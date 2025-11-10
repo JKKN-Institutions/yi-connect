@@ -6,6 +6,7 @@
 
 import { Suspense } from 'react';
 import { getUserProfile } from '@/lib/auth';
+import { getMemberAnalytics } from '@/lib/data/members';
 import {
   Card,
   CardContent,
@@ -30,6 +31,21 @@ async function WelcomeSection() {
         Here&apos;s what&apos;s happening with your Yi Chapter today.
       </p>
     </div>
+  );
+}
+
+async function TotalMembersCard() {
+  const profile = await getUserProfile();
+  const analytics = await getMemberAnalytics(profile?.chapter_id || undefined);
+
+  return (
+    <MetricCard
+      title='Total Members'
+      value={analytics.total_members.toString()}
+      description={`+${analytics.new_members_this_month} this month`}
+      icon={Users}
+      trend={analytics.new_members_this_month > 0 ? 'up' : 'neutral'}
+    />
   );
 }
 

@@ -65,7 +65,15 @@
       "Bash(supabase db push:*)",
       "mcp__supabase__generate_typescript_types",
       "Skill(advanced-tables-components)",
-      "Bash(timeout 10 sleep:*)"
+      "Bash(timeout 10 sleep:*)",
+      "Bash(NUL)",
+      "Bash(timeout 5 sleep:*)",
+      "Bash(timeout:*)",
+      "Bash(echo:*)",
+      "Bash(\"components/data-table/data-table-column-header.tsx\")",
+      "Bash(git checkout:*)",
+      "Bash(\"D:\\JKKN\\yi-connect\\components\\members\\index.ts\")",
+      "mcp__supabase__list_migrations"
     ],
     "deny": [],
     "ask": []

@@ -47,7 +47,14 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser()
 
   // Protected routes - redirect to login if not authenticated
-  const protectedPaths = ['/dashboard', '/members', '/events', '/finance', '/stakeholders']
+  const protectedPaths = [
+    '/dashboard',
+    '/members',
+    '/member-requests',
+    '/events',
+    '/finance',
+    '/stakeholders'
+  ]
   const isProtectedPath = protectedPaths.some(path =>
     request.nextUrl.pathname.startsWith(path)
   )
@@ -60,7 +67,8 @@ export async function updateSession(request: NextRequest) {
   }
 
   // Auth routes - redirect to dashboard if already authenticated
-  const authPaths = ['/login', '/signup']
+  // Note: /signup removed - only Google OAuth login is available
+  const authPaths = ['/login']
   const isAuthPath = authPaths.some(path =>
     request.nextUrl.pathname.startsWith(path)
   )

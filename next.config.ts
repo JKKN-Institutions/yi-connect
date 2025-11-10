@@ -1,9 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Temporarily disable Cache Components until data layer is implemented
-  // This will be re-enabled once proper data fetching is in place
-  // cacheComponents: true,
+  // Enable Cache Components for 'use cache' directive support
+  cacheComponents: true,
 
   // Define cache lifetime profiles for optimal performance
   cacheLife: {

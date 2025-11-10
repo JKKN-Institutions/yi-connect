@@ -35,28 +35,22 @@ export const getMembers = cache(
     const supabase = await createServerSupabaseClient();
     const { page = 1, pageSize = 10, filters = {}, sort } = params;
 
+    // Simplified query to avoid RLS/FK issues with auth.users
     let query = supabase.from('members').select(
       `
       id,
-      profile:profiles!inner(
+      company,
+      designation,
+      city,
+      state,
+      membership_status,
+      member_since,
+      chapter_id,
+      profiles!inner(
         email,
         full_name,
         avatar_url,
         phone
-      ),
-      company,
-      designation,
-      membership_status,
-      member_since,
-      engagement:engagement_metrics(
-        engagement_score
-      ),
-      leadership:leadership_assessments(
-        readiness_score
-      ),
-      skills:member_skills(
-        skill:skills(name),
-        proficiency
       )
     `,
       { count: 'exact' }
@@ -65,7 +59,7 @@ export const getMembers = cache(
     // Apply filters
     if (filters.search) {
       query = query.or(
-        `profile.full_name.ilike.%${filters.search}%,profile.email.ilike.%${filters.search}%,company.ilike.%${filters.search}%`
+        `profiles.full_name.ilike.%${filters.search}%,profiles.email.ilike.%${filters.search}%,company.ilike.%${filters.search}%`
       );
     }
 
@@ -85,47 +79,17 @@ export const getMembers = cache(
       query = query.eq('is_active', filters.is_active);
     }
 
-    if (filters.min_engagement_score !== undefined) {
-      query = query.gte(
-        'engagement.engagement_score',
-        filters.min_engagement_score
-      );
-    }
-
-    if (filters.max_engagement_score !== undefined) {
-      query = query.lte(
-        'engagement.engagement_score',
-        filters.max_engagement_score
-      );
-    }
-
-    if (filters.min_readiness_score !== undefined) {
-      query = query.gte(
-        'leadership.readiness_score',
-        filters.min_readiness_score
-      );
-    }
-
-    if (filters.max_readiness_score !== undefined) {
-      query = query.lte(
-        'leadership.readiness_score',
-        filters.max_readiness_score
-      );
-    }
+    // TODO: Add engagement and readiness score filters when those modules are built
+    // if (filters.min_engagement_score !== undefined) { ... }
+    // if (filters.max_engagement_score !== undefined) { ... }
+    // if (filters.min_readiness_score !== undefined) { ... }
+    // if (filters.max_readiness_score !== undefined) { ... }
 
     // Apply sorting
     if (sort) {
       const { field, direction } = sort;
       if (field === 'full_name') {
-        query = query.order('profile.full_name', {
-          ascending: direction === 'asc'
-        });
-      } else if (field === 'engagement_score') {
-        query = query.order('engagement.engagement_score', {
-          ascending: direction === 'asc'
-        });
-      } else if (field === 'readiness_score') {
-        query = query.order('leadership.readiness_score', {
+        query = query.order('profiles.full_name', {
           ascending: direction === 'asc'
         });
       } else {
@@ -146,23 +110,32 @@ export const getMembers = cache(
       throw new Error(`Failed to fetch members: ${error.message}`);
     }
 
+    // Fetch roles for all members
+    const memberIds = (data || []).map((m: any) => m.id);
+    const rolesMap = new Map<string, Array<{ role_name: string; hierarchy_level: number }>>();
+
+    for (const memberId of memberIds) {
+      const { data: roles } = await supabase.rpc('get_user_roles', {
+        p_user_id: memberId
+      });
+      rolesMap.set(memberId, roles || []);
+    }
+
     // Transform data to MemberListItem format
     const members: MemberListItem[] = (data || []).map((member: any) => ({
       id: member.id,
-      full_name: member.profile?.full_name || '',
-      email: member.profile?.email || '',
-      avatar_url: member.profile?.avatar_url || null,
+      full_name: member.profiles?.full_name || '',
+      email: member.profiles?.email || '',
+      avatar_url: member.profiles?.avatar_url || null,
       company: member.company,
       designation: member.designation,
       membership_status: member.membership_status,
       member_since: member.member_since,
-      engagement_score: member.engagement?.engagement_score || 0,
-      readiness_score: member.leadership?.readiness_score || 0,
-      skills_count: member.skills?.length || 0,
-      top_skills: (member.skills || []).slice(0, 3).map((ms: any) => ({
-        name: ms.skill?.name || '',
-        proficiency: ms.proficiency
-      }))
+      engagement_score: 0, // Will be populated when engagement module is built
+      readiness_score: 0, // Will be populated when leadership module is built
+      skills_count: 0, // Will be populated when skills module is built
+      top_skills: [], // Will be populated when skills module is built
+      roles: rolesMap.get(member.id) || []
     }));
 
     return {
@@ -449,6 +422,7 @@ export const getExpiringCertifications = cache(async (memberId: string) => {
 
 /**
  * Get member analytics for a chapter
+ * Simplified version - will be enhanced when engagement/leadership modules are built
  */
 export const getMemberAnalytics = cache(
   async (chapterId?: string): Promise<MemberAnalytics> => {
@@ -468,29 +442,7 @@ export const getMemberAnalytics = cache(
       );
     }
 
-    // Get engagement metrics
-    let metricsQuery = supabase
-      .from('engagement_metrics')
-      .select('engagement_score');
-    if (chapterId) {
-      const memberIds = members?.map((m) => m.id) || [];
-      metricsQuery = metricsQuery.in('member_id', memberIds);
-    }
-
-    const { data: metrics } = await metricsQuery;
-
-    // Get leadership assessments
-    let assessmentsQuery = supabase
-      .from('leadership_assessments')
-      .select('readiness_level');
-    if (chapterId) {
-      const memberIds = members?.map((m) => m.id) || [];
-      assessmentsQuery = assessmentsQuery.in('member_id', memberIds);
-    }
-
-    const { data: assessments } = await assessmentsQuery;
-
-    // Calculate analytics
+    // Calculate basic analytics
     const totalMembers = members?.length || 0;
     const activeMembers = members?.filter((m) => m.is_active).length || 0;
 
@@ -499,12 +451,6 @@ export const getMemberAnalytics = cache(
     const newMembers =
       members?.filter((m) => new Date(m.created_at) >= thirtyDaysAgo).length ||
       0;
-
-    const avgEngagementScore =
-      metrics && metrics.length > 0
-        ? metrics.reduce((sum, m) => sum + (m.engagement_score || 0), 0) /
-          metrics.length
-        : 0;
 
     // Members by status
     const membersByStatus: Record<string, number> = {};
@@ -533,26 +479,11 @@ export const getMemberAnalytics = cache(
       .sort((a, b) => b.count - a.count)
       .slice(0, 10);
 
-    // Leadership pipeline
-    const leadershipPipeline = {
-      not_ready:
-        assessments?.filter((a) => a.readiness_level === 'not_ready').length ||
-        0,
-      developing:
-        assessments?.filter((a) => a.readiness_level === 'developing').length ||
-        0,
-      ready:
-        assessments?.filter((a) => a.readiness_level === 'ready').length || 0,
-      highly_ready:
-        assessments?.filter((a) => a.readiness_level === 'highly_ready')
-          .length || 0
-    };
-
     return {
       total_members: totalMembers,
       active_members: activeMembers,
       new_members_this_month: newMembers,
-      avg_engagement_score: Math.round(avgEngagementScore),
+      avg_engagement_score: 0, // Will be calculated when engagement module is built
       members_by_status: membersByStatus,
       members_by_city: membersByCity,
       top_companies: topCompanies,
@@ -564,7 +495,12 @@ export const getMemberAnalytics = cache(
         communication: 0,
         other: 0
       },
-      leadership_pipeline: leadershipPipeline
+      leadership_pipeline: {
+        not_ready: 0,
+        developing: 0,
+        ready: 0,
+        highly_ready: 0
+      }
     };
   }
 );

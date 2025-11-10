@@ -25,6 +25,7 @@ import {
 } from 'lucide-react'
 import { notFound } from 'next/navigation'
 import { MemberDetailClient } from './member-detail-client'
+import { getMemberById } from '@/lib/data/members'
 
 interface PageProps {
   params: Promise<{ id: string }>
@@ -52,9 +53,8 @@ function getStatusColor(status: string): string {
 export default async function MemberDetailPage({ params }: PageProps) {
   const resolvedParams = await params
 
-  // TODO: Fetch member data using getMemberById
-  // For now, using mock data structure
-  const member: any = null // Replace with: await getMemberById(resolvedParams.id)
+  // Fetch member data
+  const member = await getMemberById(resolvedParams.id)
 
   if (!member) {
     notFound()
@@ -117,13 +117,11 @@ export default async function MemberDetailPage({ params }: PageProps) {
         </CardContent>
       </Card>
 
-      {/* Score Display */}
-      {member.engagement && member.leadership && (
-        <MemberScoreDisplay
-          engagementScore={member.engagement.engagement_score || 0}
-          readinessScore={member.leadership.readiness_score || 0}
-        />
-      )}
+      {/* Score Display - TODO: Enable when engagement & leadership modules are built */}
+      {/* <MemberScoreDisplay
+          engagementScore={member.engagement?.engagement_score || 0}
+          readinessScore={member.leadership?.readiness_score || 0}
+        /> */}
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Contact Information */}

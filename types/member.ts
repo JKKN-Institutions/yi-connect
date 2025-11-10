@@ -114,6 +114,10 @@ export interface MemberListItem {
     name: string
     proficiency: ProficiencyLevel
   }>
+  roles: Array<{
+    role_name: string
+    hierarchy_level: number
+  }>
 }
 
 export interface SkillWithMembers extends Skill {

@@ -1,16 +1,15 @@
 /**
  * Authentication Layout
  *
- * Layout for login, signup, and password reset pages.
+ * Layout for login and password reset pages.
  */
 
 import type { Metadata } from 'next'
-import Image from 'next/image'
 import Link from 'next/link'
 
 export const metadata: Metadata = {
   title: 'Authentication - Yi Connect',
-  description: 'Sign in to Yi Connect',
+  description: 'Sign in to Yi Connect with Google',
 }
 
 export default function AuthLayout({

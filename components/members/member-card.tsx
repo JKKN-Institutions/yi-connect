@@ -27,6 +27,7 @@ import {
   Calendar,
   Award,
   Target,
+  ShieldCheck,
 } from 'lucide-react'
 import type { MemberListItem } from '@/types/member'
 
@@ -90,10 +91,16 @@ export function MemberCard({ member, onDelete }: MemberCardProps) {
               >
                 {member.full_name}
               </Link>
-              <div className="flex items-center gap-2 mt-1">
+              <div className="flex flex-wrap items-center gap-2 mt-1">
                 <Badge variant="secondary" className={getStatusColor(member.membership_status)}>
                   {member.membership_status}
                 </Badge>
+                {member.roles && member.roles.length > 0 && member.roles.map((role, index) => (
+                  <Badge key={index} variant="outline" className="text-xs">
+                    <ShieldCheck className="mr-1 h-3 w-3" />
+                    {role.role_name}
+                  </Badge>
+                ))}
                 {member.skills_count > 0 && (
                   <span className="text-xs text-muted-foreground">
                     {member.skills_count} skill{member.skills_count !== 1 ? 's' : ''}

@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Progress } from '@/components/ui/progress'
 import { DataTableColumnHeader } from '@/components/data-table/data-table-column-header'
-import { MoreHorizontal, Eye, Edit, Trash } from 'lucide-react'
+import { MoreHorizontal, Eye, Edit, Trash, ShieldCheck } from 'lucide-react'
 import type { MemberListItem } from '@/types/member'
 
 function getInitials(name: string): string {
@@ -120,6 +120,29 @@ export const memberColumns: ColumnDef<MemberListItem>[] = [
     filterFn: (row, id, value) => {
       return value.includes(row.getValue(id))
     },
+  },
+  {
+    accessorKey: 'roles',
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Roles" />
+    ),
+    cell: ({ row }) => {
+      const roles = row.original.roles || []
+      if (roles.length === 0) {
+        return <span className="text-muted-foreground text-sm">-</span>
+      }
+      return (
+        <div className="flex flex-wrap gap-1">
+          {roles.map((role, index) => (
+            <Badge key={index} variant="outline" className="text-xs">
+              <ShieldCheck className="mr-1 h-3 w-3" />
+              {role.role_name}
+            </Badge>
+          ))}
+        </div>
+      )
+    },
+    enableSorting: false,
   },
   {
     accessorKey: 'company',

@@ -33,6 +33,7 @@ export interface FormState {
   message?: string
   errors?: Record<string, string[] | undefined>
   data?: any
+  redirectTo?: string
 }
 
 // Pagination
@@ -143,4 +144,97 @@ export interface AuditLog {
   ip_address?: string
   user_agent?: string
   created_at: string
+}
+
+// Member Extended Types
+export type MembershipType = 'individual' | 'couple'
+
+export type WillingnessLevel = 1 | 2 | 3 | 4 | 5
+
+export interface WillingnessLevelInfo {
+  level: WillingnessLevel
+  label: string
+  emoji: string
+  description: string
+}
+
+export const WILLINGNESS_LEVELS: Record<WillingnessLevel, WillingnessLevelInfo> = {
+  5: { level: 5, label: 'Activist', emoji: '🔥', description: 'Highly engaged, leads initiatives' },
+  4: { level: 4, label: 'Regular', emoji: '⭐', description: 'Consistently active participant' },
+  3: { level: 3, label: 'Selective', emoji: '✅', description: 'Participates in specific areas' },
+  2: { level: 2, label: 'Occasional', emoji: '🕐', description: 'Occasional involvement' },
+  1: { level: 1, label: 'Passive', emoji: '👀', description: 'Minimal participation' }
+}
+
+export const YI_VERTICALS = [
+  'masoom',
+  'road_safety',
+  'yuva',
+  'thalir',
+  'climate',
+  'rural_development',
+  'health',
+  'sports',
+  'innovation',
+  'arts'
+] as const
+
+export type YiVertical = typeof YI_VERTICALS[number]
+
+export const COMMON_LANGUAGES = [
+  'tamil',
+  'english',
+  'hindi',
+  'malayalam',
+  'telugu',
+  'kannada'
+] as const
+
+export type CommonLanguage = typeof COMMON_LANGUAGES[number]
+
+// Availability Profile Types
+export type TimeCommitment = 2 | 5 | 10 | 15 | 20
+
+export type PreferredDays = 'weekdays' | 'weekends' | 'flexible'
+
+export type NoticePeriod = '2_hours' | '1_day' | '3_days' | '1_week' | '2_weeks' | '1_month'
+
+export type GeographicFlexibility = 'erode_only' | 'district' | 'state' | 'zone' | 'pan_india'
+
+export type ContactMethod = 'whatsapp' | 'email' | 'phone' | 'notification'
+
+export interface AvailabilityProfile {
+  time_commitment_hours?: TimeCommitment
+  preferred_days?: PreferredDays
+  notice_period?: NoticePeriod
+  geographic_flexibility?: GeographicFlexibility
+  preferred_contact_method?: ContactMethod
+}
+
+// Member Networks Types
+export type NetworkType =
+  | 'schools'
+  | 'colleges'
+  | 'industries'
+  | 'government'
+  | 'ngos'
+  | 'venues'
+  | 'speakers'
+  | 'corporate_partners'
+
+export type RelationshipStrength = 'weak' | 'moderate' | 'strong'
+
+export interface MemberNetwork {
+  id: string
+  member_id: string
+  network_type: NetworkType
+  organization_name: string
+  contact_person?: string
+  contact_phone?: string
+  contact_email?: string
+  relationship_strength: RelationshipStrength
+  notes?: string
+  verified: boolean
+  created_at: string
+  updated_at: string
 }

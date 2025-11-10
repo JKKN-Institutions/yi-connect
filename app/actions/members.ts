@@ -139,7 +139,8 @@ export async function createMember(
 
   return {
     success: true,
-    message: 'Member created successfully!'
+    message: 'Member created successfully!',
+    redirectTo: '/members'
   };
 }
 
@@ -225,7 +226,8 @@ export async function updateMember(
 
   return {
     success: true,
-    message: 'Member updated successfully!'
+    message: 'Member updated successfully!',
+    redirectTo: `/members/${validation.data.id}`
   };
 }
 

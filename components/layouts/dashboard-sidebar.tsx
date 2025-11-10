@@ -22,6 +22,9 @@ import {
   Globe,
   Menu,
   X,
+  MapPin,
+  Shield,
+  UserCheck,
 } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
@@ -76,6 +79,19 @@ const navigation = [
     name: 'Leadership',
     href: '/leadership',
     icon: Globe,
+  },
+]
+
+const adminNavigation = [
+  {
+    name: 'Member Requests',
+    href: '/member-requests',
+    icon: UserCheck,
+  },
+  {
+    name: 'Chapters',
+    href: '/admin/chapters',
+    icon: MapPin,
   },
 ]
 
@@ -154,6 +170,40 @@ export function DashboardSidebar() {
                 )
               })}
             </ul>
+
+            {/* Admin Section */}
+            <div className="mt-6">
+              <div className="flex items-center gap-2 px-3 pb-2">
+                <Shield className="h-4 w-4 text-muted-foreground" />
+                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  Administration
+                </h3>
+              </div>
+              <ul className="space-y-1">
+                {adminNavigation.map((item) => {
+                  const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
+                  const Icon = item.icon
+
+                  return (
+                    <li key={item.name}>
+                      <Link
+                        href={item.href}
+                        onClick={() => setIsOpen(false)}
+                        className={cn(
+                          'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
+                          isActive
+                            ? 'bg-primary text-primary-foreground'
+                            : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                        )}
+                      >
+                        <Icon className="h-5 w-5" />
+                        <span>{item.name}</span>
+                      </Link>
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
           </nav>
 
           {/* Footer */}

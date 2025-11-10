@@ -8,6 +8,7 @@ import { Suspense } from 'react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { getAllChapters } from '@/lib/data/chapters';
 import { MemberForm } from '@/components/members';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -61,8 +62,8 @@ async function NewMemberForm() {
     .eq('id', user.id)
     .single();
 
-  // TODO: Fetch chapters for the form
-  const chapters: any[] = []; // Replace with: await getChapters()
+  // Fetch chapters for the form
+  const chapters = await getAllChapters();
 
   return (
     <MemberForm

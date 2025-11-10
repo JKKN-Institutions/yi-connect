@@ -4,12 +4,14 @@
  * Display full member profile with skills, certifications, and metrics.
  */
 
+import { Suspense } from 'react'
 import Link from 'next/link'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
+import { Skeleton } from '@/components/ui/skeleton'
 import { MemberScoreDisplay } from '@/components/members'
 import {
   Building2,
@@ -31,6 +33,13 @@ interface PageProps {
   params: Promise<{ id: string }>
 }
 
+// Provide placeholder ID for build-time validation with Cache Components
+export async function generateStaticParams() {
+  return [
+    { id: '00000000-0000-0000-0000-000000000000' } // Placeholder UUID
+  ];
+}
+
 function getInitials(name: string): string {
   return name
     .split(' ')
@@ -50,11 +59,10 @@ function getStatusColor(status: string): string {
   return colors[status] || colors.active
 }
 
-export default async function MemberDetailPage({ params }: PageProps) {
-  const resolvedParams = await params
-
+// Content component that fetches member data
+async function MemberDetailContent({ id }: { id: string }) {
   // Fetch member data
-  const member = await getMemberById(resolvedParams.id)
+  const member = await getMemberById(id)
 
   if (!member) {
     notFound()
@@ -265,6 +273,47 @@ export default async function MemberDetailPage({ params }: PageProps) {
         </Card>
       )}
     </div>
+  )
+}
+
+// Loading skeleton
+function LoadingSkeleton() {
+  return (
+    <div className="space-y-6">
+      <Skeleton className="h-10 w-32" />
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex items-start gap-4">
+              <Skeleton className="h-20 w-20 rounded-full" />
+              <div className="space-y-2">
+                <Skeleton className="h-8 w-48" />
+                <Skeleton className="h-5 w-64" />
+                <div className="flex gap-2">
+                  <Skeleton className="h-6 w-20" />
+                  <Skeleton className="h-6 w-24" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+      <div className="grid gap-6 md:grid-cols-2">
+        <Skeleton className="h-64" />
+        <Skeleton className="h-64" />
+      </div>
+    </div>
+  )
+}
+
+// Main page component with Suspense
+export default async function MemberDetailPage({ params }: PageProps) {
+  const resolvedParams = await params
+
+  return (
+    <Suspense fallback={<LoadingSkeleton />}>
+      <MemberDetailContent id={resolvedParams.id} />
+    </Suspense>
   )
 }
 

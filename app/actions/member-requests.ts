@@ -15,7 +15,7 @@
 
 import { createServerSupabaseClient, createAdminSupabaseClient } from '@/lib/supabase/server'
 import { requireRole } from '@/lib/auth'
-import { revalidatePath, revalidateTag } from 'next/cache'
+import { revalidatePath, updateTag } from 'next/cache'
 import type { FormState } from '@/types'
 import { z } from 'zod'
 
@@ -148,7 +148,7 @@ export async function submitMemberRequest(formData: FormData): Promise<FormState
     console.log('✅ Member request created successfully:', data?.id)
 
     // Invalidate cache
-    revalidateTag('member-requests')
+    updateTag('member-requests')
 
     return {
       success: true,
@@ -317,8 +317,8 @@ export async function approveMemberRequest(requestId: string, notes?: string): P
     // })
 
     // 6. Invalidate caches
-    revalidateTag('member-requests')
-    revalidateTag('approved-emails')
+    updateTag('member-requests')
+    updateTag('approved-emails')
     revalidatePath('/member-requests')
 
     return {
@@ -382,7 +382,7 @@ export async function rejectMemberRequest(requestId: string, notes: string): Pro
     // })
 
     // 4. Invalidate cache
-    revalidateTag('member-requests')
+    updateTag('member-requests')
     revalidatePath('/member-requests')
 
     return {
@@ -453,7 +453,7 @@ export async function withdrawMemberRequest(requestId: string): Promise<FormStat
 
     if (updateError) throw updateError
 
-    revalidateTag('member-requests')
+    updateTag('member-requests')
     revalidatePath('/member-requests')
 
     return {

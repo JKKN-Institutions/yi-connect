@@ -74,7 +74,8 @@
       "Bash(git checkout:*)",
       "Bash(\"D:\\JKKN\\yi-connect\\components\\members\\index.ts\")",
       "mcp__supabase__list_migrations",
-      "Bash(supabase db branches:*)"
+      "Bash(supabase db branches:*)",
+      "Bash(npm run supabase:gen:*)"
     ],
     "deny": [],
     "ask": []

@@ -4,24 +4,13 @@
  * Display full member profile with skills, certifications, and metrics.
  */
 
-'use client'
-
-import { use, useState } from 'react'
 import Link from 'next/link'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
-import {
-  MemberScoreDisplay,
-  SkillsDisplay,
-  CertificationsDisplay,
-  AddSkillDialog,
-  UpdateSkillDialog,
-  AddCertificationDialog,
-  UpdateCertificationDialog,
-} from '@/components/members'
+import { MemberScoreDisplay } from '@/components/members'
 import {
   Building2,
   Mail,
@@ -35,6 +24,7 @@ import {
   Globe,
 } from 'lucide-react'
 import { notFound } from 'next/navigation'
+import { MemberDetailClient } from './member-detail-client'
 
 interface PageProps {
   params: Promise<{ id: string }>
@@ -59,12 +49,8 @@ function getStatusColor(status: string): string {
   return colors[status] || colors.active
 }
 
-export default function MemberDetailPage({ params }: PageProps) {
-  const resolvedParams = use(params)
-  const [showAddSkill, setShowAddSkill] = useState(false)
-  const [showEditSkill, setShowEditSkill] = useState<string | null>(null)
-  const [showAddCertification, setShowAddCertification] = useState(false)
-  const [showEditCertification, setShowEditCertification] = useState<string | null>(null)
+export default async function MemberDetailPage({ params }: PageProps) {
+  const resolvedParams = await params
 
   // TODO: Fetch member data using getMemberById
   // For now, using mock data structure
@@ -232,19 +218,8 @@ export default function MemberDetailPage({ params }: PageProps) {
         </Card>
       </div>
 
-      {/* Skills Section */}
-      <SkillsDisplay
-        member={member}
-        onAddSkill={() => setShowAddSkill(true)}
-        onEditSkill={(id) => setShowEditSkill(id)}
-      />
-
-      {/* Certifications Section */}
-      <CertificationsDisplay
-        member={member}
-        onAddCertification={() => setShowAddCertification(true)}
-        onEditCertification={(id) => setShowEditCertification(id)}
-      />
+      {/* Skills & Certifications - Client Component */}
+      <MemberDetailClient member={member} />
 
       {/* Emergency Contact */}
       {(member.emergency_contact_name || member.emergency_contact_phone) && (
@@ -290,50 +265,6 @@ export default function MemberDetailPage({ params }: PageProps) {
             <p className="text-sm text-muted-foreground whitespace-pre-wrap">{member.notes}</p>
           </CardContent>
         </Card>
-      )}
-
-      {/* Dialogs */}
-      {showAddSkill && (
-        <AddSkillDialog
-          memberId={member.id}
-          skills={[]} // TODO: Pass skills list
-          open={showAddSkill}
-          onOpenChange={setShowAddSkill}
-        />
-      )}
-
-      {showEditSkill && (
-        <UpdateSkillDialog
-          skillId={showEditSkill}
-          currentProficiency="intermediate" // TODO: Get from selected skill
-          currentExperience={0}
-          currentMentor={false}
-          currentNotes=""
-          open={!!showEditSkill}
-          onOpenChange={(open) => !open && setShowEditSkill(null)}
-        />
-      )}
-
-      {showAddCertification && (
-        <AddCertificationDialog
-          memberId={member.id}
-          certifications={[]} // TODO: Pass certifications list
-          open={showAddCertification}
-          onOpenChange={setShowAddCertification}
-        />
-      )}
-
-      {showEditCertification && (
-        <UpdateCertificationDialog
-          certificationId={showEditCertification}
-          currentCertificateNumber=""
-          currentIssuedDate=""
-          currentExpiryDate=""
-          currentDocumentUrl=""
-          currentNotes=""
-          open={!!showEditCertification}
-          onOpenChange={(open) => !open && setShowEditCertification(null)}
-        />
       )}
     </div>
   )

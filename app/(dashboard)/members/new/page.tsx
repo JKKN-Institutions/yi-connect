@@ -49,9 +49,13 @@ async function NewMemberForm() {
     p_user_id: user.id
   });
 
-  const roleNames = userRoles?.map((r) => r.role_name) || [];
+  const roleNames =
+    userRoles?.map((r: { role_name: string }) => r.role_name) || [];
   const isAdmin = roleNames.some(
-    (role) => role === 'Super Admin' || role === 'National Admin' || role === 'Executive Member'
+    (role: string) =>
+      role === 'Super Admin' ||
+      role === 'National Admin' ||
+      role === 'Executive Member'
   );
 
   // Only redirect if user is NOT an admin and already has a member profile
@@ -82,8 +86,8 @@ async function NewMemberForm() {
     <MemberForm
       chapters={chapters}
       userId={isAdmin ? undefined : user.id} // Don't pre-fill for admins
-      userEmail={isAdmin ? '' : (profile?.email || user.email || '')} // Don't pre-fill for admins
-      userName={isAdmin ? '' : (profile?.full_name || '')} // Don't pre-fill for admins
+      userEmail={isAdmin ? '' : profile?.email || user.email || ''} // Don't pre-fill for admins
+      userName={isAdmin ? '' : profile?.full_name || ''} // Don't pre-fill for admins
     />
   );
 }

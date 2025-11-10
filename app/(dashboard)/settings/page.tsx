@@ -4,9 +4,11 @@
  * Main settings page with links to different settings sections
  */
 
+import { Suspense } from 'react'
 import Link from 'next/link'
 import { requireAuth } from '@/lib/auth'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Skeleton } from '@/components/ui/skeleton'
 import { User, Bell, Shield, Palette, Key } from 'lucide-react'
 import { redirect } from 'next/navigation'
 
@@ -62,12 +64,43 @@ const settingsSections = [
   },
 ]
 
-export default async function SettingsPage() {
+// Content component that performs auth check and redirects
+async function SettingsContent() {
   await requireAuth()
 
   // Redirect to profile settings by default
   redirect('/settings/profile')
 
+  return null // This is never reached due to redirect
+}
+
+// Loading skeleton (shown briefly during auth check)
+function LoadingSkeleton() {
+  return (
+    <div className="space-y-6">
+      <div className="space-y-2">
+        <Skeleton className="h-9 w-32" />
+        <Skeleton className="h-5 w-64" />
+      </div>
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {[...Array(5)].map((_, i) => (
+          <Skeleton key={i} className="h-32 w-full" />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+export default function SettingsPage() {
+  return (
+    <Suspense fallback={<LoadingSkeleton />}>
+      <SettingsContent />
+    </Suspense>
+  )
+}
+
+// Unreachable JSX below (kept for reference but never executed)
+function UnusedSettingsLayout() {
   return (
     <div className="space-y-6">
       {/* Page Header */}

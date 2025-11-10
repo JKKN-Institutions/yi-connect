@@ -110,8 +110,8 @@ export async function requireRole(allowedRoles: string[]) {
     redirect('/unauthorized')
   }
 
-  const userRoleNames = userRoles?.map((ur) => ur.role_name) || []
-  const hasRequiredRole = allowedRoles.some((role) => userRoleNames.includes(role))
+  const userRoleNames = userRoles?.map((ur: { role_name: string }) => ur.role_name) || []
+  const hasRequiredRole = allowedRoles.some((role: string) => userRoleNames.includes(role))
 
   if (!hasRequiredRole) {
     redirect('/unauthorized')

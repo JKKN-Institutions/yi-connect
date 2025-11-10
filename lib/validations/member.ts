@@ -5,12 +5,6 @@
  */
 
 import { z } from 'zod'
-import {
-  MEMBERSHIP_STATUSES,
-  PROFICIENCY_LEVELS,
-  AVAILABILITY_STATUSES,
-  GENDERS,
-} from '@/types/member'
 
 // ============================================================================
 // Helper Schemas
@@ -51,7 +45,7 @@ export const createMemberSchema = z.object({
   chapter_id: z.string().uuid({ message: 'Invalid chapter ID' }).optional(),
   membership_number: z.string().optional().or(z.literal('')),
   member_since: z.string().date({ message: 'Invalid date format' }).optional(),
-  membership_status: z.enum(MEMBERSHIP_STATUSES as [string, ...string[]]).optional(),
+  membership_status: z.enum(['active', 'inactive', 'suspended', 'alumni']).optional(),
 
   // Professional info
   company: z.string().max(200).optional().or(z.literal('')),
@@ -71,7 +65,7 @@ export const createMemberSchema = z.object({
 
   // Personal info
   date_of_birth: z.string().date({ message: 'Invalid date format' }).optional(),
-  gender: z.enum(GENDERS as [string, ...string[]]).optional(),
+  gender: z.enum(['male', 'female', 'other', 'prefer_not_to_say']).optional(),
   address: z.string().max(500).optional().or(z.literal('')),
   city: z.string().max(100).optional().or(z.literal('')),
   state: z.string().max(100).optional().or(z.literal('')),
@@ -112,7 +106,7 @@ export const updateMemberSchema = z
 export const addMemberSkillSchema = z.object({
   member_id: z.string().uuid({ message: 'Invalid member ID' }),
   skill_id: z.string().uuid({ message: 'Invalid skill ID' }),
-  proficiency: z.enum(PROFICIENCY_LEVELS as [string, ...string[]], {
+  proficiency: z.enum(['beginner', 'intermediate', 'advanced', 'expert'], {
     message: 'Invalid proficiency level',
   }),
   years_of_experience: z
@@ -127,7 +121,7 @@ export const addMemberSkillSchema = z.object({
 
 export const updateMemberSkillSchema = z.object({
   id: z.string().uuid({ message: 'Invalid member skill ID' }),
-  proficiency: z.enum(PROFICIENCY_LEVELS as [string, ...string[]]).optional(),
+  proficiency: z.enum(['beginner', 'intermediate', 'advanced', 'expert']).optional(),
   years_of_experience: z
     .number()
     .int()
@@ -206,7 +200,7 @@ export const deleteMemberCertificationSchema = z.object({
 export const setAvailabilitySchema = z.object({
   member_id: z.string().uuid({ message: 'Invalid member ID' }),
   date: z.string().date({ message: 'Invalid date format' }),
-  status: z.enum(AVAILABILITY_STATUSES as [string, ...string[]], {
+  status: z.enum(['available', 'busy', 'unavailable'], {
     message: 'Invalid availability status',
   }),
   time_slots: timeSlotSchema.optional(),
@@ -289,13 +283,13 @@ export const deleteCertificationSchema = z.object({
 
 export const memberFiltersSchema = z.object({
   search: z.string().max(200).optional(),
-  membership_status: z.array(z.enum(MEMBERSHIP_STATUSES as [string, ...string[]])).optional(),
+  membership_status: z.array(z.enum(['active', 'inactive', 'suspended', 'alumni'])).optional(),
   skills: z.array(z.string().uuid()).optional(),
   min_engagement_score: z.number().int().min(0).max(100).optional(),
   max_engagement_score: z.number().int().min(0).max(100).optional(),
   min_readiness_score: z.number().int().min(0).max(100).optional(),
   max_readiness_score: z.number().int().min(0).max(100).optional(),
-  availability_status: z.array(z.enum(AVAILABILITY_STATUSES as [string, ...string[]])).optional(),
+  availability_status: z.array(z.enum(['available', 'busy', 'unavailable'])).optional(),
   city: z.array(z.string()).optional(),
   company: z.array(z.string()).optional(),
   is_active: z.boolean().optional(),

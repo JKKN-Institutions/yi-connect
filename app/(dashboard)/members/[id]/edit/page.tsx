@@ -18,6 +18,13 @@ interface PageProps {
   params: Promise<{ id: string }>
 }
 
+// Provide placeholder ID for build-time validation with Cache Components
+export async function generateStaticParams() {
+  return [
+    { id: '00000000-0000-0000-0000-000000000000' } // Placeholder UUID
+  ];
+}
+
 // Loading skeleton
 function FormSkeleton() {
   return (

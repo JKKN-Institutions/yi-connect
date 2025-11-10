@@ -89,13 +89,7 @@ export default function DashboardPage() {
       {/* Metrics Grid */}
       <div className='grid gap-4 md:grid-cols-2 lg:grid-cols-4'>
         <Suspense fallback={<MetricCardSkeleton />}>
-          <MetricCard
-            title='Total Members'
-            value='0'
-            description='+0 this month'
-            icon={Users}
-            trend='up'
-          />
+          <TotalMembersCard />
         </Suspense>
         <Suspense fallback={<MetricCardSkeleton />}>
           <MetricCard

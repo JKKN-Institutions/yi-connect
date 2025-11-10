@@ -35,7 +35,7 @@ function FormSkeleton() {
 async function NewMemberForm() {
   const supabase = await createServerSupabaseClient();
 
-  // Get current user (to pre-fill if creating own profile)
+  // Get current user
   const {
     data: { user }
   } = await supabase.auth.getUser();
@@ -44,15 +44,28 @@ async function NewMemberForm() {
     redirect('/login');
   }
 
-  // Check if user already has a member profile
-  const { data: existingMember } = await supabase
-    .from('members')
-    .select('id')
-    .eq('id', user.id)
-    .single();
+  // Get user roles to check if they're an admin
+  const { data: userRoles } = await supabase.rpc('get_user_roles', {
+    p_user_id: user.id
+  });
 
-  if (existingMember) {
-    redirect(`/members/${existingMember.id}`);
+  const roleNames = userRoles?.map((r) => r.role_name) || [];
+  const isAdmin = roleNames.some(
+    (role) => role === 'Super Admin' || role === 'National Admin' || role === 'Executive Member'
+  );
+
+  // Only redirect if user is NOT an admin and already has a member profile
+  // Admins should be able to create new members even if they have their own profile
+  if (!isAdmin) {
+    const { data: existingMember } = await supabase
+      .from('members')
+      .select('id')
+      .eq('id', user.id)
+      .single();
+
+    if (existingMember) {
+      redirect(`/members/${existingMember.id}`);
+    }
   }
 
   // Get user profile
@@ -68,9 +81,9 @@ async function NewMemberForm() {
   return (
     <MemberForm
       chapters={chapters}
-      userId={user.id}
-      userEmail={profile?.email || user.email || ''}
-      userName={profile?.full_name || ''}
+      userId={isAdmin ? undefined : user.id} // Don't pre-fill for admins
+      userEmail={isAdmin ? '' : (profile?.email || user.email || '')} // Don't pre-fill for admins
+      userName={isAdmin ? '' : (profile?.full_name || '')} // Don't pre-fill for admins
     />
   );
 }

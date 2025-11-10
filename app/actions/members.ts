@@ -7,7 +7,7 @@
 
 'use server';
 
-import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { createServerSupabaseClient, createAdminSupabaseClient } from '@/lib/supabase/server';
 import { revalidateTag } from 'next/cache';
 import { redirect } from 'next/navigation';
 import {
@@ -41,10 +41,79 @@ export async function createMember(
   prevState: FormState,
   formData: FormData
 ): Promise<FormState> {
-  const validation = createMemberSchema.safeParse({
-    id: formData.get('id'),
-    email: formData.get('email'),
-    full_name: formData.get('full_name'),
+  const supabase = await createServerSupabaseClient();
+
+  // Check if this is an admin creating a new member (no id provided)
+  let userId = formData.get('id') as string | null;
+  const email = formData.get('email') as string;
+  const fullName = formData.get('full_name') as string;
+  let isNewUser = false;
+
+  // If no userId provided, create a new auth user (admin creating member)
+  if (!userId && email && fullName) {
+    isNewUser = true;
+    console.log('Admin creating new member - creating auth user first');
+
+    // Get the chapter_id from form data to add to approved_emails
+    const chapterId = formData.get('chapter_id') as string;
+
+    // Get current user for approved_by field
+    const { data: { user: currentUser } } = await supabase.auth.getUser();
+
+    // 1. Add email to approved_emails whitelist (required by handle_new_user trigger)
+    const { error: whitelistError } = await supabase.from('approved_emails').insert({
+      email,
+      assigned_chapter_id: chapterId || null,
+      approved_by: currentUser?.id || null,
+      approved_at: new Date().toISOString(),
+      is_active: true,
+      member_created: false
+    });
+
+    if (whitelistError) {
+      console.error('Failed to add email to whitelist:', whitelistError);
+      // Continue anyway - email might already be in whitelist
+    }
+
+    // Use admin client to create user (requires service role key)
+    const adminClient = createAdminSupabaseClient();
+
+    // 2. Create a new auth user via Admin API (this will trigger handle_new_user())
+    const { data: newUser, error: createUserError } = await adminClient.auth.admin.createUser({
+      email,
+      email_confirm: true, // Auto-confirm email
+      user_metadata: {
+        full_name: fullName
+      }
+    });
+
+    if (createUserError || !newUser.user) {
+      console.error('Failed to create auth user:', createUserError);
+      return {
+        message: createUserError?.message || 'Failed to create user account. Please try again.'
+      };
+    }
+
+    userId = newUser.user.id;
+    console.log('Created new auth user with ID:', userId);
+
+    // Note: Profile is automatically created by handle_new_user() trigger
+
+    // 3. Send password reset email so the user can set their password
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001'}/auth/callback?type=recovery`
+    });
+
+    if (resetError) {
+      console.error('Failed to send password reset email:', resetError);
+      // Don't fail the whole operation if email fails
+    }
+  }
+
+  const formDataObject = {
+    id: userId,
+    email,
+    full_name: fullName,
     phone: formData.get('phone'),
     chapter_id: formData.get('chapter_id'),
     membership_number: formData.get('membership_number'),
@@ -79,16 +148,17 @@ export async function createMember(
       ? JSON.parse(formData.get('communication_preferences') as string)
       : undefined,
     notes: formData.get('notes')
-  });
+  };
+
+  const validation = createMemberSchema.safeParse(formDataObject);
 
   if (!validation.success) {
+    console.error('Validation failed:', validation.error.flatten());
     return {
       errors: validation.error.flatten().fieldErrors,
       message: 'Invalid input. Please check the form.'
     };
   }
-
-  const supabase = await createServerSupabaseClient();
 
   const { error } = await supabase.from('members').insert({
     id: validation.data.id,
@@ -137,9 +207,13 @@ export async function createMember(
     revalidateTag(`analytics-${validation.data.chapter_id}`, 'max');
   }
 
+  const successMessage = isNewUser
+    ? 'Member created successfully! A password reset email has been sent to the member.'
+    : 'Member created successfully!';
+
   return {
     success: true,
-    message: 'Member created successfully!',
+    message: successMessage,
     redirectTo: '/members'
   };
 }

@@ -73,7 +73,8 @@
       "Bash(\"components/data-table/data-table-column-header.tsx\")",
       "Bash(git checkout:*)",
       "Bash(\"D:\\JKKN\\yi-connect\\components\\members\\index.ts\")",
-      "mcp__supabase__list_migrations"
+      "mcp__supabase__list_migrations",
+      "Bash(supabase db branches:*)"
     ],
     "deny": [],
     "ask": []

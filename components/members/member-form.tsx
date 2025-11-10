@@ -206,9 +206,12 @@ export function MemberForm({
 
       // Add hidden fields
       if (!isEdit) {
-        if (userId) submitData.append('id', userId);
-        if (userEmail) submitData.append('email', userEmail);
-        if (userName) submitData.append('full_name', userName);
+        if (userId) {
+          submitData.append('id', userId);
+          if (userEmail) submitData.append('email', userEmail);
+          if (userName) submitData.append('full_name', userName);
+        }
+        // For admin creating new member without userId, email and full_name come from formData
       } else {
         submitData.append('id', member.id);
       }
@@ -416,9 +419,9 @@ export function MemberForm({
             </CardHeader>
             <CardContent className='space-y-4'>
               <div className='grid gap-4 sm:grid-cols-2'>
-                {/* Full Name (Apply Mode Only) */}
-                {isApplyMode && (
-                  <div className='space-y-2 sm:col-span-2'>
+                {/* Full Name (Apply Mode or New Member in Create Mode) */}
+                {(isApplyMode || (!isEdit && !userId)) && (
+                  <div className='space-y-2'>
                     <Label htmlFor='full_name'>Full Name *</Label>
                     <Input
                       id='full_name'
@@ -426,7 +429,11 @@ export function MemberForm({
                       onChange={(e) =>
                         updateFormData('full_name', e.target.value)
                       }
-                      placeholder='Enter your full name'
+                      placeholder={
+                        isApplyMode
+                          ? 'Enter your full name'
+                          : 'Enter member full name'
+                      }
                       required
                     />
                     {errors?.full_name && (
@@ -437,16 +444,20 @@ export function MemberForm({
                   </div>
                 )}
 
-                {/* Email (Apply Mode Only) */}
-                {isApplyMode && (
-                  <div className='space-y-2 sm:col-span-2'>
+                {/* Email (Apply Mode or New Member in Create Mode) */}
+                {(isApplyMode || (!isEdit && !userId)) && (
+                  <div className='space-y-2'>
                     <Label htmlFor='email'>Email *</Label>
                     <Input
                       id='email'
                       type='email'
                       value={formData.email}
                       onChange={(e) => updateFormData('email', e.target.value)}
-                      placeholder='your.email@gmail.com'
+                      placeholder={
+                        isApplyMode
+                          ? 'your.email@gmail.com'
+                          : 'member.email@gmail.com'
+                      }
                       required
                     />
                     {errors?.email && (
@@ -455,8 +466,9 @@ export function MemberForm({
                       </p>
                     )}
                     <p className='text-xs text-muted-foreground'>
-                      Use your Google email - you&apos;ll use this to login
-                      after approval
+                      {isApplyMode
+                        ? "Use your Google email - you'll use this to login after approval"
+                        : "Member's Google email - they will use this to login"}
                     </p>
                   </div>
                 )}

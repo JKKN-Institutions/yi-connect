@@ -339,14 +339,5 @@ export default function MemberDetailPage({ params }: PageProps) {
   )
 }
 
-// Generate metadata
-export async function generateMetadata({ params }: PageProps) {
-  const resolvedParams = await params
-  // TODO: Fetch member for dynamic metadata
-  // const member = await getMemberById(resolvedParams.id)
-
-  return {
-    title: `Member Profile - Yi Connect`,
-    description: 'View member profile, skills, and certifications',
-  }
-}
+// Note: Dynamic metadata generation will be added when data fetching is implemented
+// For now, metadata is handled by the layout

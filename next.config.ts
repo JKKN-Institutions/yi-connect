@@ -1,8 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Enable Cache Components and PPR (Partial Prerendering)
-  cacheComponents: true,
+  // Temporarily disable Cache Components until data layer is implemented
+  // This will be re-enabled once proper data fetching is in place
+  // cacheComponents: true,
 
   // Define cache lifetime profiles for optimal performance
   cacheLife: {

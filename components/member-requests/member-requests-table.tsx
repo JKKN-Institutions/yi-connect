@@ -78,13 +78,13 @@ export function MemberRequestsTable({
     try {
       const result = await approveMemberRequest(requestId, notes || undefined);
       if (result.success) {
-        toast.success(result.message);
+        toast.success(result.message || 'Application approved successfully');
         setActionType(null);
         setSelectedRequest(null);
         setNotes('');
         router.refresh();
       } else {
-        toast.error(result.message);
+        toast.error(result.message || 'Failed to approve application');
       }
     } catch (error) {
       toast.error('Failed to approve request');
@@ -103,13 +103,13 @@ export function MemberRequestsTable({
     try {
       const result = await rejectMemberRequest(requestId, notes);
       if (result.success) {
-        toast.success(result.message);
+        toast.success(result.message || 'Application rejected successfully');
         setActionType(null);
         setSelectedRequest(null);
         setNotes('');
         router.refresh();
       } else {
-        toast.error(result.message);
+        toast.error(result.message || 'Failed to reject application');
       }
     } catch (error) {
       toast.error('Failed to reject request');

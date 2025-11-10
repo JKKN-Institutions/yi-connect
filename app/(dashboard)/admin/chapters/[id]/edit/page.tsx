@@ -14,6 +14,14 @@ export const metadata = {
   description: 'Edit chapter information'
 };
 
+// Provide a placeholder ID for build-time validation with Cache Components
+// The actual page will be rendered dynamically at request time
+export async function generateStaticParams() {
+  return [
+    { id: '00000000-0000-0000-0000-000000000000' } // Placeholder UUID for build validation
+  ];
+}
+
 interface EditChapterPageProps {
   params: Promise<{
     id: string;

@@ -1,0 +1,322 @@
+{
+  "project": "YI Connect",
+  "version": "1.0.0",
+  "mcp_first_principles": {
+    "critical_rules": [
+      "DATABASE is the source of truth, NOT SQL files",
+      "ALWAYS use Supabase MCP to query current database state",
+      "NEVER read SQL files to check current database status",
+      "SQL files in supabase/setup/ are documentation/backup only",
+      "Apply ALL changes using mcp__supabase__apply_migration",
+      "AFTER successful migration, update SQL files",
+      "NEVER use npx supabase db push or CLI commands"
+    ],
+    "mcp_tools_usage": {
+      "check_tables": "mcp__supabase__list_tables",
+      "query_schema": "mcp__supabase__execute_sql (e.g., SELECT * FROM information_schema.tables)",
+      "apply_changes": "mcp__supabase__apply_migration",
+      "check_logs": "mcp__supabase__get_logs",
+      "list_migrations": "mcp__supabase__list_migrations",
+      "list_extensions": "mcp__supabase__list_extensions"
+    },
+    "correct_workflow": [
+      "1. Use MCP to query current database state",
+      "2. Design the migration SQL",
+      "3. Apply using mcp__supabase__apply_migration",
+      "4. Update SQL files in supabase/setup/ after success",
+      "5. Create migration file in supabase/migrations/",
+      "6. Update TypeScript types if needed"
+    ]
+  },
+  "auto_prompts": {
+    "enabled": true,
+    "supabase_rules": {
+      "trigger_words": [
+        "database",
+        "table",
+        "SQL",
+        "Supabase",
+        "schema",
+        "migration",
+        "RLS",
+        "policy",
+        "security"
+      ],
+      "auto_checks": [
+        "ALWAYS use Supabase MCP to query current database schema",
+        "NEVER read existing SQL files for current status",
+        "Check supabase/SQL_FILE_INDEX.md for file organization only",
+        "Apply migrations using mcp__supabase__apply_migration ONLY",
+        "After migration, update corresponding SQL files in supabase/setup/",
+        "NEVER use npx supabase db push command",
+        "Wrap all functions in SELECT for RLS policies",
+        "Add indexes for all policy columns"
+      ],
+      "rls_rules": {
+        "performance": "Always use (SELECT auth.uid()) instead of auth.uid()",
+        "select_policy": "USING clause only, no WITH CHECK",
+        "insert_policy": "WITH CHECK only, no USING",
+        "update_policy": "Both USING and WITH CHECK required",
+        "delete_policy": "USING clause only, no WITH CHECK",
+        "roles": "Always specify TO authenticated or TO anon",
+        "naming": "Descriptive policy names in double quotes",
+        "indexes": "Create indexes on all columns used in policies"
+      },
+      "file_mappings": {
+        "tables": "supabase/setup/01_tables.sql",
+        "functions": "supabase/setup/02_functions.sql",
+        "policies": "supabase/setup/03_policies.sql",
+        "triggers": "supabase/setup/04_triggers.sql",
+        "views": "supabase/setup/05_views.sql"
+      }
+    }
+  },
+  "auth_ssr_rules": {
+    "critical_warnings": {
+      "never_use": [
+        "cookie.get(), cookie.set(), cookie.remove() - BREAKS APPLICATION",
+        "@supabase/auth-helpers-nextjs - DEPRECATED PACKAGE"
+      ],
+      "always_use": [
+        "@supabase/ssr package only",
+        "getAll() and setAll() methods only",
+        "Middleware must call getUser()",
+        "Return supabaseResponse from middleware"
+      ]
+    },
+    "correct_patterns": {
+      "browser_client": "lib/supabase/client.ts with createBrowserClient",
+      "server_client": "lib/supabase/server.ts with createServerClient",
+      "middleware": "middleware.ts with proper cookie handling"
+    }
+  },
+  "edge_functions_rules": {
+    "import_rules": {
+      "always_use": [
+        "npm: prefix with version (npm:express@4.18.2)",
+        "jsr: prefix for Deno packages",
+        "node: prefix for Node built-ins",
+        "Deno.serve instead of old serve import"
+      ],
+      "never_use": [
+        "Bare specifiers without prefix",
+        "Imports without version numbers",
+        "serve from deno.land/std@http/server",
+        "Cross-function dependencies"
+      ]
+    },
+    "file_structure": {
+      "shared_code": "supabase/functions/_shared/",
+      "function_pattern": "supabase/functions/[function-name]/index.ts",
+      "writable_directory": "/tmp only"
+    },
+    "environment": {
+      "pre_populated": [
+        "SUPABASE_URL",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "SUPABASE_DB_URL"
+      ],
+      "background_tasks": "EdgeRuntime.waitUntil(promise)"
+    },
+    "deployment": {
+      "deploy_single": "supabase functions deploy function-name",
+      "deploy_all": "supabase functions deploy",
+      "set_secrets": "supabase secrets set --env-file path",
+      "test_local": "supabase functions serve function-name"
+    }
+  },
+  "database_functions_rules": {
+    "security": {
+      "default_mode": "SECURITY INVOKER",
+      "search_path": "SET search_path = ''",
+      "naming": "Use fully qualified names (schema.table)",
+      "definer_warning": "Only use SECURITY DEFINER for auth functions"
+    },
+    "volatility": {
+      "IMMUTABLE": "Pure functions - same input always gives same output",
+      "STABLE": "Result can change between statements in transaction",
+      "VOLATILE": "Can modify data or has side effects"
+    },
+    "best_practices": [
+      "Input validation and sanitization",
+      "Error handling with EXCEPTION blocks",
+      "REVOKE/GRANT permissions appropriately",
+      "Return meaningful error messages",
+      "Document function purpose and parameters"
+    ],
+    "templates": {
+      "basic": "SECURITY INVOKER with search_path",
+      "auth": "SECURITY DEFINER for auth checks only",
+      "trigger": "For automatic updates",
+      "immutable": "For calculations and pure functions",
+      "aggregation": "For data statistics",
+      "error_handling": "With EXCEPTION blocks"
+    }
+  },
+  "sql_style_guide": {
+    "naming": {
+      "tables": "plural with snake_case (users, orders, products)",
+      "columns": "singular with snake_case (user_id, created_at)",
+      "avoid": "prefixes like tbl_, generic names like id",
+      "foreign_keys": "singular_table_name_id (user_id for users table)"
+    },
+    "formatting": {
+      "keywords": "always lowercase",
+      "schema": "always include (public.users)",
+      "dates": "ISO 8601 format (yyyy-mm-ddThh:mm:ss.sssss)",
+      "aliases": "meaningful with 'as' keyword",
+      "indentation": "expand for complex queries"
+    },
+    "table_requirements": {
+      "id_column": "bigint generated always as identity primary key",
+      "timestamps": "created_at, updated_at with timestamptz",
+      "comments": "always add table comments (up to 1024 chars)",
+      "indexes": "on all foreign keys"
+    },
+    "query_patterns": {
+      "simple": "compact single/few lines",
+      "complex": "expanded with proper indentation",
+      "joins": "use full table names for clarity",
+      "ctes": "for complex logic with comments"
+    }
+  },
+  "documentation_rules": {
+    "structure": {
+      "root": "docs/",
+      "categories": [
+        "modules",
+        "features",
+        "fixes",
+        "architecture",
+        "api",
+        "deployment",
+        "guides",
+        "decisions",
+        "templates"
+      ],
+      "index_file": "docs/DOCUMENTATION_INDEX.md"
+    },
+    "naming_convention": {
+      "format": "YYYY-MM-DD-CATEGORY-title.md",
+      "categories": [
+        "MODULE",
+        "FEATURE",
+        "FIX",
+        "GUIDE",
+        "ADR",
+        "API",
+        "DEPLOY"
+      ],
+      "examples": [
+        "2025-01-16-MODULE-billing.md",
+        "2025-01-16-FIX-login-bug.md"
+      ]
+    },
+    "rules": [
+      "NEVER create duplicate documentation",
+      "ALWAYS check DOCUMENTATION_INDEX.md first",
+      "NEVER create .md files in root directory",
+      "ALWAYS use templates from docs/templates/",
+      "ALWAYS update the index after changes"
+    ],
+    "templates": {
+      "module": "docs/templates/MODULE_TEMPLATE.md",
+      "feature": "docs/templates/FEATURE_TEMPLATE.md",
+      "fix": "docs/templates/FIX_TEMPLATE.md",
+      "api": "docs/templates/API_TEMPLATE.md",
+      "guide": "docs/templates/GUIDE_TEMPLATE.md"
+    },
+    "legacy_files_to_migrate": [
+      "BILLING_*.md to docs/modules/billing/",
+      "ATTENDANCE_*.md to docs/modules/attendance/",
+      "STAFF_*.md to docs/modules/staff/",
+      "*_FIX.md to docs/fixes/",
+      "*_IMPLEMENTATION.md to docs/features/"
+    ]
+  },
+  "memory_contexts": [
+    {
+      "context": "supabase_conventions",
+      "rules": [
+        "All tables must have id (UUID or BIGINT IDENTITY), created_at, updated_at",
+        "Use snake_case for all identifiers",
+        "Plural table names, singular column names",
+        "Enable RLS on all tables",
+        "Institution_id required for multi-tenant tables",
+        "ALWAYS use Supabase MCP to query current database state",
+        "NEVER read SQL files to check current database status",
+        "Apply migrations using mcp__supabase__apply_migration only",
+        "After migration, update corresponding SQL setup files",
+        "NEVER use npx supabase db push command",
+        "NEVER use deprecated auth-helpers-nextjs package",
+        "ONLY use @supabase/ssr with getAll/setAll methods",
+        "Always use lowercase SQL keywords",
+        "Always add schema prefix (public.) in queries"
+      ]
+    },
+    {
+      "context": "file_organization",
+      "rules": [
+        "SQL files only in supabase/setup/ (for reference and backup)",
+        "Setup files are updated AFTER successful migrations",
+        "Types in types/ folder",
+        "Services in lib/services/",
+        "Hooks in hooks/ folder",
+        "Migration files in supabase/migrations/",
+        "Update SQL_FILE_INDEX.md after changes"
+      ]
+    },
+    {
+      "context": "mcp_workflow",
+      "rules": [
+        "Use mcp__supabase__list_tables to check existing tables",
+        "Use mcp__supabase__execute_sql to query current schema",
+        "Use mcp__supabase__apply_migration to apply all changes",
+        "Use mcp__supabase__get_logs to debug issues",
+        "Never use CLI commands for database operations",
+        "SQL files in setup/ are documentation, not source of truth",
+        "Database is the source of truth, accessed via MCP"
+      ]
+    }
+  ],
+
+  "workflow_templates": {
+    "new_module": [
+      "Use Supabase MCP to check existing tables",
+      "Check supabase/SQL_FILE_INDEX.md for file organization",
+      "Design tables with required columns",
+      "Apply migration using mcp__supabase__apply_migration",
+      "Update supabase/setup/01_tables.sql with applied changes",
+      "Apply RLS policies using mcp__supabase__apply_migration",
+      "Update setup/03_policies.sql with applied changes",
+      "Create TypeScript types",
+      "Create service layer",
+      "Create React Query hooks",
+      "Update SQL_FILE_INDEX.md"
+    ],
+    "update_table": [
+      "Use Supabase MCP to query current table structure",
+      "Design the table modification",
+      "Apply migration using mcp__supabase__apply_migration",
+      "Update supabase/setup/01_tables.sql with dated comment",
+      "Create migration file in supabase/migrations/",
+      "Update TypeScript types if needed",
+      "Update SQL_FILE_INDEX.md if new files created"
+    ],
+    "debug_issue": [
+      "Use Supabase MCP to query affected tables",
+      "Use Supabase MCP to check RLS policies",
+      "Verify user permissions with MCP queries",
+      "Test with different roles using MCP",
+      "Check foreign key constraints with MCP",
+      "Use mcp__supabase__get_logs to review error logs"
+    ]
+  },
+  "shortcuts": {
+    "supa-new": "Create new Supabase module following all rules",
+    "supa-update": "Update existing table following conventions",
+    "supa-debug": "Debug database issue systematically",
+    "supa-check": "Check SQL_FILE_INDEX.md and current schema"
+  }
+}

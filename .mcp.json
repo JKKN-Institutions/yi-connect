@@ -1,0 +1,34 @@
+{
+  "mcpServers": {
+    "supabase": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "@supabase/mcp-server-supabase@latest",
+        "--project-ref=jxvbjpkypzedtrqewesc"
+      ],
+      "env": {
+        "SUPABASE_ACCESS_TOKEN": "sbp_47018305daf9755154b028eb0e599cbb8097c0c8"
+      }
+    },
+    "sequential-thinking": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking@latest"
+      ]
+    },
+    "actor-critic-thinking": {
+      "command": "cmd",
+      "args": ["/c", "npx", "-y", "mcp-server-actor-critic-thinking"]
+    },
+    "chrome-devtools": {
+      "command": "cmd",
+      "args": ["/c", "npx", "-y", "chrome-devtools-mcp@latest"]
+    }
+  }
+}

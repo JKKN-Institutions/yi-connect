@@ -1,0 +1,52 @@
+{
+  "name": "nextjs-pwa-skill",
+  "version": "1.0.0",
+  "description": "Advanced PWA implementation skill for Next.js applications with Supabase integration",
+  "scripts": {
+    "generate:icons": "node scripts/generate-icons.js",
+    "generate:vapid": "node scripts/generate-vapid.js",
+    "test:push": "node scripts/test-push.js",
+    "audit": "lighthouse https://localhost:3000 --view",
+    "test:pwa": "npm run audit && npm run test:push"
+  },
+  "dependencies": {
+    "@serwist/next": "^9.0.0",
+    "@supabase/supabase-js": "^2.39.0",
+    "web-push": "^3.6.0",
+    "qrcode": "^1.5.3",
+    "web-vitals": "^3.5.0"
+  },
+  "devDependencies": {
+    "@serwist/cli": "^9.0.0",
+    "@serwist/webpack-plugin": "^9.0.0",
+    "@types/web-push": "^3.6.0",
+    "sharp": "^0.33.0",
+    "lighthouse": "^11.0.0",
+    "puppeteer": "^21.0.0",
+    "@playwright/test": "^1.40.0",
+    "service-worker-mock": "^2.0.5",
+    "autocannon": "^7.14.0"
+  },
+  "peerDependencies": {
+    "next": ">=14.0.0",
+    "react": ">=18.0.0",
+    "react-dom": ">=18.0.0"
+  },
+  "keywords": [
+    "nextjs",
+    "pwa",
+    "progressive-web-app",
+    "supabase",
+    "offline",
+    "service-worker",
+    "push-notifications",
+    "serwist",
+    "web-share",
+    "background-sync"
+  ],
+  "author": "Your Dev Team",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

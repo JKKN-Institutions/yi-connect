@@ -1,0 +1,352 @@
+/**
+ * Member Detail Page
+ *
+ * Display full member profile with skills, certifications, and metrics.
+ */
+
+'use client'
+
+import { use, useState } from 'react'
+import Link from 'next/link'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Separator } from '@/components/ui/separator'
+import {
+  MemberScoreDisplay,
+  SkillsDisplay,
+  CertificationsDisplay,
+  AddSkillDialog,
+  UpdateSkillDialog,
+  AddCertificationDialog,
+  UpdateCertificationDialog,
+} from '@/components/members'
+import {
+  Building2,
+  Mail,
+  Phone,
+  MapPin,
+  Calendar,
+  Linkedin,
+  Edit,
+  Users,
+  ArrowLeft,
+  Globe,
+} from 'lucide-react'
+import { notFound } from 'next/navigation'
+
+interface PageProps {
+  params: Promise<{ id: string }>
+}
+
+function getInitials(name: string): string {
+  return name
+    .split(' ')
+    .map((n) => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2)
+}
+
+function getStatusColor(status: string): string {
+  const colors: Record<string, string> = {
+    active: 'bg-green-500/10 text-green-700 dark:text-green-400',
+    inactive: 'bg-gray-500/10 text-gray-700 dark:text-gray-400',
+    suspended: 'bg-red-500/10 text-red-700 dark:text-red-400',
+    alumni: 'bg-blue-500/10 text-blue-700 dark:text-blue-400',
+  }
+  return colors[status] || colors.active
+}
+
+export default function MemberDetailPage({ params }: PageProps) {
+  const resolvedParams = use(params)
+  const [showAddSkill, setShowAddSkill] = useState(false)
+  const [showEditSkill, setShowEditSkill] = useState<string | null>(null)
+  const [showAddCertification, setShowAddCertification] = useState(false)
+  const [showEditCertification, setShowEditCertification] = useState<string | null>(null)
+
+  // TODO: Fetch member data using getMemberById
+  // For now, using mock data structure
+  const member: any = null // Replace with: await getMemberById(resolvedParams.id)
+
+  if (!member) {
+    notFound()
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Back Button */}
+      <Button variant="ghost" asChild>
+        <Link href="/members">
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back to Members
+        </Link>
+      </Button>
+
+      {/* Member Header */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex items-start gap-4">
+              <Avatar className="h-20 w-20">
+                <AvatarImage src={member.profile?.avatar_url || undefined} alt={member.profile?.full_name} />
+                <AvatarFallback className="bg-primary/10 text-primary text-2xl">
+                  {getInitials(member.profile?.full_name || 'U')}
+                </AvatarFallback>
+              </Avatar>
+              <div className="space-y-2">
+                <div>
+                  <h1 className="text-3xl font-bold">{member.profile?.full_name}</h1>
+                  <p className="text-muted-foreground">
+                    {member.designation && member.company
+                      ? `${member.designation} at ${member.company}`
+                      : member.company || member.designation || 'Yi Member'}
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="secondary" className={getStatusColor(member.membership_status)}>
+                    {member.membership_status}
+                  </Badge>
+                  {member.membership_number && (
+                    <Badge variant="outline">{member.membership_number}</Badge>
+                  )}
+                  {member.chapter && (
+                    <Badge variant="outline">
+                      <MapPin className="h-3 w-3 mr-1" />
+                      {member.chapter.name}
+                    </Badge>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <Button asChild>
+              <Link href={`/members/${member.id}/edit`}>
+                <Edit className="h-4 w-4 mr-2" />
+                Edit Profile
+              </Link>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Score Display */}
+      {member.engagement && member.leadership && (
+        <MemberScoreDisplay
+          engagementScore={member.engagement.engagement_score || 0}
+          readinessScore={member.leadership.readiness_score || 0}
+        />
+      )}
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* Contact Information */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Contact Information</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center gap-3 text-sm">
+              <Mail className="h-4 w-4 text-muted-foreground" />
+              <a href={`mailto:${member.profile?.email}`} className="text-primary hover:underline">
+                {member.profile?.email}
+              </a>
+            </div>
+            {member.profile?.phone && (
+              <div className="flex items-center gap-3 text-sm">
+                <Phone className="h-4 w-4 text-muted-foreground" />
+                <a href={`tel:${member.profile.phone}`} className="text-primary hover:underline">
+                  {member.profile.phone}
+                </a>
+              </div>
+            )}
+            {member.linkedin_url && (
+              <div className="flex items-center gap-3 text-sm">
+                <Linkedin className="h-4 w-4 text-muted-foreground" />
+                <a
+                  href={member.linkedin_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline"
+                >
+                  LinkedIn Profile
+                </a>
+              </div>
+            )}
+            <Separator />
+            {member.address && (
+              <div className="space-y-1">
+                <p className="text-sm font-medium">Address</p>
+                <p className="text-sm text-muted-foreground">{member.address}</p>
+                <p className="text-sm text-muted-foreground">
+                  {[member.city, member.state, member.pincode, member.country]
+                    .filter(Boolean)
+                    .join(', ')}
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Professional Information */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Professional Details</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {member.company && (
+              <div className="flex items-center gap-3 text-sm">
+                <Building2 className="h-4 w-4 text-muted-foreground" />
+                <span>{member.company}</span>
+              </div>
+            )}
+            {member.designation && (
+              <div className="flex items-center gap-3 text-sm">
+                <Users className="h-4 w-4 text-muted-foreground" />
+                <span>{member.designation}</span>
+              </div>
+            )}
+            {member.industry && (
+              <div className="flex items-center gap-3 text-sm">
+                <Globe className="h-4 w-4 text-muted-foreground" />
+                <span>{member.industry}</span>
+              </div>
+            )}
+            {member.years_of_experience && (
+              <div className="text-sm">
+                <span className="text-muted-foreground">Experience: </span>
+                <span className="font-medium">{member.years_of_experience} years</span>
+              </div>
+            )}
+            <Separator />
+            <div className="flex items-center gap-3 text-sm">
+              <Calendar className="h-4 w-4 text-muted-foreground" />
+              <span>
+                Member since {new Date(member.member_since).toLocaleDateString('en-US', {
+                  month: 'long',
+                  year: 'numeric',
+                })}
+              </span>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Skills Section */}
+      <SkillsDisplay
+        member={member}
+        onAddSkill={() => setShowAddSkill(true)}
+        onEditSkill={(id) => setShowEditSkill(id)}
+      />
+
+      {/* Certifications Section */}
+      <CertificationsDisplay
+        member={member}
+        onAddCertification={() => setShowAddCertification(true)}
+        onEditCertification={(id) => setShowEditCertification(id)}
+      />
+
+      {/* Emergency Contact */}
+      {(member.emergency_contact_name || member.emergency_contact_phone) && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Emergency Contact</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {member.emergency_contact_name && (
+              <div className="text-sm">
+                <span className="text-muted-foreground">Name: </span>
+                <span className="font-medium">{member.emergency_contact_name}</span>
+              </div>
+            )}
+            {member.emergency_contact_phone && (
+              <div className="text-sm">
+                <span className="text-muted-foreground">Phone: </span>
+                <a
+                  href={`tel:${member.emergency_contact_phone}`}
+                  className="font-medium text-primary hover:underline"
+                >
+                  {member.emergency_contact_phone}
+                </a>
+              </div>
+            )}
+            {member.emergency_contact_relationship && (
+              <div className="text-sm">
+                <span className="text-muted-foreground">Relationship: </span>
+                <span className="font-medium">{member.emergency_contact_relationship}</span>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Notes */}
+      {member.notes && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Notes</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground whitespace-pre-wrap">{member.notes}</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Dialogs */}
+      {showAddSkill && (
+        <AddSkillDialog
+          memberId={member.id}
+          skills={[]} // TODO: Pass skills list
+          open={showAddSkill}
+          onOpenChange={setShowAddSkill}
+        />
+      )}
+
+      {showEditSkill && (
+        <UpdateSkillDialog
+          skillId={showEditSkill}
+          currentProficiency="intermediate" // TODO: Get from selected skill
+          currentExperience={0}
+          currentMentor={false}
+          currentNotes=""
+          open={!!showEditSkill}
+          onOpenChange={(open) => !open && setShowEditSkill(null)}
+        />
+      )}
+
+      {showAddCertification && (
+        <AddCertificationDialog
+          memberId={member.id}
+          certifications={[]} // TODO: Pass certifications list
+          open={showAddCertification}
+          onOpenChange={setShowAddCertification}
+        />
+      )}
+
+      {showEditCertification && (
+        <UpdateCertificationDialog
+          certificationId={showEditCertification}
+          currentCertificateNumber=""
+          currentIssuedDate=""
+          currentExpiryDate=""
+          currentDocumentUrl=""
+          currentNotes=""
+          open={!!showEditCertification}
+          onOpenChange={(open) => !open && setShowEditCertification(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+// Generate metadata
+export async function generateMetadata({ params }: PageProps) {
+  const resolvedParams = await params
+  // TODO: Fetch member for dynamic metadata
+  // const member = await getMemberById(resolvedParams.id)
+
+  return {
+    title: `Member Profile - Yi Connect`,
+    description: 'View member profile, skills, and certifications',
+  }
+}

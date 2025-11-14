@@ -25,6 +25,7 @@ import {
   MapPin,
   Shield,
   UserCheck,
+  UserCog,
 } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
@@ -92,6 +93,11 @@ const adminNavigation = [
     name: 'Chapters',
     href: '/admin/chapters',
     icon: MapPin,
+  },
+  {
+    name: 'User Management',
+    href: '/admin/users',
+    icon: UserCog,
   },
 ]
 

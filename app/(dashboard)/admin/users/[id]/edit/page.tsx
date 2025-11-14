@@ -30,11 +30,14 @@ interface PageProps {
   }>;
 }
 
-async function EditFormData({ userId }: { userId: string }) {
+async function EditFormData({ paramsPromise }: { paramsPromise: Promise<{ id: string }> }) {
+  // Await params inside Suspense boundary
+  const params = await paramsPromise;
+
   // Require Super Admin or National Admin
   await requireRole(['Super Admin', 'National Admin']);
 
-  const user = await getUserById(userId);
+  const user = await getUserById(params.id);
 
   if (!user) {
     notFound();
@@ -84,9 +87,7 @@ async function EditFormData({ userId }: { userId: string }) {
   );
 }
 
-export default async function EditUserPage(props: PageProps) {
-  const params = await props.params;
-
+export default function EditUserPage(props: PageProps) {
   return (
     <div className='flex flex-1 flex-col gap-6 p-6'>
       <Suspense
@@ -117,7 +118,7 @@ export default async function EditUserPage(props: PageProps) {
           </div>
         }
       >
-        <EditFormData userId={params.id} />
+        <EditFormData paramsPromise={props.params} />
       </Suspense>
     </div>
   );

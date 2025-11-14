@@ -52,11 +52,14 @@ function getRoleBadgeVariant(hierarchyLevel: number) {
   return 'outline' // Regular members
 }
 
-async function UserDetailContent({ userId }: { userId: string }) {
+async function UserDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id: string }> }) {
+  // Await params inside Suspense boundary
+  const params = await paramsPromise
+
   // Require Super Admin or National Admin
   await requireRole(['Super Admin', 'National Admin'])
 
-  const user = await getUserById(userId)
+  const user = await getUserById(params.id)
 
   if (!user) {
     notFound()
@@ -380,9 +383,7 @@ async function UserDetailContent({ userId }: { userId: string }) {
   )
 }
 
-export default async function UserDetailPage(props: PageProps) {
-  const params = await props.params
-
+export default function UserDetailPage(props: PageProps) {
   return (
     <Suspense
       fallback={
@@ -431,7 +432,7 @@ export default async function UserDetailPage(props: PageProps) {
         </div>
       }
     >
-      <UserDetailContent userId={params.id} />
+      <UserDetailContent paramsPromise={props.params} />
     </Suspense>
   )
 }

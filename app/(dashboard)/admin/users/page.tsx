@@ -96,8 +96,8 @@ async function UsersStats() {
   )
 }
 
-async function UsersTableWrapper({ searchParams }: PageProps) {
-  const params = await searchParams
+async function UsersTableWrapper({ searchParamsPromise }: { searchParamsPromise: PageProps['searchParams'] }) {
+  const params = await searchParamsPromise
   const page = Number(params.page) || 1
   const pageSize = 20
 
@@ -147,7 +147,7 @@ async function UsersTableWrapper({ searchParams }: PageProps) {
   )
 }
 
-export default async function UsersPage(props: PageProps) {
+async function PageContent(props: PageProps) {
   // Require Super Admin or National Admin
   await requireRole(['Super Admin', 'National Admin'])
 
@@ -210,10 +210,55 @@ export default async function UsersPage(props: PageProps) {
               </div>
             }
           >
-            <UsersTableWrapper searchParams={props.searchParams} />
+            <UsersTableWrapper searchParamsPromise={props.searchParams} />
           </Suspense>
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+export default function UsersPage(props: PageProps) {
+  return (
+    <Suspense
+      fallback={
+        <div className='flex flex-1 flex-col gap-6 p-6'>
+          <div className='flex items-center justify-between'>
+            <Skeleton className='h-10 w-64' />
+            <Skeleton className='h-10 w-32' />
+          </div>
+          <div className='grid gap-4 md:grid-cols-2 lg:grid-cols-4'>
+            {[...Array(4)].map((_, i) => (
+              <Card key={i}>
+                <CardHeader>
+                  <Skeleton className='h-4 w-24' />
+                </CardHeader>
+                <CardContent>
+                  <Skeleton className='h-8 w-16' />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+          <Card>
+            <CardHeader>
+              <Skeleton className='h-6 w-32' />
+              <Skeleton className='h-4 w-64' />
+            </CardHeader>
+            <CardContent>
+              <div className='space-y-4'>
+                <div className='flex gap-4'>
+                  <Skeleton className='h-9 w-[300px]' />
+                  <Skeleton className='h-9 w-[180px]' />
+                  <Skeleton className='h-9 w-[180px]' />
+                </div>
+                <Skeleton className='h-[400px] w-full' />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      }
+    >
+      <PageContent {...props} />
+    </Suspense>
   )
 }

@@ -1,7 +1,7 @@
 /**
  * Admin Chapters List Page
  *
- * Display all chapters with management actions (National Admin only).
+ * Display all chapters with management actions (Super Admin and National Admin only).
  * Following Next.js 16 patterns with Suspense boundaries and cached data.
  */
 
@@ -21,8 +21,8 @@ export const metadata = {
 }
 
 async function ChaptersContent() {
-  // Require National Admin role
-  await requireRole(['National Admin'])
+  // Require Super Admin or National Admin role
+  await requireRole(['Super Admin', 'National Admin'])
 
   // Get chapters with pagination
   const { data: chapters, total, pageSize } = await getChapters(1, 10)

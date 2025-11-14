@@ -1,7 +1,7 @@
 /**
  * Edit Chapter Page
  *
- * Form for editing an existing Yi chapter (National Admin only).
+ * Form for editing an existing Yi chapter (Super Admin and National Admin only).
  */
 
 import { Suspense } from 'react';
@@ -32,8 +32,8 @@ interface EditChapterPageProps {
 
 // Content component that fetches data
 async function EditChapterContent({ id }: { id: string }) {
-  // Require National Admin role
-  await requireRole(['National Admin']);
+  // Require Super Admin or National Admin role
+  await requireRole(['Super Admin', 'National Admin']);
 
   // Fetch chapter data
   const chapter = await getChapterById(id);

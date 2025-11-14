@@ -1,7 +1,7 @@
 /**
  * Create New Chapter Page
  *
- * Form for creating a new Yi chapter (National Admin only).
+ * Form for creating a new Yi chapter (Super Admin and National Admin only).
  */
 
 import { Suspense } from 'react'
@@ -16,8 +16,8 @@ export const metadata = {
 
 // Content component that performs auth check
 async function NewChapterContent() {
-  // Require National Admin role
-  await requireRole(['National Admin'])
+  // Require Super Admin or National Admin role
+  await requireRole(['Super Admin', 'National Admin'])
 
   return (
     <div className="space-y-6">

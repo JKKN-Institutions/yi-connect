@@ -1793,6 +1793,1320 @@ export type Database = {
         }
         Relationships: []
       }
+      // ================================================
+      // MODULE 4: FINANCE TABLES
+      // ================================================
+      budgets: {
+        Row: {
+          id: string
+          chapter_id: string
+          name: string
+          description: string | null
+          fiscal_year: number
+          period: Database["public"]["Enums"]["budget_period"]
+          quarter: number | null
+          total_amount: number
+          allocated_amount: number
+          spent_amount: number
+          committed_amount: number
+          status: Database["public"]["Enums"]["budget_status"]
+          approved_by: string | null
+          approved_at: string | null
+          start_date: string
+          end_date: string
+          created_by: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          chapter_id: string
+          name: string
+          description?: string | null
+          fiscal_year: number
+          period?: Database["public"]["Enums"]["budget_period"]
+          quarter?: number | null
+          total_amount: number
+          allocated_amount?: number
+          spent_amount?: number
+          committed_amount?: number
+          status?: Database["public"]["Enums"]["budget_status"]
+          approved_by?: string | null
+          approved_at?: string | null
+          start_date: string
+          end_date: string
+          created_by: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          chapter_id?: string
+          name?: string
+          description?: string | null
+          fiscal_year?: number
+          period?: Database["public"]["Enums"]["budget_period"]
+          quarter?: number | null
+          total_amount?: number
+          allocated_amount?: number
+          spent_amount?: number
+          committed_amount?: number
+          status?: Database["public"]["Enums"]["budget_status"]
+          approved_by?: string | null
+          approved_at?: string | null
+          start_date?: string
+          end_date?: string
+          created_by?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      budget_allocations: {
+        Row: {
+          id: string
+          budget_id: string
+          vertical_name: string
+          category_name: string | null
+          allocated_amount: number
+          spent_amount: number
+          description: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          budget_id: string
+          vertical_name: string
+          category_name?: string | null
+          allocated_amount: number
+          spent_amount?: number
+          description?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          budget_id?: string
+          vertical_name?: string
+          category_name?: string | null
+          allocated_amount?: number
+          spent_amount?: number
+          description?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      expense_categories: {
+        Row: {
+          id: string
+          chapter_id: string | null
+          name: string
+          description: string | null
+          parent_category_id: string | null
+          color: string
+          icon: string | null
+          sort_order: number
+          is_active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          chapter_id?: string | null
+          name: string
+          description?: string | null
+          parent_category_id?: string | null
+          color?: string
+          icon?: string | null
+          sort_order?: number
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          chapter_id?: string | null
+          name?: string
+          description?: string | null
+          parent_category_id?: string | null
+          color?: string
+          icon?: string | null
+          sort_order?: number
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      expense_receipts: {
+        Row: {
+          id: string
+          expense_id: string
+          file_name: string
+          file_path: string
+          file_size: number | null
+          file_type: string | null
+          uploaded_by: string
+          uploaded_at: string
+          description: string | null
+        }
+        Insert: {
+          id?: string
+          expense_id: string
+          file_name: string
+          file_path: string
+          file_size?: number | null
+          file_type?: string | null
+          uploaded_by: string
+          uploaded_at?: string
+          description?: string | null
+        }
+        Update: {
+          id?: string
+          expense_id?: string
+          file_name?: string
+          file_path?: string
+          file_size?: number | null
+          file_type?: string | null
+          uploaded_by?: string
+          uploaded_at?: string
+          description?: string | null
+        }
+        Relationships: []
+      }
+      expenses: {
+        Row: {
+          id: string
+          chapter_id: string
+          event_id: string | null
+          budget_id: string | null
+          category_id: string
+          title: string
+          description: string | null
+          amount: number
+          expense_date: string
+          vendor_name: string | null
+          vendor_contact: string | null
+          invoice_number: string | null
+          payment_method: Database["public"]["Enums"]["payment_method_type"] | null
+          payment_date: string | null
+          payment_reference: string | null
+          status: Database["public"]["Enums"]["expense_status"]
+          submitted_by: string | null
+          submitted_at: string | null
+          approved_by: string | null
+          approved_at: string | null
+          rejection_reason: string | null
+          tax_amount: number
+          other_charges: number
+          total_amount: number | null
+          notes: string | null
+          created_by: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          chapter_id: string
+          event_id?: string | null
+          budget_id?: string | null
+          category_id: string
+          title: string
+          description?: string | null
+          amount: number
+          expense_date?: string
+          vendor_name?: string | null
+          vendor_contact?: string | null
+          invoice_number?: string | null
+          payment_method?: Database["public"]["Enums"]["payment_method_type"] | null
+          payment_date?: string | null
+          payment_reference?: string | null
+          status?: Database["public"]["Enums"]["expense_status"]
+          submitted_by?: string | null
+          submitted_at?: string | null
+          approved_by?: string | null
+          approved_at?: string | null
+          rejection_reason?: string | null
+          tax_amount?: number
+          other_charges?: number
+          total_amount?: number | null
+          notes?: string | null
+          created_by: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          chapter_id?: string
+          event_id?: string | null
+          budget_id?: string | null
+          category_id?: string
+          title?: string
+          description?: string | null
+          amount?: number
+          expense_date?: string
+          vendor_name?: string | null
+          vendor_contact?: string | null
+          invoice_number?: string | null
+          payment_method?: Database["public"]["Enums"]["payment_method_type"] | null
+          payment_date?: string | null
+          payment_reference?: string | null
+          status?: Database["public"]["Enums"]["expense_status"]
+          submitted_by?: string | null
+          submitted_at?: string | null
+          approved_by?: string | null
+          approved_at?: string | null
+          rejection_reason?: string | null
+          tax_amount?: number
+          other_charges?: number
+          total_amount?: number | null
+          notes?: string | null
+          created_by?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      sponsors: {
+        Row: {
+          id: string
+          chapter_id: string
+          organization_name: string
+          industry: string | null
+          website: string | null
+          contact_person_name: string | null
+          contact_person_designation: string | null
+          contact_email: string | null
+          contact_phone: string | null
+          address_line1: string | null
+          address_line2: string | null
+          city: string | null
+          state: string | null
+          pincode: string | null
+          country: string
+          relationship_status: string
+          first_contact_date: string | null
+          last_contact_date: string | null
+          next_followup_date: string | null
+          total_sponsored_amount: number
+          current_year_amount: number
+          tags: string[] | null
+          priority: string
+          notes: string | null
+          is_active: boolean
+          created_by: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          chapter_id: string
+          organization_name: string
+          industry?: string | null
+          website?: string | null
+          contact_person_name?: string | null
+          contact_person_designation?: string | null
+          contact_email?: string | null
+          contact_phone?: string | null
+          address_line1?: string | null
+          address_line2?: string | null
+          city?: string | null
+          state?: string | null
+          pincode?: string | null
+          country?: string
+          relationship_status?: string
+          first_contact_date?: string | null
+          last_contact_date?: string | null
+          next_followup_date?: string | null
+          total_sponsored_amount?: number
+          current_year_amount?: number
+          tags?: string[] | null
+          priority?: string
+          notes?: string | null
+          is_active?: boolean
+          created_by: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          chapter_id?: string
+          organization_name?: string
+          industry?: string | null
+          website?: string | null
+          contact_person_name?: string | null
+          contact_person_designation?: string | null
+          contact_email?: string | null
+          contact_phone?: string | null
+          address_line1?: string | null
+          address_line2?: string | null
+          city?: string | null
+          state?: string | null
+          pincode?: string | null
+          country?: string
+          relationship_status?: string
+          first_contact_date?: string | null
+          last_contact_date?: string | null
+          next_followup_date?: string | null
+          total_sponsored_amount?: number
+          current_year_amount?: number
+          tags?: string[] | null
+          priority?: string
+          notes?: string | null
+          is_active?: boolean
+          created_by?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      sponsorship_tiers: {
+        Row: {
+          id: string
+          chapter_id: string
+          name: string
+          tier_level: Database["public"]["Enums"]["sponsorship_tier_level"]
+          min_amount: number
+          max_amount: number | null
+          benefits: string[] | null
+          description: string | null
+          color: string | null
+          icon: string | null
+          sort_order: number
+          is_active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          chapter_id: string
+          name: string
+          tier_level: Database["public"]["Enums"]["sponsorship_tier_level"]
+          min_amount: number
+          max_amount?: number | null
+          benefits?: string[] | null
+          description?: string | null
+          color?: string | null
+          icon?: string | null
+          sort_order?: number
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          chapter_id?: string
+          name?: string
+          tier_level?: Database["public"]["Enums"]["sponsorship_tier_level"]
+          min_amount?: number
+          max_amount?: number | null
+          benefits?: string[] | null
+          description?: string | null
+          color?: string | null
+          icon?: string | null
+          sort_order?: number
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      sponsorship_deals: {
+        Row: {
+          id: string
+          chapter_id: string
+          sponsor_id: string
+          deal_name: string
+          tier_id: string | null
+          deal_stage: Database["public"]["Enums"]["deal_stage"]
+          proposed_amount: number
+          committed_amount: number | null
+          received_amount: number
+          proposal_date: string | null
+          expected_closure_date: string | null
+          commitment_date: string | null
+          contract_signed_date: string | null
+          event_id: string | null
+          fiscal_year: number | null
+          contract_number: string | null
+          contract_terms: string | null
+          deliverables: string[] | null
+          probability_percentage: number
+          weighted_value: number | null
+          point_of_contact: string | null
+          assigned_to: string | null
+          notes: string | null
+          rejection_reason: string | null
+          created_by: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          chapter_id: string
+          sponsor_id: string
+          deal_name: string
+          tier_id?: string | null
+          deal_stage?: string
+          proposed_amount: number
+          committed_amount?: number | null
+          received_amount?: number
+          proposal_date?: string | null
+          expected_closure_date?: string | null
+          commitment_date?: string | null
+          contract_signed_date?: string | null
+          event_id?: string | null
+          fiscal_year?: number | null
+          contract_number?: string | null
+          contract_terms?: string | null
+          deliverables?: string[] | null
+          probability_percentage?: number
+          weighted_value?: number | null
+          point_of_contact?: string | null
+          assigned_to?: string | null
+          notes?: string | null
+          rejection_reason?: string | null
+          created_by: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          chapter_id?: string
+          sponsor_id?: string
+          deal_name?: string
+          tier_id?: string | null
+          deal_stage?: Database["public"]["Enums"]["deal_stage"]
+          proposed_amount?: number
+          committed_amount?: number | null
+          received_amount?: number
+          proposal_date?: string | null
+          expected_closure_date?: string | null
+          commitment_date?: string | null
+          contract_signed_date?: string | null
+          event_id?: string | null
+          fiscal_year?: number | null
+          contract_number?: string | null
+          contract_terms?: string | null
+          deliverables?: string[] | null
+          probability_percentage?: number
+          weighted_value?: number | null
+          point_of_contact?: string | null
+          assigned_to?: string | null
+          notes?: string | null
+          rejection_reason?: string | null
+          created_by?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      sponsorship_payments: {
+        Row: {
+          id: string
+          deal_id: string
+          amount: number
+          payment_date: string
+          payment_method: string
+          transaction_reference: string | null
+          bank_name: string | null
+          cheque_number: string | null
+          utr_number: string | null
+          receipt_number: string | null
+          receipt_date: string | null
+          notes: string | null
+          recorded_by: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          deal_id: string
+          amount: number
+          payment_date?: string
+          payment_method: string
+          transaction_reference?: string | null
+          bank_name?: string | null
+          cheque_number?: string | null
+          utr_number?: string | null
+          receipt_number?: string | null
+          receipt_date?: string | null
+          notes?: string | null
+          recorded_by: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          deal_id?: string
+          amount?: number
+          payment_date?: string
+          payment_method?: string
+          transaction_reference?: string | null
+          bank_name?: string | null
+          cheque_number?: string | null
+          utr_number?: string | null
+          receipt_number?: string | null
+          receipt_date?: string | null
+          notes?: string | null
+          recorded_by?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      reimbursement_requests: {
+        Row: {
+          id: string
+          chapter_id: string
+          member_id: string
+          title: string
+          amount: number
+          expense_date: string
+          category: string
+          description: string
+          receipt_urls: string[] | null
+          status: Database["public"]["Enums"]["reimbursement_status"]
+          submitted_at: string
+          reviewed_by: string | null
+          reviewed_at: string | null
+          rejection_reason: string | null
+          payment_date: string | null
+          payment_method: Database["public"]["Enums"]["payment_method_type"] | null
+          payment_reference: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          chapter_id: string
+          member_id: string
+          title: string
+          amount: number
+          expense_date: string
+          category: string
+          description: string
+          receipt_urls?: string[] | null
+          status?: Database["public"]["Enums"]["reimbursement_status"]
+          submitted_at?: string
+          reviewed_by?: string | null
+          reviewed_at?: string | null
+          rejection_reason?: string | null
+          payment_date?: string | null
+          payment_method?: Database["public"]["Enums"]["payment_method_type"] | null
+          payment_reference?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          chapter_id?: string
+          member_id?: string
+          title?: string
+          amount?: number
+          expense_date?: string
+          category?: string
+          description?: string
+          receipt_urls?: string[] | null
+          status?: Database["public"]["Enums"]["reimbursement_status"]
+          submitted_at?: string
+          reviewed_by?: string | null
+          reviewed_at?: string | null
+          rejection_reason?: string | null
+          payment_date?: string | null
+          payment_method?: Database["public"]["Enums"]["payment_method_type"] | null
+          payment_reference?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      reimbursement_approvals: {
+        Row: {
+          id: string
+          request_id: string
+          approver_id: string
+          action: string
+          comments: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          request_id: string
+          approver_id: string
+          action: string
+          comments?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          request_id?: string
+          approver_id?: string
+          action?: string
+          comments?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
+      payment_methods: {
+        Row: {
+          id: string
+          chapter_id: string
+          name: string
+          type: string
+          is_active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          chapter_id: string
+          name: string
+          type: string
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          chapter_id?: string
+          name?: string
+          type?: string
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      financial_audit_logs: {
+        Row: {
+          id: string
+          chapter_id: string
+          entity_type: string
+          entity_id: string
+          action: string
+          old_values: Json | null
+          new_values: Json | null
+          performed_by: string | null
+          ip_address: string | null
+          user_agent: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          chapter_id: string
+          entity_type: string
+          entity_id: string
+          action: string
+          old_values?: Json | null
+          new_values?: Json | null
+          performed_by?: string | null
+          ip_address?: string | null
+          user_agent?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          chapter_id?: string
+          entity_type?: string
+          entity_id?: string
+          action?: string
+          old_values?: Json | null
+          new_values?: Json | null
+          performed_by?: string | null
+          ip_address?: string | null
+          user_agent?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
+      // ================================================
+      // MODULE 2: STAKEHOLDER CRM TABLES
+      // ================================================
+      schools: {
+        Row: {
+          id: string
+          chapter_id: string
+          school_name: string
+          school_type: Database["public"]["Enums"]["school_type"]
+          address_line1: string | null
+          address_line2: string | null
+          city: string
+          state: string
+          pincode: string | null
+          phone: string | null
+          email: string | null
+          website: string | null
+          connection_type: Database["public"]["Enums"]["connection_type"]
+          connected_through_member_id: string | null
+          connection_notes: string | null
+          total_students: number | null
+          grade_range: string | null
+          medium: string[] | null
+          school_category: string | null
+          management_type: string | null
+          suitable_programs: string[] | null
+          has_auditorium: boolean
+          has_smart_class: boolean
+          has_ground: boolean
+          has_parking: boolean
+          has_library: boolean
+          facility_notes: string | null
+          best_time_to_approach: string | null
+          decision_maker: string | null
+          lead_time_required: string | null
+          notes: string | null
+          status: Database["public"]["Enums"]["stakeholder_status"]
+          created_by: string | null
+          created_at: string
+          updated_at: string
+          search_vector: unknown | null
+        }
+        Insert: {
+          id?: string
+          chapter_id: string
+          school_name: string
+          school_type: string
+          address_line1?: string | null
+          address_line2?: string | null
+          city?: string
+          state?: string
+          pincode?: string | null
+          phone?: string | null
+          email?: string | null
+          website?: string | null
+          connection_type?: Database["public"]["Enums"]["connection_type"]
+          connected_through_member_id?: string | null
+          connection_notes?: string | null
+          total_students?: number | null
+          grade_range?: string | null
+          medium?: string[] | null
+          school_category?: string | null
+          management_type?: string | null
+          suitable_programs?: string[] | null
+          has_auditorium?: boolean
+          has_smart_class?: boolean
+          has_ground?: boolean
+          has_parking?: boolean
+          has_library?: boolean
+          facility_notes?: string | null
+          best_time_to_approach?: string | null
+          decision_maker?: string | null
+          lead_time_required?: string | null
+          notes?: string | null
+          status?: Database["public"]["Enums"]["stakeholder_status"]
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+          search_vector?: unknown | null
+        }
+        Update: {
+          id?: string
+          chapter_id?: string
+          school_name?: string
+          school_type?: Database["public"]["Enums"]["school_type"]
+          address_line1?: string | null
+          address_line2?: string | null
+          city?: string
+          state?: string
+          pincode?: string | null
+          phone?: string | null
+          email?: string | null
+          website?: string | null
+          connection_type?: Database["public"]["Enums"]["connection_type"]
+          connected_through_member_id?: string | null
+          connection_notes?: string | null
+          total_students?: number | null
+          grade_range?: string | null
+          medium?: string[] | null
+          school_category?: string | null
+          management_type?: string | null
+          suitable_programs?: string[] | null
+          has_auditorium?: boolean
+          has_smart_class?: boolean
+          has_ground?: boolean
+          has_parking?: boolean
+          has_library?: boolean
+          facility_notes?: string | null
+          best_time_to_approach?: string | null
+          decision_maker?: string | null
+          lead_time_required?: string | null
+          notes?: string | null
+          status?: Database["public"]["Enums"]["stakeholder_status"]
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+          search_vector?: unknown | null
+        }
+        Relationships: []
+      }
+      colleges: {
+        Row: {
+          id: string
+          chapter_id: string
+          college_name: string
+          college_type: string
+          affiliation: string | null
+          address_line1: string | null
+          address_line2: string | null
+          city: string
+          state: string
+          pincode: string | null
+          phone: string | null
+          email: string | null
+          website: string | null
+          connection_type: Database["public"]["Enums"]["connection_type"]
+          connected_through_member_id: string | null
+          connection_notes: string | null
+          total_students: number | null
+          departments: string[] | null
+          faculty_count: number | null
+          has_yuva_chapter: boolean
+          yuva_coordinator_name: string | null
+          yuva_coordinator_contact: string | null
+          collaboration_areas: string[] | null
+          has_auditorium: boolean
+          has_seminar_hall: boolean
+          has_hostel: boolean
+          has_placement_cell: boolean
+          facility_notes: string | null
+          best_time_to_approach: string | null
+          decision_maker: string | null
+          lead_time_required: string | null
+          notes: string | null
+          status: Database["public"]["Enums"]["stakeholder_status"]
+          created_by: string | null
+          created_at: string
+          updated_at: string
+          search_vector: unknown | null
+        }
+        Insert: {
+          id?: string
+          chapter_id: string
+          college_name: string
+          college_type: string
+          affiliation?: string | null
+          address_line1?: string | null
+          address_line2?: string | null
+          city?: string
+          state?: string
+          pincode?: string | null
+          phone?: string | null
+          email?: string | null
+          website?: string | null
+          connection_type?: Database["public"]["Enums"]["connection_type"]
+          connected_through_member_id?: string | null
+          connection_notes?: string | null
+          total_students?: number | null
+          departments?: string[] | null
+          faculty_count?: number | null
+          has_yuva_chapter?: boolean
+          yuva_coordinator_name?: string | null
+          yuva_coordinator_contact?: string | null
+          collaboration_areas?: string[] | null
+          has_auditorium?: boolean
+          has_seminar_hall?: boolean
+          has_hostel?: boolean
+          has_placement_cell?: boolean
+          facility_notes?: string | null
+          best_time_to_approach?: string | null
+          decision_maker?: string | null
+          lead_time_required?: string | null
+          notes?: string | null
+          status?: Database["public"]["Enums"]["stakeholder_status"]
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+          search_vector?: unknown | null
+        }
+        Update: {
+          id?: string
+          chapter_id?: string
+          college_name?: string
+          college_type?: string
+          affiliation?: string | null
+          address_line1?: string | null
+          address_line2?: string | null
+          city?: string
+          state?: string
+          pincode?: string | null
+          phone?: string | null
+          email?: string | null
+          website?: string | null
+          connection_type?: Database["public"]["Enums"]["connection_type"]
+          connected_through_member_id?: string | null
+          connection_notes?: string | null
+          total_students?: number | null
+          departments?: string[] | null
+          faculty_count?: number | null
+          has_yuva_chapter?: boolean
+          yuva_coordinator_name?: string | null
+          yuva_coordinator_contact?: string | null
+          collaboration_areas?: string[] | null
+          has_auditorium?: boolean
+          has_seminar_hall?: boolean
+          has_hostel?: boolean
+          has_placement_cell?: boolean
+          facility_notes?: string | null
+          best_time_to_approach?: string | null
+          decision_maker?: string | null
+          lead_time_required?: string | null
+          notes?: string | null
+          status?: Database["public"]["Enums"]["stakeholder_status"]
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+          search_vector?: unknown | null
+        }
+        Relationships: []
+      }
+      industries: {
+        Row: {
+          id: string
+          chapter_id: string
+          company_name: string
+          industry_sector: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          chapter_id: string
+          company_name: string
+          industry_sector: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          chapter_id?: string
+          company_name?: string
+          industry_sector?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      government_stakeholders: {
+        Row: {
+          id: string
+          chapter_id: string
+          department_name: string
+          official_name: string
+          designation: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          chapter_id: string
+          department_name: string
+          official_name: string
+          designation: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          chapter_id?: string
+          department_name?: string
+          official_name?: string
+          designation?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      ngos: {
+        Row: {
+          id: string
+          chapter_id: string
+          ngo_name: string
+          focus_areas: string[]
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          chapter_id: string
+          ngo_name: string
+          focus_areas: string[]
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          chapter_id?: string
+          ngo_name?: string
+          focus_areas?: string[]
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      vendors: {
+        Row: {
+          id: string
+          chapter_id: string
+          vendor_name: string
+          vendor_category: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          chapter_id: string
+          vendor_name: string
+          vendor_category: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          chapter_id?: string
+          vendor_name?: string
+          vendor_category?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      speakers: {
+        Row: {
+          id: string
+          chapter_id: string
+          speaker_name: string
+          expertise_areas: string[]
+          email: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          chapter_id: string
+          speaker_name: string
+          expertise_areas: string[]
+          email: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          chapter_id?: string
+          speaker_name?: string
+          expertise_areas?: string[]
+          email?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      stakeholder_contacts: {
+        Row: {
+          id: string
+          stakeholder_type: string
+          stakeholder_id: string
+          contact_name: string
+          designation: string | null
+          phone_primary: string | null
+          email: string | null
+          is_primary_contact: boolean
+          is_decision_maker: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          stakeholder_type: string
+          stakeholder_id: string
+          contact_name: string
+          designation?: string | null
+          phone_primary?: string | null
+          email?: string | null
+          is_primary_contact?: boolean
+          is_decision_maker?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          stakeholder_type?: string
+          stakeholder_id?: string
+          contact_name?: string
+          designation?: string | null
+          phone_primary?: string | null
+          email?: string | null
+          is_primary_contact?: boolean
+          is_decision_maker?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      stakeholder_documents: {
+        Row: {
+          id: string
+          stakeholder_type: string
+          stakeholder_id: string
+          document_name: string
+          file_url: string
+          uploaded_at: string
+        }
+        Insert: {
+          id?: string
+          stakeholder_type: string
+          stakeholder_id: string
+          document_name: string
+          file_url: string
+          uploaded_at?: string
+        }
+        Update: {
+          id?: string
+          stakeholder_type?: string
+          stakeholder_id?: string
+          document_name?: string
+          file_url?: string
+          uploaded_at?: string
+        }
+        Relationships: []
+      }
+      stakeholder_interactions: {
+        Row: {
+          id: string
+          chapter_id: string
+          stakeholder_type: string
+          stakeholder_id: string
+          interaction_type: string
+          interaction_date: string
+          outcome: string
+          summary: string
+          requires_follow_up: boolean
+          follow_up_date: string | null
+          next_steps: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          chapter_id: string
+          stakeholder_type: string
+          stakeholder_id: string
+          interaction_type: string
+          interaction_date?: string
+          outcome: string
+          summary: string
+          requires_follow_up?: boolean
+          follow_up_date?: string | null
+          next_steps?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          chapter_id?: string
+          stakeholder_type?: string
+          stakeholder_id?: string
+          interaction_type?: string
+          interaction_date?: string
+          outcome?: string
+          summary?: string
+          requires_follow_up?: boolean
+          follow_up_date?: string | null
+          next_steps?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      stakeholder_mous: {
+        Row: {
+          id: string
+          chapter_id: string
+          stakeholder_type: string
+          stakeholder_id: string
+          mou_status: string
+          mou_title: string | null
+          signed_date: string | null
+          valid_from: string | null
+          valid_to: string | null
+          scope_of_collaboration: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          chapter_id: string
+          stakeholder_type: string
+          stakeholder_id: string
+          mou_status?: string
+          mou_title?: string | null
+          signed_date?: string | null
+          valid_from?: string | null
+          valid_to?: string | null
+          scope_of_collaboration?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          chapter_id?: string
+          stakeholder_type?: string
+          stakeholder_id?: string
+          mou_status?: string
+          mou_title?: string | null
+          signed_date?: string | null
+          valid_from?: string | null
+          valid_to?: string | null
+          scope_of_collaboration?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      relationship_health_scores: {
+        Row: {
+          id: string
+          chapter_id: string
+          stakeholder_type: string
+          stakeholder_id: string
+          overall_score: number
+          health_tier: string
+          total_interactions: number
+          last_interaction_date: string | null
+          days_since_last_interaction: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          chapter_id: string
+          stakeholder_type: string
+          stakeholder_id: string
+          overall_score?: number
+          health_tier?: string
+          total_interactions?: number
+          last_interaction_date?: string | null
+          days_since_last_interaction?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          chapter_id?: string
+          stakeholder_type?: string
+          stakeholder_id?: string
+          overall_score?: number
+          health_tier?: string
+          total_interactions?: number
+          last_interaction_date?: string | null
+          days_since_last_interaction?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -1889,6 +3203,24 @@ export type Database = {
         | "communication"
         | "other"
       volunteer_status: "invited" | "accepted" | "declined" | "completed"
+      budget_period: "quarterly" | "annual" | "custom"
+      budget_status: "draft" | "approved" | "active" | "closed"
+      expense_status: "draft" | "submitted" | "approved" | "rejected" | "paid"
+      reimbursement_status: "draft" | "submitted" | "pending_approval" | "approved" | "rejected" | "paid"
+      deal_stage: "prospect" | "contacted" | "proposal_sent" | "negotiation" | "committed" | "contract_signed" | "payment_received" | "lost"
+      sponsorship_tier_level: "platinum" | "gold" | "silver" | "bronze" | "supporter"
+      payment_method_type: "bank_transfer" | "cash" | "cheque" | "upi" | "credit_card" | "online"
+      stakeholder_status: "active" | "inactive" | "prospective" | "dormant" | "archived"
+      mou_status: "none" | "in_discussion" | "draft" | "signed" | "expired" | "renewed"
+      interaction_type: "call" | "meeting" | "email" | "session" | "event" | "mou_signing" | "follow_up" | "visit" | "other"
+      interaction_outcome: "positive" | "neutral" | "negative" | "pending" | "no_response"
+      school_type: "primary" | "secondary" | "high_school" | "cbse" | "state_board" | "matric" | "icse" | "international"
+      college_type: "engineering" | "arts_science" | "medical" | "management" | "polytechnic" | "other"
+      industry_sector: "manufacturing" | "it_services" | "healthcare" | "education" | "retail" | "hospitality" | "construction" | "agriculture" | "finance" | "other"
+      partnership_type: "joint_projects" | "resource_sharing" | "funding" | "implementation" | "advocacy" | "knowledge_exchange"
+      vendor_category: "catering" | "printing" | "venue" | "av_equipment" | "decoration" | "photography" | "transportation" | "merchandise" | "other"
+      connection_type: "direct" | "through_member" | "through_ngo" | "cold" | "referral"
+      health_tier: "healthy" | "needs_attention" | "at_risk"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -2051,6 +3383,24 @@ export const Constants = {
         "other",
       ],
       volunteer_status: ["invited", "accepted", "declined", "completed"],
+      budget_period: ["quarterly", "annual", "custom"],
+      budget_status: ["draft", "approved", "active", "closed"],
+      expense_status: ["draft", "submitted", "approved", "rejected", "paid"],
+      reimbursement_status: ["draft", "submitted", "pending_approval", "approved", "rejected", "paid"],
+      deal_stage: ["prospect", "contacted", "proposal_sent", "negotiation", "committed", "contract_signed", "payment_received", "lost"],
+      sponsorship_tier_level: ["platinum", "gold", "silver", "bronze", "supporter"],
+      payment_method_type: ["bank_transfer", "cash", "cheque", "upi", "credit_card", "online"],
+      stakeholder_status: ["active", "inactive", "prospective", "dormant", "archived"],
+      mou_status: ["none", "in_discussion", "draft", "signed", "expired", "renewed"],
+      interaction_type: ["call", "meeting", "email", "session", "event", "mou_signing", "follow_up", "visit", "other"],
+      interaction_outcome: ["positive", "neutral", "negative", "pending", "no_response"],
+      school_type: ["primary", "secondary", "high_school", "cbse", "state_board", "matric", "icse", "international"],
+      college_type: ["engineering", "arts_science", "medical", "management", "polytechnic", "other"],
+      industry_sector: ["manufacturing", "it_services", "healthcare", "education", "retail", "hospitality", "construction", "agriculture", "finance", "other"],
+      partnership_type: ["joint_projects", "resource_sharing", "funding", "implementation", "advocacy", "knowledge_exchange"],
+      vendor_category: ["catering", "printing", "venue", "av_equipment", "decoration", "photography", "transportation", "merchandise", "other"],
+      connection_type: ["direct", "through_member", "through_ngo", "cold", "referral"],
+      health_tier: ["healthy", "needs_attention", "at_risk"],
     },
   },
 } as const

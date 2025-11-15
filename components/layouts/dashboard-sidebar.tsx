@@ -37,6 +37,15 @@ import {
   List,
   User,
   FileText,
+  DollarSign,
+  Receipt,
+  Handshake,
+  ReceiptText,
+  GraduationCap,
+  Factory,
+  Landmark,
+  Package,
+  Mic,
 } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
@@ -113,13 +122,100 @@ const navigation: NavItem[] = [
   },
   {
     name: 'Finance',
-    href: '/finance',
     icon: Wallet,
+    items: [
+      {
+        name: 'Overview',
+        href: '/finance',
+        icon: LayoutDashboard,
+      },
+      {
+        name: 'Budgets',
+        href: '/finance/budgets',
+        icon: DollarSign,
+      },
+      {
+        name: 'Expenses',
+        href: '/finance/expenses',
+        icon: Receipt,
+      },
+      {
+        name: 'Sponsorships',
+        href: '/finance/sponsorships',
+        icon: Handshake,
+      },
+      {
+        name: 'Reimbursements',
+        href: '/finance/reimbursements',
+        icon: ReceiptText,
+      },
+      {
+        name: 'Add Budget',
+        href: '/finance/budgets/new',
+        icon: Plus,
+      },
+      {
+        name: 'Add Expense',
+        href: '/finance/expenses/new',
+        icon: Plus,
+      },
+      {
+        name: 'Add Deal',
+        href: '/finance/sponsorships/new',
+        icon: Plus,
+      },
+      {
+        name: 'New Request',
+        href: '/finance/reimbursements/new',
+        icon: Plus,
+      },
+    ],
   },
   {
     name: 'Stakeholders',
-    href: '/stakeholders',
     icon: Building2,
+    items: [
+      {
+        name: 'Overview',
+        href: '/stakeholders',
+        icon: LayoutDashboard,
+      },
+      {
+        name: 'Schools',
+        href: '/stakeholders/schools',
+        icon: Building2,
+      },
+      {
+        name: 'Colleges',
+        href: '/stakeholders/colleges',
+        icon: GraduationCap,
+      },
+      {
+        name: 'Industries',
+        href: '/stakeholders/industries',
+        icon: Factory,
+      },
+      {
+        name: 'Government',
+        href: '/stakeholders/government',
+        icon: Landmark,
+      },
+      {
+        name: 'NGOs',
+        href: '/stakeholders/ngos',
+        icon: Users,
+      },
+      {
+        name: 'Vendors',
+        href: '/stakeholders/vendors',
+        icon: Package,
+      },
+      {
+        name: 'Speakers',
+        href: '/stakeholders/speakers',
+        icon: Mic,
+      },
+    ],
   },
   {
     name: 'Communications',

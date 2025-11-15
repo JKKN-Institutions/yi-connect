@@ -80,7 +80,9 @@
       "Bash(exit 0)",
       "Bash(del /F /Q \".next\\dev\\lock\" 2)",
       "Bash(git show:*)",
-      "Bash(grid/page.tsx)"
+      "Bash(grid/page.tsx)",
+      "Bash(types/supabase.ts)",
+      "Bash(del typessupabase.ts)"
     ],
     "deny": [],
     "ask": []

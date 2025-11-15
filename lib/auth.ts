@@ -54,6 +54,36 @@ export async function requireAuth(): Promise<User> {
 }
 
 /**
+ * Get the current user's chapter ID
+ *
+ * Returns the chapter_id from the user's profile.
+ * Cached per-request using React cache().
+ * Returns null if user is not authenticated or has no chapter assigned.
+ *
+ * Usage:
+ * ```typescript
+ * const chapterId = await getCurrentChapterId()
+ * if (!chapterId) {
+ *   // Handle missing chapter
+ * }
+ * ```
+ */
+export const getCurrentChapterId = cache(async (): Promise<string | null> => {
+  const user = await getCurrentUser()
+  if (!user) return null
+
+  const supabase = await createServerSupabaseClient()
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('chapter_id')
+    .eq('id', user.id)
+    .single()
+
+  return profile?.chapter_id || null
+})
+
+/**
  * Get user profile with role information
  *
  * Fetches the user's profile including their role and chapter information.

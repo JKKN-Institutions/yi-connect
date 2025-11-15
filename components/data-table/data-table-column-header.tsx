@@ -1,13 +1,6 @@
-/**
- * Data Table Column Header
- *
- * Sortable column header component for data tables.
- */
-
-'use client'
-
 import { Column } from '@tanstack/react-table'
 import { ArrowDown, ArrowUp, ChevronsUpDown, EyeOff } from 'lucide-react'
+
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import {

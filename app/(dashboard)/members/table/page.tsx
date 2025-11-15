@@ -96,11 +96,29 @@ async function MembersTable() {
     },
   ]
 
+  // Export configuration - only serializable data
+  const exportConfig = {
+    filename: 'members-export',
+    sheetName: 'Members',
+    columns: [
+      { key: 'full_name' as const, label: 'Full Name' },
+      { key: 'email' as const, label: 'Email' },
+      { key: 'company' as const, label: 'Company' },
+      { key: 'designation' as const, label: 'Designation' },
+      { key: 'membership_status' as const, label: 'Status' },
+      { key: 'member_since' as const, label: 'Member Since' },
+      { key: 'engagement_score' as const, label: 'Engagement Score' },
+      { key: 'readiness_score' as const, label: 'Readiness Score' },
+      { key: 'skills_count' as const, label: 'Skills Count' },
+    ]
+  }
+
   return (
     <DataTable
       columns={memberColumns}
       data={members}
       filterFields={filterFields}
+      exportConfig={exportConfig}
     />
   )
 }
@@ -125,15 +143,9 @@ export default async function MembersTablePage({ searchParams }: PageProps) {
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" asChild>
-            <Link href="/members">
+            <Link href="/members/grid">
               <Grid3x3 className="h-4 w-4 mr-2" />
-              Card View
-            </Link>
-          </Button>
-          <Button variant="outline" size="sm" asChild>
-            <Link href="/members/table">
-              <TableIcon className="h-4 w-4 mr-2" />
-              Table View
+              Grid View
             </Link>
           </Button>
           <Button asChild>

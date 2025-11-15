@@ -22,6 +22,13 @@ const nextConfig: NextConfig = {
     stable: { expire: 3600 }, // Stable data (1 hour)
   },
 
+  // Experimental features
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '10mb', // Increase limit to handle base64 image uploads
+    },
+  },
+
   // Image optimization configuration (if needed for Supabase Storage)
   images: {
     remotePatterns: [

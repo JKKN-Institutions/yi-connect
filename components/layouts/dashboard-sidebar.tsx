@@ -1,7 +1,7 @@
 /**
  * Dashboard Sidebar
  *
- * Main navigation sidebar for the dashboard.
+ * Main navigation sidebar for the dashboard with collapsible dropdown menus.
  */
 
 'use client'
@@ -26,11 +26,34 @@ import {
   Shield,
   UserCheck,
   UserCog,
+  Settings,
+  ChevronDown,
+  ChevronRight,
+  Table as TableIcon,
+  Grid3x3,
+  TrendingUp,
+  CalendarDays,
+  Plus,
+  List,
+  User,
+  FileText,
 } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 
-const navigation = [
+interface NavItem {
+  name: string
+  href?: string
+  icon: any
+  items?: {
+    name: string
+    href: string
+    icon?: any
+  }[]
+}
+
+const navigation: NavItem[] = [
   {
     name: 'Dashboard',
     href: '/dashboard',
@@ -38,13 +61,55 @@ const navigation = [
   },
   {
     name: 'Members',
-    href: '/members',
     icon: Users,
+    items: [
+      {
+        name: 'All Members',
+        href: '/members',
+        icon: TableIcon,
+      },
+      {
+        name: 'Grid View',
+        href: '/members/grid',
+        icon: Grid3x3,
+      },
+      {
+        name: 'Analytics',
+        href: '/members/analytics',
+        icon: TrendingUp,
+      },
+      {
+        name: 'Add Member',
+        href: '/members/new',
+        icon: Plus,
+      },
+    ],
   },
   {
     name: 'Events',
-    href: '/events',
     icon: Calendar,
+    items: [
+      {
+        name: 'All Events',
+        href: '/events',
+        icon: CalendarDays,
+      },
+      {
+        name: 'Table View',
+        href: '/events/table',
+        icon: TableIcon,
+      },
+      {
+        name: 'Manage Events',
+        href: '/events/manage',
+        icon: List,
+      },
+      {
+        name: 'Create Event',
+        href: '/events/new',
+        icon: Plus,
+      },
+    ],
   },
   {
     name: 'Finance',
@@ -81,9 +146,25 @@ const navigation = [
     href: '/leadership',
     icon: Globe,
   },
+  {
+    name: 'Settings',
+    icon: Settings,
+    items: [
+      {
+        name: 'Profile',
+        href: '/settings/profile',
+        icon: User,
+      },
+      {
+        name: 'General',
+        href: '/settings',
+        icon: Settings,
+      },
+    ],
+  },
 ]
 
-const adminNavigation = [
+const adminNavigation: NavItem[] = [
   {
     name: 'Member Requests',
     href: '/member-requests',
@@ -101,9 +182,105 @@ const adminNavigation = [
   },
 ]
 
-export function DashboardSidebar() {
+function NavItemComponent({ item, onNavigate }: { item: NavItem; onNavigate: () => void }) {
   const pathname = usePathname()
+  const [isOpen, setIsOpen] = useState(() => {
+    // Auto-expand if any child is active
+    if (item.items) {
+      return item.items.some(
+        (child) => pathname === child.href || pathname.startsWith(child.href + '/')
+      )
+    }
+    return false
+  })
+
+  // If item has no subitems, render as simple link
+  if (!item.items) {
+    const isActive = pathname === item.href || pathname.startsWith(item.href! + '/')
+    const Icon = item.icon
+
+    return (
+      <li>
+        <Link
+          href={item.href!}
+          onClick={onNavigate}
+          className={cn(
+            'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
+            isActive
+              ? 'bg-primary text-primary-foreground'
+              : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+          )}
+        >
+          <Icon className="h-5 w-5 shrink-0" />
+          <span>{item.name}</span>
+        </Link>
+      </li>
+    )
+  }
+
+  // Render collapsible item with subitems
+  const hasActiveChild = item.items.some(
+    (child) => pathname === child.href || pathname.startsWith(child.href + '/')
+  )
+
+  return (
+    <li>
+      <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+        <CollapsibleTrigger asChild>
+          <button
+            className={cn(
+              'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
+              hasActiveChild
+                ? 'bg-accent text-accent-foreground'
+                : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+            )}
+          >
+            <item.icon className="h-5 w-5 shrink-0" />
+            <span className="flex-1 text-left">{item.name}</span>
+            {isOpen ? (
+              <ChevronDown className="h-4 w-4 shrink-0" />
+            ) : (
+              <ChevronRight className="h-4 w-4 shrink-0" />
+            )}
+          </button>
+        </CollapsibleTrigger>
+        <CollapsibleContent className="mt-1">
+          <ul className="space-y-1 ml-6 pl-2 border-l border-border">
+            {item.items.map((subItem) => {
+              const isActive = pathname === subItem.href || pathname.startsWith(subItem.href + '/')
+              const SubIcon = subItem.icon
+
+              return (
+                <li key={subItem.name}>
+                  <Link
+                    href={subItem.href}
+                    onClick={onNavigate}
+                    className={cn(
+                      'flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors',
+                      isActive
+                        ? 'bg-primary text-primary-foreground font-medium'
+                        : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                    )}
+                  >
+                    {SubIcon && <SubIcon className="h-4 w-4 shrink-0" />}
+                    <span>{subItem.name}</span>
+                  </Link>
+                </li>
+              )
+            })}
+          </ul>
+        </CollapsibleContent>
+      </Collapsible>
+    </li>
+  )
+}
+
+export function DashboardSidebar() {
   const [isOpen, setIsOpen] = useState(false)
+
+  const handleNavigate = () => {
+    setIsOpen(false)
+  }
 
   return (
     <>
@@ -153,28 +330,9 @@ export function DashboardSidebar() {
           {/* Navigation */}
           <nav className="flex-1 overflow-y-auto px-3 py-4 lg:pt-4">
             <ul className="space-y-1">
-              {navigation.map((item) => {
-                const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
-                const Icon = item.icon
-
-                return (
-                  <li key={item.name}>
-                    <Link
-                      href={item.href}
-                      onClick={() => setIsOpen(false)}
-                      className={cn(
-                        'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
-                        isActive
-                          ? 'bg-primary text-primary-foreground'
-                          : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-                      )}
-                    >
-                      <Icon className="h-5 w-5" />
-                      <span>{item.name}</span>
-                    </Link>
-                  </li>
-                )
-              })}
+              {navigation.map((item) => (
+                <NavItemComponent key={item.name} item={item} onNavigate={handleNavigate} />
+              ))}
             </ul>
 
             {/* Admin Section */}
@@ -186,28 +344,9 @@ export function DashboardSidebar() {
                 </h3>
               </div>
               <ul className="space-y-1">
-                {adminNavigation.map((item) => {
-                  const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
-                  const Icon = item.icon
-
-                  return (
-                    <li key={item.name}>
-                      <Link
-                        href={item.href}
-                        onClick={() => setIsOpen(false)}
-                        className={cn(
-                          'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
-                          isActive
-                            ? 'bg-primary text-primary-foreground'
-                            : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-                        )}
-                      >
-                        <Icon className="h-5 w-5" />
-                        <span>{item.name}</span>
-                      </Link>
-                    </li>
-                  )
-                })}
+                {adminNavigation.map((item) => (
+                  <NavItemComponent key={item.name} item={item} onNavigate={handleNavigate} />
+                ))}
               </ul>
             </div>
           </nav>

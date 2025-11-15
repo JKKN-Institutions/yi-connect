@@ -32,7 +32,7 @@ import {
 } from '@/components/ui/table'
 
 import { DataTablePagination } from './data-table-pagination'
-import { DataTableToolbar } from './data-table-toolbar'
+import { DataTableToolbar, type ExportConfig } from './data-table-toolbar'
 import type { DataTableFilterField } from '@/lib/table/types'
 
 interface DataTableProps<TData, TValue> {
@@ -41,6 +41,7 @@ interface DataTableProps<TData, TValue> {
   filterFields?: DataTableFilterField<TData>[]
   defaultColumnFilters?: ColumnFiltersState
   defaultSorting?: SortingState
+  exportConfig?: ExportConfig<TData>
 }
 
 export function DataTable<TData, TValue>({
@@ -49,6 +50,7 @@ export function DataTable<TData, TValue>({
   filterFields = [],
   defaultColumnFilters = [],
   defaultSorting = [],
+  exportConfig,
 }: DataTableProps<TData, TValue>) {
   const [rowSelection, setRowSelection] = React.useState({})
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
@@ -79,7 +81,7 @@ export function DataTable<TData, TValue>({
 
   return (
     <div className="space-y-4">
-      <DataTableToolbar table={table} filterFields={filterFields} />
+      <DataTableToolbar table={table} filterFields={filterFields} exportConfig={exportConfig} />
       <div className="rounded-md border">
         <Table>
           <TableHeader>

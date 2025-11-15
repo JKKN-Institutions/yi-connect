@@ -76,7 +76,11 @@
       "mcp__supabase__list_migrations",
       "Bash(supabase db branches:*)",
       "Bash(npm run supabase:gen:*)",
-      "mcp__supabase__get_advisors"
+      "mcp__supabase__get_advisors",
+      "Bash(exit 0)",
+      "Bash(del /F /Q \".next\\dev\\lock\" 2)",
+      "Bash(git show:*)",
+      "Bash(grid/page.tsx)"
     ],
     "deny": [],
     "ask": []

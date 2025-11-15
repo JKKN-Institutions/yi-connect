@@ -74,3 +74,6 @@ export function createAdminSupabaseClient() {
     }
   )
 }
+
+// Alias for compatibility
+export { createServerSupabaseClient as createClient }

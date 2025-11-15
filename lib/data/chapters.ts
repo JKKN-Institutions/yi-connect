@@ -2,7 +2,10 @@
  * Chapter Data Fetching Layer
  *
  * Cached data fetching functions for chapters following Next.js 16 patterns.
- * Uses 'use cache' directive with appropriate cacheLife for optimal performance.
+ *
+ * IMPORTANT: We don't use Next.js 16's 'use cache' directive here because
+ * all functions access Supabase client which uses cookies() - a dynamic data source.
+ * React's cache() would provide request-level deduplication if needed.
  */
 
 import { createServerSupabaseClient } from '@/lib/supabase/server'

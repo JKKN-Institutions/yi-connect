@@ -27,6 +27,7 @@ import {
 } from '@/components/ui/select';
 import { checkInAttendee } from '@/app/actions/events';
 import { checkInSchema, type CheckInInput } from '@/lib/validations/event';
+import Link from 'next/link';
 
 interface CheckInFormProps {
   eventId: string;
@@ -152,11 +153,7 @@ export function CheckInForm({ eventId, userId }: CheckInFormProps) {
 
         {/* Submit Button */}
         <div className='flex gap-2'>
-          <Button
-            type='submit'
-            disabled={isSubmitting}
-            className='flex-1'
-          >
+          <Button type='submit' disabled={isSubmitting} className='flex-1'>
             {isSubmitting ? (
               <>
                 <Loader2 className='mr-2 h-4 w-4 animate-spin' />
@@ -171,15 +168,15 @@ export function CheckInForm({ eventId, userId }: CheckInFormProps) {
         {/* Information */}
         {isGuest && (
           <div className='text-xs text-muted-foreground p-3 bg-muted rounded-lg'>
-            <strong>Note:</strong> You're checking in as a guest. To access member-only
-            features and track your event history,{' '}
-            <a href='/login' className='text-primary hover:underline'>
+            <strong>Note:</strong> You&apos;re checking in as a guest. To access
+            member-only features and track your event history,{' '}
+            <Link href='/login' className='text-primary hover:underline'>
               sign in
-            </a>{' '}
+            </Link>{' '}
             or{' '}
-            <a href='/apply' className='text-primary hover:underline'>
+            <Link href='/apply' className='text-primary hover:underline'>
               apply for membership
-            </a>
+            </Link>
             .
           </div>
         )}

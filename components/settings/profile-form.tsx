@@ -59,7 +59,7 @@ export function ProfileForm({ profile }: ProfileFormProps) {
                 id="full_name"
                 name="full_name"
                 type="text"
-                defaultValue={profile.full_name}
+                defaultValue={profile.full_name || ''}
                 placeholder="John Doe"
                 required
                 aria-invalid={!!state.errors?.full_name}

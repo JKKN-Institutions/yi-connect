@@ -74,7 +74,7 @@ export interface EventWithVolunteers extends EventWithDetails {
 }
 
 export interface EventWithMetrics extends EventWithDetails {
-  impact_metrics?: EventImpactMetrics | null
+  impact_metrics: EventImpactMetrics | null
 }
 
 export interface EventFull extends EventWithDetails {
@@ -415,25 +415,18 @@ export const EVENT_STATUSES: Record<EventStatus, string> = {
 }
 
 export const EVENT_CATEGORIES: Record<EventCategory, string> = {
-  networking: 'Networking',
-  social: 'Social',
-  professional_development: 'Professional Development',
-  community_service: 'Community Service',
-  sports: 'Sports',
-  cultural: 'Cultural',
-  fundraising: 'Fundraising',
-  workshop: 'Workshop',
-  seminar: 'Seminar',
+  general: 'General',
+  industrial_visit: 'Industrial Visit',
   conference: 'Conference',
-  webinar: 'Webinar',
-  other: 'Other',
+  workshop: 'Workshop',
+  social: 'Social',
 }
 
 export const RSVP_STATUSES: Record<RSVPStatus, string> = {
   pending: 'Pending',
   confirmed: 'Confirmed',
-  declined: 'Declined',
-  waitlist: 'Waitlist',
+  cancelled: 'Cancelled',
+  waitlisted: 'Waitlisted',
   attended: 'Attended',
   no_show: 'No Show',
 }
@@ -478,8 +471,8 @@ export function getRSVPStatusVariant(status: RSVPStatus): RSVPStatusBadgeVariant
   const variants: Record<RSVPStatus, RSVPStatusBadgeVariant> = {
     pending: 'default',
     confirmed: 'success',
-    declined: 'destructive',
-    waitlist: 'warning',
+    cancelled: 'destructive',
+    waitlisted: 'warning',
     attended: 'secondary',
     no_show: 'destructive',
   }

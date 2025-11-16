@@ -44,23 +44,11 @@ interface IVDetailPageProps {
   }>;
 }
 
-export async function generateMetadata({
-  params,
-}: IVDetailPageProps): Promise<Metadata> {
-  const { id } = await params;
-  const iv = await getIVById(id);
-
-  if (!iv) {
-    return {
-      title: 'Industrial Visit Not Found | Yi Connect',
-    };
-  }
-
-  return {
-    title: `${iv.title} | Industrial Visits`,
-    description: iv.description || `Industrial visit to ${iv.industry?.company_name}`,
-  };
-}
+// Static metadata to avoid prerendering issues with cookies
+export const metadata: Metadata = {
+  title: 'Industrial Visit Details | Yi Connect',
+  description: 'View industrial visit details and book your spot',
+};
 
 async function IVDetailContent({ id }: { id: string }) {
   const iv = await getIVById(id);
@@ -172,7 +160,7 @@ async function IVDetailContent({ id }: { id: string }) {
               <CardHeader>
                 <CardTitle>Learning Outcomes</CardTitle>
                 <CardDescription>
-                  What you'll gain from this industrial visit
+                  What you&apos;ll gain from this industrial visit
                 </CardDescription>
               </CardHeader>
               <CardContent>

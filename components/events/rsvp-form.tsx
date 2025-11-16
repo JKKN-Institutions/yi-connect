@@ -25,7 +25,7 @@ type RSVPFormValues = {
   status:
     | 'pending'
     | 'confirmed'
-    | 'declined'
+    | 'cancelled'
     | 'waitlist'
     | 'attended'
     | 'no_show';
@@ -207,7 +207,7 @@ export function RSVPForm({
                       ? 'default'
                       : currentRSVP.status === 'pending'
                       ? 'secondary'
-                      : currentRSVP.status === 'waitlist'
+                      : currentRSVP.status === 'waitlisted'
                       ? 'secondary'
                       : 'destructive'
                   }
@@ -374,7 +374,7 @@ export function QuickRSVP({
 }: QuickRSVPProps) {
   const [isPending, startTransition] = useTransition();
 
-  const handleRSVP = (status: 'confirmed' | 'declined') => {
+  const handleRSVP = (status: 'confirmed' | 'cancelled') => {
     startTransition(async () => {
       try {
         const result = await createOrUpdateRSVP({
@@ -385,7 +385,7 @@ export function QuickRSVP({
         });
         if (result.success) {
           toast.success(
-            status === 'confirmed' ? 'RSVP confirmed!' : 'RSVP declined'
+            status === 'confirmed' ? 'RSVP confirmed!' : 'RSVP cancelled'
           );
           onSuccess?.();
         } else {
@@ -404,7 +404,7 @@ export function QuickRSVP({
           variant={
             currentRSVP.status === 'confirmed'
               ? 'default'
-              : currentRSVP.status === 'declined'
+              : currentRSVP.status === 'cancelled'
               ? 'destructive'
               : 'secondary'
           }
@@ -416,7 +416,7 @@ export function QuickRSVP({
           size='sm'
           onClick={() =>
             handleRSVP(
-              currentRSVP.status === 'confirmed' ? 'declined' : 'confirmed'
+              currentRSVP.status === 'confirmed' ? 'cancelled' : 'confirmed'
             )
           }
           disabled={isPending}
@@ -440,7 +440,7 @@ export function QuickRSVP({
       </Button>
       <Button
         variant='outline'
-        onClick={() => handleRSVP('declined')}
+        onClick={() => handleRSVP('cancelled')}
         disabled={isPending}
         className='flex-1'
       >

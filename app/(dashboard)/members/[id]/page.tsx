@@ -211,15 +211,17 @@ async function MemberDetailContent({ id }: { id: string }) {
               </div>
             )}
             <Separator />
-            <div className="flex items-center gap-3 text-sm">
-              <Calendar className="h-4 w-4 text-muted-foreground" />
-              <span>
-                Member since {new Date(member.member_since).toLocaleDateString('en-US', {
-                  month: 'long',
-                  year: 'numeric',
-                })}
-              </span>
-            </div>
+            {member.member_since && (
+              <div className="flex items-center gap-3 text-sm">
+                <Calendar className="h-4 w-4 text-muted-foreground" />
+                <span>
+                  Member since {new Date(member.member_since).toLocaleDateString('en-US', {
+                    month: 'long',
+                    year: 'numeric',
+                  })}
+                </span>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

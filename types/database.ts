@@ -25,6 +25,8 @@ export type Database = {
           category: 'general' | 'industrial_visit' | 'conference' | 'workshop' | 'social'
           start_date: string
           end_date: string | null
+          registration_start_date: string | null
+          registration_end_date: string | null
           location: string | null
           venue_id: string | null
           venue_address: string | null
@@ -32,13 +34,20 @@ export type Database = {
           meeting_url: string | null
           virtual_meeting_link: string | null
           max_capacity: number | null
+          waitlist_enabled: boolean
+          requires_approval: boolean
+          send_reminders: boolean
+          allow_guests: boolean
+          guest_limit: number | null
           current_registrations: number
           registration_deadline: string | null
           is_member_only: boolean
           visibility: 'public' | 'members_only' | 'chapter_only'
-          status: 'draft' | 'published' | 'cancelled' | 'completed'
+          status: 'draft' | 'published' | 'ongoing' | 'completed' | 'cancelled'
           is_featured: boolean
           banner_image_url: string | null
+          tags: string[] | null
+          template_id: string | null
           created_by: string
           organizer_id: string
           estimated_budget: number | null
@@ -67,6 +76,8 @@ export type Database = {
           category?: 'general' | 'industrial_visit' | 'conference' | 'workshop' | 'social'
           start_date: string
           end_date?: string | null
+          registration_start_date?: string | null
+          registration_end_date?: string | null
           location?: string | null
           venue_id?: string | null
           venue_address?: string | null
@@ -74,13 +85,20 @@ export type Database = {
           meeting_url?: string | null
           virtual_meeting_link?: string | null
           max_capacity?: number | null
+          waitlist_enabled?: boolean
+          requires_approval?: boolean
+          send_reminders?: boolean
+          allow_guests?: boolean
+          guest_limit?: number | null
           current_registrations?: number
           registration_deadline?: string | null
           is_member_only?: boolean
           visibility?: 'public' | 'members_only' | 'chapter_only'
-          status?: 'draft' | 'published' | 'cancelled' | 'completed'
+          status?: 'draft' | 'published' | 'ongoing' | 'completed' | 'cancelled'
           is_featured?: boolean
           banner_image_url?: string | null
+          tags?: string[] | null
+          template_id?: string | null
           created_by: string
           organizer_id: string
           estimated_budget?: number | null
@@ -108,6 +126,8 @@ export type Database = {
           category?: 'general' | 'industrial_visit' | 'conference' | 'workshop' | 'social'
           start_date?: string
           end_date?: string | null
+          registration_start_date?: string | null
+          registration_end_date?: string | null
           location?: string | null
           venue_id?: string | null
           venue_address?: string | null
@@ -115,13 +135,20 @@ export type Database = {
           meeting_url?: string | null
           virtual_meeting_link?: string | null
           max_capacity?: number | null
+          waitlist_enabled?: boolean
+          requires_approval?: boolean
+          send_reminders?: boolean
+          allow_guests?: boolean
+          guest_limit?: number | null
           current_registrations?: number
           registration_deadline?: string | null
           is_member_only?: boolean
           visibility?: 'public' | 'members_only' | 'chapter_only'
-          status?: 'draft' | 'published' | 'cancelled' | 'completed'
+          status?: 'draft' | 'published' | 'ongoing' | 'completed' | 'cancelled'
           is_featured?: boolean
           banner_image_url?: string | null
+          tags?: string[] | null
+          template_id?: string | null
           created_by?: string
           organizer_id?: string
           estimated_budget?: number | null
@@ -156,6 +183,42 @@ export type Database = {
           }
         ]
       }
+      event_templates: {
+        Row: {
+          id: string
+          created_at: string
+          updated_at: string
+          name: string
+          description: string | null
+          category: 'general' | 'industrial_visit' | 'conference' | 'workshop' | 'social'
+          default_capacity: number | null
+          default_duration_hours: number | null
+          is_active: boolean
+        }
+        Insert: {
+          id?: string
+          created_at?: string
+          updated_at?: string
+          name: string
+          description?: string | null
+          category: 'general' | 'industrial_visit' | 'conference' | 'workshop' | 'social'
+          default_capacity?: number | null
+          default_duration_hours?: number | null
+          is_active?: boolean
+        }
+        Update: {
+          id?: string
+          created_at?: string
+          updated_at?: string
+          name?: string
+          description?: string | null
+          category?: 'general' | 'industrial_visit' | 'conference' | 'workshop' | 'social'
+          default_capacity?: number | null
+          default_duration_hours?: number | null
+          is_active?: boolean
+        }
+        Relationships: []
+      }
       event_rsvps: {
         Row: {
           id: string
@@ -175,6 +238,7 @@ export type Database = {
           pickup_location: string | null
           dietary_restrictions: string | null
           special_requirements: string | null
+          notes: string | null
         }
         Insert: {
           id?: string
@@ -193,6 +257,7 @@ export type Database = {
           pickup_location?: string | null
           dietary_restrictions?: string | null
           special_requirements?: string | null
+          notes?: string | null
         }
         Update: {
           id?: string
@@ -211,6 +276,7 @@ export type Database = {
           pickup_location?: string | null
           dietary_restrictions?: string | null
           special_requirements?: string | null
+          notes?: string | null
         }
         Relationships: [
           {
@@ -228,6 +294,57 @@ export type Database = {
             referencedColumns: ["id"]
           }
         ]
+      }
+      guest_rsvps: {
+        Row: {
+          id: string
+          created_at: string
+          updated_at: string
+          event_id: string
+          invited_by_member_id: string | null
+          full_name: string
+          email: string
+          phone: string | null
+          company: string | null
+          designation: string | null
+          status: 'pending' | 'confirmed' | 'cancelled' | 'waitlisted' | 'attended' | 'no_show'
+          dietary_restrictions: string | null
+          special_requirements: string | null
+          notes: string | null
+        }
+        Insert: {
+          id?: string
+          created_at?: string
+          updated_at?: string
+          event_id: string
+          invited_by_member_id?: string | null
+          full_name: string
+          email: string
+          phone?: string | null
+          company?: string | null
+          designation?: string | null
+          status?: 'pending' | 'confirmed' | 'cancelled' | 'waitlisted' | 'attended' | 'no_show'
+          dietary_restrictions?: string | null
+          special_requirements?: string | null
+          notes?: string | null
+        }
+        Update: {
+          id?: string
+          created_at?: string
+          updated_at?: string
+          event_id?: string
+          invited_by_member_id?: string | null
+          full_name?: string
+          email?: string
+          phone?: string | null
+          company?: string | null
+          designation?: string | null
+          status?: 'pending' | 'confirmed' | 'cancelled' | 'waitlisted' | 'attended' | 'no_show'
+          dietary_restrictions?: string | null
+          special_requirements?: string | null
+          notes?: string | null
+        }
+        Relationships: []
       }
       industry_portal_users: {
         Row: {
@@ -414,6 +531,8 @@ export type Database = {
           created_at: string
           updated_at: string
           name: string
+          location: string | null
+          region: string | null
           city: string | null
           state: string | null
           country: string
@@ -426,6 +545,8 @@ export type Database = {
           created_at?: string
           updated_at?: string
           name: string
+          location?: string | null
+          region?: string | null
           city?: string | null
           state?: string | null
           country?: string
@@ -438,6 +559,8 @@ export type Database = {
           created_at?: string
           updated_at?: string
           name?: string
+          location?: string | null
+          region?: string | null
           city?: string | null
           state?: string | null
           country?: string
@@ -485,6 +608,8 @@ export type Database = {
           profile_id: string
           chapter_id: string
           membership_number: string | null
+          date_of_birth: string | null
+          gender: string | null
           join_date: string | null
           status: string
           role: string | null
@@ -504,6 +629,13 @@ export type Database = {
           industry: string | null
           expertise: string[] | null
           interests: string[] | null
+          years_of_experience: number | null
+          member_since: string | null
+          emergency_contact_name: string | null
+          emergency_contact_phone: string | null
+          emergency_contact_relationship: string | null
+          communication_preferences: Record<string, any> | null
+          notes: string | null
         }
         Insert: {
           id?: string
@@ -512,30 +644,8 @@ export type Database = {
           profile_id: string
           chapter_id: string
           membership_number?: string | null
-          join_date?: string | null
-          status?: string
-          role?: string | null
-          bio?: string | null
-          designation?: string | null
-          company?: string | null
-          membership_status?: string | null
-          linkedin_url?: string | null
-          twitter_url?: string | null
-          facebook_url?: string | null
-          instagram_url?: string | null
-          address?: string | null
-          city?: string | null
-          state?: string | null
-          pincode?: string | null
-          country?: string | null
-        }
-        Update: {
-          id?: string
-          created_at?: string
-          updated_at?: string
-          profile_id?: string
-          chapter_id?: string
-          membership_number?: string | null
+          date_of_birth?: string | null
+          gender?: string | null
           join_date?: string | null
           status?: string
           role?: string | null
@@ -555,6 +665,49 @@ export type Database = {
           industry?: string | null
           expertise?: string[] | null
           interests?: string[] | null
+          years_of_experience?: number | null
+          member_since?: string | null
+          emergency_contact_name?: string | null
+          emergency_contact_phone?: string | null
+          emergency_contact_relationship?: string | null
+          communication_preferences?: Record<string, any> | null
+          notes?: string | null
+        }
+        Update: {
+          id?: string
+          created_at?: string
+          updated_at?: string
+          profile_id?: string
+          chapter_id?: string
+          membership_number?: string | null
+          date_of_birth?: string | null
+          gender?: string | null
+          join_date?: string | null
+          status?: string
+          role?: string | null
+          bio?: string | null
+          designation?: string | null
+          company?: string | null
+          membership_status?: string | null
+          linkedin_url?: string | null
+          twitter_url?: string | null
+          facebook_url?: string | null
+          instagram_url?: string | null
+          address?: string | null
+          city?: string | null
+          state?: string | null
+          pincode?: string | null
+          country?: string | null
+          industry?: string | null
+          expertise?: string[] | null
+          interests?: string[] | null
+          years_of_experience?: number | null
+          member_since?: string | null
+          emergency_contact_name?: string | null
+          emergency_contact_phone?: string | null
+          emergency_contact_relationship?: string | null
+          communication_preferences?: Record<string, any> | null
+          notes?: string | null
         }
         Relationships: []
       }
@@ -710,16 +863,19 @@ export type Database = {
           id: string
           name: string
           description: string | null
+          hierarchy_level: number | null
         }
         Insert: {
           id?: string
           name: string
           description?: string | null
+          hierarchy_level?: number | null
         }
         Update: {
           id?: string
           name?: string
           description?: string | null
+          hierarchy_level?: number | null
         }
         Relationships: []
       }
@@ -789,6 +945,66 @@ export type Database = {
         }
         Relationships: []
       }
+      event_checkins: {
+        Row: {
+          id: string
+          created_at: string
+          event_id: string
+          attendee_type: 'member' | 'guest'
+          attendee_id: string
+          check_in_method: 'qr_code' | 'manual' | 'self_checkin'
+          notes: string | null
+        }
+        Insert: {
+          id?: string
+          created_at?: string
+          event_id: string
+          attendee_type: 'member' | 'guest'
+          attendee_id: string
+          check_in_method?: 'qr_code' | 'manual' | 'self_checkin'
+          notes?: string | null
+        }
+        Update: {
+          id?: string
+          created_at?: string
+          event_id?: string
+          attendee_type?: 'member' | 'guest'
+          attendee_id?: string
+          check_in_method?: 'qr_code' | 'manual' | 'self_checkin'
+          notes?: string | null
+        }
+        Relationships: []
+      }
+      volunteer_roles: {
+        Row: {
+          id: string
+          created_at: string
+          name: string
+          description: string | null
+          event_id: string | null
+          required_count: number | null
+          is_active: boolean
+        }
+        Insert: {
+          id?: string
+          created_at?: string
+          name: string
+          description?: string | null
+          event_id?: string | null
+          required_count?: number | null
+          is_active?: boolean
+        }
+        Update: {
+          id?: string
+          created_at?: string
+          name?: string
+          description?: string | null
+          event_id?: string | null
+          required_count?: number | null
+          is_active?: boolean
+        }
+        Relationships: []
+      }
       venues: {
         Row: {
           id: string
@@ -810,6 +1026,108 @@ export type Database = {
           address?: string | null
           city?: string | null
           capacity?: number | null
+        }
+        Relationships: []
+      }
+      venue_bookings: {
+        Row: {
+          id: string
+          created_at: string
+          updated_at: string
+          venue_id: string
+          event_id: string
+          booking_date: string
+          start_time: string
+          end_time: string
+          status: 'pending' | 'confirmed' | 'cancelled'
+          notes: string | null
+        }
+        Insert: {
+          id?: string
+          created_at?: string
+          updated_at?: string
+          venue_id: string
+          event_id: string
+          booking_date: string
+          start_time: string
+          end_time: string
+          status?: 'pending' | 'confirmed' | 'cancelled'
+          notes?: string | null
+        }
+        Update: {
+          id?: string
+          created_at?: string
+          updated_at?: string
+          venue_id?: string
+          event_id?: string
+          booking_date?: string
+          start_time?: string
+          end_time?: string
+          status?: 'pending' | 'confirmed' | 'cancelled'
+          notes?: string | null
+        }
+        Relationships: []
+      }
+      resources: {
+        Row: {
+          id: string
+          created_at: string
+          name: string
+          description: string | null
+          resource_type: string
+          quantity: number
+          is_available: boolean
+        }
+        Insert: {
+          id?: string
+          created_at?: string
+          name: string
+          description?: string | null
+          resource_type: string
+          quantity?: number
+          is_available?: boolean
+        }
+        Update: {
+          id?: string
+          created_at?: string
+          name?: string
+          description?: string | null
+          resource_type?: string
+          quantity?: number
+          is_available?: boolean
+        }
+        Relationships: []
+      }
+      resource_bookings: {
+        Row: {
+          id: string
+          created_at: string
+          updated_at: string
+          resource_id: string
+          event_id: string
+          quantity: number
+          status: 'pending' | 'confirmed' | 'cancelled'
+          notes: string | null
+        }
+        Insert: {
+          id?: string
+          created_at?: string
+          updated_at?: string
+          resource_id: string
+          event_id: string
+          quantity: number
+          status?: 'pending' | 'confirmed' | 'cancelled'
+          notes?: string | null
+        }
+        Update: {
+          id?: string
+          created_at?: string
+          updated_at?: string
+          resource_id?: string
+          event_id?: string
+          quantity?: number
+          status?: 'pending' | 'confirmed' | 'cancelled'
+          notes?: string | null
         }
         Relationships: []
       }
@@ -929,6 +1247,60 @@ export type Database = {
             referencedColumns: ["id"]
           }
         ]
+      }
+      event_impact_metrics: {
+        Row: {
+          id: string
+          created_at: string
+          updated_at: string
+          event_id: string
+          total_attendees: number
+          attendance_rate: number | null
+          member_satisfaction: number | null
+          guest_satisfaction: number | null
+          volunteer_hours: number | null
+          budget_spent: number | null
+          media_coverage: string | null
+          social_media_reach: number | null
+          partnerships_formed: number | null
+          leads_generated: number | null
+          revenue_generated: number | null
+        }
+        Insert: {
+          id?: string
+          created_at?: string
+          updated_at?: string
+          event_id: string
+          total_attendees: number
+          attendance_rate?: number | null
+          member_satisfaction?: number | null
+          guest_satisfaction?: number | null
+          volunteer_hours?: number | null
+          budget_spent?: number | null
+          media_coverage?: string | null
+          social_media_reach?: number | null
+          partnerships_formed?: number | null
+          leads_generated?: number | null
+          revenue_generated?: number | null
+        }
+        Update: {
+          id?: string
+          created_at?: string
+          updated_at?: string
+          event_id?: string
+          total_attendees?: number
+          attendance_rate?: number | null
+          member_satisfaction?: number | null
+          guest_satisfaction?: number | null
+          volunteer_hours?: number | null
+          budget_spent?: number | null
+          media_coverage?: string | null
+          social_media_reach?: number | null
+          partnerships_formed?: number | null
+          leads_generated?: number | null
+          revenue_generated?: number | null
+        }
+        Relationships: []
       }
       budgets: {
         Row: {
@@ -1124,6 +1496,36 @@ export type Database = {
           }
         ]
       }
+      expense_receipts: {
+        Row: {
+          id: string
+          created_at: string
+          expense_id: string
+          file_url: string
+          file_name: string
+          file_size_kb: number | null
+          uploaded_by: string
+        }
+        Insert: {
+          id?: string
+          created_at?: string
+          expense_id: string
+          file_url: string
+          file_name: string
+          file_size_kb?: number | null
+          uploaded_by: string
+        }
+        Update: {
+          id?: string
+          created_at?: string
+          expense_id?: string
+          file_url?: string
+          file_name?: string
+          file_size_kb?: number | null
+          uploaded_by?: string
+        }
+        Relationships: []
+      }
       reimbursement_requests: {
         Row: {
           id: string
@@ -1227,6 +1629,33 @@ export type Database = {
             referencedColumns: ["id"]
           }
         ]
+      }
+      reimbursement_approvals: {
+        Row: {
+          id: string
+          created_at: string
+          reimbursement_request_id: string
+          approver_id: string
+          action: 'approve' | 'reject' | 'request_changes'
+          comments: string | null
+        }
+        Insert: {
+          id?: string
+          created_at?: string
+          reimbursement_request_id: string
+          approver_id: string
+          action: 'approve' | 'reject' | 'request_changes'
+          comments?: string | null
+        }
+        Update: {
+          id?: string
+          created_at?: string
+          reimbursement_request_id?: string
+          approver_id?: string
+          action?: 'approve' | 'reject' | 'request_changes'
+          comments?: string | null
+        }
+        Relationships: []
       }
       sponsorship_deals: {
         Row: {
@@ -1332,6 +1761,45 @@ export type Database = {
             referencedColumns: ["id"]
           }
         ]
+      }
+      sponsorship_payments: {
+        Row: {
+          id: string
+          created_at: string
+          sponsorship_deal_id: string
+          amount: number
+          payment_date: string
+          payment_method: 'bank_transfer' | 'cash' | 'cheque' | 'upi' | 'credit_card' | 'online' | null
+          transaction_reference: string | null
+          receipt_number: string | null
+          notes: string | null
+          recorded_by: string
+        }
+        Insert: {
+          id?: string
+          created_at?: string
+          sponsorship_deal_id: string
+          amount: number
+          payment_date: string
+          payment_method?: 'bank_transfer' | 'cash' | 'cheque' | 'upi' | 'credit_card' | 'online' | null
+          transaction_reference?: string | null
+          receipt_number?: string | null
+          notes?: string | null
+          recorded_by: string
+        }
+        Update: {
+          id?: string
+          created_at?: string
+          sponsorship_deal_id?: string
+          amount?: number
+          payment_date?: string
+          payment_method?: 'bank_transfer' | 'cash' | 'cheque' | 'upi' | 'credit_card' | 'online' | null
+          transaction_reference?: string | null
+          receipt_number?: string | null
+          notes?: string | null
+          recorded_by?: string
+        }
+        Relationships: []
       }
       sponsors: {
         Row: {
@@ -1599,14 +2067,16 @@ export type Database = {
     }
     Enums: {
       event_category: 'general' | 'industrial_visit' | 'conference' | 'workshop' | 'social'
-      event_status: 'draft' | 'published' | 'cancelled' | 'completed'
-      rsvp_status: 'pending' | 'confirmed' | 'cancelled' | 'waitlisted' | 'no_show'
+      event_status: 'draft' | 'published' | 'ongoing' | 'completed' | 'cancelled'
+      rsvp_status: 'pending' | 'confirmed' | 'cancelled' | 'waitlisted' | 'attended' | 'no_show'
       carpool_status: 'not_needed' | 'need_ride' | 'offering_ride'
       industry_portal_user_status: 'invited' | 'active' | 'inactive' | 'suspended'
       waitlist_status: 'waiting' | 'promoted' | 'expired' | 'withdrawn'
       proficiency_level: 'beginner' | 'intermediate' | 'advanced' | 'expert'
       availability_status: 'available' | 'limited' | 'unavailable'
       skill_category: 'technical' | 'business' | 'creative' | 'leadership' | 'other'
+      booking_status: 'pending' | 'confirmed' | 'cancelled'
+      volunteer_status: 'invited' | 'accepted' | 'declined' | 'completed'
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1709,6 +2179,8 @@ export const Constants = {
       member_status: ['active', 'inactive', 'pending'] as const,
       member_role: ['member', 'board_member', 'chapter_leader', 'admin'] as const,
       industry_portal_user_status: ['invited', 'active', 'inactive', 'suspended'] as const,
+      booking_status: ['pending', 'confirmed', 'cancelled'] as const,
+      volunteer_status: ['invited', 'accepted', 'declined', 'completed'] as const,
     },
   },
 } as const

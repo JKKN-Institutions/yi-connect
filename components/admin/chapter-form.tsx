@@ -107,7 +107,7 @@ export function ChapterForm({ chapter }: ChapterFormProps) {
                 id="location"
                 name="location"
                 type="text"
-                defaultValue={chapter?.location}
+                defaultValue={chapter?.location || ''}
                 placeholder="e.g., Coimbatore, Tamil Nadu"
                 required
                 aria-invalid={!!state.errors?.location}

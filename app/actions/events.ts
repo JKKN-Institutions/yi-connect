@@ -644,7 +644,7 @@ export async function createOrUpdateRSVP(
       event.current_registrations + totalAttendees > event.max_capacity
     ) {
       // Add to waitlist if enabled
-      validated.status = 'waitlist';
+      validated.status = 'waitlisted';
     }
 
     // Upsert RSVP

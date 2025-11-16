@@ -17,7 +17,7 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
-  DropdownMenuTrigger,
+  DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import {
   AlertDialog,
@@ -27,7 +27,7 @@ import {
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
-  AlertDialogTitle,
+  AlertDialogTitle
 } from '@/components/ui/alert-dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -38,7 +38,10 @@ interface IVBookingActionsProps {
   eventTitle: string;
 }
 
-export function IVBookingActions({ bookingId, eventTitle }: IVBookingActionsProps) {
+export function IVBookingActions({
+  bookingId,
+  eventTitle
+}: IVBookingActionsProps) {
   const router = useRouter();
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [cancellationReason, setCancellationReason] = useState('');
@@ -48,7 +51,10 @@ export function IVBookingActions({ bookingId, eventTitle }: IVBookingActionsProp
     try {
       setIsLoading(true);
 
-      const result = await cancelIVBooking(bookingId, cancellationReason.trim() || undefined);
+      const result = await cancelIVBooking(
+        bookingId,
+        cancellationReason.trim() || undefined
+      );
 
       if (result.success) {
         toast.success(result.message || 'Booking cancelled successfully');
@@ -68,16 +74,16 @@ export function IVBookingActions({ bookingId, eventTitle }: IVBookingActionsProp
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="sm">
-            <MoreHorizontal className="h-4 w-4" />
-            <span className="sr-only">Open menu</span>
+          <Button variant='ghost' size='sm'>
+            <MoreHorizontal className='h-4 w-4' />
+            <span className='sr-only'>Open menu</span>
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
+        <DropdownMenuContent align='end'>
           <DropdownMenuLabel>Actions</DropdownMenuLabel>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => setShowCancelDialog(true)}>
-            <X className="mr-2 h-4 w-4" />
+            <X className='mr-2 h-4 w-4' />
             Cancel Booking
           </DropdownMenuItem>
         </DropdownMenuContent>
@@ -88,18 +94,18 @@ export function IVBookingActions({ bookingId, eventTitle }: IVBookingActionsProp
           <AlertDialogHeader>
             <AlertDialogTitle>Cancel Booking</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to cancel your booking for "{eventTitle}"? This
-              action cannot be undone.
+              Are you sure you want to cancel your booking for &quot;
+              {eventTitle}&quot;? This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <div className="py-4">
-            <Label htmlFor="reason">Reason for cancellation (optional)</Label>
+          <div className='py-4'>
+            <Label htmlFor='reason'>Reason for cancellation (optional)</Label>
             <Textarea
-              id="reason"
+              id='reason'
               placeholder="Let us know why you're cancelling..."
               value={cancellationReason}
               onChange={(e) => setCancellationReason(e.target.value)}
-              className="mt-2"
+              className='mt-2'
             />
           </div>
           <AlertDialogFooter>
@@ -107,9 +113,9 @@ export function IVBookingActions({ bookingId, eventTitle }: IVBookingActionsProp
             <AlertDialogAction
               onClick={handleCancelBooking}
               disabled={isLoading}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className='bg-destructive text-destructive-foreground hover:bg-destructive/90'
             >
-              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {isLoading && <Loader2 className='mr-2 h-4 w-4 animate-spin' />}
               {isLoading ? 'Cancelling...' : 'Confirm Cancellation'}
             </AlertDialogAction>
           </AlertDialogFooter>

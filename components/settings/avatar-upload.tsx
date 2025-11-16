@@ -28,7 +28,7 @@ export function AvatarUpload({ profile }: AvatarUploadProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
 
-  const initials = profile.full_name
+  const initials = (profile.full_name || 'User')
     .split(' ')
     .map((n) => n[0])
     .join('')
@@ -120,7 +120,7 @@ export function AvatarUpload({ profile }: AvatarUploadProps) {
             <Avatar className="h-32 w-32">
               <AvatarImage
                 src={previewUrl || profile.avatar_url || undefined}
-                alt={profile.full_name}
+                alt={profile.full_name || 'User'}
               />
               <AvatarFallback className="bg-primary text-primary-foreground text-4xl">
                 {initials}

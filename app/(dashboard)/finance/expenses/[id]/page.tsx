@@ -300,7 +300,7 @@ async function ExpenseDetail({ expenseId }: { expenseId: string }) {
             {expense.receipts.map((receipt, index) => (
               <a
                 key={receipt.id}
-                href={receipt.file_path}
+                href={receipt.file_url}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-primary hover:underline flex items-center gap-2"

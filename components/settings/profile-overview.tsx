@@ -15,7 +15,7 @@ interface ProfileOverviewProps {
 }
 
 export function ProfileOverview({ profile }: ProfileOverviewProps) {
-  const initials = profile.full_name
+  const initials = (profile.full_name || 'User')
     .split(' ')
     .map((n) => n[0])
     .join('')
@@ -37,7 +37,7 @@ export function ProfileOverview({ profile }: ProfileOverviewProps) {
         {/* Avatar and Name */}
         <div className="flex items-center gap-4">
           <Avatar className="h-20 w-20">
-            <AvatarImage src={profile.avatar_url || undefined} alt={profile.full_name} />
+            <AvatarImage src={profile.avatar_url || undefined} alt={profile.full_name || 'User'} />
             <AvatarFallback className="bg-primary text-primary-foreground text-2xl">
               {initials}
             </AvatarFallback>

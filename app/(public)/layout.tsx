@@ -5,20 +5,21 @@
  * No authentication required
  */
 
-import type { Metadata } from 'next'
+import type { Metadata } from 'next';
+import Link from 'next/link';
 
 export const metadata: Metadata = {
   title: {
     template: '%s | Yi Connect',
-    default: 'Yi Connect',
+    default: 'Yi Connect'
   },
-  description: 'Young Indians Chapter Management System',
-}
+  description: 'Young Indians Chapter Management System'
+};
 
 export default function PublicLayout({
-  children,
+  children
 }: {
-  children: React.ReactNode
+  children: React.ReactNode;
 }) {
   return (
     <div className='min-h-screen bg-background'>
@@ -27,12 +28,12 @@ export default function PublicLayout({
         <div className='container mx-auto px-4 h-16 flex items-center justify-between'>
           <div className='text-xl font-bold'>Yi Connect</div>
           <nav className='flex gap-4'>
-            <a href='/' className='text-sm hover:underline'>
+            <Link href='/' className='text-sm hover:underline'>
               Home
-            </a>
-            <a href='/login' className='text-sm hover:underline'>
+            </Link>
+            <Link href='/login' className='text-sm hover:underline'>
               Login
-            </a>
+            </Link>
           </nav>
         </div>
       </header>
@@ -47,5 +48,5 @@ export default function PublicLayout({
         </div>
       </footer>
     </div>
-  )
+  );
 }

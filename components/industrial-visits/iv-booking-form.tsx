@@ -21,7 +21,7 @@ import {
   FormField,
   FormItem,
   FormLabel,
-  FormMessage,
+  FormMessage
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -30,7 +30,7 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
+  SelectValue
 } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { createIVBooking } from '@/app/actions/industrial-visits';
@@ -49,7 +49,7 @@ const formSchema = z.object({
   pickup_details: z.string().max(500).optional(),
   dietary_restrictions: z.string().max(500).optional(),
   special_requirements: z.string().max(500).optional(),
-  notes: z.string().max(1000).optional(),
+  notes: z.string().max(1000).optional()
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -69,8 +69,8 @@ export function IVBookingForm({ eventId }: IVBookingFormProps) {
       pickup_details: '',
       dietary_restrictions: '',
       special_requirements: '',
-      notes: '',
-    },
+      notes: ''
+    }
   });
 
   const carpoolStatus = form.watch('carpool_status');
@@ -90,8 +90,14 @@ export function IVBookingForm({ eventId }: IVBookingFormProps) {
           : null;
 
       // Validate family names count matches family_count
-      if (data.family_count > 0 && familyNames && familyNames.length !== data.family_count) {
-        toast.error(`Please provide exactly ${data.family_count} family member names`);
+      if (
+        data.family_count > 0 &&
+        familyNames &&
+        familyNames.length !== data.family_count
+      ) {
+        toast.error(
+          `Please provide exactly ${data.family_count} family member names`
+        );
         return;
       }
 
@@ -139,26 +145,26 @@ export function IVBookingForm({ eventId }: IVBookingFormProps) {
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit as any)} className="space-y-6">
+      <form onSubmit={form.handleSubmit(onSubmit as any)} className='space-y-6'>
         {/* Family Members */}
-        <div className="space-y-4">
-          <div className="flex items-center gap-2">
-            <Users className="h-4 w-4 text-muted-foreground" />
-            <h3 className="font-medium">Family Members</h3>
+        <div className='space-y-4'>
+          <div className='flex items-center gap-2'>
+            <Users className='h-4 w-4 text-muted-foreground' />
+            <h3 className='font-medium'>Family Members</h3>
           </div>
 
           <FormField
             control={form.control}
-            name="family_count"
+            name='family_count'
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Number of Family Members</FormLabel>
                 <FormControl>
                   <Input
-                    type="number"
-                    min="0"
-                    max="10"
-                    placeholder="0"
+                    type='number'
+                    min='0'
+                    max='10'
+                    placeholder='0'
                     {...field}
                   />
                 </FormControl>
@@ -173,18 +179,16 @@ export function IVBookingForm({ eventId }: IVBookingFormProps) {
           {familyCount > 0 && (
             <FormField
               control={form.control}
-              name="family_names"
+              name='family_names'
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Family Member Names</FormLabel>
                   <FormControl>
-                    <Input
-                      placeholder="John Doe, Jane Doe"
-                      {...field}
-                    />
+                    <Input placeholder='John Doe, Jane Doe' {...field} />
                   </FormControl>
                   <FormDescription>
-                    Enter {familyCount} name{familyCount > 1 ? 's' : ''}, separated by commas
+                    Enter {familyCount} name{familyCount > 1 ? 's' : ''},
+                    separated by commas
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -194,15 +198,15 @@ export function IVBookingForm({ eventId }: IVBookingFormProps) {
         </div>
 
         {/* Carpool Options */}
-        <div className="space-y-4">
-          <div className="flex items-center gap-2">
-            <Car className="h-4 w-4 text-muted-foreground" />
-            <h3 className="font-medium">Carpool Preferences</h3>
+        <div className='space-y-4'>
+          <div className='flex items-center gap-2'>
+            <Car className='h-4 w-4 text-muted-foreground' />
+            <h3 className='font-medium'>Carpool Preferences</h3>
           </div>
 
           <FormField
             control={form.control}
-            name="carpool_status"
+            name='carpool_status'
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Carpool Status</FormLabel>
@@ -212,13 +216,15 @@ export function IVBookingForm({ eventId }: IVBookingFormProps) {
                 >
                   <FormControl>
                     <SelectTrigger>
-                      <SelectValue placeholder="Select carpool preference" />
+                      <SelectValue placeholder='Select carpool preference' />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    <SelectItem value="not_needed">Not Needed</SelectItem>
-                    <SelectItem value="need_ride">Need a Ride</SelectItem>
-                    <SelectItem value="offering_ride">Offering a Ride</SelectItem>
+                    <SelectItem value='not_needed'>Not Needed</SelectItem>
+                    <SelectItem value='need_ride'>Need a Ride</SelectItem>
+                    <SelectItem value='offering_ride'>
+                      Offering a Ride
+                    </SelectItem>
                   </SelectContent>
                 </Select>
                 <FormDescription>
@@ -233,16 +239,16 @@ export function IVBookingForm({ eventId }: IVBookingFormProps) {
             <>
               <FormField
                 control={form.control}
-                name="seats_available"
+                name='seats_available'
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Seats Available</FormLabel>
                     <FormControl>
                       <Input
-                        type="number"
-                        min="1"
-                        max="10"
-                        placeholder="4"
+                        type='number'
+                        min='1'
+                        max='10'
+                        placeholder='4'
                         {...field}
                       />
                     </FormControl>
@@ -255,13 +261,13 @@ export function IVBookingForm({ eventId }: IVBookingFormProps) {
               />
               <FormField
                 control={form.control}
-                name="pickup_location"
+                name='pickup_location'
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Pickup Location</FormLabel>
                     <FormControl>
                       <Input
-                        placeholder="Downtown, near City Hall"
+                        placeholder='Downtown, near City Hall'
                         {...field}
                       />
                     </FormControl>
@@ -271,13 +277,13 @@ export function IVBookingForm({ eventId }: IVBookingFormProps) {
               />
               <FormField
                 control={form.control}
-                name="pickup_details"
+                name='pickup_details'
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Pickup Details (Optional)</FormLabel>
                     <FormControl>
                       <Textarea
-                        placeholder="Additional details about pickup location, time, etc."
+                        placeholder='Additional details about pickup location, time, etc.'
                         {...field}
                       />
                     </FormControl>
@@ -290,28 +296,28 @@ export function IVBookingForm({ eventId }: IVBookingFormProps) {
 
           {carpoolStatus === 'need_ride' && (
             <Alert>
-              <Info className="h-4 w-4" />
+              <Info className='h-4 w-4' />
               <AlertDescription>
-                We'll match you with available carpool drivers after you book. You'll
-                be notified via email.
+                We&apos;ll match you with available carpool drivers after you
+                book. You&apos;ll be notified via email.
               </AlertDescription>
             </Alert>
           )}
         </div>
 
         {/* Additional Information */}
-        <div className="space-y-4">
-          <h3 className="font-medium">Additional Information</h3>
+        <div className='space-y-4'>
+          <h3 className='font-medium'>Additional Information</h3>
 
           <FormField
             control={form.control}
-            name="dietary_restrictions"
+            name='dietary_restrictions'
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Dietary Restrictions (Optional)</FormLabel>
                 <FormControl>
                   <Textarea
-                    placeholder="Vegetarian, allergic to nuts, etc."
+                    placeholder='Vegetarian, allergic to nuts, etc.'
                     {...field}
                   />
                 </FormControl>
@@ -322,15 +328,12 @@ export function IVBookingForm({ eventId }: IVBookingFormProps) {
 
           <FormField
             control={form.control}
-            name="special_requirements"
+            name='special_requirements'
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Special Requirements (Optional)</FormLabel>
                 <FormControl>
-                  <Textarea
-                    placeholder="Wheelchair access, etc."
-                    {...field}
-                  />
+                  <Textarea placeholder='Wheelchair access, etc.' {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -339,13 +342,13 @@ export function IVBookingForm({ eventId }: IVBookingFormProps) {
 
           <FormField
             control={form.control}
-            name="notes"
+            name='notes'
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Notes (Optional)</FormLabel>
                 <FormControl>
                   <Textarea
-                    placeholder="Any additional notes or questions"
+                    placeholder='Any additional notes or questions'
                     {...field}
                   />
                 </FormControl>
@@ -355,8 +358,8 @@ export function IVBookingForm({ eventId }: IVBookingFormProps) {
           />
         </div>
 
-        <Button type="submit" className="w-full" disabled={isSubmitting}>
-          {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+        <Button type='submit' className='w-full' disabled={isSubmitting}>
+          {isSubmitting && <Loader2 className='mr-2 h-4 w-4 animate-spin' />}
           {isSubmitting ? 'Booking...' : 'Confirm Booking'}
         </Button>
       </form>

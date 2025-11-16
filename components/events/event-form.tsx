@@ -93,7 +93,7 @@ export function EventForm({
     defaultValues: {
       title: event?.title || '',
       description: event?.description || '',
-      category: event?.category || 'networking',
+      category: event?.category || 'general',
       start_date: event?.start_date || '',
       end_date: event?.end_date || '',
       registration_start_date: event?.registration_start_date || '',

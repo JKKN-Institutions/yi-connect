@@ -30,12 +30,6 @@ export function EventQRCode({ eventId, eventTitle, trigger }: EventQRCodeProps) 
     ? `${window.location.origin}/events/${eventId}/checkin?qr=true`
     : '';
 
-  useEffect(() => {
-    if (canvasRef.current && checkInUrl) {
-      generateQRCode();
-    }
-  }, [checkInUrl]);
-
   const generateQRCode = async () => {
     try {
       if (!canvasRef.current) return;
@@ -60,6 +54,13 @@ export function EventQRCode({ eventId, eventTitle, trigger }: EventQRCodeProps) 
       toast.error('Failed to generate QR code');
     }
   };
+
+  useEffect(() => {
+    if (canvasRef.current && checkInUrl) {
+      generateQRCode();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [checkInUrl]);
 
   const handleDownload = () => {
     if (!qrDataUrl) return;
@@ -232,7 +233,7 @@ export function EventQRCode({ eventId, eventTitle, trigger }: EventQRCodeProps) 
                 <li>Download or print this QR code</li>
                 <li>Display it at the event entrance</li>
                 <li>Attendees scan it with their phones</li>
-                <li>They'll be redirected to the check-in page</li>
+                <li>They&apos;ll be redirected to the check-in page</li>
               </ol>
             </div>
           </CardContent>

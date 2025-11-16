@@ -238,7 +238,7 @@ async function MySlotsContent() {
             <Alert>
               <Calendar className="h-4 w-4" />
               <AlertDescription>
-                You don't have any past industrial visit slots yet.
+                You don&apos;t have any past industrial visit slots yet.
               </AlertDescription>
             </Alert>
           ) : (
@@ -289,7 +289,7 @@ async function MySlotsContent() {
         <TabsContent value="draft" className="mt-6">
           {draftSlots.length === 0 ? (
             <Alert>
-              <AlertDescription>You don't have any draft slots.</AlertDescription>
+              <AlertDescription>You don&apos;t have any draft slots.</AlertDescription>
             </Alert>
           ) : (
             <div className="grid gap-6 md:grid-cols-2">
@@ -330,7 +330,7 @@ async function MySlotsContent() {
         <TabsContent value="cancelled" className="mt-6">
           {cancelledSlots.length === 0 ? (
             <Alert>
-              <AlertDescription>You don't have any cancelled slots.</AlertDescription>
+              <AlertDescription>You don&apos;t have any cancelled slots.</AlertDescription>
             </Alert>
           ) : (
             <div className="grid gap-6 md:grid-cols-2">

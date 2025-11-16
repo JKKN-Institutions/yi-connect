@@ -123,7 +123,7 @@ async function EventDetailContent({ params }: PageProps) {
     : 0;
 
   const startDate = new Date(event.start_date);
-  const endDate = new Date(event.end_date);
+  const endDate = event.end_date ? new Date(event.end_date) : startDate;
   const isMultiDay =
     format(startDate, 'yyyy-MM-dd') !== format(endDate, 'yyyy-MM-dd');
   const isPastEvent = endDate < new Date();

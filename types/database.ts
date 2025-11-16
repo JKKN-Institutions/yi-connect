@@ -1,10 +1,6 @@
 /**
- * Database Type Definitions
- *
- * Auto-generated types for database tables and relationships.
- * Generated from Supabase schema for Yi Connect.
- *
- * Last updated: 2025-11-15 (Added Event Lifecycle Manager tables)
+ * Database Types - Auto-generated from Supabase Schema
+ * DO NOT EDIT MANUALLY - Use supabase gen types typescript
  */
 
 export type Json =
@@ -16,412 +12,810 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "13.0.5"
-  }
   public: {
     Tables: {
-      approved_emails: {
+      events: {
         Row: {
-          approved_at: string | null
-          approved_by: string
-          assigned_chapter_id: string | null
-          created_at: string | null
-          created_member_id: string | null
-          email: string
-          first_login_at: string | null
           id: string
-          is_active: boolean | null
-          member_created: boolean | null
-          member_request_id: string | null
-          notes: string | null
-          updated_at: string | null
+          created_at: string
+          updated_at: string
+          chapter_id: string
+          title: string
+          description: string | null
+          category: 'general' | 'industrial_visit' | 'conference' | 'workshop' | 'social'
+          start_date: string
+          end_date: string | null
+          location: string | null
+          venue_id: string | null
+          venue_address: string | null
+          is_virtual: boolean
+          meeting_url: string | null
+          virtual_meeting_link: string | null
+          max_capacity: number | null
+          current_registrations: number
+          registration_deadline: string | null
+          is_member_only: boolean
+          visibility: 'public' | 'members_only' | 'chapter_only'
+          status: 'draft' | 'published' | 'cancelled' | 'completed'
+          is_featured: boolean
+          banner_image_url: string | null
+          created_by: string
+          organizer_id: string
+          estimated_budget: number | null
+          impact_metrics: Record<string, any> | null
+          // Industrial Visit specific fields
+          industry_id: string | null
+          requirements: string | null
+          learning_outcomes: string | null
+          contact_person_name: string | null
+          contact_person_email: string | null
+          contact_person_phone: string | null
+          industry_sector: string | null
+          logistics_parking: string | null
+          logistics_directions: string | null
+          logistics_dress_code: string | null
+          entry_method: 'manual' | 'self_service'
+          host_willingness_rating: number | null
         }
         Insert: {
-          approved_at?: string | null
-          approved_by: string
-          assigned_chapter_id?: string | null
-          created_at?: string | null
-          created_member_id?: string | null
-          email: string
-          first_login_at?: string | null
           id?: string
-          is_active?: boolean | null
-          member_created?: boolean | null
-          member_request_id?: string | null
-          notes?: string | null
-          updated_at?: string | null
+          created_at?: string
+          updated_at?: string
+          chapter_id: string
+          title: string
+          description?: string | null
+          category?: 'general' | 'industrial_visit' | 'conference' | 'workshop' | 'social'
+          start_date: string
+          end_date?: string | null
+          location?: string | null
+          venue_id?: string | null
+          venue_address?: string | null
+          is_virtual?: boolean
+          meeting_url?: string | null
+          virtual_meeting_link?: string | null
+          max_capacity?: number | null
+          current_registrations?: number
+          registration_deadline?: string | null
+          is_member_only?: boolean
+          visibility?: 'public' | 'members_only' | 'chapter_only'
+          status?: 'draft' | 'published' | 'cancelled' | 'completed'
+          is_featured?: boolean
+          banner_image_url?: string | null
+          created_by: string
+          organizer_id: string
+          estimated_budget?: number | null
+          impact_metrics?: Record<string, any> | null
+          industry_id?: string | null
+          requirements?: string | null
+          learning_outcomes?: string | null
+          contact_person_name?: string | null
+          contact_person_email?: string | null
+          contact_person_phone?: string | null
+          industry_sector?: string | null
+          logistics_parking?: string | null
+          logistics_directions?: string | null
+          logistics_dress_code?: string | null
+          entry_method?: 'manual' | 'self_service'
+          host_willingness_rating?: number | null
         }
         Update: {
-          approved_at?: string | null
-          approved_by?: string
-          assigned_chapter_id?: string | null
-          created_at?: string | null
-          created_member_id?: string | null
-          email?: string
-          first_login_at?: string | null
           id?: string
-          is_active?: boolean | null
-          member_created?: boolean | null
-          member_request_id?: string | null
-          notes?: string | null
-          updated_at?: string | null
+          created_at?: string
+          updated_at?: string
+          chapter_id?: string
+          title?: string
+          description?: string | null
+          category?: 'general' | 'industrial_visit' | 'conference' | 'workshop' | 'social'
+          start_date?: string
+          end_date?: string | null
+          location?: string | null
+          venue_id?: string | null
+          venue_address?: string | null
+          is_virtual?: boolean
+          meeting_url?: string | null
+          virtual_meeting_link?: string | null
+          max_capacity?: number | null
+          current_registrations?: number
+          registration_deadline?: string | null
+          is_member_only?: boolean
+          visibility?: 'public' | 'members_only' | 'chapter_only'
+          status?: 'draft' | 'published' | 'cancelled' | 'completed'
+          is_featured?: boolean
+          banner_image_url?: string | null
+          created_by?: string
+          organizer_id?: string
+          estimated_budget?: number | null
+          impact_metrics?: Record<string, any> | null
+          industry_id?: string | null
+          requirements?: string | null
+          learning_outcomes?: string | null
+          contact_person_name?: string | null
+          contact_person_email?: string | null
+          contact_person_phone?: string | null
+          industry_sector?: string | null
+          logistics_parking?: string | null
+          logistics_directions?: string | null
+          logistics_dress_code?: string | null
+          entry_method?: 'manual' | 'self_service'
+          host_willingness_rating?: number | null
         }
         Relationships: [
           {
-            foreignKeyName: "approved_emails_assigned_chapter_id_fkey"
-            columns: ["assigned_chapter_id"]
+            foreignKeyName: "events_chapter_id_fkey"
+            columns: ["chapter_id"]
             isOneToOne: false
             referencedRelation: "chapters"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "approved_emails_created_member_id_fkey"
-            columns: ["created_member_id"]
+            foreignKeyName: "events_industry_id_fkey"
+            columns: ["industry_id"]
             isOneToOne: false
-            referencedRelation: "members"
+            referencedRelation: "industries"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "approved_emails_member_request_id_fkey"
-            columns: ["member_request_id"]
-            isOneToOne: false
-            referencedRelation: "member_requests"
-            referencedColumns: ["id"]
-          },
+          }
         ]
       }
-      availability: {
+      event_rsvps: {
         Row: {
-          created_at: string
-          date: string
-          geographic_flexibility: string | null
           id: string
-          member_id: string
-          notes: string | null
-          notice_period: string | null
-          preferred_contact_method: string | null
-          preferred_days: string | null
-          status: Database["public"]["Enums"]["availability_status"]
-          time_commitment_hours: number | null
-          time_slots: Json | null
+          created_at: string
           updated_at: string
+          event_id: string
+          member_id: string
+          status: 'pending' | 'confirmed' | 'cancelled' | 'waitlisted' | 'attended' | 'no_show'
+          response_note: string | null
+          checked_in_at: string | null
+          guests_count: number
+          // IV specific fields
+          family_count: number
+          family_names: string[] | null
+          carpool_status: 'not_needed' | 'need_ride' | 'offering_ride'
+          seats_available: number | null
+          pickup_location: string | null
+          dietary_restrictions: string | null
+          special_requirements: string | null
         }
         Insert: {
-          created_at?: string
-          date: string
-          geographic_flexibility?: string | null
           id?: string
-          member_id: string
-          notes?: string | null
-          notice_period?: string | null
-          preferred_contact_method?: string | null
-          preferred_days?: string | null
-          status?: Database["public"]["Enums"]["availability_status"]
-          time_commitment_hours?: number | null
-          time_slots?: Json | null
+          created_at?: string
           updated_at?: string
+          event_id: string
+          member_id: string
+          status?: 'pending' | 'confirmed' | 'cancelled' | 'waitlisted' | 'attended' | 'no_show'
+          response_note?: string | null
+          checked_in_at?: string | null
+          guests_count?: number
+          family_count?: number
+          family_names?: string[] | null
+          carpool_status?: 'not_needed' | 'need_ride' | 'offering_ride'
+          seats_available?: number | null
+          pickup_location?: string | null
+          dietary_restrictions?: string | null
+          special_requirements?: string | null
         }
         Update: {
-          created_at?: string
-          date?: string
-          geographic_flexibility?: string | null
           id?: string
-          member_id?: string
-          notes?: string | null
-          notice_period?: string | null
-          preferred_contact_method?: string | null
-          preferred_days?: string | null
-          status?: Database["public"]["Enums"]["availability_status"]
-          time_commitment_hours?: number | null
-          time_slots?: Json | null
+          created_at?: string
           updated_at?: string
+          event_id?: string
+          member_id?: string
+          status?: 'pending' | 'confirmed' | 'cancelled' | 'waitlisted' | 'attended' | 'no_show'
+          response_note?: string | null
+          checked_in_at?: string | null
+          guests_count?: number
+          family_count?: number
+          family_names?: string[] | null
+          carpool_status?: 'not_needed' | 'need_ride' | 'offering_ride'
+          seats_available?: number | null
+          pickup_location?: string | null
+          dietary_restrictions?: string | null
+          special_requirements?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "availability_member_id_fkey"
-            columns: ["member_id"]
+            foreignKeyName: "event_rsvps_event_id_fkey"
+            columns: ["event_id"]
             isOneToOne: false
-            referencedRelation: "members"
+            referencedRelation: "events"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "event_rsvps_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
         ]
       }
-      certifications: {
+      industry_portal_users: {
         Row: {
-          created_at: string
-          description: string | null
           id: string
-          is_active: boolean
-          issuing_organization: string
-          name: string
+          created_at: string
           updated_at: string
-          validity_period_months: number | null
+          industry_id: string
+          user_id: string
+          full_name: string
+          email: string
+          phone: string | null
+          role: string | null
+          status: 'invited' | 'active' | 'inactive' | 'suspended'
+          invited_by: string | null
+          invited_at: string | null
+          last_login_at: string | null
         }
         Insert: {
-          created_at?: string
-          description?: string | null
           id?: string
-          is_active?: boolean
-          issuing_organization: string
-          name: string
+          created_at?: string
           updated_at?: string
-          validity_period_months?: number | null
+          industry_id: string
+          user_id: string
+          full_name: string
+          email: string
+          phone?: string | null
+          role?: string | null
+          status?: 'invited' | 'active' | 'inactive' | 'suspended'
+          invited_by?: string | null
+          invited_at?: string | null
+          last_login_at?: string | null
         }
         Update: {
-          created_at?: string
-          description?: string | null
           id?: string
-          is_active?: boolean
-          issuing_organization?: string
-          name?: string
+          created_at?: string
           updated_at?: string
-          validity_period_months?: number | null
+          industry_id?: string
+          user_id?: string
+          full_name?: string
+          email?: string
+          phone?: string | null
+          role?: string | null
+          status?: 'invited' | 'active' | 'inactive' | 'suspended'
+          invited_by?: string | null
+          invited_at?: string | null
+          last_login_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "industry_portal_users_industry_id_fkey"
+            columns: ["industry_id"]
+            isOneToOne: false
+            referencedRelation: "industries"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      iv_waitlist: {
+        Row: {
+          id: string
+          created_at: string
+          updated_at: string
+          event_id: string
+          member_id: string
+          position: number
+          status: 'waiting' | 'promoted' | 'expired' | 'withdrawn'
+          notified_at: string | null
+          promoted_at: string | null
+          expires_at: string | null
+        }
+        Insert: {
+          id?: string
+          created_at?: string
+          updated_at?: string
+          event_id: string
+          member_id: string
+          position?: number
+          status?: 'waiting' | 'promoted' | 'expired' | 'withdrawn'
+          notified_at?: string | null
+          promoted_at?: string | null
+          expires_at?: string | null
+        }
+        Update: {
+          id?: string
+          created_at?: string
+          updated_at?: string
+          event_id?: string
+          member_id?: string
+          position?: number
+          status?: 'waiting' | 'promoted' | 'expired' | 'withdrawn'
+          notified_at?: string | null
+          promoted_at?: string | null
+          expires_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "iv_waitlist_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "iv_waitlist_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      industries: {
+        Row: {
+          id: string
+          created_at: string
+          updated_at: string
+          name: string
+          industry_type: string | null
+          description: string | null
+          website: string | null
+          logo_url: string | null
+          address_line1: string | null
+          address_line2: string | null
+          city: string | null
+          state: string | null
+          postal_code: string | null
+          country: string
+          contact_person_name: string | null
+          contact_person_email: string | null
+          contact_person_phone: string | null
+          relationship_status: string | null
+          partnership_level: string | null
+          notes: string | null
+        }
+        Insert: {
+          id?: string
+          created_at?: string
+          updated_at?: string
+          name: string
+          industry_type?: string | null
+          description?: string | null
+          website?: string | null
+          logo_url?: string | null
+          address_line1?: string | null
+          address_line2?: string | null
+          city?: string | null
+          state?: string | null
+          postal_code?: string | null
+          country?: string
+          contact_person_name?: string | null
+          contact_person_email?: string | null
+          contact_person_phone?: string | null
+          relationship_status?: string | null
+          partnership_level?: string | null
+          notes?: string | null
+        }
+        Update: {
+          id?: string
+          created_at?: string
+          updated_at?: string
+          name?: string
+          industry_type?: string | null
+          description?: string | null
+          website?: string | null
+          logo_url?: string | null
+          address_line1?: string | null
+          address_line2?: string | null
+          city?: string | null
+          state?: string | null
+          postal_code?: string | null
+          country?: string
+          contact_person_name?: string | null
+          contact_person_email?: string | null
+          contact_person_phone?: string | null
+          relationship_status?: string | null
+          partnership_level?: string | null
+          notes?: string | null
         }
         Relationships: []
       }
       chapters: {
         Row: {
-          created_at: string | null
-          established_date: string | null
           id: string
-          location: string
-          member_count: number | null
+          created_at: string
+          updated_at: string
           name: string
-          region: string | null
-          updated_at: string | null
+          city: string | null
+          state: string | null
+          country: string
+          established_date: string | null
+          status: string
+          description: string | null
         }
         Insert: {
-          created_at?: string | null
-          established_date?: string | null
           id?: string
-          location: string
-          member_count?: number | null
+          created_at?: string
+          updated_at?: string
           name: string
-          region?: string | null
-          updated_at?: string | null
+          city?: string | null
+          state?: string | null
+          country?: string
+          established_date?: string | null
+          status?: string
+          description?: string | null
         }
         Update: {
-          created_at?: string | null
-          established_date?: string | null
           id?: string
-          location?: string
-          member_count?: number | null
+          created_at?: string
+          updated_at?: string
           name?: string
-          region?: string | null
-          updated_at?: string | null
+          city?: string | null
+          state?: string | null
+          country?: string
+          established_date?: string | null
+          status?: string
+          description?: string | null
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          id: string
+          created_at: string
+          updated_at: string
+          email: string
+          full_name: string | null
+          avatar_url: string | null
+          phone: string | null
+        }
+        Insert: {
+          id: string
+          created_at?: string
+          updated_at?: string
+          email: string
+          full_name?: string | null
+          avatar_url?: string | null
+          phone?: string | null
+        }
+        Update: {
+          id?: string
+          created_at?: string
+          updated_at?: string
+          email?: string
+          full_name?: string | null
+          avatar_url?: string | null
+          phone?: string | null
+        }
+        Relationships: []
+      }
+      members: {
+        Row: {
+          id: string
+          created_at: string
+          updated_at: string
+          profile_id: string
+          chapter_id: string
+          membership_number: string | null
+          join_date: string | null
+          status: string
+          role: string | null
+          bio: string | null
+        }
+        Insert: {
+          id?: string
+          created_at?: string
+          updated_at?: string
+          profile_id: string
+          chapter_id: string
+          membership_number?: string | null
+          join_date?: string | null
+          status?: string
+          role?: string | null
+          bio?: string | null
+        }
+        Update: {
+          id?: string
+          created_at?: string
+          updated_at?: string
+          profile_id?: string
+          chapter_id?: string
+          membership_number?: string | null
+          join_date?: string | null
+          status?: string
+          role?: string | null
+          bio?: string | null
+        }
+        Relationships: []
+      }
+      skills: {
+        Row: {
+          id: string
+          name: string
+          category: string
+          description: string | null
+        }
+        Insert: {
+          id?: string
+          name: string
+          category: string
+          description?: string | null
+        }
+        Update: {
+          id?: string
+          name?: string
+          category?: string
+          description?: string | null
+        }
+        Relationships: []
+      }
+      member_skills: {
+        Row: {
+          id: string
+          member_id: string
+          skill_id: string
+          proficiency_level: string
+        }
+        Insert: {
+          id?: string
+          member_id: string
+          skill_id: string
+          proficiency_level: string
+        }
+        Update: {
+          id?: string
+          member_id?: string
+          skill_id?: string
+          proficiency_level?: string
+        }
+        Relationships: []
+      }
+      certifications: {
+        Row: {
+          id: string
+          name: string
+          issuing_organization: string | null
+        }
+        Insert: {
+          id?: string
+          name: string
+          issuing_organization?: string | null
+        }
+        Update: {
+          id?: string
+          name?: string
+          issuing_organization?: string | null
+        }
+        Relationships: []
+      }
+      member_certifications: {
+        Row: {
+          id: string
+          member_id: string
+          certification_id: string
+          issue_date: string | null
+          expiry_date: string | null
+        }
+        Insert: {
+          id?: string
+          member_id: string
+          certification_id: string
+          issue_date?: string | null
+          expiry_date?: string | null
+        }
+        Update: {
+          id?: string
+          member_id?: string
+          certification_id?: string
+          issue_date?: string | null
+          expiry_date?: string | null
+        }
+        Relationships: []
+      }
+      availability: {
+        Row: {
+          id: string
+          member_id: string
+          status: string
+          available_hours_per_week: number | null
+        }
+        Insert: {
+          id?: string
+          member_id: string
+          status: string
+          available_hours_per_week?: number | null
+        }
+        Update: {
+          id?: string
+          member_id?: string
+          status?: string
+          available_hours_per_week?: number | null
         }
         Relationships: []
       }
       engagement_metrics: {
         Row: {
-          calculated_at: string
-          created_at: string
-          engagement_score: number | null
-          events_attended_last_3_months: number | null
-          events_attended_last_6_months: number | null
-          events_organized: number | null
-          feedback_given: number | null
           id: string
-          last_activity_date: string | null
-          last_event_date: string | null
           member_id: string
-          referrals_made: number | null
-          total_contributions: number | null
-          total_events_attended: number | null
-          updated_at: string
-          volunteer_hours: number | null
+          total_events_attended: number
+          total_hours_volunteered: number
         }
         Insert: {
-          calculated_at?: string
-          created_at?: string
-          engagement_score?: number | null
-          events_attended_last_3_months?: number | null
-          events_attended_last_6_months?: number | null
-          events_organized?: number | null
-          feedback_given?: number | null
           id?: string
-          last_activity_date?: string | null
-          last_event_date?: string | null
           member_id: string
-          referrals_made?: number | null
-          total_contributions?: number | null
-          total_events_attended?: number | null
-          updated_at?: string
-          volunteer_hours?: number | null
+          total_events_attended?: number
+          total_hours_volunteered?: number
         }
         Update: {
-          calculated_at?: string
-          created_at?: string
-          engagement_score?: number | null
-          events_attended_last_3_months?: number | null
-          events_attended_last_6_months?: number | null
-          events_organized?: number | null
-          feedback_given?: number | null
           id?: string
-          last_activity_date?: string | null
-          last_event_date?: string | null
           member_id?: string
-          referrals_made?: number | null
-          total_contributions?: number | null
-          total_events_attended?: number | null
-          updated_at?: string
-          volunteer_hours?: number | null
+          total_events_attended?: number
+          total_hours_volunteered?: number
         }
-        Relationships: [
-          {
-            foreignKeyName: "engagement_metrics_member_id_fkey"
-            columns: ["member_id"]
-            isOneToOne: true
-            referencedRelation: "members"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
-      event_checkins: {
+      leadership_assessments: {
         Row: {
-          attendee_id: string
-          attendee_type: string
-          check_in_method: string | null
-          checked_in_at: string
-          checked_in_by: string | null
-          created_at: string
-          event_id: string
           id: string
-          notes: string | null
+          member_id: string
+          assessment_date: string
+          score: number
         }
         Insert: {
-          attendee_id: string
-          attendee_type: string
-          check_in_method?: string | null
-          checked_in_at?: string
-          checked_in_by?: string | null
-          created_at?: string
-          event_id: string
           id?: string
-          notes?: string | null
+          member_id: string
+          assessment_date: string
+          score: number
         }
         Update: {
-          attendee_id?: string
-          attendee_type?: string
-          check_in_method?: string | null
-          checked_in_at?: string
-          checked_in_by?: string | null
-          created_at?: string
-          event_id?: string
           id?: string
-          notes?: string | null
+          member_id?: string
+          assessment_date?: string
+          score?: number
         }
-        Relationships: [
-          {
-            foreignKeyName: "event_checkins_event_id_fkey"
-            columns: ["event_id"]
-            isOneToOne: false
-            referencedRelation: "events"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
-      event_documents: {
+      roles: {
         Row: {
-          created_at: string
+          id: string
+          name: string
           description: string | null
-          document_type: string
-          event_id: string
-          file_size_kb: number | null
-          file_url: string
-          id: string
-          is_public: boolean
-          title: string
-          updated_at: string
-          uploaded_by: string | null
         }
         Insert: {
-          created_at?: string
-          description?: string | null
-          document_type: string
-          event_id: string
-          file_size_kb?: number | null
-          file_url: string
           id?: string
-          is_public?: boolean
-          title: string
-          updated_at?: string
-          uploaded_by?: string | null
+          name: string
+          description?: string | null
         }
         Update: {
-          created_at?: string
-          description?: string | null
-          document_type?: string
-          event_id?: string
-          file_size_kb?: number | null
-          file_url?: string
           id?: string
-          is_public?: boolean
-          title?: string
-          updated_at?: string
-          uploaded_by?: string | null
+          name?: string
+          description?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "event_documents_event_id_fkey"
-            columns: ["event_id"]
-            isOneToOne: false
-            referencedRelation: "events"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          id: string
+          user_id: string
+          role_id: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          role_id: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          role_id?: string
+        }
+        Relationships: []
+      }
+      financial_audit_logs: {
+        Row: {
+          id: string
+          created_at: string
+          action: string
+          details: Json
+        }
+        Insert: {
+          id?: string
+          created_at?: string
+          action: string
+          details: Json
+        }
+        Update: {
+          id?: string
+          created_at?: string
+          action?: string
+          details?: Json
+        }
+        Relationships: []
+      }
+      event_volunteers: {
+        Row: {
+          id: string
+          event_id: string
+          member_id: string
+          role_name: string | null
+          hours_contributed: number | null
+          status: string
+        }
+        Insert: {
+          id?: string
+          event_id: string
+          member_id: string
+          role_name?: string | null
+          hours_contributed?: number | null
+          status?: string
+        }
+        Update: {
+          id?: string
+          event_id?: string
+          member_id?: string
+          role_name?: string | null
+          hours_contributed?: number | null
+          status?: string
+        }
+        Relationships: []
+      }
+      venues: {
+        Row: {
+          id: string
+          name: string
+          address: string | null
+          city: string | null
+          capacity: number | null
+        }
+        Insert: {
+          id?: string
+          name: string
+          address?: string | null
+          city?: string | null
+          capacity?: number | null
+        }
+        Update: {
+          id?: string
+          name?: string
+          address?: string | null
+          city?: string | null
+          capacity?: number | null
+        }
+        Relationships: []
       }
       event_feedback: {
         Row: {
-          content_rating: number | null
+          id: string
           created_at: string
           event_id: string
-          id: string
-          is_anonymous: boolean
           member_id: string | null
-          organization_rating: number | null
           overall_rating: number | null
-          suggestions: string | null
-          updated_at: string
+          content_rating: number | null
           venue_rating: number | null
-          what_could_improve: string | null
+          organization_rating: number | null
           what_went_well: string | null
+          what_could_improve: string | null
+          suggestions: string | null
           would_attend_again: boolean | null
+          is_anonymous: boolean
         }
         Insert: {
-          content_rating?: number | null
+          id?: string
           created_at?: string
           event_id: string
-          id?: string
-          is_anonymous?: boolean
           member_id?: string | null
-          organization_rating?: number | null
           overall_rating?: number | null
-          suggestions?: string | null
-          updated_at?: string
+          content_rating?: number | null
           venue_rating?: number | null
-          what_could_improve?: string | null
+          organization_rating?: number | null
           what_went_well?: string | null
+          what_could_improve?: string | null
+          suggestions?: string | null
           would_attend_again?: boolean | null
+          is_anonymous?: boolean
         }
         Update: {
-          content_rating?: number | null
+          id?: string
           created_at?: string
           event_id?: string
-          id?: string
-          is_anonymous?: boolean
           member_id?: string | null
-          organization_rating?: number | null
           overall_rating?: number | null
-          suggestions?: string | null
-          updated_at?: string
+          content_rating?: number | null
           venue_rating?: number | null
-          what_could_improve?: string | null
+          organization_rating?: number | null
           what_went_well?: string | null
+          what_could_improve?: string | null
+          suggestions?: string | null
           would_attend_again?: boolean | null
+          is_anonymous?: boolean
         }
         Relationships: [
           {
@@ -437,2790 +831,435 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "members"
             referencedColumns: ["id"]
-          },
+          }
         ]
       }
-      event_impact_metrics: {
+      event_documents: {
         Row: {
-          attendance_rate: number | null
-          average_rating: number | null
-          beneficiaries_count: number | null
-          calculated_at: string
-          event_id: string
-          feedback_count: number
-          guests_attended: number
           id: string
-          members_attended: number
-          net_profit: number | null
-          satisfaction_rate: number | null
-          social_impact_description: string | null
-          total_attended: number
-          total_expense: number | null
-          total_registered: number
-          total_revenue: number | null
-          total_volunteer_hours: number
-          updated_at: string
-          volunteers_count: number
-        }
-        Insert: {
-          attendance_rate?: number | null
-          average_rating?: number | null
-          beneficiaries_count?: number | null
-          calculated_at?: string
-          event_id: string
-          feedback_count?: number
-          guests_attended?: number
-          id?: string
-          members_attended?: number
-          net_profit?: number | null
-          satisfaction_rate?: number | null
-          social_impact_description?: string | null
-          total_attended?: number
-          total_expense?: number | null
-          total_registered?: number
-          total_revenue?: number | null
-          total_volunteer_hours?: number
-          updated_at?: string
-          volunteers_count?: number
-        }
-        Update: {
-          attendance_rate?: number | null
-          average_rating?: number | null
-          beneficiaries_count?: number | null
-          calculated_at?: string
-          event_id?: string
-          feedback_count?: number
-          guests_attended?: number
-          id?: string
-          members_attended?: number
-          net_profit?: number | null
-          satisfaction_rate?: number | null
-          social_impact_description?: string | null
-          total_attended?: number
-          total_expense?: number | null
-          total_registered?: number
-          total_revenue?: number | null
-          total_volunteer_hours?: number
-          updated_at?: string
-          volunteers_count?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "event_impact_metrics_event_id_fkey"
-            columns: ["event_id"]
-            isOneToOne: true
-            referencedRelation: "events"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      event_rsvps: {
-        Row: {
-          checked_in_at: string | null
-          checked_in_by: string | null
-          created_at: string
-          dietary_restrictions: string | null
-          event_id: string
-          guests_count: number
-          id: string
-          member_id: string
-          notes: string | null
-          special_requirements: string | null
-          status: Database["public"]["Enums"]["rsvp_status"]
-          updated_at: string
-        }
-        Insert: {
-          checked_in_at?: string | null
-          checked_in_by?: string | null
-          created_at?: string
-          dietary_restrictions?: string | null
-          event_id: string
-          guests_count?: number
-          id?: string
-          member_id: string
-          notes?: string | null
-          special_requirements?: string | null
-          status?: Database["public"]["Enums"]["rsvp_status"]
-          updated_at?: string
-        }
-        Update: {
-          checked_in_at?: string | null
-          checked_in_by?: string | null
-          created_at?: string
-          dietary_restrictions?: string | null
-          event_id?: string
-          guests_count?: number
-          id?: string
-          member_id?: string
-          notes?: string | null
-          special_requirements?: string | null
-          status?: Database["public"]["Enums"]["rsvp_status"]
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "event_rsvps_event_id_fkey"
-            columns: ["event_id"]
-            isOneToOne: false
-            referencedRelation: "events"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "event_rsvps_member_id_fkey"
-            columns: ["member_id"]
-            isOneToOne: false
-            referencedRelation: "members"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      event_templates: {
-        Row: {
-          category: Database["public"]["Enums"]["event_category"]
-          checklist: Json | null
-          created_at: string
-          created_by: string | null
-          default_capacity: number | null
-          default_duration_hours: number | null
-          default_volunteer_roles: Json | null
-          description: string | null
-          id: string
-          name: string
-          updated_at: string
-        }
-        Insert: {
-          category: Database["public"]["Enums"]["event_category"]
-          checklist?: Json | null
-          created_at?: string
-          created_by?: string | null
-          default_capacity?: number | null
-          default_duration_hours?: number | null
-          default_volunteer_roles?: Json | null
-          description?: string | null
-          id?: string
-          name: string
-          updated_at?: string
-        }
-        Update: {
-          category?: Database["public"]["Enums"]["event_category"]
-          checklist?: Json | null
-          created_at?: string
-          created_by?: string | null
-          default_capacity?: number | null
-          default_duration_hours?: number | null
-          default_volunteer_roles?: Json | null
-          description?: string | null
-          id?: string
-          name?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      event_volunteers: {
-        Row: {
-          accepted_at: string | null
-          assigned_at: string
-          assigned_by: string | null
-          completed_at: string | null
           created_at: string
           event_id: string
-          feedback: string | null
-          hours_contributed: number | null
-          id: string
-          member_id: string
-          notes: string | null
-          rating: number | null
-          role_id: string | null
-          role_name: string
-          status: Database["public"]["Enums"]["volunteer_status"]
-          updated_at: string
-        }
-        Insert: {
-          accepted_at?: string | null
-          assigned_at?: string
-          assigned_by?: string | null
-          completed_at?: string | null
-          created_at?: string
-          event_id: string
-          feedback?: string | null
-          hours_contributed?: number | null
-          id?: string
-          member_id: string
-          notes?: string | null
-          rating?: number | null
-          role_id?: string | null
-          role_name: string
-          status?: Database["public"]["Enums"]["volunteer_status"]
-          updated_at?: string
-        }
-        Update: {
-          accepted_at?: string | null
-          assigned_at?: string
-          assigned_by?: string | null
-          completed_at?: string | null
-          created_at?: string
-          event_id?: string
-          feedback?: string | null
-          hours_contributed?: number | null
-          id?: string
-          member_id?: string
-          notes?: string | null
-          rating?: number | null
-          role_id?: string | null
-          role_name?: string
-          status?: Database["public"]["Enums"]["volunteer_status"]
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "event_volunteers_event_id_fkey"
-            columns: ["event_id"]
-            isOneToOne: false
-            referencedRelation: "events"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "event_volunteers_member_id_fkey"
-            columns: ["member_id"]
-            isOneToOne: false
-            referencedRelation: "members"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "event_volunteers_role_id_fkey"
-            columns: ["role_id"]
-            isOneToOne: false
-            referencedRelation: "volunteer_roles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      events: {
-        Row: {
-          actual_expense: number | null
-          allow_guests: boolean
-          attachment_urls: string[] | null
-          banner_image_url: string | null
-          category: Database["public"]["Enums"]["event_category"]
-          chapter_id: string | null
-          co_organizers: string[] | null
-          created_at: string
-          current_registrations: number
-          custom_fields: Json | null
-          description: string | null
-          end_date: string
-          estimated_budget: number | null
-          guest_limit: number | null
-          id: string
-          is_active: boolean
-          is_featured: boolean
-          is_virtual: boolean
-          max_capacity: number | null
-          organizer_id: string | null
-          registration_end_date: string | null
-          registration_start_date: string | null
-          requires_approval: boolean
-          send_reminders: boolean
-          start_date: string
-          status: Database["public"]["Enums"]["event_status"]
-          tags: string[] | null
-          template_id: string | null
           title: string
-          updated_at: string
-          venue_address: string | null
-          venue_id: string | null
-          virtual_meeting_link: string | null
-          waitlist_enabled: boolean
+          description: string | null
+          document_type: 'photo' | 'report' | 'certificate' | 'invoice' | 'other'
+          file_url: string
+          file_size_kb: number | null
+          is_public: boolean
+          uploaded_by: string | null
         }
         Insert: {
-          actual_expense?: number | null
-          allow_guests?: boolean
-          attachment_urls?: string[] | null
-          banner_image_url?: string | null
-          category: Database["public"]["Enums"]["event_category"]
-          chapter_id?: string | null
-          co_organizers?: string[] | null
-          created_at?: string
-          current_registrations?: number
-          custom_fields?: Json | null
-          description?: string | null
-          end_date: string
-          estimated_budget?: number | null
-          guest_limit?: number | null
           id?: string
-          is_active?: boolean
-          is_featured?: boolean
-          is_virtual?: boolean
-          max_capacity?: number | null
-          organizer_id?: string | null
-          registration_end_date?: string | null
-          registration_start_date?: string | null
-          requires_approval?: boolean
-          send_reminders?: boolean
-          start_date: string
-          status?: Database["public"]["Enums"]["event_status"]
-          tags?: string[] | null
-          template_id?: string | null
+          created_at?: string
+          event_id: string
           title: string
-          updated_at?: string
-          venue_address?: string | null
-          venue_id?: string | null
-          virtual_meeting_link?: string | null
-          waitlist_enabled?: boolean
+          description?: string | null
+          document_type: 'photo' | 'report' | 'certificate' | 'invoice' | 'other'
+          file_url: string
+          file_size_kb?: number | null
+          is_public?: boolean
+          uploaded_by?: string | null
         }
         Update: {
-          actual_expense?: number | null
-          allow_guests?: boolean
-          attachment_urls?: string[] | null
-          banner_image_url?: string | null
-          category?: Database["public"]["Enums"]["event_category"]
-          chapter_id?: string | null
-          co_organizers?: string[] | null
-          created_at?: string
-          current_registrations?: number
-          custom_fields?: Json | null
-          description?: string | null
-          end_date?: string
-          estimated_budget?: number | null
-          guest_limit?: number | null
           id?: string
-          is_active?: boolean
-          is_featured?: boolean
-          is_virtual?: boolean
-          max_capacity?: number | null
-          organizer_id?: string | null
-          registration_end_date?: string | null
-          registration_start_date?: string | null
-          requires_approval?: boolean
-          send_reminders?: boolean
-          start_date?: string
-          status?: Database["public"]["Enums"]["event_status"]
-          tags?: string[] | null
-          template_id?: string | null
+          created_at?: string
+          event_id?: string
           title?: string
-          updated_at?: string
-          venue_address?: string | null
-          venue_id?: string | null
-          virtual_meeting_link?: string | null
-          waitlist_enabled?: boolean
+          description?: string | null
+          document_type?: 'photo' | 'report' | 'certificate' | 'invoice' | 'other'
+          file_url?: string
+          file_size_kb?: number | null
+          is_public?: boolean
+          uploaded_by?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "events_chapter_id_fkey"
-            columns: ["chapter_id"]
-            isOneToOne: false
-            referencedRelation: "chapters"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "events_template_id_fkey"
-            columns: ["template_id"]
-            isOneToOne: false
-            referencedRelation: "event_templates"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "events_venue_id_fkey"
-            columns: ["venue_id"]
-            isOneToOne: false
-            referencedRelation: "venues"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      guest_rsvps: {
-        Row: {
-          checked_in_at: string | null
-          checked_in_by: string | null
-          company: string | null
-          created_at: string
-          designation: string | null
-          dietary_restrictions: string | null
-          email: string
-          event_id: string
-          full_name: string
-          id: string
-          invited_by_member_id: string | null
-          notes: string | null
-          phone: string | null
-          special_requirements: string | null
-          status: Database["public"]["Enums"]["rsvp_status"]
-          updated_at: string
-        }
-        Insert: {
-          checked_in_at?: string | null
-          checked_in_by?: string | null
-          company?: string | null
-          created_at?: string
-          designation?: string | null
-          dietary_restrictions?: string | null
-          email: string
-          event_id: string
-          full_name: string
-          id?: string
-          invited_by_member_id?: string | null
-          notes?: string | null
-          phone?: string | null
-          special_requirements?: string | null
-          status?: Database["public"]["Enums"]["rsvp_status"]
-          updated_at?: string
-        }
-        Update: {
-          checked_in_at?: string | null
-          checked_in_by?: string | null
-          company?: string | null
-          created_at?: string
-          designation?: string | null
-          dietary_restrictions?: string | null
-          email?: string
-          event_id?: string
-          full_name?: string
-          id?: string
-          invited_by_member_id?: string | null
-          notes?: string | null
-          phone?: string | null
-          special_requirements?: string | null
-          status?: Database["public"]["Enums"]["rsvp_status"]
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "guest_rsvps_event_id_fkey"
+            foreignKeyName: "event_documents_event_id_fkey"
             columns: ["event_id"]
             isOneToOne: false
             referencedRelation: "events"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "guest_rsvps_invited_by_member_id_fkey"
-            columns: ["invited_by_member_id"]
+            foreignKeyName: "event_documents_uploaded_by_fkey"
+            columns: ["uploaded_by"]
             isOneToOne: false
             referencedRelation: "members"
             referencedColumns: ["id"]
-          },
+          }
         ]
       }
-      leadership_assessments: {
-        Row: {
-          areas_for_development: string[] | null
-          assessed_at: string
-          created_at: string
-          engagement_score: number | null
-          id: string
-          leadership_experience_score: number | null
-          member_id: string
-          next_assessment_date: string | null
-          notes: string | null
-          readiness_level: string | null
-          readiness_score: number | null
-          recommended_roles: string[] | null
-          recommended_training: string[] | null
-          skills_score: number | null
-          strengths: string[] | null
-          tenure_score: number | null
-          training_score: number | null
-          updated_at: string
-        }
-        Insert: {
-          areas_for_development?: string[] | null
-          assessed_at?: string
-          created_at?: string
-          engagement_score?: number | null
-          id?: string
-          leadership_experience_score?: number | null
-          member_id: string
-          next_assessment_date?: string | null
-          notes?: string | null
-          readiness_level?: string | null
-          readiness_score?: number | null
-          recommended_roles?: string[] | null
-          recommended_training?: string[] | null
-          skills_score?: number | null
-          strengths?: string[] | null
-          tenure_score?: number | null
-          training_score?: number | null
-          updated_at?: string
-        }
-        Update: {
-          areas_for_development?: string[] | null
-          assessed_at?: string
-          created_at?: string
-          engagement_score?: number | null
-          id?: string
-          leadership_experience_score?: number | null
-          member_id?: string
-          next_assessment_date?: string | null
-          notes?: string | null
-          readiness_level?: string | null
-          readiness_score?: number | null
-          recommended_roles?: string[] | null
-          recommended_training?: string[] | null
-          skills_score?: number | null
-          strengths?: string[] | null
-          tenure_score?: number | null
-          training_score?: number | null
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "leadership_assessments_member_id_fkey"
-            columns: ["member_id"]
-            isOneToOne: true
-            referencedRelation: "members"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      member_certifications: {
-        Row: {
-          certificate_number: string | null
-          certification_id: string
-          created_at: string
-          document_url: string | null
-          expiry_date: string | null
-          id: string
-          issued_date: string
-          member_id: string
-          notes: string | null
-          updated_at: string
-        }
-        Insert: {
-          certificate_number?: string | null
-          certification_id: string
-          created_at?: string
-          document_url?: string | null
-          expiry_date?: string | null
-          id?: string
-          issued_date: string
-          member_id: string
-          notes?: string | null
-          updated_at?: string
-        }
-        Update: {
-          certificate_number?: string | null
-          certification_id?: string
-          created_at?: string
-          document_url?: string | null
-          expiry_date?: string | null
-          id?: string
-          issued_date?: string
-          member_id?: string
-          notes?: string | null
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "member_certifications_certification_id_fkey"
-            columns: ["certification_id"]
-            isOneToOne: false
-            referencedRelation: "certifications"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "member_certifications_member_id_fkey"
-            columns: ["member_id"]
-            isOneToOne: false
-            referencedRelation: "members"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      member_networks: {
-        Row: {
-          contact_email: string | null
-          contact_person: string | null
-          contact_phone: string | null
-          created_at: string | null
-          id: string
-          member_id: string
-          network_type: string
-          notes: string | null
-          organization_name: string
-          relationship_strength: string | null
-          updated_at: string | null
-          verified: boolean | null
-        }
-        Insert: {
-          contact_email?: string | null
-          contact_person?: string | null
-          contact_phone?: string | null
-          created_at?: string | null
-          id?: string
-          member_id: string
-          network_type: string
-          notes?: string | null
-          organization_name: string
-          relationship_strength?: string | null
-          updated_at?: string | null
-          verified?: boolean | null
-        }
-        Update: {
-          contact_email?: string | null
-          contact_person?: string | null
-          contact_phone?: string | null
-          created_at?: string | null
-          id?: string
-          member_id?: string
-          network_type?: string
-          notes?: string | null
-          organization_name?: string
-          relationship_strength?: string | null
-          updated_at?: string | null
-          verified?: boolean | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "member_networks_member_id_fkey"
-            columns: ["member_id"]
-            isOneToOne: false
-            referencedRelation: "members"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      member_requests: {
-        Row: {
-          address: string | null
-          city: string
-          company: string | null
-          country: string | null
-          created_at: string | null
-          created_member_id: string | null
-          date_of_birth: string | null
-          designation: string | null
-          email: string
-          emergency_contact_name: string | null
-          emergency_contact_phone: string | null
-          emergency_contact_relationship: string | null
-          full_name: string
-          gender: string | null
-          how_did_you_hear: string | null
-          id: string
-          industry: string | null
-          linkedin_url: string | null
-          motivation: string
-          phone: string
-          pincode: string | null
-          preferred_chapter_id: string | null
-          review_notes: string | null
-          reviewed_at: string | null
-          reviewed_by: string | null
-          state: string
-          status: string
-          updated_at: string | null
-          years_of_experience: number | null
-        }
-        Insert: {
-          address?: string | null
-          city: string
-          company?: string | null
-          country?: string | null
-          created_at?: string | null
-          created_member_id?: string | null
-          date_of_birth?: string | null
-          designation?: string | null
-          email: string
-          emergency_contact_name?: string | null
-          emergency_contact_phone?: string | null
-          emergency_contact_relationship?: string | null
-          full_name: string
-          gender?: string | null
-          how_did_you_hear?: string | null
-          id?: string
-          industry?: string | null
-          linkedin_url?: string | null
-          motivation: string
-          phone: string
-          pincode?: string | null
-          preferred_chapter_id?: string | null
-          review_notes?: string | null
-          reviewed_at?: string | null
-          reviewed_by?: string | null
-          state: string
-          status?: string
-          updated_at?: string | null
-          years_of_experience?: number | null
-        }
-        Update: {
-          address?: string | null
-          city?: string
-          company?: string | null
-          country?: string | null
-          created_at?: string | null
-          created_member_id?: string | null
-          date_of_birth?: string | null
-          designation?: string | null
-          email?: string
-          emergency_contact_name?: string | null
-          emergency_contact_phone?: string | null
-          emergency_contact_relationship?: string | null
-          full_name?: string
-          gender?: string | null
-          how_did_you_hear?: string | null
-          id?: string
-          industry?: string | null
-          linkedin_url?: string | null
-          motivation?: string
-          phone?: string
-          pincode?: string | null
-          preferred_chapter_id?: string | null
-          review_notes?: string | null
-          reviewed_at?: string | null
-          reviewed_by?: string | null
-          state?: string
-          status?: string
-          updated_at?: string | null
-          years_of_experience?: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "member_requests_created_member_id_fkey"
-            columns: ["created_member_id"]
-            isOneToOne: false
-            referencedRelation: "members"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "member_requests_preferred_chapter_id_fkey"
-            columns: ["preferred_chapter_id"]
-            isOneToOne: false
-            referencedRelation: "chapters"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      member_skills: {
-        Row: {
-          created_at: string
-          id: string
-          is_willing_to_mentor: boolean
-          member_id: string
-          notes: string | null
-          proficiency: Database["public"]["Enums"]["proficiency_level"]
-          skill_id: string
-          updated_at: string
-          years_of_experience: number | null
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          is_willing_to_mentor?: boolean
-          member_id: string
-          notes?: string | null
-          proficiency?: Database["public"]["Enums"]["proficiency_level"]
-          skill_id: string
-          updated_at?: string
-          years_of_experience?: number | null
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          is_willing_to_mentor?: boolean
-          member_id?: string
-          notes?: string | null
-          proficiency?: Database["public"]["Enums"]["proficiency_level"]
-          skill_id?: string
-          updated_at?: string
-          years_of_experience?: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "member_skills_member_id_fkey"
-            columns: ["member_id"]
-            isOneToOne: false
-            referencedRelation: "members"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "member_skills_skill_id_fkey"
-            columns: ["skill_id"]
-            isOneToOne: false
-            referencedRelation: "skills"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      members: {
-        Row: {
-          address: string | null
-          avatar_url: string | null
-          chapter_id: string | null
-          city: string | null
-          communication_preferences: Json | null
-          company: string | null
-          country: string | null
-          created_at: string
-          date_of_birth: string | null
-          designation: string | null
-          emergency_contact_name: string | null
-          emergency_contact_phone: string | null
-          emergency_contact_relationship: string | null
-          family_count: number | null
-          gender: string | null
-          id: string
-          industry: string | null
-          interests: string[] | null
-          is_active: boolean
-          languages: string[] | null
-          linkedin_url: string | null
-          member_since: string
-          membership_number: string | null
-          membership_status: string
-          membership_type: string | null
-          notes: string | null
-          pincode: string | null
-          preferred_event_types: string[] | null
-          renewal_date: string | null
-          state: string | null
-          updated_at: string
-          vertical_interests: string[] | null
-          willingness_level: number | null
-          years_of_experience: number | null
-        }
-        Insert: {
-          address?: string | null
-          avatar_url?: string | null
-          chapter_id?: string | null
-          city?: string | null
-          communication_preferences?: Json | null
-          company?: string | null
-          country?: string | null
-          created_at?: string
-          date_of_birth?: string | null
-          designation?: string | null
-          emergency_contact_name?: string | null
-          emergency_contact_phone?: string | null
-          emergency_contact_relationship?: string | null
-          family_count?: number | null
-          gender?: string | null
-          id: string
-          industry?: string | null
-          interests?: string[] | null
-          is_active?: boolean
-          languages?: string[] | null
-          linkedin_url?: string | null
-          member_since?: string
-          membership_number?: string | null
-          membership_status?: string
-          membership_type?: string | null
-          notes?: string | null
-          pincode?: string | null
-          preferred_event_types?: string[] | null
-          renewal_date?: string | null
-          state?: string | null
-          updated_at?: string
-          vertical_interests?: string[] | null
-          willingness_level?: number | null
-          years_of_experience?: number | null
-        }
-        Update: {
-          address?: string | null
-          avatar_url?: string | null
-          chapter_id?: string | null
-          city?: string | null
-          communication_preferences?: Json | null
-          company?: string | null
-          country?: string | null
-          created_at?: string
-          date_of_birth?: string | null
-          designation?: string | null
-          emergency_contact_name?: string | null
-          emergency_contact_phone?: string | null
-          emergency_contact_relationship?: string | null
-          family_count?: number | null
-          gender?: string | null
-          id?: string
-          industry?: string | null
-          interests?: string[] | null
-          is_active?: boolean
-          languages?: string[] | null
-          linkedin_url?: string | null
-          member_since?: string
-          membership_number?: string | null
-          membership_status?: string
-          membership_type?: string | null
-          notes?: string | null
-          pincode?: string | null
-          preferred_event_types?: string[] | null
-          renewal_date?: string | null
-          state?: string | null
-          updated_at?: string
-          vertical_interests?: string[] | null
-          willingness_level?: number | null
-          years_of_experience?: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "members_chapter_id_fkey"
-            columns: ["chapter_id"]
-            isOneToOne: false
-            referencedRelation: "chapters"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "members_id_fkey"
-            columns: ["id"]
-            isOneToOne: true
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      profiles: {
-        Row: {
-          approved_at: string | null
-          approved_by: string | null
-          approved_email_id: string | null
-          avatar_url: string | null
-          chapter_id: string | null
-          created_at: string | null
-          email: string
-          full_name: string
-          id: string
-          phone: string | null
-          updated_at: string | null
-        }
-        Insert: {
-          approved_at?: string | null
-          approved_by?: string | null
-          approved_email_id?: string | null
-          avatar_url?: string | null
-          chapter_id?: string | null
-          created_at?: string | null
-          email: string
-          full_name: string
-          id: string
-          phone?: string | null
-          updated_at?: string | null
-        }
-        Update: {
-          approved_at?: string | null
-          approved_by?: string | null
-          approved_email_id?: string | null
-          avatar_url?: string | null
-          chapter_id?: string | null
-          created_at?: string | null
-          email?: string
-          full_name?: string
-          id?: string
-          phone?: string | null
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "profiles_approved_email_id_fkey"
-            columns: ["approved_email_id"]
-            isOneToOne: false
-            referencedRelation: "approved_emails"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "profiles_chapter_id_fkey"
-            columns: ["chapter_id"]
-            isOneToOne: false
-            referencedRelation: "chapters"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      resource_bookings: {
-        Row: {
-          created_at: string
-          event_id: string
-          id: string
-          notes: string | null
-          quantity: number
-          resource_id: string
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          event_id: string
-          id?: string
-          notes?: string | null
-          quantity?: number
-          resource_id: string
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          event_id?: string
-          id?: string
-          notes?: string | null
-          quantity?: number
-          resource_id?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "resource_bookings_event_id_fkey"
-            columns: ["event_id"]
-            isOneToOne: false
-            referencedRelation: "events"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "resource_bookings_resource_id_fkey"
-            columns: ["resource_id"]
-            isOneToOne: false
-            referencedRelation: "resources"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      resources: {
-        Row: {
-          category: string | null
-          created_at: string
-          description: string | null
-          id: string
-          is_active: boolean
-          name: string
-          quantity_available: number
-          unit_cost: number | null
-          updated_at: string
-        }
-        Insert: {
-          category?: string | null
-          created_at?: string
-          description?: string | null
-          id?: string
-          is_active?: boolean
-          name: string
-          quantity_available?: number
-          unit_cost?: number | null
-          updated_at?: string
-        }
-        Update: {
-          category?: string | null
-          created_at?: string
-          description?: string | null
-          id?: string
-          is_active?: boolean
-          name?: string
-          quantity_available?: number
-          unit_cost?: number | null
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      roles: {
-        Row: {
-          created_at: string | null
-          description: string | null
-          hierarchy_level: number
-          id: string
-          name: string
-          permissions: string[] | null
-        }
-        Insert: {
-          created_at?: string | null
-          description?: string | null
-          hierarchy_level?: number
-          id?: string
-          name: string
-          permissions?: string[] | null
-        }
-        Update: {
-          created_at?: string | null
-          description?: string | null
-          hierarchy_level?: number
-          id?: string
-          name?: string
-          permissions?: string[] | null
-        }
-        Relationships: []
-      }
-      skills: {
-        Row: {
-          category: Database["public"]["Enums"]["skill_category"]
-          created_at: string
-          description: string | null
-          id: string
-          is_active: boolean
-          name: string
-          updated_at: string
-        }
-        Insert: {
-          category?: Database["public"]["Enums"]["skill_category"]
-          created_at?: string
-          description?: string | null
-          id?: string
-          is_active?: boolean
-          name: string
-          updated_at?: string
-        }
-        Update: {
-          category?: Database["public"]["Enums"]["skill_category"]
-          created_at?: string
-          description?: string | null
-          id?: string
-          is_active?: boolean
-          name?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      user_role_changes: {
-        Row: {
-          action: string
-          changed_by: string | null
-          created_at: string
-          id: string
-          notes: string | null
-          role_id: string
-          user_id: string
-        }
-        Insert: {
-          action: string
-          changed_by?: string | null
-          created_at?: string
-          id?: string
-          notes?: string | null
-          role_id: string
-          user_id: string
-        }
-        Update: {
-          action?: string
-          changed_by?: string | null
-          created_at?: string
-          id?: string
-          notes?: string | null
-          role_id?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "user_role_changes_changed_by_fkey"
-            columns: ["changed_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "user_role_changes_role_id_fkey"
-            columns: ["role_id"]
-            isOneToOne: false
-            referencedRelation: "roles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "user_role_changes_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      user_roles: {
-        Row: {
-          created_at: string | null
-          id: string
-          role_id: string | null
-          user_id: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          id?: string
-          role_id?: string | null
-          user_id?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          id?: string
-          role_id?: string | null
-          user_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "user_roles_role_id_fkey"
-            columns: ["role_id"]
-            isOneToOne: false
-            referencedRelation: "roles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "user_roles_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      venue_bookings: {
-        Row: {
-          booking_reference: string | null
-          created_at: string
-          end_time: string
-          event_id: string
-          id: string
-          notes: string | null
-          start_time: string
-          status: Database["public"]["Enums"]["booking_status"]
-          updated_at: string
-          venue_id: string
-        }
-        Insert: {
-          booking_reference?: string | null
-          created_at?: string
-          end_time: string
-          event_id: string
-          id?: string
-          notes?: string | null
-          start_time: string
-          status?: Database["public"]["Enums"]["booking_status"]
-          updated_at?: string
-          venue_id: string
-        }
-        Update: {
-          booking_reference?: string | null
-          created_at?: string
-          end_time?: string
-          event_id?: string
-          id?: string
-          notes?: string | null
-          start_time?: string
-          status?: Database["public"]["Enums"]["booking_status"]
-          updated_at?: string
-          venue_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "venue_bookings_event_id_fkey"
-            columns: ["event_id"]
-            isOneToOne: false
-            referencedRelation: "events"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "venue_bookings_venue_id_fkey"
-            columns: ["venue_id"]
-            isOneToOne: false
-            referencedRelation: "venues"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      venues: {
-        Row: {
-          address: string
-          amenities: string[] | null
-          booking_link: string | null
-          capacity: number | null
-          city: string | null
-          contact_email: string | null
-          contact_person: string | null
-          contact_phone: string | null
-          created_at: string
-          id: string
-          is_active: boolean
-          name: string
-          notes: string | null
-          pincode: string | null
-          state: string | null
-          updated_at: string
-        }
-        Insert: {
-          address: string
-          amenities?: string[] | null
-          booking_link?: string | null
-          capacity?: number | null
-          city?: string | null
-          contact_email?: string | null
-          contact_person?: string | null
-          contact_phone?: string | null
-          created_at?: string
-          id?: string
-          is_active?: boolean
-          name: string
-          notes?: string | null
-          pincode?: string | null
-          state?: string | null
-          updated_at?: string
-        }
-        Update: {
-          address?: string
-          amenities?: string[] | null
-          booking_link?: string | null
-          capacity?: number | null
-          city?: string | null
-          contact_email?: string | null
-          contact_person?: string | null
-          contact_phone?: string | null
-          created_at?: string
-          id?: string
-          is_active?: boolean
-          name?: string
-          notes?: string | null
-          pincode?: string | null
-          state?: string | null
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      volunteer_roles: {
-        Row: {
-          created_at: string
-          description: string | null
-          id: string
-          is_active: boolean
-          name: string
-          required_skills: string[] | null
-          responsibilities: string[] | null
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          description?: string | null
-          id?: string
-          is_active?: boolean
-          name: string
-          required_skills?: string[] | null
-          responsibilities?: string[] | null
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          description?: string | null
-          id?: string
-          is_active?: boolean
-          name?: string
-          required_skills?: string[] | null
-          responsibilities?: string[] | null
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      // ================================================
-      // MODULE 4: FINANCE TABLES
-      // ================================================
       budgets: {
         Row: {
           id: string
+          created_at: string
+          updated_at: string
           chapter_id: string
           name: string
           description: string | null
           fiscal_year: number
-          period: Database["public"]["Enums"]["budget_period"]
+          period: 'quarterly' | 'annual' | 'custom'
           quarter: number | null
           total_amount: number
-          allocated_amount: number
           spent_amount: number
-          committed_amount: number
-          status: Database["public"]["Enums"]["budget_status"]
-          approved_by: string | null
-          approved_at: string | null
+          allocated_amount: number
           start_date: string
           end_date: string
+          status: 'draft' | 'approved' | 'active' | 'closed'
+          approved_at: string | null
+          approved_by: string | null
           created_by: string
-          created_at: string
-          updated_at: string
         }
         Insert: {
           id?: string
+          created_at?: string
+          updated_at?: string
           chapter_id: string
           name: string
           description?: string | null
           fiscal_year: number
-          period?: Database["public"]["Enums"]["budget_period"]
+          period: 'quarterly' | 'annual' | 'custom'
           quarter?: number | null
           total_amount: number
-          allocated_amount?: number
           spent_amount?: number
-          committed_amount?: number
-          status?: Database["public"]["Enums"]["budget_status"]
-          approved_by?: string | null
-          approved_at?: string | null
+          allocated_amount?: number
           start_date: string
           end_date: string
+          status?: 'draft' | 'approved' | 'active' | 'closed'
+          approved_at?: string | null
+          approved_by?: string | null
           created_by: string
-          created_at?: string
-          updated_at?: string
         }
         Update: {
           id?: string
+          created_at?: string
+          updated_at?: string
           chapter_id?: string
           name?: string
           description?: string | null
           fiscal_year?: number
-          period?: Database["public"]["Enums"]["budget_period"]
+          period?: 'quarterly' | 'annual' | 'custom'
           quarter?: number | null
           total_amount?: number
-          allocated_amount?: number
           spent_amount?: number
-          committed_amount?: number
-          status?: Database["public"]["Enums"]["budget_status"]
-          approved_by?: string | null
-          approved_at?: string | null
+          allocated_amount?: number
           start_date?: string
           end_date?: string
+          status?: 'draft' | 'approved' | 'active' | 'closed'
+          approved_at?: string | null
+          approved_by?: string | null
           created_by?: string
-          created_at?: string
-          updated_at?: string
         }
-        Relationships: []
-      }
-      budget_allocations: {
-        Row: {
-          id: string
-          budget_id: string
-          vertical_name: string
-          category_name: string | null
-          allocated_amount: number
-          spent_amount: number
-          description: string | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          budget_id: string
-          vertical_name: string
-          category_name?: string | null
-          allocated_amount: number
-          spent_amount?: number
-          description?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          budget_id?: string
-          vertical_name?: string
-          category_name?: string | null
-          allocated_amount?: number
-          spent_amount?: number
-          description?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      expense_categories: {
-        Row: {
-          id: string
-          chapter_id: string | null
-          name: string
-          description: string | null
-          parent_category_id: string | null
-          color: string
-          icon: string | null
-          sort_order: number
-          is_active: boolean
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          chapter_id?: string | null
-          name: string
-          description?: string | null
-          parent_category_id?: string | null
-          color?: string
-          icon?: string | null
-          sort_order?: number
-          is_active?: boolean
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          chapter_id?: string | null
-          name?: string
-          description?: string | null
-          parent_category_id?: string | null
-          color?: string
-          icon?: string | null
-          sort_order?: number
-          is_active?: boolean
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      expense_receipts: {
-        Row: {
-          id: string
-          expense_id: string
-          file_name: string
-          file_path: string
-          file_size: number | null
-          file_type: string | null
-          uploaded_by: string
-          uploaded_at: string
-          description: string | null
-        }
-        Insert: {
-          id?: string
-          expense_id: string
-          file_name: string
-          file_path: string
-          file_size?: number | null
-          file_type?: string | null
-          uploaded_by: string
-          uploaded_at?: string
-          description?: string | null
-        }
-        Update: {
-          id?: string
-          expense_id?: string
-          file_name?: string
-          file_path?: string
-          file_size?: number | null
-          file_type?: string | null
-          uploaded_by?: string
-          uploaded_at?: string
-          description?: string | null
-        }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "budgets_chapter_id_fkey"
+            columns: ["chapter_id"]
+            isOneToOne: false
+            referencedRelation: "chapters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budgets_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       expenses: {
         Row: {
           id: string
+          created_at: string
+          updated_at: string
           chapter_id: string
-          event_id: string | null
-          budget_id: string | null
-          category_id: string
           title: string
           description: string | null
           amount: number
           expense_date: string
+          category_id: string
+          event_id: string | null
+          budget_id: string | null
           vendor_name: string | null
           vendor_contact: string | null
           invoice_number: string | null
-          payment_method: Database["public"]["Enums"]["payment_method_type"] | null
-          payment_date: string | null
-          payment_reference: string | null
-          status: Database["public"]["Enums"]["expense_status"]
-          submitted_by: string | null
-          submitted_at: string | null
-          approved_by: string | null
-          approved_at: string | null
-          rejection_reason: string | null
-          tax_amount: number
-          other_charges: number
-          total_amount: number | null
+          tax_amount: number | null
+          other_charges: number | null
           notes: string | null
+          status: 'draft' | 'submitted' | 'approved' | 'rejected' | 'paid'
+          payment_status: 'pending' | 'processing' | 'paid' | 'failed' | 'refunded'
+          payment_method: 'bank_transfer' | 'cash' | 'cheque' | 'upi' | 'credit_card' | 'online' | null
+          payment_reference: string | null
+          paid_at: string | null
+          approved_at: string | null
+          approved_by: string | null
+          rejection_reason: string | null
           created_by: string
-          created_at: string
-          updated_at: string
         }
         Insert: {
           id?: string
+          created_at?: string
+          updated_at?: string
           chapter_id: string
-          event_id?: string | null
-          budget_id?: string | null
-          category_id: string
           title: string
           description?: string | null
           amount: number
-          expense_date?: string
+          expense_date: string
+          category_id: string
+          event_id?: string | null
+          budget_id?: string | null
           vendor_name?: string | null
           vendor_contact?: string | null
           invoice_number?: string | null
-          payment_method?: Database["public"]["Enums"]["payment_method_type"] | null
-          payment_date?: string | null
-          payment_reference?: string | null
-          status?: Database["public"]["Enums"]["expense_status"]
-          submitted_by?: string | null
-          submitted_at?: string | null
-          approved_by?: string | null
-          approved_at?: string | null
-          rejection_reason?: string | null
-          tax_amount?: number
-          other_charges?: number
-          total_amount?: number | null
+          tax_amount?: number | null
+          other_charges?: number | null
           notes?: string | null
+          status?: 'draft' | 'submitted' | 'approved' | 'rejected' | 'paid'
+          payment_status?: 'pending' | 'processing' | 'paid' | 'failed' | 'refunded'
+          payment_method?: 'bank_transfer' | 'cash' | 'cheque' | 'upi' | 'credit_card' | 'online' | null
+          payment_reference?: string | null
+          paid_at?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
+          rejection_reason?: string | null
           created_by: string
-          created_at?: string
-          updated_at?: string
         }
         Update: {
           id?: string
+          created_at?: string
+          updated_at?: string
           chapter_id?: string
-          event_id?: string | null
-          budget_id?: string | null
-          category_id?: string
           title?: string
           description?: string | null
           amount?: number
           expense_date?: string
+          category_id?: string
+          event_id?: string | null
+          budget_id?: string | null
           vendor_name?: string | null
           vendor_contact?: string | null
           invoice_number?: string | null
-          payment_method?: Database["public"]["Enums"]["payment_method_type"] | null
-          payment_date?: string | null
+          tax_amount?: number | null
+          other_charges?: number | null
+          notes?: string | null
+          status?: 'draft' | 'submitted' | 'approved' | 'rejected' | 'paid'
+          payment_status?: 'pending' | 'processing' | 'paid' | 'failed' | 'refunded'
+          payment_method?: 'bank_transfer' | 'cash' | 'cheque' | 'upi' | 'credit_card' | 'online' | null
           payment_reference?: string | null
-          status?: Database["public"]["Enums"]["expense_status"]
-          submitted_by?: string | null
-          submitted_at?: string | null
-          approved_by?: string | null
+          paid_at?: string | null
           approved_at?: string | null
-          rejection_reason?: string | null
-          tax_amount?: number
-          other_charges?: number
-          total_amount?: number | null
-          notes?: string | null
-          created_by?: string
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      sponsors: {
-        Row: {
-          id: string
-          chapter_id: string
-          organization_name: string
-          industry: string | null
-          website: string | null
-          contact_person_name: string | null
-          contact_person_designation: string | null
-          contact_email: string | null
-          contact_phone: string | null
-          address_line1: string | null
-          address_line2: string | null
-          city: string | null
-          state: string | null
-          pincode: string | null
-          country: string
-          relationship_status: string
-          first_contact_date: string | null
-          last_contact_date: string | null
-          next_followup_date: string | null
-          total_sponsored_amount: number
-          current_year_amount: number
-          tags: string[] | null
-          priority: string
-          notes: string | null
-          is_active: boolean
-          created_by: string
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          chapter_id: string
-          organization_name: string
-          industry?: string | null
-          website?: string | null
-          contact_person_name?: string | null
-          contact_person_designation?: string | null
-          contact_email?: string | null
-          contact_phone?: string | null
-          address_line1?: string | null
-          address_line2?: string | null
-          city?: string | null
-          state?: string | null
-          pincode?: string | null
-          country?: string
-          relationship_status?: string
-          first_contact_date?: string | null
-          last_contact_date?: string | null
-          next_followup_date?: string | null
-          total_sponsored_amount?: number
-          current_year_amount?: number
-          tags?: string[] | null
-          priority?: string
-          notes?: string | null
-          is_active?: boolean
-          created_by: string
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          chapter_id?: string
-          organization_name?: string
-          industry?: string | null
-          website?: string | null
-          contact_person_name?: string | null
-          contact_person_designation?: string | null
-          contact_email?: string | null
-          contact_phone?: string | null
-          address_line1?: string | null
-          address_line2?: string | null
-          city?: string | null
-          state?: string | null
-          pincode?: string | null
-          country?: string
-          relationship_status?: string
-          first_contact_date?: string | null
-          last_contact_date?: string | null
-          next_followup_date?: string | null
-          total_sponsored_amount?: number
-          current_year_amount?: number
-          tags?: string[] | null
-          priority?: string
-          notes?: string | null
-          is_active?: boolean
-          created_by?: string
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      sponsorship_tiers: {
-        Row: {
-          id: string
-          chapter_id: string
-          name: string
-          tier_level: Database["public"]["Enums"]["sponsorship_tier_level"]
-          min_amount: number
-          max_amount: number | null
-          benefits: string[] | null
-          description: string | null
-          color: string | null
-          icon: string | null
-          sort_order: number
-          is_active: boolean
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          chapter_id: string
-          name: string
-          tier_level: Database["public"]["Enums"]["sponsorship_tier_level"]
-          min_amount: number
-          max_amount?: number | null
-          benefits?: string[] | null
-          description?: string | null
-          color?: string | null
-          icon?: string | null
-          sort_order?: number
-          is_active?: boolean
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          chapter_id?: string
-          name?: string
-          tier_level?: Database["public"]["Enums"]["sponsorship_tier_level"]
-          min_amount?: number
-          max_amount?: number | null
-          benefits?: string[] | null
-          description?: string | null
-          color?: string | null
-          icon?: string | null
-          sort_order?: number
-          is_active?: boolean
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      sponsorship_deals: {
-        Row: {
-          id: string
-          chapter_id: string
-          sponsor_id: string
-          deal_name: string
-          tier_id: string | null
-          deal_stage: Database["public"]["Enums"]["deal_stage"]
-          proposed_amount: number
-          committed_amount: number | null
-          received_amount: number
-          proposal_date: string | null
-          expected_closure_date: string | null
-          commitment_date: string | null
-          contract_signed_date: string | null
-          event_id: string | null
-          fiscal_year: number | null
-          contract_number: string | null
-          contract_terms: string | null
-          deliverables: string[] | null
-          probability_percentage: number
-          weighted_value: number | null
-          point_of_contact: string | null
-          assigned_to: string | null
-          notes: string | null
-          rejection_reason: string | null
-          created_by: string
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          chapter_id: string
-          sponsor_id: string
-          deal_name: string
-          tier_id?: string | null
-          deal_stage?: string
-          proposed_amount: number
-          committed_amount?: number | null
-          received_amount?: number
-          proposal_date?: string | null
-          expected_closure_date?: string | null
-          commitment_date?: string | null
-          contract_signed_date?: string | null
-          event_id?: string | null
-          fiscal_year?: number | null
-          contract_number?: string | null
-          contract_terms?: string | null
-          deliverables?: string[] | null
-          probability_percentage?: number
-          weighted_value?: number | null
-          point_of_contact?: string | null
-          assigned_to?: string | null
-          notes?: string | null
-          rejection_reason?: string | null
-          created_by: string
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          chapter_id?: string
-          sponsor_id?: string
-          deal_name?: string
-          tier_id?: string | null
-          deal_stage?: Database["public"]["Enums"]["deal_stage"]
-          proposed_amount?: number
-          committed_amount?: number | null
-          received_amount?: number
-          proposal_date?: string | null
-          expected_closure_date?: string | null
-          commitment_date?: string | null
-          contract_signed_date?: string | null
-          event_id?: string | null
-          fiscal_year?: number | null
-          contract_number?: string | null
-          contract_terms?: string | null
-          deliverables?: string[] | null
-          probability_percentage?: number
-          weighted_value?: number | null
-          point_of_contact?: string | null
-          assigned_to?: string | null
-          notes?: string | null
+          approved_by?: string | null
           rejection_reason?: string | null
           created_by?: string
-          created_at?: string
-          updated_at?: string
         }
-        Relationships: []
-      }
-      sponsorship_payments: {
-        Row: {
-          id: string
-          deal_id: string
-          amount: number
-          payment_date: string
-          payment_method: string
-          transaction_reference: string | null
-          bank_name: string | null
-          cheque_number: string | null
-          utr_number: string | null
-          receipt_number: string | null
-          receipt_date: string | null
-          notes: string | null
-          recorded_by: string
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          deal_id: string
-          amount: number
-          payment_date?: string
-          payment_method: string
-          transaction_reference?: string | null
-          bank_name?: string | null
-          cheque_number?: string | null
-          utr_number?: string | null
-          receipt_number?: string | null
-          receipt_date?: string | null
-          notes?: string | null
-          recorded_by: string
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          deal_id?: string
-          amount?: number
-          payment_date?: string
-          payment_method?: string
-          transaction_reference?: string | null
-          bank_name?: string | null
-          cheque_number?: string | null
-          utr_number?: string | null
-          receipt_number?: string | null
-          receipt_date?: string | null
-          notes?: string | null
-          recorded_by?: string
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "expenses_chapter_id_fkey"
+            columns: ["chapter_id"]
+            isOneToOne: false
+            referencedRelation: "chapters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expenses_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expenses_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expenses_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "budgets"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       reimbursement_requests: {
         Row: {
           id: string
-          chapter_id: string
-          member_id: string
-          title: string
-          amount: number
-          expense_date: string
-          category: string
-          description: string
-          receipt_urls: string[] | null
-          status: Database["public"]["Enums"]["reimbursement_status"]
-          submitted_at: string
-          reviewed_by: string | null
-          reviewed_at: string | null
-          rejection_reason: string | null
-          payment_date: string | null
-          payment_method: Database["public"]["Enums"]["payment_method_type"] | null
-          payment_reference: string | null
           created_at: string
           updated_at: string
+          chapter_id: string
+          title: string
+          description: string
+          amount: number
+          expense_date: string
+          expense_id: string | null
+          event_id: string | null
+          payment_method_preference: 'bank_transfer' | 'cash' | 'cheque' | 'upi' | 'credit_card' | 'online' | null
+          bank_account_number: string | null
+          bank_name: string | null
+          ifsc_code: string | null
+          upi_id: string | null
+          notes: string | null
+          status: 'draft' | 'submitted' | 'pending_approval' | 'approved' | 'rejected' | 'paid'
+          submitted_at: string | null
+          payment_method: 'bank_transfer' | 'cash' | 'cheque' | 'upi' | 'credit_card' | 'online' | null
+          payment_date: string | null
+          payment_reference: string | null
+          created_by: string
         }
         Insert: {
           id?: string
-          chapter_id: string
-          member_id: string
-          title: string
-          amount: number
-          expense_date: string
-          category: string
-          description: string
-          receipt_urls?: string[] | null
-          status?: Database["public"]["Enums"]["reimbursement_status"]
-          submitted_at?: string
-          reviewed_by?: string | null
-          reviewed_at?: string | null
-          rejection_reason?: string | null
-          payment_date?: string | null
-          payment_method?: Database["public"]["Enums"]["payment_method_type"] | null
-          payment_reference?: string | null
           created_at?: string
           updated_at?: string
+          chapter_id: string
+          title: string
+          description: string
+          amount: number
+          expense_date: string
+          expense_id?: string | null
+          event_id?: string | null
+          payment_method_preference?: 'bank_transfer' | 'cash' | 'cheque' | 'upi' | 'credit_card' | 'online' | null
+          bank_account_number?: string | null
+          bank_name?: string | null
+          ifsc_code?: string | null
+          upi_id?: string | null
+          notes?: string | null
+          status?: 'draft' | 'submitted' | 'pending_approval' | 'approved' | 'rejected' | 'paid'
+          submitted_at?: string | null
+          payment_method?: 'bank_transfer' | 'cash' | 'cheque' | 'upi' | 'credit_card' | 'online' | null
+          payment_date?: string | null
+          payment_reference?: string | null
+          created_by: string
         }
         Update: {
           id?: string
+          created_at?: string
+          updated_at?: string
           chapter_id?: string
-          member_id?: string
           title?: string
+          description?: string
           amount?: number
           expense_date?: string
-          category?: string
-          description?: string
-          receipt_urls?: string[] | null
-          status?: Database["public"]["Enums"]["reimbursement_status"]
-          submitted_at?: string
-          reviewed_by?: string | null
-          reviewed_at?: string | null
-          rejection_reason?: string | null
+          expense_id?: string | null
+          event_id?: string | null
+          payment_method_preference?: 'bank_transfer' | 'cash' | 'cheque' | 'upi' | 'credit_card' | 'online' | null
+          bank_account_number?: string | null
+          bank_name?: string | null
+          ifsc_code?: string | null
+          upi_id?: string | null
+          notes?: string | null
+          status?: 'draft' | 'submitted' | 'pending_approval' | 'approved' | 'rejected' | 'paid'
+          submitted_at?: string | null
+          payment_method?: 'bank_transfer' | 'cash' | 'cheque' | 'upi' | 'credit_card' | 'online' | null
           payment_date?: string | null
-          payment_method?: Database["public"]["Enums"]["payment_method_type"] | null
           payment_reference?: string | null
-          created_at?: string
-          updated_at?: string
+          created_by?: string
         }
-        Relationships: []
-      }
-      reimbursement_approvals: {
-        Row: {
-          id: string
-          request_id: string
-          approver_id: string
-          action: string
-          comments: string | null
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          request_id: string
-          approver_id: string
-          action: string
-          comments?: string | null
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          request_id?: string
-          approver_id?: string
-          action?: string
-          comments?: string | null
-          created_at?: string
-        }
-        Relationships: []
-      }
-      payment_methods: {
-        Row: {
-          id: string
-          chapter_id: string
-          name: string
-          type: string
-          is_active: boolean
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          chapter_id: string
-          name: string
-          type: string
-          is_active?: boolean
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          chapter_id?: string
-          name?: string
-          type?: string
-          is_active?: boolean
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      financial_audit_logs: {
-        Row: {
-          id: string
-          chapter_id: string
-          entity_type: string
-          entity_id: string
-          action: string
-          old_values: Json | null
-          new_values: Json | null
-          performed_by: string | null
-          ip_address: string | null
-          user_agent: string | null
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          chapter_id: string
-          entity_type: string
-          entity_id: string
-          action: string
-          old_values?: Json | null
-          new_values?: Json | null
-          performed_by?: string | null
-          ip_address?: string | null
-          user_agent?: string | null
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          chapter_id?: string
-          entity_type?: string
-          entity_id?: string
-          action?: string
-          old_values?: Json | null
-          new_values?: Json | null
-          performed_by?: string | null
-          ip_address?: string | null
-          user_agent?: string | null
-          created_at?: string
-        }
-        Relationships: []
-      }
-      // ================================================
-      // MODULE 2: STAKEHOLDER CRM TABLES
-      // ================================================
-      schools: {
-        Row: {
-          id: string
-          chapter_id: string
-          school_name: string
-          school_type: Database["public"]["Enums"]["school_type"]
-          address_line1: string | null
-          address_line2: string | null
-          city: string
-          state: string
-          pincode: string | null
-          phone: string | null
-          email: string | null
-          website: string | null
-          connection_type: Database["public"]["Enums"]["connection_type"]
-          connected_through_member_id: string | null
-          connection_notes: string | null
-          total_students: number | null
-          grade_range: string | null
-          medium: string[] | null
-          school_category: string | null
-          management_type: string | null
-          suitable_programs: string[] | null
-          has_auditorium: boolean
-          has_smart_class: boolean
-          has_ground: boolean
-          has_parking: boolean
-          has_library: boolean
-          facility_notes: string | null
-          best_time_to_approach: string | null
-          decision_maker: string | null
-          lead_time_required: string | null
-          notes: string | null
-          status: Database["public"]["Enums"]["stakeholder_status"]
-          created_by: string | null
-          created_at: string
-          updated_at: string
-          search_vector: unknown | null
-        }
-        Insert: {
-          id?: string
-          chapter_id: string
-          school_name: string
-          school_type: string
-          address_line1?: string | null
-          address_line2?: string | null
-          city?: string
-          state?: string
-          pincode?: string | null
-          phone?: string | null
-          email?: string | null
-          website?: string | null
-          connection_type?: Database["public"]["Enums"]["connection_type"]
-          connected_through_member_id?: string | null
-          connection_notes?: string | null
-          total_students?: number | null
-          grade_range?: string | null
-          medium?: string[] | null
-          school_category?: string | null
-          management_type?: string | null
-          suitable_programs?: string[] | null
-          has_auditorium?: boolean
-          has_smart_class?: boolean
-          has_ground?: boolean
-          has_parking?: boolean
-          has_library?: boolean
-          facility_notes?: string | null
-          best_time_to_approach?: string | null
-          decision_maker?: string | null
-          lead_time_required?: string | null
-          notes?: string | null
-          status?: Database["public"]["Enums"]["stakeholder_status"]
-          created_by?: string | null
-          created_at?: string
-          updated_at?: string
-          search_vector?: unknown | null
-        }
-        Update: {
-          id?: string
-          chapter_id?: string
-          school_name?: string
-          school_type?: Database["public"]["Enums"]["school_type"]
-          address_line1?: string | null
-          address_line2?: string | null
-          city?: string
-          state?: string
-          pincode?: string | null
-          phone?: string | null
-          email?: string | null
-          website?: string | null
-          connection_type?: Database["public"]["Enums"]["connection_type"]
-          connected_through_member_id?: string | null
-          connection_notes?: string | null
-          total_students?: number | null
-          grade_range?: string | null
-          medium?: string[] | null
-          school_category?: string | null
-          management_type?: string | null
-          suitable_programs?: string[] | null
-          has_auditorium?: boolean
-          has_smart_class?: boolean
-          has_ground?: boolean
-          has_parking?: boolean
-          has_library?: boolean
-          facility_notes?: string | null
-          best_time_to_approach?: string | null
-          decision_maker?: string | null
-          lead_time_required?: string | null
-          notes?: string | null
-          status?: Database["public"]["Enums"]["stakeholder_status"]
-          created_by?: string | null
-          created_at?: string
-          updated_at?: string
-          search_vector?: unknown | null
-        }
-        Relationships: []
-      }
-      colleges: {
-        Row: {
-          id: string
-          chapter_id: string
-          college_name: string
-          college_type: string
-          affiliation: string | null
-          address_line1: string | null
-          address_line2: string | null
-          city: string
-          state: string
-          pincode: string | null
-          phone: string | null
-          email: string | null
-          website: string | null
-          connection_type: Database["public"]["Enums"]["connection_type"]
-          connected_through_member_id: string | null
-          connection_notes: string | null
-          total_students: number | null
-          departments: string[] | null
-          faculty_count: number | null
-          has_yuva_chapter: boolean
-          yuva_coordinator_name: string | null
-          yuva_coordinator_contact: string | null
-          collaboration_areas: string[] | null
-          has_auditorium: boolean
-          has_seminar_hall: boolean
-          has_hostel: boolean
-          has_placement_cell: boolean
-          facility_notes: string | null
-          best_time_to_approach: string | null
-          decision_maker: string | null
-          lead_time_required: string | null
-          notes: string | null
-          status: Database["public"]["Enums"]["stakeholder_status"]
-          created_by: string | null
-          created_at: string
-          updated_at: string
-          search_vector: unknown | null
-        }
-        Insert: {
-          id?: string
-          chapter_id: string
-          college_name: string
-          college_type: string
-          affiliation?: string | null
-          address_line1?: string | null
-          address_line2?: string | null
-          city?: string
-          state?: string
-          pincode?: string | null
-          phone?: string | null
-          email?: string | null
-          website?: string | null
-          connection_type?: Database["public"]["Enums"]["connection_type"]
-          connected_through_member_id?: string | null
-          connection_notes?: string | null
-          total_students?: number | null
-          departments?: string[] | null
-          faculty_count?: number | null
-          has_yuva_chapter?: boolean
-          yuva_coordinator_name?: string | null
-          yuva_coordinator_contact?: string | null
-          collaboration_areas?: string[] | null
-          has_auditorium?: boolean
-          has_seminar_hall?: boolean
-          has_hostel?: boolean
-          has_placement_cell?: boolean
-          facility_notes?: string | null
-          best_time_to_approach?: string | null
-          decision_maker?: string | null
-          lead_time_required?: string | null
-          notes?: string | null
-          status?: Database["public"]["Enums"]["stakeholder_status"]
-          created_by?: string | null
-          created_at?: string
-          updated_at?: string
-          search_vector?: unknown | null
-        }
-        Update: {
-          id?: string
-          chapter_id?: string
-          college_name?: string
-          college_type?: string
-          affiliation?: string | null
-          address_line1?: string | null
-          address_line2?: string | null
-          city?: string
-          state?: string
-          pincode?: string | null
-          phone?: string | null
-          email?: string | null
-          website?: string | null
-          connection_type?: Database["public"]["Enums"]["connection_type"]
-          connected_through_member_id?: string | null
-          connection_notes?: string | null
-          total_students?: number | null
-          departments?: string[] | null
-          faculty_count?: number | null
-          has_yuva_chapter?: boolean
-          yuva_coordinator_name?: string | null
-          yuva_coordinator_contact?: string | null
-          collaboration_areas?: string[] | null
-          has_auditorium?: boolean
-          has_seminar_hall?: boolean
-          has_hostel?: boolean
-          has_placement_cell?: boolean
-          facility_notes?: string | null
-          best_time_to_approach?: string | null
-          decision_maker?: string | null
-          lead_time_required?: string | null
-          notes?: string | null
-          status?: Database["public"]["Enums"]["stakeholder_status"]
-          created_by?: string | null
-          created_at?: string
-          updated_at?: string
-          search_vector?: unknown | null
-        }
-        Relationships: []
-      }
-      industries: {
-        Row: {
-          id: string
-          chapter_id: string
-          company_name: string
-          industry_sector: string
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          chapter_id: string
-          company_name: string
-          industry_sector: string
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          chapter_id?: string
-          company_name?: string
-          industry_sector?: string
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      government_stakeholders: {
-        Row: {
-          id: string
-          chapter_id: string
-          department_name: string
-          official_name: string
-          designation: string
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          chapter_id: string
-          department_name: string
-          official_name: string
-          designation: string
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          chapter_id?: string
-          department_name?: string
-          official_name?: string
-          designation?: string
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      ngos: {
-        Row: {
-          id: string
-          chapter_id: string
-          ngo_name: string
-          focus_areas: string[]
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          chapter_id: string
-          ngo_name: string
-          focus_areas: string[]
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          chapter_id?: string
-          ngo_name?: string
-          focus_areas?: string[]
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      vendors: {
-        Row: {
-          id: string
-          chapter_id: string
-          vendor_name: string
-          vendor_category: string
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          chapter_id: string
-          vendor_name: string
-          vendor_category: string
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          chapter_id?: string
-          vendor_name?: string
-          vendor_category?: string
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      speakers: {
-        Row: {
-          id: string
-          chapter_id: string
-          speaker_name: string
-          expertise_areas: string[]
-          email: string
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          chapter_id: string
-          speaker_name: string
-          expertise_areas: string[]
-          email: string
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          chapter_id?: string
-          speaker_name?: string
-          expertise_areas?: string[]
-          email?: string
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      stakeholder_contacts: {
-        Row: {
-          id: string
-          stakeholder_type: string
-          stakeholder_id: string
-          contact_name: string
-          designation: string | null
-          phone_primary: string | null
-          email: string | null
-          is_primary_contact: boolean
-          is_decision_maker: boolean
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          stakeholder_type: string
-          stakeholder_id: string
-          contact_name: string
-          designation?: string | null
-          phone_primary?: string | null
-          email?: string | null
-          is_primary_contact?: boolean
-          is_decision_maker?: boolean
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          stakeholder_type?: string
-          stakeholder_id?: string
-          contact_name?: string
-          designation?: string | null
-          phone_primary?: string | null
-          email?: string | null
-          is_primary_contact?: boolean
-          is_decision_maker?: boolean
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      stakeholder_documents: {
-        Row: {
-          id: string
-          stakeholder_type: string
-          stakeholder_id: string
-          document_name: string
-          file_url: string
-          uploaded_at: string
-        }
-        Insert: {
-          id?: string
-          stakeholder_type: string
-          stakeholder_id: string
-          document_name: string
-          file_url: string
-          uploaded_at?: string
-        }
-        Update: {
-          id?: string
-          stakeholder_type?: string
-          stakeholder_id?: string
-          document_name?: string
-          file_url?: string
-          uploaded_at?: string
-        }
-        Relationships: []
-      }
-      stakeholder_interactions: {
-        Row: {
-          id: string
-          chapter_id: string
-          stakeholder_type: string
-          stakeholder_id: string
-          interaction_type: string
-          interaction_date: string
-          outcome: string
-          summary: string
-          requires_follow_up: boolean
-          follow_up_date: string | null
-          next_steps: string | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          chapter_id: string
-          stakeholder_type: string
-          stakeholder_id: string
-          interaction_type: string
-          interaction_date?: string
-          outcome: string
-          summary: string
-          requires_follow_up?: boolean
-          follow_up_date?: string | null
-          next_steps?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          chapter_id?: string
-          stakeholder_type?: string
-          stakeholder_id?: string
-          interaction_type?: string
-          interaction_date?: string
-          outcome?: string
-          summary?: string
-          requires_follow_up?: boolean
-          follow_up_date?: string | null
-          next_steps?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      stakeholder_mous: {
-        Row: {
-          id: string
-          chapter_id: string
-          stakeholder_type: string
-          stakeholder_id: string
-          mou_status: string
-          mou_title: string | null
-          signed_date: string | null
-          valid_from: string | null
-          valid_to: string | null
-          scope_of_collaboration: string | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          chapter_id: string
-          stakeholder_type: string
-          stakeholder_id: string
-          mou_status?: string
-          mou_title?: string | null
-          signed_date?: string | null
-          valid_from?: string | null
-          valid_to?: string | null
-          scope_of_collaboration?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          chapter_id?: string
-          stakeholder_type?: string
-          stakeholder_id?: string
-          mou_status?: string
-          mou_title?: string | null
-          signed_date?: string | null
-          valid_from?: string | null
-          valid_to?: string | null
-          scope_of_collaboration?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      relationship_health_scores: {
-        Row: {
-          id: string
-          chapter_id: string
-          stakeholder_type: string
-          stakeholder_id: string
-          overall_score: number
-          health_tier: string
-          total_interactions: number
-          last_interaction_date: string | null
-          days_since_last_interaction: number
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          chapter_id: string
-          stakeholder_type: string
-          stakeholder_id: string
-          overall_score?: number
-          health_tier?: string
-          total_interactions?: number
-          last_interaction_date?: string | null
-          days_since_last_interaction?: number
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          chapter_id?: string
-          stakeholder_type?: string
-          stakeholder_id?: string
-          overall_score?: number
-          health_tier?: string
-          total_interactions?: number
-          last_interaction_date?: string | null
-          days_since_last_interaction?: number
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "reimbursement_requests_chapter_id_fkey"
+            columns: ["chapter_id"]
+            isOneToOne: false
+            referencedRelation: "chapters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reimbursement_requests_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reimbursement_requests_expense_id_fkey"
+            columns: ["expense_id"]
+            isOneToOne: false
+            referencedRelation: "expenses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reimbursement_requests_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          }
+        ]
       }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      calculate_engagement_score: {
-        Args: { p_member_id: string }
-        Returns: number
-      }
-      calculate_event_impact: {
-        Args: { p_event_id: string }
-        Returns: undefined
-      }
-      calculate_leadership_readiness: {
-        Args: { p_member_id: string }
-        Returns: number
-      }
-      can_manage_role: {
-        Args: { manager_id: string; target_role_id: string }
-        Returns: boolean
-      }
-      check_venue_availability: {
+      check_iv_capacity: {
         Args: {
-          p_end_time: string
-          p_exclude_booking_id?: string
-          p_start_time: string
-          p_venue_id: string
+          event_id: string
         }
-        Returns: boolean
-      }
-      get_skill_gaps: {
-        Args: { p_chapter_id: string }
         Returns: {
-          advanced_count: number
-          avg_proficiency: number
-          beginner_count: number
-          expert_count: number
-          gap_severity: string
-          intermediate_count: number
-          mentors_available: number
-          skill_category: Database["public"]["Enums"]["skill_category"]
-          skill_id: string
-          skill_name: string
-          total_members_with_skill: number
+          has_capacity: boolean
+          current_count: number
+          max_capacity: number | null
+          available_spots: number | null
         }[]
       }
-      get_user_hierarchy_level: { Args: { user_id: string }; Returns: number }
-      get_user_roles: {
-        Args: { p_user_id: string }
+      add_to_waitlist: {
+        Args: {
+          p_event_id: string
+          p_member_id: string
+        }
         Returns: {
-          hierarchy_level: number
-          role_name: string
+          waitlist_id: string
+          position: number
         }[]
       }
-      is_same_chapter: { Args: { member_id: string }; Returns: boolean }
-      show_limit: { Args: never; Returns: number }
-      show_trgm: { Args: { "": string }; Returns: string[] }
+      promote_from_waitlist: {
+        Args: {
+          p_event_id: string
+        }
+        Returns: {
+          promoted_member_id: string
+          new_rsvp_id: string
+        }[]
+      }
+      calculate_carpool_matches: {
+        Args: {
+          p_event_id: string
+        }
+        Returns: {
+          driver_id: string
+          driver_name: string
+          seats_available: number
+          pickup_location: string | null
+          rider_id: string
+          rider_name: string
+          match_score: number
+        }[]
+      }
+      get_iv_analytics: {
+        Args: {
+          p_chapter_id: string
+        }
+        Returns: {
+          total_ivs: number
+          upcoming_ivs: number
+          completed_ivs: number
+          total_participants: number
+          avg_attendance_rate: number
+          total_carpool_seats_shared: number
+          unique_industries_visited: number
+        }[]
+      }
     }
     Enums: {
-      availability_status: "available" | "busy" | "unavailable"
-      booking_status: "pending" | "confirmed" | "cancelled"
-      event_category:
-        | "networking"
-        | "social"
-        | "professional_development"
-        | "community_service"
-        | "sports"
-        | "cultural"
-        | "fundraising"
-        | "workshop"
-        | "seminar"
-        | "conference"
-        | "webinar"
-        | "other"
-      event_status:
-        | "draft"
-        | "published"
-        | "ongoing"
-        | "completed"
-        | "cancelled"
-      proficiency_level: "beginner" | "intermediate" | "advanced" | "expert"
-      rsvp_status:
-        | "pending"
-        | "confirmed"
-        | "declined"
-        | "waitlist"
-        | "attended"
-        | "no_show"
-      skill_category:
-        | "technical"
-        | "business"
-        | "creative"
-        | "leadership"
-        | "communication"
-        | "other"
-      volunteer_status: "invited" | "accepted" | "declined" | "completed"
-      budget_period: "quarterly" | "annual" | "custom"
-      budget_status: "draft" | "approved" | "active" | "closed"
-      expense_status: "draft" | "submitted" | "approved" | "rejected" | "paid"
-      reimbursement_status: "draft" | "submitted" | "pending_approval" | "approved" | "rejected" | "paid"
-      deal_stage: "prospect" | "contacted" | "proposal_sent" | "negotiation" | "committed" | "contract_signed" | "payment_received" | "lost"
-      sponsorship_tier_level: "platinum" | "gold" | "silver" | "bronze" | "supporter"
-      payment_method_type: "bank_transfer" | "cash" | "cheque" | "upi" | "credit_card" | "online"
-      stakeholder_status: "active" | "inactive" | "prospective" | "dormant" | "archived"
-      mou_status: "none" | "in_discussion" | "draft" | "signed" | "expired" | "renewed"
-      interaction_type: "call" | "meeting" | "email" | "session" | "event" | "mou_signing" | "follow_up" | "visit" | "other"
-      interaction_outcome: "positive" | "neutral" | "negative" | "pending" | "no_response"
-      school_type: "primary" | "secondary" | "high_school" | "cbse" | "state_board" | "matric" | "icse" | "international"
-      college_type: "engineering" | "arts_science" | "medical" | "management" | "polytechnic" | "other"
-      industry_sector: "manufacturing" | "it_services" | "healthcare" | "education" | "retail" | "hospitality" | "construction" | "agriculture" | "finance" | "other"
-      partnership_type: "joint_projects" | "resource_sharing" | "funding" | "implementation" | "advocacy" | "knowledge_exchange"
-      vendor_category: "catering" | "printing" | "venue" | "av_equipment" | "decoration" | "photography" | "transportation" | "merchandise" | "other"
-      connection_type: "direct" | "through_member" | "through_ngo" | "cold" | "referral"
-      health_tier: "healthy" | "needs_attention" | "at_risk"
+      event_category: 'general' | 'industrial_visit' | 'conference' | 'workshop' | 'social'
+      event_status: 'draft' | 'published' | 'cancelled' | 'completed'
+      rsvp_status: 'pending' | 'confirmed' | 'cancelled' | 'waitlisted' | 'no_show'
+      carpool_status: 'not_needed' | 'need_ride' | 'offering_ride'
+      industry_portal_user_status: 'invited' | 'active' | 'inactive' | 'suspended'
+      waitlist_status: 'waiting' | 'promoted' | 'expired' | 'withdrawn'
+      proficiency_level: 'beginner' | 'intermediate' | 'advanced' | 'expert'
+      availability_status: 'available' | 'limited' | 'unavailable'
+      skill_category: 'technical' | 'business' | 'creative' | 'leadership' | 'other'
     }
     CompositeTypes: {
       [_ in never]: never
@@ -3228,33 +1267,27 @@ export type Database = {
   }
 }
 
-type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
-
-type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
+type PublicSchema = Database[Extract<keyof Database, "public">]
 
 export type Tables<
-  DefaultSchemaTableNameOrOptions extends
-    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
-    | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
-  }
-    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+  PublicTableNameOrOptions extends
+    | keyof (PublicSchema["Tables"] & PublicSchema["Views"])
+    | { schema: keyof Database },
+  TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
+    ? keyof (Database[PublicTableNameOrOptions["schema"]]["Tables"] &
+        Database[PublicTableNameOrOptions["schema"]]["Views"])
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
-  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+> = PublicTableNameOrOptions extends { schema: keyof Database }
+  ? (Database[PublicTableNameOrOptions["schema"]]["Tables"] &
+      Database[PublicTableNameOrOptions["schema"]]["Views"])[TableName] extends {
       Row: infer R
     }
     ? R
     : never
-  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
-        DefaultSchema["Views"])
-    ? (DefaultSchema["Tables"] &
-        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+  : PublicTableNameOrOptions extends keyof (PublicSchema["Tables"] &
+        PublicSchema["Views"])
+    ? (PublicSchema["Tables"] &
+        PublicSchema["Views"])[PublicTableNameOrOptions] extends {
         Row: infer R
       }
       ? R
@@ -3262,24 +1295,20 @@ export type Tables<
     : never
 
 export type TablesInsert<
-  DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema["Tables"]
-    | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
-  }
-    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+  PublicTableNameOrOptions extends
+    | keyof PublicSchema["Tables"]
+    | { schema: keyof Database },
+  TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
+    ? keyof Database[PublicTableNameOrOptions["schema"]]["Tables"]
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
-  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+> = PublicTableNameOrOptions extends { schema: keyof Database }
+  ? Database[PublicTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Insert: infer I
     }
     ? I
     : never
-  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
-    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+  : PublicTableNameOrOptions extends keyof PublicSchema["Tables"]
+    ? PublicSchema["Tables"][PublicTableNameOrOptions] extends {
         Insert: infer I
       }
       ? I
@@ -3287,24 +1316,20 @@ export type TablesInsert<
     : never
 
 export type TablesUpdate<
-  DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema["Tables"]
-    | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
-  }
-    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+  PublicTableNameOrOptions extends
+    | keyof PublicSchema["Tables"]
+    | { schema: keyof Database },
+  TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
+    ? keyof Database[PublicTableNameOrOptions["schema"]]["Tables"]
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
-  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+> = PublicTableNameOrOptions extends { schema: keyof Database }
+  ? Database[PublicTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Update: infer U
     }
     ? U
     : never
-  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
-    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+  : PublicTableNameOrOptions extends keyof PublicSchema["Tables"]
+    ? PublicSchema["Tables"][PublicTableNameOrOptions] extends {
         Update: infer U
       }
       ? U
@@ -3312,95 +1337,31 @@ export type TablesUpdate<
     : never
 
 export type Enums<
-  DefaultSchemaEnumNameOrOptions extends
-    | keyof DefaultSchema["Enums"]
-    | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
-  }
-    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+  PublicEnumNameOrOptions extends
+    | keyof PublicSchema["Enums"]
+    | { schema: keyof Database },
+  EnumName extends PublicEnumNameOrOptions extends { schema: keyof Database }
+    ? keyof Database[PublicEnumNameOrOptions["schema"]]["Enums"]
     : never = never,
-> = DefaultSchemaEnumNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
-  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
-  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
-    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
+> = PublicEnumNameOrOptions extends { schema: keyof Database }
+  ? Database[PublicEnumNameOrOptions["schema"]]["Enums"][EnumName]
+  : PublicEnumNameOrOptions extends keyof PublicSchema["Enums"]
+    ? PublicSchema["Enums"][PublicEnumNameOrOptions]
     : never
 
-export type CompositeTypes<
-  PublicCompositeTypeNameOrOptions extends
-    | keyof DefaultSchema["CompositeTypes"]
-    | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
-  }
-    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
-> = PublicCompositeTypeNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
-  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
-  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
-    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
-    : never
-
+// Constants export for enum values (used in validation)
 export const Constants = {
   public: {
     Enums: {
-      availability_status: ["available", "busy", "unavailable"],
-      booking_status: ["pending", "confirmed", "cancelled"],
-      event_category: [
-        "networking",
-        "social",
-        "professional_development",
-        "community_service",
-        "sports",
-        "cultural",
-        "fundraising",
-        "workshop",
-        "seminar",
-        "conference",
-        "webinar",
-        "other",
-      ],
-      event_status: ["draft", "published", "ongoing", "completed", "cancelled"],
-      proficiency_level: ["beginner", "intermediate", "advanced", "expert"],
-      rsvp_status: [
-        "pending",
-        "confirmed",
-        "declined",
-        "waitlist",
-        "attended",
-        "no_show",
-      ],
-      skill_category: [
-        "technical",
-        "business",
-        "creative",
-        "leadership",
-        "communication",
-        "other",
-      ],
-      volunteer_status: ["invited", "accepted", "declined", "completed"],
-      budget_period: ["quarterly", "annual", "custom"],
-      budget_status: ["draft", "approved", "active", "closed"],
-      expense_status: ["draft", "submitted", "approved", "rejected", "paid"],
-      reimbursement_status: ["draft", "submitted", "pending_approval", "approved", "rejected", "paid"],
-      deal_stage: ["prospect", "contacted", "proposal_sent", "negotiation", "committed", "contract_signed", "payment_received", "lost"],
-      sponsorship_tier_level: ["platinum", "gold", "silver", "bronze", "supporter"],
-      payment_method_type: ["bank_transfer", "cash", "cheque", "upi", "credit_card", "online"],
-      stakeholder_status: ["active", "inactive", "prospective", "dormant", "archived"],
-      mou_status: ["none", "in_discussion", "draft", "signed", "expired", "renewed"],
-      interaction_type: ["call", "meeting", "email", "session", "event", "mou_signing", "follow_up", "visit", "other"],
-      interaction_outcome: ["positive", "neutral", "negative", "pending", "no_response"],
-      school_type: ["primary", "secondary", "high_school", "cbse", "state_board", "matric", "icse", "international"],
-      college_type: ["engineering", "arts_science", "medical", "management", "polytechnic", "other"],
-      industry_sector: ["manufacturing", "it_services", "healthcare", "education", "retail", "hospitality", "construction", "agriculture", "finance", "other"],
-      partnership_type: ["joint_projects", "resource_sharing", "funding", "implementation", "advocacy", "knowledge_exchange"],
-      vendor_category: ["catering", "printing", "venue", "av_equipment", "decoration", "photography", "transportation", "merchandise", "other"],
-      connection_type: ["direct", "through_member", "through_ngo", "cold", "referral"],
-      health_tier: ["healthy", "needs_attention", "at_risk"],
+      event_category: ['general', 'industrial_visit', 'conference', 'workshop', 'social'] as const,
+      event_status: ['draft', 'published', 'ongoing', 'completed', 'cancelled'] as const,
+      rsvp_status: ['pending', 'confirmed', 'cancelled', 'waitlisted', 'attended', 'no_show'] as const,
+      carpool_status: ['not_needed', 'need_ride', 'offering_ride'] as const,
+      waitlist_status: ['waiting', 'promoted', 'expired', 'withdrawn'] as const,
+      entry_method: ['manual', 'self_service'] as const,
+      member_status: ['active', 'inactive', 'pending'] as const,
+      member_role: ['member', 'board_member', 'chapter_leader', 'admin'] as const,
+      industry_portal_user_status: ['invited', 'active', 'inactive', 'suspended'] as const,
     },
   },
 } as const

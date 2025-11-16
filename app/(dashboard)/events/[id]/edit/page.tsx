@@ -85,7 +85,7 @@ async function EventEditContent({ params }: PageProps) {
   const { data: templates } = await supabase
     .from('event_templates')
     .select('*')
-    .order('name', { ascending: true });
+    .order('name', { ascending: true }) as { data: any[] | null };
 
   return (
     <div className='flex flex-col gap-6'>
@@ -134,7 +134,7 @@ async function EventEditContent({ params }: PageProps) {
           <EventForm
             event={event as any}
             venues={venues || []}
-            templates={templates || []}
+            templates={(templates || []) as any}
           />
         </CardContent>
       </Card>

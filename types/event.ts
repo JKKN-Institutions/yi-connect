@@ -90,7 +90,6 @@ export interface EventFull extends EventWithDetails {
   resource_bookings: Array<ResourceBooking & {
     resource: Resource
   }>
-  impact_metrics?: EventImpactMetrics | null
   feedback: EventFeedback[]
   documents: EventDocument[]
 }

@@ -1,0 +1,26 @@
+sponsorship_deals: {
+  Row: {
+    id: string
+    created_at: string
+    updated_at: string
+    chapter_id: string
+    deal_name: string
+    sponsor_id: string
+    tier_id: string | null
+    proposed_amount: number
+    committed_amount: number | null
+    deal_stage: 'prospect' | 'contacted' | 'proposal_sent' | 'negotiation' | 'committed' | 'contract_signed' | 'payment_received' | 'lost'
+    proposal_date: string | null
+    expected_closure_date: string | null
+    commitment_date: string | null
+    contract_signed_date: string | null
+    event_id: string | null
+    fiscal_year: number | null
+    probability_percentage: number | null
+    point_of_contact: string | null
+    assigned_to: string | null
+    contract_terms: string | null
+    notes: string | null
+    created_by: string
+  }
+}

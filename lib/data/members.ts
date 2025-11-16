@@ -6,6 +6,7 @@
  */
 
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { getCurrentUser } from '@/lib/data/auth';
 import { cache } from 'react';
 import type {
   MemberListItem,
@@ -580,3 +581,48 @@ export const getAvailableMembers = cache(
     return data;
   }
 );
+
+// ============================================================================
+// Auth Helper Functions
+// ============================================================================
+
+/**
+ * Get the current user's chapter
+ * Used for access control and filtering data by chapter
+ *
+ * Note: We don't use 'use cache' directive here because it depends on getCurrentUser()
+ * which accesses dynamic cookies. React's cache() provides request-level deduplication.
+ */
+export const getCurrentUserChapter = cache(async () => {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    return null;
+  }
+
+  const supabase = await createServerSupabaseClient();
+
+  // Get the member record for the current user
+  const { data: member, error: memberError } = await supabase
+    .from('members')
+    .select('chapter_id')
+    .eq('profile_id', user.id)
+    .single();
+
+  if (memberError || !member) {
+    return null;
+  }
+
+  // Get the chapter details
+  const { data: chapter, error: chapterError } = await supabase
+    .from('chapters')
+    .select('id, name, city, state, country')
+    .eq('id', member.chapter_id)
+    .single();
+
+  if (chapterError || !chapter) {
+    return null;
+  }
+
+  return chapter;
+});

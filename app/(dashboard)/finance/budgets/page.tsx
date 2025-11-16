@@ -16,13 +16,13 @@ export const metadata: Metadata = {
 
 async function BudgetsTableWrapper() {
   const chapterId = await getCurrentChapterId()
-  if (!chapterId) return null
 
+  // Super admins without chapter_id will see all budgets
   const result = await getBudgets(chapterId, {}, 1, 50)
 
   return (
-    <BudgetsTable 
-      data={result.data} 
+    <BudgetsTable
+      data={result.data}
       pageCount={result.totalPages}
     />
   )

@@ -56,9 +56,10 @@ import type {
 /**
  * Get paginated list of budgets with filters
  * Used in budget listing pages
+ * If chapterId is null, fetches all budgets (for super admins)
  */
 export const getBudgets = cache(async (
-  chapterId: string,
+  chapterId: string | null,
   filters?: BudgetFilters,
   page: number = 1,
   pageSize: number = 50
@@ -68,7 +69,12 @@ export const getBudgets = cache(async (
   let query = supabase
     .from('budgets')
     .select('*', { count: 'exact' })
-    .eq('chapter_id', chapterId)
+
+  // Filter by chapter only if chapterId is provided (regular members)
+  // Super admins without chapterId see all budgets
+  if (chapterId) {
+    query = query.eq('chapter_id', chapterId)
+  }
 
   // Apply filters
   if (filters?.fiscal_year) {
@@ -303,9 +309,10 @@ export const getExpenseCategoryById = cache(async (categoryId: string): Promise<
 
 /**
  * Get paginated list of expenses with filters
+ * If chapterId is null, fetches all expenses (for super admins)
  */
 export const getExpenses = cache(async (
-  chapterId: string,
+  chapterId: string | null,
   filters?: ExpenseFilters,
   page: number = 1,
   pageSize: number = 50
@@ -321,7 +328,12 @@ export const getExpenses = cache(async (
       budget:budgets(id, name),
       receipts:expense_receipts(count)
     `, { count: 'exact' })
-    .eq('chapter_id', chapterId)
+
+  // Filter by chapter only if chapterId is provided (regular members)
+  // Super admins without chapterId see all expenses
+  if (chapterId) {
+    query = query.eq('chapter_id', chapterId)
+  }
 
   // Apply filters
   if (filters?.category_id) {
@@ -525,9 +537,10 @@ export const getExpenseAnalytics = cache(async (chapterId: string, dateFrom?: st
 
 /**
  * Get paginated list of sponsors with filters
+ * If chapterId is null, fetches all sponsors (for super admins)
  */
 export const getSponsors = cache(async (
-  chapterId: string,
+  chapterId: string | null,
   filters?: SponsorFilters,
   page: number = 1,
   pageSize: number = 50
@@ -540,7 +553,12 @@ export const getSponsors = cache(async (
       *,
       deals:sponsorship_deals(count)
     `, { count: 'exact' })
-    .eq('chapter_id', chapterId)
+
+  // Filter by chapter only if chapterId is provided (regular members)
+  // Super admins without chapterId see all sponsors
+  if (chapterId) {
+    query = query.eq('chapter_id', chapterId)
+  }
 
   // Apply filters
   if (filters?.industry) {
@@ -663,9 +681,10 @@ export const getSponsorById = cache(async (sponsorId: string): Promise<SponsorWi
 
 /**
  * Get paginated list of sponsorship deals with filters
+ * If chapterId is null, fetches all sponsorship deals (for super admins)
  */
 export const getSponsorshipDeals = cache(async (
-  chapterId: string,
+  chapterId: string | null,
   filters?: SponsorshipDealFilters,
   page: number = 1,
   pageSize: number = 50
@@ -679,7 +698,12 @@ export const getSponsorshipDeals = cache(async (
       sponsor:sponsors(id, organization_name),
       tier:sponsorship_tiers(id, name, tier_level)
     `, { count: 'exact' })
-    .eq('chapter_id', chapterId)
+
+  // Filter by chapter only if chapterId is provided (regular members)
+  // Super admins without chapterId see all sponsorship deals
+  if (chapterId) {
+    query = query.eq('chapter_id', chapterId)
+  }
 
   // Apply filters
   if (filters?.sponsor_id) {
@@ -790,9 +814,70 @@ export const getSponsorshipDealById = cache(async (dealId: string): Promise<Spon
 
 /**
  * Get sponsorship pipeline value
+ * If chapterId is null, calculates for all chapters (super admins)
  */
-export const getSponsorshipPipelineValue = cache(async (chapterId: string): Promise<SponsorshipPipelineValue> => {
+export const getSponsorshipPipelineValue = cache(async (chapterId: string | null): Promise<SponsorshipPipelineValue> => {
   const supabase = await createServerSupabaseClient()
+
+  // For super admins without chapter, aggregate manually instead of using RPC
+  if (!chapterId) {
+    const { data: deals, error } = await supabase
+      .from('sponsorship_deals')
+      .select('*')
+
+    if (error || !deals) {
+      console.error('Error fetching sponsorship deals:', error)
+      return {
+        prospect_count: 0,
+        active_count: 0,
+        committed_count: 0,
+        closed_count: 0,
+        lost_count: 0,
+        total_pipeline_value: 0,
+        weighted_pipeline_value: 0,
+        total_committed: 0,
+        total_received: 0,
+        win_rate: 0,
+      }
+    }
+
+    const prospect_count = deals.filter(d => d.deal_stage === 'prospect').length
+    const active_count = deals.filter(d => ['contacted', 'proposal_sent', 'negotiation'].includes(d.deal_stage)).length
+    const committed_count = deals.filter(d => ['committed', 'contract_signed'].includes(d.deal_stage)).length
+    const closed_count = deals.filter(d => d.deal_stage === 'payment_received').length
+    const lost_count = deals.filter(d => d.deal_stage === 'lost').length
+
+    const total_pipeline_value = deals
+      .filter(d => !['lost', 'payment_received'].includes(d.deal_stage))
+      .reduce((sum, d) => sum + Number(d.proposed_amount || 0), 0)
+
+    const weighted_pipeline_value = deals
+      .filter(d => !['lost', 'payment_received'].includes(d.deal_stage))
+      .reduce((sum, d) => sum + Number(d.weighted_value || 0), 0)
+
+    const total_committed = deals
+      .filter(d => d.committed_amount)
+      .reduce((sum, d) => sum + Number(d.committed_amount || 0), 0)
+
+    const total_received = deals.reduce((sum, d) => sum + Number(d.received_amount || 0), 0)
+
+    const win_rate = (closed_count + lost_count) > 0
+      ? (closed_count / (closed_count + lost_count)) * 100
+      : 0
+
+    return {
+      prospect_count,
+      active_count,
+      committed_count,
+      closed_count,
+      lost_count,
+      total_pipeline_value,
+      weighted_pipeline_value,
+      total_committed,
+      total_received,
+      win_rate,
+    }
+  }
 
   const { data, error } = await supabase
     .rpc('calculate_sponsorship_pipeline_value', { p_chapter_id: chapterId })
@@ -822,9 +907,10 @@ export const getSponsorshipPipelineValue = cache(async (chapterId: string): Prom
 
 /**
  * Get paginated list of reimbursement requests with filters
+ * If chapterId is null, fetches all reimbursement requests (for super admins)
  */
 export const getReimbursementRequests = cache(async (
-  chapterId: string,
+  chapterId: string | null,
   filters?: ReimbursementFilters,
   page: number = 1,
   pageSize: number = 50
@@ -837,7 +923,12 @@ export const getReimbursementRequests = cache(async (
       *,
       event:events(id, title)
     `, { count: 'exact' })
-    .eq('chapter_id', chapterId)
+
+  // Filter by chapter only if chapterId is provided (regular members)
+  // Super admins without chapterId see all reimbursement requests
+  if (chapterId) {
+    query = query.eq('chapter_id', chapterId)
+  }
 
   // Apply filters
   if (filters?.requester_id) {
@@ -970,14 +1061,21 @@ export const getPendingApprovals = cache(async (approverId: string): Promise<Pen
 
 /**
  * Get reimbursement analytics
+ * If chapterId is null, calculates for all chapters (super admins)
  */
-export const getReimbursementAnalytics = cache(async (chapterId: string): Promise<ReimbursementAnalytics> => {
+export const getReimbursementAnalytics = cache(async (chapterId: string | null): Promise<ReimbursementAnalytics> => {
   const supabase = await createServerSupabaseClient()
 
-  const { data: requests, error } = await supabase
+  let query = supabase
     .from('reimbursement_requests')
     .select('*')
-    .eq('chapter_id', chapterId)
+
+  // Filter by chapter only if chapterId is provided
+  if (chapterId) {
+    query = query.eq('chapter_id', chapterId)
+  }
+
+  const { data: requests, error } = await query
 
   if (error) {
     console.error('Error fetching reimbursement analytics:', error)

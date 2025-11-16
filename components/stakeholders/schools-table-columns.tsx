@@ -66,6 +66,20 @@ export const schoolsColumns: ColumnDef<SchoolListItem>[] = [
     },
   },
   {
+    accessorKey: 'school_type',
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Type" />,
+    cell: ({ row }) => {
+      const schoolType = row.getValue('school_type') as string
+      return (
+        <span className="capitalize text-sm">{schoolType.replace('_', ' ')}</span>
+      )
+    },
+    filterFn: (row, id, value) => {
+      return value.includes(row.getValue(id))
+    },
+    enableHiding: true,
+  },
+  {
     accessorKey: 'city',
     header: ({ column }) => <DataTableColumnHeader column={column} title="Location" />,
     cell: ({ row }) => {

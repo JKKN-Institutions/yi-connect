@@ -18,8 +18,8 @@ export const metadata: Metadata = {
 
 async function ReimbursementsTableWrapper() {
   const chapterId = await getCurrentChapterId()
-  if (!chapterId) return null
 
+  // Super admins without chapter_id will see all reimbursement requests
   const result = await getReimbursementRequests(chapterId, {}, 1, 50)
 
   return (
@@ -32,8 +32,8 @@ async function ReimbursementsTableWrapper() {
 
 async function ReimbursementStats() {
   const chapterId = await getCurrentChapterId()
-  if (!chapterId) return null
 
+  // Super admins without chapter_id will see aggregated reimbursement stats
   const analytics = await getReimbursementAnalytics(chapterId)
 
   return (

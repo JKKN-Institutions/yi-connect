@@ -62,12 +62,16 @@ export interface StakeholderInteraction {
   tags?: string[]
   created_by: string
   created_at: string
+  led_by_member_id?: string
 
   // Relationships (for detail views)
-  creator?: {
+  led_by?: {
     id: string
-    full_name: string
-    email?: string
+    profiles: {
+      id: string
+      full_name: string
+      email?: string
+    }
   }
 }
 

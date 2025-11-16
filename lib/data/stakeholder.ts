@@ -43,36 +43,95 @@ import type {
 // SCHOOL DATA FUNCTIONS
 // ============================================================================
 
-export const getSchools = cache(async (chapterId: string): Promise<SchoolListItem[]> => {
+/**
+ * Get all schools for a chapter
+ * If chapterId is null, fetches all schools (for super admins)
+ */
+export const getSchools = cache(async (chapterId: string | null): Promise<SchoolListItem[]> => {
   const supabase = await createServerSupabaseClient()
 
-  const { data, error } = await supabase
+  // Base query - get schools with optional chapter filter
+  let schoolsQuery = supabase
     .from('schools')
-    .select(`
-      *,
-      connected_member:members!schools_connected_through_member_id_fkey(id, full_name),
-      contacts:stakeholder_contacts(id),
-      interactions:stakeholder_interactions(id),
-      mous:stakeholder_mous(mou_status),
-      health:relationship_health_scores(overall_score, health_tier, days_since_last_interaction)
-    `)
-    .eq('chapter_id', chapterId)
-    .order('school_name')
+    .select('*')
 
-  if (error) {
-    console.error('Error fetching schools:', error)
+  if (chapterId) {
+    schoolsQuery = schoolsQuery.eq('chapter_id', chapterId)
+  }
+
+  const { data: schools, error: schoolsError } = await schoolsQuery.order('school_name')
+
+  if (schoolsError) {
+    console.error('Error fetching schools:', schoolsError)
     return []
   }
 
-  return (data || []).map((school) => ({
-    ...school,
-    contact_count: school.contacts?.length || 0,
-    interaction_count: school.interactions?.length || 0,
-    mou_status: school.mous?.[0]?.mou_status || 'none',
-    health_score: school.health?.[0]?.overall_score,
-    health_tier: school.health?.[0]?.health_tier,
-    days_since_last_contact: school.health?.[0]?.days_since_last_interaction,
-  })) as SchoolListItem[]
+  if (!schools || schools.length === 0) {
+    return []
+  }
+
+  const schoolIds = schools.map((s) => s.id)
+
+  // Fetch related data for counts
+  const [contactsData, interactionsData, mousData, healthData] = await Promise.all([
+    supabase
+      .from('stakeholder_contacts')
+      .select('stakeholder_id')
+      .eq('stakeholder_type', 'schools')
+      .in('stakeholder_id', schoolIds),
+    supabase
+      .from('stakeholder_interactions')
+      .select('stakeholder_id')
+      .eq('stakeholder_type', 'schools')
+      .in('stakeholder_id', schoolIds),
+    supabase
+      .from('stakeholder_mous')
+      .select('stakeholder_id, mou_status')
+      .eq('stakeholder_type', 'schools')
+      .in('stakeholder_id', schoolIds),
+    supabase
+      .from('relationship_health_scores')
+      .select('stakeholder_id, overall_score, health_tier, days_since_last_interaction')
+      .eq('stakeholder_type', 'schools')
+      .in('stakeholder_id', schoolIds),
+  ])
+
+  // Create lookup maps for counts
+  const contactCounts = new Map<string, number>()
+  contactsData.data?.forEach((c) => {
+    contactCounts.set(c.stakeholder_id, (contactCounts.get(c.stakeholder_id) || 0) + 1)
+  })
+
+  const interactionCounts = new Map<string, number>()
+  interactionsData.data?.forEach((i) => {
+    interactionCounts.set(i.stakeholder_id, (interactionCounts.get(i.stakeholder_id) || 0) + 1)
+  })
+
+  const mouStatusMap = new Map<string, string>()
+  mousData.data?.forEach((m) => {
+    if (m.mou_status === 'signed') {
+      mouStatusMap.set(m.stakeholder_id, 'signed')
+    }
+  })
+
+  const healthMap = new Map<string, any>()
+  healthData.data?.forEach((h) => {
+    healthMap.set(h.stakeholder_id, h)
+  })
+
+  // Combine data
+  return schools.map((school) => {
+    const health = healthMap.get(school.id)
+    return {
+      ...school,
+      contact_count: contactCounts.get(school.id) || 0,
+      interaction_count: interactionCounts.get(school.id) || 0,
+      mou_status: mouStatusMap.get(school.id) || 'none',
+      health_score: health?.overall_score,
+      health_tier: health?.health_tier,
+      days_since_last_contact: health?.days_since_last_interaction,
+    }
+  }) as SchoolListItem[]
 })
 
 export const getSchoolById = cache(async (schoolId: string): Promise<SchoolDetail | null> => {
@@ -115,36 +174,55 @@ export const getSchoolById = cache(async (schoolId: string): Promise<SchoolDetai
 // COLLEGE DATA FUNCTIONS
 // ============================================================================
 
-export const getColleges = cache(async (chapterId: string): Promise<CollegeListItem[]> => {
+/**
+ * Get all colleges for a chapter
+ * If chapterId is null, fetches all colleges (for super admins)
+ */
+export const getColleges = cache(async (chapterId: string | null): Promise<CollegeListItem[]> => {
   const supabase = await createServerSupabaseClient()
 
-  const { data, error } = await supabase
-    .from('colleges')
-    .select(`
-      *,
-      connected_member:members!colleges_connected_through_member_id_fkey(id, full_name),
-      contacts:stakeholder_contacts(id),
-      interactions:stakeholder_interactions(id),
-      mous:stakeholder_mous(mou_status),
-      health:relationship_health_scores(overall_score, health_tier, days_since_last_interaction)
-    `)
-    .eq('chapter_id', chapterId)
-    .order('college_name')
+  let collegesQuery = supabase.from('colleges').select('*')
+  if (chapterId) collegesQuery = collegesQuery.eq('chapter_id', chapterId)
 
-  if (error) {
-    console.error('Error fetching colleges:', error)
+  const { data: colleges, error: collegesError } = await collegesQuery.order('college_name')
+  if (collegesError) {
+    console.error('Error fetching colleges:', collegesError)
     return []
   }
+  if (!colleges || colleges.length === 0) return []
 
-  return (data || []).map((college) => ({
-    ...college,
-    contact_count: college.contacts?.length || 0,
-    interaction_count: college.interactions?.length || 0,
-    mou_status: college.mous?.[0]?.mou_status || 'none',
-    health_score: college.health?.[0]?.overall_score,
-    health_tier: college.health?.[0]?.health_tier,
-    days_since_last_contact: college.health?.[0]?.days_since_last_interaction,
-  })) as CollegeListItem[]
+  const collegeIds = colleges.map((c) => c.id)
+  const [contactsData, interactionsData, mousData, healthData] = await Promise.all([
+    supabase.from('stakeholder_contacts').select('stakeholder_id').eq('stakeholder_type', 'colleges').in('stakeholder_id', collegeIds),
+    supabase.from('stakeholder_interactions').select('stakeholder_id').eq('stakeholder_type', 'colleges').in('stakeholder_id', collegeIds),
+    supabase.from('stakeholder_mous').select('stakeholder_id, mou_status').eq('stakeholder_type', 'colleges').in('stakeholder_id', collegeIds),
+    supabase.from('relationship_health_scores').select('stakeholder_id, overall_score, health_tier, days_since_last_interaction').eq('stakeholder_type', 'colleges').in('stakeholder_id', collegeIds),
+  ])
+
+  const contactCounts = new Map<string, number>()
+  contactsData.data?.forEach((c) => contactCounts.set(c.stakeholder_id, (contactCounts.get(c.stakeholder_id) || 0) + 1))
+
+  const interactionCounts = new Map<string, number>()
+  interactionsData.data?.forEach((i) => interactionCounts.set(i.stakeholder_id, (interactionCounts.get(i.stakeholder_id) || 0) + 1))
+
+  const mouStatusMap = new Map<string, string>()
+  mousData.data?.forEach((m) => { if (m.mou_status === 'signed') mouStatusMap.set(m.stakeholder_id, 'signed') })
+
+  const healthMap = new Map<string, any>()
+  healthData.data?.forEach((h) => healthMap.set(h.stakeholder_id, h))
+
+  return colleges.map((college) => {
+    const health = healthMap.get(college.id)
+    return {
+      ...college,
+      contact_count: contactCounts.get(college.id) || 0,
+      interaction_count: interactionCounts.get(college.id) || 0,
+      mou_status: mouStatusMap.get(college.id) || 'none',
+      health_score: health?.overall_score,
+      health_tier: health?.health_tier,
+      days_since_last_contact: health?.days_since_last_interaction,
+    }
+  }) as CollegeListItem[]
 })
 
 export const getCollegeById = cache(async (collegeId: string): Promise<CollegeDetail | null> => {
@@ -186,36 +264,55 @@ export const getCollegeById = cache(async (collegeId: string): Promise<CollegeDe
 // INDUSTRY DATA FUNCTIONS
 // ============================================================================
 
-export const getIndustries = cache(async (chapterId: string): Promise<IndustryListItem[]> => {
+/**
+ * Get all industries for a chapter
+ * If chapterId is null, fetches all industries (for super admins)
+ */
+export const getIndustries = cache(async (chapterId: string | null): Promise<IndustryListItem[]> => {
   const supabase = await createServerSupabaseClient()
 
-  const { data, error } = await supabase
-    .from('industries')
-    .select(`
-      *,
-      connected_member:members!industries_connected_through_member_id_fkey(id, full_name),
-      contacts:stakeholder_contacts(id),
-      interactions:stakeholder_interactions(id),
-      mous:stakeholder_mous(mou_status),
-      health:relationship_health_scores(overall_score, health_tier, days_since_last_interaction)
-    `)
-    .eq('chapter_id', chapterId)
-    .order('organization_name')
+  let industriesQuery = supabase.from('industries').select('*')
+  if (chapterId) industriesQuery = industriesQuery.eq('chapter_id', chapterId)
 
-  if (error) {
-    console.error('Error fetching industries:', error)
+  const { data: industries, error: industriesError } = await industriesQuery.order('organization_name')
+  if (industriesError) {
+    console.error('Error fetching industries:', industriesError)
     return []
   }
+  if (!industries || industries.length === 0) return []
 
-  return (data || []).map((industry) => ({
-    ...industry,
-    contact_count: industry.contacts?.length || 0,
-    interaction_count: industry.interactions?.length || 0,
-    mou_status: industry.mous?.[0]?.mou_status || 'none',
-    health_score: industry.health?.[0]?.overall_score,
-    health_tier: industry.health?.[0]?.health_tier,
-    days_since_last_contact: industry.health?.[0]?.days_since_last_interaction,
-  })) as IndustryListItem[]
+  const industryIds = industries.map((i) => i.id)
+  const [contactsData, interactionsData, mousData, healthData] = await Promise.all([
+    supabase.from('stakeholder_contacts').select('stakeholder_id').eq('stakeholder_type', 'industries').in('stakeholder_id', industryIds),
+    supabase.from('stakeholder_interactions').select('stakeholder_id').eq('stakeholder_type', 'industries').in('stakeholder_id', industryIds),
+    supabase.from('stakeholder_mous').select('stakeholder_id, mou_status').eq('stakeholder_type', 'industries').in('stakeholder_id', industryIds),
+    supabase.from('relationship_health_scores').select('stakeholder_id, overall_score, health_tier, days_since_last_interaction').eq('stakeholder_type', 'industries').in('stakeholder_id', industryIds),
+  ])
+
+  const contactCounts = new Map<string, number>()
+  contactsData.data?.forEach((c) => contactCounts.set(c.stakeholder_id, (contactCounts.get(c.stakeholder_id) || 0) + 1))
+
+  const interactionCounts = new Map<string, number>()
+  interactionsData.data?.forEach((i) => interactionCounts.set(i.stakeholder_id, (interactionCounts.get(i.stakeholder_id) || 0) + 1))
+
+  const mouStatusMap = new Map<string, string>()
+  mousData.data?.forEach((m) => { if (m.mou_status === 'signed') mouStatusMap.set(m.stakeholder_id, 'signed') })
+
+  const healthMap = new Map<string, any>()
+  healthData.data?.forEach((h) => healthMap.set(h.stakeholder_id, h))
+
+  return industries.map((industry) => {
+    const health = healthMap.get(industry.id)
+    return {
+      ...industry,
+      contact_count: contactCounts.get(industry.id) || 0,
+      interaction_count: interactionCounts.get(industry.id) || 0,
+      mou_status: mouStatusMap.get(industry.id) || 'none',
+      health_score: health?.overall_score,
+      health_tier: health?.health_tier,
+      days_since_last_contact: health?.days_since_last_interaction,
+    }
+  }) as IndustryListItem[]
 })
 
 export const getIndustryById = cache(async (industryId: string): Promise<IndustryDetail | null> => {
@@ -257,47 +354,62 @@ export const getIndustryById = cache(async (industryId: string): Promise<Industr
 // GOVERNMENT STAKEHOLDER DATA FUNCTIONS
 // ============================================================================
 
-export const getGovernmentStakeholders = cache(async (chapterId: string): Promise<GovernmentStakeholderListItem[]> => {
+/**
+ * Get all government stakeholders for a chapter
+ * If chapterId is null, fetches all government stakeholders (for super admins)
+ */
+export const getGovernmentStakeholders = cache(async (chapterId: string | null): Promise<GovernmentStakeholderListItem[]> => {
   const supabase = await createServerSupabaseClient()
 
-  const { data, error } = await supabase
-    .from('government_stakeholders')
-    .select(`
-      *,
-      connected_member:members!government_stakeholders_connected_through_member_id_fkey(id, full_name),
-      contacts:stakeholder_contacts(id),
-      interactions:stakeholder_interactions(id),
-      mous:stakeholder_mous(mou_status),
-      health:relationship_health_scores(overall_score, health_tier, days_since_last_interaction)
-    `)
-    .eq('chapter_id', chapterId)
-    .order('official_name')
+  let govQuery = supabase.from('government_stakeholders').select('*')
+  if (chapterId) govQuery = govQuery.eq('chapter_id', chapterId)
 
-  if (error) {
-    console.error('Error fetching government stakeholders:', error)
+  const { data: govStakeholders, error: govError } = await govQuery.order('official_name')
+  if (govError) {
+    console.error('Error fetching government stakeholders:', govError)
     return []
   }
+  if (!govStakeholders || govStakeholders.length === 0) return []
 
-  return (data || []).map((stakeholder) => {
-    // Calculate tenure status
+  const govIds = govStakeholders.map((g) => g.id)
+  const [contactsData, interactionsData, mousData, healthData] = await Promise.all([
+    supabase.from('stakeholder_contacts').select('stakeholder_id').eq('stakeholder_type', 'government').in('stakeholder_id', govIds),
+    supabase.from('stakeholder_interactions').select('stakeholder_id').eq('stakeholder_type', 'government').in('stakeholder_id', govIds),
+    supabase.from('stakeholder_mous').select('stakeholder_id, mou_status').eq('stakeholder_type', 'government').in('stakeholder_id', govIds),
+    supabase.from('relationship_health_scores').select('stakeholder_id, overall_score, health_tier, days_since_last_interaction').eq('stakeholder_type', 'government').in('stakeholder_id', govIds),
+  ])
+
+  const contactCounts = new Map<string, number>()
+  contactsData.data?.forEach((c) => contactCounts.set(c.stakeholder_id, (contactCounts.get(c.stakeholder_id) || 0) + 1))
+
+  const interactionCounts = new Map<string, number>()
+  interactionsData.data?.forEach((i) => interactionCounts.set(i.stakeholder_id, (interactionCounts.get(i.stakeholder_id) || 0) + 1))
+
+  const mouStatusMap = new Map<string, string>()
+  mousData.data?.forEach((m) => { if (m.mou_status === 'signed') mouStatusMap.set(m.stakeholder_id, 'signed') })
+
+  const healthMap = new Map<string, any>()
+  healthData.data?.forEach((h) => healthMap.set(h.stakeholder_id, h))
+
+  return govStakeholders.map((stakeholder) => {
     let tenure_status: 'active' | 'expiring_soon' | 'expired' = 'active'
     if (stakeholder.tenure_end_date) {
       const endDate = new Date(stakeholder.tenure_end_date)
       const now = new Date()
       const daysUntilExpiry = Math.floor((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
-
       if (daysUntilExpiry < 0) tenure_status = 'expired'
       else if (daysUntilExpiry <= 90) tenure_status = 'expiring_soon'
     }
 
+    const health = healthMap.get(stakeholder.id)
     return {
       ...stakeholder,
-      contact_count: stakeholder.contacts?.length || 0,
-      interaction_count: stakeholder.interactions?.length || 0,
-      mou_status: stakeholder.mous?.[0]?.mou_status || 'none',
-      health_score: stakeholder.health?.[0]?.overall_score,
-      health_tier: stakeholder.health?.[0]?.health_tier,
-      days_since_last_contact: stakeholder.health?.[0]?.days_since_last_interaction,
+      contact_count: contactCounts.get(stakeholder.id) || 0,
+      interaction_count: interactionCounts.get(stakeholder.id) || 0,
+      mou_status: mouStatusMap.get(stakeholder.id) || 'none',
+      health_score: health?.overall_score,
+      health_tier: health?.health_tier,
+      days_since_last_contact: health?.days_since_last_interaction,
       tenure_status,
     }
   }) as GovernmentStakeholderListItem[]
@@ -342,36 +454,55 @@ export const getGovernmentStakeholderById = cache(async (stakeholderId: string):
 // NGO DATA FUNCTIONS
 // ============================================================================
 
-export const getNGOs = cache(async (chapterId: string): Promise<NGOListItem[]> => {
+/**
+ * Get all NGOs for a chapter
+ * If chapterId is null, fetches all NGOs (for super admins)
+ */
+export const getNGOs = cache(async (chapterId: string | null): Promise<NGOListItem[]> => {
   const supabase = await createServerSupabaseClient()
 
-  const { data, error } = await supabase
-    .from('ngos')
-    .select(`
-      *,
-      connected_member:members!ngos_connected_through_member_id_fkey(id, full_name),
-      contacts:stakeholder_contacts(id),
-      interactions:stakeholder_interactions(id),
-      mous:stakeholder_mous(mou_status),
-      health:relationship_health_scores(overall_score, health_tier, days_since_last_interaction)
-    `)
-    .eq('chapter_id', chapterId)
-    .order('ngo_name')
+  let ngosQuery = supabase.from('ngos').select('*')
+  if (chapterId) ngosQuery = ngosQuery.eq('chapter_id', chapterId)
 
-  if (error) {
-    console.error('Error fetching NGOs:', error)
+  const { data: ngos, error: ngosError } = await ngosQuery.order('ngo_name')
+  if (ngosError) {
+    console.error('Error fetching NGOs:', ngosError)
     return []
   }
+  if (!ngos || ngos.length === 0) return []
 
-  return (data || []).map((ngo) => ({
-    ...ngo,
-    contact_count: ngo.contacts?.length || 0,
-    interaction_count: ngo.interactions?.length || 0,
-    mou_status: ngo.mous?.[0]?.mou_status || 'none',
-    health_score: ngo.health?.[0]?.overall_score,
-    health_tier: ngo.health?.[0]?.health_tier,
-    days_since_last_contact: ngo.health?.[0]?.days_since_last_interaction,
-  })) as NGOListItem[]
+  const ngoIds = ngos.map((n) => n.id)
+  const [contactsData, interactionsData, mousData, healthData] = await Promise.all([
+    supabase.from('stakeholder_contacts').select('stakeholder_id').eq('stakeholder_type', 'ngos').in('stakeholder_id', ngoIds),
+    supabase.from('stakeholder_interactions').select('stakeholder_id').eq('stakeholder_type', 'ngos').in('stakeholder_id', ngoIds),
+    supabase.from('stakeholder_mous').select('stakeholder_id, mou_status').eq('stakeholder_type', 'ngos').in('stakeholder_id', ngoIds),
+    supabase.from('relationship_health_scores').select('stakeholder_id, overall_score, health_tier, days_since_last_interaction').eq('stakeholder_type', 'ngos').in('stakeholder_id', ngoIds),
+  ])
+
+  const contactCounts = new Map<string, number>()
+  contactsData.data?.forEach((c) => contactCounts.set(c.stakeholder_id, (contactCounts.get(c.stakeholder_id) || 0) + 1))
+
+  const interactionCounts = new Map<string, number>()
+  interactionsData.data?.forEach((i) => interactionCounts.set(i.stakeholder_id, (interactionCounts.get(i.stakeholder_id) || 0) + 1))
+
+  const mouStatusMap = new Map<string, number>()
+  mousData.data?.forEach((m) => { if (m.mou_status === 'signed') mouStatusMap.set(m.stakeholder_id, 'signed') })
+
+  const healthMap = new Map<string, any>()
+  healthData.data?.forEach((h) => healthMap.set(h.stakeholder_id, h))
+
+  return ngos.map((ngo) => {
+    const health = healthMap.get(ngo.id)
+    return {
+      ...ngo,
+      contact_count: contactCounts.get(ngo.id) || 0,
+      interaction_count: interactionCounts.get(ngo.id) || 0,
+      mou_status: mouStatusMap.get(ngo.id) || 'none',
+      health_score: health?.overall_score,
+      health_tier: health?.health_tier,
+      days_since_last_contact: health?.days_since_last_interaction,
+    }
+  }) as NGOListItem[]
 })
 
 export const getNGOById = cache(async (ngoId: string): Promise<NGODetail | null> => {
@@ -413,34 +544,50 @@ export const getNGOById = cache(async (ngoId: string): Promise<NGODetail | null>
 // VENDOR DATA FUNCTIONS
 // ============================================================================
 
-export const getVendors = cache(async (chapterId: string): Promise<VendorListItem[]> => {
+/**
+ * Get all vendors for a chapter
+ * If chapterId is null, fetches all vendors (for super admins)
+ */
+export const getVendors = cache(async (chapterId: string | null): Promise<VendorListItem[]> => {
   const supabase = await createServerSupabaseClient()
 
-  const { data, error } = await supabase
-    .from('vendors')
-    .select(`
-      *,
-      connected_member:members!vendors_connected_through_member_id_fkey(id, full_name),
-      contacts:stakeholder_contacts(id),
-      interactions:stakeholder_interactions(id),
-      health:relationship_health_scores(overall_score, health_tier, days_since_last_interaction)
-    `)
-    .eq('chapter_id', chapterId)
-    .order('vendor_name')
+  let vendorsQuery = supabase.from('vendors').select('*')
+  if (chapterId) vendorsQuery = vendorsQuery.eq('chapter_id', chapterId)
 
-  if (error) {
-    console.error('Error fetching vendors:', error)
+  const { data: vendors, error: vendorsError } = await vendorsQuery.order('vendor_name')
+  if (vendorsError) {
+    console.error('Error fetching vendors:', vendorsError)
     return []
   }
+  if (!vendors || vendors.length === 0) return []
 
-  return (data || []).map((vendor) => ({
-    ...vendor,
-    contact_count: vendor.contacts?.length || 0,
-    interaction_count: vendor.interactions?.length || 0,
-    health_score: vendor.health?.[0]?.overall_score,
-    health_tier: vendor.health?.[0]?.health_tier,
-    days_since_last_contact: vendor.health?.[0]?.days_since_last_interaction,
-  })) as VendorListItem[]
+  const vendorIds = vendors.map((v) => v.id)
+  const [contactsData, interactionsData, healthData] = await Promise.all([
+    supabase.from('stakeholder_contacts').select('stakeholder_id').eq('stakeholder_type', 'vendors').in('stakeholder_id', vendorIds),
+    supabase.from('stakeholder_interactions').select('stakeholder_id').eq('stakeholder_type', 'vendors').in('stakeholder_id', vendorIds),
+    supabase.from('relationship_health_scores').select('stakeholder_id, overall_score, health_tier, days_since_last_interaction').eq('stakeholder_type', 'vendors').in('stakeholder_id', vendorIds),
+  ])
+
+  const contactCounts = new Map<string, number>()
+  contactsData.data?.forEach((c) => contactCounts.set(c.stakeholder_id, (contactCounts.get(c.stakeholder_id) || 0) + 1))
+
+  const interactionCounts = new Map<string, number>()
+  interactionsData.data?.forEach((i) => interactionCounts.set(i.stakeholder_id, (interactionCounts.get(i.stakeholder_id) || 0) + 1))
+
+  const healthMap = new Map<string, any>()
+  healthData.data?.forEach((h) => healthMap.set(h.stakeholder_id, h))
+
+  return vendors.map((vendor) => {
+    const health = healthMap.get(vendor.id)
+    return {
+      ...vendor,
+      contact_count: contactCounts.get(vendor.id) || 0,
+      interaction_count: interactionCounts.get(vendor.id) || 0,
+      health_score: health?.overall_score,
+      health_tier: health?.health_tier,
+      days_since_last_contact: health?.days_since_last_interaction,
+    }
+  }) as VendorListItem[]
 })
 
 export const getVendorById = cache(async (vendorId: string): Promise<VendorDetail | null> => {
@@ -480,40 +627,53 @@ export const getVendorById = cache(async (vendorId: string): Promise<VendorDetai
 // SPEAKER DATA FUNCTIONS
 // ============================================================================
 
-export const getSpeakers = cache(async (chapterId: string): Promise<SpeakerListItem[]> => {
+/**
+ * Get all speakers for a chapter
+ * If chapterId is null, fetches all speakers (for super admins)
+ */
+export const getSpeakers = cache(async (chapterId: string | null): Promise<SpeakerListItem[]> => {
   const supabase = await createServerSupabaseClient()
 
-  const { data, error } = await supabase
-    .from('speakers')
-    .select(`
-      *,
-      connected_member:members!speakers_connected_through_member_id_fkey(id, full_name),
-      contacts:stakeholder_contacts(id),
-      interactions:stakeholder_interactions(id),
-      health:relationship_health_scores(overall_score, health_tier, days_since_last_interaction)
-    `)
-    .eq('chapter_id', chapterId)
-    .order('speaker_name')
+  let speakersQuery = supabase.from('speakers').select('*')
+  if (chapterId) speakersQuery = speakersQuery.eq('chapter_id', chapterId)
 
-  if (error) {
-    console.error('Error fetching speakers:', error)
+  const { data: speakers, error: speakersError } = await speakersQuery.order('speaker_name')
+  if (speakersError) {
+    console.error('Error fetching speakers:', speakersError)
     return []
   }
+  if (!speakers || speakers.length === 0) return []
 
-  return (data || []).map((speaker) => {
-    // Determine availability indicator
+  const speakerIds = speakers.map((s) => s.id)
+  const [contactsData, interactionsData, healthData] = await Promise.all([
+    supabase.from('stakeholder_contacts').select('stakeholder_id').eq('stakeholder_type', 'speakers').in('stakeholder_id', speakerIds),
+    supabase.from('stakeholder_interactions').select('stakeholder_id').eq('stakeholder_type', 'speakers').in('stakeholder_id', speakerIds),
+    supabase.from('relationship_health_scores').select('stakeholder_id, overall_score, health_tier, days_since_last_interaction').eq('stakeholder_type', 'speakers').in('stakeholder_id', speakerIds),
+  ])
+
+  const contactCounts = new Map<string, number>()
+  contactsData.data?.forEach((c) => contactCounts.set(c.stakeholder_id, (contactCounts.get(c.stakeholder_id) || 0) + 1))
+
+  const interactionCounts = new Map<string, number>()
+  interactionsData.data?.forEach((i) => interactionCounts.set(i.stakeholder_id, (interactionCounts.get(i.stakeholder_id) || 0) + 1))
+
+  const healthMap = new Map<string, any>()
+  healthData.data?.forEach((h) => healthMap.set(h.stakeholder_id, h))
+
+  return speakers.map((speaker) => {
     let availability_indicator: 'available' | 'busy' | 'unknown' = 'unknown'
     if (speaker.availability_status) {
       availability_indicator = speaker.availability_status === 'available' ? 'available' : 'busy'
     }
 
+    const health = healthMap.get(speaker.id)
     return {
       ...speaker,
-      contact_count: speaker.contacts?.length || 0,
-      interaction_count: speaker.interactions?.length || 0,
-      health_score: speaker.health?.[0]?.overall_score,
-      health_tier: speaker.health?.[0]?.health_tier,
-      days_since_last_contact: speaker.health?.[0]?.days_since_last_interaction,
+      contact_count: contactCounts.get(speaker.id) || 0,
+      interaction_count: interactionCounts.get(speaker.id) || 0,
+      health_score: health?.overall_score,
+      health_tier: health?.health_tier,
+      days_since_last_contact: health?.days_since_last_interaction,
       availability_indicator,
     }
   }) as SpeakerListItem[]
@@ -585,7 +745,10 @@ export const getStakeholderInteractions = cache(
       .from('stakeholder_interactions')
       .select(`
         *,
-        creator:profiles!stakeholder_interactions_created_by_fkey(id, full_name, email)
+        led_by:members!stakeholder_interactions_led_by_member_id_fkey(
+          id,
+          profiles!members_id_fkey(id, full_name, email)
+        )
       `)
       .eq('stakeholder_type', stakeholderType)
       .eq('stakeholder_id', stakeholderId)
@@ -808,8 +971,17 @@ export const searchStakeholders = cache(
   }
 )
 
-export const getStakeholderOverview = cache(async (chapterId: string): Promise<StakeholderOverviewStats> => {
+/**
+ * Get stakeholder overview statistics
+ * If chapterId is null, aggregates across all chapters (for super admins)
+ */
+export const getStakeholderOverview = cache(async (chapterId: string | null): Promise<StakeholderOverviewStats> => {
   const supabase = await createServerSupabaseClient()
+
+  // Helper to conditionally add chapter filter
+  const applyChapterFilter = <T extends { chapter_id?: string }>(query: any) => {
+    return chapterId ? query.eq('chapter_id', chapterId) : query
+  }
 
   // Get counts for each stakeholder type
   const [
@@ -826,34 +998,18 @@ export const getStakeholderOverview = cache(async (chapterId: string): Promise<S
     recentInteractions,
     pendingFollowUps,
   ] = await Promise.all([
-    supabase.from('schools').select('id, status', { count: 'exact' }).eq('chapter_id', chapterId),
-    supabase.from('colleges').select('id, status', { count: 'exact' }).eq('chapter_id', chapterId),
-    supabase.from('industries').select('id, status', { count: 'exact' }).eq('chapter_id', chapterId),
-    supabase.from('government_stakeholders').select('id, status', { count: 'exact' }).eq('chapter_id', chapterId),
-    supabase.from('ngos').select('id, status', { count: 'exact' }).eq('chapter_id', chapterId),
-    supabase.from('vendors').select('id, status', { count: 'exact' }).eq('chapter_id', chapterId),
-    supabase.from('speakers').select('id, status', { count: 'exact' }).eq('chapter_id', chapterId),
-    supabase.from('relationship_health_scores').select('health_tier').eq('chapter_id', chapterId),
-    supabase
-      .from('stakeholder_mous')
-      .select('id', { count: 'exact' })
-      .eq('chapter_id', chapterId)
-      .eq('mou_status', 'signed'),
-    supabase
-      .from('stakeholder_mous')
-      .select('id, valid_to')
-      .eq('chapter_id', chapterId)
-      .eq('mou_status', 'signed'),
-    supabase
-      .from('stakeholder_interactions')
-      .select('id', { count: 'exact' })
-      .eq('chapter_id', chapterId)
-      .gte('interaction_date', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()),
-    supabase
-      .from('stakeholder_interactions')
-      .select('id', { count: 'exact' })
-      .eq('chapter_id', chapterId)
-      .eq('requires_follow_up', true),
+    applyChapterFilter(supabase.from('schools').select('id, status', { count: 'exact' })),
+    applyChapterFilter(supabase.from('colleges').select('id, status', { count: 'exact' })),
+    applyChapterFilter(supabase.from('industries').select('id, status', { count: 'exact' })),
+    applyChapterFilter(supabase.from('government_stakeholders').select('id, status', { count: 'exact' })),
+    applyChapterFilter(supabase.from('ngos').select('id, status', { count: 'exact' })),
+    applyChapterFilter(supabase.from('vendors').select('id, status', { count: 'exact' })),
+    applyChapterFilter(supabase.from('speakers').select('id, status', { count: 'exact' })),
+    applyChapterFilter(supabase.from('relationship_health_scores').select('health_tier')),
+    applyChapterFilter(supabase.from('stakeholder_mous').select('id', { count: 'exact' }).eq('mou_status', 'signed')),
+    applyChapterFilter(supabase.from('stakeholder_mous').select('id, valid_to').eq('mou_status', 'signed')),
+    applyChapterFilter(supabase.from('stakeholder_interactions').select('id', { count: 'exact' }).gte('interaction_date', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())),
+    applyChapterFilter(supabase.from('stakeholder_interactions').select('id', { count: 'exact' }).eq('requires_follow_up', true)),
   ])
 
   // Calculate status distributions
@@ -914,18 +1070,31 @@ export const getStakeholderOverview = cache(async (chapterId: string): Promise<S
 // PENDING FOLLOW-UPS
 // ============================================================================
 
-export const getPendingFollowUps = cache(async (chapterId: string): Promise<StakeholderInteraction[]> => {
+/**
+ * Get pending follow-ups
+ * If chapterId is null, fetches all pending follow-ups (for super admins)
+ */
+export const getPendingFollowUps = cache(async (chapterId: string | null): Promise<StakeholderInteraction[]> => {
   const supabase = await createServerSupabaseClient()
 
-  const { data, error } = await supabase
+  let query = supabase
     .from('stakeholder_interactions')
     .select(`
       *,
-      creator:profiles!stakeholder_interactions_created_by_fkey(id, full_name)
+      led_by:members!stakeholder_interactions_led_by_member_id_fkey(
+        id,
+        profiles!members_id_fkey(id, full_name)
+      )
     `)
-    .eq('chapter_id', chapterId)
     .eq('requires_follow_up', true)
     .lte('follow_up_date', new Date().toISOString())
+
+  // Filter by chapter only if chapterId is provided
+  if (chapterId) {
+    query = query.eq('chapter_id', chapterId)
+  }
+
+  const { data, error } = await query
     .order('follow_up_date')
 
   if (error) {
@@ -940,20 +1109,29 @@ export const getPendingFollowUps = cache(async (chapterId: string): Promise<Stak
 // EXPIRING MOUS
 // ============================================================================
 
-export const getExpiringMous = cache(async (chapterId: string, daysAhead: number = 30): Promise<StakeholderMou[]> => {
+/**
+ * Get expiring MoUs
+ * If chapterId is null, fetches all expiring MoUs (for super admins)
+ */
+export const getExpiringMous = cache(async (chapterId: string | null, daysAhead: number = 30): Promise<StakeholderMou[]> => {
   const supabase = await createServerSupabaseClient()
 
   const now = new Date()
   const futureDate = new Date(now.getTime() + daysAhead * 24 * 60 * 60 * 1000)
 
-  const { data, error } = await supabase
+  let query = supabase
     .from('stakeholder_mous')
     .select('*')
-    .eq('chapter_id', chapterId)
     .eq('mou_status', 'signed')
     .gte('valid_to', now.toISOString())
     .lte('valid_to', futureDate.toISOString())
-    .order('valid_to')
+
+  // Filter by chapter only if chapterId is provided
+  if (chapterId) {
+    query = query.eq('chapter_id', chapterId)
+  }
+
+  const { data, error } = await query.order('valid_to')
 
   if (error) {
     console.error('Error fetching expiring MoUs:', error)

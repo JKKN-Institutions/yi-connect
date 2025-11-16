@@ -18,8 +18,8 @@ export const metadata: Metadata = {
 
 async function SponsorshipsTableWrapper() {
   const chapterId = await getCurrentChapterId()
-  if (!chapterId) return null
 
+  // Super admins without chapter_id will see all sponsorship deals
   const result = await getSponsorshipDeals(chapterId, {}, 1, 50)
 
   return (
@@ -32,8 +32,8 @@ async function SponsorshipsTableWrapper() {
 
 async function PipelineStats() {
   const chapterId = await getCurrentChapterId()
-  if (!chapterId) return null
 
+  // Super admins without chapter_id will see aggregated pipeline stats
   const pipelineValue = await getSponsorshipPipelineValue(chapterId)
 
   return (

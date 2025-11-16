@@ -33,7 +33,7 @@ import type { ExpenseCategory, Budget } from '@/types/finance'
 type ExpenseFormValues = z.infer<typeof createExpenseSchema>
 
 interface ExpenseFormProps {
-  chapterId: string
+  chapterId: string | null  // Allow null for super admins
   categories?: ExpenseCategory[]
   budgets?: Budget[]
   eventId?: string
@@ -50,6 +50,8 @@ export function ExpenseForm({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const { toast } = useToast()
 
+  const isAdminCreating = !chapterId  // Super admin flag
+
   const form = useForm<ExpenseFormValues>({
     resolver: zodResolver(createExpenseSchema) as any,
     defaultValues: {
@@ -63,7 +65,7 @@ export function ExpenseForm({
       tax_amount: 0,
       other_charges: 0,
       notes: '',
-      chapter_id: chapterId,
+      chapter_id: chapterId || '',
       event_id: eventId,
     },
   })
@@ -114,6 +116,29 @@ export function ExpenseForm({
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        {isAdminCreating && (
+          <FormField
+            control={form.control}
+            name="chapter_id"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Chapter ID</FormLabel>
+                <FormControl>
+                  <Input
+                    placeholder="Enter chapter ID"
+                    {...field}
+                    value={field.value || ''}
+                  />
+                </FormControl>
+                <FormDescription>
+                  As a super admin, enter the chapter ID for this expense
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
+
         <FormField
           control={form.control}
           name="title"

@@ -23,8 +23,8 @@ export const metadata = {
 
 async function SchoolsStats() {
   const chapterId = await getCurrentChapterId()
-  if (!chapterId) return null
 
+  // Super admins without chapter_id will see aggregated stats from all chapters
   const schools = await getSchools(chapterId)
 
   const stats = {
@@ -98,10 +98,7 @@ async function SchoolsStats() {
 async function SchoolsListWrapper() {
   const chapterId = await getCurrentChapterId()
 
-  if (!chapterId) {
-    redirect('/login')
-  }
-
+  // Super admins without chapter_id will see all schools
   const schools = await getSchools(chapterId)
 
   return <SchoolsTable data={schools} />

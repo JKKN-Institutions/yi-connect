@@ -16,13 +16,13 @@ export const metadata: Metadata = {
 
 async function ExpensesTableWrapper() {
   const chapterId = await getCurrentChapterId()
-  if (!chapterId) return null
 
+  // Super admins without chapter_id will see all expenses
   const result = await getExpenses(chapterId, {}, 1, 50)
 
   return (
-    <ExpensesTable 
-      data={result.data} 
+    <ExpensesTable
+      data={result.data}
       pageCount={result.totalPages}
     />
   )

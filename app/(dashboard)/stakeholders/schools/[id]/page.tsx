@@ -333,9 +333,9 @@ async function SchoolDetail({ schoolId }: { schoolId: string }) {
                           <strong>Next steps:</strong> {interaction.next_steps}
                         </div>
                       )}
-                      {interaction.creator && (
+                      {interaction.led_by?.profiles && (
                         <p className="text-xs text-muted-foreground mt-2">
-                          By {interaction.creator.full_name}
+                          By {interaction.led_by.profiles.full_name}
                         </p>
                       )}
                     </div>

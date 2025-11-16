@@ -32,7 +32,7 @@ import { useToast } from '@/hooks/use-toast'
 type BudgetFormValues = z.infer<typeof createBudgetSchema>
 
 interface BudgetFormProps {
-  chapterId: string
+  chapterId: string | null  // Allow null for super admins
   onSuccess?: () => void
 }
 
@@ -51,11 +51,12 @@ export function BudgetForm({ chapterId, onSuccess }: BudgetFormProps) {
       total_amount: 0,
       start_date: '',
       end_date: '',
-      chapter_id: chapterId,
+      chapter_id: chapterId || '',  // Empty string if no chapter
     },
   })
 
   const period = form.watch('period')
+  const isAdminCreating = !chapterId  // Super admin creating for a chapter
 
   async function onSubmit(values: BudgetFormValues) {
     setIsSubmitting(true)
@@ -98,6 +99,29 @@ export function BudgetForm({ chapterId, onSuccess }: BudgetFormProps) {
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        {isAdminCreating && (
+          <FormField
+            control={form.control}
+            name="chapter_id"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Chapter ID</FormLabel>
+                <FormControl>
+                  <Input
+                    placeholder="Enter chapter ID"
+                    {...field}
+                    value={field.value || ''}
+                  />
+                </FormControl>
+                <FormDescription>
+                  As a super admin, enter the chapter ID for this budget
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
+
         <FormField
           control={form.control}
           name="name"

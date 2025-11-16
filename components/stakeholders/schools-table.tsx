@@ -40,7 +40,9 @@ interface SchoolsTableProps {
 
 export function SchoolsTable({ data }: SchoolsTableProps) {
   const [rowSelection, setRowSelection] = useState({})
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({
+    school_type: false, // Hide by default as it's shown in school_name column
+  })
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
   const [sorting, setSorting] = useState<SortingState>([])
 

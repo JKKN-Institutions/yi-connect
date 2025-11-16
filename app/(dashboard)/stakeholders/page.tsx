@@ -106,8 +106,8 @@ const stakeholderTypes = [
 
 async function StakeholderOverviewStats() {
   const chapterId = await getCurrentChapterId();
-  if (!chapterId) return null;
 
+  // Super admins without chapter_id will see aggregated stats
   const stats = await getStakeholderOverview(chapterId);
 
   return (
@@ -248,8 +248,8 @@ async function StakeholderOverviewStats() {
 
 async function PendingFollowUpsCard() {
   const chapterId = await getCurrentChapterId();
-  if (!chapterId) return null;
 
+  // Super admins without chapter_id will see all pending follow-ups
   const followUps = await getPendingFollowUps(chapterId);
 
   if (followUps.length === 0) {
@@ -309,8 +309,8 @@ async function PendingFollowUpsCard() {
 
 async function ExpiringMoUsCard() {
   const chapterId = await getCurrentChapterId();
-  if (!chapterId) return null;
 
+  // Super admins without chapter_id will see all expiring MoUs
   const expiringMous = await getExpiringMous(chapterId, 30);
 
   if (expiringMous.length === 0) {
@@ -361,12 +361,7 @@ async function ExpiringMoUsCard() {
 }
 
 async function DashboardWrapper() {
-  const chapterId = await getCurrentChapterId();
-
-  if (!chapterId) {
-    redirect('/login');
-  }
-
+  // Super admins can view dashboard without chapter ID
   return (
     <>
       <StakeholderOverviewStats />

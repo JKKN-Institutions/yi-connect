@@ -154,10 +154,7 @@ async function FinanceHeader() {
 async function FinanceAnalytics() {
   const chapterId = await getCurrentChapterId()
 
-  if (!chapterId) {
-    return null
-  }
-
+  // Super admins without chapter_id will see aggregated analytics
   // Get current fiscal year budgets
   const currentYear = new Date().getFullYear()
   const budgetsResult = await getBudgets(
@@ -249,10 +246,7 @@ async function FinanceAnalytics() {
 async function RecentExpenses() {
   const chapterId = await getCurrentChapterId()
 
-  if (!chapterId) {
-    return null
-  }
-
+  // Super admins without chapter_id will see recent expenses from all chapters
   const result = await getExpenses(chapterId, {}, 1, 5)
 
   return (
@@ -311,10 +305,7 @@ async function RecentExpenses() {
 async function ActiveBudgets() {
   const chapterId = await getCurrentChapterId()
 
-  if (!chapterId) {
-    return null
-  }
-
+  // Super admins without chapter_id will see active budgets from all chapters
   const result = await getBudgets(
     chapterId,
     {

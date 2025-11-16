@@ -485,7 +485,7 @@ export const getNGOs = cache(async (chapterId: string | null): Promise<NGOListIt
   const interactionCounts = new Map<string, number>()
   interactionsData.data?.forEach((i) => interactionCounts.set(i.stakeholder_id, (interactionCounts.get(i.stakeholder_id) || 0) + 1))
 
-  const mouStatusMap = new Map<string, number>()
+  const mouStatusMap = new Map<string, string>()
   mousData.data?.forEach((m) => { if (m.mou_status === 'signed') mouStatusMap.set(m.stakeholder_id, 'signed') })
 
   const healthMap = new Map<string, any>()
@@ -1032,14 +1032,14 @@ export const getStakeholderOverview = cache(async (chapterId: string | null): Pr
 
   // Calculate health distribution
   const healthDistribution = {
-    healthy: (healthScores.data || []).filter((h) => h.health_tier === 'healthy').length,
-    needs_attention: (healthScores.data || []).filter((h) => h.health_tier === 'needs_attention').length,
-    at_risk: (healthScores.data || []).filter((h) => h.health_tier === 'at_risk').length,
+    healthy: (healthScores.data || []).filter((h: any) => h.health_tier === 'healthy').length,
+    needs_attention: (healthScores.data || []).filter((h: any) => h.health_tier === 'needs_attention').length,
+    at_risk: (healthScores.data || []).filter((h: any) => h.health_tier === 'at_risk').length,
   }
 
   // Count expiring MoUs (within 30 days)
   const now = new Date()
-  const expiringCount = (expiringMous.data || []).filter((mou) => {
+  const expiringCount = (expiringMous.data || []).filter((mou: any) => {
     if (!mou.valid_to) return false
     const expiryDate = new Date(mou.valid_to)
     const daysUntilExpiry = Math.floor((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))

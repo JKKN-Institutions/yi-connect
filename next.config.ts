@@ -1,8 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Enable Cache Components for 'use cache' directive support
-  cacheComponents: true,
+  // Temporarily disable Cache Components until all data fetching is refactored
+  // Re-enable once functions are updated to follow Next.js 16 pattern
+  // (access cookies outside cached functions and pass data as arguments)
+  cacheComponents: false,
 
   // Define cache lifetime profiles for optimal performance
   cacheLife: {

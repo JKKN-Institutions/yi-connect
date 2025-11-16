@@ -1,10 +1,11 @@
 /**
  * Industrial Visits Module - Data Layer
  * Cached data fetching functions for IV operations
- * Uses React cache() for request-level deduplication
+ * Uses Next.js 16 Cache Components with 'use cache' directive
  */
 
 import { cache } from 'react';
+import { cacheLife } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentUser } from '@/lib/data/auth';
 import type {
@@ -146,9 +147,7 @@ export const getIVs = cache(async (
 /**
  * Get single Industrial Visit by ID with full details
  */
-export const getIVById = cache(async (id: string): Promise<IndustrialVisitFull | null> => {
-  'use server';
-
+export async function getIVById(id: string): Promise<IndustrialVisitFull | null> {
   try {
     const supabase = await createClient();
 
@@ -211,7 +210,7 @@ export const getIVById = cache(async (id: string): Promise<IndustrialVisitFull |
     console.error('Error in getIVById:', error);
     throw error;
   }
-});
+}
 
 /**
  * Get available Industrial Visits (published, not full, future dates)
@@ -828,9 +827,7 @@ export const getIndustryIVs = cache(async (industryId: string): Promise<IVListIt
  * Get Industry Dashboard Stats
  * @param industryId - ID of the industry
  */
-export const getIndustryDashboardStats = cache(async (industryId: string) => {
-  'use server';
-
+export async function getIndustryDashboardStats(industryId: string) {
   try {
     const supabase = await createClient();
 
@@ -887,41 +884,37 @@ export const getIndustryDashboardStats = cache(async (industryId: string) => {
     console.error('Error in getIndustryDashboardStats:', error);
     throw error;
   }
-});
+}
 
 /**
  * Get Industry Upcoming Slots
  * @param industryId - ID of the industry
  * @param limit - Maximum number of slots to return
  */
-export const getIndustryUpcomingSlots = cache(
-  async (industryId: string, limit: number = 5) => {
-    'use server';
+export async function getIndustryUpcomingSlots(industryId: string, limit: number = 5) {
+  try {
+    const supabase = await createClient();
 
-    try {
-      const supabase = await createClient();
+    const { data, error } = await supabase
+      .from('events')
+      .select('id, title, start_date, max_capacity, current_registrations, status')
+      .eq('industry_id', industryId)
+      .eq('category', 'industrial_visit')
+      .gte('start_date', new Date().toISOString())
+      .neq('status', 'cancelled')
+      .order('start_date', { ascending: true })
+      .limit(limit);
 
-      const { data, error } = await supabase
-        .from('events')
-        .select('id, title, start_date, max_capacity, current_registrations, status')
-        .eq('industry_id', industryId)
-        .eq('category', 'industrial_visit')
-        .gte('start_date', new Date().toISOString())
-        .neq('status', 'cancelled')
-        .order('start_date', { ascending: true })
-        .limit(limit);
-
-      if (error) {
-        throw new Error(`Failed to fetch upcoming slots: ${error.message}`);
-      }
-
-      return data || [];
-    } catch (error) {
-      console.error('Error in getIndustryUpcomingSlots:', error);
-      throw error;
+    if (error) {
+      throw new Error(`Failed to fetch upcoming slots: ${error.message}`);
     }
+
+    return data || [];
+  } catch (error) {
+    console.error('Error in getIndustryUpcomingSlots:', error);
+    throw error;
   }
-);
+}
 
 /**
  * Get My Industry Slots (with filters)

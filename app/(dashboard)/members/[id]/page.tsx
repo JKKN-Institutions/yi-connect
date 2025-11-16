@@ -99,8 +99,8 @@ async function MemberDetailContent({ id }: { id: string }) {
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant="secondary" className={getStatusColor(member.membership_status)}>
-                    {member.membership_status}
+                  <Badge variant="secondary" className={getStatusColor(member.membership_status || 'active')}>
+                    {member.membership_status || 'Active'}
                   </Badge>
                   {member.membership_number && (
                     <Badge variant="outline">{member.membership_number}</Badge>

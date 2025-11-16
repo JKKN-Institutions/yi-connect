@@ -42,7 +42,7 @@ async function DealDetail({ dealId }: { dealId: string }) {
   const commitmentDate = deal.commitment_date ? new Date(deal.commitment_date) : null
   const contractDate = deal.contract_signed_date ? new Date(deal.contract_signed_date) : null
 
-  const receivedPercentage = deal.committed_amount
+  const receivedPercentage = deal.committed_amount && deal.received_amount
     ? Math.round((deal.received_amount / deal.committed_amount) * 100)
     : 0
 
@@ -116,7 +116,7 @@ async function DealDetail({ dealId }: { dealId: string }) {
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(deal.received_amount)}</div>
+            <div className="text-2xl font-bold">{formatCurrency(deal.received_amount || 0)}</div>
             <p className="text-xs text-muted-foreground mt-1">
               {deal.payments?.length || 0} payment{deal.payments?.length !== 1 ? 's' : ''}
             </p>
@@ -143,7 +143,7 @@ async function DealDetail({ dealId }: { dealId: string }) {
           <CardHeader>
             <CardTitle>Payment Progress</CardTitle>
             <CardDescription>
-              {formatCurrency(deal.received_amount)} of {formatCurrency(deal.committed_amount)} received
+              {formatCurrency(deal.received_amount || 0)} of {formatCurrency(deal.committed_amount || 0)} received
             </CardDescription>
           </CardHeader>
           <CardContent>

@@ -489,6 +489,21 @@ export type Database = {
           status: string
           role: string | null
           bio: string | null
+          designation: string | null
+          company: string | null
+          membership_status: string | null
+          linkedin_url: string | null
+          twitter_url: string | null
+          facebook_url: string | null
+          instagram_url: string | null
+          address: string | null
+          city: string | null
+          state: string | null
+          pincode: string | null
+          country: string | null
+          industry: string | null
+          expertise: string[] | null
+          interests: string[] | null
         }
         Insert: {
           id?: string
@@ -501,6 +516,18 @@ export type Database = {
           status?: string
           role?: string | null
           bio?: string | null
+          designation?: string | null
+          company?: string | null
+          membership_status?: string | null
+          linkedin_url?: string | null
+          twitter_url?: string | null
+          facebook_url?: string | null
+          instagram_url?: string | null
+          address?: string | null
+          city?: string | null
+          state?: string | null
+          pincode?: string | null
+          country?: string | null
         }
         Update: {
           id?: string
@@ -513,6 +540,21 @@ export type Database = {
           status?: string
           role?: string | null
           bio?: string | null
+          designation?: string | null
+          company?: string | null
+          membership_status?: string | null
+          linkedin_url?: string | null
+          twitter_url?: string | null
+          facebook_url?: string | null
+          instagram_url?: string | null
+          address?: string | null
+          city?: string | null
+          state?: string | null
+          pincode?: string | null
+          country?: string | null
+          industry?: string | null
+          expertise?: string[] | null
+          interests?: string[] | null
         }
         Relationships: []
       }
@@ -1182,6 +1224,311 @@ export type Database = {
             columns: ["event_id"]
             isOneToOne: false
             referencedRelation: "events"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      sponsorship_deals: {
+        Row: {
+          id: string
+          created_at: string
+          updated_at: string
+          chapter_id: string
+          deal_name: string
+          sponsor_id: string
+          tier_id: string | null
+          proposed_amount: number
+          committed_amount: number | null
+          received_amount: number | null
+          deal_stage: 'prospect' | 'contacted' | 'proposal_sent' | 'negotiation' | 'committed' | 'contract_signed' | 'payment_received' | 'lost'
+          proposal_date: string | null
+          expected_closure_date: string | null
+          commitment_date: string | null
+          contract_signed_date: string | null
+          event_id: string | null
+          fiscal_year: number | null
+          probability_percentage: number | null
+          weighted_value: number | null
+          point_of_contact: string | null
+          assigned_to: string | null
+          contract_number: string | null
+          contract_terms: string | null
+          deliverables: string[] | null
+          notes: string | null
+          rejection_reason: string | null
+          created_by: string
+        }
+        Insert: {
+          id?: string
+          created_at?: string
+          updated_at?: string
+          chapter_id: string
+          deal_name: string
+          sponsor_id: string
+          tier_id?: string | null
+          proposed_amount: number
+          committed_amount?: number | null
+          received_amount?: number | null
+          deal_stage?: 'prospect' | 'contacted' | 'proposal_sent' | 'negotiation' | 'committed' | 'contract_signed' | 'payment_received' | 'lost'
+          proposal_date?: string | null
+          expected_closure_date?: string | null
+          commitment_date?: string | null
+          contract_signed_date?: string | null
+          event_id?: string | null
+          fiscal_year?: number | null
+          probability_percentage?: number | null
+          weighted_value?: number | null
+          point_of_contact?: string | null
+          assigned_to?: string | null
+          contract_number?: string | null
+          contract_terms?: string | null
+          deliverables?: string[] | null
+          notes?: string | null
+          rejection_reason?: string | null
+          created_by: string
+        }
+        Update: {
+          id?: string
+          created_at?: string
+          updated_at?: string
+          chapter_id?: string
+          deal_name?: string
+          sponsor_id?: string
+          tier_id?: string | null
+          proposed_amount?: number
+          committed_amount?: number | null
+          received_amount?: number | null
+          deal_stage?: 'prospect' | 'contacted' | 'proposal_sent' | 'negotiation' | 'committed' | 'contract_signed' | 'payment_received' | 'lost'
+          proposal_date?: string | null
+          expected_closure_date?: string | null
+          commitment_date?: string | null
+          contract_signed_date?: string | null
+          event_id?: string | null
+          fiscal_year?: number | null
+          probability_percentage?: number | null
+          weighted_value?: number | null
+          point_of_contact?: string | null
+          assigned_to?: string | null
+          contract_number?: string | null
+          contract_terms?: string | null
+          deliverables?: string[] | null
+          notes?: string | null
+          rejection_reason?: string | null
+          created_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sponsorship_deals_chapter_id_fkey"
+            columns: ["chapter_id"]
+            isOneToOne: false
+            referencedRelation: "chapters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sponsorship_deals_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      sponsors: {
+        Row: {
+          id: string
+          created_at: string
+          updated_at: string
+          chapter_id: string
+          organization_name: string
+          industry: string | null
+          website: string | null
+          contact_person_name: string | null
+          contact_person_designation: string | null
+          contact_email: string | null
+          contact_phone: string | null
+          address_line1: string | null
+          address_line2: string | null
+          city: string | null
+          state: string | null
+          pincode: string | null
+          country: string | null
+          relationship_status: string | null
+          last_contact_date: string | null
+          next_followup_date: string | null
+          tags: string[] | null
+          priority: string | null
+          notes: string | null
+          is_active: boolean
+          created_by: string
+        }
+        Insert: {
+          id?: string
+          created_at?: string
+          updated_at?: string
+          chapter_id: string
+          organization_name: string
+          industry?: string | null
+          website?: string | null
+          contact_person_name?: string | null
+          contact_person_designation?: string | null
+          contact_email?: string | null
+          contact_phone?: string | null
+          address_line1?: string | null
+          address_line2?: string | null
+          city?: string | null
+          state?: string | null
+          pincode?: string | null
+          country?: string | null
+          relationship_status?: string | null
+          last_contact_date?: string | null
+          next_followup_date?: string | null
+          tags?: string[] | null
+          priority?: string | null
+          notes?: string | null
+          is_active?: boolean
+          created_by: string
+        }
+        Update: {
+          id?: string
+          created_at?: string
+          updated_at?: string
+          chapter_id?: string
+          organization_name?: string
+          industry?: string | null
+          website?: string | null
+          contact_person_name?: string | null
+          contact_person_designation?: string | null
+          contact_email?: string | null
+          contact_phone?: string | null
+          address_line1?: string | null
+          address_line2?: string | null
+          city?: string | null
+          state?: string | null
+          pincode?: string | null
+          country?: string | null
+          relationship_status?: string | null
+          last_contact_date?: string | null
+          next_followup_date?: string | null
+          tags?: string[] | null
+          priority?: string | null
+          notes?: string | null
+          is_active?: boolean
+          created_by?: string
+        }
+        Relationships: []
+      }
+      sponsorship_tiers: {
+        Row: {
+          id: string
+          created_at: string
+          chapter_id: string
+          name: string
+          tier_name: string
+          tier_level: 'platinum' | 'gold' | 'silver' | 'bronze' | 'supporter'
+          min_amount: number
+          max_amount: number | null
+          benefits: string[] | null
+          description: string | null
+          is_active: boolean
+        }
+        Insert: {
+          id?: string
+          created_at?: string
+          chapter_id: string
+          name: string
+          tier_name?: string
+          tier_level: 'platinum' | 'gold' | 'silver' | 'bronze' | 'supporter'
+          min_amount: number
+          max_amount?: number | null
+          benefits?: string[] | null
+          description?: string | null
+          is_active?: boolean
+        }
+        Update: {
+          id?: string
+          created_at?: string
+          chapter_id?: string
+          name?: string
+          tier_name?: string
+          tier_level?: 'platinum' | 'gold' | 'silver' | 'bronze' | 'supporter'
+          min_amount?: number
+          max_amount?: number | null
+          benefits?: string[] | null
+          description?: string | null
+          is_active?: boolean
+        }
+        Relationships: []
+      }
+      expense_categories: {
+        Row: {
+          id: string
+          created_at: string
+          chapter_id: string
+          name: string
+          category_name: string
+          description: string | null
+          budget_allocation_percentage: number | null
+          is_active: boolean
+        }
+        Insert: {
+          id?: string
+          created_at?: string
+          chapter_id: string
+          name: string
+          category_name?: string
+          description?: string | null
+          budget_allocation_percentage?: number | null
+          is_active?: boolean
+        }
+        Update: {
+          id?: string
+          created_at?: string
+          chapter_id?: string
+          name?: string
+          category_name?: string
+          description?: string | null
+          budget_allocation_percentage?: number | null
+          is_active?: boolean
+        }
+        Relationships: []
+      }
+      budget_allocations: {
+        Row: {
+          id: string
+          created_at: string
+          budget_id: string
+          vertical_name: string
+          category_name: string | null
+          allocated_amount: number
+          spent_amount: number
+          description: string | null
+        }
+        Insert: {
+          id?: string
+          created_at?: string
+          budget_id: string
+          vertical_name: string
+          category_name?: string | null
+          allocated_amount: number
+          spent_amount?: number
+          description?: string | null
+        }
+        Update: {
+          id?: string
+          created_at?: string
+          budget_id?: string
+          vertical_name?: string
+          category_name?: string | null
+          allocated_amount?: number
+          spent_amount?: number
+          description?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_allocations_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "budgets"
             referencedColumns: ["id"]
           }
         ]

@@ -75,10 +75,11 @@ export const getCurrentChapterId = cache(async (): Promise<string | null> => {
   const supabase = await createServerSupabaseClient()
 
   // chapter_id is stored in the members table, not profiles
+  // Note: member.id IS the profile/user id in the members table
   const { data: member } = await supabase
     .from('members')
     .select('chapter_id')
-    .eq('profile_id', user.id)
+    .eq('id', user.id)
     .single()
 
   return member?.chapter_id || null

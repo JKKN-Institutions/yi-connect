@@ -46,6 +46,10 @@ import {
   Landmark,
   Package,
   Mic,
+  Briefcase,
+  ShoppingCart,
+  PieChart,
+  ShieldCheck,
 } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
@@ -214,6 +218,32 @@ const navigation: NavItem[] = [
         name: 'Speakers',
         href: '/stakeholders/speakers',
         icon: Mic,
+      },
+    ],
+  },
+  {
+    name: 'Industrial Visits',
+    icon: Briefcase,
+    items: [
+      {
+        name: 'Marketplace',
+        href: '/industrial-visits/marketplace',
+        icon: ShoppingCart,
+      },
+      {
+        name: 'My Bookings',
+        href: '/industrial-visits/my-bookings',
+        icon: List,
+      },
+      {
+        name: 'Admin',
+        href: '/industrial-visits/admin',
+        icon: ShieldCheck,
+      },
+      {
+        name: 'Analytics',
+        href: '/industrial-visits/analytics',
+        icon: PieChart,
       },
     ],
   },

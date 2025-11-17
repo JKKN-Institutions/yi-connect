@@ -49,8 +49,10 @@ export type FormState = {
 export async function createSchool(prevState: FormState, formData: FormData): Promise<FormState> {
   const chapterId = await getCurrentChapterId()
   if (!chapterId) {
-    return { success: false, message: 'Unauthorized' }
+    return { success: false, message: 'Unauthorized - No chapter found for user' }
   }
+
+  console.log('Creating school with chapter_id:', chapterId)
 
   // Parse and validate form data
   const rawData = Object.fromEntries(formData)
@@ -60,10 +62,10 @@ export async function createSchool(prevState: FormState, formData: FormData): Pr
     ...rawData,
     medium: formData.getAll('medium[]'),
     suitable_programs: formData.getAll('suitable_programs[]'),
-    restrictions: formData.getAll('restrictions[]'),
     has_auditorium: rawData.has_auditorium === 'true',
     has_smart_class: rawData.has_smart_class === 'true',
     has_ground: rawData.has_ground === 'true',
+    has_parking: rawData.has_parking === 'true',
     has_library: rawData.has_library === 'true',
   }
 
@@ -78,6 +80,18 @@ export async function createSchool(prevState: FormState, formData: FormData): Pr
 
   const supabase = await createClient()
 
+  // Verify user has member record before insert
+  const { data: { user } } = await supabase.auth.getUser()
+  console.log('Current user ID:', user?.id)
+
+  const { data: memberCheck } = await supabase
+    .from('members')
+    .select('id, chapter_id')
+    .eq('id', user?.id)
+    .single()
+
+  console.log('Member record:', memberCheck)
+
   const { data, error } = await supabase
     .from('schools')
     .insert({
@@ -89,9 +103,10 @@ export async function createSchool(prevState: FormState, formData: FormData): Pr
 
   if (error) {
     console.error('Error creating school:', error)
+    console.error('Attempted to insert with chapter_id:', chapterId)
     return {
       success: false,
-      message: 'Failed to create school. Please try again.',
+      message: `Failed to create school: ${error.message}`,
     }
   }
 
@@ -115,10 +130,10 @@ export async function updateSchool(
     ...rawData,
     medium: formData.getAll('medium[]'),
     suitable_programs: formData.getAll('suitable_programs[]'),
-    restrictions: formData.getAll('restrictions[]'),
     has_auditorium: rawData.has_auditorium === 'true',
     has_smart_class: rawData.has_smart_class === 'true',
     has_ground: rawData.has_ground === 'true',
+    has_parking: rawData.has_parking === 'true',
     has_library: rawData.has_library === 'true',
   }
 

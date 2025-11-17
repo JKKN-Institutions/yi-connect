@@ -156,6 +156,10 @@ export interface School {
   latitude?: number
   longitude?: number
 
+  // Contact
+  phone?: string
+  email?: string
+
   // Connection
   connection_type: ConnectionType
   connected_through_member_id?: string
@@ -171,6 +175,7 @@ export interface School {
   has_auditorium: boolean
   has_smart_class: boolean
   has_ground: boolean
+  has_parking: boolean
   has_library: boolean
 
   // Operational
@@ -222,6 +227,8 @@ export interface SchoolFormInput {
   city?: string
   state?: string
   pincode?: string
+  phone?: string
+  email?: string
   connection_type?: ConnectionType
   connected_through_member_id?: string
   total_students?: number
@@ -231,6 +238,7 @@ export interface SchoolFormInput {
   has_auditorium?: boolean
   has_smart_class?: boolean
   has_ground?: boolean
+  has_parking?: boolean
   has_library?: boolean
   best_time_to_approach?: string
   decision_maker?: string

@@ -47,12 +47,16 @@ export const getIVs = cache(async (
     const supabase = await createClient();
 
     // Base query
+    // Note: organizer_id is a FK to members.id (which IS the profile/user id)
     let query = supabase
       .from('events')
       .select(`
         *,
         industry:industries(id, company_name, industry_sector, city),
-        organizer:profiles!events_organizer_id_fkey(id, full_name, email, avatar_url)
+        organizer:members!events_organizer_id_fkey(
+          id,
+          profiles!inner(full_name, email, avatar_url)
+        )
       `, { count: 'exact' })
       .eq('chapter_id', chapterId)
       .eq('category', 'industrial_visit');
@@ -156,7 +160,10 @@ export async function getIVById(id: string): Promise<IndustrialVisitFull | null>
       .select(`
         *,
         industry:industries(*),
-        organizer:profiles!events_organizer_id_fkey(id, full_name, email, avatar_url)
+        organizer:members!events_organizer_id_fkey(
+          id,
+          profiles!inner(full_name, email, avatar_url)
+        )
       `)
       .eq('id', id)
       .eq('category', 'industrial_visit')
@@ -197,10 +204,18 @@ export async function getIVById(id: string): Promise<IndustrialVisitFull | null>
       .eq('carpool_status', 'need_ride')
       .eq('status', 'confirmed');
 
+    // Flatten the organizer structure (members -> profiles)
+    const organizer = data.organizer?.profiles ? {
+      id: data.organizer.id,
+      full_name: data.organizer.profiles.full_name,
+      email: data.organizer.profiles.email,
+      avatar_url: data.organizer.profiles.avatar_url,
+    } : data.organizer;
+
     return {
       ...data,
       industry: data.industry,
-      organizer: data.organizer,
+      organizer,
       rsvps_count: rsvpsCount || 0,
       waitlist_count: waitlistCount || 0,
       carpool_drivers_count: driversCount || 0,
@@ -382,7 +397,7 @@ export const getMyIVBookings = cache(async (): Promise<IVBookingWithMember[]> =>
         *,
         event:events!inner(
           id, title, start_date, end_date, category, status,
-          industry:industries(name, city)
+          industry:industries(company_name, city)
         )
       `)
       .eq('member_id', user.id)
@@ -421,7 +436,7 @@ export const getMyWaitlistEntries = cache(async (): Promise<IVWaitlistWithMember
         *,
         event:events!inner(
           id, title, start_date, category,
-          industry:industries(name, city)
+          industry:industries(company_name, city)
         )
       `)
       .eq('member_id', user.id)

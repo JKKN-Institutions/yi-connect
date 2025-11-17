@@ -32,7 +32,10 @@ const phoneSchema = z.string().regex(/^[0-9]{10}$/, 'Phone number must be 10 dig
 const pincodeSchema = z.string().regex(/^[0-9]{6}$/, 'Pincode must be 6 digits').optional().or(z.literal(''))
 const urlSchema = z.string().url('Invalid URL').optional().or(z.literal(''))
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format').optional().or(z.literal(''))
-const uuidSchema = z.string().uuid('Invalid UUID').optional().or(z.literal(''))
+const uuidSchema = z.preprocess(
+  (val) => val === '' || val === null || val === undefined ? null : val,
+  z.string().uuid('Invalid UUID').nullable().optional()
+)
 
 // ============================================================================
 // SCHOOL VALIDATION SCHEMAS
@@ -53,35 +56,44 @@ export const schoolFormSchema = z.object({
   state: z.string().max(100).optional(),
   pincode: pincodeSchema,
 
+  // Contact
+  phone: phoneSchema,
+  email: emailSchema,
+  website: urlSchema,
+
   // Connection
   connection_type: connectionTypeSchema.optional(),
   connected_through_member_id: uuidSchema,
+  connection_notes: z.string().max(1000).optional().or(z.literal('')),
 
   // School profile
   total_students: z.coerce.number().int().min(1).max(100000).optional(),
   grade_range: z.string().max(50).optional().or(z.literal('')),
   medium: z.array(z.string()).optional(),
+  school_category: z.string().max(100).optional().or(z.literal('')),
+  management_type: z.string().max(100).optional().or(z.literal('')),
   suitable_programs: z.array(z.string()).optional(),
 
   // Facilities (booleans)
   has_auditorium: z.boolean().optional(),
   has_smart_class: z.boolean().optional(),
   has_ground: z.boolean().optional(),
+  has_parking: z.boolean().optional(),
   has_library: z.boolean().optional(),
+  facility_notes: z.string().max(1000).optional().or(z.literal('')),
 
   // Operational
   best_time_to_approach: z.string().max(255).optional().or(z.literal('')),
   decision_maker: z.string().max(255).optional().or(z.literal('')),
   lead_time_required: z.string().max(100).optional().or(z.literal('')),
-  restrictions: z.array(z.string()).optional(),
 
   // Notes
   notes: z.string().max(2000).optional().or(z.literal('')),
 }).refine(
   (data) => {
     // If connected through member, require member ID
-    if (data.connection_type === 'through_member' && !data.connected_through_member_id) {
-      return false
+    if (data.connection_type === 'through_member') {
+      return !!data.connected_through_member_id && data.connected_through_member_id !== null
     }
     return true
   },

@@ -141,7 +141,10 @@ export const getSchoolById = cache(async (schoolId: string): Promise<SchoolDetai
     .from('schools')
     .select(`
       *,
-      connected_member:members!schools_connected_through_member_id_fkey(id, full_name)
+      connected_member:members!schools_connected_through_member_id_fkey(
+        id,
+        profiles!inner(full_name)
+      )
     `)
     .eq('id', schoolId)
     .single()
@@ -232,7 +235,7 @@ export const getCollegeById = cache(async (collegeId: string): Promise<CollegeDe
     .from('colleges')
     .select(`
       *,
-      connected_member:members!colleges_connected_through_member_id_fkey(id, full_name)
+      connected_member:members!colleges_connected_through_member_id_fkey(id, profiles!inner(full_name))
     `)
     .eq('id', collegeId)
     .single()
@@ -322,7 +325,7 @@ export const getIndustryById = cache(async (industryId: string): Promise<Industr
     .from('industries')
     .select(`
       *,
-      connected_member:members!industries_connected_through_member_id_fkey(id, full_name)
+      connected_member:members!industries_connected_through_member_id_fkey(id, profiles!inner(full_name))
     `)
     .eq('id', industryId)
     .single()
@@ -422,7 +425,7 @@ export const getGovernmentStakeholderById = cache(async (stakeholderId: string):
     .from('government_stakeholders')
     .select(`
       *,
-      connected_member:members!government_stakeholders_connected_through_member_id_fkey(id, full_name)
+      connected_member:members!government_stakeholders_connected_through_member_id_fkey(id, profiles!inner(full_name))
     `)
     .eq('id', stakeholderId)
     .single()
@@ -512,7 +515,7 @@ export const getNGOById = cache(async (ngoId: string): Promise<NGODetail | null>
     .from('ngos')
     .select(`
       *,
-      connected_member:members!ngos_connected_through_member_id_fkey(id, full_name)
+      connected_member:members!ngos_connected_through_member_id_fkey(id, profiles!inner(full_name))
     `)
     .eq('id', ngoId)
     .single()
@@ -597,7 +600,7 @@ export const getVendorById = cache(async (vendorId: string): Promise<VendorDetai
     .from('vendors')
     .select(`
       *,
-      connected_member:members!vendors_connected_through_member_id_fkey(id, full_name)
+      connected_member:members!vendors_connected_through_member_id_fkey(id, profiles!inner(full_name))
     `)
     .eq('id', vendorId)
     .single()
@@ -686,7 +689,7 @@ export const getSpeakerById = cache(async (speakerId: string): Promise<SpeakerDe
     .from('speakers')
     .select(`
       *,
-      connected_member:members!speakers_connected_through_member_id_fkey(id, full_name)
+      connected_member:members!speakers_connected_through_member_id_fkey(id, profiles!inner(full_name))
     `)
     .eq('id', speakerId)
     .single()
@@ -789,10 +792,7 @@ export const getStakeholderDocuments = cache(
 
     const { data, error } = await supabase
       .from('stakeholder_documents')
-      .select(`
-        *,
-        uploader:profiles!stakeholder_documents_uploaded_by_fkey(id, full_name)
-      `)
+      .select('*')
       .eq('stakeholder_type', stakeholderType)
       .eq('stakeholder_id', stakeholderId)
       .order('uploaded_at', { ascending: false })

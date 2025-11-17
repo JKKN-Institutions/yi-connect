@@ -8,7 +8,14 @@
       "mcp__supabase__list_tables",
       "mcp__supabase__execute_sql",
       "Bash(netstat:*)",
-      "Bash(findstr:*)"
+      "Bash(findstr:*)",
+      "Skill(frontend-design:frontend-design)",
+      "Bash(wc:*)",
+      "Bash(npm run dev:*)",
+      "mcp__sequential-thinking__sequentialthinking",
+      "Skill(nextjs16-web-development)",
+      "mcp__ide__getDiagnostics",
+      "Bash(ls:*)"
     ],
     "deny": [],
     "ask": []

@@ -602,10 +602,11 @@ export const getCurrentUserChapter = cache(async () => {
   const supabase = await createServerSupabaseClient();
 
   // Get the member record for the current user
+  // Note: member.id IS the profile/user id in the members table
   const { data: member, error: memberError } = await supabase
     .from('members')
     .select('chapter_id')
-    .eq('profile_id', user.id)
+    .eq('id', user.id)
     .single();
 
   if (memberError || !member) {
@@ -615,7 +616,7 @@ export const getCurrentUserChapter = cache(async () => {
   // Get the chapter details
   const { data: chapter, error: chapterError } = await supabase
     .from('chapters')
-    .select('id, name, city, state, country')
+    .select('id, name, location, region')
     .eq('id', member.chapter_id)
     .single();
 

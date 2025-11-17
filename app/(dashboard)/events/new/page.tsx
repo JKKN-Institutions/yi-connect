@@ -75,8 +75,10 @@ async function NewEventFormWrapper() {
     .eq('id', user.id)
     .single();
 
-  // Only allow event coordinators and above to create events
-  if (userHierarchyLevel > 4) {
+  // Only allow EC Members and above to create events (hierarchy level >= 2)
+  // Lower numbers = lower hierarchy, higher numbers = higher hierarchy
+  // Super Admins (7), National Admins (6), and Executive Members (5) should have full access
+  if (userHierarchyLevel < 2) {
     redirect('/events');
   }
 

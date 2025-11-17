@@ -19,6 +19,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { getNGOs } from '@/lib/data/stakeholder'
 import { NGOsTable } from '@/components/stakeholders/ngos-table'
+import { getCurrentChapterId } from '@/lib/auth'
 
 export const metadata = {
   title: 'NGOs',
@@ -26,7 +27,9 @@ export const metadata = {
 }
 
 async function NGOsStats() {
-  const ngos = await getNGOs()
+  // Super admins without chapter_id will see aggregated stats from all chapters
+  const chapterId = await getCurrentChapterId()
+  const ngos = await getNGOs(chapterId)
 
   const totalNGOs = ngos.length
   const activeNGOs = ngos.filter((n) => n.status === 'active').length
@@ -84,7 +87,9 @@ async function NGOsStats() {
 }
 
 async function NGOsTableWrapper() {
-  const ngos = await getNGOs()
+  // Super admins without chapter_id will see aggregated data from all chapters
+  const chapterId = await getCurrentChapterId()
+  const ngos = await getNGOs(chapterId)
 
   return <NGOsTable data={ngos} />
 }

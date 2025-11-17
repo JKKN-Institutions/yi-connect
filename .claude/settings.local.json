@@ -15,7 +15,9 @@
       "mcp__sequential-thinking__sequentialthinking",
       "Skill(nextjs16-web-development)",
       "mcp__ide__getDiagnostics",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(npx tsc:*)",
+      "Bash(find:*)"
     ],
     "deny": [],
     "ask": []

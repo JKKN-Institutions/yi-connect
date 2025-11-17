@@ -16,6 +16,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { getSpeakers } from '@/lib/data/stakeholder'
 import { SpeakersTable } from '@/components/stakeholders/speakers-table'
+import { getCurrentChapterId } from '@/lib/auth'
 
 export const metadata = {
   title: 'Speakers',
@@ -23,7 +24,9 @@ export const metadata = {
 }
 
 async function SpeakersStats() {
-  const speakers = await getSpeakers()
+  // Super admins without chapter_id will see aggregated stats from all chapters
+  const chapterId = await getCurrentChapterId()
+  const speakers = await getSpeakers(chapterId)
   const totalSpeakers = speakers.length
   const activeSpeakers = speakers.filter((s) => s.status === 'active').length
   const availableSpeakers = speakers.filter((s) => s.availability_status === 'available').length
@@ -58,7 +61,9 @@ async function SpeakersStats() {
 }
 
 async function SpeakersTableWrapper() {
-  const speakers = await getSpeakers()
+  // Super admins without chapter_id will see aggregated data from all chapters
+  const chapterId = await getCurrentChapterId()
+  const speakers = await getSpeakers(chapterId)
   return <SpeakersTable data={speakers} />
 }
 

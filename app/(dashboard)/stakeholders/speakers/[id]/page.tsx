@@ -67,13 +67,6 @@ async function SpeakerInformation({ speakerId }: { speakerId: string }) {
         <CardTitle>Speaker Information</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {speaker.bio && (
-          <div>
-            <p className="text-sm font-medium text-muted-foreground mb-2">Biography</p>
-            <p className="text-sm">{speaker.bio}</p>
-          </div>
-        )}
-
         {speaker.expertise_areas && speaker.expertise_areas.length > 0 && (
           <div>
             <p className="text-sm font-medium text-muted-foreground mb-2">Expertise Areas</p>
@@ -128,42 +121,7 @@ async function SpeakerInformation({ speakerId }: { speakerId: string }) {
               </Badge>
             </div>
           </div>
-
-          {speaker.website && (
-            <div>
-              <p className="text-sm font-medium text-muted-foreground">Website</p>
-              <a
-                href={speaker.website}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-sm text-primary hover:underline mt-1 block"
-              >
-                {speaker.website}
-              </a>
-            </div>
-          )}
-
-          {speaker.linkedin_profile && (
-            <div>
-              <p className="text-sm font-medium text-muted-foreground">LinkedIn</p>
-              <a
-                href={speaker.linkedin_profile}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-sm text-primary hover:underline mt-1 block"
-              >
-                View Profile
-              </a>
-            </div>
-          )}
         </div>
-
-        {speaker.past_engagements && (
-          <div>
-            <p className="text-sm font-medium text-muted-foreground mb-2">Past Engagements</p>
-            <p className="text-sm whitespace-pre-line">{speaker.past_engagements}</p>
-          </div>
-        )}
 
         {speaker.notes && (
           <div>

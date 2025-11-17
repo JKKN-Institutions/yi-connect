@@ -17,6 +17,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { getCurrentChapterId } from '@/lib/auth'
 import { getColleges } from '@/lib/data/stakeholder'
 import { CollegesTable } from '@/components/stakeholders/colleges-table'
 
@@ -26,7 +27,10 @@ export const metadata = {
 }
 
 async function CollegesStats() {
-  const colleges = await getColleges()
+  const chapterId = await getCurrentChapterId()
+
+  // Super admins without chapter_id will see aggregated stats from all chapters
+  const colleges = await getColleges(chapterId)
 
   const totalColleges = colleges.length
   const activeColleges = colleges.filter((c) => c.status === 'active').length
@@ -84,7 +88,10 @@ async function CollegesStats() {
 }
 
 async function CollegesTableWrapper() {
-  const colleges = await getColleges()
+  const chapterId = await getCurrentChapterId()
+
+  // Super admins without chapter_id will see all colleges
+  const colleges = await getColleges(chapterId)
 
   return <CollegesTable data={colleges} />
 }

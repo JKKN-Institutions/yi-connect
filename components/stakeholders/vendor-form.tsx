@@ -35,11 +35,10 @@ import {
 import { Checkbox } from '@/components/ui/checkbox'
 import { Separator } from '@/components/ui/separator'
 import { createVendor } from '@/app/actions/stakeholder'
-import { vendorFormSchema } from '@/lib/validations/stakeholder'
-import type { VendorFormInput } from '@/types/stakeholder'
+import { vendorFormSchema, type VendorFormInput } from '@/lib/validations/stakeholder'
 
 interface VendorFormProps {
-  chapterId: string
+  chapterId: string | null; // Allow null for super admins
   initialData?: Partial<VendorFormInput>
   mode?: 'create' | 'edit'
 }
@@ -50,8 +49,8 @@ export function VendorForm({ chapterId, initialData, mode = 'create' }: VendorFo
   const [service, setService] = useState('')
   const [location, setLocation] = useState('')
 
-  const form = useForm<VendorFormInput>({
-    resolver: zodResolver(vendorFormSchema),
+  const form = useForm({
+    resolver: zodResolver(vendorFormSchema) as any,
     defaultValues: initialData || {
       vendor_name: '',
       vendor_category: 'catering',
@@ -67,11 +66,11 @@ export function VendorForm({ chapterId, initialData, mode = 'create' }: VendorFo
     },
   })
 
-  const onSubmit = async (data: VendorFormInput) => {
+  const onSubmit = async (data: any) => {
     startTransition(async () => {
       try {
         const formData = new FormData()
-        formData.append('chapter_id', chapterId)
+        formData.append('chapter_id', chapterId || '')
         formData.append('vendor_name', data.vendor_name)
         formData.append('vendor_category', data.vendor_category)
         if (data.status) formData.append('status', data.status)
@@ -104,14 +103,14 @@ export function VendorForm({ chapterId, initialData, mode = 'create' }: VendorFo
         formData.append('has_service_agreement', String(data.has_service_agreement || false))
         if (data.notes) formData.append('notes', data.notes)
 
-        const result = await createVendor(formData)
+        const result = await createVendor({ message: '', success: false }, formData)
 
         if (result.success) {
           toast.success('Vendor created successfully')
           router.push('/stakeholders/vendors')
           router.refresh()
         } else {
-          toast.error(result.error || 'Failed to create vendor')
+          toast.error(result.message || 'Failed to create vendor')
         }
       } catch (error) {
         toast.error('An unexpected error occurred')

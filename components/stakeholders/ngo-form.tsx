@@ -35,11 +35,10 @@ import {
 import { Checkbox } from '@/components/ui/checkbox'
 import { Separator } from '@/components/ui/separator'
 import { createNGO } from '@/app/actions/stakeholder'
-import { ngoFormSchema } from '@/lib/validations/stakeholder'
-import type { NGOFormInput } from '@/types/stakeholder'
+import { ngoFormSchema, type NGOFormInput } from '@/lib/validations/stakeholder'
 
 interface NGOFormProps {
-  chapterId: string
+  chapterId: string | null; // Allow null for super admins
   initialData?: Partial<NGOFormInput>
   mode?: 'create' | 'edit'
 }
@@ -53,8 +52,8 @@ export function NGOForm({ chapterId, initialData, mode = 'create' }: NGOFormProp
   const [resourceProvide, setResourceProvide] = useState('')
   const [resourceNeed, setResourceNeed] = useState('')
 
-  const form = useForm<NGOFormInput>({
-    resolver: zodResolver(ngoFormSchema),
+  const form = useForm({
+    resolver: zodResolver(ngoFormSchema) as any,
     defaultValues: initialData || {
       ngo_name: '',
       status: 'prospective',
@@ -70,13 +69,13 @@ export function NGOForm({ chapterId, initialData, mode = 'create' }: NGOFormProp
     },
   })
 
-  const onSubmit = async (data: NGOFormInput) => {
+  const onSubmit = async (data: any) => {
     startTransition(async () => {
       try {
         const formData = new FormData()
 
         // Basic Information
-        formData.append('chapter_id', chapterId)
+        formData.append('chapter_id', chapterId || '')
         formData.append('ngo_name', data.ngo_name)
         if (data.registration_number)
           formData.append('registration_number', data.registration_number)
@@ -134,14 +133,18 @@ export function NGOForm({ chapterId, initialData, mode = 'create' }: NGOFormProp
         // Additional
         if (data.notes) formData.append('notes', data.notes)
 
-        const result = await createNGO(formData)
+        const result = await createNGO({ message: '', success: false }, formData)
 
         if (result.success) {
           toast.success('NGO created successfully')
           router.push('/stakeholders/ngos')
           router.refresh()
         } else {
-          toast.error(result.error || 'Failed to create NGO')
+          toast.error(
+            result.errors?.ngo_name?.[0] ||
+              result.errors?.status?.[0] ||
+              'Failed to create NGO'
+          )
         }
       } catch (error) {
         toast.error('An unexpected error occurred')

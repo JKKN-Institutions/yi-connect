@@ -7,6 +7,21 @@
 
 import { Database } from './database'
 
+// Import Zod-inferred form input types from validation schemas
+import type {
+  SchoolFormInput as SchoolFormInputValidation,
+  CollegeFormInput as CollegeFormInputValidation,
+  IndustryFormInput as IndustryFormInputValidation,
+  GovernmentStakeholderFormInput as GovernmentStakeholderFormInputValidation,
+  NGOFormInput as NGOFormInputValidation,
+  VendorFormInput as VendorFormInputValidation,
+  SpeakerFormInput as SpeakerFormInputValidation,
+  ContactFormInput as ContactFormInputValidation,
+  InteractionFormInput as InteractionFormInputValidation,
+  MouFormInput as MouFormInputValidation,
+  DocumentFormInput as DocumentFormInputValidation,
+} from '@/lib/validations/stakeholder'
+
 // ============================================================================
 // ENUM TYPES (matching database ENUMs)
 // ============================================================================
@@ -218,34 +233,8 @@ export interface SchoolDetail extends School {
   health_score?: RelationshipHealthScore
 }
 
-export interface SchoolFormInput {
-  school_name: string
-  school_type: SchoolType
-  status?: StakeholderStatus
-  address_line1?: string
-  address_line2?: string
-  city?: string
-  state?: string
-  pincode?: string
-  phone?: string
-  email?: string
-  connection_type?: ConnectionType
-  connected_through_member_id?: string
-  total_students?: number
-  grade_range?: string
-  medium?: string[]
-  suitable_programs?: string[]
-  has_auditorium?: boolean
-  has_smart_class?: boolean
-  has_ground?: boolean
-  has_parking?: boolean
-  has_library?: boolean
-  best_time_to_approach?: string
-  decision_maker?: string
-  lead_time_required?: string
-  restrictions?: string[]
-  notes?: string
-}
+// Re-export Zod-inferred type for form inputs
+export type SchoolFormInput = SchoolFormInputValidation
 
 // ============================================================================
 // COLLEGE TYPES
@@ -331,34 +320,8 @@ export interface CollegeDetail extends College {
   health_score?: RelationshipHealthScore
 }
 
-export interface CollegeFormInput {
-  college_name: string
-  college_type: CollegeType
-  status?: StakeholderStatus
-  address_line1?: string
-  address_line2?: string
-  city?: string
-  state?: string
-  pincode?: string
-  connection_type?: ConnectionType
-  connected_through_member_id?: string
-  total_students?: number
-  total_staff?: number
-  departments?: string[]
-  accreditation?: string[]
-  university_affiliation?: string
-  has_yuva_chapter?: boolean
-  yuva_chapter_strength?: number
-  yuva_chapter_status?: string
-  yuva_president_name?: string
-  yuva_president_contact?: string
-  suitable_activities?: string[]
-  available_resources?: string[]
-  decision_maker?: string
-  decision_making_process?: string
-  lead_time_required?: string
-  notes?: string
-}
+// Re-export Zod-inferred type for form inputs
+export type CollegeFormInput = CollegeFormInputValidation
 
 // ============================================================================
 // INDUSTRY TYPES
@@ -442,34 +405,8 @@ export interface IndustryDetail extends Industry {
   health_score?: RelationshipHealthScore
 }
 
-export interface IndustryFormInput {
-  organization_name: string
-  industry_sector: IndustrySector
-  status?: StakeholderStatus
-  address_line1?: string
-  address_line2?: string
-  city?: string
-  state?: string
-  pincode?: string
-  website?: string
-  connection_type?: ConnectionType
-  connected_through_member_id?: string
-  organization_size?: string
-  employee_count?: number
-  annual_turnover?: string
-  has_csr_program?: boolean
-  csr_budget_range?: string
-  csr_focus_areas?: string[]
-  sponsorship_potential?: string
-  collaboration_interests?: string[]
-  available_resources?: string[]
-  can_provide_internships?: boolean
-  can_provide_mentorship?: boolean
-  decision_maker?: string
-  procurement_process?: string
-  lead_time_required?: string
-  notes?: string
-}
+// Re-export Zod-inferred type for form inputs
+export type IndustryFormInput = IndustryFormInputValidation
 
 // ============================================================================
 // GOVERNMENT STAKEHOLDER TYPES
@@ -554,34 +491,8 @@ export interface GovernmentStakeholderDetail extends GovernmentStakeholder {
   health_score?: RelationshipHealthScore
 }
 
-export interface GovernmentStakeholderFormInput {
-  official_name: string
-  department: string
-  designation: string
-  status?: StakeholderStatus
-  office_address?: string
-  city?: string
-  state?: string
-  email?: string
-  phone?: string
-  connection_type?: ConnectionType
-  connected_through_member_id?: string
-  jurisdiction?: string
-  key_responsibilities?: string[]
-  decision_making_authority?: string[]
-  appointment_date?: string
-  tenure_end_date?: string
-  is_elected?: boolean
-  term_duration?: string
-  areas_of_support?: string[]
-  can_provide_permissions?: boolean
-  can_provide_funding?: boolean
-  can_provide_venue?: boolean
-  best_time_to_meet?: string
-  protocol_requirements?: string[]
-  lead_time_required?: string
-  notes?: string
-}
+// Re-export Zod-inferred type for form inputs
+export type GovernmentStakeholderFormInput = GovernmentStakeholderFormInputValidation
 
 // ============================================================================
 // NGO TYPES
@@ -669,34 +580,8 @@ export interface NGODetail extends NGO {
   health_score?: RelationshipHealthScore
 }
 
-export interface NGOFormInput {
-  ngo_name: string
-  registration_number?: string
-  status?: StakeholderStatus
-  address_line1?: string
-  address_line2?: string
-  city?: string
-  state?: string
-  pincode?: string
-  website?: string
-  connection_type?: ConnectionType
-  connected_through_member_id?: string
-  focus_areas?: string[]
-  target_beneficiaries?: string[]
-  geographic_reach?: string
-  team_size?: number
-  is_registered?: boolean
-  registration_type?: string
-  tax_exemption_status?: string
-  partnership_type?: PartnershipType[]
-  collaboration_areas?: string[]
-  resources_they_can_provide?: string[]
-  resources_they_need?: string[]
-  decision_maker?: string
-  decision_making_process?: string
-  lead_time_required?: string
-  notes?: string
-}
+// Re-export Zod-inferred type for form inputs
+export type NGOFormInput = NGOFormInputValidation
 
 // ============================================================================
 // VENDOR TYPES
@@ -795,38 +680,8 @@ export interface VendorDetail extends Vendor {
   health_score?: RelationshipHealthScore
 }
 
-export interface VendorFormInput {
-  vendor_name: string
-  vendor_category: VendorCategory
-  status?: StakeholderStatus
-  contact_person?: string
-  email?: string
-  phone_primary?: string
-  phone_secondary?: string
-  address_line1?: string
-  city?: string
-  state?: string
-  pincode?: string
-  connection_type?: ConnectionType
-  connected_through_member_id?: string
-  services_offered?: string[]
-  capacity?: string
-  quality_rating?: number
-  pricing_model?: string
-  pricing_details?: any
-  accepts_negotiation?: boolean
-  payment_terms?: string
-  advance_percentage?: number
-  cancellation_policy?: string
-  performance_rating?: number
-  lead_time_required?: string
-  minimum_order_value?: number
-  serves_locations?: string[]
-  has_gst_certificate?: boolean
-  gst_number?: string
-  has_service_agreement?: boolean
-  notes?: string
-}
+// Re-export Zod-inferred type for form inputs
+export type VendorFormInput = VendorFormInputValidation
 
 // ============================================================================
 // SPEAKER TYPES
@@ -922,38 +777,8 @@ export interface SpeakerDetail extends Speaker {
   health_score?: RelationshipHealthScore
 }
 
-export interface SpeakerFormInput {
-  speaker_name: string
-  professional_title?: string
-  status?: StakeholderStatus
-  email?: string
-  phone?: string
-  city?: string
-  state?: string
-  connection_type?: ConnectionType
-  connected_through_member_id?: string
-  expertise_areas?: string[]
-  suitable_topics?: string[]
-  target_audience?: string[]
-  session_formats?: string[]
-  years_of_experience?: number
-  organizations_associated?: string[]
-  notable_achievements?: string[]
-  typical_session_duration?: string
-  max_audience_size?: number
-  requires_av_equipment?: string[]
-  language_proficiency?: string[]
-  charges_fee?: boolean
-  fee_range?: string
-  travel_charges?: string
-  accommodation_required?: boolean
-  availability_status?: string
-  preferred_days?: string[]
-  preferred_time_slots?: string[]
-  lead_time_required?: string
-  special_requirements?: string[]
-  notes?: string
-}
+// Re-export Zod-inferred type for form inputs
+export type SpeakerFormInput = SpeakerFormInputValidation
 
 // ============================================================================
 // UNIFIED STAKEHOLDER TYPES
@@ -980,60 +805,11 @@ export interface UnifiedStakeholderSearchResult {
 // INTERACTION & ENGAGEMENT TYPES
 // ============================================================================
 
-export interface InteractionFormInput {
-  stakeholder_type: string
-  stakeholder_id: string
-  interaction_type: InteractionType
-  interaction_date: string
-  outcome: InteractionOutcome
-  summary: string
-  next_steps?: string
-  requires_follow_up?: boolean
-  follow_up_date?: string
-  follow_up_assigned_to?: string
-  attended_by_members?: string[]
-  tags?: string[]
-}
-
-export interface ContactFormInput {
-  stakeholder_type: string
-  stakeholder_id: string
-  contact_name: string
-  designation?: string
-  email?: string
-  phone_primary?: string
-  phone_secondary?: string
-  is_primary_contact?: boolean
-  is_decision_maker?: boolean
-  preferred_contact_method?: string
-  notes?: string
-}
-
-export interface MouFormInput {
-  stakeholder_type: string
-  stakeholder_id: string
-  mou_title: string
-  mou_status: MouStatus
-  signed_date?: string
-  valid_from?: string
-  valid_to?: string
-  renewal_date?: string
-  scope_of_collaboration?: string
-  key_deliverables?: string[]
-  compliance_requirements?: string[]
-  document_url?: string
-}
-
-export interface DocumentFormInput {
-  stakeholder_type: string
-  stakeholder_id: string
-  document_type: string
-  document_name: string
-  description?: string
-  file_url: string
-  file_size?: number
-  tags?: string[]
-}
+// Re-export Zod-inferred types for shared operations
+export type InteractionFormInput = InteractionFormInputValidation
+export type ContactFormInput = ContactFormInputValidation
+export type MouFormInput = MouFormInputValidation
+export type DocumentFormInput = DocumentFormInputValidation
 
 // ============================================================================
 // DASHBOARD & ANALYTICS TYPES

@@ -19,6 +19,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { getIndustries } from '@/lib/data/stakeholder'
 import { IndustriesTable } from '@/components/stakeholders/industries-table'
+import { getCurrentChapterId } from '@/lib/auth'
 
 export const metadata = {
   title: 'Industries',
@@ -26,7 +27,9 @@ export const metadata = {
 }
 
 async function IndustriesStats() {
-  const industries = await getIndustries()
+  // Super admins without chapter_id will see aggregated stats from all chapters
+  const chapterId = await getCurrentChapterId()
+  const industries = await getIndustries(chapterId)
 
   const totalIndustries = industries.length
   const activeIndustries = industries.filter((i) => i.status === 'active').length
@@ -84,7 +87,9 @@ async function IndustriesStats() {
 }
 
 async function IndustriesTableWrapper() {
-  const industries = await getIndustries()
+  // Super admins without chapter_id will see aggregated data from all chapters
+  const chapterId = await getCurrentChapterId()
+  const industries = await getIndustries(chapterId)
 
   return <IndustriesTable data={industries} />
 }

@@ -32,10 +32,7 @@ const phoneSchema = z.string().regex(/^[0-9]{10}$/, 'Phone number must be 10 dig
 const pincodeSchema = z.string().regex(/^[0-9]{6}$/, 'Pincode must be 6 digits').optional().or(z.literal(''))
 const urlSchema = z.string().url('Invalid URL').optional().or(z.literal(''))
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format').optional().or(z.literal(''))
-const uuidSchema = z.preprocess(
-  (val) => val === '' || val === null || val === undefined ? null : val,
-  z.string().uuid('Invalid UUID').nullable().optional()
-)
+const uuidSchema = z.string().uuid('Invalid UUID').optional().or(z.literal(''))
 
 // ============================================================================
 // SCHOOL VALIDATION SCHEMAS

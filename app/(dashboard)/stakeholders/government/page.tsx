@@ -17,6 +17,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { getCurrentChapterId } from '@/lib/auth'
 import { getGovernmentStakeholders } from '@/lib/data/stakeholder'
 import { GovernmentStakeholdersTable } from '@/components/stakeholders/government-stakeholders-table'
 
@@ -26,7 +27,10 @@ export const metadata = {
 }
 
 async function GovernmentStats() {
-  const stakeholders = await getGovernmentStakeholders()
+  const chapterId = await getCurrentChapterId()
+
+  // Super admins without chapter_id will see aggregated stats from all chapters
+  const stakeholders = await getGovernmentStakeholders(chapterId)
 
   const totalStakeholders = stakeholders.length
   const activeStakeholders = stakeholders.filter((s) => s.status === 'active').length
@@ -84,7 +88,10 @@ async function GovernmentStats() {
 }
 
 async function GovernmentTableWrapper() {
-  const stakeholders = await getGovernmentStakeholders()
+  const chapterId = await getCurrentChapterId()
+
+  // Super admins without chapter_id will see all government stakeholders
+  const stakeholders = await getGovernmentStakeholders(chapterId)
 
   return <GovernmentStakeholdersTable data={stakeholders} />
 }

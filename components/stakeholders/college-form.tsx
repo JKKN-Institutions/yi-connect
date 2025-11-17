@@ -195,7 +195,7 @@ export function CollegeForm({ chapterId }: CollegeFormProps) {
       // Add boolean fields
       formData.append('has_yuva_chapter', String(values.has_yuva_chapter));
 
-      const result = await createCollege({}, formData);
+      const result = await createCollege({ message: '', success: false }, formData);
 
       if (result.success) {
         toast.success('College created successfully');

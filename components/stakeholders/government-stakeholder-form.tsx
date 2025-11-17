@@ -39,7 +39,7 @@ import { governmentStakeholderFormSchema } from '@/lib/validations/stakeholder'
 import type { GovernmentStakeholderFormInput } from '@/types/stakeholder'
 
 interface GovernmentStakeholderFormProps {
-  chapterId: string
+  chapterId: string | null; // Allow null for super admins
   initialData?: Partial<GovernmentStakeholderFormInput>
   mode?: 'create' | 'edit'
 }
@@ -56,8 +56,8 @@ export function GovernmentStakeholderForm({
   const [areaOfSupport, setAreaOfSupport] = useState('')
   const [protocolRequirement, setProtocolRequirement] = useState('')
 
-  const form = useForm<GovernmentStakeholderFormInput>({
-    resolver: zodResolver(governmentStakeholderFormSchema),
+  const form = useForm({
+    resolver: zodResolver(governmentStakeholderFormSchema) as any,
     defaultValues: initialData || {
       official_name: '',
       department: '',
@@ -77,13 +77,13 @@ export function GovernmentStakeholderForm({
     },
   })
 
-  const onSubmit = async (data: GovernmentStakeholderFormInput) => {
+  const onSubmit = async (data: any) => {
     startTransition(async () => {
       try {
         const formData = new FormData()
 
         // Basic Information
-        formData.append('chapter_id', chapterId)
+        formData.append('chapter_id', chapterId || '')
         formData.append('official_name', data.official_name)
         formData.append('department', data.department)
         formData.append('designation', data.designation)
@@ -134,14 +134,14 @@ export function GovernmentStakeholderForm({
         // Additional
         if (data.notes) formData.append('notes', data.notes)
 
-        const result = await createGovernmentStakeholder(formData)
+        const result = await createGovernmentStakeholder({ message: '', success: false }, formData)
 
         if (result.success) {
           toast.success('Government stakeholder created successfully')
           router.push('/stakeholders/government')
           router.refresh()
         } else {
-          toast.error(result.error || 'Failed to create government stakeholder')
+          toast.error(result.errors?.official_name?.[0] || result.errors?.department?.[0] || result.errors?.designation?.[0] || 'Failed to create government stakeholder')
         }
       } catch (error) {
         toast.error('An unexpected error occurred')

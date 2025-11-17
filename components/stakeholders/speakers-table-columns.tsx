@@ -11,7 +11,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import { DataTableColumnHeader } from '@/components/data-table/data-table-column-header'
 import { StakeholderStatusBadge, HealthTierBadge } from './status-badges'
-import type { SpeakerListItem } from '@/types/stakeholder'
+import type { SpeakerListItem, StakeholderStatus, HealthTier } from '@/types/stakeholder'
 
 export const speakersColumns: ColumnDef<SpeakerListItem>[] = [
   {
@@ -168,7 +168,7 @@ export const speakersColumns: ColumnDef<SpeakerListItem>[] = [
     accessorKey: 'status',
     header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
     cell: ({ row }) => {
-      const status = row.getValue('status') as string
+      const status = row.getValue('status') as StakeholderStatus
       return <StakeholderStatusBadge status={status} />
     },
     filterFn: (row, id, value) => {
@@ -179,7 +179,7 @@ export const speakersColumns: ColumnDef<SpeakerListItem>[] = [
     accessorKey: 'health_tier',
     header: ({ column }) => <DataTableColumnHeader column={column} title="Health" />,
     cell: ({ row }) => {
-      const tier = row.getValue('health_tier') as string | null
+      const tier = row.getValue('health_tier') as HealthTier | null
       if (!tier) return <span className="text-muted-foreground">-</span>
       return <HealthTierBadge tier={tier} />
     },

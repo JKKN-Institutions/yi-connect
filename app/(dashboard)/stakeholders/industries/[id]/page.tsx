@@ -103,7 +103,7 @@ async function IndustryHeader({ industryId }: { industryId: string }) {
     },
     {
       label: 'Health Score',
-      value: industry.relationship_health_score?.current_score?.toFixed(0) || 'N/A',
+      value: industry.health_score?.overall_score?.toFixed(0) || 'N/A',
       icon: TrendingUp,
     },
   ]
@@ -123,8 +123,8 @@ async function IndustryHeader({ industryId }: { industryId: string }) {
                 {industry.organization_name}
               </h1>
               <StakeholderStatusBadge status={industry.status} />
-              {industry.relationship_health_score && (
-                <HealthTierBadge tier={industry.relationship_health_score.health_tier} />
+              {industry.health_score && (
+                <HealthTierBadge tier={industry.health_score.health_tier} />
               )}
             </div>
             <div className="flex items-center gap-4 mt-2 text-muted-foreground">
@@ -480,7 +480,7 @@ async function InteractionHistory({ industryId }: { industryId: string }) {
                 <TableRow>
                   <TableHead>Date</TableHead>
                   <TableHead>Type</TableHead>
-                  <TableHead>Purpose</TableHead>
+                  <TableHead>Summary</TableHead>
                   <TableHead>Outcome</TableHead>
                 </TableRow>
               </TableHeader>
@@ -496,7 +496,7 @@ async function InteractionHistory({ industryId }: { industryId: string }) {
                     <TableCell className="capitalize">
                       {interaction.interaction_type.replace('_', ' ')}
                     </TableCell>
-                    <TableCell>{interaction.purpose || '-'}</TableCell>
+                    <TableCell>{interaction.summary || '-'}</TableCell>
                     <TableCell>
                       <Badge
                         variant={
@@ -548,36 +548,30 @@ async function MousList({ industryId }: { industryId: string }) {
               >
                 <div className="flex items-start justify-between">
                   <div className="space-y-1">
-                    <h4 className="font-medium">{mou.title}</h4>
-                    {mou.purpose && (
-                      <p className="text-sm text-muted-foreground">{mou.purpose}</p>
+                    <h4 className="font-medium">{mou.mou_title}</h4>
+                    {mou.scope_of_collaboration && (
+                      <p className="text-sm text-muted-foreground">{mou.scope_of_collaboration}</p>
                     )}
                   </div>
-                  <MouStatusBadge status={mou.status} />
+                  <MouStatusBadge status={mou.mou_status} />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
                     <p className="text-muted-foreground">Start Date</p>
                     <p className="font-medium">
-                      {new Date(mou.start_date).toLocaleDateString()}
+                      {mou.valid_from ? new Date(mou.valid_from).toLocaleDateString() : 'N/A'}
                     </p>
                   </div>
-                  {mou.end_date && (
+                  {mou.valid_to && (
                     <div>
                       <p className="text-muted-foreground">End Date</p>
                       <p className="font-medium">
-                        {new Date(mou.end_date).toLocaleDateString()}
+                        {new Date(mou.valid_to).toLocaleDateString()}
                       </p>
                     </div>
                   )}
                 </div>
-
-                {mou.notes && (
-                  <p className="text-sm text-muted-foreground border-t pt-3">
-                    {mou.notes}
-                  </p>
-                )}
               </div>
             ))}
           </div>
@@ -611,7 +605,7 @@ async function ContactsSidebar({ industryId }: { industryId: string }) {
               >
                 <Avatar className="h-10 w-10">
                   <AvatarFallback>
-                    {contact.name
+                    {contact.contact_name
                       .split(' ')
                       .map((n) => n[0])
                       .join('')
@@ -620,8 +614,8 @@ async function ContactsSidebar({ industryId }: { industryId: string }) {
                 </Avatar>
                 <div className="flex-1 space-y-1">
                   <div className="flex items-center justify-between">
-                    <h4 className="font-medium text-sm">{contact.name}</h4>
-                    {contact.is_primary && (
+                    <h4 className="font-medium text-sm">{contact.contact_name}</h4>
+                    {contact.is_primary_contact && (
                       <Badge variant="secondary" className="text-xs">
                         Primary
                       </Badge>
@@ -635,10 +629,10 @@ async function ContactsSidebar({ industryId }: { industryId: string }) {
                         <span className="truncate">{contact.email}</span>
                       </div>
                     )}
-                    {contact.phone && (
+                    {contact.phone_primary && (
                       <div className="flex items-center gap-2 text-xs">
                         <Phone className="h-3 w-3 text-muted-foreground" />
-                        <span>{contact.phone}</span>
+                        <span>{contact.phone_primary}</span>
                       </div>
                     )}
                   </div>

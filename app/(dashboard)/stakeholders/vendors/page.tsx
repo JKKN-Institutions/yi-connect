@@ -16,6 +16,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { getVendors } from '@/lib/data/stakeholder'
 import { VendorsTable } from '@/components/stakeholders/vendors-table'
+import { getCurrentChapterId } from '@/lib/auth'
 
 export const metadata = {
   title: 'Vendors',
@@ -23,7 +24,9 @@ export const metadata = {
 }
 
 async function VendorsStats() {
-  const vendors = await getVendors()
+  // Super admins without chapter_id will see aggregated stats from all chapters
+  const chapterId = await getCurrentChapterId()
+  const vendors = await getVendors(chapterId)
   const totalVendors = vendors.length
   const activeVendors = vendors.filter((v) => v.status === 'active').length
   const avgRating = vendors.reduce((sum, v) => sum + (v.quality_rating || 0), 0) / (vendors.filter((v) => v.quality_rating).length || 1)
@@ -58,7 +61,9 @@ async function VendorsStats() {
 }
 
 async function VendorsTableWrapper() {
-  const vendors = await getVendors()
+  // Super admins without chapter_id will see aggregated data from all chapters
+  const chapterId = await getCurrentChapterId()
+  const vendors = await getVendors(chapterId)
   return <VendorsTable data={vendors} />
 }
 

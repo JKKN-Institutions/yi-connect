@@ -1,0 +1,1348 @@
+// ============================================================================
+// Module 7: Communication Hub - Server Actions
+// ============================================================================
+// Description: Server Actions for all Communication Hub CRUD operations
+//              using Next.js 16 Server Actions with Zod validation
+// Version: 1.0
+// Created: 2025-11-17
+// ============================================================================
+
+'use server';
+
+import { revalidateTag } from 'next/cache';
+import { redirect } from 'next/navigation';
+import { createClient } from '@/lib/supabase/server';
+import { getCurrentUser, getCurrentChapterId } from '@/lib/auth';
+import {
+  createAnnouncementSchema,
+  updateAnnouncementSchema,
+  sendAnnouncementSchema,
+  scheduleAnnouncementSchema,
+  cancelAnnouncementSchema,
+  deleteAnnouncementSchema,
+  duplicateAnnouncementSchema,
+  createTemplateSchema,
+  updateTemplateSchema,
+  deleteTemplateSchema,
+  duplicateTemplateSchema,
+  createNotificationSchema,
+  markNotificationReadSchema,
+  markAllNotificationsReadSchema,
+  deleteNotificationSchema,
+  createNewsletterSchema,
+  updateNewsletterSchema,
+  publishNewsletterSchema,
+  deleteNewsletterSchema,
+  createSegmentSchema,
+  updateSegmentSchema,
+  deleteSegmentSchema,
+  calculateSegmentSizeSchema,
+  createAutomationRuleSchema,
+  updateAutomationRuleSchema,
+  toggleAutomationRuleSchema,
+  deleteAutomationRuleSchema,
+  runAutomationRuleSchema,
+} from '@/lib/validations/communication';
+
+// ============================================================================
+// TYPES FOR SERVER ACTION RESPONSES
+// ============================================================================
+
+type ActionResponse<T = any> = {
+  success: boolean;
+  message: string;
+  data?: T;
+  error?: string;
+};
+
+// ============================================================================
+// ANNOUNCEMENT ACTIONS
+// ============================================================================
+
+/**
+ * Create a new announcement
+ */
+export async function createAnnouncement(
+  formData: unknown
+): Promise<ActionResponse<{ id: string }>> {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, message: 'Unauthorized', error: 'Please log in' };
+    }
+
+    const chapterId = await getCurrentChapterId();
+    if (!chapterId) {
+      return { success: false, message: 'Chapter not found', error: 'No chapter associated with user' };
+    }
+
+    // Validate input
+    const validation = createAnnouncementSchema.safeParse(formData);
+    if (!validation.success) {
+      return {
+        success: false,
+        message: 'Validation failed',
+        error: validation.error.issues[0].message,
+      };
+    }
+
+    const data = validation.data;
+    const supabase = await createClient();
+
+    // Create announcement
+    const { data: announcement, error } = await supabase
+      .from('announcements')
+      .insert({
+        chapter_id: chapterId,
+        title: data.title,
+        content: data.content,
+        channels: data.channels,
+        priority: data.priority || 'normal',
+        audience_filter: data.audience_filter || null,
+        segment_id: data.segment_id || null,
+        template_id: data.template_id || null,
+        scheduled_at: data.scheduled_at || null,
+        status: data.scheduled_at ? 'scheduled' : 'draft',
+        created_by: user.id,
+        metadata: data.metadata || {},
+      })
+      .select('id')
+      .single();
+
+    if (error) {
+      console.error('Error creating announcement:', error);
+      return { success: false, message: 'Failed to create announcement', error: error.message };
+    }
+
+    // Invalidate cache
+    revalidateTag('communications', 'page');
+    revalidateTag('announcements', 'page');
+
+    return {
+      success: true,
+      message: 'Announcement created successfully',
+      data: { id: announcement.id },
+    };
+  } catch (error) {
+    console.error('Create announcement error:', error);
+    return { success: false, message: 'An unexpected error occurred', error: String(error) };
+  }
+}
+
+/**
+ * Update an existing announcement
+ */
+export async function updateAnnouncement(
+  id: string,
+  formData: unknown
+): Promise<ActionResponse> {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, message: 'Unauthorized', error: 'Please log in' };
+    }
+
+    // Validate input
+    const validation = updateAnnouncementSchema.safeParse(formData);
+    if (!validation.success) {
+      return {
+        success: false,
+        message: 'Validation failed',
+        error: validation.error.issues[0].message,
+      };
+    }
+
+    const data = validation.data;
+    const supabase = await createClient();
+
+    // Update announcement
+    const { error } = await supabase
+      .from('announcements')
+      .update({
+        title: data.title,
+        content: data.content,
+        channels: data.channels,
+        priority: data.priority,
+        audience_filter: data.audience_filter,
+        segment_id: data.segment_id,
+        scheduled_at: data.scheduled_at,
+        metadata: data.metadata,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id);
+
+    if (error) {
+      console.error('Error updating announcement:', error);
+      return { success: false, message: 'Failed to update announcement', error: error.message };
+    }
+
+    // Invalidate cache
+    revalidateTag('communications', 'page');
+    revalidateTag('announcements', 'page');
+    revalidateTag(`announcement-${id}`, 'page');
+
+    return { success: true, message: 'Announcement updated successfully' };
+  } catch (error) {
+    console.error('Update announcement error:', error);
+    return { success: false, message: 'An unexpected error occurred', error: String(error) };
+  }
+}
+
+/**
+ * Send announcement immediately
+ */
+export async function sendAnnouncement(id: string): Promise<ActionResponse> {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, message: 'Unauthorized', error: 'Please log in' };
+    }
+
+    const supabase = await createClient();
+
+    // Get announcement details
+    const { data: announcement, error: fetchError } = await supabase
+      .from('announcements')
+      .select('*, communication_segments(*)')
+      .eq('id', id)
+      .single();
+
+    if (fetchError || !announcement) {
+      return { success: false, message: 'Announcement not found', error: fetchError?.message };
+    }
+
+    // Check if announcement can be sent
+    if (announcement.status === 'sent') {
+      return { success: false, message: 'Announcement already sent', error: 'Cannot resend' };
+    }
+
+    // Update status to sending
+    const { error: updateError } = await supabase
+      .from('announcements')
+      .update({
+        status: 'sending',
+        sent_at: new Date().toISOString(),
+      })
+      .eq('id', id);
+
+    if (updateError) {
+      return { success: false, message: 'Failed to send announcement', error: updateError.message };
+    }
+
+    // TODO: Create recipients based on audience_filter or segment
+    // TODO: Queue messages for actual sending (Email, WhatsApp, In-App)
+    // For MVP, just create in-app notifications
+
+    // Get target members (simplified - get all active members for MVP)
+    const { data: members } = await supabase
+      .from('members')
+      .select('id')
+      .eq('chapter_id', announcement.chapter_id)
+      .eq('is_active', true);
+
+    // Create announcement_recipients records
+    if (members && members.length > 0) {
+      const recipients = members.flatMap(member =>
+        announcement.channels.map((channel: string) => ({
+          announcement_id: id,
+          member_id: member.id,
+          channel,
+          status: 'queued',
+        }))
+      );
+
+      await supabase.from('announcement_recipients').insert(recipients);
+
+      // If in_app channel is included, create notifications
+      if (announcement.channels.includes('in_app')) {
+        const notifications = members.map(member => ({
+          member_id: member.id,
+          title: announcement.title,
+          message: announcement.content.substring(0, 200),
+          category: 'announcements',
+          announcement_id: id,
+        }));
+
+        await supabase.from('in_app_notifications').insert(notifications);
+      }
+    }
+
+    // Update status to sent
+    await supabase
+      .from('announcements')
+      .update({ status: 'sent' })
+      .eq('id', id);
+
+    // Invalidate cache
+    revalidateTag('communications', 'page');
+    revalidateTag('announcements', 'page');
+    revalidateTag(`announcement-${id}`, 'page');
+
+    return {
+      success: true,
+      message: `Announcement sent successfully to ${members?.length || 0} members`,
+    };
+  } catch (error) {
+    console.error('Send announcement error:', error);
+    return { success: false, message: 'An unexpected error occurred', error: String(error) };
+  }
+}
+
+/**
+ * Schedule announcement for later
+ */
+export async function scheduleAnnouncement(
+  id: string,
+  scheduledAt: string
+): Promise<ActionResponse> {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, message: 'Unauthorized', error: 'Please log in' };
+    }
+
+    // Validate scheduled time is in future
+    if (new Date(scheduledAt) <= new Date()) {
+      return { success: false, message: 'Invalid schedule time', error: 'Must be in the future' };
+    }
+
+    const supabase = await createClient();
+
+    const { error } = await supabase
+      .from('announcements')
+      .update({
+        scheduled_at: scheduledAt,
+        status: 'scheduled',
+      })
+      .eq('id', id);
+
+    if (error) {
+      return { success: false, message: 'Failed to schedule announcement', error: error.message };
+    }
+
+    revalidateTag('communications', 'page');
+    revalidateTag('announcements', 'page');
+    revalidateTag(`announcement-${id}`, 'page');
+
+    return { success: true, message: 'Announcement scheduled successfully' };
+  } catch (error) {
+    console.error('Schedule announcement error:', error);
+    return { success: false, message: 'An unexpected error occurred', error: String(error) };
+  }
+}
+
+/**
+ * Cancel scheduled announcement
+ */
+export async function cancelAnnouncement(id: string, reason?: string): Promise<ActionResponse> {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, message: 'Unauthorized', error: 'Please log in' };
+    }
+
+    const supabase = await createClient();
+
+    const { error } = await supabase
+      .from('announcements')
+      .update({
+        status: 'cancelled',
+        metadata: { cancelled_reason: reason, cancelled_at: new Date().toISOString() },
+      })
+      .eq('id', id);
+
+    if (error) {
+      return { success: false, message: 'Failed to cancel announcement', error: error.message };
+    }
+
+    revalidateTag('communications', 'page');
+    revalidateTag('announcements', 'page');
+    revalidateTag(`announcement-${id}`, 'page');
+
+    return { success: true, message: 'Announcement cancelled successfully' };
+  } catch (error) {
+    console.error('Cancel announcement error:', error);
+    return { success: false, message: 'An unexpected error occurred', error: String(error) };
+  }
+}
+
+/**
+ * Delete announcement (only drafts)
+ */
+export async function deleteAnnouncement(id: string): Promise<ActionResponse> {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, message: 'Unauthorized', error: 'Please log in' };
+    }
+
+    const supabase = await createClient();
+
+    // Check if announcement is draft
+    const { data: announcement } = await supabase
+      .from('announcements')
+      .select('status')
+      .eq('id', id)
+      .single();
+
+    if (announcement?.status !== 'draft') {
+      return {
+        success: false,
+        message: 'Cannot delete',
+        error: 'Only draft announcements can be deleted',
+      };
+    }
+
+    const { error } = await supabase.from('announcements').delete().eq('id', id);
+
+    if (error) {
+      return { success: false, message: 'Failed to delete announcement', error: error.message };
+    }
+
+    revalidateTag('communications', 'page');
+    revalidateTag('announcements', 'page');
+
+    return { success: true, message: 'Announcement deleted successfully' };
+  } catch (error) {
+    console.error('Delete announcement error:', error);
+    return { success: false, message: 'An unexpected error occurred', error: String(error) };
+  }
+}
+
+/**
+ * Duplicate announcement
+ */
+export async function duplicateAnnouncement(
+  id: string,
+  newTitle?: string
+): Promise<ActionResponse<{ id: string }>> {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, message: 'Unauthorized', error: 'Please log in' };
+    }
+
+    const supabase = await createClient();
+
+    // Get original announcement
+    const { data: original, error: fetchError } = await supabase
+      .from('announcements')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (fetchError || !original) {
+      return { success: false, message: 'Announcement not found', error: fetchError?.message };
+    }
+
+    // Create duplicate
+    const { data: duplicate, error: createError } = await supabase
+      .from('announcements')
+      .insert({
+        chapter_id: original.chapter_id,
+        title: newTitle || `${original.title} (Copy)`,
+        content: original.content,
+        channels: original.channels,
+        audience_filter: original.audience_filter,
+        segment_id: original.segment_id,
+        template_id: original.template_id,
+        status: 'draft',
+        created_by: user.id,
+        metadata: original.metadata,
+      })
+      .select('id')
+      .single();
+
+    if (createError) {
+      return { success: false, message: 'Failed to duplicate announcement', error: createError.message };
+    }
+
+    revalidateTag('communications', 'page');
+    revalidateTag('announcements', 'page');
+
+    return {
+      success: true,
+      message: 'Announcement duplicated successfully',
+      data: { id: duplicate.id },
+    };
+  } catch (error) {
+    console.error('Duplicate announcement error:', error);
+    return { success: false, message: 'An unexpected error occurred', error: String(error) };
+  }
+}
+
+// ============================================================================
+// TEMPLATE ACTIONS
+// ============================================================================
+
+/**
+ * Create announcement template
+ */
+export async function createTemplate(formData: unknown): Promise<ActionResponse<{ id: string }>> {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, message: 'Unauthorized', error: 'Please log in' };
+    }
+
+    const chapterId = await getCurrentChapterId();
+
+    const validation = createTemplateSchema.safeParse(formData);
+    if (!validation.success) {
+      return {
+        success: false,
+        message: 'Validation failed',
+        error: validation.error.issues[0].message,
+      };
+    }
+
+    const data = validation.data;
+    const supabase = await createClient();
+
+    const { data: template, error } = await supabase
+      .from('announcement_templates')
+      .insert({
+        chapter_id: chapterId,
+        name: data.name,
+        type: data.type,
+        content_template: data.content_template,
+        default_channels: data.default_channels,
+        category: data.category,
+        created_by: user.id,
+      })
+      .select('id')
+      .single();
+
+    if (error) {
+      return { success: false, message: 'Failed to create template', error: error.message };
+    }
+
+    revalidateTag('communications', 'page');
+    revalidateTag('templates', 'page');
+
+    return {
+      success: true,
+      message: 'Template created successfully',
+      data: { id: template.id },
+    };
+  } catch (error) {
+    console.error('Create template error:', error);
+    return { success: false, message: 'An unexpected error occurred', error: String(error) };
+  }
+}
+
+/**
+ * Update template
+ */
+export async function updateTemplate(id: string, formData: unknown): Promise<ActionResponse> {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, message: 'Unauthorized', error: 'Please log in' };
+    }
+
+    const validation = updateTemplateSchema.safeParse(formData);
+    if (!validation.success) {
+      return {
+        success: false,
+        message: 'Validation failed',
+        error: validation.error.issues[0].message,
+      };
+    }
+
+    const data = validation.data;
+    const supabase = await createClient();
+
+    const { error } = await supabase
+      .from('announcement_templates')
+      .update({
+        name: data.name,
+        type: data.type,
+        content_template: data.content_template,
+        default_channels: data.default_channels,
+        category: data.category,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id);
+
+    if (error) {
+      return { success: false, message: 'Failed to update template', error: error.message };
+    }
+
+    revalidateTag('communications', 'page');
+    revalidateTag('templates', 'page');
+    revalidateTag(`template-${id}`, 'page');
+
+    return { success: true, message: 'Template updated successfully' };
+  } catch (error) {
+    console.error('Update template error:', error);
+    return { success: false, message: 'An unexpected error occurred', error: String(error) };
+  }
+}
+
+/**
+ * Delete template
+ */
+export async function deleteTemplate(id: string): Promise<ActionResponse> {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, message: 'Unauthorized', error: 'Please log in' };
+    }
+
+    const supabase = await createClient();
+
+    const { error } = await supabase.from('announcement_templates').delete().eq('id', id);
+
+    if (error) {
+      return { success: false, message: 'Failed to delete template', error: error.message };
+    }
+
+    revalidateTag('communications', 'page');
+    revalidateTag('templates', 'page');
+
+    return { success: true, message: 'Template deleted successfully' };
+  } catch (error) {
+    console.error('Delete template error:', error);
+    return { success: false, message: 'An unexpected error occurred', error: String(error) };
+  }
+}
+
+/**
+ * Duplicate template
+ */
+export async function duplicateTemplate(
+  id: string,
+  newName: string
+): Promise<ActionResponse<{ id: string }>> {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, message: 'Unauthorized', error: 'Please log in' };
+    }
+
+    const supabase = await createClient();
+
+    const { data: original, error: fetchError } = await supabase
+      .from('announcement_templates')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (fetchError || !original) {
+      return { success: false, message: 'Template not found', error: fetchError?.message };
+    }
+
+    const { data: duplicate, error: createError } = await supabase
+      .from('announcement_templates')
+      .insert({
+        chapter_id: original.chapter_id,
+        name: newName,
+        type: original.type,
+        content_template: original.content_template,
+        default_channels: original.default_channels,
+        category: original.category,
+        created_by: user.id,
+      })
+      .select('id')
+      .single();
+
+    if (createError) {
+      return { success: false, message: 'Failed to duplicate template', error: createError.message };
+    }
+
+    revalidateTag('communications', 'page');
+    revalidateTag('templates', 'page');
+
+    return {
+      success: true,
+      message: 'Template duplicated successfully',
+      data: { id: duplicate.id },
+    };
+  } catch (error) {
+    console.error('Duplicate template error:', error);
+    return { success: false, message: 'An unexpected error occurred', error: String(error) };
+  }
+}
+
+// ============================================================================
+// NOTIFICATION ACTIONS
+// ============================================================================
+
+/**
+ * Create manual notification
+ */
+export async function createNotification(formData: unknown): Promise<ActionResponse<{ id: string }>> {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, message: 'Unauthorized', error: 'Please log in' };
+    }
+
+    const validation = createNotificationSchema.safeParse(formData);
+    if (!validation.success) {
+      return {
+        success: false,
+        message: 'Validation failed',
+        error: validation.error.issues[0].message,
+      };
+    }
+
+    const data = validation.data;
+    const supabase = await createClient();
+
+    const { data: notification, error } = await supabase
+      .from('in_app_notifications')
+      .insert({
+        member_id: data.member_id,
+        title: data.title,
+        message: data.message,
+        category: data.category,
+        action_url: data.action_url || null,
+        metadata: data.metadata || {},
+        expires_at: data.expires_at || null,
+      })
+      .select('id')
+      .single();
+
+    if (error) {
+      return { success: false, message: 'Failed to create notification', error: error.message };
+    }
+
+    revalidateTag('communications', 'page');
+    revalidateTag(`notifications-${data.member_id}`, 'page');
+
+    return {
+      success: true,
+      message: 'Notification created successfully',
+      data: { id: notification.id },
+    };
+  } catch (error) {
+    console.error('Create notification error:', error);
+    return { success: false, message: 'An unexpected error occurred', error: String(error) };
+  }
+}
+
+/**
+ * Mark notification as read
+ */
+export async function markNotificationAsRead(id: string): Promise<ActionResponse> {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, message: 'Unauthorized', error: 'Please log in' };
+    }
+
+    const supabase = await createClient();
+
+    const { error } = await supabase
+      .from('in_app_notifications')
+      .update({ read: true, read_at: new Date().toISOString() })
+      .eq('id', id)
+      .eq('member_id', user.id); // Ensure user can only mark their own notifications
+
+    if (error) {
+      return { success: false, message: 'Failed to mark notification as read', error: error.message };
+    }
+
+    revalidateTag('communications', 'page');
+    revalidateTag(`notifications-${user.id}`, 'page');
+
+    return { success: true, message: 'Notification marked as read' };
+  } catch (error) {
+    console.error('Mark notification as read error:', error);
+    return { success: false, message: 'An unexpected error occurred', error: String(error) };
+  }
+}
+
+/**
+ * Mark all notifications as read
+ */
+export async function markAllNotificationsAsRead(
+  memberId?: string,
+  category?: string
+): Promise<ActionResponse> {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, message: 'Unauthorized', error: 'Please log in' };
+    }
+
+    const targetMemberId = memberId || user.id;
+    const supabase = await createClient();
+
+    let query = supabase
+      .from('in_app_notifications')
+      .update({ read: true, read_at: new Date().toISOString() })
+      .eq('member_id', targetMemberId)
+      .eq('read', false);
+
+    if (category) {
+      query = query.eq('category', category);
+    }
+
+    const { error } = await query;
+
+    if (error) {
+      return { success: false, message: 'Failed to mark all notifications as read', error: error.message };
+    }
+
+    revalidateTag('communications', 'page');
+    revalidateTag(`notifications-${targetMemberId}`, 'page');
+
+    return { success: true, message: 'All notifications marked as read' };
+  } catch (error) {
+    console.error('Mark all notifications as read error:', error);
+    return { success: false, message: 'An unexpected error occurred', error: String(error) };
+  }
+}
+
+/**
+ * Delete notification
+ */
+export async function deleteNotification(id: string): Promise<ActionResponse> {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, message: 'Unauthorized', error: 'Please log in' };
+    }
+
+    const supabase = await createClient();
+
+    const { error } = await supabase
+      .from('in_app_notifications')
+      .delete()
+      .eq('id', id)
+      .eq('member_id', user.id); // Ensure user can only delete their own notifications
+
+    if (error) {
+      return { success: false, message: 'Failed to delete notification', error: error.message };
+    }
+
+    revalidateTag('communications', 'page');
+    revalidateTag(`notifications-${user.id}`, 'page');
+
+    return { success: true, message: 'Notification deleted successfully' };
+  } catch (error) {
+    console.error('Delete notification error:', error);
+    return { success: false, message: 'An unexpected error occurred', error: String(error) };
+  }
+}
+
+// ============================================================================
+// NEWSLETTER ACTIONS
+// ============================================================================
+
+/**
+ * Create newsletter
+ */
+export async function createNewsletter(formData: unknown): Promise<ActionResponse<{ id: string }>> {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, message: 'Unauthorized', error: 'Please log in' };
+    }
+
+    const chapterId = await getCurrentChapterId();
+    if (!chapterId) {
+      return { success: false, message: 'Chapter not found', error: 'No chapter associated with user' };
+    }
+
+    const validation = createNewsletterSchema.safeParse(formData);
+    if (!validation.success) {
+      return {
+        success: false,
+        message: 'Validation failed',
+        error: validation.error.issues[0].message,
+      };
+    }
+
+    const data = validation.data;
+    const supabase = await createClient();
+
+    const { data: newsletter, error } = await supabase
+      .from('newsletters')
+      .insert({
+        chapter_id: chapterId,
+        title: data.title,
+        edition_number: data.edition_number,
+        month: data.month,
+        year: data.year,
+        content: data.content,
+        chair_message: data.chair_message,
+        chair_image_url: data.chair_image_url,
+        status: 'draft',
+        created_by: user.id,
+      })
+      .select('id')
+      .single();
+
+    if (error) {
+      return { success: false, message: 'Failed to create newsletter', error: error.message };
+    }
+
+    revalidateTag('communications', 'page');
+    revalidateTag('newsletters', 'page');
+
+    return {
+      success: true,
+      message: 'Newsletter created successfully',
+      data: { id: newsletter.id },
+    };
+  } catch (error) {
+    console.error('Create newsletter error:', error);
+    return { success: false, message: 'An unexpected error occurred', error: String(error) };
+  }
+}
+
+/**
+ * Update newsletter
+ */
+export async function updateNewsletter(id: string, formData: unknown): Promise<ActionResponse> {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, message: 'Unauthorized', error: 'Please log in' };
+    }
+
+    const validation = updateNewsletterSchema.safeParse(formData);
+    if (!validation.success) {
+      return {
+        success: false,
+        message: 'Validation failed',
+        error: validation.error.issues[0].message,
+      };
+    }
+
+    const data = validation.data;
+    const supabase = await createClient();
+
+    const { error } = await supabase
+      .from('newsletters')
+      .update({
+        title: data.title,
+        content: data.content,
+        chair_message: data.chair_message,
+        chair_image_url: data.chair_image_url,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id);
+
+    if (error) {
+      return { success: false, message: 'Failed to update newsletter', error: error.message };
+    }
+
+    revalidateTag('communications', 'page');
+    revalidateTag('newsletters', 'page');
+    revalidateTag(`newsletter-${id}`, 'page');
+
+    return { success: true, message: 'Newsletter updated successfully' };
+  } catch (error) {
+    console.error('Update newsletter error:', error);
+    return { success: false, message: 'An unexpected error occurred', error: String(error) };
+  }
+}
+
+/**
+ * Publish newsletter
+ */
+export async function publishNewsletter(id: string): Promise<ActionResponse> {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, message: 'Unauthorized', error: 'Please log in' };
+    }
+
+    const supabase = await createClient();
+
+    const { error } = await supabase
+      .from('newsletters')
+      .update({
+        status: 'published',
+        sent_at: new Date().toISOString(),
+      })
+      .eq('id', id);
+
+    if (error) {
+      return { success: false, message: 'Failed to publish newsletter', error: error.message };
+    }
+
+    revalidateTag('communications', 'page');
+    revalidateTag('newsletters', 'page');
+    revalidateTag(`newsletter-${id}`, 'page');
+
+    return { success: true, message: 'Newsletter published successfully' };
+  } catch (error) {
+    console.error('Publish newsletter error:', error);
+    return { success: false, message: 'An unexpected error occurred', error: String(error) };
+  }
+}
+
+/**
+ * Delete newsletter
+ */
+export async function deleteNewsletter(id: string): Promise<ActionResponse> {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, message: 'Unauthorized', error: 'Please log in' };
+    }
+
+    const supabase = await createClient();
+
+    // Only allow deleting drafts
+    const { data: newsletter } = await supabase
+      .from('newsletters')
+      .select('status')
+      .eq('id', id)
+      .single();
+
+    if (newsletter?.status !== 'draft') {
+      return {
+        success: false,
+        message: 'Cannot delete',
+        error: 'Only draft newsletters can be deleted',
+      };
+    }
+
+    const { error } = await supabase.from('newsletters').delete().eq('id', id);
+
+    if (error) {
+      return { success: false, message: 'Failed to delete newsletter', error: error.message };
+    }
+
+    revalidateTag('communications', 'page');
+    revalidateTag('newsletters', 'page');
+
+    return { success: true, message: 'Newsletter deleted successfully' };
+  } catch (error) {
+    console.error('Delete newsletter error:', error);
+    return { success: false, message: 'An unexpected error occurred', error: String(error) };
+  }
+}
+
+// ============================================================================
+// SEGMENT ACTIONS
+// ============================================================================
+
+/**
+ * Create audience segment
+ */
+export async function createSegment(formData: unknown): Promise<ActionResponse<{ id: string }>> {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, message: 'Unauthorized', error: 'Please log in' };
+    }
+
+    const chapterId = await getCurrentChapterId();
+    if (!chapterId) {
+      return { success: false, message: 'Chapter not found', error: 'No chapter associated with user' };
+    }
+
+    const validation = createSegmentSchema.safeParse(formData);
+    if (!validation.success) {
+      return {
+        success: false,
+        message: 'Validation failed',
+        error: validation.error.issues[0].message,
+      };
+    }
+
+    const data = validation.data;
+    const supabase = await createClient();
+
+    const { data: segment, error } = await supabase
+      .from('communication_segments')
+      .insert({
+        chapter_id: chapterId,
+        name: data.name,
+        description: data.description,
+        filter_rules: data.filter_rules,
+        created_by: user.id,
+      })
+      .select('id')
+      .single();
+
+    if (error) {
+      return { success: false, message: 'Failed to create segment', error: error.message };
+    }
+
+    // Calculate initial member count
+    await supabase.rpc('calculate_segment_size', { p_segment_id: segment.id });
+
+    revalidateTag('communications', 'page');
+    revalidateTag('segments', 'page');
+
+    return {
+      success: true,
+      message: 'Segment created successfully',
+      data: { id: segment.id },
+    };
+  } catch (error) {
+    console.error('Create segment error:', error);
+    return { success: false, message: 'An unexpected error occurred', error: String(error) };
+  }
+}
+
+/**
+ * Update segment
+ */
+export async function updateSegment(id: string, formData: unknown): Promise<ActionResponse> {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, message: 'Unauthorized', error: 'Please log in' };
+    }
+
+    const validation = updateSegmentSchema.safeParse(formData);
+    if (!validation.success) {
+      return {
+        success: false,
+        message: 'Validation failed',
+        error: validation.error.issues[0].message,
+      };
+    }
+
+    const data = validation.data;
+    const supabase = await createClient();
+
+    const { error } = await supabase
+      .from('communication_segments')
+      .update({
+        name: data.name,
+        description: data.description,
+        filter_rules: data.filter_rules,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id);
+
+    if (error) {
+      return { success: false, message: 'Failed to update segment', error: error.message };
+    }
+
+    // Recalculate member count
+    if (data.filter_rules) {
+      await supabase.rpc('calculate_segment_size', { p_segment_id: id });
+    }
+
+    revalidateTag('communications', 'page');
+    revalidateTag('segments', 'page');
+    revalidateTag(`segment-${id}`, 'page');
+
+    return { success: true, message: 'Segment updated successfully' };
+  } catch (error) {
+    console.error('Update segment error:', error);
+    return { success: false, message: 'An unexpected error occurred', error: String(error) };
+  }
+}
+
+/**
+ * Delete segment
+ */
+export async function deleteSegment(id: string): Promise<ActionResponse> {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, message: 'Unauthorized', error: 'Please log in' };
+    }
+
+    const supabase = await createClient();
+
+    const { error } = await supabase.from('communication_segments').delete().eq('id', id);
+
+    if (error) {
+      return { success: false, message: 'Failed to delete segment', error: error.message };
+    }
+
+    revalidateTag('communications', 'page');
+    revalidateTag('segments', 'page');
+
+    return { success: true, message: 'Segment deleted successfully' };
+  } catch (error) {
+    console.error('Delete segment error:', error);
+    return { success: false, message: 'An unexpected error occurred', error: String(error) };
+  }
+}
+
+// ============================================================================
+// AUTOMATION RULE ACTIONS
+// ============================================================================
+
+/**
+ * Create automation rule
+ */
+export async function createAutomationRule(formData: unknown): Promise<ActionResponse<{ id: string }>> {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, message: 'Unauthorized', error: 'Please log in' };
+    }
+
+    const chapterId = await getCurrentChapterId();
+    if (!chapterId) {
+      return { success: false, message: 'Chapter not found', error: 'No chapter associated with user' };
+    }
+
+    const validation = createAutomationRuleSchema.safeParse(formData);
+    if (!validation.success) {
+      return {
+        success: false,
+        message: 'Validation failed',
+        error: validation.error.issues[0].message,
+      };
+    }
+
+    const data = validation.data;
+    const supabase = await createClient();
+
+    const { data: rule, error } = await supabase
+      .from('communication_automation_rules')
+      .insert({
+        chapter_id: chapterId,
+        name: data.name,
+        trigger_type: data.trigger_type,
+        conditions: data.conditions,
+        template_id: data.template_id,
+        channels: data.channels,
+        enabled: data.enabled ?? true,
+        created_by: user.id,
+      })
+      .select('id')
+      .single();
+
+    if (error) {
+      return { success: false, message: 'Failed to create automation rule', error: error.message };
+    }
+
+    revalidateTag('communications', 'page');
+    revalidateTag('automation-rules', 'page');
+
+    return {
+      success: true,
+      message: 'Automation rule created successfully',
+      data: { id: rule.id },
+    };
+  } catch (error) {
+    console.error('Create automation rule error:', error);
+    return { success: false, message: 'An unexpected error occurred', error: String(error) };
+  }
+}
+
+/**
+ * Update automation rule
+ */
+export async function updateAutomationRule(id: string, formData: unknown): Promise<ActionResponse> {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, message: 'Unauthorized', error: 'Please log in' };
+    }
+
+    const validation = updateAutomationRuleSchema.safeParse(formData);
+    if (!validation.success) {
+      return {
+        success: false,
+        message: 'Validation failed',
+        error: validation.error.issues[0].message,
+      };
+    }
+
+    const data = validation.data;
+    const supabase = await createClient();
+
+    const { error } = await supabase
+      .from('communication_automation_rules')
+      .update({
+        name: data.name,
+        conditions: data.conditions,
+        template_id: data.template_id,
+        channels: data.channels,
+        enabled: data.enabled,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id);
+
+    if (error) {
+      return { success: false, message: 'Failed to update automation rule', error: error.message };
+    }
+
+    revalidateTag('communications', 'page');
+    revalidateTag('automation-rules', 'page');
+    revalidateTag(`automation-rule-${id}`, 'page');
+
+    return { success: true, message: 'Automation rule updated successfully' };
+  } catch (error) {
+    console.error('Update automation rule error:', error);
+    return { success: false, message: 'An unexpected error occurred', error: String(error) };
+  }
+}
+
+/**
+ * Toggle automation rule
+ */
+export async function toggleAutomationRule(id: string, enabled: boolean): Promise<ActionResponse> {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, message: 'Unauthorized', error: 'Please log in' };
+    }
+
+    const supabase = await createClient();
+
+    const { error } = await supabase
+      .from('communication_automation_rules')
+      .update({ enabled, updated_at: new Date().toISOString() })
+      .eq('id', id);
+
+    if (error) {
+      return { success: false, message: 'Failed to toggle automation rule', error: error.message };
+    }
+
+    revalidateTag('communications', 'page');
+    revalidateTag('automation-rules', 'page');
+    revalidateTag(`automation-rule-${id}`, 'page');
+
+    return {
+      success: true,
+      message: `Automation rule ${enabled ? 'enabled' : 'disabled'} successfully`,
+    };
+  } catch (error) {
+    console.error('Toggle automation rule error:', error);
+    return { success: false, message: 'An unexpected error occurred', error: String(error) };
+  }
+}
+
+/**
+ * Delete automation rule
+ */
+export async function deleteAutomationRule(id: string): Promise<ActionResponse> {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, message: 'Unauthorized', error: 'Please log in' };
+    }
+
+    const supabase = await createClient();
+
+    const { error } = await supabase.from('communication_automation_rules').delete().eq('id', id);
+
+    if (error) {
+      return { success: false, message: 'Failed to delete automation rule', error: error.message };
+    }
+
+    revalidateTag('communications', 'page');
+    revalidateTag('automation-rules', 'page');
+
+    return { success: true, message: 'Automation rule deleted successfully' };
+  } catch (error) {
+    console.error('Delete automation rule error:', error);
+    return { success: false, message: 'An unexpected error occurred', error: String(error) };
+  }
+}
+
+// ============================================================================
+// EXPORT ALL ACTIONS
+// ============================================================================
+
+export type { ActionResponse };

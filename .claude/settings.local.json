@@ -17,7 +17,9 @@
       "mcp__ide__getDiagnostics",
       "Bash(ls:*)",
       "Bash(npx tsc:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(cat:*)",
+      "mcp__supabase__apply_migration"
     ],
     "deny": [],
     "ask": []

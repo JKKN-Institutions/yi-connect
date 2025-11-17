@@ -1,7 +1,7 @@
 /**
  * New School Form Page
  *
- * Placeholder for school creation form - to be implemented with full form UI
+ * Form page for creating a new school stakeholder
  */
 
 import { Suspense } from 'react';
@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getCurrentChapterId } from '@/lib/auth';
-import { redirect } from 'next/navigation';
+import { SchoolForm } from '@/components/stakeholders/school-form';
 
 export const metadata = {
   title: 'Add New School',
@@ -28,7 +28,6 @@ export const metadata = {
 async function NewSchoolFormWrapper() {
   const chapterId = await getCurrentChapterId();
 
-  // Allow super admins to proceed without a chapter ID
   return (
     <Card>
       <CardHeader>
@@ -38,35 +37,7 @@ async function NewSchoolFormWrapper() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <div className='rounded-lg border-2 border-dashed p-12 text-center'>
-          <h3 className='text-lg font-semibold mb-2'>School Form</h3>
-          <p className='text-muted-foreground mb-4'>
-            The school creation form will be implemented in the next iteration.
-          </p>
-          <p className='text-sm text-muted-foreground mb-6'>
-            For now, schools can be created directly via the database or API
-            using the createSchool server action.
-          </p>
-          {!chapterId && (
-            <p className='text-xs text-amber-600 mb-4'>
-              Note: As a super admin, you&apos;ll need to specify chapter ID
-              when creating schools.
-            </p>
-          )}
-          <div className='text-xs text-left bg-muted p-4 rounded-lg'>
-            <p className='font-semibold mb-2'>Form will include:</p>
-            <ul className='list-disc list-inside space-y-1 text-muted-foreground'>
-              <li>School name and type (CBSE, State Board, etc.)</li>
-              <li>Address and location details</li>
-              <li>Student count and grade range</li>
-              <li>Medium of instruction</li>
-              <li>Facilities (auditorium, smart class, ground, library)</li>
-              <li>Suitable Yi programs</li>
-              <li>Connection type and decision maker info</li>
-              <li>Notes and operational details</li>
-            </ul>
-          </div>
-        </div>
+        <SchoolForm chapterId={chapterId} />
       </CardContent>
     </Card>
   );

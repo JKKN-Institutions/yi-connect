@@ -3,7 +3,12 @@
     "allow": [
       "Bash(cut:*)",
       "Bash(1)",
-      "Bash(tee:*)"
+      "Bash(tee:*)",
+      "Bash(npm run build:*)",
+      "mcp__supabase__list_tables",
+      "mcp__supabase__execute_sql",
+      "Bash(netstat:*)",
+      "Bash(findstr:*)"
     ],
     "deny": [],
     "ask": []

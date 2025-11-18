@@ -856,3 +856,82 @@ export type Enums<
   : PublicEnumNameOrOptions extends keyof PublicSchema['Enums']
   ? PublicSchema['Enums'][PublicEnumNameOrOptions]
   : never;
+
+// ============================================================================
+// Constants Export (for validation schemas)
+// ============================================================================
+
+export const Constants = {
+  public: {
+    Enums: {
+      event_status: [
+        'draft',
+        'published',
+        'ongoing',
+        'completed',
+        'cancelled'
+      ] as ['draft', 'published', 'ongoing', 'completed', 'cancelled'],
+      event_category: [
+        'networking',
+        'social',
+        'professional_development',
+        'community_service',
+        'sports',
+        'cultural',
+        'fundraising',
+        'workshop',
+        'seminar',
+        'conference',
+        'webinar',
+        'other',
+        'industrial_visit'
+      ] as [
+        'networking',
+        'social',
+        'professional_development',
+        'community_service',
+        'sports',
+        'cultural',
+        'fundraising',
+        'workshop',
+        'seminar',
+        'conference',
+        'webinar',
+        'other',
+        'industrial_visit'
+      ],
+      rsvp_status: [
+        'pending',
+        'confirmed',
+        'declined',
+        'waitlist',
+        'attended',
+        'no_show'
+      ] as [
+        'pending',
+        'confirmed',
+        'declined',
+        'waitlist',
+        'attended',
+        'no_show'
+      ],
+      volunteer_status: ['invited', 'accepted', 'declined', 'completed'] as [
+        'invited',
+        'accepted',
+        'declined',
+        'completed'
+      ],
+      booking_status: ['pending', 'confirmed', 'cancelled'] as [
+        'pending',
+        'confirmed',
+        'cancelled'
+      ],
+      budget_status: ['draft', 'approved', 'active', 'closed'] as [
+        'draft',
+        'approved',
+        'active',
+        'closed'
+      ]
+    }
+  }
+} as const;

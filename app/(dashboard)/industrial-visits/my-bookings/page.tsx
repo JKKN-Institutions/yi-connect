@@ -5,6 +5,7 @@
 
 import { Suspense } from 'react';
 import { Metadata } from 'next';
+import { unstable_noStore as noStore } from 'next/cache';
 import { Calendar, Clock, Car, Users, ExternalLink, X } from 'lucide-react';
 import Link from 'next/link';
 import { format } from 'date-fns';
@@ -40,19 +41,13 @@ export const metadata: Metadata = {
 };
 
 async function MyBookingsContent() {
-  // Handle prerendering errors gracefully - return empty data during build
-  let bookings: Awaited<ReturnType<typeof getMyIVBookings>> = [];
-  let waitlistEntries: Awaited<ReturnType<typeof getMyWaitlistEntries>> = [];
+  // Prevent caching for authenticated pages (Next.js 16)
+  noStore();
 
-  try {
-    [bookings, waitlistEntries] = await Promise.all([
-      getMyIVBookings(),
-      getMyWaitlistEntries()
-    ]);
-  } catch (error) {
-    // During prerendering, auth functions may fail - return empty arrays
-    console.log('Prerender: returning empty data for my-bookings page');
-  }
+  const [bookings, waitlistEntries] = await Promise.all([
+    getMyIVBookings(),
+    getMyWaitlistEntries()
+  ]);
 
   const confirmedBookings = bookings.filter((b) => b.status === 'confirmed');
   const upcomingBookings = confirmedBookings.filter(

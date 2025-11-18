@@ -5,6 +5,7 @@
 
 import { Suspense } from 'react';
 import { Metadata } from 'next';
+import { unstable_noStore as noStore } from 'next/cache';
 import {
   CalendarPlus,
   Users,
@@ -48,6 +49,9 @@ async function getCurrentIndustryId(): Promise<string | null> {
 }
 
 async function IndustryDashboardContent() {
+  // Prevent caching for authenticated pages (Next.js 16)
+  noStore();
+
   const industryId = await getCurrentIndustryId();
 
   if (!industryId) {
@@ -61,25 +65,10 @@ async function IndustryDashboardContent() {
     );
   }
 
-  // Handle prerendering errors gracefully - return empty data during build
-  let stats: Awaited<ReturnType<typeof getIndustryDashboardStats>> = {
-    total_slots: 0,
-    upcoming_slots: 0,
-    total_participants: 0,
-    avg_capacity_utilization: 0,
-    pending_bookings: 0
-  };
-  let upcomingSlots: Awaited<ReturnType<typeof getIndustryUpcomingSlots>> = [];
-
-  try {
-    [stats, upcomingSlots] = await Promise.all([
-      getIndustryDashboardStats(industryId),
-      getIndustryUpcomingSlots(industryId)
-    ]);
-  } catch (error) {
-    // During prerendering, cookies may fail - return placeholder data
-    console.log('Prerender: returning empty data for industry-portal page');
-  }
+  const [stats, upcomingSlots] = await Promise.all([
+    getIndustryDashboardStats(industryId),
+    getIndustryUpcomingSlots(industryId)
+  ]);
 
   return (
     <div className='space-y-6'>

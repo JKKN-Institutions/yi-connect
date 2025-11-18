@@ -17,13 +17,11 @@ export const metadata: Metadata = {
   description: "Manage chapter announcements and communications",
 };
 
-export default async function AnnouncementsPage({
+export default function AnnouncementsPage({
   searchParams,
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
-  // Await searchParams (Next.js 16+)
-  const params = await searchParams;
   return (
     <div className="flex flex-col gap-6">
       {/* Header */}
@@ -57,7 +55,7 @@ export default async function AnnouncementsPage({
         </CardHeader>
         <CardContent>
           <Suspense fallback={<TableSkeleton />}>
-            <AnnouncementsTableWrapper searchParams={params} />
+            <AnnouncementsTableWrapper searchParams={searchParams} />
           </Suspense>
         </CardContent>
       </Card>
@@ -127,13 +125,16 @@ async function StatsCards() {
 async function AnnouncementsTableWrapper({
   searchParams
 }: {
-  searchParams: { [key: string]: string | string[] | undefined };
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
+  // Await searchParams inside Suspense boundary (Next.js 16+)
+  const params = await searchParams;
+
   // Parse search params
-  const page = Number(searchParams.page) || 1;
-  const pageSize = Number(searchParams.pageSize) || 20;
-  const status = searchParams.status as string | undefined;
-  const search = searchParams.search as string | undefined;
+  const page = Number(params.page) || 1;
+  const pageSize = Number(params.pageSize) || 20;
+  const status = params.status as string | undefined;
+  const search = params.search as string | undefined;
 
   // Fetch announcements
   const { data, total, totalPages } = await getAnnouncements(

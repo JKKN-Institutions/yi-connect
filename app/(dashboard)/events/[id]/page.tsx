@@ -31,7 +31,14 @@ import {
   getEventDocuments,
   getVolunteerRoles
 } from '@/lib/data/events';
-import { RSVPForm, EventFeedbackForm, VolunteerAssignmentForm, ShareButton, EventQRCode, VolunteerMatcher } from '@/components/events';
+import {
+  RSVPForm,
+  EventFeedbackForm,
+  VolunteerAssignmentForm,
+  ShareButton,
+  EventQRCode,
+  VolunteerMatcher
+} from '@/components/events';
 import { FeedbackDisplay } from '@/components/events/event-feedback-form';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -41,7 +48,7 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
-  DropdownMenuTrigger,
+  DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import {
   Card,
@@ -107,7 +114,7 @@ async function EventDetailContent({ params }: PageProps) {
     notFound();
   }
 
-  const isOrganizer = event.organizer_id === user.id;
+  const isOrganizer = event.organizer?.id === user.id;
   const isAdmin = userHierarchyLevel <= 3;
   const canEdit = isOrganizer || isAdmin;
 
@@ -222,244 +229,265 @@ async function EventDetailContent({ params }: PageProps) {
                   <TabsTrigger value='rsvps' className='text-xs sm:text-sm'>
                     <Users className='mr-1 h-3 w-3 sm:h-4 sm:w-4' />
                     <span className='hidden sm:inline'>RSVPs</span>
-                    <span className='sm:hidden'>({event.rsvps?.length || 0})</span>
-                    <span className='hidden sm:inline ml-1'>({event.rsvps?.length || 0})</span>
+                    <span className='sm:hidden'>
+                      ({event.rsvps?.length || 0})
+                    </span>
+                    <span className='hidden sm:inline ml-1'>
+                      ({event.rsvps?.length || 0})
+                    </span>
                   </TabsTrigger>
-                  <TabsTrigger value='volunteers' className='text-xs sm:text-sm'>
+                  <TabsTrigger
+                    value='volunteers'
+                    className='text-xs sm:text-sm'
+                  >
                     <Award className='mr-1 h-3 w-3 sm:h-4 sm:w-4' />
                     <span className='hidden sm:inline'>Volunteers</span>
-                    <span className='sm:hidden'>({event.volunteers?.length || 0})</span>
-                    <span className='hidden sm:inline ml-1'>({event.volunteers?.length || 0})</span>
+                    <span className='sm:hidden'>
+                      ({event.volunteers?.length || 0})
+                    </span>
+                    <span className='hidden sm:inline ml-1'>
+                      ({event.volunteers?.length || 0})
+                    </span>
                   </TabsTrigger>
                   <TabsTrigger value='feedback' className='text-xs sm:text-sm'>
                     <span className='hidden sm:inline'>Feedback</span>
                     <span className='sm:hidden'>FB</span>
-                    <span className='ml-1'>({event.feedback?.length || 0})</span>
+                    <span className='ml-1'>
+                      ({event.feedback?.length || 0})
+                    </span>
                   </TabsTrigger>
                   <TabsTrigger value='documents' className='text-xs sm:text-sm'>
                     <span className='hidden sm:inline'>Documents</span>
                     <span className='sm:hidden'>Docs</span>
-                    <span className='ml-1'>({event.documents?.length || 0})</span>
+                    <span className='ml-1'>
+                      ({event.documents?.length || 0})
+                    </span>
                   </TabsTrigger>
                 </TabsList>
               </CardHeader>
 
-            <TabsContent value='rsvps' className='mt-0'>
-              <CardContent className='space-y-4 pt-4'>
-                <div className='flex items-center justify-between'>
-                  <div>
-                    <h3 className='font-semibold'>Attendees</h3>
-                    <p className='text-sm text-muted-foreground'>
-                      {event.current_registrations} member
-                      {event.current_registrations !== 1 ? 's' : ''} registered
-                      {event.guest_rsvps && event.guest_rsvps.length > 0 && (
-                        <>
-                          {' '}
-                          + {event.guest_rsvps.length} guest
-                          {event.guest_rsvps.length !== 1 ? 's' : ''}
-                        </>
-                      )}
-                    </p>
+              <TabsContent value='rsvps' className='mt-0'>
+                <CardContent className='space-y-4 pt-4'>
+                  <div className='flex items-center justify-between'>
+                    <div>
+                      <h3 className='font-semibold'>Attendees</h3>
+                      <p className='text-sm text-muted-foreground'>
+                        {event.current_registrations} member
+                        {event.current_registrations !== 1 ? 's' : ''}{' '}
+                        registered
+                        {event.guest_rsvps && event.guest_rsvps.length > 0 && (
+                          <>
+                            {' '}
+                            + {event.guest_rsvps.length} guest
+                            {event.guest_rsvps.length !== 1 ? 's' : ''}
+                          </>
+                        )}
+                      </p>
+                    </div>
                   </div>
-                </div>
-                <Separator />
-                <div className='space-y-3'>
-                  {(event as any).rsvps && (event as any).rsvps.length > 0 ? (
-                    (event as any).rsvps.map((rsvp: any) => (
-                      <div
-                        key={rsvp.id}
-                        className='flex items-center justify-between'
-                      >
-                        <div className='flex items-center gap-3'>
-                          <Avatar>
-                            <AvatarImage
-                              src={
-                                rsvp.member?.profile?.avatar_url ||
-                                undefined
-                              }
-                            />
-                            <AvatarFallback>
-                              {(
-                                rsvp.member?.profile?.full_name || 'U'
-                              ).charAt(0)}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <div className='font-medium'>
-                              {rsvp.member?.profile?.full_name ||
-                                'Unknown'}
-                            </div>
-                            <div className='text-sm text-muted-foreground'>
-                              {rsvp.guests_count > 0 &&
-                                `+${rsvp.guests_count} guest${
-                                  rsvp.guests_count !== 1 ? 's' : ''
-                                }`}
+                  <Separator />
+                  <div className='space-y-3'>
+                    {(event as any).rsvps && (event as any).rsvps.length > 0 ? (
+                      (event as any).rsvps.map((rsvp: any) => (
+                        <div
+                          key={rsvp.id}
+                          className='flex items-center justify-between'
+                        >
+                          <div className='flex items-center gap-3'>
+                            <Avatar>
+                              <AvatarImage
+                                src={
+                                  rsvp.member?.profile?.avatar_url || undefined
+                                }
+                              />
+                              <AvatarFallback>
+                                {(
+                                  rsvp.member?.profile?.full_name || 'U'
+                                ).charAt(0)}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <div className='font-medium'>
+                                {rsvp.member?.profile?.full_name || 'Unknown'}
+                              </div>
+                              <div className='text-sm text-muted-foreground'>
+                                {rsvp.guests_count > 0 &&
+                                  `+${rsvp.guests_count} guest${
+                                    rsvp.guests_count !== 1 ? 's' : ''
+                                  }`}
+                              </div>
                             </div>
                           </div>
+                          <Badge
+                            variant={
+                              rsvp.status === 'confirmed'
+                                ? 'success'
+                                : rsvp.status === 'pending'
+                                ? 'secondary'
+                                : rsvp.status === 'attended'
+                                ? 'default'
+                                : 'destructive'
+                            }
+                          >
+                            {rsvp.status}
+                          </Badge>
                         </div>
-                        <Badge
-                          variant={
-                            rsvp.status === 'confirmed'
-                              ? 'success'
-                              : rsvp.status === 'pending'
-                              ? 'secondary'
-                              : rsvp.status === 'attended'
-                              ? 'default'
-                              : 'destructive'
-                          }
-                        >
-                          {rsvp.status}
-                        </Badge>
-                      </div>
-                    ))
-                  ) : (
-                    <p className='text-sm text-muted-foreground text-center py-8'>
-                      No RSVPs yet
-                    </p>
-                  )}
-                </div>
-              </CardContent>
-            </TabsContent>
-
-            <TabsContent value='volunteers' className='mt-0'>
-              <CardContent className='space-y-4 pt-4'>
-                <div className='flex items-center justify-between'>
-                  <div>
-                    <h3 className='font-semibold'>Volunteers</h3>
-                    <p className='text-sm text-muted-foreground'>
-                      Event volunteers and their roles
-                    </p>
+                      ))
+                    ) : (
+                      <p className='text-sm text-muted-foreground text-center py-8'>
+                        No RSVPs yet
+                      </p>
+                    )}
                   </div>
-                  {canEdit && (
-                    <VolunteerAssignmentForm
-                      eventId={event.id}
-                      roles={volunteerRoles}
-                      trigger={
-                        <Button size='sm'>
-                          <UserPlus className='mr-2 h-4 w-4' />
-                          Assign Volunteer
-                        </Button>
-                      }
-                    />
-                  )}
-                </div>
-                <Separator />
-                <div className='space-y-3'>
-                  {(event as any).volunteers && (event as any).volunteers.length > 0 ? (
-                    (event as any).volunteers.map((volunteer: any) => (
-                      <div
-                        key={volunteer.id}
-                        className='flex items-center justify-between'
-                      >
-                        <div className='flex items-center gap-3'>
-                          <Avatar>
-                            <AvatarImage
-                              src={
-                                volunteer.member?.profile?.avatar_url ||
-                                undefined
-                              }
-                            />
-                            <AvatarFallback>
-                              {(
-                                volunteer.member?.profile?.full_name ||
-                                'U'
-                              ).charAt(0)}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <div className='font-medium'>
-                              {volunteer.member?.profile?.full_name ||
-                                'Unknown'}
-                            </div>
-                            <div className='text-sm text-muted-foreground'>
-                              {volunteer.role_name}
-                              {volunteer.hours_contributed &&
-                                volunteer.hours_contributed > 0 && (
-                                  <>
-                                    {' '}
-                                    • {volunteer.hours_contributed}h contributed
-                                  </>
-                                )}
+                </CardContent>
+              </TabsContent>
+
+              <TabsContent value='volunteers' className='mt-0'>
+                <CardContent className='space-y-4 pt-4'>
+                  <div className='flex items-center justify-between'>
+                    <div>
+                      <h3 className='font-semibold'>Volunteers</h3>
+                      <p className='text-sm text-muted-foreground'>
+                        Event volunteers and their roles
+                      </p>
+                    </div>
+                    {canEdit && (
+                      <VolunteerAssignmentForm
+                        eventId={event.id}
+                        roles={volunteerRoles}
+                        trigger={
+                          <Button size='sm'>
+                            <UserPlus className='mr-2 h-4 w-4' />
+                            Assign Volunteer
+                          </Button>
+                        }
+                      />
+                    )}
+                  </div>
+                  <Separator />
+                  <div className='space-y-3'>
+                    {(event as any).volunteers &&
+                    (event as any).volunteers.length > 0 ? (
+                      (event as any).volunteers.map((volunteer: any) => (
+                        <div
+                          key={volunteer.id}
+                          className='flex items-center justify-between'
+                        >
+                          <div className='flex items-center gap-3'>
+                            <Avatar>
+                              <AvatarImage
+                                src={
+                                  volunteer.member?.profile?.avatar_url ||
+                                  undefined
+                                }
+                              />
+                              <AvatarFallback>
+                                {(
+                                  volunteer.member?.profile?.full_name || 'U'
+                                ).charAt(0)}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <div className='font-medium'>
+                                {volunteer.member?.profile?.full_name ||
+                                  'Unknown'}
+                              </div>
+                              <div className='text-sm text-muted-foreground'>
+                                {volunteer.role_name}
+                                {volunteer.hours_contributed &&
+                                  volunteer.hours_contributed > 0 && (
+                                    <>
+                                      {' '}
+                                      • {volunteer.hours_contributed}h
+                                      contributed
+                                    </>
+                                  )}
+                              </div>
                             </div>
                           </div>
+                          <Badge
+                            variant={
+                              volunteer.status === 'accepted'
+                                ? 'success'
+                                : volunteer.status === 'completed'
+                                ? 'secondary'
+                                : volunteer.status === 'declined'
+                                ? 'destructive'
+                                : 'default'
+                            }
+                          >
+                            {volunteer.status}
+                          </Badge>
                         </div>
-                        <Badge
-                          variant={
-                            volunteer.status === 'accepted'
-                              ? 'success'
-                              : volunteer.status === 'completed'
-                              ? 'secondary'
-                              : volunteer.status === 'declined'
-                              ? 'destructive'
-                              : 'default'
-                          }
-                        >
-                          {volunteer.status}
-                        </Badge>
-                      </div>
-                    ))
-                  ) : (
-                    <p className='text-sm text-muted-foreground text-center py-8'>
-                      No volunteers assigned yet
-                    </p>
-                  )}
-                </div>
-
-                {/* Volunteer Matching Section */}
-                {canEdit && event.status === 'published' && (
-                  <>
-                    <Separator className='my-6' />
-                    <VolunteerMatcher
-                      eventId={event.id}
-                      requiredSkills={[]}
-                    />
-                  </>
-                )}
-              </CardContent>
-            </TabsContent>
-
-            <TabsContent value='feedback' className='mt-0'>
-              <CardContent className='pt-4'>
-              <div className='flex items-center justify-between mb-4'>
-                <div>
-                  <h3 className='text-lg font-semibold'>Event Feedback</h3>
-                  <p className='text-sm text-muted-foreground'>
-                    Reviews and ratings from attendees
-                  </p>
-                </div>
-                {event.status === 'completed' && (
-                  <EventFeedbackForm
-                    eventId={event.id}
-                    eventTitle={event.title}
-                    memberId={user.id}
-                  />
-                )}
-              </div>
-
-              <Suspense fallback={<div>Loading feedback...</div>}>
-                <FeedbackList eventId={event.id} />
-              </Suspense>
-              </CardContent>
-            </TabsContent>
-
-            <TabsContent value='documents' className='mt-0'>
-              <CardContent className='space-y-4 pt-4'>
-                <div className='flex items-center justify-between'>
-                  <div>
-                    <h3 className='font-semibold'>Event Documents</h3>
-                    <p className='text-sm text-muted-foreground'>
-                      Photos, reports, and certificates
-                    </p>
+                      ))
+                    ) : (
+                      <p className='text-sm text-muted-foreground text-center py-8'>
+                        No volunteers assigned yet
+                      </p>
+                    )}
                   </div>
-                  {canEdit && <Button size='sm'>Upload Document</Button>}
-                </div>
-                <Separator />
-                <Suspense fallback={<div className='text-sm text-muted-foreground py-4'>Loading documents...</div>}>
-                  <DocumentsList eventId={event.id} />
-                </Suspense>
-              </CardContent>
-            </TabsContent>
-          </Tabs>
+
+                  {/* Volunteer Matching Section */}
+                  {canEdit && event.status === 'published' && (
+                    <>
+                      <Separator className='my-6' />
+                      <VolunteerMatcher
+                        eventId={event.id}
+                        requiredSkills={[]}
+                      />
+                    </>
+                  )}
+                </CardContent>
+              </TabsContent>
+
+              <TabsContent value='feedback' className='mt-0'>
+                <CardContent className='pt-4'>
+                  <div className='flex items-center justify-between mb-4'>
+                    <div>
+                      <h3 className='text-lg font-semibold'>Event Feedback</h3>
+                      <p className='text-sm text-muted-foreground'>
+                        Reviews and ratings from attendees
+                      </p>
+                    </div>
+                    {event.status === 'completed' && (
+                      <EventFeedbackForm
+                        eventId={event.id}
+                        eventTitle={event.title}
+                        memberId={user.id}
+                      />
+                    )}
+                  </div>
+
+                  <Suspense fallback={<div>Loading feedback...</div>}>
+                    <FeedbackList eventId={event.id} />
+                  </Suspense>
+                </CardContent>
+              </TabsContent>
+
+              <TabsContent value='documents' className='mt-0'>
+                <CardContent className='space-y-4 pt-4'>
+                  <div className='flex items-center justify-between'>
+                    <div>
+                      <h3 className='font-semibold'>Event Documents</h3>
+                      <p className='text-sm text-muted-foreground'>
+                        Photos, reports, and certificates
+                      </p>
+                    </div>
+                    {canEdit && <Button size='sm'>Upload Document</Button>}
+                  </div>
+                  <Separator />
+                  <Suspense
+                    fallback={
+                      <div className='text-sm text-muted-foreground py-4'>
+                        Loading documents...
+                      </div>
+                    }
+                  >
+                    <DocumentsList eventId={event.id} />
+                  </Suspense>
+                </CardContent>
+              </TabsContent>
+            </Tabs>
           </Card>
         </div>
 
@@ -535,10 +563,14 @@ async function EventDetailContent({ params }: PageProps) {
                     <div className='flex-1'>
                       {(event as any).venue ? (
                         <>
-                          <div className='font-medium'>{(event as any).venue.name}</div>
+                          <div className='font-medium'>
+                            {(event as any).venue.name}
+                          </div>
                           <div className='text-sm text-muted-foreground'>
                             {(event as any).venue.address}
-                            {(event as any).venue.city && <>, {(event as any).venue.city}</>}
+                            {(event as any).venue.city && (
+                              <>, {(event as any).venue.city}</>
+                            )}
                           </div>
                         </>
                       ) : event.venue_address ? (
@@ -628,7 +660,10 @@ async function EventDetailContent({ params }: PageProps) {
                 <div className='flex items-center justify-between'>
                   <span className='text-sm'>Attendance Rate</span>
                   <span className='font-medium'>
-                    {Math.round((event as any).impact_metrics.attendance_rate || 0)}%
+                    {Math.round(
+                      (event as any).impact_metrics.attendance_rate || 0
+                    )}
+                    %
                   </span>
                 </div>
                 <div className='flex items-center justify-between'>
@@ -641,7 +676,8 @@ async function EventDetailContent({ params }: PageProps) {
                   <span className='text-sm'>Average Rating</span>
                   <span className='font-medium flex items-center gap-1'>
                     <Award className='h-4 w-4 text-yellow-500' />
-                    {(event as any).impact_metrics.average_rating?.toFixed(1) || 'N/A'}
+                    {(event as any).impact_metrics.average_rating?.toFixed(1) ||
+                      'N/A'}
                   </span>
                 </div>
               </CardContent>

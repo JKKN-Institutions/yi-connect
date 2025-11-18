@@ -67,7 +67,7 @@ async function EventEditContent({ params }: PageProps) {
   }
 
   // Check permissions - only organizer or admin can edit
-  const isOrganizer = event.organizer_id === user.id;
+  const isOrganizer = event.organizer?.id === user.id;
   const isAdmin = userHierarchyLevel <= 3;
   const canEdit = isOrganizer || isAdmin;
 
@@ -134,11 +134,7 @@ async function EventEditContent({ params }: PageProps) {
       {/* Event Form */}
       <Card>
         <CardContent className='pt-6'>
-          <EventForm
-            event={event}
-            venues={venues}
-            templates={templates}
-          />
+          <EventForm event={event} venues={venues} templates={templates} />
         </CardContent>
       </Card>
     </div>

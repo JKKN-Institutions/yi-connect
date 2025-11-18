@@ -704,6 +704,243 @@ export type Database = {
           updated_at?: string;
         };
       };
+      award_categories: {
+        Row: {
+          id: string;
+          chapter_id: string | null;
+          name: string;
+          description: string | null;
+          criteria: Json | null;
+          scoring_weights: Json | null;
+          frequency: Database['public']['Enums']['award_frequency'];
+          icon: string | null;
+          color: string | null;
+          sort_order: number | null;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          chapter_id?: string | null;
+          name: string;
+          description?: string | null;
+          criteria?: Json | null;
+          scoring_weights?: Json | null;
+          frequency: Database['public']['Enums']['award_frequency'];
+          icon?: string | null;
+          color?: string | null;
+          sort_order?: number | null;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          chapter_id?: string | null;
+          name?: string;
+          description?: string | null;
+          criteria?: Json | null;
+          scoring_weights?: Json | null;
+          frequency?: Database['public']['Enums']['award_frequency'];
+          icon?: string | null;
+          color?: string | null;
+          sort_order?: number | null;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      award_cycles: {
+        Row: {
+          id: string;
+          category_id: string;
+          cycle_name: string;
+          year: number;
+          period_identifier: string | null;
+          start_date: string;
+          end_date: string;
+          nomination_deadline: string;
+          jury_deadline: string;
+          status: Database['public']['Enums']['award_cycle_status'];
+          description: string | null;
+          max_nominations_per_member: number | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          category_id: string;
+          cycle_name: string;
+          year: number;
+          period_identifier?: string | null;
+          start_date: string;
+          end_date: string;
+          nomination_deadline: string;
+          jury_deadline: string;
+          status?: Database['public']['Enums']['award_cycle_status'];
+          description?: string | null;
+          max_nominations_per_member?: number | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          category_id?: string;
+          cycle_name?: string;
+          year?: number;
+          period_identifier?: string | null;
+          start_date?: string;
+          end_date?: string;
+          nomination_deadline?: string;
+          jury_deadline?: string;
+          status?: Database['public']['Enums']['award_cycle_status'];
+          description?: string | null;
+          max_nominations_per_member?: number | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      nominations: {
+        Row: {
+          id: string;
+          cycle_id: string;
+          nominee_id: string;
+          nominator_id: string;
+          justification: string;
+          supporting_documents: Json | null;
+          status: Database['public']['Enums']['nomination_status'];
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          cycle_id: string;
+          nominee_id: string;
+          nominator_id: string;
+          justification: string;
+          supporting_documents?: Json | null;
+          status?: Database['public']['Enums']['nomination_status'];
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          cycle_id?: string;
+          nominee_id?: string;
+          nominator_id?: string;
+          justification?: string;
+          supporting_documents?: Json | null;
+          status?: Database['public']['Enums']['nomination_status'];
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      jury_members: {
+        Row: {
+          id: string;
+          cycle_id: string;
+          member_id: string;
+          completed: boolean;
+          completed_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          cycle_id: string;
+          member_id: string;
+          completed?: boolean;
+          completed_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          cycle_id?: string;
+          member_id?: string;
+          completed?: boolean;
+          completed_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      jury_scores: {
+        Row: {
+          id: string;
+          nomination_id: string;
+          jury_member_id: string;
+          impact_score: number;
+          innovation_score: number;
+          participation_score: number;
+          consistency_score: number;
+          leadership_score: number;
+          comments: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          nomination_id: string;
+          jury_member_id: string;
+          impact_score: number;
+          innovation_score: number;
+          participation_score: number;
+          consistency_score: number;
+          leadership_score: number;
+          comments?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          nomination_id?: string;
+          jury_member_id?: string;
+          impact_score?: number;
+          innovation_score?: number;
+          participation_score?: number;
+          consistency_score?: number;
+          leadership_score?: number;
+          comments?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      award_winners: {
+        Row: {
+          id: string;
+          cycle_id: string;
+          nomination_id: string;
+          rank: number;
+          final_score: number;
+          announced_by: string | null;
+          announced_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          cycle_id: string;
+          nomination_id: string;
+          rank: number;
+          final_score: number;
+          announced_by?: string | null;
+          announced_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          cycle_id?: string;
+          nomination_id?: string;
+          rank?: number;
+          final_score?: number;
+          announced_by?: string | null;
+          announced_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
     };
     Views: {
       [_ in never]: never;
@@ -742,6 +979,15 @@ export type Database = {
       volunteer_status: 'invited' | 'accepted' | 'declined' | 'completed';
       booking_status: 'pending' | 'confirmed' | 'cancelled';
       budget_status: 'draft' | 'approved' | 'active' | 'closed';
+      award_frequency: 'monthly' | 'quarterly' | 'annual' | 'one_time';
+      award_cycle_status:
+        | 'draft'
+        | 'open'
+        | 'nominations_closed'
+        | 'judging'
+        | 'completed'
+        | 'cancelled';
+      nomination_status: 'pending' | 'approved' | 'rejected' | 'withdrawn';
     };
     CompositeTypes: {
       [_ in never]: never;
@@ -931,6 +1177,33 @@ export const Constants = {
         'approved',
         'active',
         'closed'
+      ],
+      award_frequency: ['monthly', 'quarterly', 'annual', 'one_time'] as [
+        'monthly',
+        'quarterly',
+        'annual',
+        'one_time'
+      ],
+      award_cycle_status: [
+        'draft',
+        'open',
+        'nominations_closed',
+        'judging',
+        'completed',
+        'cancelled'
+      ] as [
+        'draft',
+        'open',
+        'nominations_closed',
+        'judging',
+        'completed',
+        'cancelled'
+      ],
+      nomination_status: ['pending', 'approved', 'rejected', 'withdrawn'] as [
+        'pending',
+        'approved',
+        'rejected',
+        'withdrawn'
       ]
     }
   }

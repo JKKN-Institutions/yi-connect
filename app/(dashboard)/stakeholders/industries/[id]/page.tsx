@@ -62,20 +62,10 @@ interface IndustryDetailPageProps {
   params: Promise<{ id: string }>
 }
 
-export async function generateMetadata({ params }: IndustryDetailPageProps) {
-  const { id } = await params
-  const industry = await getIndustryById(id)
-
-  if (!industry) {
-    return {
-      title: 'Industry Not Found',
-    }
-  }
-
-  return {
-    title: industry.organization_name,
-    description: `Manage ${industry.organization_name} stakeholder relationship`,
-  }
+// Static metadata to avoid issues with dynamic data access
+export const metadata = {
+  title: 'Industry Details | Yi Connect',
+  description: 'View and manage industry stakeholder relationship',
 }
 
 async function IndustryHeader({ industryId }: { industryId: string }) {
@@ -687,7 +677,7 @@ function ContentSkeleton() {
   )
 }
 
-export default async function IndustryDetailPage({ params }: IndustryDetailPageProps) {
+async function IndustryDetailContent({ params }: IndustryDetailPageProps) {
   const { id } = await params
 
   return (
@@ -718,5 +708,13 @@ export default async function IndustryDetailPage({ params }: IndustryDetailPageP
         </div>
       </div>
     </div>
+  )
+}
+
+export default function IndustryDetailPage({ params }: IndustryDetailPageProps) {
+  return (
+    <Suspense fallback={<div className="p-8"><ContentSkeleton /></div>}>
+      <IndustryDetailContent params={params} />
+    </Suspense>
   )
 }

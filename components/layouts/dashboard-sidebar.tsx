@@ -4,11 +4,11 @@
  * Main navigation sidebar for the dashboard with collapsible dropdown menus.
  */
 
-'use client'
+'use client';
 
-import Link from 'next/link'
-import { usePathname } from 'next/navigation'
-import { cn } from '@/lib/utils'
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { cn } from '@/lib/utils';
 import {
   LayoutDashboard,
   Users,
@@ -50,27 +50,34 @@ import {
   ShoppingCart,
   PieChart,
   ShieldCheck,
-} from 'lucide-react'
-import { useState } from 'react'
-import { Button } from '@/components/ui/button'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+  Send,
+  Bell,
+  Users2
+} from 'lucide-react';
+import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger
+} from '@/components/ui/collapsible';
 
 interface NavItem {
-  name: string
-  href?: string
-  icon: any
+  name: string;
+  href?: string;
+  icon: any;
   items?: {
-    name: string
-    href: string
-    icon?: any
-  }[]
+    name: string;
+    href: string;
+    icon?: any;
+  }[];
 }
 
 const navigation: NavItem[] = [
   {
     name: 'Dashboard',
     href: '/dashboard',
-    icon: LayoutDashboard,
+    icon: LayoutDashboard
   },
   {
     name: 'Members',
@@ -79,24 +86,24 @@ const navigation: NavItem[] = [
       {
         name: 'All Members',
         href: '/members',
-        icon: TableIcon,
+        icon: TableIcon
       },
       {
         name: 'Grid View',
         href: '/members/grid',
-        icon: Grid3x3,
+        icon: Grid3x3
       },
       {
         name: 'Analytics',
         href: '/members/analytics',
-        icon: TrendingUp,
+        icon: TrendingUp
       },
       {
         name: 'Add Member',
         href: '/members/new',
-        icon: Plus,
-      },
-    ],
+        icon: Plus
+      }
+    ]
   },
   {
     name: 'Events',
@@ -105,24 +112,24 @@ const navigation: NavItem[] = [
       {
         name: 'All Events',
         href: '/events',
-        icon: CalendarDays,
+        icon: CalendarDays
       },
       {
         name: 'Table View',
         href: '/events/table',
-        icon: TableIcon,
+        icon: TableIcon
       },
       {
         name: 'Manage Events',
         href: '/events/manage',
-        icon: List,
+        icon: List
       },
       {
         name: 'Create Event',
         href: '/events/new',
-        icon: Plus,
-      },
-    ],
+        icon: Plus
+      }
+    ]
   },
   {
     name: 'Finance',
@@ -131,49 +138,49 @@ const navigation: NavItem[] = [
       {
         name: 'Overview',
         href: '/finance',
-        icon: LayoutDashboard,
+        icon: LayoutDashboard
       },
       {
         name: 'Budgets',
         href: '/finance/budgets',
-        icon: DollarSign,
+        icon: DollarSign
       },
       {
         name: 'Expenses',
         href: '/finance/expenses',
-        icon: Receipt,
+        icon: Receipt
       },
       {
         name: 'Sponsorships',
         href: '/finance/sponsorships',
-        icon: Handshake,
+        icon: Handshake
       },
       {
         name: 'Reimbursements',
         href: '/finance/reimbursements',
-        icon: ReceiptText,
+        icon: ReceiptText
       },
       {
         name: 'Add Budget',
         href: '/finance/budgets/new',
-        icon: Plus,
+        icon: Plus
       },
       {
         name: 'Add Expense',
         href: '/finance/expenses/new',
-        icon: Plus,
+        icon: Plus
       },
       {
         name: 'Add Deal',
         href: '/finance/sponsorships/new',
-        icon: Plus,
+        icon: Plus
       },
       {
         name: 'New Request',
         href: '/finance/reimbursements/new',
-        icon: Plus,
-      },
-    ],
+        icon: Plus
+      }
+    ]
   },
   {
     name: 'Stakeholders',
@@ -182,44 +189,44 @@ const navigation: NavItem[] = [
       {
         name: 'Overview',
         href: '/stakeholders',
-        icon: LayoutDashboard,
+        icon: LayoutDashboard
       },
       {
         name: 'Schools',
         href: '/stakeholders/schools',
-        icon: Building2,
+        icon: Building2
       },
       {
         name: 'Colleges',
         href: '/stakeholders/colleges',
-        icon: GraduationCap,
+        icon: GraduationCap
       },
       {
         name: 'Industries',
         href: '/stakeholders/industries',
-        icon: Factory,
+        icon: Factory
       },
       {
         name: 'Government',
         href: '/stakeholders/government',
-        icon: Landmark,
+        icon: Landmark
       },
       {
         name: 'NGOs',
         href: '/stakeholders/ngos',
-        icon: Users,
+        icon: Users
       },
       {
         name: 'Vendors',
         href: '/stakeholders/vendors',
-        icon: Package,
+        icon: Package
       },
       {
         name: 'Speakers',
         href: '/stakeholders/speakers',
-        icon: Mic,
-      },
-    ],
+        icon: Mic
+      }
+    ]
   },
   {
     name: 'Industrial Visits',
@@ -228,49 +235,85 @@ const navigation: NavItem[] = [
       {
         name: 'Marketplace',
         href: '/industrial-visits/marketplace',
-        icon: ShoppingCart,
+        icon: ShoppingCart
       },
       {
         name: 'My Bookings',
         href: '/industrial-visits/my-bookings',
-        icon: List,
+        icon: List
       },
       {
         name: 'Admin',
         href: '/industrial-visits/admin',
-        icon: ShieldCheck,
+        icon: ShieldCheck
       },
       {
         name: 'Analytics',
         href: '/industrial-visits/analytics',
-        icon: PieChart,
-      },
-    ],
+        icon: PieChart
+      }
+    ]
   },
   {
-    name: 'Communications',
-    href: '/communications',
+    name: 'Communication Hub',
     icon: MessageSquare,
+    items: [
+      {
+        name: 'Overview',
+        href: '/communications',
+        icon: LayoutDashboard
+      },
+      {
+        name: 'Announcements',
+        href: '/communications/announcements',
+        icon: Send
+      },
+      {
+        name: 'Notifications',
+        href: '/communications/notifications',
+        icon: Bell
+      },
+      {
+        name: 'Templates',
+        href: '/communications/templates',
+        icon: FileText
+      },
+      {
+        name: 'Segments',
+        href: '/communications/segments',
+        icon: Users2
+      },
+      {
+        name: 'Analytics',
+        href: '/communications/analytics',
+        icon: TrendingUp
+      },
+      {
+        name: 'New Announcement',
+        href: '/communications/announcements/new',
+        icon: Plus
+      }
+    ]
   },
   {
     name: 'Awards',
     href: '/awards',
-    icon: Award,
+    icon: Award
   },
   {
     name: 'Knowledge',
     href: '/knowledge',
-    icon: BookOpen,
+    icon: BookOpen
   },
   {
     name: 'Analytics',
     href: '/analytics',
-    icon: BarChart3,
+    icon: BarChart3
   },
   {
     name: 'Leadership',
     href: '/leadership',
-    icon: Globe,
+    icon: Globe
   },
   {
     name: 'Settings',
@@ -279,51 +322,53 @@ const navigation: NavItem[] = [
       {
         name: 'Profile',
         href: '/settings/profile',
-        icon: User,
+        icon: User
       },
       {
         name: 'General',
         href: '/settings',
-        icon: Settings,
-      },
-    ],
-  },
-]
+        icon: Settings
+      }
+    ]
+  }
+];
 
 const adminNavigation: NavItem[] = [
   {
     name: 'Member Requests',
     href: '/member-requests',
-    icon: UserCheck,
+    icon: UserCheck
   },
   {
     name: 'Chapters',
     href: '/admin/chapters',
-    icon: MapPin,
+    icon: MapPin
   },
   {
     name: 'User Management',
     href: '/admin/users',
-    icon: UserCog,
-  },
-]
+    icon: UserCog
+  }
+];
 
-function NavItemComponent({ item, onNavigate }: { item: NavItem; onNavigate: () => void }) {
-  const pathname = usePathname()
-  const [isOpen, setIsOpen] = useState(() => {
-    // Auto-expand if any child is active
-    if (item.items) {
-      return item.items.some(
-        (child) => pathname === child.href || pathname.startsWith(child.href + '/')
-      )
-    }
-    return false
-  })
+function NavItemComponent({
+  item,
+  onNavigate
+}: {
+  item: NavItem;
+  onNavigate: () => void;
+}) {
+  const pathname = usePathname();
+
+  // Hooks must be called at the top level (before any returns)
+  const [isManuallyToggled, setIsManuallyToggled] = useState(false);
+  const [manualOpenState, setManualOpenState] = useState(false);
 
   // If item has no subitems, render as simple link
   if (!item.items) {
-    const isActive = pathname === item.href || pathname.startsWith(item.href! + '/')
-    const Icon = item.icon
+    const isActive =
+      pathname === item.href || pathname.startsWith(item.href! + '/');
+    const Icon = item.icon;
 
     return (
       <li>
@@ -337,21 +382,30 @@ function NavItemComponent({ item, onNavigate }: { item: NavItem; onNavigate: () 
               : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
           )}
         >
-          <Icon className="h-5 w-5 shrink-0" />
+          <Icon className='h-5 w-5 shrink-0' />
           <span>{item.name}</span>
         </Link>
       </li>
-    )
+    );
   }
 
   // Render collapsible item with subitems
+  // Calculate if should be open based on active child
   const hasActiveChild = item.items.some(
     (child) => pathname === child.href || pathname.startsWith(child.href + '/')
-  )
+  );
+
+  // Determine open state: manual toggle takes precedence, otherwise use hasActiveChild
+  const isOpen = isManuallyToggled ? manualOpenState : hasActiveChild;
+
+  const handleOpenChange = (open: boolean) => {
+    setIsManuallyToggled(true);
+    setManualOpenState(open);
+  };
 
   return (
     <li>
-      <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+      <Collapsible open={isOpen} onOpenChange={handleOpenChange}>
         <CollapsibleTrigger asChild>
           <button
             className={cn(
@@ -361,20 +415,22 @@ function NavItemComponent({ item, onNavigate }: { item: NavItem; onNavigate: () 
                 : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
             )}
           >
-            <item.icon className="h-5 w-5 shrink-0" />
-            <span className="flex-1 text-left">{item.name}</span>
+            <item.icon className='h-5 w-5 shrink-0' />
+            <span className='flex-1 text-left'>{item.name}</span>
             {isOpen ? (
-              <ChevronDown className="h-4 w-4 shrink-0" />
+              <ChevronDown className='h-4 w-4 shrink-0' />
             ) : (
-              <ChevronRight className="h-4 w-4 shrink-0" />
+              <ChevronRight className='h-4 w-4 shrink-0' />
             )}
           </button>
         </CollapsibleTrigger>
-        <CollapsibleContent className="mt-1">
-          <ul className="space-y-1 ml-6 pl-2 border-l border-border">
+        <CollapsibleContent className='mt-1'>
+          <ul className='space-y-1 ml-6 pl-2 border-l border-border'>
             {item.items.map((subItem) => {
-              const isActive = pathname === subItem.href || pathname.startsWith(subItem.href + '/')
-              const SubIcon = subItem.icon
+              const isActive =
+                pathname === subItem.href ||
+                pathname.startsWith(subItem.href + '/');
+              const SubIcon = subItem.icon;
 
               return (
                 <li key={subItem.name}>
@@ -388,50 +444,50 @@ function NavItemComponent({ item, onNavigate }: { item: NavItem; onNavigate: () 
                         : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
                     )}
                   >
-                    {SubIcon && <SubIcon className="h-4 w-4 shrink-0" />}
+                    {SubIcon && <SubIcon className='h-4 w-4 shrink-0' />}
                     <span>{subItem.name}</span>
                   </Link>
                 </li>
-              )
+              );
             })}
           </ul>
         </CollapsibleContent>
       </Collapsible>
     </li>
-  )
+  );
 }
 
 export function DashboardSidebar() {
-  const [isOpen, setIsOpen] = useState(false)
+  const [isOpen, setIsOpen] = useState(false);
 
   const handleNavigate = () => {
-    setIsOpen(false)
-  }
+    setIsOpen(false);
+  };
 
   return (
     <>
       {/* Mobile Menu Button */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-background border-b px-4 py-3 flex items-center justify-between">
-        <Link href="/dashboard" className="flex items-center gap-2">
-          <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
-            <span className="text-lg font-bold text-primary">Yi</span>
+      <div className='lg:hidden fixed top-0 left-0 right-0 z-50 bg-background border-b px-4 py-3 flex items-center justify-between'>
+        <Link href='/dashboard' className='flex items-center gap-2'>
+          <div className='h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center'>
+            <span className='text-lg font-bold text-primary'>Yi</span>
           </div>
-          <span className="text-lg font-bold">Yi Connect</span>
+          <span className='text-lg font-bold'>Yi Connect</span>
         </Link>
         <Button
-          variant="ghost"
-          size="icon"
+          variant='ghost'
+          size='icon'
           onClick={() => setIsOpen(!isOpen)}
-          aria-label="Toggle menu"
+          aria-label='Toggle menu'
         >
-          {isOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          {isOpen ? <X className='h-5 w-5' /> : <Menu className='h-5 w-5' />}
         </Button>
       </div>
 
       {/* Mobile Backdrop */}
       {isOpen && (
         <div
-          className="lg:hidden fixed inset-0 z-40 bg-background/80 backdrop-blur-sm"
+          className='lg:hidden fixed inset-0 z-40 bg-background/80 backdrop-blur-sm'
           onClick={() => setIsOpen(false)}
         />
       )}
@@ -444,47 +500,55 @@ export function DashboardSidebar() {
           isOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >
-        <div className="flex flex-col h-full">
+        <div className='flex flex-col h-full'>
           {/* Logo */}
-          <div className="hidden lg:flex items-center gap-2 px-6 py-5 border-b">
-            <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-              <span className="text-2xl font-bold text-primary">Yi</span>
+          <div className='hidden lg:flex items-center gap-2 px-6 py-5 border-b'>
+            <div className='h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center'>
+              <span className='text-2xl font-bold text-primary'>Yi</span>
             </div>
-            <span className="text-2xl font-bold">Yi Connect</span>
+            <span className='text-2xl font-bold'>Yi Connect</span>
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 overflow-y-auto px-3 py-4 lg:pt-4">
-            <ul className="space-y-1">
+          <nav className='flex-1 overflow-y-auto px-3 py-4 lg:pt-4'>
+            <ul className='space-y-1'>
               {navigation.map((item) => (
-                <NavItemComponent key={item.name} item={item} onNavigate={handleNavigate} />
+                <NavItemComponent
+                  key={item.name}
+                  item={item}
+                  onNavigate={handleNavigate}
+                />
               ))}
             </ul>
 
             {/* Admin Section */}
-            <div className="mt-6">
-              <div className="flex items-center gap-2 px-3 pb-2">
-                <Shield className="h-4 w-4 text-muted-foreground" />
-                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+            <div className='mt-6'>
+              <div className='flex items-center gap-2 px-3 pb-2'>
+                <Shield className='h-4 w-4 text-muted-foreground' />
+                <h3 className='text-xs font-semibold text-muted-foreground uppercase tracking-wider'>
                   Administration
                 </h3>
               </div>
-              <ul className="space-y-1">
+              <ul className='space-y-1'>
                 {adminNavigation.map((item) => (
-                  <NavItemComponent key={item.name} item={item} onNavigate={handleNavigate} />
+                  <NavItemComponent
+                    key={item.name}
+                    item={item}
+                    onNavigate={handleNavigate}
+                  />
                 ))}
               </ul>
             </div>
           </nav>
 
           {/* Footer */}
-          <div className="p-4 border-t">
-            <p className="text-xs text-muted-foreground text-center">
+          <div className='p-4 border-t'>
+            <p className='text-xs text-muted-foreground text-center'>
               Yi Connect v1.0.0
             </p>
           </div>
         </div>
       </aside>
     </>
-  )
+  );
 }

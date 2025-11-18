@@ -61,20 +61,10 @@ interface CollegeDetailPageProps {
   params: Promise<{ id: string }>
 }
 
-export async function generateMetadata({ params }: CollegeDetailPageProps) {
-  const { id } = await params
-  const college = await getCollegeById(id)
-
-  if (!college) {
-    return {
-      title: 'College Not Found',
-    }
-  }
-
-  return {
-    title: college.college_name,
-    description: `Manage ${college.college_name} stakeholder relationship`,
-  }
+// Static metadata to avoid issues with dynamic data access
+export const metadata = {
+  title: 'College Details | Yi Connect',
+  description: 'View and manage college stakeholder relationship',
 }
 
 async function CollegeHeader({ collegeId }: { collegeId: string }) {
@@ -670,7 +660,7 @@ function ContentSkeleton() {
   )
 }
 
-export default async function CollegeDetailPage({ params }: CollegeDetailPageProps) {
+async function CollegeDetailContent({ params }: CollegeDetailPageProps) {
   const { id } = await params
 
   return (
@@ -701,5 +691,13 @@ export default async function CollegeDetailPage({ params }: CollegeDetailPagePro
         </div>
       </div>
     </div>
+  )
+}
+
+export default function CollegeDetailPage({ params }: CollegeDetailPageProps) {
+  return (
+    <Suspense fallback={<div className="p-8"><HeaderSkeleton /></div>}>
+      <CollegeDetailContent params={params} />
+    </Suspense>
   )
 }

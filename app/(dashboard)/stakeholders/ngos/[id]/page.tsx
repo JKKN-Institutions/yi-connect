@@ -59,20 +59,10 @@ interface NGODetailPageProps {
   params: Promise<{ id: string }>
 }
 
-export async function generateMetadata({ params }: NGODetailPageProps) {
-  const { id } = await params
-  const ngo = await getNGOById(id)
-
-  if (!ngo) {
-    return {
-      title: 'NGO Not Found',
-    }
-  }
-
-  return {
-    title: ngo.ngo_name,
-    description: `Manage ${ngo.ngo_name} stakeholder relationship`,
-  }
+// Static metadata to avoid issues with dynamic data access
+export const metadata = {
+  title: 'NGO Details | Yi Connect',
+  description: 'View and manage NGO stakeholder relationship',
 }
 
 async function NGOHeader({ ngoId }: { ngoId: string }) {
@@ -557,7 +547,7 @@ function ContentSkeleton() {
   )
 }
 
-export default async function NGODetailPage({ params }: NGODetailPageProps) {
+async function NGODetailContent({ params }: NGODetailPageProps) {
   const { id } = await params
 
   return (
@@ -588,5 +578,13 @@ export default async function NGODetailPage({ params }: NGODetailPageProps) {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function NGODetailPage({ params }: NGODetailPageProps) {
+  return (
+    <Suspense fallback={<div className="p-8"><ContentSkeleton /></div>}>
+      <NGODetailContent params={params} />
+    </Suspense>
   )
 }

@@ -105,11 +105,6 @@ export function ChannelSelector({
           );
         })}
       </div>
-      {selectedChannels.length === 0 && (
-        <p className="text-sm text-destructive">
-          Please select at least one channel
-        </p>
-      )}
     </div>
   );
 }

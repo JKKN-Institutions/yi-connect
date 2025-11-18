@@ -20,8 +20,10 @@ export const metadata: Metadata = {
 export default async function AnnouncementsPage({
   searchParams,
 }: {
-  searchParams: { [key: string]: string | string[] | undefined };
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
+  // Await searchParams (Next.js 16+)
+  const params = await searchParams;
   return (
     <div className="flex flex-col gap-6">
       {/* Header */}
@@ -33,7 +35,7 @@ export default async function AnnouncementsPage({
           </p>
         </div>
         <Button asChild>
-          <Link href="/communication/announcements/new">
+          <Link href="/communications/announcements/new">
             <Plus className="mr-2 h-4 w-4" />
             New Announcement
           </Link>
@@ -55,7 +57,7 @@ export default async function AnnouncementsPage({
         </CardHeader>
         <CardContent>
           <Suspense fallback={<TableSkeleton />}>
-            <AnnouncementsTableWrapper searchParams={searchParams} />
+            <AnnouncementsTableWrapper searchParams={params} />
           </Suspense>
         </CardContent>
       </Card>

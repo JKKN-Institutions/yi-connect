@@ -19,19 +19,21 @@ export const metadata: Metadata = {
   description: "View and manage your notifications",
 };
 
-export default async function NotificationsPage({
-  searchParams,
-}: {
-  searchParams: { [key: string]: string | string[] | undefined };
-}) {
+interface NotificationsPageProps {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}
+
+async function NotificationsPageContent({ searchParams }: NotificationsPageProps) {
   const user = await getCurrentUser();
 
   if (!user) {
     return <div>Please log in to view notifications</div>;
   }
 
-  const category = searchParams.category as string | undefined;
-  const showUnreadOnly = searchParams.unread === "true";
+  // Await searchParams (Next.js 16+)
+  const params = await searchParams;
+  const category = params.category as string | undefined;
+  const showUnreadOnly = params.unread === "true";
 
   return (
     <div className="flex flex-col gap-6">
@@ -96,6 +98,14 @@ export default async function NotificationsPage({
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function NotificationsPage({ searchParams }: NotificationsPageProps) {
+  return (
+    <Suspense fallback={<div className="p-8"><Skeleton className="h-96 w-full" /></div>}>
+      <NotificationsPageContent searchParams={searchParams} />
+    </Suspense>
   );
 }
 

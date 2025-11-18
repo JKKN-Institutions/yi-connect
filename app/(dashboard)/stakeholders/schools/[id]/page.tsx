@@ -58,8 +58,10 @@ interface PageProps {
   params: Promise<{ id: string }>;
 }
 
-export async function generateStaticParams() {
-  return [{ id: '00000000-0000-0000-0000-000000000000' }];
+// Static metadata to avoid issues with dynamic data access
+export const metadata = {
+  title: 'School Details | Yi Connect',
+  description: 'View and manage school stakeholder relationship',
 }
 
 async function SchoolDetail({ schoolId }: { schoolId: string }) {
@@ -641,12 +643,20 @@ async function SchoolDetail({ schoolId }: { schoolId: string }) {
   );
 }
 
-export default async function SchoolDetailPage({ params }: PageProps) {
+async function SchoolDetailPageContent({ params }: PageProps) {
   const { id } = await params;
 
   return (
     <Suspense fallback={<SchoolDetailSkeleton />}>
       <SchoolDetail schoolId={id} />
+    </Suspense>
+  );
+}
+
+export default function SchoolDetailPage({ params }: PageProps) {
+  return (
+    <Suspense fallback={<SchoolDetailSkeleton />}>
+      <SchoolDetailPageContent params={params} />
     </Suspense>
   );
 }

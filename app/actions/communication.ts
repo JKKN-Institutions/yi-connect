@@ -43,6 +43,8 @@ import {
   deleteAutomationRuleSchema,
   runAutomationRuleSchema,
 } from '@/lib/validations/communication';
+import { getSegmentPreviewCount as getSegmentPreviewCountData } from '@/lib/data/communication';
+import type { AudienceFilter } from '@/types/communication';
 
 // ============================================================================
 // TYPES FOR SERVER ACTION RESPONSES
@@ -1338,6 +1340,29 @@ export async function deleteAutomationRule(id: string): Promise<ActionResponse> 
   } catch (error) {
     console.error('Delete automation rule error:', error);
     return { success: false, message: 'An unexpected error occurred', error: String(error) };
+  }
+}
+
+// ============================================================================
+// UTILITY ACTIONS
+// ============================================================================
+
+/**
+ * Get preview count for a segment or audience filter
+ * Used by client components to show audience size estimates
+ */
+export async function getAudiencePreviewCount(
+  segmentId?: string,
+  audienceFilter?: AudienceFilter
+): Promise<{ success: boolean; count?: number; message?: string }> {
+  'use server';
+
+  try {
+    const count = await getSegmentPreviewCountData(segmentId, audienceFilter);
+    return { success: true, count };
+  } catch (error) {
+    console.error('Get audience preview count error:', error);
+    return { success: false, message: 'Failed to get audience preview count' };
   }
 }
 

@@ -59,20 +59,10 @@ interface GovernmentDetailPageProps {
   params: Promise<{ id: string }>
 }
 
-export async function generateMetadata({ params }: GovernmentDetailPageProps) {
-  const { id } = await params
-  const stakeholder = await getGovernmentStakeholderById(id)
-
-  if (!stakeholder) {
-    return {
-      title: 'Government Stakeholder Not Found',
-    }
-  }
-
-  return {
-    title: stakeholder.official_name,
-    description: `Manage ${stakeholder.official_name} stakeholder relationship`,
-  }
+// Static metadata to avoid issues with dynamic data access
+export const metadata = {
+  title: 'Government Stakeholder Details | Yi Connect',
+  description: 'View and manage government stakeholder relationship',
 }
 
 async function GovernmentHeader({ stakeholderId }: { stakeholderId: string }) {
@@ -680,8 +670,8 @@ function ContentSkeleton() {
   )
 }
 
-export default async function GovernmentDetailPage({ params }: GovernmentDetailPageProps) {
-  const { id } = await params
+async function GovernmentDetailContent({ params }: GovernmentDetailPageProps) {
+  const { id} = await params
 
   return (
     <div className="flex flex-col gap-8">
@@ -711,5 +701,13 @@ export default async function GovernmentDetailPage({ params }: GovernmentDetailP
         </div>
       </div>
     </div>
+  )
+}
+
+export default function GovernmentDetailPage({ params }: GovernmentDetailPageProps) {
+  return (
+    <Suspense fallback={<div className="p-8"><ContentSkeleton /></div>}>
+      <GovernmentDetailContent params={params} />
+    </Suspense>
   )
 }

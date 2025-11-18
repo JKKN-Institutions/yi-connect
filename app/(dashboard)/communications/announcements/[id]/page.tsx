@@ -13,26 +13,17 @@ import { StatusBadge, ChannelBadge, PriorityBadge } from "@/components/communica
 import { getAnnouncementById, getAnnouncementRecipients } from "@/lib/data/communication";
 import { format } from "date-fns";
 
-export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
-  const announcement = await getAnnouncementById(params.id);
+// Static metadata to avoid issues with dynamic data access
+export const metadata: Metadata = {
+  title: "Announcement Details | Yi Connect",
+  description: "View announcement details and delivery status",
+};
 
-  if (!announcement) {
-    return {
-      title: "Announcement Not Found",
-    };
-  }
-
-  return {
-    title: `${announcement.title} | Announcements`,
-    description: announcement.content.substring(0, 160),
-  };
+interface AnnouncementDetailPageProps {
+  params: { id: string };
 }
 
-export default async function AnnouncementDetailPage({
-  params,
-}: {
-  params: { id: string };
-}) {
+async function AnnouncementDetailContent({ params }: AnnouncementDetailPageProps) {
   const announcement = await getAnnouncementById(params.id);
 
   if (!announcement) {
@@ -298,6 +289,14 @@ export default async function AnnouncementDetailPage({
         </div>
       </div>
     </div>
+  );
+}
+
+export default function AnnouncementDetailPage({ params }: AnnouncementDetailPageProps) {
+  return (
+    <Suspense fallback={<div className="p-8"><Skeleton className="h-96 w-full" /></div>}>
+      <AnnouncementDetailContent params={params} />
+    </Suspense>
   );
 }
 

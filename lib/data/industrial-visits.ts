@@ -381,8 +381,6 @@ export const getIVBookings = cache(async (
  * Get current user's IV bookings
  */
 export const getMyIVBookings = cache(async (): Promise<IVBookingWithMember[]> => {
-  'use server';
-
   try {
     const user = await getCurrentUser();
     if (!user) {
@@ -420,8 +418,6 @@ export const getMyIVBookings = cache(async (): Promise<IVBookingWithMember[]> =>
  * Get current user's waitlist entries
  */
 export const getMyWaitlistEntries = cache(async (): Promise<IVWaitlistWithMember[]> => {
-  'use server';
-
   try {
     const user = await getCurrentUser();
     if (!user) {

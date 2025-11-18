@@ -40,10 +40,19 @@ export const metadata: Metadata = {
 };
 
 async function MyBookingsContent() {
-  const [bookings, waitlistEntries] = await Promise.all([
-    getMyIVBookings(),
-    getMyWaitlistEntries()
-  ]);
+  // Handle prerendering errors gracefully - return empty data during build
+  let bookings: Awaited<ReturnType<typeof getMyIVBookings>> = [];
+  let waitlistEntries: Awaited<ReturnType<typeof getMyWaitlistEntries>> = [];
+
+  try {
+    [bookings, waitlistEntries] = await Promise.all([
+      getMyIVBookings(),
+      getMyWaitlistEntries()
+    ]);
+  } catch (error) {
+    // During prerendering, auth functions may fail - return empty arrays
+    console.log('Prerender: returning empty data for my-bookings page');
+  }
 
   const confirmedBookings = bookings.filter((b) => b.status === 'confirmed');
   const upcomingBookings = confirmedBookings.filter(

@@ -15,11 +15,19 @@
       "mcp__sequential-thinking__sequentialthinking",
       "Skill(nextjs16-web-development)",
       "mcp__ide__getDiagnostics",
+      "Read(C:\\Users\\Admin\\Pictures\\Screenshots\\*.png)",
       "Bash(ls:*)",
       "Bash(npx tsc:*)",
       "Bash(find:*)",
       "Bash(cat:*)",
-      "mcp__supabase__apply_migration"
+      "mcp__supabase__apply_migration",
+      "Bash(npx next build:*)",
+      "Bash(done)",
+      "Bash(timeout /t 8)",
+      "Read(D:\\JKKN\\yi-connect\\**)",
+      "Edit(D:\\JKKN\\yi-connect\\**)",
+      "Write(D:\\JKKN\\yi-connect\\**)",
+      "Glob(D:\\JKKN\\yi-connect\\**)"
     ],
     "deny": [],
     "ask": []

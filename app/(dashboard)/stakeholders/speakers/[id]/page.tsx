@@ -17,6 +17,12 @@ interface SpeakerDetailPageProps {
   params: Promise<{ id: string }>
 }
 
+// Static metadata to avoid issues with dynamic data access
+export const metadata = {
+  title: 'Speaker Details | Yi Connect',
+  description: 'View and manage speaker stakeholder relationship',
+}
+
 async function SpeakerHeader({ speakerId }: { speakerId: string }) {
   const speaker = await getSpeakerById(speakerId)
   if (!speaker) notFound()
@@ -134,7 +140,7 @@ async function SpeakerInformation({ speakerId }: { speakerId: string }) {
   )
 }
 
-export default async function SpeakerDetailPage({ params }: SpeakerDetailPageProps) {
+async function SpeakerDetailContent({ params }: SpeakerDetailPageProps) {
   const { id } = await params
   return (
     <div className="flex flex-col gap-8">
@@ -145,5 +151,13 @@ export default async function SpeakerDetailPage({ params }: SpeakerDetailPagePro
         <SpeakerInformation speakerId={id} />
       </Suspense>
     </div>
+  )
+}
+
+export default function SpeakerDetailPage({ params }: SpeakerDetailPageProps) {
+  return (
+    <Suspense fallback={<div className="p-8">Loading...</div>}>
+      <SpeakerDetailContent params={params} />
+    </Suspense>
   )
 }

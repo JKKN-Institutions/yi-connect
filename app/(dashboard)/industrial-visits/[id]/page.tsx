@@ -450,12 +450,20 @@ function IVDetailLoading() {
   );
 }
 
-export default async function IVDetailPage({ params }: IVDetailPageProps) {
+async function IVDetailPageContent({ params }: IVDetailPageProps) {
   const { id } = await params;
 
   return (
     <Suspense fallback={<IVDetailLoading />}>
       <IVDetailContent id={id} />
+    </Suspense>
+  );
+}
+
+export default function IVDetailPage({ params }: IVDetailPageProps) {
+  return (
+    <Suspense fallback={<IVDetailLoading />}>
+      <IVDetailPageContent params={params} />
     </Suspense>
   );
 }

@@ -13,25 +13,17 @@ import {
   getSegments
 } from "@/lib/data/communication";
 
-export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
-  const announcement = await getAnnouncementById(params.id);
+// Static metadata to avoid issues with dynamic data access
+export const metadata: Metadata = {
+  title: "Edit Announcement | Yi Connect",
+  description: "Edit announcement details and settings",
+};
 
-  if (!announcement) {
-    return {
-      title: "Edit Announcement | Communication Hub",
-    };
-  }
-
-  return {
-    title: `Edit: ${announcement.title} | Announcements`,
-  };
+interface EditAnnouncementPageProps {
+  params: { id: string };
 }
 
-export default async function EditAnnouncementPage({
-  params,
-}: {
-  params: { id: string };
-}) {
+async function EditAnnouncementContent({ params }: EditAnnouncementPageProps) {
   const announcement = await getAnnouncementById(params.id);
 
   if (!announcement) {
@@ -88,6 +80,14 @@ export default async function EditAnnouncementPage({
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function EditAnnouncementPage({ params }: EditAnnouncementPageProps) {
+  return (
+    <Suspense fallback={<div className="p-8"><Skeleton className="h-96 w-full" /></div>}>
+      <EditAnnouncementContent params={params} />
+    </Suspense>
   );
 }
 

@@ -24,7 +24,7 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Users, Filter, Loader2, Target } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { getSegmentPreviewCount } from "@/lib/data/communication";
+import { getAudiencePreviewCount } from "@/app/actions/communication";
 
 interface AudienceTaggerProps {
   segmentId?: string;
@@ -73,8 +73,13 @@ export function AudienceTagger({
 
       setIsLoadingPreview(true);
       try {
-        const count = await getSegmentPreviewCount(segmentId, audienceFilter);
-        setPreviewCount(count);
+        const result = await getAudiencePreviewCount(segmentId, audienceFilter);
+        if (result.success && result.count !== undefined) {
+          setPreviewCount(result.count);
+        } else {
+          console.error("Failed to load preview:", result.message);
+          setPreviewCount(null);
+        }
       } catch (error) {
         console.error("Failed to load preview:", error);
         setPreviewCount(null);

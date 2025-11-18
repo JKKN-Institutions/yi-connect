@@ -17,6 +17,12 @@ interface VendorDetailPageProps {
   params: Promise<{ id: string }>
 }
 
+// Static metadata to avoid issues with dynamic data access
+export const metadata = {
+  title: 'Vendor Details | Yi Connect',
+  description: 'View and manage vendor stakeholder relationship',
+}
+
 async function VendorHeader({ vendorId }: { vendorId: string }) {
   const vendor = await getVendorById(vendorId)
   if (!vendor) notFound()
@@ -100,7 +106,7 @@ async function VendorInformation({ vendorId }: { vendorId: string }) {
   )
 }
 
-export default async function VendorDetailPage({ params }: VendorDetailPageProps) {
+async function VendorDetailContent({ params }: VendorDetailPageProps) {
   const { id } = await params
   return (
     <div className="flex flex-col gap-8">
@@ -111,5 +117,13 @@ export default async function VendorDetailPage({ params }: VendorDetailPageProps
         <VendorInformation vendorId={id} />
       </Suspense>
     </div>
+  )
+}
+
+export default function VendorDetailPage({ params }: VendorDetailPageProps) {
+  return (
+    <Suspense fallback={<div className="p-8">Loading...</div>}>
+      <VendorDetailContent params={params} />
+    </Suspense>
   )
 }

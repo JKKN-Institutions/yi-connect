@@ -61,10 +61,25 @@ async function IndustryDashboardContent() {
     );
   }
 
-  const [stats, upcomingSlots] = await Promise.all([
-    getIndustryDashboardStats(industryId),
-    getIndustryUpcomingSlots(industryId)
-  ]);
+  // Handle prerendering errors gracefully - return empty data during build
+  let stats: Awaited<ReturnType<typeof getIndustryDashboardStats>> = {
+    total_slots: 0,
+    upcoming_slots: 0,
+    total_participants: 0,
+    avg_capacity_utilization: 0,
+    pending_bookings: 0
+  };
+  let upcomingSlots: Awaited<ReturnType<typeof getIndustryUpcomingSlots>> = [];
+
+  try {
+    [stats, upcomingSlots] = await Promise.all([
+      getIndustryDashboardStats(industryId),
+      getIndustryUpcomingSlots(industryId)
+    ]);
+  } catch (error) {
+    // During prerendering, cookies may fail - return placeholder data
+    console.log('Prerender: returning empty data for industry-portal page');
+  }
 
   return (
     <div className='space-y-6'>

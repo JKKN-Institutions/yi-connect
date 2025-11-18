@@ -27,7 +27,13 @@
       "Read(D:\\JKKN\\yi-connect\\**)",
       "Edit(D:\\JKKN\\yi-connect\\**)",
       "Write(D:\\JKKN\\yi-connect\\**)",
-      "Glob(D:\\JKKN\\yi-connect\\**)"
+      "Glob(D:\\JKKN\\yi-connect\\**)",
+      "mcp__supabase__list_migrations",
+      "mcp__supabase__generate_typescript_types",
+      "Bash(dir:*)",
+      "Bash(taskkill:*)",
+      "Bash(nul)",
+      "Bash(curl:*)"
     ],
     "deny": [],
     "ask": []

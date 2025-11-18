@@ -52,7 +52,8 @@ import {
   ShieldCheck,
   Send,
   Bell,
-  Users2
+  Users2,
+  Trophy
 } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -297,8 +298,49 @@ const navigation: NavItem[] = [
   },
   {
     name: 'Awards',
-    href: '/awards',
-    icon: Award
+    icon: Award,
+    items: [
+      {
+        name: 'Overview',
+        href: '/awards',
+        icon: LayoutDashboard
+      },
+      {
+        name: 'Nominate',
+        href: '/awards/nominate',
+        icon: Plus
+      },
+      {
+        name: 'My Nominations',
+        href: '/awards/nominations',
+        icon: FileText
+      },
+      {
+        name: 'Jury Dashboard',
+        href: '/awards/jury',
+        icon: Users2
+      },
+      {
+        name: 'Leaderboard',
+        href: '/awards/leaderboard',
+        icon: Trophy
+      },
+      {
+        name: 'Manage Cycles',
+        href: '/awards/admin/cycles',
+        icon: CalendarDays
+      },
+      {
+        name: 'Review Winners',
+        href: '/awards/admin/review',
+        icon: ShieldCheck
+      },
+      {
+        name: 'Manage Categories',
+        href: '/awards/admin/categories',
+        icon: Settings
+      }
+    ]
   },
   {
     name: 'Knowledge',

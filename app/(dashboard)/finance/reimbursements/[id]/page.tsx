@@ -260,13 +260,13 @@ async function RequestDetail({ requestId }: { requestId: string }) {
 
             <Separator />
 
-            {request.payment_method && (
+            {request.payment_method_preference && (
               <div>
                 <p className='text-sm font-medium text-muted-foreground'>
                   Payment Method
                 </p>
                 <div className='mt-1'>
-                  <PaymentMethodBadge method={request.payment_method} />
+                  <PaymentMethodBadge method={request.payment_method_preference} />
                 </div>
               </div>
             )}

@@ -83,6 +83,10 @@ export interface NominationWithDetails extends Nomination {
   }
   jury_scores?: JuryScore[]
   winner?: AwardWinner
+  // Calculated score fields (added when fetching with scores)
+  average_score?: number | null
+  weighted_average_score?: number | null
+  submitted_at?: string | null
 }
 
 export interface SupportingDocument {

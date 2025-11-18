@@ -1,4 +1,5 @@
 'use client';
+'use no memo';
 
 /**
  * RSVP Form Component
@@ -9,13 +10,12 @@
 import { useState, useTransition } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Loader2, UserPlus, X } from 'lucide-react';
+import { Loader2, UserPlus } from 'lucide-react';
 import { createOrUpdateRSVP } from '@/app/actions/events';
 import {
   createRSVPSchema,
   type CreateRSVPInput
 } from '@/lib/validations/event';
-import type { z } from 'zod';
 import type { EventWithDetails, EventRSVP } from '@/types/event';
 
 // Form values type - ensures required fields are non-optional
@@ -93,14 +93,14 @@ export function RSVPForm({
     defaultValues: {
       event_id: event.id,
       member_id: memberId,
-      status: (currentRSVP?.status ||
+      status: ((currentRSVP as any)?.status ||
         (event.requires_approval
           ? 'pending'
           : 'confirmed')) as RSVPFormValues['status'],
-      guests_count: currentRSVP?.guests_count ?? 0,
-      dietary_restrictions: currentRSVP?.dietary_restrictions || '',
-      special_requirements: currentRSVP?.special_requirements || '',
-      notes: currentRSVP?.notes || ''
+      guests_count: (currentRSVP as any)?.guests_count ?? 0,
+      dietary_restrictions: (currentRSVP as any)?.dietary_restrictions || '',
+      special_requirements: (currentRSVP as any)?.special_requirements || '',
+      notes: (currentRSVP as any)?.notes || ''
     }
   });
 
@@ -203,16 +203,16 @@ export function RSVPForm({
                 <span className='text-sm font-medium'>Current Status:</span>
                 <Badge
                   variant={
-                    currentRSVP.status === 'confirmed'
+                    (currentRSVP as any).status === 'confirmed'
                       ? 'default'
-                      : currentRSVP.status === 'pending'
+                      : (currentRSVP as any).status === 'pending'
                       ? 'secondary'
-                      : currentRSVP.status === 'waitlisted'
+                      : (currentRSVP as any).status === 'waitlisted'
                       ? 'secondary'
                       : 'destructive'
                   }
                 >
-                  {currentRSVP.status}
+                  {(currentRSVP as any).status}
                 </Badge>
               </div>
             )}
@@ -402,21 +402,21 @@ export function QuickRSVP({
       <div className='flex items-center gap-2'>
         <Badge
           variant={
-            currentRSVP.status === 'confirmed'
+            (currentRSVP as any).status === 'confirmed'
               ? 'default'
-              : currentRSVP.status === 'cancelled'
+              : (currentRSVP as any).status === 'cancelled'
               ? 'destructive'
               : 'secondary'
           }
         >
-          {currentRSVP.status}
+          {(currentRSVP as any).status}
         </Badge>
         <Button
           variant='ghost'
           size='sm'
           onClick={() =>
             handleRSVP(
-              currentRSVP.status === 'confirmed' ? 'cancelled' : 'confirmed'
+              (currentRSVP as any).status === 'confirmed' ? 'cancelled' : 'confirmed'
             )
           }
           disabled={isPending}

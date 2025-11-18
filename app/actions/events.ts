@@ -7,7 +7,7 @@
 
 'use server';
 
-import { revalidatePath, revalidateTag } from 'next/cache';
+import { revalidatePath, updateTag } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentUser } from '@/lib/data/auth';
@@ -179,7 +179,7 @@ export async function createEvent(
     }
 
     // Invalidate cache
-    revalidateTag('events', 'max');
+    updateTag('events');
     revalidatePath('/events');
 
     return { success: true, data: { id: data.id } };
@@ -256,7 +256,7 @@ export async function updateEvent(
     }
 
     // Invalidate cache
-    revalidateTag('events', 'max');
+    updateTag('events');
     revalidatePath('/events');
     revalidatePath(`/events/${eventId}`);
 
@@ -314,7 +314,7 @@ export async function publishEvent(
     }
 
     // Invalidate cache
-    revalidateTag('events', 'max');
+    updateTag('events');
     revalidatePath('/events');
     revalidatePath(`/events/${validated.id}`);
 
@@ -380,7 +380,7 @@ export async function cancelEvent(
     // TODO: Send cancellation notifications to all RSVPs
 
     // Invalidate cache
-    revalidateTag('events', 'max');
+    updateTag('events');
     revalidatePath('/events');
     revalidatePath(`/events/${validated.id}`);
 
@@ -436,7 +436,7 @@ export async function deleteEvent(eventId: string): Promise<ActionResponse> {
     }
 
     // Invalidate cache
-    revalidateTag('events', 'max');
+    updateTag('events');
     revalidatePath('/events');
 
     return { success: true };
@@ -483,7 +483,7 @@ export async function createVenue(
       return { success: false, error: 'Failed to create venue' };
     }
 
-    revalidateTag('venues', 'max');
+    updateTag('venues');
     revalidatePath('/events/venues');
 
     return { success: true, data: { id: data.id } };
@@ -524,7 +524,7 @@ export async function updateVenue(
       return { success: false, error: 'Failed to update venue' };
     }
 
-    revalidateTag('venues', 'max');
+    updateTag('venues');
     revalidatePath('/events/venues');
     revalidatePath(`/events/venues/${venueId}`);
 
@@ -573,7 +573,7 @@ export async function deleteVenue(venueId: string): Promise<ActionResponse> {
       return { success: false, error: 'Failed to delete venue' };
     }
 
-    revalidateTag('venues', 'max');
+    updateTag('venues');
     revalidatePath('/events/venues');
 
     return { success: true };
@@ -668,8 +668,8 @@ export async function createOrUpdateRSVP(
       return { success: false, error: 'Failed to save RSVP' };
     }
 
-    revalidateTag('events', 'max');
-    revalidateTag('rsvps', 'max');
+    updateTag('events');
+    updateTag('rsvps');
     revalidatePath(`/events/${validated.event_id}`);
 
     return { success: true, data: { id: data.id } };
@@ -722,8 +722,8 @@ export async function updateRSVP(
       return { success: false, error: 'Failed to update RSVP' };
     }
 
-    revalidateTag('events', 'max');
-    revalidateTag('rsvps', 'max');
+    updateTag('events');
+    updateTag('rsvps');
     revalidatePath(`/events/${rsvp.event_id}`);
 
     return { success: true };
@@ -771,8 +771,8 @@ export async function deleteRSVP(rsvpId: string): Promise<ActionResponse> {
       return { success: false, error: 'Failed to delete RSVP' };
     }
 
-    revalidateTag('events', 'max');
-    revalidateTag('rsvps', 'max');
+    updateTag('events');
+    updateTag('rsvps');
     revalidatePath(`/events/${rsvp.event_id}`);
 
     return { success: true };
@@ -831,8 +831,8 @@ export async function createGuestRSVP(
       return { success: false, error: 'Failed to create guest RSVP' };
     }
 
-    revalidateTag('events', 'max');
-    revalidateTag('rsvps', 'max');
+    updateTag('events');
+    updateTag('rsvps');
     revalidatePath(`/events/${validated.event_id}`);
 
     return { success: true, data: { id: data.id } };
@@ -885,8 +885,8 @@ export async function updateGuestRSVP(
       return { success: false, error: 'Failed to update guest RSVP' };
     }
 
-    revalidateTag('events', 'max');
-    revalidateTag('rsvps', 'max');
+    updateTag('events');
+    updateTag('rsvps');
     revalidatePath(`/events/${guestRsvp.event_id}`);
 
     return { success: true };
@@ -936,8 +936,8 @@ export async function deleteGuestRSVP(
       return { success: false, error: 'Failed to delete guest RSVP' };
     }
 
-    revalidateTag('events', 'max');
-    revalidateTag('rsvps', 'max');
+    updateTag('events');
+    updateTag('rsvps');
     revalidatePath(`/events/${guestRsvp.event_id}`);
 
     return { success: true };
@@ -999,8 +999,8 @@ export async function assignVolunteer(
 
     // TODO: Send notification to volunteer
 
-    revalidateTag('events', 'max');
-    revalidateTag('volunteers', 'max');
+    updateTag('events');
+    updateTag('volunteers');
     revalidatePath(`/events/${validated.event_id}`);
 
     return { success: true, data: { id: data.id } };
@@ -1068,8 +1068,8 @@ export async function updateVolunteer(
       return { success: false, error: 'Failed to update volunteer' };
     }
 
-    revalidateTag('events', 'max');
-    revalidateTag('volunteers', 'max');
+    updateTag('events');
+    updateTag('volunteers');
     revalidatePath(`/events/${volunteer.event_id}`);
 
     return { success: true };
@@ -1123,8 +1123,8 @@ export async function deleteVolunteer(
       return { success: false, error: 'Failed to remove volunteer' };
     }
 
-    revalidateTag('events', 'max');
-    revalidateTag('volunteers', 'max');
+    updateTag('events');
+    updateTag('volunteers');
     revalidatePath(`/events/${volunteer.event_id}`);
 
     return { success: true };
@@ -1216,8 +1216,8 @@ export async function checkInAttendee(
         .eq('id', validated.attendee_id);
     }
 
-    revalidateTag('events', 'max');
-    revalidateTag('checkins', 'max');
+    updateTag('events');
+    updateTag('checkins');
     revalidatePath(`/events/${validated.event_id}`);
 
     return { success: true, data: { id: data.id } };
@@ -1287,8 +1287,8 @@ export async function submitEventFeedback(
       p_event_id: validated.event_id
     });
 
-    revalidateTag('events', 'max');
-    revalidateTag('feedback', 'max');
+    updateTag('events');
+    updateTag('feedback');
     revalidatePath(`/events/${validated.event_id}`);
 
     return { success: true, data: { id: data.id } };
@@ -1346,8 +1346,8 @@ export async function updateEventFeedback(
       p_event_id: feedback.event_id
     });
 
-    revalidateTag('events', 'max');
-    revalidateTag('feedback', 'max');
+    updateTag('events');
+    updateTag('feedback');
     revalidatePath(`/events/${feedback.event_id}`);
 
     return { success: true };
@@ -1402,8 +1402,8 @@ export async function deleteEventFeedback(
       p_event_id: feedback.event_id
     });
 
-    revalidateTag('events', 'max');
-    revalidateTag('feedback', 'max');
+    updateTag('events');
+    updateTag('feedback');
     revalidatePath(`/events/${feedback.event_id}`);
 
     return { success: true };
@@ -1463,8 +1463,8 @@ export async function uploadEventDocument(
       return { success: false, error: 'Failed to upload document' };
     }
 
-    revalidateTag('events', 'max');
-    revalidateTag('documents', 'max');
+    updateTag('events');
+    updateTag('documents');
     revalidatePath(`/events/${validated.event_id}`);
 
     return { success: true, data: { id: data.id } };
@@ -1520,8 +1520,8 @@ export async function deleteEventDocument(
       return { success: false, error: 'Failed to delete document' };
     }
 
-    revalidateTag('events', 'max');
-    revalidateTag('documents', 'max');
+    updateTag('events');
+    updateTag('documents');
     revalidatePath(`/events/${document.event_id}`);
 
     return { success: true };

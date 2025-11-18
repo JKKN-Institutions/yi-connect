@@ -13,6 +13,7 @@ import { createClient } from '@/lib/supabase/server';
 import { getEventFull } from '@/lib/data/events';
 import { EventForm } from '@/components/events';
 import { Button } from '@/components/ui/button';
+import type { Venue, EventTemplate } from '@/types/event';
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -75,17 +76,19 @@ async function EventEditContent({ params }: PageProps) {
   }
 
   // Fetch venues for the form
-  const { data: venues } = await supabase
+  const { data: venuesData } = await supabase
     .from('venues')
     .select('*')
     .eq('is_active', true)
     .order('name', { ascending: true });
+  const venues = (venuesData || []) as Venue[];
 
   // Fetch templates for the form
-  const { data: templates } = await supabase
+  const { data: templatesData } = await supabase
     .from('event_templates')
     .select('*')
-    .order('name', { ascending: true }) as { data: any[] | null };
+    .order('name', { ascending: true });
+  const templates = (templatesData || []) as EventTemplate[];
 
   return (
     <div className='flex flex-col gap-6'>
@@ -132,9 +135,9 @@ async function EventEditContent({ params }: PageProps) {
       <Card>
         <CardContent className='pt-6'>
           <EventForm
-            event={event as any}
-            venues={venues || []}
-            templates={(templates || []) as any}
+            event={event}
+            venues={venues}
+            templates={templates}
           />
         </CardContent>
       </Card>

@@ -5,11 +5,12 @@
  */
 
 import { Suspense } from 'react';
-import { notFound, redirect } from 'next/navigation';
+import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, QrCode, CheckCircle2 } from 'lucide-react';
 import { getCurrentUser } from '@/lib/data/auth';
-import { getEventFull, getMemberRSVP } from '@/lib/data/events';
+import { getEventFull } from '@/lib/data/events';
+import { createClient } from '@/lib/supabase/server';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -21,7 +22,6 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator
 } from '@/components/ui/breadcrumb';
-import { checkInAttendee } from '@/app/actions/events';
 import { CheckInForm } from '@/components/events/check-in-form';
 
 interface PageProps {
@@ -55,8 +55,16 @@ async function CheckInContent({ params, searchParams }: PageProps) {
   // Check if user is already checked in
   let isCheckedIn = false;
   if (user) {
-    const rsvp = await getMemberRSVP(id, user.id);
-    isCheckedIn = !!rsvp?.checked_in_at;
+    const supabase = await createClient();
+    const { data: checkin } = await supabase
+      .from('event_checkins')
+      .select('id')
+      .eq('event_id', id)
+      .eq('attendee_id', user.id)
+      .eq('attendee_type', 'member')
+      .single();
+
+    isCheckedIn = !!checkin;
   }
 
   return (
@@ -163,10 +171,10 @@ async function CheckInContent({ params, searchParams }: PageProps) {
               })}`}
             </span>
           </div>
-          {event.venue && (
+          {(event as any).venue?.name && (
             <div className='flex justify-between'>
               <span className='text-muted-foreground'>Venue:</span>
-              <span className='font-medium'>{event.venue.name}</span>
+              <span className='font-medium'>{(event as any).venue.name}</span>
             </div>
           )}
           {event.is_virtual && event.virtual_meeting_link && (

@@ -1,4 +1,4 @@
-import { Suspense, use } from 'react'
+import { Suspense } from 'react'
 import { getLeaderboard, getAwardCategories } from '@/lib/data/awards'
 import { LeaderboardTable } from '@/components/awards'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -151,34 +151,48 @@ async function FiltersWrapper({ categoryId, year }: { categoryId?: string; year?
   )
 }
 
-export default function LeaderboardPage({ searchParams }: LeaderboardPageProps) {
-  const params = use(searchParams)
+async function LeaderboardContent({ searchParams }: LeaderboardPageProps) {
+  const params = await searchParams
   const categoryId = params.category
   const year = params.year ? parseInt(params.year) : undefined
 
   return (
-    <div className="container mx-auto py-8 space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-4">
-        <div>
-          <h1 className="text-4xl font-bold flex items-center gap-3">
-            <Trophy className="h-10 w-10 text-yellow-500" />
-            Awards Leaderboard
-          </h1>
-          <p className="text-muted-foreground mt-2">
-            View all-time award winners and rankings
-          </p>
-        </div>
+    <div className="space-y-6">
+      {/* Filters */}
+      <Suspense fallback={<Skeleton className="h-[80px]" />}>
+        <FiltersWrapper categoryId={categoryId} year={params.year} />
+      </Suspense>
 
-        {/* Filters */}
-        <Suspense fallback={<Skeleton className="h-[80px]" />}>
-          <FiltersWrapper categoryId={categoryId} year={params.year} />
-        </Suspense>
-      </div>
-
-      {/* Leaderboard Content */}
+      {/* Leaderboard Section */}
       <Suspense fallback={<Skeleton className="h-[600px]" />}>
         <LeaderboardSection categoryId={categoryId} year={year} />
+      </Suspense>
+    </div>
+  )
+}
+
+export default function LeaderboardPage({ searchParams }: LeaderboardPageProps) {
+  return (
+    <div className="container mx-auto py-8 space-y-6">
+      {/* Header */}
+      <div>
+        <h1 className="text-4xl font-bold flex items-center gap-3">
+          <Trophy className="h-10 w-10 text-yellow-500" />
+          Awards Leaderboard
+        </h1>
+        <p className="text-muted-foreground mt-2">
+          View all-time award winners and rankings
+        </p>
+      </div>
+
+      {/* Content with searchParams - wrapped in Suspense */}
+      <Suspense fallback={
+        <div className="space-y-6">
+          <Skeleton className="h-[80px]" />
+          <Skeleton className="h-[600px]" />
+        </div>
+      }>
+        <LeaderboardContent searchParams={searchParams} />
       </Suspense>
     </div>
   )

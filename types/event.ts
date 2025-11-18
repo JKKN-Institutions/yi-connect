@@ -5,93 +5,127 @@
  * Includes events, venues, RSVPs, volunteers, and feedback.
  */
 
-import type { Tables, Enums } from './database'
-import type { MemberListItem } from './member'
+import type { Tables, Enums } from './database';
+import type { MemberListItem } from './member';
 
 // ============================================================================
 // Database Table Types
 // ============================================================================
 
-export type Event = Tables<'events'>
-export type EventTemplate = Tables<'event_templates'>
-export type Venue = Tables<'venues'>
-export type VenueBooking = Tables<'venue_bookings'>
-export type Resource = Tables<'resources'>
-export type ResourceBooking = Tables<'resource_bookings'>
-export type EventRSVP = Tables<'event_rsvps'>
-export type GuestRSVP = Tables<'guest_rsvps'>
-export type VolunteerRole = Tables<'volunteer_roles'>
-export type EventVolunteer = Tables<'event_volunteers'>
-export type EventCheckin = Tables<'event_checkins'>
-export type EventFeedback = Tables<'event_feedback'>
-export type EventDocument = Tables<'event_documents'>
-export type EventImpactMetrics = Tables<'event_impact_metrics'>
+export type Event = Tables<'events'>;
+export type EventTemplate = Tables<'event_templates'>;
+export type Venue = Tables<'venues'>;
+export type VenueBooking = Tables<'venue_bookings'>;
+export type Resource = Tables<'resources'>;
+export type ResourceBooking = Tables<'resource_bookings'>;
+export type EventRSVP = Tables<'event_rsvps'>;
+export type GuestRSVP = Tables<'guest_rsvps'>;
+export type VolunteerRole = Tables<'volunteer_roles'>;
+export type EventVolunteer = Tables<'event_volunteers'>;
+export type EventCheckin = Tables<'event_checkins'>;
+export type EventFeedback = Tables<'event_feedback'>;
+export type EventDocument = Tables<'event_documents'>;
+export type EventImpactMetrics = Tables<'event_impact_metrics'>;
 
 // ============================================================================
 // Enum Types
 // ============================================================================
 
-export type EventStatus = Enums<'event_status'>
-export type EventCategory = Enums<'event_category'>
-export type RSVPStatus = Enums<'rsvp_status'>
-export type BookingStatus = Enums<'booking_status'>
-export type VolunteerStatus = Enums<'volunteer_status'>
+export type EventStatus = Enums<'event_status'>;
+export type EventCategory = Enums<'event_category'>;
+export type RSVPStatus = Enums<'rsvp_status'>;
+export type BookingStatus = Enums<'booking_status'>;
+export type VolunteerStatus = Enums<'volunteer_status'>;
 
 // ============================================================================
 // Extended Types (with relationships)
 // ============================================================================
 
-export interface EventWithDetails extends Event {
-  venue?: Venue | null
-  template?: EventTemplate | null
+export interface EventWithDetails
+  extends Omit<
+    Event,
+    'venue_id' | 'template_id' | 'organizer_id' | 'chapter_id'
+  > {
+  venue?: Venue | null;
+  template?: EventTemplate | null;
   organizer?: {
-    id: string
+    id: string;
     profile: {
-      full_name: string
-      email: string
-      avatar_url?: string | null
-    } | null
-  } | null
+      full_name: string;
+      email: string;
+      avatar_url?: string | null;
+    } | null;
+  } | null;
   chapter?: {
-    id: string
-    name: string
-    location: string
-  } | null
+    id: string;
+    name: string;
+    location: string;
+  } | null;
 }
 
 export interface EventWithRSVPs extends EventWithDetails {
-  rsvps: Array<EventRSVP & {
-    member: MemberListItem
-  }>
-  guest_rsvps: GuestRSVP[]
+  rsvps: Array<
+    EventRSVP & {
+      member: MemberListItem;
+    }
+  >;
+  guest_rsvps: GuestRSVP[];
 }
 
 export interface EventWithVolunteers extends EventWithDetails {
-  volunteers: Array<EventVolunteer & {
-    member: MemberListItem
-    role?: VolunteerRole | null
-  }>
+  volunteers: Array<
+    EventVolunteer & {
+      member: MemberListItem;
+      role?: VolunteerRole | null;
+    }
+  >;
 }
 
 export interface EventWithMetrics extends EventWithDetails {
-  impact_metrics: EventImpactMetrics | null
+  impact_metrics: EventImpactMetrics | null;
 }
 
-export interface EventFull extends EventWithDetails {
-  rsvps: Array<EventRSVP & {
-    member: MemberListItem
-  }>
-  guest_rsvps: GuestRSVP[]
-  volunteers: Array<EventVolunteer & {
-    member: MemberListItem
-    role?: VolunteerRole | null
-  }>
-  venue_booking?: VenueBooking | null
-  resource_bookings: Array<ResourceBooking & {
-    resource: Resource
-  }>
-  feedback: EventFeedback[]
-  documents: EventDocument[]
+export interface EventFull
+  extends Omit<
+    Event,
+    'venue_id' | 'template_id' | 'organizer_id' | 'chapter_id'
+  > {
+  venue?: Venue | null;
+  template?: EventTemplate | null;
+  organizer?: {
+    id: string;
+    profile: {
+      full_name: string;
+      email: string;
+      avatar_url?: string | null;
+    } | null;
+  } | null;
+  chapter?: {
+    id: string;
+    name: string;
+    location: string;
+  } | null;
+  rsvps: Array<
+    EventRSVP & {
+      member: MemberListItem;
+    }
+  >;
+  guest_rsvps: GuestRSVP[];
+  volunteers: Array<
+    EventVolunteer & {
+      member: MemberListItem;
+      role?: VolunteerRole | null;
+    }
+  >;
+  venue_booking?: VenueBooking | null;
+  resource_bookings: Array<
+    ResourceBooking & {
+      resource: Resource;
+    }
+  >;
+  impact_metrics?: EventImpactMetrics | null;
+  feedback: EventFeedback[];
+  documents: EventDocument[];
 }
 
 // ============================================================================
@@ -99,47 +133,49 @@ export interface EventFull extends EventWithDetails {
 // ============================================================================
 
 export interface EventListItem {
-  id: string
-  title: string
-  description: string | null
-  category: EventCategory
-  status: EventStatus
-  start_date: string
-  end_date: string
-  is_virtual: boolean
-  venue_id: string | null
-  venue_address: string | null
-  max_capacity: number | null
-  current_registrations: number
-  organizer_id: string | null
-  banner_image_url: string | null
-  is_featured: boolean
-  created_at: string
+  id: string;
+  title: string;
+  description: string | null;
+  category: EventCategory;
+  status: EventStatus;
+  start_date: string;
+  end_date: string;
+  is_virtual: boolean;
+  venue_id: string | null;
+  venue_address: string | null;
+  max_capacity: number | null;
+  current_registrations: number;
+  organizer_id: string | null;
+  banner_image_url: string | null;
+  is_featured: boolean;
+  created_at: string;
   venue?: {
-    id: string
-    name: string
-    city: string | null
-  } | null
+    id: string;
+    name: string;
+    city: string | null;
+  } | null;
   organizer?: {
-    id: string
+    id: string;
     profile: {
-      full_name: string
-      email: string
-      avatar_url?: string | null
-    } | null
-  } | null
+      full_name: string;
+      email: string;
+      avatar_url?: string | null;
+    } | null;
+  } | null;
 }
 
 export interface VenueWithBookings extends Venue {
-  bookings: VenueBooking[]
-  upcoming_bookings_count: number
+  bookings: VenueBooking[];
+  upcoming_bookings_count: number;
 }
 
 export interface VolunteerRoleWithMembers extends VolunteerRole {
-  members_count: number
-  volunteers: Array<EventVolunteer & {
-    member: MemberListItem
-  }>
+  members_count: number;
+  volunteers: Array<
+    EventVolunteer & {
+      member: MemberListItem;
+    }
+  >;
 }
 
 // ============================================================================
@@ -147,34 +183,34 @@ export interface VolunteerRoleWithMembers extends VolunteerRole {
 // ============================================================================
 
 export interface EventAnalytics {
-  total_events: number
-  upcoming_events: number
-  ongoing_events: number
-  completed_events: number
-  draft_events: number
-  cancelled_events: number
-  total_attendees: number
-  average_attendance_rate: number
-  total_volunteers: number
-  total_volunteer_hours: number
-  events_by_category: Record<EventCategory, number>
+  total_events: number;
+  upcoming_events: number;
+  ongoing_events: number;
+  completed_events: number;
+  draft_events: number;
+  cancelled_events: number;
+  total_attendees: number;
+  average_attendance_rate: number;
+  total_volunteers: number;
+  total_volunteer_hours: number;
+  events_by_category: Record<EventCategory, number>;
   events_by_month: Array<{
-    month: string
-    count: number
-  }>
+    month: string;
+    count: number;
+  }>;
 }
 
 export interface EventImpactSummary {
-  attendance_rate: number
-  satisfaction_rate: number
-  volunteer_engagement: number
-  budget_utilization: number
+  attendance_rate: number;
+  satisfaction_rate: number;
+  volunteer_engagement: number;
+  budget_utilization: number;
   top_performers: Array<{
-    event_id: string
-    event_title: string
-    metric: string
-    value: number
-  }>
+    event_id: string;
+    event_title: string;
+    metric: string;
+    value: number;
+  }>;
 }
 
 // ============================================================================
@@ -182,16 +218,16 @@ export interface EventImpactSummary {
 // ============================================================================
 
 export interface EventFilters {
-  search?: string
-  status?: EventStatus[]
-  category?: EventCategory[]
-  start_date_from?: string
-  start_date_to?: string
-  is_virtual?: boolean
-  is_featured?: boolean
-  organizer_id?: string
-  chapter_id?: string
-  has_capacity?: boolean
+  search?: string;
+  status?: EventStatus[];
+  category?: EventCategory[];
+  start_date_from?: string;
+  start_date_to?: string;
+  is_virtual?: boolean;
+  is_featured?: boolean;
+  organizer_id?: string;
+  chapter_id?: string;
+  has_capacity?: boolean;
 }
 
 export type EventSortField =
@@ -200,49 +236,49 @@ export type EventSortField =
   | 'title'
   | 'current_registrations'
   | 'created_at'
-  | 'status'
+  | 'status';
 
 export interface EventSortOptions {
-  field: EventSortField
-  direction: 'asc' | 'desc'
+  field: EventSortField;
+  direction: 'asc' | 'desc';
 }
 
 export interface EventQueryParams {
-  page?: number
-  pageSize?: number
-  filters?: EventFilters
-  sort?: EventSortOptions
+  page?: number;
+  pageSize?: number;
+  filters?: EventFilters;
+  sort?: EventSortOptions;
 }
 
 export interface PaginatedEvents {
-  data: EventListItem[]
-  total: number
-  page: number
-  pageSize: number
-  totalPages: number
+  data: EventListItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
 }
 
 export interface VenueFilters {
-  search?: string
-  city?: string[]
-  capacity_min?: number
-  capacity_max?: number
-  amenities?: string[]
-  is_active?: boolean
+  search?: string;
+  city?: string[];
+  capacity_min?: number;
+  capacity_max?: number;
+  amenities?: string[];
+  is_active?: boolean;
 }
 
 export interface RSVPFilters {
-  event_id?: string
-  member_id?: string
-  status?: RSVPStatus[]
-  has_guests?: boolean
+  event_id?: string;
+  member_id?: string;
+  status?: RSVPStatus[];
+  has_guests?: boolean;
 }
 
 export interface VolunteerFilters {
-  event_id?: string
-  member_id?: string
-  role_id?: string
-  status?: VolunteerStatus[]
+  event_id?: string;
+  member_id?: string;
+  role_id?: string;
+  status?: VolunteerStatus[];
 }
 
 // ============================================================================
@@ -250,133 +286,133 @@ export interface VolunteerFilters {
 // ============================================================================
 
 export interface CreateEventInput {
-  title: string
-  description?: string
-  category: EventCategory
-  start_date: string
-  end_date: string
-  registration_start_date?: string
-  registration_end_date?: string
-  venue_id?: string
-  venue_address?: string
-  is_virtual: boolean
-  virtual_meeting_link?: string
-  max_capacity?: number
-  waitlist_enabled: boolean
-  requires_approval: boolean
-  send_reminders: boolean
-  allow_guests: boolean
-  guest_limit?: number
-  estimated_budget?: number
-  banner_image_url?: string
-  tags?: string[]
-  template_id?: string
-  chapter_id?: string
+  title: string;
+  description?: string;
+  category: EventCategory;
+  start_date: string;
+  end_date: string;
+  registration_start_date?: string;
+  registration_end_date?: string;
+  venue_id?: string;
+  venue_address?: string;
+  is_virtual: boolean;
+  virtual_meeting_link?: string;
+  max_capacity?: number;
+  waitlist_enabled: boolean;
+  requires_approval: boolean;
+  send_reminders: boolean;
+  allow_guests: boolean;
+  guest_limit?: number;
+  estimated_budget?: number;
+  banner_image_url?: string;
+  tags?: string[];
+  template_id?: string;
+  chapter_id?: string;
 }
 
 export interface UpdateEventInput extends Partial<CreateEventInput> {
-  status?: EventStatus
-  current_registrations?: number
-  actual_expense?: number
+  status?: EventStatus;
+  current_registrations?: number;
+  actual_expense?: number;
 }
 
 export interface CreateVenueInput {
-  name: string
-  address: string
-  city?: string
-  state?: string
-  pincode?: string
-  capacity?: number
-  amenities?: string[]
-  contact_person?: string
-  contact_phone?: string
-  contact_email?: string
-  booking_link?: string
-  notes?: string
+  name: string;
+  address: string;
+  city?: string;
+  state?: string;
+  pincode?: string;
+  capacity?: number;
+  amenities?: string[];
+  contact_person?: string;
+  contact_phone?: string;
+  contact_email?: string;
+  booking_link?: string;
+  notes?: string;
 }
 
 export interface UpdateVenueInput extends Partial<CreateVenueInput> {
-  is_active?: boolean
+  is_active?: boolean;
 }
 
 export interface CreateRSVPInput {
-  event_id: string
-  member_id: string
-  status?: RSVPStatus
-  guests_count?: number
-  dietary_restrictions?: string
-  special_requirements?: string
-  notes?: string
+  event_id: string;
+  member_id: string;
+  status?: RSVPStatus;
+  guests_count?: number;
+  dietary_restrictions?: string;
+  special_requirements?: string;
+  notes?: string;
 }
 
 export interface UpdateRSVPInput {
-  status?: RSVPStatus
-  guests_count?: number
-  dietary_restrictions?: string
-  special_requirements?: string
-  notes?: string
+  status?: RSVPStatus;
+  guests_count?: number;
+  dietary_restrictions?: string;
+  special_requirements?: string;
+  notes?: string;
 }
 
 export interface CreateGuestRSVPInput {
-  event_id: string
-  invited_by_member_id?: string
-  full_name: string
-  email: string
-  phone?: string
-  company?: string
-  designation?: string
-  status?: RSVPStatus
-  dietary_restrictions?: string
-  special_requirements?: string
-  notes?: string
+  event_id: string;
+  invited_by_member_id?: string;
+  full_name: string;
+  email: string;
+  phone?: string;
+  company?: string;
+  designation?: string;
+  status?: RSVPStatus;
+  dietary_restrictions?: string;
+  special_requirements?: string;
+  notes?: string;
 }
 
 export interface AssignVolunteerInput {
-  event_id: string
-  member_id: string
-  role_id?: string
-  role_name: string
-  notes?: string
+  event_id: string;
+  member_id: string;
+  role_id?: string;
+  role_name: string;
+  notes?: string;
 }
 
 export interface UpdateVolunteerInput {
-  status?: VolunteerStatus
-  hours_contributed?: number
-  feedback?: string
-  rating?: number
-  notes?: string
+  status?: VolunteerStatus;
+  hours_contributed?: number;
+  feedback?: string;
+  rating?: number;
+  notes?: string;
 }
 
 export interface CreateEventFeedbackInput {
-  event_id: string
-  member_id?: string
-  overall_rating?: number
-  content_rating?: number
-  venue_rating?: number
-  organization_rating?: number
-  what_went_well?: string
-  what_could_improve?: string
-  suggestions?: string
-  would_attend_again?: boolean
-  is_anonymous?: boolean
+  event_id: string;
+  member_id?: string;
+  overall_rating?: number;
+  content_rating?: number;
+  venue_rating?: number;
+  organization_rating?: number;
+  what_went_well?: string;
+  what_could_improve?: string;
+  suggestions?: string;
+  would_attend_again?: boolean;
+  is_anonymous?: boolean;
 }
 
 export interface CheckInInput {
-  event_id: string
-  attendee_type: 'member' | 'guest'
-  attendee_id: string
-  check_in_method?: 'qr_code' | 'manual' | 'self_checkin'
-  notes?: string
+  event_id: string;
+  attendee_type: 'member' | 'guest';
+  attendee_id: string;
+  check_in_method?: 'qr_code' | 'manual' | 'self_checkin';
+  notes?: string;
 }
 
 export interface UploadEventDocumentInput {
-  event_id: string
-  title: string
-  description?: string
-  document_type: 'photo' | 'report' | 'certificate' | 'invoice' | 'other'
-  file_url: string
-  file_size_kb?: number
-  is_public?: boolean
+  event_id: string;
+  title: string;
+  description?: string;
+  document_type: 'photo' | 'report' | 'certificate' | 'invoice' | 'other';
+  file_url: string;
+  file_size_kb?: number;
+  is_public?: boolean;
 }
 
 // ============================================================================
@@ -384,22 +420,22 @@ export interface UploadEventDocumentInput {
 // ============================================================================
 
 export interface VolunteerMatch {
-  member_id: string
-  member_name: string
-  match_score: number
-  matching_skills: string[]
-  availability_status: 'available' | 'busy' | 'unavailable'
-  volunteer_hours: number
-  events_volunteered: number
-  preferred_roles: string[]
+  member_id: string;
+  member_name: string;
+  match_score: number;
+  matching_skills: string[];
+  availability_status: 'available' | 'busy' | 'unavailable';
+  volunteer_hours: number;
+  events_volunteered: number;
+  preferred_roles: string[];
 }
 
 export interface VolunteerMatchCriteria {
-  event_id: string
-  required_skills?: string[]
-  preferred_roles?: string[]
-  min_availability?: 'available' | 'busy'
-  sort_by?: 'match_score' | 'volunteer_hours' | 'events_volunteered'
+  event_id: string;
+  required_skills?: string[];
+  preferred_roles?: string[];
+  min_availability?: 'available' | 'busy';
+  sort_by?: 'match_score' | 'volunteer_hours' | 'events_volunteered';
 }
 
 // ============================================================================
@@ -411,70 +447,98 @@ export const EVENT_STATUSES: Record<EventStatus, string> = {
   published: 'Published',
   ongoing: 'Ongoing',
   completed: 'Completed',
-  cancelled: 'Cancelled',
-}
+  cancelled: 'Cancelled'
+};
 
 export const EVENT_CATEGORIES: Record<EventCategory, string> = {
-  general: 'General',
-  industrial_visit: 'Industrial Visit',
-  conference: 'Conference',
-  workshop: 'Workshop',
+  networking: 'Networking',
   social: 'Social',
-}
+  professional_development: 'Professional Development',
+  community_service: 'Community Service',
+  sports: 'Sports',
+  cultural: 'Cultural',
+  fundraising: 'Fundraising',
+  workshop: 'Workshop',
+  seminar: 'Seminar',
+  conference: 'Conference',
+  webinar: 'Webinar',
+  other: 'Other',
+  industrial_visit: 'Industrial Visit'
+};
 
 export const RSVP_STATUSES: Record<RSVPStatus, string> = {
   pending: 'Pending',
   confirmed: 'Confirmed',
-  cancelled: 'Cancelled',
-  waitlisted: 'Waitlisted',
+  declined: 'Declined',
+  waitlist: 'Waitlisted',
   attended: 'Attended',
-  no_show: 'No Show',
-}
+  no_show: 'No Show'
+};
 
 export const VOLUNTEER_STATUSES: Record<VolunteerStatus, string> = {
   invited: 'Invited',
   accepted: 'Accepted',
   declined: 'Declined',
-  completed: 'Completed',
-}
+  completed: 'Completed'
+} as const;
 
 export const BOOKING_STATUSES: Record<BookingStatus, string> = {
   pending: 'Pending',
   confirmed: 'Confirmed',
-  cancelled: 'Cancelled',
-}
+  cancelled: 'Cancelled'
+};
 
-export const CHECK_IN_METHODS = ['qr_code', 'manual', 'self_checkin'] as const
-export const DOCUMENT_TYPES = ['photo', 'report', 'certificate', 'invoice', 'other'] as const
-export const ATTENDEE_TYPES = ['member', 'guest'] as const
+export const CHECK_IN_METHODS = ['qr_code', 'manual', 'self_checkin'] as const;
+export const DOCUMENT_TYPES = [
+  'photo',
+  'report',
+  'certificate',
+  'invoice',
+  'other'
+] as const;
+export const ATTENDEE_TYPES = ['member', 'guest'] as const;
 
 // ============================================================================
 // Utility Types
 // ============================================================================
 
-export type EventStatusBadgeVariant = 'default' | 'secondary' | 'success' | 'warning' | 'destructive'
+export type EventStatusBadgeVariant =
+  | 'default'
+  | 'secondary'
+  | 'success'
+  | 'warning'
+  | 'destructive';
 
-export function getEventStatusVariant(status: EventStatus): EventStatusBadgeVariant {
+export function getEventStatusVariant(
+  status: EventStatus
+): EventStatusBadgeVariant {
   const variants: Record<EventStatus, EventStatusBadgeVariant> = {
     draft: 'default',
     published: 'secondary',
     ongoing: 'warning',
     completed: 'success',
-    cancelled: 'destructive',
-  }
-  return variants[status]
+    cancelled: 'destructive'
+  };
+  return variants[status];
 }
 
-export type RSVPStatusBadgeVariant = 'default' | 'secondary' | 'success' | 'warning' | 'destructive'
+export type RSVPStatusBadgeVariant =
+  | 'default'
+  | 'secondary'
+  | 'success'
+  | 'warning'
+  | 'destructive';
 
-export function getRSVPStatusVariant(status: RSVPStatus): RSVPStatusBadgeVariant {
+export function getRSVPStatusVariant(
+  status: RSVPStatus
+): RSVPStatusBadgeVariant {
   const variants: Record<RSVPStatus, RSVPStatusBadgeVariant> = {
     pending: 'default',
     confirmed: 'success',
-    cancelled: 'destructive',
-    waitlisted: 'warning',
+    declined: 'destructive',
+    waitlist: 'warning',
     attended: 'secondary',
-    no_show: 'destructive',
-  }
-  return variants[status]
+    no_show: 'destructive'
+  };
+  return variants[status];
 }

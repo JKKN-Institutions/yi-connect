@@ -33,7 +33,8 @@
       "Bash(dir:*)",
       "Bash(taskkill:*)",
       "Bash(nul)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(powershell -Command \"\n$types = @''\n[The types content would go here but is too large]\n''@\n\nWrite-Host ''Checking PowerShell approach...''\nWrite-Host ''PowerShell version: '' $PSVersionTable.PSVersion\n\")"
     ],
     "deny": [],
     "ask": []

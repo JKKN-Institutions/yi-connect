@@ -201,7 +201,7 @@ async function EventDetailContent({ params }: PageProps) {
         {/* Main Content */}
         <div className='lg:col-span-2 space-y-6'>
           {/* Full Description Card (if description is long) */}
-          {event.description && event.description.length > 150 && (
+          {event.description && (event.description as any).length > 150 && (
             <Card>
               <CardHeader>
                 <CardTitle>About This Event</CardTitle>
@@ -264,8 +264,8 @@ async function EventDetailContent({ params }: PageProps) {
                 </div>
                 <Separator />
                 <div className='space-y-3'>
-                  {event.rsvps && event.rsvps.length > 0 ? (
-                    event.rsvps.map((rsvp) => (
+                  {(event as any).rsvps && (event as any).rsvps.length > 0 ? (
+                    (event as any).rsvps.map((rsvp: any) => (
                       <div
                         key={rsvp.id}
                         className='flex items-center justify-between'
@@ -274,19 +274,19 @@ async function EventDetailContent({ params }: PageProps) {
                           <Avatar>
                             <AvatarImage
                               src={
-                                (rsvp.member as any).profile?.avatar_url ||
+                                rsvp.member?.profile?.avatar_url ||
                                 undefined
                               }
                             />
                             <AvatarFallback>
                               {(
-                                (rsvp.member as any).profile?.full_name || 'U'
+                                rsvp.member?.profile?.full_name || 'U'
                               ).charAt(0)}
                             </AvatarFallback>
                           </Avatar>
                           <div>
                             <div className='font-medium'>
-                              {(rsvp.member as any).profile?.full_name ||
+                              {rsvp.member?.profile?.full_name ||
                                 'Unknown'}
                             </div>
                             <div className='text-sm text-muted-foreground'>
@@ -345,8 +345,8 @@ async function EventDetailContent({ params }: PageProps) {
                 </div>
                 <Separator />
                 <div className='space-y-3'>
-                  {event.volunteers && event.volunteers.length > 0 ? (
-                    event.volunteers.map((volunteer) => (
+                  {(event as any).volunteers && (event as any).volunteers.length > 0 ? (
+                    (event as any).volunteers.map((volunteer: any) => (
                       <div
                         key={volunteer.id}
                         className='flex items-center justify-between'
@@ -355,20 +355,20 @@ async function EventDetailContent({ params }: PageProps) {
                           <Avatar>
                             <AvatarImage
                               src={
-                                (volunteer.member as any).profile?.avatar_url ||
+                                volunteer.member?.profile?.avatar_url ||
                                 undefined
                               }
                             />
                             <AvatarFallback>
                               {(
-                                (volunteer.member as any).profile?.full_name ||
+                                volunteer.member?.profile?.full_name ||
                                 'U'
                               ).charAt(0)}
                             </AvatarFallback>
                           </Avatar>
                           <div>
                             <div className='font-medium'>
-                              {(volunteer.member as any).profile?.full_name ||
+                              {volunteer.member?.profile?.full_name ||
                                 'Unknown'}
                             </div>
                             <div className='text-sm text-muted-foreground'>
@@ -533,12 +533,12 @@ async function EventDetailContent({ params }: PageProps) {
                   <>
                     <MapPin className='h-5 w-5 mt-0.5 text-muted-foreground' />
                     <div className='flex-1'>
-                      {event.venue ? (
+                      {(event as any).venue ? (
                         <>
-                          <div className='font-medium'>{event.venue.name}</div>
+                          <div className='font-medium'>{(event as any).venue.name}</div>
                           <div className='text-sm text-muted-foreground'>
-                            {event.venue.address}
-                            {event.venue.city && <>, {event.venue.city}</>}
+                            {(event as any).venue.address}
+                            {(event as any).venue.city && <>, {(event as any).venue.city}</>}
                           </div>
                         </>
                       ) : event.venue_address ? (
@@ -610,7 +610,7 @@ async function EventDetailContent({ params }: PageProps) {
                       Estimated Budget
                     </div>
                     <span className='text-sm'>
-                      ₹{event.estimated_budget.toLocaleString()}
+                      ₹{(event.estimated_budget as any).toLocaleString()}
                     </span>
                   </div>
                 </>
@@ -619,7 +619,7 @@ async function EventDetailContent({ params }: PageProps) {
           </Card>
 
           {/* Impact Metrics */}
-          {event.impact_metrics && (
+          {(event as any).impact_metrics && (
             <Card>
               <CardHeader>
                 <CardTitle>Impact Metrics</CardTitle>
@@ -628,20 +628,20 @@ async function EventDetailContent({ params }: PageProps) {
                 <div className='flex items-center justify-between'>
                   <span className='text-sm'>Attendance Rate</span>
                   <span className='font-medium'>
-                    {Math.round(event.impact_metrics.attendance_rate || 0)}%
+                    {Math.round((event as any).impact_metrics.attendance_rate || 0)}%
                   </span>
                 </div>
                 <div className='flex items-center justify-between'>
                   <span className='text-sm'>Volunteer Hours</span>
                   <span className='font-medium'>
-                    {event.impact_metrics.total_volunteer_hours || 0}h
+                    {(event as any).impact_metrics.total_volunteer_hours || 0}h
                   </span>
                 </div>
                 <div className='flex items-center justify-between'>
                   <span className='text-sm'>Average Rating</span>
                   <span className='font-medium flex items-center gap-1'>
                     <Award className='h-4 w-4 text-yellow-500' />
-                    {event.impact_metrics.average_rating?.toFixed(1) || 'N/A'}
+                    {(event as any).impact_metrics.average_rating?.toFixed(1) || 'N/A'}
                   </span>
                 </div>
               </CardContent>
@@ -668,8 +668,8 @@ async function FeedbackList({ eventId }: { eventId: string }) {
 
   return (
     <div className='space-y-4'>
-      {feedback.map((item) => (
-        <FeedbackDisplay key={item.id} feedback={item as any} />
+      {(feedback as any[]).map((item: any) => (
+        <FeedbackDisplay key={item.id} feedback={item} />
       ))}
     </div>
   );
@@ -690,7 +690,7 @@ async function DocumentsList({ eventId }: { eventId: string }) {
 
   return (
     <div className='space-y-3'>
-      {documents.map((doc) => (
+      {(documents as any[]).map((doc: any) => (
         <div
           key={doc.id}
           className='flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors'

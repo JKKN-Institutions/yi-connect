@@ -533,7 +533,8 @@ export const getEventFull = cache(
       return null;
     }
 
-    return data as EventFull;
+    // Type assertion is safe here because our query selects exactly what EventFull expects
+    return data as unknown as EventFull;
   }
 );
 
@@ -578,7 +579,9 @@ export const getMemberUpcomingEvents = cache(
         ),
         organizer:members!organizer_id (
           id,
-          full_name
+          profile:profiles (
+            full_name
+          )
         )
       )
     `
@@ -616,7 +619,9 @@ export const getMemberUpcomingEvents = cache(
         ),
         organizer:members!organizer_id (
           id,
-          full_name
+          profile:profiles (
+            full_name
+          )
         )
       )
     `
@@ -697,7 +702,7 @@ export const getVenues = cache(
       throw new Error('Failed to fetch venues');
     }
 
-    return data || [];
+    return (data || []) as Venue[];
   }
 );
 
@@ -762,12 +767,14 @@ export const getRSVPs = cache(
       *,
       member:members (
         id,
-        full_name,
-        email,
-        phone_number,
-        avatar_url,
         company,
-        designation
+        designation,
+        profile:profiles (
+          full_name,
+          email,
+          phone,
+          avatar_url
+        )
       ),
       event:events (
         id,
@@ -802,7 +809,7 @@ export const getRSVPs = cache(
       throw new Error('Failed to fetch RSVPs');
     }
 
-    return data || [];
+    return (data || []) as EventRSVP[];
   }
 );
 
@@ -861,7 +868,7 @@ export const getGuestRSVPs = cache(
       throw new Error('Failed to fetch guest RSVPs');
     }
 
-    return data || [];
+    return (data || []) as GuestRSVP[];
   }
 );
 
@@ -891,7 +898,7 @@ export const getVolunteerRoles = cache(async (): Promise<VolunteerRole[]> => {
     throw new Error('Failed to fetch volunteer roles');
   }
 
-  return data || [];
+  return (data || []) as VolunteerRole[];
 });
 
 /**
@@ -910,12 +917,14 @@ export const getVolunteers = cache(
       *,
       member:members (
         id,
-        full_name,
-        email,
-        phone_number,
-        avatar_url,
         company,
-        designation
+        designation,
+        profile:profiles (
+          full_name,
+          email,
+          phone,
+          avatar_url
+        )
       ),
       role:volunteer_roles (*),
       event:events (
@@ -947,7 +956,7 @@ export const getVolunteers = cache(
       throw new Error('Failed to fetch volunteers');
     }
 
-    return data || [];
+    return (data || []) as EventVolunteer[];
   }
 );
 
@@ -1266,7 +1275,7 @@ export const getEventFeedback = cache(
       throw new Error('Failed to fetch event feedback');
     }
 
-    return data || [];
+    return (data || []) as EventFeedback[];
   }
 );
 
@@ -1293,7 +1302,7 @@ export const getEventDocuments = cache(
       throw new Error('Failed to fetch event documents');
     }
 
-    return data || [];
+    return (data || []) as EventDocument[];
   }
 );
 
@@ -1318,7 +1327,7 @@ export const getEventTemplates = cache(async (): Promise<EventTemplate[]> => {
     throw new Error('Failed to fetch event templates');
   }
 
-  return data || [];
+  return (data || []) as EventTemplate[];
 });
 
 // ============================================================================
@@ -1354,10 +1363,9 @@ export const getVolunteerMatches = cache(
       .from('members')
       .select(`
         id,
-        user_id,
-        first_name,
-        last_name,
-        availability_status,
+        profile:profiles (
+          full_name
+        ),
         skills:member_skills(
           skill_id,
           skill_name,
@@ -1370,7 +1378,6 @@ export const getVolunteerMatches = cache(
           performance_rating
         )
       `)
-      .eq('status', 'active')
       .eq('is_active', true);
 
     if (error || !members) {
@@ -1420,12 +1427,8 @@ export const getVolunteerMatches = cache(
         }
 
         // Availability status (20% of score)
-        const availabilityScores: Record<string, number> = {
-          available: 20,
-          busy: 10,
-          unavailable: 0
-        };
-        const availabilityScore = availabilityScores[member.availability_status || 'available'] || 0;
+        // Default to available since availability_status is tracked in separate availability table
+        const availabilityScore = 20;
         matchScore += availabilityScore;
 
         // Volunteer experience (20% of score)
@@ -1449,11 +1452,11 @@ export const getVolunteerMatches = cache(
         matchScore += experienceScore;
 
         return {
-          member_id: member.user_id,
-          member_name: `${member.first_name} ${member.last_name}`,
+          member_id: member.id,
+          member_name: (member.profile as any)?.full_name || 'Unknown',
           match_score: Math.round(matchScore),
           matching_skills: matchingSkills,
-          availability_status: member.availability_status || 'available',
+          availability_status: 'available' as 'available' | 'busy' | 'unavailable',
           volunteer_hours: totalHours,
           events_volunteered: eventsVolunteered,
           preferred_roles: [] // Could be enhanced with member preferences

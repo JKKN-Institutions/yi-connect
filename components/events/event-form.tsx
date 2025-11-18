@@ -1,4 +1,5 @@
 'use client';
+'use no memo';
 
 /**
  * Event Form Component
@@ -71,12 +72,17 @@ interface EventFormProps {
   chapterId?: string;
 }
 
-export function EventForm({
-  event,
-  venues = [],
-  templates = [],
-  chapterId
-}: EventFormProps) {
+export function EventForm(props: EventFormProps) {
+  const {
+    event,
+    venues: venuesProp = [],
+    templates: templatesProp = [],
+    chapterId
+  } = props;
+
+  const venues = venuesProp as Venue[];
+  const templates = templatesProp as EventTemplate[];
+
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [selectedTemplate, setSelectedTemplate] =
@@ -93,7 +99,7 @@ export function EventForm({
     defaultValues: {
       title: event?.title || '',
       description: event?.description || '',
-      category: event?.category || 'general',
+      category: event?.category || 'other',
       start_date: event?.start_date || '',
       end_date: event?.end_date || '',
       registration_start_date: event?.registration_start_date || '',
@@ -120,11 +126,11 @@ export function EventForm({
   const allowGuests = form.watch('allow_guests');
 
   // Apply template when selected
-  const applyTemplate = (template: EventTemplate) => {
-    setSelectedTemplate(template);
-    form.setValue('category', template.category);
-    form.setValue('max_capacity', template.default_capacity || undefined);
-    form.setValue('template_id', template.id);
+  const applyTemplate = (template: any) => {
+    setSelectedTemplate(template as EventTemplate);
+    (form.setValue as any)('category', template.category);
+    (form.setValue as any)('max_capacity', template.default_capacity || undefined);
+    (form.setValue as any)('template_id', template.id);
     toast.success(`Applied template: ${template.name}`);
   };
 
@@ -296,8 +302,8 @@ export function EventForm({
                     <FormLabel>Start from Template (Optional)</FormLabel>
                     <Select
                       onValueChange={(value) => {
-                        const template = templates.find((t) => t.id === value);
-                        if (template) applyTemplate(template);
+                        const template = templates.find((t) => (t as any).id === value);
+                        if (template) applyTemplate(template as EventTemplate);
                       }}
                     >
                       <SelectTrigger>
@@ -305,16 +311,16 @@ export function EventForm({
                       </SelectTrigger>
                       <SelectContent>
                         {templates.map((template) => (
-                          <SelectItem key={template.id} value={template.id}>
-                            {template.name} -{' '}
-                            {EVENT_CATEGORIES[template.category]}
+                          <SelectItem key={(template as any).id} value={(template as any).id}>
+                            {(template as any).name} -{' '}
+                            {(EVENT_CATEGORIES as any)[(template as any).category]}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                     {selectedTemplate && (
                       <p className='text-sm text-muted-foreground'>
-                        {selectedTemplate.description}
+                        {(selectedTemplate as any).description}
                       </p>
                     )}
                   </div>

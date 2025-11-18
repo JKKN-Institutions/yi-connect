@@ -56,7 +56,7 @@ async function MyBookingsContent() {
   const pastBookings = confirmedBookings.filter(
     (b) => new Date(b.event.start_date) <= new Date()
   );
-  const cancelledBookings = bookings.filter((b) => b.status === 'cancelled');
+  const cancelledBookings = bookings.filter((b) => b.cancelled_at !== null);
   const activeWaitlist = waitlistEntries.filter((w) => w.status === 'waiting');
 
   return (

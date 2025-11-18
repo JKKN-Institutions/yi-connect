@@ -2026,6 +2026,70 @@ export type Database = {
           updated_at?: string;
         };
       };
+      profiles: {
+        Row: {
+          id: string;
+          email: string;
+          full_name: string;
+          avatar_url: string | null;
+          phone: string | null;
+          chapter_id: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id: string;
+          email: string;
+          full_name: string;
+          avatar_url?: string | null;
+          phone?: string | null;
+          chapter_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          email?: string;
+          full_name?: string;
+          avatar_url?: string | null;
+          phone?: string | null;
+          chapter_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      chapters: {
+        Row: {
+          id: string;
+          name: string;
+          location: string;
+          region: string | null;
+          established_date: string | null;
+          member_count: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          location: string;
+          region?: string | null;
+          established_date?: string | null;
+          member_count?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          location?: string;
+          region?: string | null;
+          established_date?: string | null;
+          member_count?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
     };
     Views: {
       [_ in never]: never;

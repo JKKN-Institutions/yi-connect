@@ -7,7 +7,6 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { createNomination, updateNomination } from '@/app/actions/awards'
 import { CreateNominationSchema } from '@/lib/validations/award'
-import { NominationStatus } from '@/types/award'
 import { Button } from '@/components/ui/button'
 import {
   Form,
@@ -75,6 +74,24 @@ export function NominationForm({
     { success: false }
   )
 
+  // Map database status to form status
+  const getFormStatus = (dbStatus?: string): 'draft' | 'submitted' | 'under_review' | 'shortlisted' | 'rejected' | 'winner' | undefined => {
+    if (!dbStatus) return 'draft'
+    // Map database enum values to form schema values
+    const statusMap: Record<string, 'draft' | 'submitted' | 'under_review' | 'shortlisted' | 'rejected' | 'winner'> = {
+      'pending': 'submitted',
+      'approved': 'under_review',
+      'rejected': 'rejected',
+      'withdrawn': 'draft',
+      'draft': 'draft',
+      'submitted': 'submitted',
+      'under_review': 'under_review',
+      'shortlisted': 'shortlisted',
+      'winner': 'winner',
+    }
+    return statusMap[dbStatus] || 'draft'
+  }
+
   const form = useForm<NominationFormValues>({
     resolver: zodResolver(CreateNominationSchema),
     defaultValues: {
@@ -82,7 +99,7 @@ export function NominationForm({
       nominator_id: nominatorId,
       nominee_id: defaultValues?.nominee_id || '',
       justification: defaultValues?.justification || '',
-      status: (defaultValues?.status as NominationStatus) || 'draft',
+      status: getFormStatus(defaultValues?.status),
     },
   })
 

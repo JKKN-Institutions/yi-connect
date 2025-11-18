@@ -31,6 +31,32 @@ interface NominationStatusCardProps {
 }
 
 const STATUS_CONFIG = {
+  // Database enum values
+  pending: {
+    label: 'Pending',
+    variant: 'default' as const,
+    icon: Clock,
+    description: 'Awaiting review',
+  },
+  approved: {
+    label: 'Approved',
+    variant: 'default' as const,
+    icon: CheckCircle2,
+    description: 'Approved for judging',
+  },
+  rejected: {
+    label: 'Rejected',
+    variant: 'destructive' as const,
+    icon: XCircle,
+    description: 'Not accepted',
+  },
+  withdrawn: {
+    label: 'Withdrawn',
+    variant: 'secondary' as const,
+    icon: XCircle,
+    description: 'Nomination withdrawn',
+  },
+  // Form schema values (for compatibility)
   draft: {
     label: 'Draft',
     variant: 'secondary' as const,
@@ -55,12 +81,6 @@ const STATUS_CONFIG = {
     icon: CheckCircle2,
     description: 'Accepted for judging',
   },
-  rejected: {
-    label: 'Rejected',
-    variant: 'destructive' as const,
-    icon: XCircle,
-    description: 'Not accepted',
-  },
   winner: {
     label: 'Winner',
     variant: 'default' as const,
@@ -74,7 +94,9 @@ export function NominationStatusCard({
   showActions = true,
   viewAs = 'nominator',
 }: NominationStatusCardProps) {
-  const statusConfig = STATUS_CONFIG[nomination.status || 'draft']
+  // Map database status to config key (handle both database enum and form schema values)
+  const statusKey = nomination.status || 'pending'
+  const statusConfig = STATUS_CONFIG[statusKey as keyof typeof STATUS_CONFIG] || STATUS_CONFIG.pending
   const StatusIcon = statusConfig.icon
 
   const nominee = nomination.nominee
@@ -155,8 +177,8 @@ export function NominationStatusCard({
           </div>
         )}
 
-        {/* Jury Progress (for shortlisted/judging nominations) */}
-        {nomination.status && ['shortlisted', 'under_review'].includes(nomination.status) &&
+        {/* Jury Progress (for approved/pending nominations) */}
+        {nomination.status && ['approved', 'pending', 'shortlisted', 'under_review'].includes(nomination.status) &&
           totalJuryMembers > 0 && (
             <div className="space-y-2">
               <div className="flex items-center justify-between text-xs">

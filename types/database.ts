@@ -1634,6 +1634,398 @@ export type Database = {
           updated_at?: string;
         };
       };
+      members: {
+        Row: {
+          id: string;
+          chapter_id: string | null;
+          membership_number: string | null;
+          member_since: string;
+          membership_status: string;
+          company: string | null;
+          designation: string | null;
+          industry: string | null;
+          years_of_experience: number | null;
+          linkedin_url: string | null;
+          date_of_birth: string | null;
+          gender: string | null;
+          address: string | null;
+          city: string | null;
+          state: string | null;
+          country: string | null;
+          pincode: string | null;
+          emergency_contact_name: string | null;
+          emergency_contact_phone: string | null;
+          emergency_contact_relationship: string | null;
+          interests: string[] | null;
+          preferred_event_types: string[] | null;
+          communication_preferences: Json | null;
+          is_active: boolean;
+          notes: string | null;
+          avatar_url: string | null;
+          renewal_date: string | null;
+          membership_type: string | null;
+          family_count: number;
+          languages: string[] | null;
+          willingness_level: number | null;
+          vertical_interests: string[] | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id: string;
+          chapter_id?: string | null;
+          membership_number?: string | null;
+          member_since?: string;
+          membership_status?: string;
+          company?: string | null;
+          designation?: string | null;
+          industry?: string | null;
+          years_of_experience?: number | null;
+          linkedin_url?: string | null;
+          date_of_birth?: string | null;
+          gender?: string | null;
+          address?: string | null;
+          city?: string | null;
+          state?: string | null;
+          country?: string | null;
+          pincode?: string | null;
+          emergency_contact_name?: string | null;
+          emergency_contact_phone?: string | null;
+          emergency_contact_relationship?: string | null;
+          interests?: string[] | null;
+          preferred_event_types?: string[] | null;
+          communication_preferences?: Json | null;
+          is_active?: boolean;
+          notes?: string | null;
+          avatar_url?: string | null;
+          membership_type?: string | null;
+          family_count?: number;
+          languages?: string[] | null;
+          willingness_level?: number | null;
+          vertical_interests?: string[] | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          chapter_id?: string | null;
+          membership_number?: string | null;
+          member_since?: string;
+          membership_status?: string;
+          company?: string | null;
+          designation?: string | null;
+          industry?: string | null;
+          years_of_experience?: number | null;
+          linkedin_url?: string | null;
+          date_of_birth?: string | null;
+          gender?: string | null;
+          address?: string | null;
+          city?: string | null;
+          state?: string | null;
+          country?: string | null;
+          pincode?: string | null;
+          emergency_contact_name?: string | null;
+          emergency_contact_phone?: string | null;
+          emergency_contact_relationship?: string | null;
+          interests?: string[] | null;
+          preferred_event_types?: string[] | null;
+          communication_preferences?: Json | null;
+          is_active?: boolean;
+          notes?: string | null;
+          avatar_url?: string | null;
+          membership_type?: string | null;
+          family_count?: number;
+          languages?: string[] | null;
+          willingness_level?: number | null;
+          vertical_interests?: string[] | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      skills: {
+        Row: {
+          id: string;
+          name: string;
+          category: Database['public']['Enums']['skill_category'];
+          description: string | null;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          category?: Database['public']['Enums']['skill_category'];
+          description?: string | null;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          category?: Database['public']['Enums']['skill_category'];
+          description?: string | null;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      member_skills: {
+        Row: {
+          id: string;
+          member_id: string;
+          skill_id: string;
+          proficiency: Database['public']['Enums']['proficiency_level'];
+          years_of_experience: number;
+          is_willing_to_mentor: boolean;
+          notes: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          member_id: string;
+          skill_id: string;
+          proficiency?: Database['public']['Enums']['proficiency_level'];
+          years_of_experience?: number;
+          is_willing_to_mentor?: boolean;
+          notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          member_id?: string;
+          skill_id?: string;
+          proficiency?: Database['public']['Enums']['proficiency_level'];
+          years_of_experience?: number;
+          is_willing_to_mentor?: boolean;
+          notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      certifications: {
+        Row: {
+          id: string;
+          name: string;
+          issuing_organization: string;
+          description: string | null;
+          validity_period_months: number | null;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          issuing_organization: string;
+          description?: string | null;
+          validity_period_months?: number | null;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          issuing_organization?: string;
+          description?: string | null;
+          validity_period_months?: number | null;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      member_certifications: {
+        Row: {
+          id: string;
+          member_id: string;
+          certification_id: string;
+          certificate_number: string | null;
+          issued_date: string;
+          expiry_date: string | null;
+          document_url: string | null;
+          notes: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          member_id: string;
+          certification_id: string;
+          certificate_number?: string | null;
+          issued_date: string;
+          expiry_date?: string | null;
+          document_url?: string | null;
+          notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          member_id?: string;
+          certification_id?: string;
+          certificate_number?: string | null;
+          issued_date?: string;
+          expiry_date?: string | null;
+          document_url?: string | null;
+          notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      availability: {
+        Row: {
+          id: string;
+          member_id: string;
+          date: string;
+          status: Database['public']['Enums']['availability_status'];
+          time_slots: Json | null;
+          notes: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          member_id: string;
+          date: string;
+          status?: Database['public']['Enums']['availability_status'];
+          time_slots?: Json | null;
+          notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          member_id?: string;
+          date?: string;
+          status?: Database['public']['Enums']['availability_status'];
+          time_slots?: Json | null;
+          notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      engagement_metrics: {
+        Row: {
+          id: string;
+          member_id: string;
+          total_events_attended: number;
+          events_attended_last_3_months: number;
+          events_attended_last_6_months: number;
+          events_organized: number;
+          volunteer_hours: number;
+          total_contributions: number;
+          feedback_given: number;
+          referrals_made: number;
+          engagement_score: number;
+          last_event_date: string | null;
+          last_activity_date: string | null;
+          calculated_at: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          member_id: string;
+          total_events_attended?: number;
+          events_attended_last_3_months?: number;
+          events_attended_last_6_months?: number;
+          events_organized?: number;
+          volunteer_hours?: number;
+          total_contributions?: number;
+          feedback_given?: number;
+          referrals_made?: number;
+          engagement_score?: number;
+          last_event_date?: string | null;
+          last_activity_date?: string | null;
+          calculated_at?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          member_id?: string;
+          total_events_attended?: number;
+          events_attended_last_3_months?: number;
+          events_attended_last_6_months?: number;
+          events_organized?: number;
+          volunteer_hours?: number;
+          total_contributions?: number;
+          feedback_given?: number;
+          referrals_made?: number;
+          engagement_score?: number;
+          last_event_date?: string | null;
+          last_activity_date?: string | null;
+          calculated_at?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      leadership_assessments: {
+        Row: {
+          id: string;
+          member_id: string;
+          engagement_score: number;
+          tenure_score: number;
+          skills_score: number;
+          leadership_experience_score: number;
+          training_score: number;
+          readiness_score: number;
+          readiness_level: string | null;
+          strengths: string[] | null;
+          areas_for_development: string[] | null;
+          recommended_roles: string[] | null;
+          recommended_training: string[] | null;
+          assessed_at: string;
+          next_assessment_date: string | null;
+          notes: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          member_id: string;
+          engagement_score?: number;
+          tenure_score?: number;
+          skills_score?: number;
+          leadership_experience_score?: number;
+          training_score?: number;
+          readiness_score?: number;
+          readiness_level?: string | null;
+          strengths?: string[] | null;
+          areas_for_development?: string[] | null;
+          recommended_roles?: string[] | null;
+          recommended_training?: string[] | null;
+          assessed_at?: string;
+          next_assessment_date?: string | null;
+          notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          member_id?: string;
+          engagement_score?: number;
+          tenure_score?: number;
+          skills_score?: number;
+          leadership_experience_score?: number;
+          training_score?: number;
+          readiness_score?: number;
+          readiness_level?: string | null;
+          strengths?: string[] | null;
+          areas_for_development?: string[] | null;
+          recommended_roles?: string[] | null;
+          recommended_training?: string[] | null;
+          assessed_at?: string;
+          next_assessment_date?: string | null;
+          notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
     };
     Views: {
       [_ in never]: never;
@@ -1679,6 +2071,9 @@ export type Database = {
       deal_stage: 'prospect' | 'contacted' | 'proposal_sent' | 'negotiation' | 'committed' | 'contract_signed' | 'payment_received' | 'lost';
       reimbursement_status: 'draft' | 'submitted' | 'pending_approval' | 'approved' | 'rejected' | 'paid';
       approval_action: 'approve' | 'reject' | 'request_changes';
+      proficiency_level: 'beginner' | 'intermediate' | 'advanced' | 'expert';
+      availability_status: 'available' | 'busy' | 'unavailable';
+      skill_category: 'technical' | 'business' | 'creative' | 'leadership' | 'communication' | 'other';
       award_frequency: 'monthly' | 'quarterly' | 'annual' | 'one_time';
       award_cycle_status:
         | 'draft'
@@ -1904,6 +2299,32 @@ export const Constants = {
         'approved',
         'rejected',
         'withdrawn'
+      ],
+      proficiency_level: ['beginner', 'intermediate', 'advanced', 'expert'] as [
+        'beginner',
+        'intermediate',
+        'advanced',
+        'expert'
+      ],
+      availability_status: ['available', 'busy', 'unavailable'] as [
+        'available',
+        'busy',
+        'unavailable'
+      ],
+      skill_category: [
+        'technical',
+        'business',
+        'creative',
+        'leadership',
+        'communication',
+        'other'
+      ] as [
+        'technical',
+        'business',
+        'creative',
+        'leadership',
+        'communication',
+        'other'
       ]
     }
   }

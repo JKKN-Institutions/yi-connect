@@ -118,7 +118,7 @@ export default function Home() {
     <div className='min-h-screen bg-background'>
       {/* Hero Section */}
       <section className='relative overflow-hidden bg-gradient-to-br from-orange-50 via-background to-green-50 dark:from-orange-950/20 dark:via-background dark:to-green-950/20'>
-        <div className='absolute inset-0 bg-grid-slate-200/50 dark:bg-grid-slate-800/50 [mask-image:linear-gradient(to_bottom,white,transparent)]' />
+        <div className='absolute inset-0 bg-grid-slate-200/50 dark:bg-grid-slate-800/50 [mask-image:linear-gradient(to_bottom,white,transparent)] pointer-events-none' />
         <div className='container relative mx-auto px-4 py-20 md:py-32'>
           <div className='mx-auto max-w-5xl text-center space-y-8'>
             <div className='inline-flex items-center gap-2 rounded-full bg-orange-100 dark:bg-orange-950/50 px-5 py-2.5 text-sm font-semibold text-orange-700 dark:text-orange-400 ring-1 ring-orange-200 dark:ring-orange-900'>
@@ -317,7 +317,7 @@ export default function Home() {
 
       {/* CTA Section */}
       <section className='relative overflow-hidden bg-gradient-to-br from-orange-600 via-orange-500 to-green-600 py-20 md:py-28'>
-        <div className='absolute inset-0 bg-grid-white/10 [mask-image:linear-gradient(to_bottom,white,transparent)]' />
+        <div className='absolute inset-0 bg-grid-white/10 [mask-image:linear-gradient(to_bottom,white,transparent)] pointer-events-none' />
         <div className='container relative mx-auto px-4'>
           <Card className='mx-auto max-w-4xl bg-white/10 backdrop-blur-sm text-white border-white/20 shadow-2xl'>
             <CardContent className='p-8 md:p-12 text-center space-y-6'>

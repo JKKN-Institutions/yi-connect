@@ -20,7 +20,7 @@ export default function AuthLayout({
   return (
     <div className="min-h-screen grid lg:grid-cols-2">
       {/* Left side - Branding */}
-      <div className="hidden lg:flex lg:flex-col lg:justify-between bg-linear-to-br from-primary via-primary/90 to-secondary p-12">
+      <div className="hidden lg:flex lg:flex-col lg:justify-between bg-gradient-to-br from-primary via-primary/90 to-secondary p-12">
         <div>
           <Link href="/" className="flex items-center gap-2 text-white">
             <div className="h-10 w-10 rounded-lg bg-white/20 backdrop-blur flex items-center justify-center">

@@ -117,8 +117,8 @@ export default function Home() {
   return (
     <div className='min-h-screen bg-background'>
       {/* Hero Section */}
-      <section className='relative overflow-hidden bg-gradient-to-br from-orange-50 via-background to-green-50 dark:from-orange-950/20 dark:via-background dark:to-green-950/20'>
-        <div className='absolute inset-0 bg-grid-slate-200/50 dark:bg-grid-slate-800/50 [mask-image:linear-gradient(to_bottom,white,transparent)] pointer-events-none' />
+      <section className='relative overflow-hidden bg-linear-to-br from-orange-50 via-background to-green-50 dark:from-orange-950/20 dark:via-background dark:to-green-950/20'>
+        <div className='absolute inset-0 bg-grid-slate-200/50 dark:bg-grid-slate-800/50 pointer-events-none' />
         <div className='container relative mx-auto px-4 py-20 md:py-32'>
           <div className='mx-auto max-w-5xl text-center space-y-8'>
             <div className='inline-flex items-center gap-2 rounded-full bg-orange-100 dark:bg-orange-950/50 px-5 py-2.5 text-sm font-semibold text-orange-700 dark:text-orange-400 ring-1 ring-orange-200 dark:ring-orange-900'>
@@ -131,7 +131,7 @@ export default function Home() {
 
             <h1 className='text-5xl font-bold tracking-tight sm:text-6xl md:text-7xl lg:text-8xl'>
               <span className='block text-foreground mb-2'>Welcome to</span>
-              <span className='block bg-gradient-to-r from-orange-600 via-orange-500 to-green-600 bg-clip-text text-transparent'>
+              <span className='block bg-linear-to-r from-orange-600 via-orange-500 to-green-600 bg-clip-text text-transparent'>
                 Yi Connect
               </span>
             </h1>
@@ -178,7 +178,7 @@ export default function Home() {
       {/* Stats Section */}
       <section className='container mx-auto px-4 py-16 md:py-20'>
         <div className='grid gap-6 sm:grid-cols-2 lg:grid-cols-4 max-w-6xl mx-auto'>
-          <Card className='relative overflow-hidden border-orange-200 dark:border-orange-900 bg-gradient-to-br from-orange-50 to-background dark:from-orange-950/30 dark:to-background'>
+          <Card className='relative overflow-hidden border-orange-200 dark:border-orange-900 bg-linear-to-br from-orange-50 to-background dark:from-orange-950/30 dark:to-background'>
             <CardContent className='p-6 text-center'>
               <div className='text-4xl font-bold text-orange-600 dark:text-orange-400 mb-2'>
                 11
@@ -189,7 +189,7 @@ export default function Home() {
             </CardContent>
           </Card>
 
-          <Card className='relative overflow-hidden border-green-200 dark:border-green-900 bg-gradient-to-br from-green-50 to-background dark:from-green-950/30 dark:to-background'>
+          <Card className='relative overflow-hidden border-green-200 dark:border-green-900 bg-linear-to-br from-green-50 to-background dark:from-green-950/30 dark:to-background'>
             <CardContent className='p-6 text-center'>
               <div className='text-4xl font-bold text-green-600 dark:text-green-400 mb-2'>
                 80%
@@ -200,7 +200,7 @@ export default function Home() {
             </CardContent>
           </Card>
 
-          <Card className='relative overflow-hidden border-blue-200 dark:border-blue-900 bg-gradient-to-br from-blue-50 to-background dark:from-blue-950/30 dark:to-background'>
+          <Card className='relative overflow-hidden border-blue-200 dark:border-blue-900 bg-linear-to-br from-blue-50 to-background dark:from-blue-950/30 dark:to-background'>
             <CardContent className='p-6 text-center'>
               <div className='text-4xl font-bold text-blue-600 dark:text-blue-400 mb-2'>
                 100%
@@ -211,7 +211,7 @@ export default function Home() {
             </CardContent>
           </Card>
 
-          <Card className='relative overflow-hidden border-purple-200 dark:border-purple-900 bg-gradient-to-br from-purple-50 to-background dark:from-purple-950/30 dark:to-background'>
+          <Card className='relative overflow-hidden border-purple-200 dark:border-purple-900 bg-linear-to-br from-purple-50 to-background dark:from-purple-950/30 dark:to-background'>
             <CardContent className='p-6 text-center'>
               <div className='text-4xl font-bold text-purple-600 dark:text-purple-400 mb-2'>
                 2×
@@ -269,12 +269,12 @@ export default function Home() {
       <section className='container mx-auto px-4 py-16 md:py-24'>
         <div className='mx-auto max-w-7xl'>
           <div className='mb-16 text-center space-y-4'>
-            <div className='inline-block rounded-full bg-gradient-to-r from-orange-100 to-green-100 dark:from-orange-950/50 dark:to-green-950/50 px-4 py-2 text-sm font-semibold text-orange-700 dark:text-orange-400'>
+            <div className='inline-block rounded-full bg-linear-to-r from-orange-100 to-green-100 dark:from-orange-950/50 dark:to-green-950/50 px-4 py-2 text-sm font-semibold text-orange-700 dark:text-orange-400'>
               Complete Solution
             </div>
             <h2 className='text-3xl md:text-4xl font-bold'>
               11 Powerful{' '}
-              <span className='text-transparent bg-gradient-to-r from-orange-600 to-green-600 bg-clip-text'>
+              <span className='text-transparent bg-linear-to-r from-orange-600 to-green-600 bg-clip-text'>
                 Integrated Modules
               </span>
             </h2>

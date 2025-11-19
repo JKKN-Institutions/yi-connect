@@ -164,16 +164,16 @@ async function DashboardContent({ params }: { params: Promise<{ id: string }> })
             <CardContent>
               <div className="flex items-center gap-4">
                 <Avatar className="h-16 w-16">
-                  <AvatarImage src={dashboard.current_chair.member.avatar_url || undefined} />
+                  <AvatarImage src={dashboard.current_chair.member?.avatar_url || undefined} />
                   <AvatarFallback className="text-lg">
-                    {dashboard.current_chair.member.full_name.charAt(0)}
+                    {dashboard.current_chair.member?.profile?.full_name?.charAt(0) || 'C'}
                   </AvatarFallback>
                 </Avatar>
                 <div>
-                  <p className="font-semibold text-lg">{dashboard.current_chair.member.full_name}</p>
+                  <p className="font-semibold text-lg">{dashboard.current_chair.member?.profile?.full_name}</p>
                   <p className="text-sm text-muted-foreground">{dashboard.current_chair.role}</p>
                   <p className="text-xs text-muted-foreground">
-                    Since {new Date(dashboard.current_chair.term_start_date).toLocaleDateString()}
+                    Since {new Date(dashboard.current_chair.start_date).toLocaleDateString()}
                   </p>
                 </div>
               </div>

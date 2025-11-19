@@ -235,17 +235,17 @@ export async function assignVerticalChair(input: AssignVerticalChairInput): Prom
 
     const supabase = await createClient()
 
-    // Mark existing current chairs as not current
+    // Mark existing active chairs as inactive
     await supabase
       .from('vertical_chairs')
-      .update({ is_current: false, updated_at: new Date().toISOString() })
+      .update({ is_active: false, updated_at: new Date().toISOString() })
       .eq('vertical_id', sanitized.vertical_id)
-      .eq('is_current', true)
+      .eq('is_active', true)
 
     // Create new chair assignment
     const { data, error } = await supabase
       .from('vertical_chairs')
-      .insert({ ...sanitized, is_current: true })
+      .insert({ ...sanitized, is_active: true })
       .select('id')
       .single()
 

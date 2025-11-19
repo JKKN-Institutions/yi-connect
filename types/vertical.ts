@@ -65,12 +65,14 @@ export interface VerticalWithChair extends Vertical {
     id: string
     member_id: string
     role: string
-    term_start_date: string
+    start_date: string
     member?: {
       id: string
-      full_name: string
-      email: string
       avatar_url: string | null
+      profile?: {
+        full_name: string
+        email: string
+      }
     }
   } | null
   member_count?: number
@@ -226,12 +228,14 @@ export interface VerticalDashboardSummary {
     id: string
     member_id: string
     role: string
-    term_start_date: string
+    start_date: string
     member?: {
       id: string
-      full_name: string
-      email: string
       avatar_url: string | null
+      profile?: {
+        full_name: string
+        email: string
+      }
     }
   } | null
   current_plan?: VerticalPlanWithKPIs | null
@@ -555,8 +559,8 @@ export interface VerticalChairFormData {
   vertical_id: string
   member_id: string
   role?: string
-  term_start_date: string
-  term_end_date?: string | null
+  start_date: string
+  end_date?: string | null
   responsibilities?: string | null
 }
 

@@ -225,14 +225,14 @@ function VerticalCard({ vertical }: { vertical: any }) {
         {vertical.current_chair && vertical.current_chair.member ? (
           <div className="flex items-center gap-2 mb-4">
             <Avatar className="h-8 w-8">
-              <AvatarImage src={vertical.current_chair.member.avatar_url} />
+              <AvatarImage src={vertical.current_chair.member?.avatar_url} />
               <AvatarFallback>
-                {vertical.current_chair.member.full_name.charAt(0)}
+                {vertical.current_chair.member?.profile?.full_name?.charAt(0) || 'C'}
               </AvatarFallback>
             </Avatar>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium truncate">
-                {vertical.current_chair.member.full_name}
+                {vertical.current_chair.member?.profile?.full_name}
               </p>
               <p className="text-xs text-muted-foreground">{vertical.current_chair.role}</p>
             </div>

@@ -78,12 +78,16 @@ export const getVerticals = cache(
           id,
           member_id,
           role,
-          term_start_date,
-          member:members(id, full_name, email, avatar_url)
+          start_date,
+          member:members!vertical_chairs_member_id_fkey(
+            id,
+            avatar_url,
+            profile:profiles(full_name, email)
+          )
         )
       `
       )
-      .eq('vertical_chairs.is_current', true)
+      .eq('vertical_chairs.is_active', true)
 
     // Apply filters
     if (filters) {
@@ -124,13 +128,17 @@ export const getVerticalById = cache(async (id: string): Promise<VerticalWithCha
         id,
         member_id,
         role,
-        term_start_date,
-        member:members(id, full_name, email, avatar_url)
+        start_date,
+        member:members!vertical_chairs_member_id_fkey(
+          id,
+          avatar_url,
+          profile:profiles(full_name, email)
+        )
       )
     `
     )
     .eq('id', id)
-    .eq('vertical_chairs.is_current', true)
+    .eq('vertical_chairs.is_active', true)
     .single()
 
   if (error) throw error
@@ -158,13 +166,17 @@ export const getVerticalBySlug = cache(async (slug: string): Promise<VerticalWit
         id,
         member_id,
         role,
-        term_start_date,
-        member:members(id, full_name, email, avatar_url)
+        start_date,
+        member:members!vertical_chairs_member_id_fkey(
+          id,
+          avatar_url,
+          profile:profiles(full_name, email)
+        )
       )
     `
     )
     .eq('slug', slug)
-    .eq('vertical_chairs.is_current', true)
+    .eq('vertical_chairs.is_active', true)
     .single()
 
   if (error) throw error
@@ -188,8 +200,14 @@ export const getVerticalPlans = cache(async (verticalId: string): Promise<Vertic
       *,
       vertical:verticals(id, name, slug, color, icon),
       kpis:vertical_kpis(*),
-      created_by_member:members!vertical_plans_created_by_fkey(id, full_name, email),
-      approved_by_member:members!vertical_plans_approved_by_fkey(id, full_name, email)
+      created_by_member:members!vertical_plans_created_by_fkey(
+        id,
+        profile:profiles(full_name, email)
+      ),
+      approved_by_member:members!vertical_plans_approved_by_fkey(
+        id,
+        profile:profiles(full_name, email)
+      )
     `
     )
     .eq('vertical_id', verticalId)
@@ -213,8 +231,14 @@ export const getActiveVerticalPlan = cache(
         *,
         vertical:verticals(id, name, slug, color, icon),
         kpis:vertical_kpis(*),
-        created_by_member:members!vertical_plans_created_by_fkey(id, full_name, email),
-        approved_by_member:members!vertical_plans_approved_by_fkey(id, full_name, email)
+        created_by_member:members!vertical_plans_created_by_fkey(
+          id,
+          profile:profiles(full_name, email)
+        ),
+        approved_by_member:members!vertical_plans_approved_by_fkey(
+          id,
+          profile:profiles(full_name, email)
+        )
       `
       )
       .eq('vertical_id', verticalId)
@@ -247,8 +271,14 @@ export const getPlanById = cache(async (id: string): Promise<VerticalPlanWithKPI
         *,
         actuals:vertical_kpi_actuals(*)
       ),
-      created_by_member:members!vertical_plans_created_by_fkey(id, full_name, email),
-      approved_by_member:members!vertical_plans_approved_by_fkey(id, full_name, email)
+      created_by_member:members!vertical_plans_created_by_fkey(
+        id,
+        profile:profiles(full_name, email)
+      ),
+      approved_by_member:members!vertical_plans_approved_by_fkey(
+        id,
+        profile:profiles(full_name, email)
+      )
     `
     )
     .eq('id', id)
@@ -387,7 +417,11 @@ export const getVerticalActivities = cache(
         *,
         vertical:verticals(id, name, slug, color),
         event:events(id, title, start_date, status),
-        created_by_member:members(id, full_name, email, avatar_url)
+        created_by_member:members!vertical_activities_created_by_fkey(
+          id,
+          avatar_url,
+          profile:profiles(full_name, email)
+        )
       `
       )
       .eq('vertical_id', verticalId)
@@ -458,7 +492,11 @@ export const getActivityById = cache(async (id: string): Promise<VerticalActivit
       *,
       vertical:verticals(id, name, slug, color),
       event:events(id, title, start_date, status),
-      created_by_member:members(id, full_name, email, avatar_url)
+      created_by_member:members!vertical_activities_created_by_fkey(
+        id,
+        avatar_url,
+        profile:profiles(full_name, email)
+      )
     `
     )
     .eq('id', id)
@@ -488,9 +526,16 @@ export const getVerticalReviews = cache(
         chair:vertical_chairs(
           id,
           role,
-          member:members(id, full_name, email, avatar_url)
+          member:members!vertical_chairs_member_id_fkey(
+            id,
+            avatar_url,
+            profile:profiles(full_name, email)
+          )
         ),
-        reviewed_by_member:members(id, full_name, email)
+        reviewed_by_member:members!vertical_performance_reviews_reviewed_by_fkey(
+          id,
+          profile:profiles(full_name, email)
+        )
       `
       )
       .eq('vertical_id', verticalId)
@@ -538,9 +583,16 @@ export const getReviewById = cache(async (id: string): Promise<VerticalPerforman
       chair:vertical_chairs(
         id,
         role,
-        member:members(id, full_name, email, avatar_url)
+        member:members!vertical_chairs_member_id_fkey(
+          id,
+          avatar_url,
+          profile:profiles(full_name, email)
+        )
       ),
-      reviewed_by_member:members(id, full_name, email)
+      reviewed_by_member:members!vertical_performance_reviews_reviewed_by_fkey(
+        id,
+        profile:profiles(full_name, email)
+      )
     `
     )
     .eq('id', id)
@@ -565,7 +617,11 @@ export const getVerticalMembers = cache(async (verticalId: string): Promise<Vert
     .select(
       `
       *,
-      member:members(id, full_name, email, avatar_url, phone),
+      member:members(
+        id,
+        avatar_url,
+        profile:profiles(full_name, email, phone)
+      ),
       vertical:verticals(id, name, slug, color)
     `
     )
@@ -593,7 +649,10 @@ export const getVerticalAchievements = cache(async (verticalId: string): Promise
       `
       *,
       vertical:verticals(id, name, slug, color, icon),
-      created_by_member:members(id, full_name, email)
+      created_by_member:members!vertical_achievements_created_by_fkey(
+        id,
+        profile:profiles(full_name, email)
+      )
     `
     )
     .eq('vertical_id', verticalId)
@@ -703,7 +762,14 @@ export const getVerticalRankings = cache(async (fiscalYear: number): Promise<Ver
     p_fiscal_year: fiscalYear,
   })
 
-  if (error) throw error
+  // If function doesn't exist, return empty array
+  if (error) {
+    if (error.code === 'PGRST202') {
+      console.warn('calculate_vertical_ranking function not found, returning empty rankings')
+      return []
+    }
+    throw error
+  }
   return (data as VerticalRanking[]) || []
 })
 
@@ -718,7 +784,14 @@ export const getKPIAlerts = cache(async (verticalId: string, quarter: number): P
     p_quarter: quarter,
   })
 
-  if (error) throw error
+  // If function doesn't exist, return empty array
+  if (error) {
+    if (error.code === 'PGRST202') {
+      console.warn('check_kpi_alerts function not found, returning empty alerts')
+      return []
+    }
+    throw error
+  }
   return (data as KPIAlert[]) || []
 })
 

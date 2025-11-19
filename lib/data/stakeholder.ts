@@ -277,7 +277,7 @@ export const getIndustries = cache(async (chapterId: string | null): Promise<Ind
   let industriesQuery = supabase.from('industries').select('*')
   if (chapterId) industriesQuery = industriesQuery.eq('chapter_id', chapterId)
 
-  const { data: industries, error: industriesError } = await industriesQuery.order('organization_name')
+  const { data: industries, error: industriesError } = await industriesQuery.order('company_name')
   if (industriesError) {
     console.error('Error fetching industries:', industriesError)
     return []
@@ -850,7 +850,7 @@ export const searchStakeholders = cache(
         .limit(5),
       supabase
         .from('industries')
-        .select('id, organization_name, status, city, state, last_contact_date')
+        .select('id, company_name, status, city, state')
         .eq('chapter_id', chapterId)
         .textSearch('search_vector', searchTerm)
         .limit(5),
@@ -911,9 +911,8 @@ export const searchStakeholders = cache(
       results.push({
         id: i.id,
         type: 'industry',
-        name: i.organization_name,
+        name: i.company_name,
         status: i.status,
-        last_contact_date: i.last_contact_date,
         city: i.city,
         state: i.state,
       })

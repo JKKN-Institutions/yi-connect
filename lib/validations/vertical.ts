@@ -197,7 +197,7 @@ export const updateVerticalChairSchema = z
     term_start_date: dateStringSchema.optional(),
     term_end_date: dateStringSchema.optional().nullable(),
     responsibilities: z.string().max(1000).trim().optional().nullable(),
-    is_current: z.boolean().optional(),
+    is_active: z.boolean().optional(),
   })
   .refine(
     (data) => {

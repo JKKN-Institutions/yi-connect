@@ -6,6 +6,7 @@
 
 import { Suspense } from 'react'
 import Link from 'next/link'
+import { connection } from 'next/server'
 import { Plus, GraduationCap, Activity, FileCheck, TrendingUp } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -130,7 +131,10 @@ function TableSkeleton() {
   )
 }
 
-export default function CollegesPage() {
+export default async function CollegesPage() {
+  // Opt out of static prerendering
+  await connection()
+
   return (
     <div className="flex flex-col gap-8">
       <div className="flex items-center justify-between">

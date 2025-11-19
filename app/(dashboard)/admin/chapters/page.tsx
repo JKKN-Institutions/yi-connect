@@ -7,6 +7,7 @@
 
 import { Suspense } from 'react'
 import Link from 'next/link'
+import { connection } from 'next/server'
 import { requireRole } from '@/lib/auth'
 import { getChapters } from '@/lib/data/chapters'
 import { ChaptersTable } from '@/components/admin/chapters-table'
@@ -53,7 +54,10 @@ function ChaptersTableSkeleton() {
   )
 }
 
-export default function AdminChaptersPage() {
+export default async function AdminChaptersPage() {
+  // Opt out of static prerendering
+  await connection()
+
   return (
     <div className="space-y-6">
       {/* Page Header */}

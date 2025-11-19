@@ -8,14 +8,18 @@
  */
 
 import { Suspense } from 'react'
+import { connection } from 'next/server'
 import { DashboardHeader } from '@/components/layouts/dashboard-header'
 import { DashboardSidebar } from '@/components/layouts/dashboard-sidebar'
 
-export default function DashboardLayout({
+export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  // Opt out of static prerendering for authenticated routes
+  await connection()
+
   return (
     <div className="min-h-screen flex">
       {/* Sidebar */}

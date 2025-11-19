@@ -6,7 +6,7 @@
 import { Building2, CalendarClock, Users, BarChart3, Settings } from 'lucide-react';
 import Link from 'next/link';
 import { Suspense } from 'react';
-
+import { connection } from 'next/server';
 import { Button } from '@/components/ui/button';
 import {
   SidebarProvider,
@@ -42,11 +42,14 @@ const industryNavigation = [
   },
 ];
 
-export default function IndustryPortalLayout({
+export default async function IndustryPortalLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // Opt out of static prerendering for authenticated routes
+  await connection()
+
   return (
     <SidebarProvider>
       <div className="flex min-h-screen w-full">

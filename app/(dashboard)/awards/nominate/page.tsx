@@ -28,7 +28,18 @@ interface NominatePageProps {
   }>;
 }
 
-async function NominationFormSection({ cycleId }: { cycleId: string }) {
+async function NominationFormSection({
+  searchParamsPromise
+}: {
+  searchParamsPromise: Promise<{ cycle?: string; category?: string }>
+}) {
+  const params = await searchParamsPromise
+  const cycleId = params.cycle
+
+  if (!cycleId) {
+    return null
+  }
+
   const supabase = await createServerSupabaseClient();
 
   // Get current user
@@ -236,10 +247,12 @@ async function NominationFormSection({ cycleId }: { cycleId: string }) {
 }
 
 async function CycleSelector({
-  selectedCycleId
+  searchParamsPromise
 }: {
-  selectedCycleId?: string;
+  searchParamsPromise: Promise<{ cycle?: string; category?: string }>
 }) {
+  const params = await searchParamsPromise
+  const selectedCycleId = params.cycle
   const cycles = await getActiveCycles();
 
   if (cycles.length === 0) {
@@ -290,12 +303,24 @@ async function CycleSelector({
   );
 }
 
-export default async function NominatePage({
+async function PageContent({
+  searchParamsPromise
+}: {
+  searchParamsPromise: Promise<{ cycle?: string; category?: string }>
+}) {
+  const params = await searchParamsPromise
+  const cycleId = params.cycle
+
+  if (!cycleId) {
+    return <CycleSelector searchParamsPromise={searchParamsPromise} />
+  }
+
+  return <NominationFormSection searchParamsPromise={searchParamsPromise} />
+}
+
+export default function NominatePage({
   searchParams
 }: NominatePageProps) {
-  const params = await searchParams;
-  const cycleId = params.cycle;
-
   return (
     <div className='container mx-auto py-8 space-y-6 max-w-9xl'>
       {/* Header */}
@@ -307,15 +332,9 @@ export default async function NominatePage({
       </div>
 
       {/* Content */}
-      {!cycleId ? (
-        <Suspense fallback={<Skeleton className='h-[200px]' />}>
-          <CycleSelector />
-        </Suspense>
-      ) : (
-        <Suspense fallback={<Skeleton className='h-[600px]' />}>
-          <NominationFormSection cycleId={cycleId} />
-        </Suspense>
-      )}
+      <Suspense fallback={<Skeleton className='h-[600px]' />}>
+        <PageContent searchParamsPromise={searchParams} />
+      </Suspense>
     </div>
   );
 }

@@ -14,10 +14,31 @@ export type UserProfile = Database['public']['Tables']['profiles']['Row']
 export type UserProfileInsert = Database['public']['Tables']['profiles']['Insert']
 export type UserProfileUpdate = Database['public']['Tables']['profiles']['Update']
 
-export type UserRole = Database['public']['Tables']['user_roles']['Row']
-export type UserRoleInsert = Database['public']['Tables']['user_roles']['Insert']
+// Manually defined types - these tables will be created in the user management module
+export interface UserRole {
+  id: string
+  user_id: string
+  role_id: string
+  assigned_at: string
+  assigned_by: string | null
+}
 
-export type Role = Database['public']['Tables']['roles']['Row']
+export interface UserRoleInsert {
+  user_id: string
+  role_id: string
+  assigned_by?: string | null
+}
+
+export interface Role {
+  id: string
+  name: string
+  description: string | null
+  hierarchy_level: number
+  permissions: string[]
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
 
 // UserRoleChange type - manually defined until database types are regenerated
 export interface UserRoleChange {

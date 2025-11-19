@@ -493,6 +493,7 @@ export const getMemberAnalytics = cache(
         business: 0,
         creative: 0,
         leadership: 0,
+        communication: 0,
         other: 0
       },
       leadership_pipeline: {

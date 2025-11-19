@@ -18,6 +18,28 @@ import {
 } from '@/components/ui/table'
 import { Users, CheckCircle2, Clock, FileText, Star } from 'lucide-react'
 
+async function PageContent() {
+  const supabase = await createServerSupabaseClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    redirect('/login')
+  }
+
+  return (
+    <>
+      {/* Stats */}
+      <JuryStats userId={user.id} />
+
+      {/* Nominations Table */}
+      <JuryNominationsTable userId={user.id} />
+    </>
+  )
+}
+
 async function JuryStats({ userId }: { userId: string }) {
   const supabase = await createServerSupabaseClient()
 
@@ -286,17 +308,7 @@ async function JuryNominationsTable({ userId }: { userId: string }) {
   )
 }
 
-export default async function JuryDashboardPage() {
-  const supabase = await createServerSupabaseClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    redirect('/login')
-  }
-
+export default function JuryDashboardPage() {
   return (
     <div className="container mx-auto py-8 space-y-6">
       {/* Header */}
@@ -310,22 +322,20 @@ export default async function JuryDashboardPage() {
         </p>
       </div>
 
-      {/* Stats */}
+      {/* Content */}
       <Suspense
         fallback={
-          <div className="grid gap-4 md:grid-cols-4">
-            {[1, 2, 3, 4].map((i) => (
-              <Skeleton key={i} className="h-[120px]" />
-            ))}
+          <div className="space-y-6">
+            <div className="grid gap-4 md:grid-cols-4">
+              {[1, 2, 3, 4].map((i) => (
+                <Skeleton key={i} className="h-[120px]" />
+              ))}
+            </div>
+            <Skeleton className="h-[400px]" />
           </div>
         }
       >
-        <JuryStats userId={user.id} />
-      </Suspense>
-
-      {/* Nominations Table */}
-      <Suspense fallback={<Skeleton className="h-[400px]" />}>
-        <JuryNominationsTable userId={user.id} />
+        <PageContent />
       </Suspense>
     </div>
   )

@@ -12,14 +12,21 @@ interface JuryScorePageProps {
   }>;
 }
 
-async function ScoringFormSection({
-  nominationId,
-  userId
+async function PageContent({
+  paramsPromise
 }: {
-  nominationId: string;
-  userId: string;
+  paramsPromise: Promise<{ nominationId: string }>
 }) {
+  const { nominationId } = await paramsPromise;
   const supabase = await createServerSupabaseClient();
+
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect('/login');
+  }
 
   // Get the nomination with full details
   const { data: nomination, error } = await supabase
@@ -51,7 +58,7 @@ async function ScoringFormSection({
     .from('jury_members')
     .select('id')
     .eq('cycle_id', nomination.cycle_id)
-    .eq('member_id', userId)
+    .eq('member_id', user.id)
     .single();
 
   if (!juryMember) {
@@ -108,18 +115,7 @@ async function ScoringFormSection({
   );
 }
 
-export default async function JuryScorePage({ params }: JuryScorePageProps) {
-  const { nominationId } = await params;
-  const supabase = await createServerSupabaseClient();
-
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect('/login');
-  }
-
+export default function JuryScorePage({ params }: JuryScorePageProps) {
   return (
     <div className='container mx-auto py-8 space-y-6 max-w-4xl'>
       {/* Header */}
@@ -132,7 +128,7 @@ export default async function JuryScorePage({ params }: JuryScorePageProps) {
 
       {/* Scoring Form */}
       <Suspense fallback={<Skeleton className='h-[800px]' />}>
-        <ScoringFormSection nominationId={nominationId} userId={user.id} />
+        <PageContent paramsPromise={params} />
       </Suspense>
     </div>
   );

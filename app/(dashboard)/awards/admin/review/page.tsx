@@ -30,7 +30,13 @@ interface ReviewPageProps {
   }>
 }
 
-async function CycleSelector({ selectedCycleId }: { selectedCycleId?: string }) {
+async function CycleSelector({
+  searchParamsPromise
+}: {
+  searchParamsPromise: Promise<{ cycle?: string }>
+}) {
+  const params = await searchParamsPromise
+  const selectedCycleId = params.cycle
   const cycles = await getActiveCycles()
 
   if (cycles.length === 0) {
@@ -85,7 +91,18 @@ async function CycleSelector({ selectedCycleId }: { selectedCycleId?: string }) 
   )
 }
 
-async function RankedNominationsSection({ cycleId }: { cycleId: string }) {
+async function RankedNominationsSection({
+  searchParamsPromise
+}: {
+  searchParamsPromise: Promise<{ cycle?: string }>
+}) {
+  const params = await searchParamsPromise
+  const cycleId = params.cycle
+
+  if (!cycleId) {
+    return null
+  }
+
   const rankedNominations = await getRankedNominations(cycleId)
 
   if (!rankedNominations || rankedNominations.length === 0) {
@@ -217,10 +234,22 @@ async function RankedNominationsSection({ cycleId }: { cycleId: string }) {
   )
 }
 
-export default async function ReviewPage({ searchParams }: ReviewPageProps) {
-  const params = await searchParams
+async function PageContent({
+  searchParamsPromise
+}: {
+  searchParamsPromise: Promise<{ cycle?: string }>
+}) {
+  const params = await searchParamsPromise
   const cycleId = params.cycle
 
+  if (!cycleId) {
+    return <CycleSelector searchParamsPromise={searchParamsPromise} />
+  }
+
+  return <RankedNominationsSection searchParamsPromise={searchParamsPromise} />
+}
+
+export default function ReviewPage({ searchParams }: ReviewPageProps) {
   return (
     <div className="container mx-auto py-8 space-y-6">
       {/* Header */}
@@ -232,15 +261,9 @@ export default async function ReviewPage({ searchParams }: ReviewPageProps) {
       </div>
 
       {/* Content */}
-      {!cycleId ? (
-        <Suspense fallback={<Skeleton className="h-[200px]" />}>
-          <CycleSelector />
-        </Suspense>
-      ) : (
-        <Suspense fallback={<Skeleton className="h-[600px]" />}>
-          <RankedNominationsSection cycleId={cycleId} />
-        </Suspense>
-      )}
+      <Suspense fallback={<Skeleton className="h-[600px]" />}>
+        <PageContent searchParamsPromise={searchParams} />
+      </Suspense>
     </div>
   )
 }

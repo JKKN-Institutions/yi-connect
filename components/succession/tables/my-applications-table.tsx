@@ -22,7 +22,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { withdrawApplication } from '@/app/actions/succession'
-import { toast } from 'react-hot-toast'
+import toast from 'react-hot-toast'
 
 const statusColors: Record<string, string> = {
   draft: 'bg-gray-500',
@@ -77,7 +77,7 @@ export function MyApplicationsTable({ applications }: MyApplicationsTableProps) 
       <div className="text-center py-12 text-muted-foreground">
         <p className="text-lg font-medium">No applications submitted yet</p>
         <p className="text-sm mt-2">
-          Click "Apply for Position" to submit your application for a leadership role
+          Click &quot;Apply for Position&quot; to submit your application for a leadership role
         </p>
       </div>
     )

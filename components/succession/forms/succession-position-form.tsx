@@ -29,7 +29,7 @@ import { Separator } from '@/components/ui/separator'
 import { createSuccessionPosition, updateSuccessionPosition } from '@/app/actions/succession'
 import { CreateSuccessionPositionSchema } from '@/lib/validations/succession'
 import type { SuccessionPosition } from '@/lib/types/succession'
-import { toast } from 'react-hot-toast'
+import toast from 'react-hot-toast'
 
 type FormData = z.infer<typeof CreateSuccessionPositionSchema>
 

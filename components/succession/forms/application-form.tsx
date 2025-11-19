@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { toast } from 'react-hot-toast'
 import { Upload, X, FileText } from 'lucide-react'
 import {
   Form,
@@ -29,6 +28,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { submitApplication } from '@/app/actions/succession'
 import { CreateApplicationSchema } from '@/lib/validations/succession'
+import toast from 'react-hot-toast'
 
 type FormData = Omit<z.infer<typeof CreateApplicationSchema>, 'member_id'>
 

@@ -21,7 +21,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { createSuccessionCycle, updateSuccessionCycle } from '@/app/actions/succession'
 import { CreateSuccessionCycleSchema } from '@/lib/validations/succession'
 import type { SuccessionCycle } from '@/lib/types/succession'
-import { toast } from 'react-hot-toast'
+import toast from 'react-hot-toast'
 
 type FormData = z.infer<typeof CreateSuccessionCycleSchema>
 

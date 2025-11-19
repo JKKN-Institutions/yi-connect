@@ -123,7 +123,7 @@ async function EventsContent({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value='all'>All Categories</SelectItem>
-              {Object.entries(EVENT_CATEGORIES).map(([value, label]) => (
+              {(Object.entries(EVENT_CATEGORIES) as [string, string][]).map(([value, label]) => (
                 <SelectItem key={value} value={value}>
                   {label}
                 </SelectItem>
@@ -136,7 +136,7 @@ async function EventsContent({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value='all'>All Statuses</SelectItem>
-              {Object.entries(EVENT_STATUSES).map(([value, label]) => (
+              {(Object.entries(EVENT_STATUSES) as [string, string][]).map(([value, label]) => (
                 <SelectItem key={value} value={value}>
                   {label}
                 </SelectItem>

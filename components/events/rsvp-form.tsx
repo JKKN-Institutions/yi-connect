@@ -416,7 +416,9 @@ export function QuickRSVP({
           size='sm'
           onClick={() =>
             handleRSVP(
-              (currentRSVP as any).status === 'confirmed' ? 'declined' : 'confirmed'
+              (currentRSVP as any).status === 'confirmed'
+                ? 'declined'
+                : 'confirmed'
             )
           }
           disabled={isPending}

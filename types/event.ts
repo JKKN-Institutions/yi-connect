@@ -61,6 +61,7 @@ export interface EventWithDetails
     name: string;
     location: string;
   } | null;
+  tags?: string[] | null;
 }
 
 export interface EventWithRSVPs extends EventWithDetails {
@@ -88,8 +89,15 @@ export interface EventWithMetrics extends EventWithDetails {
 export interface EventFull
   extends Omit<
     Event,
-    'venue_id' | 'template_id' | 'organizer_id' | 'chapter_id'
+    | 'venue_id'
+    | 'template_id'
+    | 'organizer_id'
+    | 'chapter_id'
+    | 'status'
+    | 'category'
   > {
+  status: EventStatus;
+  category: EventCategory;
   venue?: Venue | null;
   template?: EventTemplate | null;
   organizer?: {

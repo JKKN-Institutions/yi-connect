@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { AwardCategory } from '@/types/award'
+import { AwardCategory, AwardFrequency } from '@/types/award'
 import {
   Card,
   CardContent,
@@ -18,19 +18,19 @@ interface CategoryCardProps {
   totalNominations?: number
 }
 
-const FREQUENCY_LABELS = {
+const FREQUENCY_LABELS: Record<AwardFrequency, { label: string; icon: typeof Calendar }> = {
   monthly: { label: 'Monthly', icon: Calendar },
   quarterly: { label: 'Quarterly', icon: Calendar },
   annual: { label: 'Annual', icon: Calendar },
   one_time: { label: 'One Time', icon: Target },
-} as const
+}
 
 export function CategoryCard({
   category,
   activeCycleCount = 0,
   totalNominations = 0,
 }: CategoryCardProps) {
-  const frequencyConfig = FREQUENCY_LABELS[category.frequency]
+  const frequencyConfig = FREQUENCY_LABELS[category.frequency as AwardFrequency] || FREQUENCY_LABELS.annual
 
   return (
     <Card className="hover:shadow-lg transition-shadow">

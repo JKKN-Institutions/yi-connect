@@ -45,7 +45,8 @@
       "Bash(powershell -Command \"Start-Sleep -Seconds 10\")",
       "Bash(powershell -Command:*)",
       "Bash(\"D:\\JKKN\\yi-connect\\temp_tables.sql\")",
-      "Bash(timeout:*)"
+      "Bash(timeout:*)",
+      "Bash(more:*)"
     ],
     "deny": [],
     "ask": []

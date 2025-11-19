@@ -244,7 +244,7 @@ export function NominationStatusCard({
                 {nomination.winner.rank === 3 && '3rd Place Winner'}
               </p>
               <p className='text-xs text-muted-foreground'>
-                Final Score: {nomination.winner.final_score.toFixed(2)}
+                Final Score: {nomination.winner.final_score?.toFixed(2) ?? 'N/A'}
               </p>
             </div>
           </div>

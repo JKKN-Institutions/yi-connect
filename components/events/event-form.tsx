@@ -26,7 +26,12 @@ import {
   type CreateEventInput
 } from '@/lib/validations/event';
 import { EVENT_CATEGORIES } from '@/types/event';
-import type { EventWithDetails, Venue, EventTemplate } from '@/types/event';
+import type {
+  EventWithDetails,
+  Venue,
+  EventTemplate,
+  EventCategory
+} from '@/types/event';
 import { Button } from '@/components/ui/button';
 import {
   Form,
@@ -99,7 +104,7 @@ export function EventForm(props: EventFormProps) {
     defaultValues: {
       title: event?.title || '',
       description: event?.description || '',
-      category: event?.category || 'other',
+      category: (event?.category as EventCategory | undefined) || 'other',
       start_date: event?.start_date || '',
       end_date: event?.end_date || '',
       registration_start_date: event?.registration_start_date || '',
@@ -116,7 +121,7 @@ export function EventForm(props: EventFormProps) {
       guest_limit: event?.guest_limit || 0,
       estimated_budget: event?.estimated_budget ?? ('' as any),
       banner_image_url: event?.banner_image_url || '',
-      tags: event?.tags || [],
+      tags: (event?.tags as string[]) || [],
       template_id: event?.template?.id || '',
       chapter_id: event?.chapter?.id || chapterId || ''
     }
@@ -129,7 +134,10 @@ export function EventForm(props: EventFormProps) {
   const applyTemplate = (template: any) => {
     setSelectedTemplate(template as EventTemplate);
     (form.setValue as any)('category', template.category);
-    (form.setValue as any)('max_capacity', template.default_capacity || undefined);
+    (form.setValue as any)(
+      'max_capacity',
+      template.default_capacity || undefined
+    );
     (form.setValue as any)('template_id', template.id);
     toast.success(`Applied template: ${template.name}`);
   };
@@ -206,7 +214,10 @@ export function EventForm(props: EventFormProps) {
       console.log('Current tab:', currentTab);
       console.log('Fields to validate:', fieldsToValidate);
       console.log('Current form values:', form.getValues());
-      console.log('Current form errors before validation:', form.formState.errors);
+      console.log(
+        'Current form errors before validation:',
+        form.formState.errors
+      );
 
       // Trigger validation only for current tab fields
       const isValid = await form.trigger(fieldsToValidate as any);
@@ -302,7 +313,9 @@ export function EventForm(props: EventFormProps) {
                     <FormLabel>Start from Template (Optional)</FormLabel>
                     <Select
                       onValueChange={(value) => {
-                        const template = templates.find((t) => (t as any).id === value);
+                        const template = templates.find(
+                          (t) => (t as any).id === value
+                        );
                         if (template) applyTemplate(template as EventTemplate);
                       }}
                     >
@@ -311,9 +324,16 @@ export function EventForm(props: EventFormProps) {
                       </SelectTrigger>
                       <SelectContent>
                         {templates.map((template) => (
-                          <SelectItem key={(template as any).id} value={(template as any).id}>
+                          <SelectItem
+                            key={(template as any).id}
+                            value={(template as any).id}
+                          >
                             {(template as any).name} -{' '}
-                            {(EVENT_CATEGORIES as any)[(template as any).category]}
+                            {
+                              (EVENT_CATEGORIES as any)[
+                                (template as any).category
+                              ]
+                            }
                           </SelectItem>
                         ))}
                       </SelectContent>

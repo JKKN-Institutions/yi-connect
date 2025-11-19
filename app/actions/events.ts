@@ -93,13 +93,16 @@ function sanitizeEventData<T extends Record<string, any>>(data: T): T {
   ];
 
   for (const field of nullableFields) {
-    if (field in sanitized && (sanitized[field] === '' || sanitized[field] === undefined)) {
+    if (
+      field in sanitized &&
+      (sanitized[field] === '' || sanitized[field] === undefined)
+    ) {
       sanitized[field] = null;
     }
   }
 
   // Remove undefined values
-  Object.keys(sanitized).forEach(key => {
+  Object.keys(sanitized).forEach((key) => {
     if (sanitized[key] === undefined) {
       delete sanitized[key];
     }
@@ -143,7 +146,11 @@ export async function createEvent(
     // Handle image upload if it's a base64 data URL
     let bannerImageUrl = validated.banner_image_url;
     if (bannerImageUrl && bannerImageUrl.startsWith('data:image/')) {
-      const uploadResult = await uploadImage(bannerImageUrl, 'event-images', 'banners');
+      const uploadResult = await uploadImage(
+        bannerImageUrl,
+        'event-images',
+        'banners'
+      );
       if (uploadResult.success && uploadResult.data) {
         bannerImageUrl = uploadResult.data.url;
       } else {
@@ -226,7 +233,11 @@ export async function updateEvent(
     // Handle image upload if it's a base64 data URL
     let bannerImageUrl = validated.banner_image_url;
     if (bannerImageUrl && bannerImageUrl.startsWith('data:image/')) {
-      const uploadResult = await uploadImage(bannerImageUrl, 'event-images', 'banners');
+      const uploadResult = await uploadImage(
+        bannerImageUrl,
+        'event-images',
+        'banners'
+      );
       if (uploadResult.success && uploadResult.data) {
         bannerImageUrl = uploadResult.data.url;
       } else {

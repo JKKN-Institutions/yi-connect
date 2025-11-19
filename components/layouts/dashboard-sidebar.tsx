@@ -53,7 +53,9 @@ import {
   Send,
   Bell,
   Users2,
-  Trophy
+  Trophy,
+  Target,
+  Activity
 } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -369,6 +371,27 @@ const navigation: NavItem[] = [
       {
         name: 'Upload Document',
         href: '/knowledge/documents/upload',
+        icon: Plus
+      }
+    ]
+  },
+  {
+    name: 'Verticals',
+    icon: Target,
+    items: [
+      {
+        name: 'Overview',
+        href: '/verticals',
+        icon: LayoutDashboard
+      },
+      {
+        name: 'Rankings',
+        href: '/verticals/rankings',
+        icon: Trophy
+      },
+      {
+        name: 'Add Vertical',
+        href: '/verticals/new',
         icon: Plus
       }
     ]

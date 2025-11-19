@@ -36,6 +36,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertCircle, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import type { MemberWithProfile } from '@/types/member';
+import type { Member } from '@/types/member';
 import type { ChapterOption } from '@/types/chapter';
 
 interface MemberFormProps {
@@ -117,53 +118,57 @@ export function MemberForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string[]>>({});
 
+  // Type helper to access Member properties (MemberWithProfile extends Member)
+  // Using type assertion since MemberWithProfile extends Member but TypeScript doesn't infer all properties
+  const memberData = member as any as Member & typeof member;
+
   // Initialize form data
   const [formData, setFormData] = useState<FormData>({
     // Basic Info
     full_name: userName || member?.profile?.full_name || '',
     email: userEmail || member?.profile?.email || '',
-    chapter_id: member?.chapter_id || '',
-    membership_number: member?.membership_number || '',
+    chapter_id: memberData?.chapter_id || member?.chapter?.id || '',
+    membership_number: memberData?.membership_number || '',
     member_since:
-      member?.member_since || new Date().toISOString().split('T')[0],
-    membership_status: member?.membership_status || 'active',
+      memberData?.member_since || new Date().toISOString().split('T')[0],
+    membership_status: memberData?.membership_status || 'active',
     phone: member?.profile?.phone || '',
 
     // Professional Info
-    company: member?.company || '',
-    designation: member?.designation || '',
-    industry: member?.industry || '',
-    years_of_experience: member?.years_of_experience?.toString() || '',
-    linkedin_url: member?.linkedin_url || '',
+    company: memberData?.company || '',
+    designation: memberData?.designation || '',
+    industry: memberData?.industry || '',
+    years_of_experience: memberData?.years_of_experience?.toString() || '',
+    linkedin_url: memberData?.linkedin_url || '',
 
     // Personal Info
-    date_of_birth: member?.date_of_birth || '',
-    gender: member?.gender || '',
-    address: member?.address || '',
-    city: member?.city || '',
-    state: member?.state || '',
-    pincode: member?.pincode || '',
-    country: member?.country || 'India',
-    emergency_contact_name: member?.emergency_contact_name || '',
-    emergency_contact_phone: member?.emergency_contact_phone || '',
+    date_of_birth: memberData?.date_of_birth || '',
+    gender: memberData?.gender || '',
+    address: memberData?.address || '',
+    city: memberData?.city || '',
+    state: memberData?.state || '',
+    pincode: memberData?.pincode || '',
+    country: memberData?.country || 'India',
+    emergency_contact_name: memberData?.emergency_contact_name || '',
+    emergency_contact_phone: memberData?.emergency_contact_phone || '',
     emergency_contact_relationship:
-      member?.emergency_contact_relationship || '',
+      memberData?.emergency_contact_relationship || '',
 
     // Application Info (apply mode)
     motivation: '',
     how_did_you_hear: '',
 
     // Preferences
-    communication_preferences_email: member?.communication_preferences
-      ? (member.communication_preferences as any).email
+    communication_preferences_email: memberData?.communication_preferences
+      ? (memberData.communication_preferences as any).email
       : true,
-    communication_preferences_sms: member?.communication_preferences
-      ? (member.communication_preferences as any).sms
+    communication_preferences_sms: memberData?.communication_preferences
+      ? (memberData.communication_preferences as any).sms
       : true,
-    communication_preferences_whatsapp: member?.communication_preferences
-      ? (member.communication_preferences as any).whatsapp
+    communication_preferences_whatsapp: memberData?.communication_preferences
+      ? (memberData.communication_preferences as any).whatsapp
       : true,
-    notes: member?.notes || ''
+    notes: memberData?.notes || ''
   });
 
   // Update form data
@@ -213,7 +218,7 @@ export function MemberForm({
         }
         // For admin creating new member without userId, email and full_name come from formData
       } else {
-        submitData.append('id', member.id);
+        submitData.append('id', memberData.id);
       }
 
       // Add all form fields

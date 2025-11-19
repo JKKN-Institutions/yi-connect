@@ -68,6 +68,7 @@ export interface AwardCycleWithDetails extends AwardCycle {
 export type Nomination = NominationRow
 
 export interface NominationWithDetails extends Nomination {
+  justification: string
   cycle?: AwardCycle
   nominee?: {
     id: string

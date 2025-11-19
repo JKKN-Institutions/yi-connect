@@ -70,6 +70,14 @@ export function EventsDataTable({
   const router = useRouter();
   const searchParams = useSearchParams();
 
+  const updateSort = (field: string, direction: 'asc' | 'desc') => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('sort', field);
+    params.set('order', direction);
+    params.set('page', '1'); // Reset to first page
+    router.push(`?${params.toString()}`);
+  };
+
   // Table columns
   const columns: ColumnDef<EventListItem>[] = [
     {
@@ -307,14 +315,6 @@ export function EventsDataTable({
     manualSorting: true,
     manualFiltering: true
   });
-
-  const updateSort = (field: string, direction: 'asc' | 'desc') => {
-    const params = new URLSearchParams(searchParams.toString());
-    params.set('sort', field);
-    params.set('order', direction);
-    params.set('page', '1'); // Reset to first page
-    router.push(`?${params.toString()}`);
-  };
 
   return (
     <div className='space-y-4'>

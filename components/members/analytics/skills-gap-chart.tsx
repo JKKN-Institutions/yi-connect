@@ -20,7 +20,9 @@ export function SkillsGapChart({ skillGaps }: SkillsGapChartProps) {
     );
   }, [skillGaps]);
 
-  const getSeverityIcon = (severity: string) => {
+  type GapSeverity = 'critical' | 'high' | 'medium' | 'low';
+
+  const getSeverityIcon = (severity: GapSeverity) => {
     switch (severity) {
       case 'critical':
         return <AlertTriangle className='h-4 w-4 text-red-600' />;
@@ -30,12 +32,10 @@ export function SkillsGapChart({ skillGaps }: SkillsGapChartProps) {
         return <Info className='h-4 w-4 text-yellow-600' />;
       case 'low':
         return <CheckCircle className='h-4 w-4 text-green-600' />;
-      default:
-        return null;
     }
   };
 
-  const getSeverityColor = (severity: string): 'destructive' | 'default' | 'secondary' | 'outline' => {
+  const getSeverityColor = (severity: GapSeverity): 'destructive' | 'default' | 'secondary' | 'outline' => {
     switch (severity) {
       case 'critical':
         return 'destructive';
@@ -45,12 +45,10 @@ export function SkillsGapChart({ skillGaps }: SkillsGapChartProps) {
         return 'secondary';
       case 'low':
         return 'outline';
-      default:
-        return 'outline';
     }
   };
 
-  const getProgressColor = (severity: string) => {
+  const getProgressColor = (severity: GapSeverity) => {
     switch (severity) {
       case 'critical':
         return 'bg-red-600';
@@ -60,8 +58,6 @@ export function SkillsGapChart({ skillGaps }: SkillsGapChartProps) {
         return 'bg-yellow-600';
       case 'low':
         return 'bg-green-600';
-      default:
-        return 'bg-gray-600';
     }
   };
 

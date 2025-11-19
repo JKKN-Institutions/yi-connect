@@ -13,6 +13,7 @@ export const metadata: Metadata = {
   description: "Create a new chapter announcement",
 };
 
+
 export default function NewAnnouncementPage() {
   return (
     <div className="flex flex-col gap-6">

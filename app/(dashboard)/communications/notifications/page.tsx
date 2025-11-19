@@ -19,6 +19,7 @@ export const metadata: Metadata = {
   description: "View and manage your notifications",
 };
 
+
 interface NotificationsPageProps {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }

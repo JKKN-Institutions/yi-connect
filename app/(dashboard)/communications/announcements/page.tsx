@@ -17,6 +17,7 @@ export const metadata: Metadata = {
   description: "Manage chapter announcements and communications",
 };
 
+
 export default function AnnouncementsPage({
   searchParams,
 }: {

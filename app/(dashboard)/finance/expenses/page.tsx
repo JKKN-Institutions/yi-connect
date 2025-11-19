@@ -1,5 +1,6 @@
 import { Suspense } from 'react'
 import { Metadata } from 'next'
+import { unstable_noStore as noStore } from 'next/cache'
 import Link from 'next/link'
 import { Plus } from 'lucide-react'
 
@@ -14,21 +15,13 @@ export const metadata: Metadata = {
   description: 'Track and manage chapter expenses',
 }
 
-async function ExpensesTableWrapper() {
+async function ExpensesContent() {
+  noStore()
   const chapterId = await getCurrentChapterId()
 
   // Super admins without chapter_id will see all expenses
   const result = await getExpenses(chapterId, {}, 1, 50)
 
-  return (
-    <ExpensesTable
-      data={result.data}
-      pageCount={result.totalPages}
-    />
-  )
-}
-
-export default async function ExpensesPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -46,9 +39,34 @@ export default async function ExpensesPage() {
         </Link>
       </div>
 
-      <Suspense fallback={<Skeleton className="h-[600px]" />}>
-        <ExpensesTableWrapper />
-      </Suspense>
+      <ExpensesTable
+        data={result.data}
+        pageCount={result.totalPages}
+      />
     </div>
+  )
+}
+
+function ExpensesLoading() {
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Expenses</h1>
+          <p className="text-muted-foreground">
+            Track and manage all chapter expenses
+          </p>
+        </div>
+      </div>
+      <Skeleton className="h-[600px]" />
+    </div>
+  )
+}
+
+export default function ExpensesPage() {
+  return (
+    <Suspense fallback={<ExpensesLoading />}>
+      <ExpensesContent />
+    </Suspense>
   )
 }

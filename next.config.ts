@@ -1,9 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Enable Cache Components for Next.js 16 caching features
+  // Temporarily disabled due to auth route pre-rendering issues
+  // Re-enable after implementing proper 'use cache' directives
   // Module 7 (Communication Hub) uses 'use cache' directive at file level
-  // Temporarily disabled due to prerendering conflicts with authenticated routes
   cacheComponents: false,
 
   // Define cache lifetime profiles for optimal performance

@@ -5,6 +5,7 @@
  */
 
 import { Suspense } from 'react'
+import { unstable_noStore as noStore } from 'next/cache'
 import Link from 'next/link'
 import { Plus, Heart, Activity, FileCheck, TrendingUp } from 'lucide-react'
 
@@ -27,6 +28,7 @@ export const metadata = {
 }
 
 async function NGOsStats() {
+  noStore()
   // Super admins without chapter_id will see aggregated stats from all chapters
   const chapterId = await getCurrentChapterId()
   const ngos = await getNGOs(chapterId)

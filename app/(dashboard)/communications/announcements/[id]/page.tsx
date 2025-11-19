@@ -19,6 +19,7 @@ export const metadata: Metadata = {
   description: "View announcement details and delivery status",
 };
 
+
 interface AnnouncementDetailPageProps {
   params: { id: string };
 }

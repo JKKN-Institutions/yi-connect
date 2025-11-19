@@ -36,7 +36,14 @@
       "Bash(curl:*)",
       "Bash(powershell -Command \"\n$types = @''\n[The types content would go here but is too large]\n''@\n\nWrite-Host ''Checking PowerShell approach...''\nWrite-Host ''PowerShell version: '' $PSVersionTable.PSVersion\n\")",
       "Bash(head:*)",
-      "Bash(powershell -Command \"Stop-Process -Id 12024 -Force\")"
+      "Bash(powershell -Command \"Stop-Process -Id 12024 -Force\")",
+      "Bash(for file in app/(dashboard)/communications/page.tsx app/(dashboard)/communications/announcements/page.tsx app/(dashboard)/communications/announcements/new/page.tsx app/(dashboard)/communications/announcements/[id]/page.tsx app/(dashboard)/communications/announcements/[id]/edit/page.tsx app/(dashboard)/communications/analytics/page.tsx app/(dashboard)/communications/notifications/page.tsx app/(dashboard)/communications/segments/page.tsx app/(dashboard)/communications/templates/page.tsx)",
+      "Bash(do sed -i '/^\\/\\/ Force dynamic rendering/d; /^export const dynamic = .force-dynamic.;$/d' \"$file\")",
+      "Bash(npx supabase db push:*)",
+      "Bash(timeout 120 npx tsc:*)",
+      "Bash(echo:*)",
+      "Bash(powershell -Command \"Start-Sleep -Seconds 10\")",
+      "Bash(powershell -Command:*)"
     ],
     "deny": [],
     "ask": []

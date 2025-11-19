@@ -816,10 +816,12 @@ export interface AutomationRuleFilters {
 
 export interface PaginatedAnnouncements {
   data: AnnouncementListItem[];
+  items: AnnouncementListItem[]; // Alias for data
   total: number;
   page: number;
   pageSize: number;
   totalPages: number;
+  page_count: number; // Alias for totalPages
 }
 
 export interface PaginatedNotifications {

@@ -22,6 +22,7 @@ export const metadata: Metadata = {
   description: "Manage message templates with dynamic placeholders",
 };
 
+
 export default function TemplatesPage() {
   return (
     <div className="flex flex-col gap-6">

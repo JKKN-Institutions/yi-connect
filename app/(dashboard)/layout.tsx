@@ -8,7 +8,7 @@
  */
 
 import { Suspense } from 'react'
-import { connection } from 'next/server'
+import { unstable_noStore as noStore } from 'next/cache'
 import { DashboardHeader } from '@/components/layouts/dashboard-header'
 import { DashboardSidebar } from '@/components/layouts/dashboard-sidebar'
 
@@ -17,8 +17,8 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode
 }) {
-  // Opt out of static prerendering for authenticated routes
-  await connection()
+  // Opt out of static prerendering and caching for authenticated routes
+  noStore()
 
   return (
     <div className="min-h-screen flex">

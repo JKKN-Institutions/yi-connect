@@ -28,6 +28,7 @@ export const metadata: Metadata = {
   description: "Manage chapter communications, announcements, and notifications",
 };
 
+
 export default function CommunicationDashboardPage() {
   return (
     <div className="flex flex-col gap-6">

@@ -19,6 +19,7 @@ export const metadata: Metadata = {
   description: "Edit announcement details and settings",
 };
 
+
 interface EditAnnouncementPageProps {
   params: { id: string };
 }

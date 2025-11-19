@@ -1,5 +1,6 @@
 import { Suspense } from 'react'
 import { Metadata } from 'next'
+import { unstable_noStore as noStore } from 'next/cache'
 import Link from 'next/link'
 import { Plus } from 'lucide-react'
 
@@ -14,21 +15,13 @@ export const metadata: Metadata = {
   description: 'Manage chapter budgets and allocations',
 }
 
-async function BudgetsTableWrapper() {
+async function BudgetsContent() {
+  noStore()
   const chapterId = await getCurrentChapterId()
 
   // Super admins without chapter_id will see all budgets
   const result = await getBudgets(chapterId, {}, 1, 50)
 
-  return (
-    <BudgetsTable
-      data={result.data}
-      pageCount={result.totalPages}
-    />
-  )
-}
-
-export default async function BudgetsPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -46,9 +39,34 @@ export default async function BudgetsPage() {
         </Link>
       </div>
 
-      <Suspense fallback={<Skeleton className="h-[600px]" />}>
-        <BudgetsTableWrapper />
-      </Suspense>
+      <BudgetsTable
+        data={result.data}
+        pageCount={result.totalPages}
+      />
     </div>
+  )
+}
+
+function BudgetsLoading() {
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Budgets</h1>
+          <p className="text-muted-foreground">
+            Manage and track chapter budgets and allocations
+          </p>
+        </div>
+      </div>
+      <Skeleton className="h-[600px]" />
+    </div>
+  )
+}
+
+export default function BudgetsPage() {
+  return (
+    <Suspense fallback={<BudgetsLoading />}>
+      <BudgetsContent />
+    </Suspense>
   )
 }

@@ -59,10 +59,12 @@ export const getAnnouncements = cache(
     if (!cId) {
       return {
         data: [],
+        items: [], // Alias for data
         total: 0,
         page,
         pageSize,
-        totalPages: 0
+        totalPages: 0,
+        page_count: 0 // Alias for totalPages
       };
     }
 
@@ -133,10 +135,12 @@ export const getAnnouncements = cache(
       console.error('Error fetching announcements:', error);
       return {
         data: [],
+        items: [], // Alias for data
         total: 0,
         page,
         pageSize,
-        totalPages: 0
+        totalPages: 0,
+        page_count: 0 // Alias for totalPages
       };
     }
 
@@ -182,12 +186,16 @@ export const getAnnouncements = cache(
       }
     );
 
+    const totalPages = Math.ceil((count || 0) / pageSize);
+
     return {
       data: announcements,
+      items: announcements, // Alias for data
       total: count || 0,
       page,
       pageSize,
-      totalPages: Math.ceil((count || 0) / pageSize)
+      totalPages,
+      page_count: totalPages // Alias for totalPages
     };
   }
 );

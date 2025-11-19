@@ -20,6 +20,7 @@ export const metadata: Metadata = {
   description: "Communication performance metrics and insights",
 };
 
+
 export default function AnalyticsPage() {
   return (
     <div className="flex flex-col gap-6">

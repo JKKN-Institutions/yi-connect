@@ -21,6 +21,7 @@ export const metadata: Metadata = {
   description: "Manage saved audience segments for targeted communications",
 };
 
+
 export default function SegmentsPage() {
   return (
     <div className="flex flex-col gap-6">

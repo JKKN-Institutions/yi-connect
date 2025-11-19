@@ -104,7 +104,7 @@ export function EventForm(props: EventFormProps) {
       end_date: event?.end_date || '',
       registration_start_date: event?.registration_start_date || '',
       registration_end_date: event?.registration_end_date || '',
-      venue_id: event?.venue_id || '',
+      venue_id: event?.venue?.id || '',
       venue_address: event?.venue_address || '',
       is_virtual: event?.is_virtual || false,
       virtual_meeting_link: event?.virtual_meeting_link || '',
@@ -117,8 +117,8 @@ export function EventForm(props: EventFormProps) {
       estimated_budget: event?.estimated_budget ?? ('' as any),
       banner_image_url: event?.banner_image_url || '',
       tags: event?.tags || [],
-      template_id: event?.template_id || '',
-      chapter_id: event?.chapter_id || chapterId || ''
+      template_id: event?.template?.id || '',
+      chapter_id: event?.chapter?.id || chapterId || ''
     }
   });
 

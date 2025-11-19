@@ -25,7 +25,7 @@ type RSVPFormValues = {
   status:
     | 'pending'
     | 'confirmed'
-    | 'cancelled'
+    | 'declined'
     | 'waitlist'
     | 'attended'
     | 'no_show';
@@ -374,7 +374,7 @@ export function QuickRSVP({
 }: QuickRSVPProps) {
   const [isPending, startTransition] = useTransition();
 
-  const handleRSVP = (status: 'confirmed' | 'cancelled') => {
+  const handleRSVP = (status: 'confirmed' | 'declined') => {
     startTransition(async () => {
       try {
         const result = await createOrUpdateRSVP({
@@ -385,7 +385,7 @@ export function QuickRSVP({
         });
         if (result.success) {
           toast.success(
-            status === 'confirmed' ? 'RSVP confirmed!' : 'RSVP cancelled'
+            status === 'confirmed' ? 'RSVP confirmed!' : 'RSVP declined'
           );
           onSuccess?.();
         } else {
@@ -404,7 +404,7 @@ export function QuickRSVP({
           variant={
             (currentRSVP as any).status === 'confirmed'
               ? 'default'
-              : (currentRSVP as any).status === 'cancelled'
+              : (currentRSVP as any).status === 'declined'
               ? 'destructive'
               : 'secondary'
           }
@@ -416,7 +416,7 @@ export function QuickRSVP({
           size='sm'
           onClick={() =>
             handleRSVP(
-              (currentRSVP as any).status === 'confirmed' ? 'cancelled' : 'confirmed'
+              (currentRSVP as any).status === 'confirmed' ? 'declined' : 'confirmed'
             )
           }
           disabled={isPending}
@@ -440,7 +440,7 @@ export function QuickRSVP({
       </Button>
       <Button
         variant='outline'
-        onClick={() => handleRSVP('cancelled')}
+        onClick={() => handleRSVP('declined')}
         disabled={isPending}
         className='flex-1'
       >

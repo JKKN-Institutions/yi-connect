@@ -344,8 +344,34 @@ const navigation: NavItem[] = [
   },
   {
     name: 'Knowledge',
-    href: '/knowledge',
-    icon: BookOpen
+    icon: BookOpen,
+    items: [
+      {
+        name: 'Overview',
+        href: '/knowledge',
+        icon: LayoutDashboard
+      },
+      {
+        name: 'Documents',
+        href: '/knowledge/documents',
+        icon: FileText
+      },
+      {
+        name: 'Wiki Pages',
+        href: '/knowledge/wiki',
+        icon: BookOpen
+      },
+      {
+        name: 'Best Practices',
+        href: '/knowledge/best-practices',
+        icon: Trophy
+      },
+      {
+        name: 'Upload Document',
+        href: '/knowledge/documents/upload',
+        icon: Plus
+      }
+    ]
   },
   {
     name: 'Analytics',

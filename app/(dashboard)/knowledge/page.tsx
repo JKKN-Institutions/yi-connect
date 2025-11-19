@@ -1,207 +1,252 @@
-/**
- * Knowledge Module - Knowledge Management System
- * Module 8: Digital repository for reports, MoUs, templates, and best practices
- *
- * Status: Not Started (0%)
- * Priority: MEDIUM - Phase 2
- */
+import { Suspense } from 'react';
+import Link from 'next/link';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
+import { getCategories, getKnowledgeAnalytics } from '@/lib/data/knowledge';
+import { getCurrentUserChapter } from '@/lib/data/members';
+import {
+  FileText,
+  BookOpen,
+  Lightbulb,
+  FolderOpen,
+  Plus,
+  TrendingUp,
+  Users,
+  Download,
+  Eye,
+} from 'lucide-react';
 
-import { BookOpen, FileText, FolderOpen, Search, BookMarked, Share2, AlertCircle } from 'lucide-react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+export const metadata = {
+  title: 'Knowledge Management',
+  description: 'Access documents, wiki pages, and best practices',
+};
+
+async function KnowledgeStats() {
+  const chapter = await getCurrentUserChapter();
+  if (!chapter) return null;
+
+  const analytics = await getKnowledgeAnalytics(chapter.id);
+  if (!analytics) return null;
+
+  const stats = [
+    {
+      title: 'Total Documents',
+      value: analytics.total_documents,
+      icon: FileText,
+      description: 'Documents in library',
+      color: 'text-blue-500',
+    },
+    {
+      title: 'Wiki Pages',
+      value: analytics.total_wiki_pages,
+      icon: BookOpen,
+      description: 'Collaborative pages',
+      color: 'text-green-500',
+    },
+    {
+      title: 'Best Practices',
+      value: analytics.total_best_practices,
+      icon: Lightbulb,
+      description: 'Published practices',
+      color: 'text-yellow-500',
+    },
+    {
+      title: 'Total Views',
+      value: analytics.total_views,
+      icon: Eye,
+      description: 'Content views',
+      color: 'text-purple-500',
+    },
+  ];
+
+  return (
+    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      {stats.map((stat) => {
+        const Icon = stat.icon;
+        return (
+          <Card key={stat.title}>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
+              <Icon className={`h-4 w-4 ${stat.color}`} />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stat.value}</div>
+              <p className="text-xs text-muted-foreground">{stat.description}</p>
+            </CardContent>
+          </Card>
+        );
+      })}
+    </div>
+  );
+}
+
+async function CategoriesSection() {
+  const chapter = await getCurrentUserChapter();
+  if (!chapter) return null;
+
+  const categories = await getCategories(chapter.id);
+
+  if (categories.length === 0) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Categories</CardTitle>
+          <CardDescription>Organize your knowledge base</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">
+            No categories yet. Create one to start organizing your documents.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Categories</CardTitle>
+        <CardDescription>Browse by category</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">
+          {categories.map((category) => (
+            <Link
+              key={category.id}
+              href={`/knowledge/documents?category=${category.id}`}
+              className="flex items-center gap-3 rounded-lg border p-3 hover:bg-accent transition-colors"
+            >
+              <div
+                className="flex h-10 w-10 items-center justify-center rounded-md"
+                style={{ backgroundColor: category.color || '#3b82f6' }}
+              >
+                <FolderOpen className="h-5 w-5 text-white" />
+              </div>
+              <div className="flex-1">
+                <p className="font-medium text-sm">{category.name}</p>
+                <p className="text-xs text-muted-foreground">
+                  {category.description}
+                </p>
+              </div>
+            </Link>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 export default function KnowledgePage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <div className="flex items-center gap-3 mb-2">
-          <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
-            <BookOpen className="h-6 w-6 text-primary" />
-          </div>
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Knowledge Management System</h1>
-            <p className="text-muted-foreground">
-              Module 8 - Digital Repository for Reports, MoUs, Templates & Best Practices
-            </p>
-          </div>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Knowledge Management</h1>
+          <p className="text-muted-foreground">
+            Access and manage your chapter's knowledge repository
+          </p>
         </div>
-        <div className="flex items-center gap-2 mt-4">
-          <Badge variant="secondary">Module 8</Badge>
-          <Badge variant="outline">Phase 2 - Collaboration</Badge>
-          <Badge variant="destructive">Not Started</Badge>
+        <div className="flex gap-2">
+          <Button asChild>
+            <Link href="/knowledge/documents/upload">
+              <Plus className="mr-2 h-4 w-4" />
+              Upload Document
+            </Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href="/knowledge/wiki/new">
+              <Plus className="mr-2 h-4 w-4" />
+              New Wiki Page
+            </Link>
+          </Button>
         </div>
       </div>
 
-      {/* Coming Soon Alert */}
-      <Alert>
-        <AlertCircle className="h-4 w-4" />
-        <AlertTitle>Coming Soon</AlertTitle>
-        <AlertDescription>
-          This module is currently under development. It will provide a comprehensive knowledge repository
-          with full-text search, version control, and national content sync.
-        </AlertDescription>
-      </Alert>
+      {/* Stats */}
+      <Suspense
+        fallback={
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            {[...Array(4)].map((_, i) => (
+              <Card key={i}>
+                <CardHeader>
+                  <Skeleton className="h-4 w-24" />
+                </CardHeader>
+                <CardContent>
+                  <Skeleton className="h-8 w-16" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        }
+      >
+        <KnowledgeStats />
+      </Suspense>
 
-      {/* Document Categories */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <Card>
+      {/* Quick Access Cards */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card className="hover:shadow-lg transition-shadow">
           <CardHeader>
             <div className="flex items-center gap-2">
-              <FileText className="h-5 w-5 text-muted-foreground" />
-              <CardTitle className="text-base">Reports & Documents</CardTitle>
+              <FileText className="h-5 w-5 text-blue-500" />
+              <CardTitle>Documents</CardTitle>
             </div>
+            <CardDescription>Browse and download documents</CardDescription>
           </CardHeader>
           <CardContent>
-            <CardDescription>
-              Event reports, financial statements, and chapter documentation with version history
-            </CardDescription>
+            <Button asChild className="w-full">
+              <Link href="/knowledge/documents">View Documents</Link>
+            </Button>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="hover:shadow-lg transition-shadow">
           <CardHeader>
             <div className="flex items-center gap-2">
-              <FolderOpen className="h-5 w-5 text-muted-foreground" />
-              <CardTitle className="text-base">Templates Library</CardTitle>
+              <BookOpen className="h-5 w-5 text-green-500" />
+              <CardTitle>Wiki Pages</CardTitle>
             </div>
+            <CardDescription>Collaborative knowledge pages</CardDescription>
           </CardHeader>
           <CardContent>
-            <CardDescription>
-              Reusable templates for events, proposals, budgets, and official communications
-            </CardDescription>
+            <Button asChild className="w-full">
+              <Link href="/knowledge/wiki">View Wiki</Link>
+            </Button>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="hover:shadow-lg transition-shadow">
           <CardHeader>
             <div className="flex items-center gap-2">
-              <BookMarked className="h-5 w-5 text-muted-foreground" />
-              <CardTitle className="text-base">Best Practices</CardTitle>
+              <Lightbulb className="h-5 w-5 text-yellow-500" />
+              <CardTitle>Best Practices</CardTitle>
             </div>
+            <CardDescription>Learn from shared experiences</CardDescription>
           </CardHeader>
           <CardContent>
-            <CardDescription>
-              Documented guidelines, SOPs, and successful case studies from chapter activities
-            </CardDescription>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <FileText className="h-5 w-5 text-muted-foreground" />
-              <CardTitle className="text-base">MoUs & Agreements</CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <CardDescription>
-              Centralized storage for all memorandums of understanding and legal agreements
-            </CardDescription>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Search className="h-5 w-5 text-muted-foreground" />
-              <CardTitle className="text-base">Full-Text Search</CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <CardDescription>
-              Advanced search across all documents with filters and tag-based navigation
-            </CardDescription>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Share2 className="h-5 w-5 text-muted-foreground" />
-              <CardTitle className="text-base">National Sync</CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <CardDescription>
-              Synchronize important documents with national-level repository for knowledge sharing
-            </CardDescription>
+            <Button asChild className="w-full">
+              <Link href="/knowledge/best-practices">View Best Practices</Link>
+            </Button>
           </CardContent>
         </Card>
       </div>
 
-      {/* Key Features */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Planned Features</CardTitle>
-          <CardDescription>Comprehensive knowledge management and document repository</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <ul className="space-y-2 text-sm text-muted-foreground">
-            <li className="flex items-start gap-2">
-              <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5" />
-              <span>Document upload with automatic categorization and tagging</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5" />
-              <span>Version control with change tracking and rollback capabilities</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5" />
-              <span>Full-text search with OCR support for scanned documents</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5" />
-              <span>Wiki-style pages for collaborative documentation</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5" />
-              <span>Access controls with role-based permissions</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5" />
-              <span>Document expiry alerts for MoUs and time-sensitive agreements</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5" />
-              <span>Template marketplace for sharing reusable resources</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5" />
-              <span>Integration with national repository for best practices sharing</span>
-            </li>
-          </ul>
-        </CardContent>
-      </Card>
-
-      {/* Implementation Info */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Implementation Status</CardTitle>
-          <CardDescription>Module 8 - Knowledge Management System</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <h4 className="text-sm font-medium mb-2">Priority</h4>
-            <p className="text-sm text-muted-foreground">
-              MEDIUM - Phase 2 Collaboration Module (To be implemented in Q2)
-            </p>
-          </div>
-          <div>
-            <h4 className="text-sm font-medium mb-2">Estimated Timeline</h4>
-            <p className="text-sm text-muted-foreground">
-              4-5 weeks for full implementation including search, wiki, and sync features
-            </p>
-          </div>
-          <div>
-            <h4 className="text-sm font-medium mb-2">Dependencies</h4>
-            <p className="text-sm text-muted-foreground">
-              Module 2 (Stakeholders) for MoU integration; Module 10 (National Integration) for sync
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Categories Section */}
+      <Suspense
+        fallback={
+          <Card>
+            <CardHeader>
+              <Skeleton className="h-6 w-32" />
+            </CardHeader>
+            <CardContent>
+              <Skeleton className="h-24 w-full" />
+            </CardContent>
+          </Card>
+        }
+      >
+        <CategoriesSection />
+      </Suspense>
     </div>
-  )
+  );
 }

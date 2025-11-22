@@ -1,10 +1,25 @@
 import type { NextConfig } from "next";
+import withSerwistInit from "@serwist/next";
+
+// Initialize Serwist for PWA support
+const withSerwist = withSerwistInit({
+  swSrc: "app/sw.ts",
+  swDest: "public/sw.js",
+  reloadOnOnline: true,
+  // Enable service worker in all environments for testing
+  // Set DISABLE_SW=true in .env to disable during development
+  disable: process.env.DISABLE_SW === "true",
+});
 
 const nextConfig: NextConfig = {
   // Temporarily disabled due to auth route pre-rendering issues
   // Re-enable after implementing proper 'use cache' directives
   // Module 7 (Communication Hub) uses 'use cache' directive at file level
   cacheComponents: false,
+
+  // Empty turbopack config to silence the warning about webpack config
+  // Serwist uses webpack, but we need this for Next.js 16 compatibility
+  turbopack: {},
 
   // Define cache lifetime profiles for optimal performance
   cacheLife: {
@@ -42,6 +57,48 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+
+  // Security headers for PWA
+  async headers() {
+    return [
+      {
+        // Service worker headers
+        source: "/sw.js",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "no-cache, no-store, must-revalidate",
+          },
+          {
+            key: "Content-Type",
+            value: "application/javascript; charset=utf-8",
+          },
+        ],
+      },
+      {
+        // Security headers for all routes
+        source: "/(.*)",
+        headers: [
+          {
+            key: "X-Content-Type-Options",
+            value: "nosniff",
+          },
+          {
+            key: "X-Frame-Options",
+            value: "DENY",
+          },
+          {
+            key: "X-XSS-Protection",
+            value: "1; mode=block",
+          },
+          {
+            key: "Referrer-Policy",
+            value: "strict-origin-when-cross-origin",
+          },
+        ],
+      },
+    ];
+  },
 };
 
-export default nextConfig;
+export default withSerwist(nextConfig);

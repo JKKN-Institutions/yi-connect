@@ -15,25 +15,26 @@ export const metadata = {
 };
 
 interface PageProps {
-  searchParams: {
+  searchParams: Promise<{
     view?: 'grid' | 'list';
     category?: string;
     search?: string;
-  };
+  }>;
 }
 
 async function DocumentsList({ searchParams }: PageProps) {
+  const params = await searchParams;
   const chapter = await getCurrentUserChapter();
   if (!chapter) return null;
 
   const filters = {
-    category_id: searchParams.category,
-    search: searchParams.search,
+    category_id: params.category,
+    search: params.search,
   };
 
   const { data: documents } = await getDocuments(chapter.id, filters);
 
-  const viewMode = searchParams.view || 'list';
+  const viewMode = params.view || 'list';
 
   if (documents.length === 0) {
     return (
@@ -64,8 +65,9 @@ async function DocumentsList({ searchParams }: PageProps) {
   return <DocumentsTable data={documents} />;
 }
 
-export default function DocumentsPage({ searchParams }: PageProps) {
-  const viewMode = searchParams.view || 'list';
+export default async function DocumentsPage({ searchParams }: PageProps) {
+  const params = await searchParams;
+  const viewMode = params.view || 'list';
 
   return (
     <div className="space-y-6">

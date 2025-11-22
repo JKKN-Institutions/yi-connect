@@ -12,7 +12,8 @@ import {
   CardHeader,
   CardTitle
 } from '@/components/ui/card';
-import { redirect } from 'next/navigation';
+import { SponsorshipDealForm } from '@/components/finance/sponsorship-deal-form';
+import { getSponsorsForDropdown, getSponsorshipTiers } from '@/lib/data/finance';
 
 export const metadata = {
   title: 'Create Sponsorship Deal',
@@ -23,7 +24,38 @@ export const metadata = {
 async function NewDealFormWrapper() {
   const chapterId = await getCurrentChapterId();
 
-  // Allow super admins to proceed without a chapter ID
+  // Fetch sponsors and tiers for the form
+  const [sponsors, tiers] = await Promise.all([
+    getSponsorsForDropdown(chapterId),
+    getSponsorshipTiers(chapterId)
+  ]);
+
+  // If no chapter ID (super admin), show a warning but still allow the form
+  if (!chapterId) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Create Sponsorship Deal</CardTitle>
+          <CardDescription>
+            Track a new sponsorship opportunity from prospect to payment
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className='rounded-lg border border-amber-200 bg-amber-50 p-4 mb-6'>
+            <p className='text-sm text-amber-800'>
+              As a super admin, you need to select a chapter context first to create sponsorship deals.
+            </p>
+          </div>
+          <div className='rounded-lg border-2 border-dashed p-12 text-center'>
+            <p className='text-muted-foreground'>
+              Please select a chapter from the sidebar to proceed with creating a sponsorship deal.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -33,22 +65,23 @@ async function NewDealFormWrapper() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <div className='rounded-lg border-2 border-dashed p-12 text-center'>
-          <h3 className='text-lg font-semibold mb-2'>Sponsorship Deal Form</h3>
-          <p className='text-muted-foreground mb-4'>
-            This form will be implemented in the next iteration.
-          </p>
-          <p className='text-sm text-muted-foreground'>
-            For now, sponsorship deals can be created directly in the database
-            or via API.
-          </p>
-          {!chapterId && (
-            <p className='text-xs text-amber-600 mt-2'>
-              Note: As a super admin, you&apos;ll need to specify chapter ID
-              when creating deals.
+        {sponsors.length === 0 ? (
+          <div className='rounded-lg border-2 border-dashed p-12 text-center'>
+            <h3 className='text-lg font-semibold mb-2'>No Sponsors Found</h3>
+            <p className='text-muted-foreground mb-4'>
+              You need to add sponsors before creating sponsorship deals.
             </p>
-          )}
-        </div>
+            <Button asChild>
+              <Link href='/finance/sponsorships/sponsors/new'>Add Sponsor</Link>
+            </Button>
+          </div>
+        ) : (
+          <SponsorshipDealForm
+            chapterId={chapterId}
+            sponsors={sponsors}
+            tiers={tiers}
+          />
+        )}
       </CardContent>
     </Card>
   );

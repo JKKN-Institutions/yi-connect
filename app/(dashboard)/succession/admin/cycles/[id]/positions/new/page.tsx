@@ -4,15 +4,16 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { SuccessionPositionForm } from '@/components/succession/forms/succession-position-form'
 
-export default function NewPositionPage({
+export default async function NewPositionPage({
   params,
 }: {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }) {
+  const { id } = await params;
   return (
     <div className="space-y-6">
       <Button variant="ghost" size="sm" asChild>
-        <Link href={`/succession/admin/cycles/${params.id}`}>
+        <Link href={`/succession/admin/cycles/${id}`}>
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back to Cycle
         </Link>
@@ -33,7 +34,7 @@ export default function NewPositionPage({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <SuccessionPositionForm cycleId={params.id} />
+          <SuccessionPositionForm cycleId={id} />
         </CardContent>
       </Card>
     </div>

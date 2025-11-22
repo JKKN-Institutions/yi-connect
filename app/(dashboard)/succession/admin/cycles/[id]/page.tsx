@@ -211,11 +211,12 @@ function CycleDetailLoading() {
   )
 }
 
-export default function SuccessionCycleDetailPage({
+export default async function SuccessionCycleDetailPage({
   params,
 }: {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }) {
+  const { id } = await params;
   return (
     <div className="space-y-6">
       <Button variant="ghost" size="sm" asChild>
@@ -226,7 +227,7 @@ export default function SuccessionCycleDetailPage({
       </Button>
 
       <Suspense fallback={<CycleDetailLoading />}>
-        <CycleDetailContent id={params.id} />
+        <CycleDetailContent id={id} />
       </Suspense>
     </div>
   )

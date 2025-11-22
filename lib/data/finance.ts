@@ -30,6 +30,7 @@ import type {
   SponsorWithDeals,
   SponsorFilters,
   PaginatedSponsors,
+  SponsorshipTier,
   SponsorshipDeal,
   SponsorshipDealListItem,
   SponsorshipDealWithSponsor,
@@ -673,6 +674,66 @@ export const getSponsorById = cache(async (sponsorId: string): Promise<SponsorWi
     active_deals_count: activeDeals.length,
     total_pipeline_value: totalPipelineValue,
   }
+})
+
+// ================================================
+// SPONSORSHIP TIER QUERIES
+// ================================================
+
+/**
+ * Get list of sponsorship tiers for a chapter
+ * If chapterId is null, fetches all tiers (for super admins)
+ */
+export const getSponsorshipTiers = cache(async (
+  chapterId: string | null
+): Promise<SponsorshipTier[]> => {
+  const supabase = await createServerSupabaseClient()
+
+  let query = supabase
+    .from('sponsorship_tiers')
+    .select('*')
+    .order('min_amount', { ascending: false })
+
+  if (chapterId) {
+    query = query.eq('chapter_id', chapterId)
+  }
+
+  const { data, error } = await query
+
+  if (error) {
+    console.error('Error fetching sponsorship tiers:', error)
+    return []
+  }
+
+  return data || []
+})
+
+/**
+ * Get sponsors list for dropdown (simple list)
+ */
+export const getSponsorsForDropdown = cache(async (
+  chapterId: string | null
+): Promise<Pick<Sponsor, 'id' | 'organization_name'>[]> => {
+  const supabase = await createServerSupabaseClient()
+
+  let query = supabase
+    .from('sponsors')
+    .select('id, organization_name')
+    .eq('is_active', true)
+    .order('organization_name')
+
+  if (chapterId) {
+    query = query.eq('chapter_id', chapterId)
+  }
+
+  const { data, error } = await query
+
+  if (error) {
+    console.error('Error fetching sponsors for dropdown:', error)
+    return []
+  }
+
+  return data || []
 })
 
 // ================================================

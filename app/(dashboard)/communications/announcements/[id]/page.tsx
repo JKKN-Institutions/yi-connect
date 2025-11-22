@@ -21,11 +21,12 @@ export const metadata: Metadata = {
 
 
 interface AnnouncementDetailPageProps {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
 async function AnnouncementDetailContent({ params }: AnnouncementDetailPageProps) {
-  const announcement = await getAnnouncementById(params.id);
+  const { id } = await params;
+  const announcement = await getAnnouncementById(id);
 
   if (!announcement) {
     notFound();
@@ -293,7 +294,7 @@ async function AnnouncementDetailContent({ params }: AnnouncementDetailPageProps
   );
 }
 
-export default function AnnouncementDetailPage({ params }: AnnouncementDetailPageProps) {
+export default async function AnnouncementDetailPage({ params }: AnnouncementDetailPageProps) {
   return (
     <Suspense fallback={<div className="p-8"><Skeleton className="h-96 w-full" /></div>}>
       <AnnouncementDetailContent params={params} />

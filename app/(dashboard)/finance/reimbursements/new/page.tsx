@@ -12,7 +12,7 @@ import {
   CardHeader,
   CardTitle
 } from '@/components/ui/card';
-import { redirect } from 'next/navigation';
+import { ReimbursementRequestForm } from '@/components/finance/reimbursement-request-form';
 
 export const metadata = {
   title: 'New Reimbursement Request',
@@ -22,7 +22,32 @@ export const metadata = {
 async function NewRequestFormWrapper() {
   const chapterId = await getCurrentChapterId();
 
-  // Allow super admins to proceed without a chapter ID
+  // If no chapter ID (super admin), show a warning
+  if (!chapterId) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>New Reimbursement Request</CardTitle>
+          <CardDescription>
+            Submit a request to get reimbursed for approved chapter expenses
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className='rounded-lg border border-amber-200 bg-amber-50 p-4 mb-6'>
+            <p className='text-sm text-amber-800'>
+              As a super admin, you need to select a chapter context first to create reimbursement requests.
+            </p>
+          </div>
+          <div className='rounded-lg border-2 border-dashed p-12 text-center'>
+            <p className='text-muted-foreground'>
+              Please select a chapter from the sidebar to proceed with creating a reimbursement request.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -32,24 +57,7 @@ async function NewRequestFormWrapper() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <div className='rounded-lg border-2 border-dashed p-12 text-center'>
-          <h3 className='text-lg font-semibold mb-2'>
-            Reimbursement Request Form
-          </h3>
-          <p className='text-muted-foreground mb-4'>
-            This form will be implemented in the next iteration.
-          </p>
-          <p className='text-sm text-muted-foreground'>
-            For now, reimbursement requests can be created directly in the
-            database or via API.
-          </p>
-          {!chapterId && (
-            <p className='text-xs text-amber-600 mt-2'>
-              Note: As a super admin, you&apos;ll need to specify chapter ID
-              when creating requests.
-            </p>
-          )}
-        </div>
+        <ReimbursementRequestForm chapterId={chapterId} />
       </CardContent>
     </Card>
   );

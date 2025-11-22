@@ -195,3 +195,24 @@ export async function logout() {
   await supabase.auth.signOut()
   redirect('/login')
 }
+
+/**
+ * Get the current user's member ID
+ *
+ * Returns the member ID (which equals the user ID in our schema).
+ * Cached per-request using React cache().
+ * Returns null if user is not authenticated.
+ *
+ * Usage:
+ * ```typescript
+ * const memberId = await getCurrentMemberId()
+ * if (!memberId) {
+ *   // Handle unauthenticated state
+ * }
+ * ```
+ */
+export const getCurrentMemberId = cache(async (): Promise<string | null> => {
+  const user = await getCurrentUser()
+  if (!user) return null
+  return user.id
+})

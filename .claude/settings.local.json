@@ -47,7 +47,9 @@
       "Bash(\"D:\\JKKN\\yi-connect\\temp_tables.sql\")",
       "Bash(timeout:*)",
       "Bash(more:*)",
-      "mcp__chrome-devtools__take_snapshot"
+      "mcp__chrome-devtools__take_snapshot",
+      "Skill(nextjs-pwa-skill)",
+      "Bash(npm install:*)"
     ],
     "deny": [],
     "ask": []

@@ -46,15 +46,16 @@ function EditCycleLoading() {
   )
 }
 
-export default function EditSuccessionCyclePage({
+export default async function EditSuccessionCyclePage({
   params,
 }: {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }) {
+  const { id } = await params;
   return (
     <div className="space-y-6">
       <Button variant="ghost" size="sm" asChild>
-        <Link href={`/succession/admin/cycles/${params.id}`}>
+        <Link href={`/succession/admin/cycles/${id}`}>
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back to Cycle
         </Link>
@@ -68,7 +69,7 @@ export default function EditSuccessionCyclePage({
       </div>
 
       <Suspense fallback={<EditCycleLoading />}>
-        <EditCycleContent id={params.id} />
+        <EditCycleContent id={id} />
       </Suspense>
     </div>
   )

@@ -103,12 +103,20 @@ export default async function SponsorshipsPage() {
             Track and manage sponsorship deals from prospect to payment
           </p>
         </div>
-        <Link href="/finance/sponsorships/new">
-          <Button>
-            <Plus className="mr-2 h-4 w-4" />
-            Create Deal
-          </Button>
-        </Link>
+        <div className="flex gap-2">
+          <Link href="/finance/sponsorships/sponsors/new">
+            <Button variant="outline">
+              <Plus className="mr-2 h-4 w-4" />
+              Add Sponsor
+            </Button>
+          </Link>
+          <Link href="/finance/sponsorships/new">
+            <Button>
+              <Plus className="mr-2 h-4 w-4" />
+              Create Deal
+            </Button>
+          </Link>
+        </div>
       </div>
 
       <Suspense fallback={

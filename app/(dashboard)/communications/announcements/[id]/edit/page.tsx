@@ -21,11 +21,12 @@ export const metadata: Metadata = {
 
 
 interface EditAnnouncementPageProps {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
 async function EditAnnouncementContent({ params }: EditAnnouncementPageProps) {
-  const announcement = await getAnnouncementById(params.id);
+  const { id } = await params;
+  const announcement = await getAnnouncementById(id);
 
   if (!announcement) {
     notFound();
@@ -84,7 +85,7 @@ async function EditAnnouncementContent({ params }: EditAnnouncementPageProps) {
   );
 }
 
-export default function EditAnnouncementPage({ params }: EditAnnouncementPageProps) {
+export default async function EditAnnouncementPage({ params }: EditAnnouncementPageProps) {
   return (
     <Suspense fallback={<div className="p-8"><Skeleton className="h-96 w-full" /></div>}>
       <EditAnnouncementContent params={params} />

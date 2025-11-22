@@ -55,7 +55,9 @@ import {
   Users2,
   Trophy,
   Target,
-  Activity
+  Activity,
+  RefreshCw,
+  Megaphone
 } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -171,6 +173,11 @@ const navigation: NavItem[] = [
       {
         name: 'Add Expense',
         href: '/finance/expenses/new',
+        icon: Plus
+      },
+      {
+        name: 'Add Sponsor',
+        href: '/finance/sponsorships/sponsors/new',
         icon: Plus
       },
       {
@@ -397,14 +404,40 @@ const navigation: NavItem[] = [
     ]
   },
   {
-    name: 'Analytics',
-    href: '/analytics',
-    icon: BarChart3
-  },
-  {
-    name: 'Leadership',
-    href: '/leadership',
-    icon: Globe
+    name: 'National',
+    icon: Globe,
+    items: [
+      {
+        name: 'Overview',
+        href: '/national',
+        icon: LayoutDashboard
+      },
+      {
+        name: 'Events',
+        href: '/national/events',
+        icon: CalendarDays
+      },
+      {
+        name: 'Benchmarks',
+        href: '/national/benchmarks',
+        icon: BarChart3
+      },
+      {
+        name: 'Broadcasts',
+        href: '/national/broadcasts',
+        icon: Megaphone
+      },
+      {
+        name: 'Sync Status',
+        href: '/national/sync',
+        icon: RefreshCw
+      },
+      {
+        name: 'Settings',
+        href: '/national/settings',
+        icon: Settings
+      }
+    ]
   },
   {
     name: 'Settings',

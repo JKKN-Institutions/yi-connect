@@ -109,7 +109,16 @@ export const getVerticals = cache(
     const { data, error } = await query
 
     if (error) throw error
-    return (data as VerticalWithChair[]) || []
+
+    // Supabase returns current_chair as an array for each vertical, we need the first (active) chair
+    const results = (data || []).map((vertical: any) => {
+      if (vertical && Array.isArray(vertical.current_chair)) {
+        vertical.current_chair = vertical.current_chair[0] || null
+      }
+      return vertical
+    })
+
+    return results as VerticalWithChair[]
   }
 )
 
@@ -142,7 +151,14 @@ export const getVerticalById = cache(async (id: string): Promise<VerticalWithCha
     .single()
 
   if (error) throw error
-  return data as VerticalWithChair
+
+  // Supabase returns current_chair as an array, we need the first (active) chair
+  const result = data as any
+  if (result && Array.isArray(result.current_chair)) {
+    result.current_chair = result.current_chair[0] || null
+  }
+
+  return result as VerticalWithChair
 })
 
 /**
@@ -180,7 +196,14 @@ export const getVerticalBySlug = cache(async (slug: string): Promise<VerticalWit
     .single()
 
   if (error) throw error
-  return data as VerticalWithChair
+
+  // Supabase returns current_chair as an array, we need the first (active) chair
+  const result = data as any
+  if (result && Array.isArray(result.current_chair)) {
+    result.current_chair = result.current_chair[0] || null
+  }
+
+  return result as VerticalWithChair
 })
 
 // ============================================================================
@@ -218,7 +241,8 @@ export const getVerticalPlans = cache(async (verticalId: string): Promise<Vertic
 })
 
 /**
- * Get active plan for a vertical
+ * Get current plan for a vertical (any status, for the given fiscal year)
+ * This returns the plan regardless of status (draft, submitted, approved, active, completed)
  */
 export const getActiveVerticalPlan = cache(
   async (verticalId: string, fiscalYear?: number): Promise<VerticalPlanWithKPIs | null> => {
@@ -242,7 +266,6 @@ export const getActiveVerticalPlan = cache(
       `
       )
       .eq('vertical_id', verticalId)
-      .eq('status', 'active')
 
     if (fiscalYear) {
       query = query.eq('fiscal_year', fiscalYear)
@@ -627,7 +650,7 @@ export const getVerticalMembers = cache(async (verticalId: string): Promise<Vert
     )
     .eq('vertical_id', verticalId)
     .eq('is_active', true)
-    .order('joined_at', { ascending: false })
+    .order('joined_date', { ascending: false })
 
   if (error) throw error
   return (data as VerticalMemberWithDetails[]) || []
@@ -716,14 +739,16 @@ export const getVerticalDashboard = cache(async (verticalId: string, fiscalYear:
   }
 
   // Get budget summary (assuming budget is in vertical_plans)
+  // Database column is total_budget, not budget_allocated
+  const totalBudget = (currentPlan as any)?.total_budget || 0
   const budgetSummary = {
-    allocated: currentPlan?.budget_allocated || 0,
+    allocated: totalBudget,
     spent: impactMetrics.total_cost,
     committed: 0, // TODO: Get from expenses
-    available: (currentPlan?.budget_allocated || 0) - impactMetrics.total_cost,
+    available: totalBudget - impactMetrics.total_cost,
     utilization_percentage:
-      currentPlan?.budget_allocated && currentPlan.budget_allocated > 0
-        ? (impactMetrics.total_cost / currentPlan.budget_allocated) * 100
+      totalBudget > 0
+        ? (impactMetrics.total_cost / totalBudget) * 100
         : 0,
   }
 
@@ -747,6 +772,7 @@ export const getVerticalDashboard = cache(async (verticalId: string, fiscalYear:
     budget_summary: budgetSummary,
     recent_activities: recentActivities.slice(0, 5),
     recent_achievements: recentAchievements.slice(0, 5),
+    members: members,
     member_count: members.length,
     active_member_count: members.filter((m) => m.is_active).length,
   }

@@ -46,7 +46,8 @@
       "Bash(powershell -Command:*)",
       "Bash(\"D:\\JKKN\\yi-connect\\temp_tables.sql\")",
       "Bash(timeout:*)",
-      "Bash(more:*)"
+      "Bash(more:*)",
+      "mcp__chrome-devtools__take_snapshot"
     ],
     "deny": [],
     "ask": []

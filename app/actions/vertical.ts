@@ -599,9 +599,9 @@ export async function recordKPIActual(input: RecordKPIActualInput): Promise<Acti
         .from('vertical_kpi_actuals')
         .update({
           actual_value: sanitized.actual_value,
-          recorded_date: sanitized.recorded_date || new Date().toISOString().split('T')[0],
           notes: sanitized.notes,
           recorded_by: sanitized.recorded_by,
+          recorded_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         })
         .eq('id', existing.id)
@@ -615,8 +615,13 @@ export async function recordKPIActual(input: RecordKPIActualInput): Promise<Acti
       const { data, error } = await supabase
         .from('vertical_kpi_actuals')
         .insert({
-          ...sanitized,
-          recorded_date: sanitized.recorded_date || new Date().toISOString().split('T')[0],
+          kpi_id: sanitized.kpi_id,
+          quarter: sanitized.quarter,
+          actual_value: sanitized.actual_value,
+          notes: sanitized.notes,
+          recorded_by: sanitized.recorded_by,
+          recorded_at: new Date().toISOString(),
+          supporting_event_ids: sanitized.supporting_event_ids,
         })
         .select('id')
         .single()
@@ -701,10 +706,9 @@ export async function addVerticalMember(input: AddVerticalMemberInput): Promise<
           .from('vertical_members')
           .update({
             is_active: true,
-            joined_at: sanitized.joined_at || new Date().toISOString(),
-            left_at: null,
-            role: sanitized.role,
-            contribution_notes: sanitized.contribution_notes,
+            joined_date: sanitized.joined_date || new Date().toISOString().split('T')[0],
+            left_date: null,
+            role_in_vertical: sanitized.role,
             updated_at: new Date().toISOString(),
           })
           .eq('id', existing.id)
@@ -720,8 +724,10 @@ export async function addVerticalMember(input: AddVerticalMemberInput): Promise<
     const { data, error } = await supabase
       .from('vertical_members')
       .insert({
-        ...sanitized,
-        joined_at: sanitized.joined_at || new Date().toISOString(),
+        vertical_id: sanitized.vertical_id,
+        member_id: sanitized.member_id,
+        role_in_vertical: sanitized.role,
+        joined_date: sanitized.joined_date || new Date().toISOString().split('T')[0],
         is_active: true,
       })
       .select('id')
@@ -786,7 +792,7 @@ export async function removeVerticalMember(id: string): Promise<ActionResponse> 
       .from('vertical_members')
       .update({
         is_active: false,
-        left_at: new Date().toISOString(),
+        left_date: new Date().toISOString().split('T')[0],
         updated_at: new Date().toISOString(),
       })
       .eq('id', id)

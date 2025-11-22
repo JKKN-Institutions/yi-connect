@@ -170,21 +170,21 @@ export const assignVerticalChairSchema = z
   .object({
     vertical_id: uuidSchema,
     member_id: uuidSchema,
-    role: z.string().default('Chair'),
-    term_start_date: dateStringSchema,
-    term_end_date: dateStringSchema.optional().nullable(),
-    responsibilities: z.string().max(1000).trim().optional().nullable(),
+    role: z.enum(['chair', 'co_chair']).default('chair'),
+    start_date: dateStringSchema,
+    end_date: dateStringSchema.optional().nullable(),
+    notes: z.string().max(1000).trim().optional().nullable(),
   })
   .refine(
     (data) => {
-      if (data.term_end_date) {
-        return new Date(data.term_end_date) > new Date(data.term_start_date)
+      if (data.end_date) {
+        return new Date(data.end_date) > new Date(data.start_date)
       }
       return true
     },
     {
-      message: 'Term end date must be after term start date',
-      path: ['term_end_date'],
+      message: 'End date must be after start date',
+      path: ['end_date'],
     }
   )
 
@@ -193,22 +193,22 @@ export const assignVerticalChairSchema = z
  */
 export const updateVerticalChairSchema = z
   .object({
-    role: z.string().optional(),
-    term_start_date: dateStringSchema.optional(),
-    term_end_date: dateStringSchema.optional().nullable(),
-    responsibilities: z.string().max(1000).trim().optional().nullable(),
+    role: z.enum(['chair', 'co_chair']).optional(),
+    start_date: dateStringSchema.optional(),
+    end_date: dateStringSchema.optional().nullable(),
+    notes: z.string().max(1000).trim().optional().nullable(),
     is_active: z.boolean().optional(),
   })
   .refine(
     (data) => {
-      if (data.term_end_date && data.term_start_date) {
-        return new Date(data.term_end_date) > new Date(data.term_start_date)
+      if (data.end_date && data.start_date) {
+        return new Date(data.end_date) > new Date(data.start_date)
       }
       return true
     },
     {
-      message: 'Term end date must be after term start date',
-      path: ['term_end_date'],
+      message: 'End date must be after start date',
+      path: ['end_date'],
     }
   )
 
@@ -246,20 +246,24 @@ const kpiItemSchema = z.object({
 
 /**
  * Create vertical plan schema
+ * Database columns: plan_name, vision, mission, q1_budget, q2_budget, q3_budget, q4_budget
+ * Note: total_budget is a generated column (computed from quarterly budgets) - do not insert
  */
 export const createVerticalPlanSchema = z
   .object({
     vertical_id: uuidSchema,
     fiscal_year: fiscalYearSchema,
-    plan_title: z
+    plan_name: z
       .string()
-      .min(3, 'Plan title must be at least 3 characters')
-      .max(200, 'Plan title must be at most 200 characters')
+      .min(3, 'Plan name must be at least 3 characters')
+      .max(200, 'Plan name must be at most 200 characters')
       .trim(),
-    plan_description: z.string().max(2000).trim().optional().nullable(),
-    vision_statement: z.string().max(1000).trim().optional().nullable(),
-    objectives: z.array(z.string()).optional().nullable(),
-    budget_allocated: currencySchema.default(0),
+    mission: z.string().max(2000).trim().optional().nullable(),
+    vision: z.string().max(1000).trim().optional().nullable(),
+    q1_budget: currencySchema.default(0),
+    q2_budget: currencySchema.default(0),
+    q3_budget: currencySchema.default(0),
+    q4_budget: currencySchema.default(0),
     status: z
       .enum([
         PLAN_STATUSES.DRAFT,
@@ -288,18 +292,22 @@ export const createVerticalPlanSchema = z
 
 /**
  * Update vertical plan schema
+ * Database columns: plan_name, vision, mission, q1_budget, q2_budget, q3_budget, q4_budget
+ * Note: total_budget is a generated column (computed from quarterly budgets) - do not update
  */
 export const updateVerticalPlanSchema = z.object({
-  plan_title: z
+  plan_name: z
     .string()
-    .min(3, 'Plan title must be at least 3 characters')
-    .max(200, 'Plan title must be at most 200 characters')
+    .min(3, 'Plan name must be at least 3 characters')
+    .max(200, 'Plan name must be at most 200 characters')
     .trim()
     .optional(),
-  plan_description: z.string().max(2000).trim().optional().nullable(),
-  vision_statement: z.string().max(1000).trim().optional().nullable(),
-  objectives: z.array(z.string()).optional().nullable(),
-  budget_allocated: currencySchema.optional(),
+  mission: z.string().max(2000).trim().optional().nullable(),
+  vision: z.string().max(1000).trim().optional().nullable(),
+  q1_budget: currencySchema.optional(),
+  q2_budget: currencySchema.optional(),
+  q3_budget: currencySchema.optional(),
+  q4_budget: currencySchema.optional(),
   status: z
     .enum([
       PLAN_STATUSES.DRAFT,
@@ -388,22 +396,28 @@ export const updateKPISchema = z.object({
 /**
  * Record KPI actual value schema
  */
+/**
+ * Record KPI actual schema
+ * Database columns: kpi_id, quarter, actual_value, recorded_by, recorded_at, notes, supporting_event_ids
+ * Note: recorded_at is a timestamp, not a date string
+ */
 export const recordKPIActualSchema = z.object({
   kpi_id: uuidSchema,
   quarter: quarterSchema,
-  actual_value: z.number('Actual value is required'),
-  recorded_date: dateStringSchema.optional(),
+  actual_value: z.number({ message: 'Actual value is required' }),
   notes: z.string().max(1000).trim().optional().nullable(),
   recorded_by: uuidSchema,
+  supporting_event_ids: z.array(uuidSchema).optional().nullable(),
 })
 
 /**
  * Update KPI actual schema
+ * Database columns: actual_value, notes, supporting_event_ids
  */
 export const updateKPIActualSchema = z.object({
-  actual_value: z.number('Actual value is required').optional(),
-  recorded_date: dateStringSchema.optional(),
+  actual_value: z.number({ message: 'Actual value is required' }).optional(),
   notes: z.string().max(1000).trim().optional().nullable(),
+  supporting_event_ids: z.array(uuidSchema).optional().nullable(),
 })
 
 // ============================================================================
@@ -418,7 +432,7 @@ export const addVerticalMemberSchema = z
     vertical_id: uuidSchema,
     member_id: uuidSchema,
     role: z.string().max(100).trim().optional().nullable(),
-    joined_at: dateStringSchema.optional(),
+    joined_date: dateStringSchema.optional(),
     contribution_notes: z.string().max(1000).trim().optional().nullable(),
   })
 
@@ -427,7 +441,7 @@ export const addVerticalMemberSchema = z
  */
 export const updateVerticalMemberSchema = z.object({
   role: z.string().max(100).trim().optional().nullable(),
-  left_at: dateStringSchema.optional().nullable(),
+  left_date: dateStringSchema.optional().nullable(),
   is_active: z.boolean().optional(),
   contribution_notes: z.string().max(1000).trim().optional().nullable(),
 })
@@ -437,7 +451,7 @@ export const updateVerticalMemberSchema = z.object({
  */
 export const removeVerticalMemberSchema = z.object({
   id: uuidSchema,
-  left_at: dateStringSchema.optional(),
+  left_date: dateStringSchema.optional(),
 })
 
 // ============================================================================

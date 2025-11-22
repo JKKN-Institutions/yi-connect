@@ -182,10 +182,12 @@ export interface VerticalPerformanceReviewWithDetails extends VerticalPerformanc
 export interface VerticalMemberWithDetails extends VerticalMember {
   member?: {
     id: string
-    full_name: string
-    email: string
     avatar_url: string | null
-    phone: string | null
+    profile?: {
+      full_name: string
+      email: string
+      phone: string | null
+    }
   }
   vertical?: {
     id: string
@@ -266,6 +268,7 @@ export interface VerticalDashboardSummary {
   }
   recent_activities: VerticalActivityWithDetails[]
   recent_achievements: VerticalAchievementWithDetails[]
+  members: VerticalMemberWithDetails[]
   member_count: number
   active_member_count: number
 }
@@ -486,15 +489,19 @@ export interface VerticalFormData {
 
 /**
  * Form data for creating/updating a vertical plan
+ * Database columns: plan_name, vision, mission, q1_budget, q2_budget, q3_budget, q4_budget
+ * Note: total_budget is a generated column (computed from quarterly budgets)
  */
 export interface VerticalPlanFormData {
   vertical_id: string
   fiscal_year: number
-  plan_title: string
-  plan_description?: string | null
-  vision_statement?: string | null
-  objectives?: string[] | null
-  budget_allocated: number
+  plan_name: string
+  mission?: string | null
+  vision?: string | null
+  q1_budget: number
+  q2_budget: number
+  q3_budget: number
+  q4_budget: number
   kpis?: {
     kpi_name: string
     metric_type: MetricType
@@ -571,7 +578,7 @@ export interface VerticalMemberFormData {
   vertical_id: string
   member_id: string
   role?: string | null
-  joined_at?: string
+  joined_date?: string
   contribution_notes?: string | null
 }
 
@@ -675,6 +682,15 @@ export const REVIEW_STATUSES = {
   COMPLETED: 'completed',
   PUBLISHED: 'published',
 } as const
+
+/**
+ * Review status labels for UI
+ */
+export const REVIEW_STATUS_LABELS: Record<ReviewStatus, string> = {
+  pending: 'Pending',
+  completed: 'Completed',
+  published: 'Published',
+}
 
 /**
  * Quarter options

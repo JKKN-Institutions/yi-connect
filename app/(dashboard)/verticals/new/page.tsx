@@ -7,16 +7,13 @@
 
 import { Suspense } from 'react';
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
+import { getCurrentUser } from '@/lib/data/auth';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle
-} from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { VerticalForm } from '@/components/verticals/vertical-form';
+import { createClient } from '@/lib/supabase/server';
 
 export const metadata = {
   title: 'Create New Vertical',
@@ -48,64 +45,83 @@ export default function NewVerticalPage() {
 
       {/* Form */}
       <Suspense fallback={<FormSkeleton />}>
-        <NewVerticalForm />
+        <NewVerticalFormWrapper />
       </Suspense>
     </div>
   );
 }
 
-async function NewVerticalForm() {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Vertical Information</CardTitle>
-        <CardDescription>
-          Enter the details for the new vertical
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className='space-y-4'>
-          {/* Form fields will be added here */}
-          <div className='rounded-lg border border-dashed p-8 text-center'>
-            <p className='text-sm text-muted-foreground'>
-              Vertical creation form is under development.
-            </p>
-            <p className='text-xs text-muted-foreground mt-2'>
-              This feature will allow you to create and configure new verticals
-              for your chapter.
-            </p>
-          </div>
+async function NewVerticalFormWrapper() {
+  const user = await getCurrentUser();
 
-          <div className='flex gap-2 justify-end'>
-            <Button variant='outline' asChild>
-              <Link href='/verticals'>Cancel</Link>
-            </Button>
-            <Button disabled>Create Vertical</Button>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
+  if (!user) {
+    redirect('/login');
+  }
+
+  // Get user's chapter from their profile/member record
+  const supabase = await createClient();
+  const { data: member } = await supabase
+    .from('members')
+    .select('chapter_id')
+    .eq('id', user.id)
+    .single();
+
+  if (!member?.chapter_id) {
+    return (
+      <div className='rounded-lg border border-dashed p-8 text-center'>
+        <p className='text-sm text-muted-foreground'>
+          Unable to determine your chapter. Please contact support.
+        </p>
+      </div>
+    );
+  }
+
+  return <VerticalForm chapterId={member.chapter_id} />;
 }
 
 function FormSkeleton() {
   return (
-    <Card>
-      <CardHeader>
-        <Skeleton className='h-6 w-48' />
-        <Skeleton className='h-4 w-64 mt-2' />
-      </CardHeader>
-      <CardContent>
+    <div className='space-y-6'>
+      <div className='rounded-lg border p-6'>
+        <Skeleton className='h-6 w-48 mb-2' />
+        <Skeleton className='h-4 w-64 mb-6' />
         <div className='space-y-4'>
-          <Skeleton className='h-10 w-full' />
-          <Skeleton className='h-10 w-full' />
-          <Skeleton className='h-20 w-full' />
-          <div className='flex gap-2 justify-end'>
-            <Skeleton className='h-10 w-20' />
-            <Skeleton className='h-10 w-32' />
+          <div>
+            <Skeleton className='h-4 w-24 mb-2' />
+            <Skeleton className='h-10 w-full' />
+          </div>
+          <div>
+            <Skeleton className='h-4 w-24 mb-2' />
+            <Skeleton className='h-10 w-full' />
+          </div>
+          <div>
+            <Skeleton className='h-4 w-24 mb-2' />
+            <Skeleton className='h-24 w-full' />
           </div>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+      <div className='rounded-lg border p-6'>
+        <Skeleton className='h-6 w-32 mb-2' />
+        <Skeleton className='h-4 w-56 mb-6' />
+        <div className='space-y-4'>
+          <div>
+            <Skeleton className='h-4 w-24 mb-2' />
+            <div className='flex gap-2'>
+              <Skeleton className='h-10 w-10' />
+              <Skeleton className='h-10 w-32' />
+            </div>
+            <div className='flex gap-2 mt-2'>
+              {[...Array(8)].map((_, i) => (
+                <Skeleton key={i} className='h-8 w-8' />
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className='flex justify-end gap-4'>
+        <Skeleton className='h-10 w-20' />
+        <Skeleton className='h-10 w-32' />
+      </div>
+    </div>
   );
 }

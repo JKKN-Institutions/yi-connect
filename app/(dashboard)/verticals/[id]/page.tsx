@@ -347,7 +347,7 @@ async function DashboardContent({ params }: { params: Promise<{ id: string }> })
                 <Target className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                 <p className="text-sm text-muted-foreground mb-4">No active plan for FY{fiscalYear}</p>
                 <Button asChild>
-                  <Link href={`/verticals/${id}/plan/new`}>Create Plan</Link>
+                  <Link href={`/verticals/${id}/plan?new=true`}>Create Plan</Link>
                 </Button>
               </div>
             ) : dashboard.current_plan.kpis && dashboard.current_plan.kpis.length > 0 ? (
@@ -426,23 +426,104 @@ async function DashboardContent({ params }: { params: Promise<{ id: string }> })
       </TabsContent>
 
       <TabsContent value="team">
+        {/* Current Chair Section */}
+        {dashboard.current_chair && dashboard.current_chair.member && (
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Award className="h-5 w-5 text-yellow-500" />
+                Vertical Chair
+              </CardTitle>
+              <CardDescription>Current leadership for this vertical</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-4 p-4 rounded-lg bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-800">
+                <Avatar className="h-16 w-16">
+                  <AvatarImage src={dashboard.current_chair.member?.avatar_url || undefined} />
+                  <AvatarFallback className="text-lg">
+                    {dashboard.current_chair.member?.profile?.full_name?.charAt(0) || 'C'}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex-1">
+                  <h4 className="font-semibold text-lg">
+                    {dashboard.current_chair.member?.profile?.full_name || 'Unknown'}
+                  </h4>
+                  <p className="text-sm text-muted-foreground">
+                    {dashboard.current_chair.member?.profile?.email}
+                  </p>
+                  <div className="flex items-center gap-2 mt-2">
+                    <Badge>{dashboard.current_chair.role === 'chair' ? 'Chair' : 'Co-Chair'}</Badge>
+                    <span className="text-sm text-muted-foreground">
+                      Since {new Date(dashboard.current_chair.start_date).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Team Members Section */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
-              <CardTitle>Team Members</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <Users className="h-5 w-5" />
+                Team Members
+              </CardTitle>
               <CardDescription>{dashboard.active_member_count} active members</CardDescription>
             </div>
             <Button size="sm" asChild>
-              <Link href={`/verticals/${id}/members`}>
+              <Link href={`/verticals/${id}/members/assign`}>
                 <Plus className="mr-2 h-4 w-4" />
                 Add Member
               </Link>
             </Button>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-muted-foreground text-center py-8">
-              Team member list will be implemented here
-            </p>
+            {dashboard.members.filter((m) => m.is_active).length === 0 ? (
+              <div className="text-center py-12">
+                <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <p className="text-sm text-muted-foreground mb-4">No team members assigned yet</p>
+                <Button asChild>
+                  <Link href={`/verticals/${id}/members/assign`}>Add Members</Link>
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {dashboard.members
+                  .filter((m) => m.is_active)
+                  .map((member) => {
+                    const displayName = member.member?.profile?.full_name || 'Unknown Member'
+                    return (
+                      <div
+                        key={member.id}
+                        className="flex items-center justify-between p-4 rounded-lg border"
+                      >
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-10 w-10">
+                            <AvatarImage src={member.member?.avatar_url || undefined} />
+                            <AvatarFallback>
+                              {displayName.charAt(0).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <p className="font-medium">{displayName}</p>
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                              {member.role_in_vertical && (
+                                <Badge variant="secondary">{member.role_in_vertical}</Badge>
+                              )}
+                              <span>
+                                Joined {new Date(member.joined_date).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+              </div>
+            )}
           </CardContent>
         </Card>
       </TabsContent>

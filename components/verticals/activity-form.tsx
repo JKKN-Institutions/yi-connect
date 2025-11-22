@@ -83,10 +83,12 @@ export function ActivityForm({
       activity_type: (activity?.activity_type as CreateActivityInput['activity_type']) || ACTIVITY_TYPES.EVENT,
       description: activity?.description || '',
       beneficiaries_count: activity?.beneficiaries_count || 0,
+      volunteer_count: (activity as any)?.volunteer_count || 0,
       volunteer_hours: activity?.volunteer_hours || 0,
       cost_incurred: activity?.cost_incurred || 0,
-      impact_notes: activity?.impact_notes || '',
-      photo_urls: activity?.photo_urls || [],
+      photos_count: (activity as any)?.photos_count || 0,
+      report_url: (activity as any)?.report_url || '',
+      impact_summary: (activity as any)?.impact_summary || '',
       created_by: userId,
     },
   })
@@ -325,13 +327,13 @@ export function ActivityForm({
               />
             </div>
 
-            {/* Impact Notes */}
+            {/* Impact Summary */}
             <FormField
               control={form.control}
-              name="impact_notes"
+              name="impact_summary"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Impact Notes</FormLabel>
+                  <FormLabel>Impact Summary</FormLabel>
                   <FormControl>
                     <Textarea
                       placeholder="Describe the impact and outcomes of this activity..."

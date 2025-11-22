@@ -390,6 +390,16 @@ const navigation: NavItem[] = [
         icon: Trophy
       },
       {
+        name: 'Activities',
+        href: '/verticals/activities',
+        icon: Activity
+      },
+      {
+        name: 'Achievements',
+        href: '/verticals/achievements',
+        icon: Award
+      },
+      {
         name: 'Add Vertical',
         href: '/verticals/new',
         icon: Plus

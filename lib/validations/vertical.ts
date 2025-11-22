@@ -461,6 +461,12 @@ export const removeVerticalMemberSchema = z.object({
 /**
  * Create vertical activity schema
  */
+/**
+ * Create activity schema
+ * Database columns: vertical_id, event_id, activity_date, activity_title, activity_type,
+ * description, beneficiaries_count, volunteer_count, volunteer_hours, cost_incurred,
+ * photos_count, report_url, impact_summary, quarter, created_by
+ */
 export const createActivitySchema = z.object({
   vertical_id: uuidSchema,
   event_id: uuidSchema.optional().nullable(),
@@ -480,15 +486,22 @@ export const createActivitySchema = z.object({
   ]),
   description: z.string().max(2000).trim().optional().nullable(),
   beneficiaries_count: z.number().int().nonnegative('Beneficiaries count must be non-negative').default(0),
+  volunteer_count: z.number().int().nonnegative('Volunteer count must be non-negative').default(0),
   volunteer_hours: z.number().nonnegative('Volunteer hours must be non-negative').default(0),
   cost_incurred: currencySchema.default(0),
-  impact_notes: z.string().max(1000).trim().optional().nullable(),
-  photo_urls: z.array(z.string().url('Invalid photo URL')).optional().nullable(),
+  photos_count: z.number().int().nonnegative().default(0),
+  report_url: z.string().url('Invalid report URL').optional().nullable(),
+  impact_summary: z.string().max(1000).trim().optional().nullable(),
+  quarter: quarterSchema.optional(),
   created_by: uuidSchema,
 })
 
 /**
  * Update activity schema
+ */
+/**
+ * Update activity schema
+ * Database columns match createActivitySchema
  */
 export const updateActivitySchema = z.object({
   activity_date: dateStringSchema.optional(),
@@ -510,10 +523,13 @@ export const updateActivitySchema = z.object({
     .optional(),
   description: z.string().max(2000).trim().optional().nullable(),
   beneficiaries_count: z.number().int().nonnegative('Beneficiaries count must be non-negative').optional(),
+  volunteer_count: z.number().int().nonnegative('Volunteer count must be non-negative').optional(),
   volunteer_hours: z.number().nonnegative('Volunteer hours must be non-negative').optional(),
   cost_incurred: currencySchema.optional(),
-  impact_notes: z.string().max(1000).trim().optional().nullable(),
-  photo_urls: z.array(z.string().url('Invalid photo URL')).optional().nullable(),
+  photos_count: z.number().int().nonnegative().optional(),
+  report_url: z.string().url('Invalid report URL').optional().nullable(),
+  impact_summary: z.string().max(1000).trim().optional().nullable(),
+  quarter: quarterSchema.optional(),
 })
 
 // ============================================================================

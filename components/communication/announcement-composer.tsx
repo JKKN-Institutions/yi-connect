@@ -61,7 +61,7 @@ import {
   Eye,
   EyeOff
 } from 'lucide-react';
-import { toast } from 'react-hot-toast';
+import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
 
 interface AnnouncementComposerProps {

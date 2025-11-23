@@ -35,7 +35,7 @@ import {
   type SpeakerFormInput
 } from '@/lib/validations/stakeholder';
 import { createSpeaker } from '@/app/actions/stakeholder';
-import { toast } from 'react-hot-toast';
+import toast from 'react-hot-toast';
 
 interface SpeakerFormProps {
   chapterId: string | null; // Allow null for super admins
@@ -224,7 +224,6 @@ export function SpeakerForm({ chapterId, initialData }: SpeakerFormProps) {
               </FormItem>
             )}
           />
-
 
           <FormField
             control={form.control}

@@ -23,22 +23,28 @@ import {
 } from '@/components/ui/select';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { documentUploadMetadataSchema } from '@/lib/validations/knowledge';
-import { createDocument } from '@/app/actions/knowledge';
-import type { KnowledgeCategory } from '@/types/knowledge';
-import type { FormState } from '@/types/knowledge';
+import { updateDocument } from '@/app/actions/knowledge';
+import type {
+  KnowledgeCategory,
+  KnowledgeDocument,
+  FormState
+} from '@/types/knowledge';
 import { z } from 'zod';
+import toast from 'react-hot-toast';
 import { Loader2, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import toast from 'react-hot-toast';
 
-interface DocumentUploadFormProps {
+interface DocumentEditFormProps {
+  document: KnowledgeDocument;
   categories: KnowledgeCategory[];
-  onSuccess?: () => void;
 }
 
-const formSchema = documentUploadMetadataSchema.extend({
-  file: z.any()
+const formSchema = z.object({
+  title: z.string().min(1, 'Title is required').max(255),
+  description: z.string().optional(),
+  category_id: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+  visibility: z.enum(['public', 'chapter', 'ec_only', 'chair_only'])
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -58,88 +64,41 @@ const VISIBILITY_OPTIONS = [
   }
 ];
 
-const ALLOWED_FILE_TYPES = [
-  'application/pdf',
-  'application/msword',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.ms-excel',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  'application/vnd.ms-powerpoint',
-  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-  'image/jpeg',
-  'image/png',
-  'image/gif',
-  'image/webp',
-  'text/plain'
-];
-
-const MAX_FILE_SIZE_MB = 50;
-
-export function DocumentUploadForm({
-  categories,
-  onSuccess
-}: DocumentUploadFormProps) {
+export function DocumentEditForm({
+  document,
+  categories
+}: DocumentEditFormProps) {
   const router = useRouter();
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [tagInput, setTagInput] = useState('');
-  const [tags, setTags] = useState<string[]>([]);
+  const [tags, setTags] = useState<string[]>(document.tags || []);
 
-  const form = useForm({
+  const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      title: '',
-      description: '',
-      category_id: '',
-      tags: [],
-      visibility: 'chapter',
-      file: null
+      title: document.title,
+      description: document.description || '',
+      category_id: document.category_id || 'none',
+      tags: document.tags || [],
+      visibility: document.visibility
     }
   });
 
+  const updateDocumentWithId = updateDocument.bind(null, document.id);
   const initialState: FormState = { success: false, message: '' };
-  const [state, formAction, isPending] = useActionState(createDocument, initialState);
+  const [state, formAction, isPending] = useActionState(
+    updateDocumentWithId,
+    initialState
+  );
   const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
     if (state.success) {
-      if (state.message) toast.success(state.message);
-      if (state.redirectTo) {
-        router.push(state.redirectTo);
-      } else if (onSuccess) {
-        onSuccess();
-      }
-    } else if (state.message) {
+      toast.success(state.message || 'Document updated successfully');
+      router.push(`/knowledge/documents/${document.id}`);
+    } else if (state.message && !state.success) {
       toast.error(state.message);
     }
-  }, [state, router, onSuccess]);
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    // Validate file type
-    if (!ALLOWED_FILE_TYPES.includes(file.type)) {
-      toast.error(
-        'Invalid file type. Please upload a PDF, document, spreadsheet, presentation, or image.'
-      );
-      return;
-    }
-
-    // Validate file size
-    const fileSizeMB = file.size / (1024 * 1024);
-    if (fileSizeMB > MAX_FILE_SIZE_MB) {
-      toast.error(`File size must be less than ${MAX_FILE_SIZE_MB}MB`);
-      return;
-    }
-
-    setSelectedFile(file);
-
-    // Auto-fill title from filename if empty
-    if (!form.getValues('title')) {
-      const filename = file.name.replace(/\.[^/.]+$/, ''); // Remove extension
-      form.setValue('title', filename);
-    }
-  };
+  }, [state, router, document.id]);
 
   const handleAddTag = () => {
     const tag = tagInput.trim().toLowerCase();
@@ -158,30 +117,23 @@ export function DocumentUploadForm({
   };
 
   const handleFormAction = async (formData: FormData) => {
-    if (!selectedFile) {
-      toast.error('Please select a file to upload');
-      return;
-    }
-
-    // Add file data
-    formData.set('file', selectedFile);
-    formData.set('file_name', selectedFile.name);
-    formData.set('file_type', selectedFile.type);
-    formData.set(
-      'file_size_kb',
-      Math.ceil(selectedFile.size / 1024).toString()
-    );
-
     // Add react-hook-form values that aren't in native form elements
     // (Select components don't create native form elements)
     const formValues = form.getValues();
-    formData.set('category_id', formValues.category_id || 'none');
+
+    // Handle category
+    const categoryId = formValues.category_id;
+    if (categoryId && categoryId !== 'none') {
+      formData.set('category_id', categoryId);
+    } else {
+      formData.delete('category_id');
+    }
+
+    // Add visibility
     formData.set('visibility', formValues.visibility || 'chapter');
 
-    // Add tags to formData
-    tags.forEach((tag) => {
-      formData.append('tags', tag);
-    });
+    // Add tags as JSON
+    formData.set('tags', JSON.stringify(tags));
 
     // Call the server action
     return formAction(formData);
@@ -190,41 +142,20 @@ export function DocumentUploadForm({
   return (
     <Form {...form}>
       <form ref={formRef} action={handleFormAction} className='space-y-6'>
-        {/* File Upload */}
-        <FormItem>
-          <FormLabel>File</FormLabel>
-          <FormControl>
-            <div className='flex items-center gap-4'>
-              <Input
-                type='file'
-                onChange={handleFileChange}
-                disabled={isPending}
-                accept={ALLOWED_FILE_TYPES.join(',')}
-                className='file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90'
-              />
-              {selectedFile && (
-                <Button
-                  type='button'
-                  variant='ghost'
-                  size='sm'
-                  onClick={() => setSelectedFile(null)}
-                >
-                  <X className='h-4 w-4' />
-                </Button>
-              )}
-            </div>
-          </FormControl>
-          {selectedFile && (
-            <p className='text-sm text-muted-foreground'>
-              Selected: {selectedFile.name} (
-              {(selectedFile.size / 1024).toFixed(2)} KB)
-            </p>
-          )}
-          <FormDescription>
-            Max file size: {MAX_FILE_SIZE_MB}MB. Supported: PDF, Word, Excel,
-            PowerPoint, Images
-          </FormDescription>
-        </FormItem>
+        {/* File Info (read-only) */}
+        <div className='rounded-lg border p-4 bg-muted/50'>
+          <p className='text-sm font-medium'>File</p>
+          <p className='text-sm text-muted-foreground mt-1'>
+            {document.file_name}
+          </p>
+          <p className='text-xs text-muted-foreground'>
+            {document.file_size_kb >= 1024
+              ? `${(document.file_size_kb / 1024).toFixed(2)} MB`
+              : `${document.file_size_kb} KB`}
+            {' • '}
+            {document.file_type}
+          </p>
+        </div>
 
         <FormField
           control={form.control}
@@ -268,10 +199,10 @@ export function DocumentUploadForm({
           name='category_id'
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Category (Optional)</FormLabel>
+              <FormLabel>Category</FormLabel>
               <Select
                 onValueChange={field.onChange}
-                value={field.value}
+                value={field.value || 'none'}
                 disabled={isPending}
               >
                 <FormControl>
@@ -295,7 +226,7 @@ export function DocumentUploadForm({
 
         {/* Tags Input */}
         <FormItem>
-          <FormLabel>Tags (Optional)</FormLabel>
+          <FormLabel>Tags</FormLabel>
           <div className='flex gap-2'>
             <Input
               value={tagInput}
@@ -334,10 +265,6 @@ export function DocumentUploadForm({
               ))}
             </div>
           )}
-          <FormDescription>
-            Auto-tags will be extracted from filename. You can add custom tags
-            here.
-          </FormDescription>
         </FormItem>
 
         <FormField
@@ -383,9 +310,9 @@ export function DocumentUploadForm({
           >
             Cancel
           </Button>
-          <Button type='submit' disabled={isPending || !selectedFile}>
+          <Button type='submit' disabled={isPending}>
             {isPending && <Loader2 className='mr-2 h-4 w-4 animate-spin' />}
-            {isPending ? 'Uploading...' : 'Upload Document'}
+            {isPending ? 'Saving...' : 'Save Changes'}
           </Button>
         </div>
       </form>

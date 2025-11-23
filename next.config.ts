@@ -6,9 +6,9 @@ const withSerwist = withSerwistInit({
   swSrc: "app/sw.ts",
   swDest: "public/sw.js",
   reloadOnOnline: true,
-  // Enable service worker in all environments for testing
-  // Set DISABLE_SW=true in .env to disable during development
-  disable: process.env.DISABLE_SW === "true",
+  // Disable Serwist in development mode (Turbopack not supported)
+  // See: https://github.com/serwist/serwist/issues/54
+  disable: process.env.NODE_ENV !== "production",
 });
 
 const nextConfig: NextConfig = {

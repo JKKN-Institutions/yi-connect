@@ -354,7 +354,7 @@ export async function deleteDocument(documentId: string): Promise<FormState> {
   }
 }
 
-export async function incrementDocumentView(documentId: string): Promise<void> {
+export async function incrementDocumentView(documentId: string, shouldRevalidate = false): Promise<void> {
   try {
     const supabase = await createServerSupabaseClient();
 
@@ -364,7 +364,10 @@ export async function incrementDocumentView(documentId: string): Promise<void> {
       column_name: 'view_count',
     });
 
-    revalidateTag('knowledge-documents', 'max');
+    // Only revalidate when called from a user action, not during render
+    if (shouldRevalidate) {
+      revalidateTag('knowledge-documents', 'max');
+    }
   } catch (error) {
     console.error('Increment view error:', error);
   }
@@ -809,6 +812,44 @@ export async function toggleBestPracticeUpvote(practiceId: string): Promise<Form
   } catch (error) {
     console.error('Toggle upvote error:', error);
     return { success: false, message: 'Failed to toggle upvote' };
+  }
+}
+
+export async function incrementBestPracticeView(practiceId: string, shouldRevalidate = false): Promise<void> {
+  try {
+    const supabase = await createServerSupabaseClient();
+
+    await supabase.rpc('increment', {
+      table_name: 'best_practices',
+      row_id: practiceId,
+      column_name: 'view_count',
+    });
+
+    if (shouldRevalidate) {
+      revalidateTag('best-practices', 'max');
+    }
+  } catch (error) {
+    console.error('Increment best practice view error:', error);
+  }
+}
+
+export async function hasUserUpvotedBestPractice(practiceId: string): Promise<boolean> {
+  try {
+    const supabase = await createServerSupabaseClient();
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return false;
+
+    const { data: existing } = await supabase
+      .from('best_practice_upvotes')
+      .select('id')
+      .eq('best_practice_id', practiceId)
+      .eq('member_id', user.id)
+      .single();
+
+    return !!existing;
+  } catch {
+    return false;
   }
 }
 

@@ -20,7 +20,7 @@ import {
 } from '@/app/actions/communication';
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 import { formatDistanceToNow } from 'date-fns';
-import { toast } from 'react-hot-toast';
+import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 

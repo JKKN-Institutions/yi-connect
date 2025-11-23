@@ -63,7 +63,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { toast } from 'react-hot-toast';
+import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
 
 interface VolunteerAssignmentFormProps {
@@ -341,9 +341,14 @@ export function VolunteerAssignmentForm({
                     </FormControl>
                     <SelectContent>
                       {roles.map((role) => (
-                        <SelectItem key={(role as any).id} value={(role as any).id}>
+                        <SelectItem
+                          key={(role as any).id}
+                          value={(role as any).id}
+                        >
                           <div>
-                            <div className='font-medium'>{(role as any).name}</div>
+                            <div className='font-medium'>
+                              {(role as any).name}
+                            </div>
                             {(role as any).description && (
                               <div className='text-xs text-muted-foreground'>
                                 {(role as any).description}

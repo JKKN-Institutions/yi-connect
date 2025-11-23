@@ -28,8 +28,11 @@ import {
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { approveMemberRequest, rejectMemberRequest } from '@/app/actions/member-requests';
-import { toast } from 'react-hot-toast';
+import {
+  approveMemberRequest,
+  rejectMemberRequest
+} from '@/app/actions/member-requests';
+import toast from 'react-hot-toast';
 import { Check, X, Eye, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -68,8 +71,12 @@ export function MemberRequestsTable({
   pageSize
 }: MemberRequestsTableProps) {
   const router = useRouter();
-  const [selectedRequest, setSelectedRequest] = useState<MemberRequest | null>(null);
-  const [actionType, setActionType] = useState<'approve' | 'reject' | 'view' | null>(null);
+  const [selectedRequest, setSelectedRequest] = useState<MemberRequest | null>(
+    null
+  );
+  const [actionType, setActionType] = useState<
+    'approve' | 'reject' | 'view' | null
+  >(null);
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -118,7 +125,10 @@ export function MemberRequestsTable({
     }
   };
 
-  const openDialog = (request: MemberRequest, action: 'approve' | 'reject' | 'view') => {
+  const openDialog = (
+    request: MemberRequest,
+    action: 'approve' | 'reject' | 'view'
+  ) => {
     setSelectedRequest(request);
     setActionType(action);
     setNotes(request.review_notes || '');
@@ -131,7 +141,10 @@ export function MemberRequestsTable({
   };
 
   const getStatusBadge = (status: string) => {
-    const variants: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
+    const variants: Record<
+      string,
+      'default' | 'secondary' | 'destructive' | 'outline'
+    > = {
       pending: 'secondary',
       approved: 'default',
       rejected: 'destructive',
@@ -166,14 +179,18 @@ export function MemberRequestsTable({
           <TableBody>
             {requests.map((request) => (
               <TableRow key={request.id}>
-                <TableCell className='font-medium'>{request.full_name}</TableCell>
+                <TableCell className='font-medium'>
+                  {request.full_name}
+                </TableCell>
                 <TableCell>{request.email}</TableCell>
                 <TableCell>{request.phone}</TableCell>
                 <TableCell>
                   {request.city}, {request.state}
                 </TableCell>
                 <TableCell>{request.chapter?.name || 'N/A'}</TableCell>
-                <TableCell>{format(new Date(request.created_at), 'MMM dd, yyyy')}</TableCell>
+                <TableCell>
+                  {format(new Date(request.created_at), 'MMM dd, yyyy')}
+                </TableCell>
                 <TableCell>{getStatusBadge(request.status)}</TableCell>
                 <TableCell className='text-right'>
                   <div className='flex items-center justify-end gap-2'>
@@ -215,7 +232,8 @@ export function MemberRequestsTable({
         <div className='flex items-center justify-between px-2'>
           <div className='text-sm text-muted-foreground'>
             Showing {(currentPage - 1) * pageSize + 1} to{' '}
-            {Math.min(currentPage * pageSize, totalCount)} of {totalCount} applications
+            {Math.min(currentPage * pageSize, totalCount)} of {totalCount}{' '}
+            applications
           </div>
           <div className='flex items-center gap-2'>
             <Button
@@ -248,10 +266,12 @@ export function MemberRequestsTable({
               {actionType === 'reject' && 'Reject Application'}
             </DialogTitle>
             <DialogDescription>
-              {actionType === 'view' && 'Review the complete application details'}
+              {actionType === 'view' &&
+                'Review the complete application details'}
               {actionType === 'approve' &&
                 'This will add the email to the whitelist and allow the applicant to login'}
-              {actionType === 'reject' && 'Please provide a reason for rejection'}
+              {actionType === 'reject' &&
+                'Please provide a reason for rejection'}
             </DialogDescription>
           </DialogHeader>
 
@@ -285,7 +305,9 @@ export function MemberRequestsTable({
               {/* Professional Information */}
               {(selectedRequest.company || selectedRequest.designation) && (
                 <div>
-                  <h3 className='font-semibold mb-2'>Professional Information</h3>
+                  <h3 className='font-semibold mb-2'>
+                    Professional Information
+                  </h3>
                   <div className='grid grid-cols-2 gap-3 text-sm'>
                     {selectedRequest.company && (
                       <div>
@@ -295,8 +317,12 @@ export function MemberRequestsTable({
                     )}
                     {selectedRequest.designation && (
                       <div>
-                        <span className='text-muted-foreground'>Designation:</span>
-                        <p className='font-medium'>{selectedRequest.designation}</p>
+                        <span className='text-muted-foreground'>
+                          Designation:
+                        </span>
+                        <p className='font-medium'>
+                          {selectedRequest.designation}
+                        </p>
                       </div>
                     )}
                   </div>
@@ -306,14 +332,17 @@ export function MemberRequestsTable({
               {/* Motivation */}
               <div>
                 <h3 className='font-semibold mb-2'>Why Join Yi?</h3>
-                <p className='text-sm bg-muted p-3 rounded-md'>{selectedRequest.motivation}</p>
+                <p className='text-sm bg-muted p-3 rounded-md'>
+                  {selectedRequest.motivation}
+                </p>
               </div>
 
               {/* Preferred Chapter */}
               <div>
                 <h3 className='font-semibold mb-2'>Preferred Chapter</h3>
                 <p className='text-sm'>
-                  {selectedRequest.chapter?.name} - {selectedRequest.chapter?.location}
+                  {selectedRequest.chapter?.name} -{' '}
+                  {selectedRequest.chapter?.location}
                 </p>
               </div>
 
@@ -323,9 +352,14 @@ export function MemberRequestsTable({
                   <h3 className='font-semibold mb-2'>Review Information</h3>
                   <div className='grid grid-cols-2 gap-3 text-sm'>
                     <div>
-                      <span className='text-muted-foreground'>Reviewed At:</span>
+                      <span className='text-muted-foreground'>
+                        Reviewed At:
+                      </span>
                       <p className='font-medium'>
-                        {format(new Date(selectedRequest.reviewed_at), 'MMM dd, yyyy')}
+                        {format(
+                          new Date(selectedRequest.reviewed_at),
+                          'MMM dd, yyyy'
+                        )}
                       </p>
                     </div>
                   </div>
@@ -344,7 +378,10 @@ export function MemberRequestsTable({
               {(actionType === 'approve' || actionType === 'reject') && (
                 <div className='space-y-2'>
                   <Label htmlFor='notes'>
-                    Notes {actionType === 'reject' && <span className='text-red-600'>*</span>}
+                    Notes{' '}
+                    {actionType === 'reject' && (
+                      <span className='text-red-600'>*</span>
+                    )}
                   </Label>
                   <Textarea
                     id='notes'
@@ -368,7 +405,10 @@ export function MemberRequestsTable({
               {actionType === 'view' ? 'Close' : 'Cancel'}
             </Button>
             {actionType === 'approve' && selectedRequest && (
-              <Button onClick={() => handleApprove(selectedRequest.id)} disabled={loading}>
+              <Button
+                onClick={() => handleApprove(selectedRequest.id)}
+                disabled={loading}
+              >
                 {loading && <Loader2 className='mr-2 h-4 w-4 animate-spin' />}
                 Approve Application
               </Button>

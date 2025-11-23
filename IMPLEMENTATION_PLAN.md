@@ -22,7 +22,22 @@
 - ✅ **Phase 3 - Leadership (Q3):** ■■■■■■■■■■ 100% (Module 5: 100% ✅, Module 9: 100% ✅, Module 10: 100% ✅)
 - ✅ **Phase 4 - Mobile & Analytics (Q4):** ■■■■■■■■■■ 100% (Module 11: 100% ✅)
 
-### Latest Update (2025-11-22)
+### Latest Update (2025-11-23)
+
+🔧 **Module 8 (Knowledge Management) - Bug Fixes & Enhancements**
+   - ✅ **Fixed Wiki Pages:** Create/View/Edit routes now working (/knowledge/wiki/new, /knowledge/wiki/[slug], /knowledge/wiki/[slug]/edit)
+   - ✅ **Fixed Best Practices:** Create/View/Edit routes now working (/knowledge/best-practices/new, /knowledge/best-practices/[id], /knowledge/best-practices/[id]/edit)
+   - ✅ **Fixed Document Delete:** Replaced window.confirm with proper AlertDialog modal
+   - ✅ **Fixed Form Controls:** Select components now use `value` prop for controlled behavior
+   - ✅ **Fixed Impact Metrics:** Resolved controlled/uncontrolled input error for number fields
+   - ✅ **Fixed Status Filtering:** Best practices page now shows tabs (All, Published, My Drafts, Under Review)
+   - ✅ **Fixed Review Workflow:** canReview now uses user_roles/roles tables (hierarchy_level >= 2)
+   - ✅ **Added View Tracking:** BestPracticeViewTracker component increments view_count on page load
+   - ✅ **Added Upvote Button:** BestPracticeUpvoteButton with optimistic updates for published practices
+   - ✅ **Added Server Actions:** incrementBestPracticeView(), hasUserUpvotedBestPractice()
+   - 📊 **Status**: All bug fixes complete, module fully functional
+
+### Previous Update (2025-11-22)
 
 ✅ **Module 11 (Mobile Command Center): 100% COMPLETE - Production Ready**
    - 🎉 **Complete PWA implementation** - Mobile-first experience with installability
@@ -1866,6 +1881,18 @@ Complete knowledge management system with document repository, wiki pages, best 
 - Fixed Supabase relationship query aliases
 - Created upvote increment/decrement RPC functions
 - Removed invalid `.ip()` Zod validation
+
+**Bug Fixes (2025-11-23):**
+- Fixed Wiki Pages routes: Created /knowledge/wiki/new, /knowledge/wiki/[slug], /knowledge/wiki/[slug]/edit pages
+- Fixed Best Practices routes: Created /knowledge/best-practices/new, /knowledge/best-practices/[id], /knowledge/best-practices/[id]/edit pages
+- Fixed document delete confirmation: Replaced window.confirm with AlertDialog modal (DocumentRowActions component)
+- Fixed Select components: Changed from `defaultValue` to `value` prop for controlled behavior in forms
+- Fixed impact metrics inputs: Resolved controlled/uncontrolled warning with `value={field.value ?? ''}` pattern
+- Fixed best practices filtering: Added tabs (All, Published, My Drafts, Under Review) to properly show all statuses
+- Fixed canReview permission: Updated to use user_roles/roles tables instead of non-existent members.role column
+- Added view tracking: BestPracticeViewTracker component with incrementBestPracticeView() action
+- Added upvote functionality: BestPracticeUpvoteButton component with optimistic UI updates
+- Added hasUserUpvotedBestPractice() server action for checking upvote status
 
 #### Integration Points
 

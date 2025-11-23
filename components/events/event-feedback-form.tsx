@@ -50,7 +50,7 @@ import {
   DialogTitle,
   DialogTrigger
 } from '@/components/ui/dialog';
-import { toast } from 'react-hot-toast';
+import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
 
 interface EventFeedbackFormProps {

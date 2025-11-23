@@ -5,6 +5,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import type {
   KnowledgeCategory,
   KnowledgeDocument,
+  KnowledgeDocumentWithDetails,
   DocumentListItem,
   WikiPage,
   WikiPageListItem,
@@ -201,6 +202,38 @@ export const getDocumentById = cache(
       throw error;
     }
     return data;
+  }
+);
+
+export const getDocumentWithDetails = cache(
+  async (documentId: string): Promise<KnowledgeDocumentWithDetails | null> => {
+    const supabase = await createServerSupabaseClient();
+
+    const { data, error } = await supabase
+      .from('knowledge_documents')
+      .select(`
+        *,
+        category:knowledge_categories(name),
+        uploader:members!knowledge_documents_uploaded_by_fkey(
+          profile:profiles(full_name, avatar_url)
+        )
+      `)
+      .eq('id', documentId)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') return null;
+      throw error;
+    }
+
+    if (!data) return null;
+
+    return {
+      ...data,
+      category_name: data.category?.name || null,
+      uploaded_by_name: data.uploader?.profile?.full_name || 'Unknown',
+      uploaded_by_avatar: data.uploader?.profile?.avatar_url || null,
+    } as KnowledgeDocumentWithDetails;
   }
 );
 

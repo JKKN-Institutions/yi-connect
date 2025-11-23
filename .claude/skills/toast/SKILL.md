@@ -1,11 +1,13 @@
 # Toast Migrator Skill
 
 ## Purpose
+
 Systematically migrate MyJKKN codebase from custom `useToast` hook to direct `react-hot-toast` library usage. This skill ensures consistent toast API usage across the application and prevents the mixing of different toast patterns.
 
 ## When to Use This Skill
 
 Use this skill when:
+
 1. User reports toast-related errors in a file
 2. User mentions "useToast hook error" or "toast not working"
 3. You detect `useToast` import in a file during code analysis
@@ -15,6 +17,7 @@ Use this skill when:
 ## Detection Patterns
 
 Auto-trigger this skill when you find:
+
 - `import { useToast } from '@/hooks/use-toast'`
 - `import { useToast } from '@/components/ui/use-toast'`
 - `const { toast } = useToast()`
@@ -23,6 +26,7 @@ Auto-trigger this skill when you find:
 ## Migration Process
 
 ### Step 1: Analyze Current Usage
+
 ```bash
 # Find all files using useToast
 grep -r "useToast" --include="*.tsx" --include="*.ts" app/ components/ lib/
@@ -35,7 +39,9 @@ grep -c "toast({" [FILE_PATH]
 ```
 
 ### Step 2: Verify Import
+
 Check if file has correct import:
+
 ```typescript
 // ❌ REMOVE THIS
 import { useToast } from '@/hooks/use-toast';
@@ -50,6 +56,7 @@ import toast from 'react-hot-toast';
 Apply these transformations systematically:
 
 #### Pattern 1: Error Toasts
+
 ```typescript
 // ❌ BEFORE
 toast({
@@ -63,6 +70,7 @@ toast.error('Something went wrong')
 ```
 
 #### Pattern 2: Success Toasts
+
 ```typescript
 // ❌ BEFORE
 toast({
@@ -75,6 +83,7 @@ toast.success('Operation completed successfully')
 ```
 
 #### Pattern 3: Info/Warning Toasts
+
 ```typescript
 // ❌ BEFORE
 toast({
@@ -87,6 +96,7 @@ toast('Please check your inputs', { duration: 3000 })
 ```
 
 #### Pattern 4: Loading Toasts
+
 ```typescript
 // ❌ BEFORE
 const toastId = toast({
@@ -99,6 +109,7 @@ const toastId = toast.loading('Processing...')
 ```
 
 #### Pattern 5: Long Duration Errors
+
 ```typescript
 // ❌ BEFORE
 toast({
@@ -113,6 +124,7 @@ toast.error('Long error message', { duration: 5000 })
 ```
 
 #### Pattern 6: Dismissible Toasts
+
 ```typescript
 // ❌ BEFORE
 const id = toast({ title: 'Info', description: 'Message' })
@@ -126,6 +138,7 @@ toast.dismiss(id)
 ```
 
 ### Step 4: Remove Hook Usage
+
 ```typescript
 // ❌ REMOVE THIS
 const { toast } = useToast();
@@ -135,7 +148,9 @@ import toast from 'react-hot-toast';
 ```
 
 ### Step 5: Verification
+
 After migration, verify:
+
 ```bash
 # Should return 0
 grep -c "useToast" [FILE_PATH]
@@ -166,6 +181,7 @@ For each file:
 ## Common Edge Cases
 
 ### Multiple Toast Calls in One Statement
+
 ```typescript
 // ❌ BEFORE
 if (error) {
@@ -183,6 +199,7 @@ toast.success('Done');
 ```
 
 ### Conditional Toast Variants
+
 ```typescript
 // ❌ BEFORE
 toast({
@@ -200,6 +217,7 @@ if (isError) {
 ```
 
 ### Toast with Custom Duration
+
 ```typescript
 // ❌ BEFORE
 toast({
@@ -215,18 +233,21 @@ toast('Check attendance settings', { duration: 6000 })
 ## Best Practices
 
 ### Duration Guidelines
+
 - **Error toasts**: 5000ms (longer for user to read)
 - **Success toasts**: 3000ms (default)
 - **Info toasts**: 3000-4000ms
 - **Loading toasts**: Dismiss manually with `toast.dismiss(id)`
 
 ### Message Guidelines
+
 - Keep messages concise (< 60 characters ideal)
 - Use action-oriented language ("Failed to save" not "Error")
 - Avoid redundant "Error:" or "Success:" prefixes
 - Include context when helpful ("Failed to save attendance for 2024-01-15")
 
 ### Error Handling Patterns
+
 ```typescript
 // ✅ GOOD - Consistent error handling
 try {
@@ -245,12 +266,14 @@ try {
 When migrating multiple files:
 
 1. **Prioritize** by usage frequency:
+
    - API routes (highest impact)
    - Form components
    - Service layers
    - Utility functions
 
 2. **Track progress**:
+
    ```bash
    # List all files needing migration
    grep -l "useToast" --include="*.tsx" app/ components/ > toast-migration-list.txt
@@ -269,6 +292,7 @@ When migrating multiple files:
 If migration causes issues:
 
 1. Check the original pattern:
+
    ```typescript
    // If something breaks, temporarily use this format
    import toast from 'react-hot-toast';
@@ -281,11 +305,13 @@ If migration causes issues:
    ```
 
 2. Verify react-hot-toast is installed:
+
    ```bash
    npm list react-hot-toast
    ```
 
 3. Check for Toaster component in layout:
+
    ```typescript
    // Should exist in root layout
    import { Toaster } from 'react-hot-toast';
@@ -296,6 +322,7 @@ If migration causes issues:
 ## Automation Commands
 
 ### Quick Migration
+
 ```bash
 # Find file
 FILE="app/(routes)/path/to/component.tsx"
@@ -308,6 +335,7 @@ grep -c "useToast" "$FILE" && grep -c "toast({" "$FILE"
 ```
 
 ### Batch Check
+
 ```bash
 # Check all files in a directory
 find app/(routes)/academic -name "*.tsx" -exec sh -c '
@@ -322,6 +350,7 @@ find app/(routes)/academic -name "*.tsx" -exec sh -c '
 ## Success Criteria
 
 Migration is complete when:
+
 - ✅ 0 files with `useToast` import
 - ✅ 0 files with `toast({` calls
 - ✅ All toast calls use `toast.error()`, `toast.success()`, `toast()`, or `toast.loading()`
@@ -332,6 +361,7 @@ Migration is complete when:
 ## Reference Examples
 
 ### Before Migration (app/example/page.tsx)
+
 ```typescript
 import { useToast } from '@/hooks/use-toast';
 
@@ -357,6 +387,7 @@ export default function ExamplePage() {
 ```
 
 ### After Migration (app/example/page.tsx)
+
 ```typescript
 import toast from 'react-hot-toast';
 
@@ -375,17 +406,21 @@ export default function ExamplePage() {
 ## Troubleshooting
 
 ### Issue: "toast is not a function"
+
 **Solution**: Check import statement
+
 ```typescript
 // ❌ Wrong
-import { toast } from 'react-hot-toast';
+import toast from 'react-hot-toast';
 
 // ✅ Correct
 import toast from 'react-hot-toast';
 ```
 
 ### Issue: "File modified since read"
+
 **Solution**: Re-read file and try again
+
 ```typescript
 // The file was changed by linter/formatter
 // Read the file again to get current state
@@ -393,7 +428,9 @@ import toast from 'react-hot-toast';
 ```
 
 ### Issue: "String to replace not found"
+
 **Solution**:
+
 1. Read the specific section with offset
 2. Verify exact string with whitespace
 3. Use smaller, more specific string replacements
@@ -401,6 +438,7 @@ import toast from 'react-hot-toast';
 ## Memory Aids
 
 Remember for this project:
+
 - MyJKKN uses react-hot-toast directly (no wrapper)
 - All toast calls should use method-based API
 - Duration defaults: errors=5000ms, success/info=3000ms
@@ -415,6 +453,7 @@ Remember for this project:
 - **import-organizer**: For cleaning up imports
 
 ## Skill Version
+
 Version: 1.0.0
 Last Updated: 2025-01-24
 Tested On: MyJKKN v1.0 (Next.js 15, TypeScript)

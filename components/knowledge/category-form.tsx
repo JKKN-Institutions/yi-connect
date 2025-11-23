@@ -12,23 +12,26 @@ import {
   FormField,
   FormItem,
   FormLabel,
-  FormMessage,
+  FormMessage
 } from '@/components/ui/form';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
+  SelectValue
 } from '@/components/ui/select';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { createCategorySchema, updateCategorySchema } from '@/lib/validations/knowledge';
+import {
+  createCategorySchema,
+  updateCategorySchema
+} from '@/lib/validations/knowledge';
 import { createCategory, updateCategory } from '@/app/actions/knowledge';
 import type { KnowledgeCategory } from '@/types/knowledge';
 import type { FormState } from '@/types/knowledge';
 import { z } from 'zod';
-import { toast } from 'react-hot-toast';
+import toast from 'react-hot-toast';
 import { Loader2 } from 'lucide-react';
 
 interface CategoryFormProps {
@@ -45,7 +48,7 @@ const LUCIDE_ICONS = [
   'Archive',
   'Inbox',
   'Package',
-  'Tag',
+  'Tag'
 ];
 
 const COLORS = [
@@ -56,10 +59,14 @@ const COLORS = [
   '#8b5cf6', // violet
   '#ec4899', // pink
   '#06b6d4', // cyan
-  '#84cc16', // lime
+  '#84cc16' // lime
 ];
 
-export function CategoryForm({ category, categories = [], onSuccess }: CategoryFormProps) {
+export function CategoryForm({
+  category,
+  categories = [],
+  onSuccess
+}: CategoryFormProps) {
   const router = useRouter();
   const isEditing = !!category;
 
@@ -76,7 +83,7 @@ export function CategoryForm({ category, categories = [], onSuccess }: CategoryF
           icon: category.icon || '',
           color: category.color || '',
           parent_category_id: category.parent_category_id || undefined,
-          sort_order: category.sort_order,
+          sort_order: category.sort_order
         }
       : {
           name: '',
@@ -84,8 +91,8 @@ export function CategoryForm({ category, categories = [], onSuccess }: CategoryF
           description: '',
           icon: 'FolderOpen',
           color: '#3b82f6',
-          sort_order: 0,
-        },
+          sort_order: 0
+        }
   });
 
   const action = isEditing
@@ -123,13 +130,10 @@ export function CategoryForm({ category, categories = [], onSuccess }: CategoryF
 
   return (
     <Form {...form}>
-      <form
-        action={formAction}
-        className="space-y-6"
-      >
+      <form action={formAction} className='space-y-6'>
         <FormField
           control={form.control}
-          name="name"
+          name='name'
           render={({ field }) => (
             <FormItem>
               <FormLabel>Category Name</FormLabel>
@@ -137,7 +141,7 @@ export function CategoryForm({ category, categories = [], onSuccess }: CategoryF
                 <Input
                   {...field}
                   onChange={handleNameChange}
-                  placeholder="e.g., Event Reports"
+                  placeholder='e.g., Event Reports'
                   disabled={isPending}
                 />
               </FormControl>
@@ -148,14 +152,14 @@ export function CategoryForm({ category, categories = [], onSuccess }: CategoryF
 
         <FormField
           control={form.control}
-          name="slug"
+          name='slug'
           render={({ field }) => (
             <FormItem>
               <FormLabel>Slug</FormLabel>
               <FormControl>
                 <Input
                   {...field}
-                  placeholder="e.g., event-reports"
+                  placeholder='e.g., event-reports'
                   disabled={isPending || isEditing}
                 />
               </FormControl>
@@ -169,14 +173,14 @@ export function CategoryForm({ category, categories = [], onSuccess }: CategoryF
 
         <FormField
           control={form.control}
-          name="description"
+          name='description'
           render={({ field }) => (
             <FormItem>
               <FormLabel>Description (Optional)</FormLabel>
               <FormControl>
                 <Textarea
                   {...field}
-                  placeholder="Brief description of this category"
+                  placeholder='Brief description of this category'
                   rows={3}
                   disabled={isPending}
                 />
@@ -186,10 +190,10 @@ export function CategoryForm({ category, categories = [], onSuccess }: CategoryF
           )}
         />
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className='grid grid-cols-2 gap-4'>
           <FormField
             control={form.control}
-            name="icon"
+            name='icon'
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Icon</FormLabel>
@@ -200,7 +204,7 @@ export function CategoryForm({ category, categories = [], onSuccess }: CategoryF
                 >
                   <FormControl>
                     <SelectTrigger>
-                      <SelectValue placeholder="Select an icon" />
+                      <SelectValue placeholder='Select an icon' />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
@@ -218,7 +222,7 @@ export function CategoryForm({ category, categories = [], onSuccess }: CategoryF
 
           <FormField
             control={form.control}
-            name="color"
+            name='color'
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Color</FormLabel>
@@ -229,15 +233,15 @@ export function CategoryForm({ category, categories = [], onSuccess }: CategoryF
                 >
                   <FormControl>
                     <SelectTrigger>
-                      <SelectValue placeholder="Select a color" />
+                      <SelectValue placeholder='Select a color' />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
                     {COLORS.map((color) => (
                       <SelectItem key={color} value={color}>
-                        <div className="flex items-center gap-2">
+                        <div className='flex items-center gap-2'>
                           <div
-                            className="h-4 w-4 rounded"
+                            className='h-4 w-4 rounded'
                             style={{ backgroundColor: color }}
                           />
                           {color}
@@ -255,7 +259,7 @@ export function CategoryForm({ category, categories = [], onSuccess }: CategoryF
         {categories.length > 0 && (
           <FormField
             control={form.control}
-            name="parent_category_id"
+            name='parent_category_id'
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Parent Category (Optional)</FormLabel>
@@ -266,11 +270,13 @@ export function CategoryForm({ category, categories = [], onSuccess }: CategoryF
                 >
                   <FormControl>
                     <SelectTrigger>
-                      <SelectValue placeholder="None (top-level category)" />
+                      <SelectValue placeholder='None (top-level category)' />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    <SelectItem value="none">None (top-level category)</SelectItem>
+                    <SelectItem value='none'>
+                      None (top-level category)
+                    </SelectItem>
                     {categories
                       .filter((c) => c.id !== category?.id)
                       .map((cat) => (
@@ -291,15 +297,15 @@ export function CategoryForm({ category, categories = [], onSuccess }: CategoryF
 
         <FormField
           control={form.control}
-          name="sort_order"
+          name='sort_order'
           render={({ field }) => (
             <FormItem>
               <FormLabel>Sort Order</FormLabel>
               <FormControl>
                 <Input
                   {...field}
-                  type="number"
-                  min="0"
+                  type='number'
+                  min='0'
                   onChange={(e) => field.onChange(parseInt(e.target.value))}
                   disabled={isPending}
                 />
@@ -312,17 +318,17 @@ export function CategoryForm({ category, categories = [], onSuccess }: CategoryF
           )}
         />
 
-        <div className="flex justify-end gap-2">
+        <div className='flex justify-end gap-2'>
           <Button
-            type="button"
-            variant="outline"
+            type='button'
+            variant='outline'
             onClick={() => router.back()}
             disabled={isPending}
           >
             Cancel
           </Button>
-          <Button type="submit" disabled={isPending}>
-            {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          <Button type='submit' disabled={isPending}>
+            {isPending && <Loader2 className='mr-2 h-4 w-4 animate-spin' />}
             {isEditing ? 'Update Category' : 'Create Category'}
           </Button>
         </div>

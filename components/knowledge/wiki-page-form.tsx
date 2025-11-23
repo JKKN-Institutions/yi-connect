@@ -12,23 +12,26 @@ import {
   FormField,
   FormItem,
   FormLabel,
-  FormMessage,
+  FormMessage
 } from '@/components/ui/form';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
+  SelectValue
 } from '@/components/ui/select';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { createWikiPageSchema, updateWikiPageSchema } from '@/lib/validations/knowledge';
+import {
+  createWikiPageSchema,
+  updateWikiPageSchema
+} from '@/lib/validations/knowledge';
 import { createWikiPage, updateWikiPage } from '@/app/actions/knowledge';
 import type { WikiPage } from '@/types/knowledge';
 import type { FormState } from '@/types/knowledge';
 import { z } from 'zod';
-import { toast } from 'react-hot-toast';
+import toast from 'react-hot-toast';
 import { Loader2 } from 'lucide-react';
 
 interface WikiPageFormProps {
@@ -40,14 +43,14 @@ const WIKI_CATEGORIES = [
   { value: 'sop', label: 'SOP (Standard Operating Procedure)' },
   { value: 'best_practice', label: 'Best Practice' },
   { value: 'process_note', label: 'Process Note' },
-  { value: 'general', label: 'General Knowledge' },
+  { value: 'general', label: 'General Knowledge' }
 ];
 
 const VISIBILITY_OPTIONS = [
   { value: 'public', label: 'Public' },
   { value: 'chapter', label: 'Chapter Members' },
   { value: 'ec_only', label: 'EC Only' },
-  { value: 'chair_only', label: 'Chair Only' },
+  { value: 'chair_only', label: 'Chair Only' }
 ];
 
 export function WikiPageForm({ wikiPage, onSuccess }: WikiPageFormProps) {
@@ -65,7 +68,7 @@ export function WikiPageForm({ wikiPage, onSuccess }: WikiPageFormProps) {
           content: wikiPage.content,
           summary: wikiPage.summary || '',
           visibility: wikiPage.visibility,
-          change_summary: '',
+          change_summary: ''
         }
       : {
           title: '',
@@ -73,8 +76,8 @@ export function WikiPageForm({ wikiPage, onSuccess }: WikiPageFormProps) {
           category: 'general',
           content: '',
           summary: '',
-          visibility: 'chapter',
-        },
+          visibility: 'chapter'
+        }
   });
 
   const action = isEditing
@@ -112,10 +115,10 @@ export function WikiPageForm({ wikiPage, onSuccess }: WikiPageFormProps) {
 
   return (
     <Form {...form}>
-      <form action={formAction} className="space-y-6">
+      <form action={formAction} className='space-y-6'>
         <FormField
           control={form.control}
-          name="title"
+          name='title'
           render={({ field }) => (
             <FormItem>
               <FormLabel>Title</FormLabel>
@@ -123,7 +126,7 @@ export function WikiPageForm({ wikiPage, onSuccess }: WikiPageFormProps) {
                 <Input
                   {...field}
                   onChange={isEditing ? field.onChange : handleTitleChange}
-                  placeholder="e.g., How to Organize Events"
+                  placeholder='e.g., How to Organize Events'
                   disabled={isPending}
                 />
               </FormControl>
@@ -136,14 +139,14 @@ export function WikiPageForm({ wikiPage, onSuccess }: WikiPageFormProps) {
           <>
             <FormField
               control={form.control}
-              name="slug"
+              name='slug'
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Slug</FormLabel>
                   <FormControl>
                     <Input
                       {...field}
-                      placeholder="e.g., how-to-organize-events"
+                      placeholder='e.g., how-to-organize-events'
                       disabled={isPending}
                     />
                   </FormControl>
@@ -157,18 +160,18 @@ export function WikiPageForm({ wikiPage, onSuccess }: WikiPageFormProps) {
 
             <FormField
               control={form.control}
-              name="category"
+              name='category'
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Category</FormLabel>
                   <Select
                     onValueChange={field.onChange}
-                    defaultValue={field.value}
+                    value={field.value}
                     disabled={isPending}
                   >
                     <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select category" />
+                      <SelectTrigger className='w-full'>
+                        <SelectValue placeholder='Select category' />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
@@ -188,16 +191,16 @@ export function WikiPageForm({ wikiPage, onSuccess }: WikiPageFormProps) {
 
         <FormField
           control={form.control}
-          name="content"
+          name='content'
           render={({ field }) => (
             <FormItem>
               <FormLabel>Content</FormLabel>
               <FormControl>
                 <Textarea
                   {...field}
-                  placeholder="Write your wiki page content here (Markdown supported)"
+                  placeholder='Write your wiki page content here (Markdown supported)'
                   rows={15}
-                  className="font-mono"
+                  className='font-mono'
                   disabled={isPending}
                 />
               </FormControl>
@@ -211,7 +214,7 @@ export function WikiPageForm({ wikiPage, onSuccess }: WikiPageFormProps) {
 
         <FormField
           control={form.control}
-          name="summary"
+          name='summary'
           render={({ field }) => (
             <FormItem>
               <FormLabel>Summary (Optional)</FormLabel>
@@ -219,7 +222,7 @@ export function WikiPageForm({ wikiPage, onSuccess }: WikiPageFormProps) {
                 <Textarea
                   {...field}
                   value={field.value || ''}
-                  placeholder="Brief summary of this wiki page"
+                  placeholder='Brief summary of this wiki page'
                   rows={2}
                   disabled={isPending}
                 />
@@ -235,14 +238,14 @@ export function WikiPageForm({ wikiPage, onSuccess }: WikiPageFormProps) {
         {isEditing && (
           <FormField
             control={form.control}
-            name="change_summary"
+            name='change_summary'
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Change Summary (Optional)</FormLabel>
                 <FormControl>
                   <Input
                     {...field}
-                    placeholder="e.g., Updated event guidelines"
+                    placeholder='e.g., Updated event guidelines'
                     disabled={isPending}
                   />
                 </FormControl>
@@ -257,18 +260,18 @@ export function WikiPageForm({ wikiPage, onSuccess }: WikiPageFormProps) {
 
         <FormField
           control={form.control}
-          name="visibility"
+          name='visibility'
           render={({ field }) => (
             <FormItem>
               <FormLabel>Visibility</FormLabel>
               <Select
                 onValueChange={field.onChange}
-                defaultValue={field.value}
+                value={field.value}
                 disabled={isPending}
               >
                 <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select visibility" />
+                  <SelectTrigger className='w-full'>
+                    <SelectValue placeholder='Select visibility' />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
@@ -284,17 +287,17 @@ export function WikiPageForm({ wikiPage, onSuccess }: WikiPageFormProps) {
           )}
         />
 
-        <div className="flex justify-end gap-2">
+        <div className='flex justify-end gap-2'>
           <Button
-            type="button"
-            variant="outline"
+            type='button'
+            variant='outline'
             onClick={() => router.back()}
             disabled={isPending}
           >
             Cancel
           </Button>
-          <Button type="submit" disabled={isPending}>
-            {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          <Button type='submit' disabled={isPending}>
+            {isPending && <Loader2 className='mr-2 h-4 w-4 animate-spin' />}
             {isEditing ? 'Update Wiki Page' : 'Create Wiki Page'}
           </Button>
         </div>

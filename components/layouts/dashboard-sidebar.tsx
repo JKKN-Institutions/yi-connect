@@ -59,22 +59,25 @@ import {
   RefreshCw,
   Megaphone
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger
 } from '@/components/ui/collapsible';
+import { useUserRoles, hasAnyRole } from '@/hooks/use-user-roles';
 
 interface NavItem {
   name: string;
   href?: string;
   icon: any;
+  requiredRoles?: string[]; // Roles required to see this menu item
   items?: {
     name: string;
     href: string;
     icon?: any;
+    requiredRoles?: string[]; // Roles required to see this sub-item
   }[];
 }
 
@@ -461,17 +464,20 @@ const adminNavigation: NavItem[] = [
   {
     name: 'Member Requests',
     href: '/member-requests',
-    icon: UserCheck
+    icon: UserCheck,
+    requiredRoles: ['Executive Member', 'Chair', 'Co-Chair', 'EC Member']
   },
   {
     name: 'Chapters',
     href: '/admin/chapters',
-    icon: MapPin
+    icon: MapPin,
+    requiredRoles: ['Super Admin', 'National Admin']
   },
   {
     name: 'User Management',
     href: '/admin/users',
-    icon: UserCog
+    icon: UserCog,
+    requiredRoles: ['Super Admin', 'National Admin', 'Executive Member', 'Chair']
   }
 ];
 
@@ -583,10 +589,58 @@ function NavItemComponent({
 
 export function DashboardSidebar() {
   const [isOpen, setIsOpen] = useState(false);
+  const { roles, loading } = useUserRoles();
 
   const handleNavigate = () => {
     setIsOpen(false);
   };
+
+  // Filter navigation items based on user roles
+  const filteredNavigation = useMemo(() => {
+    return navigation
+      .map((item) => {
+        // If item has no role requirements, show it to everyone
+        if (!item.requiredRoles || item.requiredRoles.length === 0) {
+          return item;
+        }
+
+        // Check if user has required role for this item
+        if (!hasAnyRole(roles, item.requiredRoles)) {
+          return null;
+        }
+
+        // If item has subitems, filter those too
+        if (item.items) {
+          const filteredItems = item.items.filter((subItem) => {
+            if (!subItem.requiredRoles || subItem.requiredRoles.length === 0) {
+              return true;
+            }
+            return hasAnyRole(roles, subItem.requiredRoles);
+          });
+
+          // If no subitems remain after filtering, hide the parent item
+          if (filteredItems.length === 0) {
+            return null;
+          }
+
+          return { ...item, items: filteredItems };
+        }
+
+        return item;
+      })
+      .filter((item): item is NavItem => item !== null);
+  }, [roles]);
+
+  // Filter admin navigation based on user roles
+  const filteredAdminNavigation = useMemo(() => {
+    return adminNavigation
+      .filter((item) => {
+        if (!item.requiredRoles || item.requiredRoles.length === 0) {
+          return true;
+        }
+        return hasAnyRole(roles, item.requiredRoles);
+      });
+  }, [roles]);
 
   return (
     <>
@@ -635,34 +689,44 @@ export function DashboardSidebar() {
 
           {/* Navigation */}
           <nav className='flex-1 overflow-y-auto px-3 py-4 lg:pt-4'>
-            <ul className='space-y-1'>
-              {navigation.map((item) => (
-                <NavItemComponent
-                  key={item.name}
-                  item={item}
-                  onNavigate={handleNavigate}
-                />
-              ))}
-            </ul>
-
-            {/* Admin Section */}
-            <div className='mt-6'>
-              <div className='flex items-center gap-2 px-3 pb-2'>
-                <Shield className='h-4 w-4 text-muted-foreground' />
-                <h3 className='text-xs font-semibold text-muted-foreground uppercase tracking-wider'>
-                  Administration
-                </h3>
+            {loading ? (
+              <div className='text-center py-4'>
+                <div className='inline-block h-6 w-6 animate-spin rounded-full border-2 border-solid border-current border-r-transparent'></div>
               </div>
-              <ul className='space-y-1'>
-                {adminNavigation.map((item) => (
-                  <NavItemComponent
-                    key={item.name}
-                    item={item}
-                    onNavigate={handleNavigate}
-                  />
-                ))}
-              </ul>
-            </div>
+            ) : (
+              <>
+                <ul className='space-y-1'>
+                  {filteredNavigation.map((item) => (
+                    <NavItemComponent
+                      key={item.name}
+                      item={item}
+                      onNavigate={handleNavigate}
+                    />
+                  ))}
+                </ul>
+
+                {/* Admin Section - Only show if user has access to at least one admin item */}
+                {filteredAdminNavigation.length > 0 && (
+                  <div className='mt-6'>
+                    <div className='flex items-center gap-2 px-3 pb-2'>
+                      <Shield className='h-4 w-4 text-muted-foreground' />
+                      <h3 className='text-xs font-semibold text-muted-foreground uppercase tracking-wider'>
+                        Administration
+                      </h3>
+                    </div>
+                    <ul className='space-y-1'>
+                      {filteredAdminNavigation.map((item) => (
+                        <NavItemComponent
+                          key={item.name}
+                          item={item}
+                          onNavigate={handleNavigate}
+                        />
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </>
+            )}
           </nav>
 
           {/* Footer */}

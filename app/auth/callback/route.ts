@@ -13,15 +13,39 @@ import type { NextRequest } from 'next/server';
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get('code');
+  const error = requestUrl.searchParams.get('error');
+  const errorDescription = requestUrl.searchParams.get('error_description');
   const next = requestUrl.searchParams.get('next') || '/dashboard';
+
+  // Check if OAuth provider returned an error
+  if (error) {
+    console.error('OAuth error:', error, errorDescription);
+
+    // Check if it's an unauthorized email error (from database trigger)
+    if (
+      errorDescription?.includes('not authorized') ||
+      errorDescription?.includes('not approved') ||
+      errorDescription?.includes('Database error saving new user') ||
+      error === 'server_error'
+    ) {
+      return NextResponse.redirect(
+        new URL('/login?error=unauthorized', requestUrl.origin)
+      );
+    }
+
+    // Generic auth error
+    return NextResponse.redirect(
+      new URL('/login?error=auth_failed', requestUrl.origin)
+    );
+  }
 
   if (code) {
     const supabase = await createServerSupabaseClient();
 
     // Exchange code for session
-    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+    const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
 
-    if (!error && data.user) {
+    if (!exchangeError && data.user) {
       // Check if this is first login (no member record exists)
       const { data: existingMember } = await supabase
         .from('members')
@@ -36,6 +60,11 @@ export async function GET(request: NextRequest) {
 
       // Successful authentication - redirect to dashboard or specified page
       return NextResponse.redirect(new URL(next, requestUrl.origin));
+    }
+
+    // Log exchange error for debugging
+    if (exchangeError) {
+      console.error('Exchange code error:', exchangeError);
     }
   }
 

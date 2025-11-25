@@ -52,7 +52,9 @@
       "Bash(npm install:*)",
       "Bash(npm run lint:*)",
       "Bash(npm ls:*)",
-      "mcp__supabase__get_logs"
+      "mcp__supabase__get_logs",
+      "WebFetch(domain:www.npmjs.com)",
+      "WebSearch"
     ],
     "deny": [],
     "ask": []

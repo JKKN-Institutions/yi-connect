@@ -66,7 +66,21 @@ import {
   CollapsibleContent,
   CollapsibleTrigger
 } from '@/components/ui/collapsible';
-import { useUserRoles, hasAnyRole } from '@/hooks/use-user-roles';
+
+/**
+ * Check if user has any of the specified roles
+ */
+function hasAnyRole(userRoles: string[], requiredRoles: string[]): boolean {
+  // Super Admin and National Admin have access to everything
+  if (
+    userRoles.includes('Super Admin') ||
+    userRoles.includes('National Admin')
+  ) {
+    return true;
+  }
+  // Check if user has any of the required roles
+  return requiredRoles.some((role) => userRoles.includes(role));
+}
 
 interface NavItem {
   name: string;
@@ -683,9 +697,12 @@ function NavItemComponent({
   );
 }
 
-export function DashboardSidebar() {
+interface DashboardSidebarProps {
+  userRoles: string[];
+}
+
+export function DashboardSidebar({ userRoles }: DashboardSidebarProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const { roles, loading } = useUserRoles();
 
   const handleNavigate = () => {
     setIsOpen(false);
@@ -701,7 +718,7 @@ export function DashboardSidebar() {
         }
 
         // Check if user has required role for this item
-        if (!hasAnyRole(roles, item.requiredRoles)) {
+        if (!hasAnyRole(userRoles, item.requiredRoles)) {
           return null;
         }
 
@@ -711,7 +728,7 @@ export function DashboardSidebar() {
             if (!subItem.requiredRoles || subItem.requiredRoles.length === 0) {
               return true;
             }
-            return hasAnyRole(roles, subItem.requiredRoles);
+            return hasAnyRole(userRoles, subItem.requiredRoles);
           });
 
           // If no subitems remain after filtering, hide the parent item
@@ -725,7 +742,7 @@ export function DashboardSidebar() {
         return item;
       })
       .filter((item): item is NavItem => item !== null);
-  }, [roles]);
+  }, [userRoles]);
 
   // Filter admin navigation based on user roles
   const filteredAdminNavigation = useMemo(() => {
@@ -734,9 +751,9 @@ export function DashboardSidebar() {
         if (!item.requiredRoles || item.requiredRoles.length === 0) {
           return true;
         }
-        return hasAnyRole(roles, item.requiredRoles);
+        return hasAnyRole(userRoles, item.requiredRoles);
       });
-  }, [roles]);
+  }, [userRoles]);
 
   return (
     <>
@@ -785,14 +802,27 @@ export function DashboardSidebar() {
 
           {/* Navigation */}
           <nav className='flex-1 overflow-y-auto px-3 py-4 lg:pt-4'>
-            {loading ? (
-              <div className='text-center py-4'>
-                <div className='inline-block h-6 w-6 animate-spin rounded-full border-2 border-solid border-current border-r-transparent'></div>
-              </div>
-            ) : (
-              <>
+            <ul className='space-y-1'>
+              {filteredNavigation.map((item) => (
+                <NavItemComponent
+                  key={item.name}
+                  item={item}
+                  onNavigate={handleNavigate}
+                />
+              ))}
+            </ul>
+
+            {/* Admin Section - Only show if user has access to at least one admin item */}
+            {filteredAdminNavigation.length > 0 && (
+              <div className='mt-6'>
+                <div className='flex items-center gap-2 px-3 pb-2'>
+                  <Shield className='h-4 w-4 text-muted-foreground' />
+                  <h3 className='text-xs font-semibold text-muted-foreground uppercase tracking-wider'>
+                    Administration
+                  </h3>
+                </div>
                 <ul className='space-y-1'>
-                  {filteredNavigation.map((item) => (
+                  {filteredAdminNavigation.map((item) => (
                     <NavItemComponent
                       key={item.name}
                       item={item}
@@ -800,28 +830,7 @@ export function DashboardSidebar() {
                     />
                   ))}
                 </ul>
-
-                {/* Admin Section - Only show if user has access to at least one admin item */}
-                {filteredAdminNavigation.length > 0 && (
-                  <div className='mt-6'>
-                    <div className='flex items-center gap-2 px-3 pb-2'>
-                      <Shield className='h-4 w-4 text-muted-foreground' />
-                      <h3 className='text-xs font-semibold text-muted-foreground uppercase tracking-wider'>
-                        Administration
-                      </h3>
-                    </div>
-                    <ul className='space-y-1'>
-                      {filteredAdminNavigation.map((item) => (
-                        <NavItemComponent
-                          key={item.name}
-                          item={item}
-                          onNavigate={handleNavigate}
-                        />
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </>
+              </div>
             )}
           </nav>
 

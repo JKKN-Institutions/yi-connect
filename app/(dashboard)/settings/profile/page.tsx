@@ -9,6 +9,7 @@ import { requireAuth, getUserProfile } from '@/lib/auth'
 import { ProfileOverview } from '@/components/settings/profile-overview'
 import { ProfileForm } from '@/components/settings/profile-form'
 import { AvatarUpload } from '@/components/settings/avatar-upload'
+import { MyBugsPanelWrapper } from '@/components/settings/my-bugs-panel-wrapper'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 
@@ -38,6 +39,7 @@ async function ProfileContent() {
       <div className="space-y-6">
         <AvatarUpload profile={profile} />
         <ProfileOverview profile={profile} />
+        <MyBugsPanelWrapper />
       </div>
 
       {/* Right Column - Edit Form */}

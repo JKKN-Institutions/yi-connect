@@ -11,6 +11,7 @@ import { useEffect, useState } from 'react';
 
 export interface UserRole {
   role_name: string;
+  hierarchy_level?: number; // Optional since we don't always use it
 }
 
 export function useUserRoles() {
@@ -19,45 +20,101 @@ export function useUserRoles() {
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
+    let isMounted = true;
+
     async function fetchRoles() {
       try {
+        console.log('[useUserRoles] Starting to fetch roles...');
+
+        // Create timeout promise wrapper
+        const withTimeout = <T,>(promise: Promise<T>, timeoutMs: number, operation: string): Promise<T> => {
+          return Promise.race([
+            promise,
+            new Promise<T>((_, reject) =>
+              setTimeout(() => reject(new Error(`${operation} timed out after ${timeoutMs}ms`)), timeoutMs)
+            )
+          ]);
+        };
+
         const supabase = createBrowserSupabaseClient();
 
-        // Get current user
-        const {
-          data: { user },
-          error: userError
-        } = await supabase.auth.getUser();
+        if (!supabase) {
+          throw new Error('Failed to create Supabase client');
+        }
 
-        if (userError) throw userError;
-        if (!user) {
-          setRoles([]);
-          setLoading(false);
+        // Get session with timeout
+        console.log('[useUserRoles] Fetching session...');
+        const sessionPromise = supabase.auth.getSession();
+        const {
+          data: { session },
+          error: sessionError
+        } = await withTimeout(sessionPromise, 5000, 'getSession');
+
+        console.log('[useUserRoles] Session fetch completed');
+
+        if (sessionError) {
+          console.error('[useUserRoles] Session error:', sessionError);
+          throw sessionError;
+        }
+
+        if (!session?.user) {
+          console.log('[useUserRoles] No user session found');
+          if (isMounted) {
+            setRoles([]);
+            setLoading(false);
+          }
           return;
         }
 
-        // Fetch user roles using the secure RPC function
-        const { data: userRoles, error: rolesError } = await supabase.rpc(
-          'get_user_roles',
-          {
-            p_user_id: user.id
-          }
+        console.log('[useUserRoles] User found:', session.user.id);
+
+        // Fetch user roles with timeout
+        console.log('[useUserRoles] Fetching roles via RPC...');
+        const rpcPromise = supabase.rpc('get_user_roles', {
+          p_user_id: session.user.id
+        });
+
+        const { data: userRoles, error: rolesError } = await withTimeout(
+          rpcPromise,
+          5000,
+          'get_user_roles RPC'
         );
 
-        if (rolesError) throw rolesError;
+        console.log('[useUserRoles] RPC fetch completed');
 
-        const roleNames =
-          userRoles?.map((ur: UserRole) => ur.role_name) || [];
-        setRoles(roleNames);
+        if (rolesError) {
+          console.error('[useUserRoles] Roles error:', rolesError);
+          throw rolesError;
+        }
+
+        console.log('[useUserRoles] Roles fetched:', userRoles);
+
+        const roleNames = userRoles?.map((ur: UserRole) => ur.role_name) || [];
+
+        console.log('[useUserRoles] Processed role names:', roleNames);
+
+        if (isMounted) {
+          setRoles(roleNames);
+        }
       } catch (err) {
-        console.error('Error fetching user roles:', err);
-        setError(err as Error);
+        console.error('[useUserRoles] Error fetching user roles:', err);
+        if (isMounted) {
+          setError(err as Error);
+          setRoles([]);
+        }
       } finally {
-        setLoading(false);
+        console.log('[useUserRoles] Finally block - setting loading to false');
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     }
 
     fetchRoles();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   return { roles, loading, error };

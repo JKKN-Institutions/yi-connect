@@ -6,6 +6,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { getBestPractices } from '@/lib/data/knowledge';
 import { getCurrentUserChapter } from '@/lib/data/members';
+import { requireRole } from '@/lib/auth';
 import { BestPracticeCard } from '@/components/knowledge/best-practice-card';
 import { Plus } from 'lucide-react';
 
@@ -68,7 +69,9 @@ function BestPracticesLoading() {
   );
 }
 
-export default function BestPracticesPage() {
+export default async function BestPracticesPage() {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member', 'Member']);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { requireRole } from '@/lib/auth';
 import { BestPracticeForm } from '@/components/knowledge/best-practice-form';
 import { getBestPracticeById } from '@/lib/data/knowledge';
 import { ArrowLeft } from 'lucide-react';
@@ -32,6 +33,8 @@ async function EditBestPracticeContent({ practiceId }: { practiceId: string }) {
 }
 
 export default async function EditBestPracticePage({ params }: PageProps) {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']);
+
   const { id } = await params;
 
   return (

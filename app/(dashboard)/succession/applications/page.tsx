@@ -6,6 +6,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { getMyApplications, getCurrentActiveCycle } from '@/lib/data/succession'
 import { MyApplicationsTable } from '@/components/succession/tables/my-applications-table'
 import { Plus } from 'lucide-react'
+import { requireRole } from '@/lib/auth'
 
 export const metadata = {
   title: 'My Applications | Succession',
@@ -99,7 +100,9 @@ function ApplicationsLoading() {
   )
 }
 
-export default function ApplicationsPage() {
+export default async function ApplicationsPage() {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member', 'Member'])
+
   return (
     <div className="space-y-6">
       <div>

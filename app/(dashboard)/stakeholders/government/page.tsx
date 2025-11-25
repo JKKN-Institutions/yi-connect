@@ -17,7 +17,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { getCurrentChapterId } from '@/lib/auth'
+import { getCurrentChapterId, requireRole } from '@/lib/auth'
 import { getGovernmentStakeholders } from '@/lib/data/stakeholder'
 import { GovernmentStakeholdersTable } from '@/components/stakeholders/government-stakeholders-table'
 
@@ -130,7 +130,9 @@ function TableSkeleton() {
   )
 }
 
-export default function GovernmentStakeholdersPage() {
+export default async function GovernmentStakeholdersPage() {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']);
+
   return (
     <div className="flex flex-col gap-8">
       <div className="flex items-center justify-between">

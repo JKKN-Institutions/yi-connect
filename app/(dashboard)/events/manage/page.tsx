@@ -10,6 +10,7 @@ import Link from 'next/link'
 import { ArrowLeft, Plus, BarChart3 } from 'lucide-react'
 import { getCurrentUser } from '@/lib/data/auth'
 import { createClient } from '@/lib/supabase/server'
+import { requireRole } from '@/lib/auth'
 import { getEvents, getEventAnalytics } from '@/lib/data/events'
 import { EventsTable } from '@/components/events/events-table'
 import { Button } from '@/components/ui/button'
@@ -26,7 +27,9 @@ interface PageProps {
   }>
 }
 
-export default function EventsManagePage({ searchParams }: PageProps) {
+export default async function EventsManagePage({ searchParams }: PageProps) {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member'])
+
   return (
     <Suspense fallback={<EventsManagePageSkeleton />}>
       <EventsManagePageContent searchParams={searchParams} />

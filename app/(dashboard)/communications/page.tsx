@@ -22,6 +22,7 @@ import {
   getCommunicationAnalytics,
   getRecentNotifications
 } from "@/lib/data/communication";
+import { requireRole } from "@/lib/auth";
 
 export const metadata: Metadata = {
   title: "Communication Hub | Yi Connect",
@@ -29,7 +30,8 @@ export const metadata: Metadata = {
 };
 
 
-export default function CommunicationDashboardPage() {
+export default async function CommunicationDashboardPage() {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member']);
   return (
     <div className="flex flex-col gap-6">
       {/* Header */}

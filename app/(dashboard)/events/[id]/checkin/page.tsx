@@ -9,6 +9,7 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, QrCode, CheckCircle2 } from 'lucide-react';
 import { getCurrentUser } from '@/lib/data/auth';
+import { requireRole } from '@/lib/auth';
 import { getEventFull } from '@/lib/data/events';
 import { createClient } from '@/lib/supabase/server';
 import { Button } from '@/components/ui/button';
@@ -33,7 +34,9 @@ interface PageProps {
   }>;
 }
 
-export default function EventCheckInPage({ params, searchParams }: PageProps) {
+export default async function EventCheckInPage({ params, searchParams }: PageProps) {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']);
+
   return (
     <Suspense fallback={<CheckInSkeleton />}>
       <CheckInContent params={params} searchParams={searchParams} />

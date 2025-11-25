@@ -16,7 +16,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { getVendors } from '@/lib/data/stakeholder'
 import { VendorsTable } from '@/components/stakeholders/vendors-table'
-import { getCurrentChapterId } from '@/lib/auth'
+import { getCurrentChapterId, requireRole } from '@/lib/auth'
 
 export const metadata = {
   title: 'Vendors',
@@ -101,7 +101,9 @@ function TableSkeleton() {
   )
 }
 
-export default function VendorsPage() {
+export default async function VendorsPage() {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']);
+
   return (
     <div className="flex flex-col gap-8">
       <div className="flex items-center justify-between">

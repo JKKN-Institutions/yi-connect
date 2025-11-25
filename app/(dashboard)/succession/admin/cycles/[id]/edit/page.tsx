@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Skeleton } from '@/components/ui/skeleton'
 import { getSuccessionCycleById } from '@/lib/data/succession'
 import { SuccessionCycleForm } from '@/components/succession/forms/succession-cycle-form'
+import { requireRole } from '@/lib/auth'
 
 async function EditCycleContent({ id }: { id: string }) {
   const cycle = await getSuccessionCycleById(id)
@@ -51,6 +52,8 @@ export default async function EditSuccessionCyclePage({
 }: {
   params: Promise<{ id: string }>
 }) {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member'])
+
   const { id } = await params;
   return (
     <div className="space-y-6">

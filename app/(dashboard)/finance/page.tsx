@@ -20,7 +20,7 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
-import { getCurrentChapterId, getCurrentUser } from '@/lib/auth'
+import { getCurrentChapterId, getCurrentUser, requireRole } from '@/lib/auth'
 import { getBudgets, getExpenses } from '@/lib/data/finance'
 import { ExpenseStatusBadge, BudgetStatusBadge } from '@/components/finance/status-badges'
 import { formatCurrency } from '@/types/finance'
@@ -31,7 +31,10 @@ export const metadata = {
   description: 'Manage budgets, expenses, and financial operations',
 }
 
-export default function FinancePage() {
+export default async function FinancePage() {
+  // Require Chair, Co-Chair, Executive Member, or higher roles to access financial data
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member'])
+
   return (
     <div className="space-y-6">
       {/* Header */}

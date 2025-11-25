@@ -10,6 +10,7 @@ import { Plus, Calendar, Grid3x3, Filter } from 'lucide-react';
 import { getEvents, getEventAnalytics } from '@/lib/data/events';
 import { getCurrentUser } from '@/lib/data/auth';
 import { createClient } from '@/lib/supabase/server';
+import { requireRole } from '@/lib/auth';
 import { EventCard, EventCalendar } from '@/components/events';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -44,7 +45,9 @@ interface PageProps {
   }>;
 }
 
-export default function EventsPage({ searchParams }: PageProps) {
+export default async function EventsPage({ searchParams }: PageProps) {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member', 'Member']);
+
   return (
     <div className='flex flex-col gap-8'>
       {/* Header */}

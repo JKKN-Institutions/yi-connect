@@ -9,7 +9,7 @@ import { Suspense } from 'react'
 import Link from 'next/link'
 import { redirect, notFound } from 'next/navigation'
 import { ArrowLeft, Plus, Trophy, Award, Star, Target, Lightbulb } from 'lucide-react'
-import { getCurrentUser } from '@/lib/data/auth'
+import { getCurrentUser, requireRole } from '@/lib/auth'
 import { getVerticalById, getVerticalAchievements, getCurrentFiscalYear } from '@/lib/data/vertical'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -36,7 +36,8 @@ const categoryIcons = {
   [ACHIEVEMENT_CATEGORIES.INNOVATION]: Lightbulb,
 }
 
-export default function AchievementsPage({ params }: PageProps) {
+export default async function AchievementsPage({ params }: PageProps) {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member'])
   return (
     <div className="flex flex-col gap-8">
       {/* Header */}

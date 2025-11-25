@@ -4,7 +4,7 @@ import { ArrowLeft } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { getCurrentChapterId } from '@/lib/auth';
+import { getCurrentChapterId, requireRole } from '@/lib/auth';
 import {
   Card,
   CardContent,
@@ -84,7 +84,9 @@ function FormSkeleton() {
   );
 }
 
-export default function NewSponsorPage() {
+export default async function NewSponsorPage() {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']);
+
   return (
     <div className='flex flex-col gap-8 max-w-9xl mx-auto'>
       <div className='flex items-center gap-4'>

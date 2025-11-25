@@ -30,7 +30,7 @@ import {
 } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
-import { getCurrentChapterId } from '@/lib/auth';
+import { getCurrentChapterId, requireRole } from '@/lib/auth';
 import {
   getStakeholderOverview,
   getPendingFollowUps,
@@ -391,7 +391,9 @@ function DashboardSkeleton() {
   );
 }
 
-export default function StakeholdersPage() {
+export default async function StakeholdersPage() {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']);
+
   return (
     <div className='flex flex-col gap-8'>
       {/* Header */}

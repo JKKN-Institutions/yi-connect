@@ -27,6 +27,7 @@ import {
   getCurrentQuarter,
   getKPIAlerts,
 } from '@/lib/data/vertical'
+import { requireRole } from '@/lib/auth'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -46,7 +47,8 @@ interface PageProps {
   params: Promise<{ id: string }>
 }
 
-export default function VerticalDashboardPage({ params }: PageProps) {
+export default async function VerticalDashboardPage({ params }: PageProps) {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member'])
   return (
     <div className="flex flex-col gap-6">
       {/* Header */}

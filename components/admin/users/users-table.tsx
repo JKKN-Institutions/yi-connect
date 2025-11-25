@@ -7,7 +7,7 @@
 
 'use client'
 
-import { useState } from 'react'
+import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   ColumnDef,
@@ -23,7 +23,7 @@ import {
   getSortedRowModel,
   useReactTable
 } from '@tanstack/react-table'
-import { Download, Shield, UserCog, Building2, X } from 'lucide-react'
+import { Download, Shield, UserCog, Building2, X, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
@@ -72,10 +72,18 @@ export function UsersTable({ data, pageCount, roles, chapters }: UsersTableProps
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
   const [rowSelection, setRowSelection] = useState({})
+  const [isRefreshing, startRefresh] = useTransition()
 
   // Role manager dialog state
   const [roleDialogOpen, setRoleDialogOpen] = useState(false)
   const [selectedUserForRole, setSelectedUserForRole] = useState<UserListItem | null>(null)
+
+  // Handle refresh
+  const handleRefresh = () => {
+    startRefresh(() => {
+      router.refresh()
+    })
+  }
 
   const table = useReactTable({
     data,
@@ -228,6 +236,18 @@ export function UsersTable({ data, pageCount, roles, chapters }: UsersTableProps
         </div>
 
         <div className='flex items-center gap-2'>
+          {/* Refresh Button */}
+          <Button
+            variant='outline'
+            size='sm'
+            className='h-9'
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+          >
+            <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+            {isRefreshing ? 'Refreshing...' : 'Refresh'}
+          </Button>
+
           {/* Export Dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

@@ -54,6 +54,7 @@ import {
   HealthTierBadge,
   MouStatusBadge,
 } from '@/components/stakeholders/status-badges'
+import { requireRole } from '@/lib/auth'
 
 interface NGODetailPageProps {
   params: Promise<{ id: string }>
@@ -581,7 +582,9 @@ async function NGODetailContent({ params }: NGODetailPageProps) {
   )
 }
 
-export default function NGODetailPage({ params }: NGODetailPageProps) {
+export default async function NGODetailPage({ params }: NGODetailPageProps) {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']);
+
   return (
     <Suspense fallback={<div className="p-8"><ContentSkeleton /></div>}>
       <NGODetailContent params={params} />

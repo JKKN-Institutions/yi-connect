@@ -9,6 +9,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { getCategories } from '@/lib/data/knowledge';
 import { getCurrentUserChapter } from '@/lib/data/members';
+import { requireRole } from '@/lib/auth';
 import { DocumentUploadForm } from '@/components/knowledge/document-upload-form';
 import { FileUp } from 'lucide-react';
 
@@ -26,7 +27,9 @@ async function UploadFormWrapper() {
   return <DocumentUploadForm categories={categories} />;
 }
 
-export default function UploadDocumentPage() {
+export default async function UploadDocumentPage() {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']);
+
   return (
     <div className='max-w-9xl mx-auto space-y-6'>
       {/* Header */}

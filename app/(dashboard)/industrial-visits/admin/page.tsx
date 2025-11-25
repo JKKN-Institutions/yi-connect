@@ -19,6 +19,7 @@ import { getIVs, getIVAnalytics } from '@/lib/data/industrial-visits';
 import { getCurrentUserChapter } from '@/lib/data/members';
 import { IVDataTable } from '@/components/industrial-visits/iv-data-table/iv-data-table';
 import { ivColumns } from '@/components/industrial-visits/iv-data-table/columns';
+import { requireRole } from '@/lib/auth';
 
 export const metadata: Metadata = {
   title: 'IV Admin Dashboard | Yi Connect',
@@ -26,6 +27,9 @@ export const metadata: Metadata = {
 };
 
 async function IVAdminContent() {
+  // Only executive leadership can access admin dashboard
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member']);
+
   const chapter = await getCurrentUserChapter();
 
   if (!chapter) {

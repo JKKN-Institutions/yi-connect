@@ -17,6 +17,7 @@ import {
   Calendar,
   DollarSign
 } from 'lucide-react';
+import { requireRole } from '@/lib/auth';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -369,6 +370,8 @@ async function ExpenseDetail({ expenseId }: { expenseId: string }) {
 }
 
 export default async function ExpensePage({ params }: PageProps) {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']);
+
   const { id } = await params;
 
   return (

@@ -8,7 +8,7 @@
 
 import { ColumnDef } from '@tanstack/react-table'
 import { format } from 'date-fns'
-import { MoreHorizontal, Pencil, Shield, UserX, UserCheck } from 'lucide-react'
+import { MoreHorizontal, Pencil, Shield, UserX, UserCheck, Eye } from 'lucide-react'
 import Link from 'next/link'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
@@ -23,6 +23,11 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { DataTableColumnHeader } from '@/components/data-table/data-table-column-header'
+import {
+  UserDeactivateDialog,
+  UserReactivateDialog,
+  UserDeleteDialog
+} from './user-actions-dialog'
 import type { UserListItem } from '@/types/user'
 
 // Helper function to get role badge variant
@@ -200,6 +205,7 @@ export const usersTableColumns: ColumnDef<UserListItem>[] = [
     id: 'actions',
     cell: ({ row }) => {
       const user = row.original
+      const isInactive = !user.is_active
 
       return (
         <DropdownMenu>
@@ -214,7 +220,7 @@ export const usersTableColumns: ColumnDef<UserListItem>[] = [
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
               <Link href={`/admin/users/${user.id}`}>
-                <Pencil className='mr-2 h-4 w-4' />
+                <Eye className='mr-2 h-4 w-4' />
                 View Details
               </Link>
             </DropdownMenuItem>
@@ -228,6 +234,25 @@ export const usersTableColumns: ColumnDef<UserListItem>[] = [
               <Shield className='mr-2 h-4 w-4' />
               Manage Roles
             </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            {isInactive ? (
+              <UserReactivateDialog
+                userId={user.id}
+                userName={user.full_name}
+                trigger='dropdown'
+              />
+            ) : (
+              <UserDeactivateDialog
+                userId={user.id}
+                userName={user.full_name}
+                trigger='dropdown'
+              />
+            )}
+            <UserDeleteDialog
+              userId={user.id}
+              userName={user.full_name}
+              trigger='dropdown'
+            />
           </DropdownMenuContent>
         </DropdownMenu>
       )

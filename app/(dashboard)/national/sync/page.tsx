@@ -18,7 +18,7 @@ import {
   Settings
 } from 'lucide-react';
 import Link from 'next/link';
-import { getCurrentChapterId } from '@/lib/auth';
+import { getCurrentChapterId, requireRole } from '@/lib/auth';
 import { SyncStatusCard } from '@/components/national/sync-status-card';
 import { SyncLogsTable } from '@/components/national/sync-logs-table';
 import { ConflictsTable } from '@/components/national/conflicts-table';
@@ -31,6 +31,9 @@ export const metadata = {
 };
 
 async function SyncDashboardContent() {
+  // Require National Admin role
+  await requireRole(['Super Admin', 'National Admin']);
+
   const chapterId = await getCurrentChapterId();
 
   if (!chapterId) {

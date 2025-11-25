@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Skeleton } from '@/components/ui/skeleton'
 import { getApplications, getCurrentActiveCycle } from '@/lib/data/succession'
 import { AdminApplicationsTable } from '@/components/succession/tables/admin-applications-table'
+import { requireRole } from '@/lib/auth'
 
 export const metadata = {
   title: 'Review Applications | Admin',
@@ -72,7 +73,9 @@ function ApplicationsLoading() {
   )
 }
 
-export default function AdminApplicationsPage() {
+export default async function AdminApplicationsPage() {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member'])
+
   return (
     <div className="space-y-6">
       <div>

@@ -14,6 +14,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getCommunicationAnalytics } from "@/lib/data/communication";
+import { requireRole } from "@/lib/auth";
 
 export const metadata: Metadata = {
   title: "Analytics | Communication Hub",
@@ -21,7 +22,8 @@ export const metadata: Metadata = {
 };
 
 
-export default function AnalyticsPage() {
+export default async function AnalyticsPage() {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member']);
   return (
     <div className="flex flex-col gap-6">
       {/* Header */}

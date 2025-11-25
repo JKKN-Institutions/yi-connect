@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getDocuments } from '@/lib/data/knowledge';
 import { getCurrentUserChapter } from '@/lib/data/members';
+import { requireRole } from '@/lib/auth';
 import { DocumentsTable } from '@/components/knowledge/documents-table';
 import { DocumentCard } from '@/components/knowledge/document-card';
 import { Plus, Grid, List } from 'lucide-react';
@@ -66,6 +67,8 @@ async function DocumentsList({ searchParams }: PageProps) {
 }
 
 export default async function DocumentsPage({ searchParams }: PageProps) {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member', 'Member']);
+
   const params = await searchParams;
   const viewMode = params.view || 'list';
 

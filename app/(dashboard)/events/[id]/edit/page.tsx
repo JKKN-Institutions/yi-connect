@@ -10,6 +10,7 @@ import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { getCurrentUser } from '@/lib/data/auth';
 import { createClient } from '@/lib/supabase/server';
+import { requireRole } from '@/lib/auth';
 import { getEventFull } from '@/lib/data/events';
 import { EventForm } from '@/components/events';
 import { Button } from '@/components/ui/button';
@@ -31,7 +32,9 @@ interface PageProps {
   }>;
 }
 
-export default function EventEditPage({ params }: PageProps) {
+export default async function EventEditPage({ params }: PageProps) {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']);
+
   return (
     <Suspense fallback={<EventEditSkeleton />}>
       <EventEditContent params={params} />

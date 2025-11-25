@@ -26,6 +26,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 import { getIVAnalytics, getIndustryPerformance } from '@/lib/data/industrial-visits';
 import { getCurrentUserChapter } from '@/lib/data/members';
+import { requireRole } from '@/lib/auth';
 
 export const metadata: Metadata = {
   title: 'IV Analytics | Yi Connect',
@@ -33,6 +34,9 @@ export const metadata: Metadata = {
 };
 
 async function IVAnalyticsContent() {
+  // Leadership roles can view analytics
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']);
+
   const chapter = await getCurrentUserChapter();
 
   if (!chapter) {

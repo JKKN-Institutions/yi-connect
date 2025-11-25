@@ -6,12 +6,13 @@
 
 import { Suspense } from 'react'
 import Link from 'next/link'
+import { requireRole } from '@/lib/auth'
 import { getMembers, getMemberAnalytics } from '@/lib/data/members'
 import { MemberCard, MemberStats } from '@/components/members'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Plus, Users, Grid3x3, Table } from 'lucide-react'
+import { Plus, Users, Grid3x3, Table, Upload } from 'lucide-react'
 import type { MemberQueryParams } from '@/types/member'
 
 interface PageProps {
@@ -193,7 +194,9 @@ async function MembersPageContent({ searchParams }: PageProps) {
 }
 
 // Main page component
-export default function MembersPage({ searchParams }: PageProps) {
+export default async function MembersPage({ searchParams }: PageProps) {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member'])
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -209,6 +212,12 @@ export default function MembersPage({ searchParams }: PageProps) {
             <Link href="/members/table">
               <Table className="h-4 w-4 mr-2" />
               Table View
+            </Link>
+          </Button>
+          <Button variant="outline" asChild>
+            <Link href="/members/bulk-upload">
+              <Upload className="h-4 w-4 mr-2" />
+              Bulk Upload
             </Link>
           </Button>
           <Button asChild>

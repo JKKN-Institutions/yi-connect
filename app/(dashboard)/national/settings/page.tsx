@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+// Note: This is a client component. For National Admin protection,
+// implement server-side checks in the action handlers (updateSyncConfig, testConnection, toggleSync)
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';

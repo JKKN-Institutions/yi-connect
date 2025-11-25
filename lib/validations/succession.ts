@@ -446,6 +446,118 @@ export const SuccessionApplicationFiltersSchema = z.object({
 })
 
 // ============================================================================
+// TIMELINE STEP SCHEMAS
+// ============================================================================
+
+export const TimelineStepStatusSchema = z.enum([
+  'pending',
+  'active',
+  'completed',
+  'overdue',
+])
+
+export const CreateTimelineStepSchema = z.object({
+  cycle_id: uuidSchema,
+  step_number: z.number().int().min(1, 'Step number must be 1-7').max(7, 'Step number must be 1-7'),
+  step_name: z.string().min(1, 'Step name is required').max(200, 'Step name too long'),
+  description: z.string().max(500, 'Description too long').optional(),
+  start_date: z.string(),
+  end_date: z.string(),
+  status: TimelineStepStatusSchema.optional(),
+  auto_trigger_action: z.string().max(200).optional(),
+}).refine(
+  (data) => new Date(data.end_date) > new Date(data.start_date),
+  { message: 'End date must be after start date', path: ['end_date'] }
+)
+
+export const UpdateTimelineStepSchema = CreateTimelineStepSchema.partial().extend({
+  id: uuidSchema,
+})
+
+// ============================================================================
+// CANDIDATE APPROACH SCHEMAS
+// ============================================================================
+
+export const ApproachResponseStatusSchema = z.enum([
+  'pending',
+  'accepted',
+  'declined',
+  'conditional',
+])
+
+export const CreateApproachSchema = z.object({
+  cycle_id: uuidSchema,
+  position_id: uuidSchema,
+  nominee_id: uuidSchema,
+  approached_by: uuidSchema,
+  response_status: ApproachResponseStatusSchema.optional(),
+  conditions_text: z.string().max(1000).optional(),
+  notes: z.string().max(2000).optional(),
+})
+
+export const UpdateApproachSchema = CreateApproachSchema.partial().extend({
+  id: uuidSchema,
+})
+
+// ============================================================================
+// STEERING COMMITTEE MEETING SCHEMAS
+// ============================================================================
+
+export const MeetingTypeSchema = z.enum([
+  'steering_committee',
+  'rc_review',
+  'final_selection',
+  'interview',
+])
+
+export const MeetingStatusSchema = z.enum([
+  'scheduled',
+  'in_progress',
+  'completed',
+  'cancelled',
+])
+
+export const CreateMeetingSchema = z.object({
+  cycle_id: uuidSchema,
+  meeting_date: z.string(),
+  meeting_type: MeetingTypeSchema,
+  location: z.string().max(200).optional(),
+  meeting_link: z.string().url('Invalid meeting link').optional(),
+  agenda: z.string().max(2000).optional(),
+  notes: z.string().max(5000).optional(),
+  status: MeetingStatusSchema.optional(),
+  created_by: uuidSchema,
+}).refine(
+  (data) => data.location || data.meeting_link,
+  { message: 'Either location or meeting link must be provided', path: ['location'] }
+)
+
+export const UpdateMeetingSchema = CreateMeetingSchema.partial().extend({
+  id: uuidSchema,
+})
+
+// ============================================================================
+// VOTING SCHEMAS
+// ============================================================================
+
+export const VoteValueSchema = z.enum(['yes', 'no', 'abstain'])
+
+export const CreateVoteSchema = z.object({
+  meeting_id: uuidSchema,
+  position_id: uuidSchema,
+  nominee_id: uuidSchema,
+  voter_member_id: uuidSchema,
+  vote: VoteValueSchema,
+  comments: z.string().max(1000).optional(),
+})
+
+export const UpdateVoteSchema = z.object({
+  id: uuidSchema,
+  vote: VoteValueSchema,
+  comments: z.string().max(1000).optional(),
+})
+
+// ============================================================================
 // TYPE INFERENCE EXPORTS
 // ============================================================================
 
@@ -458,3 +570,11 @@ export type SubmitEvaluationScoresInput = z.infer<typeof SubmitEvaluationScoresS
 export type ScheduleInterviewInput = z.infer<typeof ScheduleInterviewSchema>
 export type SubmitInterviewFeedbackInput = z.infer<typeof SubmitInterviewFeedbackSchema>
 export type DeclareSelectionsInput = z.infer<typeof DeclareSelectionsSchema>
+export type CreateTimelineStepInput = z.infer<typeof CreateTimelineStepSchema>
+export type UpdateTimelineStepInput = z.infer<typeof UpdateTimelineStepSchema>
+export type CreateApproachInput = z.infer<typeof CreateApproachSchema>
+export type UpdateApproachInput = z.infer<typeof UpdateApproachSchema>
+export type CreateMeetingInput = z.infer<typeof CreateMeetingSchema>
+export type UpdateMeetingInput = z.infer<typeof UpdateMeetingSchema>
+export type CreateVoteInput = z.infer<typeof CreateVoteSchema>
+export type UpdateVoteInput = z.infer<typeof UpdateVoteSchema>

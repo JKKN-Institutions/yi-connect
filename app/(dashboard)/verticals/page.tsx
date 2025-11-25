@@ -9,7 +9,8 @@ import { Suspense } from 'react'
 import Link from 'next/link'
 import { Plus, TrendingUp, Award, Users, Activity } from 'lucide-react'
 import { getVerticals, getCurrentFiscalYear, getVerticalRankings } from '@/lib/data/vertical'
-import { getCurrentUser } from '@/lib/data/auth'
+import { getCurrentUser } from '@/lib/auth'
+import { requireRole } from '@/lib/auth'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -25,7 +26,8 @@ interface PageProps {
   }>
 }
 
-export default function VerticalsPage({ searchParams }: PageProps) {
+export default async function VerticalsPage({ searchParams }: PageProps) {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member'])
   return (
     <div className="flex flex-col gap-8">
       {/* Header */}

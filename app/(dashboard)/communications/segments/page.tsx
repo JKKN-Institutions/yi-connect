@@ -14,6 +14,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { getSegments } from "@/lib/data/communication";
+import { requireRole } from "@/lib/auth";
 import { format } from "date-fns";
 
 export const metadata: Metadata = {
@@ -22,7 +23,8 @@ export const metadata: Metadata = {
 };
 
 
-export default function SegmentsPage() {
+export default async function SegmentsPage() {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member']);
   return (
     <div className="flex flex-col gap-6">
       {/* Header */}

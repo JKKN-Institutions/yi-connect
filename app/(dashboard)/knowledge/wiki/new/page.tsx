@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { requireRole } from '@/lib/auth';
 import { WikiPageForm } from '@/components/knowledge/wiki-page-form';
 import { ArrowLeft } from 'lucide-react';
 
@@ -9,7 +10,9 @@ export const metadata = {
   description: 'Create a new wiki page',
 };
 
-export default function NewWikiPagePage() {
+export default async function NewWikiPagePage() {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']);
+
   return (
     <div className="space-y-6">
       <Button variant="ghost" size="sm" asChild>

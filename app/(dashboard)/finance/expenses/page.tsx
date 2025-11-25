@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ExpensesTable } from '@/components/finance/expenses-table'
 import { getExpenses } from '@/lib/data/finance'
-import { getCurrentChapterId } from '@/lib/auth'
+import { getCurrentChapterId, requireRole } from '@/lib/auth'
 
 export const metadata: Metadata = {
   title: 'Expenses',
@@ -63,7 +63,10 @@ function ExpensesLoading() {
   )
 }
 
-export default function ExpensesPage() {
+export default async function ExpensesPage() {
+  // Require leadership roles to view all expenses
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member'])
+
   return (
     <Suspense fallback={<ExpensesLoading />}>
       <ExpensesContent />

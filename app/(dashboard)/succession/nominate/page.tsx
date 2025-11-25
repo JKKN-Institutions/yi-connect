@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getCurrentActiveCycle, getSuccessionPositions } from '@/lib/data/succession'
 import { NominationForm } from '@/components/succession/forms/nomination-form'
 import { Award } from 'lucide-react'
+import { requireRole } from '@/lib/auth'
 
 export const metadata = {
   title: 'Nominate a Member | Succession',
@@ -134,7 +135,9 @@ function NominateLoading() {
   )
 }
 
-export default function NominatePage() {
+export default async function NominatePage() {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member'])
+
   return (
     <div className="space-y-6">
       <div>

@@ -8,7 +8,7 @@ import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
-import { getCurrentUser, getCurrentChapterId } from '@/lib/auth';
+import { getCurrentUser, getCurrentChapterId, requireRole } from '@/lib/auth';
 import { ExpenseForm } from '@/components/finance/expense-form';
 import { Button } from '@/components/ui/button';
 import {
@@ -25,7 +25,8 @@ export const metadata = {
   description: 'Record a new expense for your chapter'
 };
 
-export default function NewExpensePage() {
+export default async function NewExpensePage() {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']);
   return (
     <div className='flex flex-col gap-8 max-w-9xl mx-auto'>
       {/* Header */}

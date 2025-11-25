@@ -1,12 +1,14 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { SuccessionCycleForm } from '@/components/succession/forms/succession-cycle-form'
+import { requireRole } from '@/lib/auth'
 
 export const metadata = {
   title: 'New Succession Cycle | Admin',
   description: 'Create a new succession cycle',
 }
 
-export default function NewSuccessionCyclePage() {
+export default async function NewSuccessionCyclePage() {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member'])
   return (
     <div className="space-y-6">
       <div>

@@ -326,11 +326,14 @@ export const getEligibleMembersForPosition = cache(
         *,
         member:members (
           id,
-          first_name,
-          last_name,
-          email,
-          phone,
-          avatar_url
+          avatar_url,
+          company,
+          designation,
+          profiles!inner(
+            email,
+            full_name,
+            phone
+          )
         )
       `
       )
@@ -387,15 +390,19 @@ export const getNominations = cache(
         *,
         nominee:members!succession_nominations_nominee_id_fkey (
           id,
-          first_name,
-          last_name,
-          email,
-          avatar_url
+          avatar_url,
+          company,
+          designation,
+          profiles!inner(
+            email,
+            full_name
+          )
         ),
         nominator:members!succession_nominations_nominated_by_id_fkey (
           id,
-          first_name,
-          last_name
+          profiles!inner(
+            full_name
+          )
         ),
         position:succession_positions (
           id,
@@ -444,17 +451,21 @@ export const getNominationById = cache(async (id: string) => {
       *,
       nominee:members!succession_nominations_nominee_id_fkey (
         id,
-        first_name,
-        last_name,
-        email,
-        phone,
-        avatar_url
+        avatar_url,
+        company,
+        designation,
+        profiles!inner(
+          email,
+          full_name,
+          phone
+        )
       ),
       nominator:members!succession_nominations_nominated_by_id_fkey (
         id,
-        first_name,
-        last_name,
-        email
+        profiles!inner(
+          email,
+          full_name
+        )
       ),
       position:succession_positions (
         id,
@@ -470,8 +481,10 @@ export const getNominationById = cache(async (id: string) => {
         status
       ),
       reviewed_by:members!succession_nominations_reviewed_by_id_fkey (
-        first_name,
-        last_name
+        id,
+        profiles!inner(
+          full_name
+        )
       )
     `
     )
@@ -508,9 +521,12 @@ export const getMyNominations = cache(async () => {
       `
       *,
       nominee:members!succession_nominations_nominee_id_fkey (
-        first_name,
-        last_name,
-        email
+        id,
+        avatar_url,
+        profiles!inner(
+          email,
+          full_name
+        )
       ),
       position:succession_positions (
         title,
@@ -552,8 +568,10 @@ export const getNominationsForMe = cache(async () => {
       `
       *,
       nominator:members!succession_nominations_nominated_by_id_fkey (
-        first_name,
-        last_name
+        id,
+        profiles!inner(
+          full_name
+        )
       ),
       position:succession_positions (
         title,
@@ -672,10 +690,13 @@ export const getApplications = cache(
         *,
         applicant:members!succession_applications_member_id_fkey (
           id,
-          first_name,
-          last_name,
-          email,
-          avatar_url
+          avatar_url,
+          company,
+          designation,
+          profiles!inner(
+            email,
+            full_name
+          )
         ),
         position:succession_positions (
           id,
@@ -721,13 +742,14 @@ export const getApplicationById = cache(async (id: string) => {
       *,
       applicant:members!succession_applications_member_id_fkey (
         id,
-        first_name,
-        last_name,
-        email,
         avatar_url,
-        phone,
         designation,
-        company
+        company,
+        profiles!inner(
+          email,
+          full_name,
+          phone
+        )
       ),
       position:succession_positions (
         id,
@@ -745,8 +767,9 @@ export const getApplicationById = cache(async (id: string) => {
       ),
       reviewed_by:members!succession_applications_reviewed_by_id_fkey (
         id,
-        first_name,
-        last_name
+        profiles!inner(
+          full_name
+        )
       )
     `)
     .eq('id', id)
@@ -812,10 +835,13 @@ export const getApplicationsForPosition = cache(
         *,
         applicant:members!succession_applications_member_id_fkey (
           id,
-          first_name,
-          last_name,
-          email,
-          avatar_url
+          avatar_url,
+          company,
+          designation,
+          profiles!inner(
+            email,
+            full_name
+          )
         )
       `)
       .eq('position_id', positionId)
@@ -891,15 +917,19 @@ export const getEvaluators = cache(async (cycleId: string) => {
       *,
       evaluator:members!succession_evaluators_member_id_fkey (
         id,
-        first_name,
-        last_name,
-        email,
-        avatar_url
+        avatar_url,
+        company,
+        designation,
+        profiles!inner(
+          email,
+          full_name
+        )
       ),
       assigned_by:members!succession_evaluators_assigned_by_id_fkey (
         id,
-        first_name,
-        last_name
+        profiles!inner(
+          full_name
+        )
       )
     `)
     .eq('cycle_id', cycleId)
@@ -925,10 +955,13 @@ export const getEvaluatorById = cache(async (id: string) => {
       *,
       evaluator:members!succession_evaluators_member_id_fkey (
         id,
-        first_name,
-        last_name,
-        email,
-        avatar_url
+        avatar_url,
+        company,
+        designation,
+        profiles!inner(
+          email,
+          full_name
+        )
       )
     `)
     .eq('id', id)
@@ -961,8 +994,9 @@ export const getEvaluationScores = cache(
           id,
           evaluator:members!succession_evaluators_member_id_fkey (
             id,
-            first_name,
-            last_name
+            profiles!inner(
+              full_name
+            )
           )
         ),
         criterion:succession_evaluation_criteria (
@@ -1015,8 +1049,9 @@ export const getMyEvaluationScores = cache(async (cycleId: string) => {
         id,
         nominee:members!succession_nominations_nominee_id_fkey (
           id,
-          first_name,
-          last_name
+          profiles!inner(
+            full_name
+          )
         ),
         position:succession_positions (
           id,
@@ -1040,3 +1075,977 @@ export const getMyEvaluationScores = cache(async (cycleId: string) => {
 
   return data || []
 })
+
+// ============================================================================
+// TIMELINE STEPS DATA LAYER
+// ============================================================================
+
+/**
+ * Get timeline steps for a succession cycle
+ * Returns the 7-week timeline with current status
+ */
+export const getTimelineSteps = cache(async (cycleId: string) => {
+  const supabase = await createClient()
+
+  const { data, error } = await supabase
+    .from('succession_timeline_steps')
+    .select('*')
+    .eq('cycle_id', cycleId)
+    .order('step_number', { ascending: true })
+
+  if (error) {
+    console.error('Error fetching timeline steps:', error)
+    throw new Error('Failed to fetch timeline steps')
+  }
+
+  return data || []
+})
+
+/**
+ * Get current active timeline step for a cycle
+ */
+export const getCurrentTimelineStep = cache(async (cycleId: string) => {
+  const supabase = await createClient()
+  const today = new Date().toISOString().split('T')[0]
+
+  const { data, error } = await supabase
+    .from('succession_timeline_steps')
+    .select('*')
+    .eq('cycle_id', cycleId)
+    .lte('start_date', today)
+    .gte('end_date', today)
+    .single()
+
+  if (error) {
+    if (error.code === 'PGRST116') {
+      return null
+    }
+    console.error('Error fetching current timeline step:', error)
+    return null
+  }
+
+  return data
+})
+
+/**
+ * Get timeline step by ID
+ */
+export const getTimelineStepById = cache(async (id: string) => {
+  const supabase = await createClient()
+
+  const { data, error} = await supabase
+    .from('succession_timeline_steps')
+    .select('*')
+    .eq('id', id)
+    .single()
+
+  if (error) {
+    console.error('Error fetching timeline step:', error)
+    throw new Error('Failed to fetch timeline step')
+  }
+
+  return data
+})
+
+// ============================================================================
+// CANDIDATE APPROACH DATA LAYER
+// ============================================================================
+
+/**
+ * Get all approaches for a cycle with nominee and position details
+ */
+export const getApproaches = cache(async (cycleId?: string) => {
+  const supabase = await createClient()
+
+  let query = supabase
+    .from('succession_approaches')
+    .select(`
+      *,
+      cycle:succession_cycles (
+        id,
+        cycle_name,
+        year
+      ),
+      position:succession_positions (
+        id,
+        title,
+        hierarchy_level
+      ),
+      nominee:members!succession_approaches_nominee_id_fkey (
+        id,
+        avatar_url,
+        company,
+        designation,
+        profiles!inner(
+          email,
+          full_name,
+          phone
+        )
+      ),
+      approached_by_member:members!succession_approaches_approached_by_fkey (
+        id,
+        profiles!inner(
+          full_name
+        )
+      )
+    `)
+    .order('approached_at', { ascending: false })
+
+  if (cycleId) {
+    query = query.eq('cycle_id', cycleId)
+  }
+
+  const { data, error } = await query
+
+  if (error) {
+    console.error('Error fetching approaches:', error)
+    throw new Error('Failed to fetch approaches')
+  }
+
+  return data || []
+})
+
+/**
+ * Get approach by ID with full details
+ */
+export const getApproachById = cache(async (id: string) => {
+  const supabase = await createClient()
+
+  const { data, error } = await supabase
+    .from('succession_approaches')
+    .select(`
+      *,
+      cycle:succession_cycles (
+        id,
+        cycle_name,
+        year
+      ),
+      position:succession_positions (
+        id,
+        title,
+        description,
+        hierarchy_level
+      ),
+      nominee:members!succession_approaches_nominee_id_fkey (
+        id,
+        avatar_url,
+        designation,
+        company,
+        profiles!inner(
+          email,
+          full_name,
+          phone
+        )
+      ),
+      approached_by_member:members!succession_approaches_approached_by_fkey (
+        id,
+        profiles!inner(
+          email,
+          full_name
+        )
+      )
+    `)
+    .eq('id', id)
+    .single()
+
+  if (error) {
+    console.error('Error fetching approach:', error)
+    throw new Error('Failed to fetch approach')
+  }
+
+  return data
+})
+
+/**
+ * Get approaches for a specific position
+ */
+export const getApproachesForPosition = cache(async (positionId: string) => {
+  const supabase = await createClient()
+
+  const { data, error } = await supabase
+    .from('succession_approaches')
+    .select(`
+      *,
+      nominee:members!succession_approaches_nominee_id_fkey (
+        id,
+        avatar_url,
+        company,
+        designation,
+        profiles!inner(
+          email,
+          full_name
+        )
+      )
+    `)
+    .eq('position_id', positionId)
+    .order('approached_at', { ascending: false })
+
+  if (error) {
+    console.error('Error fetching position approaches:', error)
+    throw new Error('Failed to fetch approaches')
+  }
+
+  return data || []
+})
+
+/**
+ * Get approaches where current user is the nominee
+ */
+export const getMyApproaches = cache(async () => {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) return []
+
+  const { data, error } = await supabase
+    .from('succession_approaches')
+    .select(`
+      *,
+      position:succession_positions (
+        id,
+        title,
+        hierarchy_level,
+        description
+      ),
+      cycle:succession_cycles (
+        id,
+        cycle_name,
+        year
+      ),
+      approached_by_member:members!succession_approaches_approached_by_fkey (
+        id,
+        profiles!inner(
+          full_name
+        )
+      )
+    `)
+    .eq('nominee_id', user.id)
+    .order('approached_at', { ascending: false })
+
+  if (error) {
+    console.error('Error fetching my approaches:', error)
+    throw new Error('Failed to fetch approaches')
+  }
+
+  return data || []
+})
+
+// ============================================================================
+// STEERING COMMITTEE MEETINGS DATA LAYER
+// ============================================================================
+
+/**
+ * Get meetings for a succession cycle
+ */
+export const getMeetings = cache(async (cycleId?: string) => {
+  const supabase = await createClient()
+
+  let query = supabase
+    .from('succession_meetings')
+    .select(`
+      *,
+      cycle:succession_cycles (
+        id,
+        cycle_name,
+        year
+      ),
+      created_by_member:members!succession_meetings_created_by_fkey (
+        id,
+        profiles!inner(
+          full_name
+        )
+      )
+    `)
+    .order('meeting_date', { ascending: false })
+
+  if (cycleId) {
+    query = query.eq('cycle_id', cycleId)
+  }
+
+  const { data, error } = await query
+
+  if (error) {
+    console.error('Error fetching meetings:', error)
+    throw new Error('Failed to fetch meetings')
+  }
+
+  return data || []
+})
+
+/**
+ * Get meeting by ID with full details
+ */
+export const getMeetingById = cache(async (id: string) => {
+  const supabase = await createClient()
+
+  const { data, error } = await supabase
+    .from('succession_meetings')
+    .select(`
+      *,
+      cycle:succession_cycles (
+        id,
+        cycle_name,
+        year,
+        status
+      ),
+      created_by_member:members!succession_meetings_created_by_fkey (
+        id,
+        profiles!inner(
+          email,
+          full_name
+        )
+      )
+    `)
+    .eq('id', id)
+    .single()
+
+  if (error) {
+    console.error('Error fetching meeting:', error)
+    throw new Error('Failed to fetch meeting')
+  }
+
+  return data
+})
+
+/**
+ * Get upcoming meetings for a cycle
+ */
+export const getUpcomingMeetings = cache(async (cycleId: string) => {
+  const supabase = await createClient()
+  const today = new Date().toISOString()
+
+  const { data, error } = await supabase
+    .from('succession_meetings')
+    .select(`
+      *,
+      cycle:succession_cycles (
+        id,
+        cycle_name,
+        year
+      )
+    `)
+    .eq('cycle_id', cycleId)
+    .gte('meeting_date', today)
+    .in('status', ['scheduled', 'in_progress'])
+    .order('meeting_date', { ascending: true })
+
+  if (error) {
+    console.error('Error fetching upcoming meetings:', error)
+    throw new Error('Failed to fetch upcoming meetings')
+  }
+
+  return data || []
+})
+
+// ============================================================================
+// VOTING DATA LAYER
+// ============================================================================
+
+/**
+ * Get votes for a specific meeting
+ */
+export const getVotesForMeeting = cache(async (meetingId: string) => {
+  const supabase = await createClient()
+
+  const { data, error } = await supabase
+    .from('succession_votes')
+    .select(`
+      *,
+      position:succession_positions (
+        id,
+        title
+      ),
+      nominee:members!succession_votes_nominee_id_fkey (
+        id,
+        avatar_url,
+        profiles!inner(
+          full_name
+        )
+      ),
+      voter:members!succession_votes_voter_member_id_fkey (
+        id,
+        profiles!inner(
+          full_name
+        )
+      )
+    `)
+    .eq('meeting_id', meetingId)
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    console.error('Error fetching votes:', error)
+    throw new Error('Failed to fetch votes')
+  }
+
+  return data || []
+})
+
+/**
+ * Get votes for a specific nominee across all positions
+ */
+export const getVotesForNominee = cache(async (nomineeId: string, meetingId?: string) => {
+  const supabase = await createClient()
+
+  let query = supabase
+    .from('succession_votes')
+    .select(`
+      *,
+      position:succession_positions (
+        id,
+        title,
+        hierarchy_level
+      ),
+      voter:members!succession_votes_voter_member_id_fkey (
+        id,
+        profiles!inner(
+          full_name
+        )
+      ),
+      meeting:succession_meetings (
+        id,
+        meeting_date,
+        meeting_type
+      )
+    `)
+    .eq('nominee_id', nomineeId)
+    .order('created_at', { ascending: false })
+
+  if (meetingId) {
+    query = query.eq('meeting_id', meetingId)
+  }
+
+  const { data, error } = await query
+
+  if (error) {
+    console.error('Error fetching nominee votes:', error)
+    throw new Error('Failed to fetch votes')
+  }
+
+  return data || []
+})
+
+/**
+ * Get vote results aggregated by position for a meeting
+ */
+export const getVoteResultsByPosition = cache(async (meetingId: string) => {
+  const supabase = await createClient()
+
+  const { data, error } = await supabase
+    .from('succession_votes')
+    .select(`
+      vote,
+      position_id,
+      nominee_id,
+      position:succession_positions (
+        id,
+        title,
+        hierarchy_level
+      ),
+      nominee:members!succession_votes_nominee_id_fkey (
+        id,
+        avatar_url,
+        profiles!inner(
+          full_name
+        )
+      )
+    `)
+    .eq('meeting_id', meetingId)
+
+  if (error) {
+    console.error('Error fetching vote results:', error)
+    throw new Error('Failed to fetch vote results')
+  }
+
+  // Group by position and nominee, count votes
+  const results = (data || []).reduce((acc: any, vote: any) => {
+    const key = `${vote.position_id}-${vote.nominee_id}`
+    if (!acc[key]) {
+      acc[key] = {
+        position: vote.position,
+        nominee: vote.nominee,
+        votes: { yes: 0, no: 0, abstain: 0 },
+      }
+    }
+    acc[key].votes[vote.vote]++
+    return acc
+  }, {})
+
+  return Object.values(results)
+})
+
+/**
+ * Get current user's votes for a meeting
+ */
+export const getMyVotesForMeeting = cache(async (meetingId: string) => {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) return []
+
+  const { data, error } = await supabase
+    .from('succession_votes')
+    .select(`
+      *,
+      position:succession_positions (
+        id,
+        title
+      ),
+      nominee:members!succession_votes_nominee_id_fkey (
+        id,
+        avatar_url,
+        profiles!inner(
+          full_name
+        )
+      )
+    `)
+    .eq('meeting_id', meetingId)
+    .eq('voter_member_id', user.id)
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    console.error('Error fetching my votes:', error)
+    throw new Error('Failed to fetch votes')
+  }
+
+  return data || []
+})
+
+// ============================================================================
+// KNOWLEDGE BASE & HISTORICAL DATA LAYER
+// ============================================================================
+
+/**
+ * Get all completed/archived succession cycles for knowledge base
+ * Returns cycles with full statistics for pattern analysis
+ */
+export const getHistoricalCycles = cache(async () => {
+  const supabase = await createClient()
+
+  const { data, error } = await supabase
+    .from('succession_cycles')
+    .select('*')
+    .in('status', ['completed', 'archived'])
+    .order('year', { ascending: false })
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    console.error('Error fetching historical cycles:', error)
+    throw new Error('Failed to fetch historical cycles')
+  }
+
+  return data || []
+})
+
+/**
+ * Get statistics for a completed cycle
+ * Used for pattern analysis and insights
+ */
+export const getCycleStatistics = cache(async (cycleId: string) => {
+  const supabase = await createClient()
+
+  // Get all counts in parallel
+  const [
+    { count: positionCount },
+    { count: nominationCount },
+    { count: applicationCount },
+    { count: evaluatorCount },
+    { count: selectionCount },
+  ] = await Promise.all([
+    supabase
+      .from('succession_positions')
+      .select('id', { count: 'exact', head: true })
+      .eq('cycle_id', cycleId),
+    supabase
+      .from('succession_nominations')
+      .select('id', { count: 'exact', head: true })
+      .eq('cycle_id', cycleId),
+    supabase
+      .from('succession_applications')
+      .select('id', { count: 'exact', head: true })
+      .eq('cycle_id', cycleId),
+    supabase
+      .from('succession_evaluators')
+      .select('id', { count: 'exact', head: true })
+      .eq('cycle_id', cycleId),
+    supabase
+      .from('succession_selections')
+      .select('id', { count: 'exact', head: true })
+      .eq('cycle_id', cycleId),
+  ])
+
+  // Get nomination status breakdown
+  const { data: nominationsByStatus } = await supabase
+    .from('succession_nominations')
+    .select('status')
+    .eq('cycle_id', cycleId)
+
+  const nominationStatusCounts = (nominationsByStatus || []).reduce(
+    (acc: Record<string, number>, n: any) => {
+      acc[n.status] = (acc[n.status] || 0) + 1
+      return acc
+    },
+    {}
+  )
+
+  // Get application status breakdown
+  const { data: applicationsByStatus } = await supabase
+    .from('succession_applications')
+    .select('status')
+    .eq('cycle_id', cycleId)
+
+  const applicationStatusCounts = (applicationsByStatus || []).reduce(
+    (acc: Record<string, number>, a: any) => {
+      acc[a.status] = (acc[a.status] || 0) + 1
+      return acc
+    },
+    {}
+  )
+
+  return {
+    positions: positionCount || 0,
+    nominations: nominationCount || 0,
+    applications: applicationCount || 0,
+    evaluators: evaluatorCount || 0,
+    selections: selectionCount || 0,
+    nominationsByStatus: nominationStatusCounts,
+    applicationsByStatus: applicationStatusCounts,
+  }
+})
+
+/**
+ * Get pattern insights from historical data
+ * Analyzes trends across completed cycles
+ */
+export const getSuccessionInsights = cache(async () => {
+  const supabase = await createClient()
+
+  // Get all completed cycles
+  const { data: cycles } = await supabase
+    .from('succession_cycles')
+    .select('id, year, cycle_name')
+    .in('status', ['completed', 'archived'])
+    .order('year', { ascending: true })
+
+  if (!cycles || cycles.length === 0) {
+    return {
+      totalCycles: 0,
+      averageNominationsPerCycle: 0,
+      averageApplicationsPerCycle: 0,
+      positionPopularity: [],
+      yearOverYearTrends: [],
+    }
+  }
+
+  // Get aggregate data for insights
+  const insights = {
+    totalCycles: cycles.length,
+    averageNominationsPerCycle: 0,
+    averageApplicationsPerCycle: 0,
+    positionPopularity: [] as any[],
+    yearOverYearTrends: [] as any[],
+  }
+
+  // Calculate averages across all cycles
+  let totalNominations = 0
+  let totalApplications = 0
+
+  for (const cycle of cycles) {
+    const { count: nomCount } = await supabase
+      .from('succession_nominations')
+      .select('id', { count: 'exact', head: true })
+      .eq('cycle_id', cycle.id)
+
+    const { count: appCount } = await supabase
+      .from('succession_applications')
+      .select('id', { count: 'exact', head: true })
+      .eq('cycle_id', cycle.id)
+
+    totalNominations += nomCount || 0
+    totalApplications += appCount || 0
+
+    insights.yearOverYearTrends.push({
+      year: cycle.year,
+      cycleName: cycle.cycle_name,
+      nominations: nomCount || 0,
+      applications: appCount || 0,
+    })
+  }
+
+  insights.averageNominationsPerCycle = Math.round(totalNominations / cycles.length)
+  insights.averageApplicationsPerCycle = Math.round(totalApplications / cycles.length)
+
+  // Get position popularity across all cycles
+  const { data: positionData } = await supabase
+    .from('succession_positions')
+    .select(`
+      title,
+      cycle_id
+    `)
+
+  // Count nominations per position title
+  const positionNominations: Record<string, number> = {}
+  if (positionData) {
+    for (const pos of positionData) {
+      const { count } = await supabase
+        .from('succession_nominations')
+        .select('id', { count: 'exact', head: true })
+        .eq('position_id', pos.cycle_id)
+
+      positionNominations[pos.title] = (positionNominations[pos.title] || 0) + (count || 0)
+    }
+  }
+
+  insights.positionPopularity = Object.entries(positionNominations)
+    .map(([title, count]) => ({ title, nominations: count }))
+    .sort((a, b) => b.nominations - a.nominations)
+    .slice(0, 5)
+
+  return insights
+})
+
+/**
+ * Get selected candidates from completed cycles
+ * Used for success pattern analysis
+ */
+export const getHistoricalSelections = cache(async () => {
+  const supabase = await createClient()
+
+  const { data, error } = await supabase
+    .from('succession_selections')
+    .select(`
+      *,
+      position:succession_positions (
+        id,
+        title,
+        hierarchy_level
+      ),
+      cycle:succession_cycles (
+        id,
+        cycle_name,
+        year
+      ),
+      nomination:succession_nominations (
+        id,
+        nominee:members!succession_nominations_nominee_id_fkey (
+          id,
+          avatar_url,
+          profiles!inner(
+            full_name
+          )
+        )
+      )
+    `)
+    .order('announced_at', { ascending: false })
+    .limit(50)
+
+  if (error) {
+    console.error('Error fetching historical selections:', error)
+    throw new Error('Failed to fetch historical selections')
+  }
+
+  return data || []
+})
+
+/**
+ * Get audit log for a cycle
+ * Useful for reviewing decision history
+ */
+export const getCycleAuditLog = cache(async (cycleId: string, limit = 50) => {
+  const supabase = await createClient()
+
+  const { data, error } = await supabase
+    .from('succession_audit_log')
+    .select(`
+      *,
+      performed_by:members!succession_audit_log_performed_by_id_fkey (
+        id,
+        profiles!inner(
+          full_name
+        )
+      )
+    `)
+    .eq('cycle_id', cycleId)
+    .order('performed_at', { ascending: false })
+    .limit(limit)
+
+  if (error) {
+    console.error('Error fetching audit log:', error)
+    throw new Error('Failed to fetch audit log')
+  }
+
+  return data || []
+})
+
+// ============================================================================
+// RC REVIEW PORTAL DATA LAYER
+// ============================================================================
+
+/**
+ * Get candidates pending RC review
+ * Returns nominations approved by steering committee awaiting RC approval
+ */
+export const getCandidatesPendingRCReview = cache(async (cycleId: string) => {
+  const supabase = await createClient()
+
+  // Get approaches that are accepted but need RC approval
+  const { data, error } = await supabase
+    .from('succession_approaches')
+    .select(`
+      *,
+      position:succession_positions (
+        id,
+        title,
+        description,
+        hierarchy_level,
+        number_of_openings
+      ),
+      nominee:members!succession_approaches_nominee_id_fkey (
+        id,
+        avatar_url,
+        designation,
+        company,
+        member_since,
+        profiles!inner(
+          email,
+          full_name,
+          phone
+        )
+      ),
+      cycle:succession_cycles (
+        id,
+        cycle_name,
+        year
+      )
+    `)
+    .eq('cycle_id', cycleId)
+    .eq('response_status', 'accepted')
+    .is('rc_approved_at', null)
+    .order('approached_at', { ascending: true })
+
+  if (error) {
+    console.error('Error fetching candidates for RC review:', error)
+    throw new Error('Failed to fetch candidates')
+  }
+
+  return data || []
+})
+
+/**
+ * Get candidate profiles with scores for RC review
+ * Includes evaluation scores, interview feedback, and voting results
+ */
+export const getCandidateProfileForReview = cache(
+  async (nomineeId: string, cycleId: string) => {
+    const supabase = await createClient()
+
+    // Get member details
+    const { data: member, error: memberError } = await supabase
+      .from('members')
+      .select(`
+        *,
+        skills:member_skills (
+          skill:skills (
+            name,
+            category
+          ),
+          proficiency,
+          years_of_experience
+        )
+      `)
+      .eq('id', nomineeId)
+      .single()
+
+    if (memberError) {
+      console.error('Error fetching member:', memberError)
+      throw new Error('Failed to fetch member')
+    }
+
+    // Get their nominations in this cycle
+    const { data: nominations } = await supabase
+      .from('succession_nominations')
+      .select(`
+        *,
+        position:succession_positions (
+          id,
+          title,
+          hierarchy_level
+        ),
+        nominator:members!succession_nominations_nominated_by_id_fkey (
+          id,
+          profiles!inner(
+            full_name
+          )
+        )
+      `)
+      .eq('nominee_id', nomineeId)
+      .eq('cycle_id', cycleId)
+
+    // Get their applications
+    const { data: applications } = await supabase
+      .from('succession_applications')
+      .select(`
+        *,
+        position:succession_positions (
+          id,
+          title,
+          hierarchy_level
+        )
+      `)
+      .eq('member_id', nomineeId)
+      .eq('cycle_id', cycleId)
+
+    // Get evaluation scores
+    const { data: scores } = await supabase
+      .from('succession_evaluation_scores')
+      .select(`
+        score,
+        comments,
+        criterion:succession_evaluation_criteria (
+          criterion_name,
+          weight,
+          max_score
+        )
+      `)
+      .eq('cycle_id', cycleId)
+      .in(
+        'nomination_id',
+        (nominations || []).map((n: any) => n.id)
+      )
+
+    // Calculate average score
+    const totalScore =
+      scores && scores.length > 0
+        ? scores.reduce((sum: number, s: any) => sum + (s.score || 0), 0) / scores.length
+        : 0
+
+    // Get EC experience
+    const { data: ecHistory } = await supabase
+      .from('event_volunteers')
+      .select('id')
+      .eq('member_id', nomineeId)
+      .eq('status', 'completed')
+
+    // Get leadership assessment
+    const { data: assessment } = await supabase
+      .from('leadership_assessments')
+      .select('*')
+      .eq('member_id', nomineeId)
+      .single()
+
+    return {
+      member,
+      nominations: nominations || [],
+      applications: applications || [],
+      evaluationScores: scores || [],
+      averageScore: totalScore,
+      ecEventsParticipated: (ecHistory || []).length,
+      leadershipAssessment: assessment || null,
+    }
+  }
+)

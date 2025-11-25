@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getWikiPages } from '@/lib/data/knowledge';
 import { getCurrentUserChapter } from '@/lib/data/members';
+import { requireRole } from '@/lib/auth';
 import { WikiPageCard } from '@/components/knowledge/wiki-page-card';
 import { Plus, BookOpen } from 'lucide-react';
 
@@ -44,7 +45,9 @@ async function WikiPagesList() {
   );
 }
 
-export default function WikiPagesPage() {
+export default async function WikiPagesPage() {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member', 'Member']);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">

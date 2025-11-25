@@ -10,6 +10,7 @@ import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { getCurrentUser } from '@/lib/data/auth';
 import { createClient } from '@/lib/supabase/server';
+import { requireRole } from '@/lib/auth';
 import { getVenues } from '@/lib/data/events';
 import { getEventTemplates } from '@/lib/data/events';
 import { EventForm } from '@/components/events';
@@ -23,7 +24,9 @@ import {
 } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 
-export default function NewEventPage() {
+export default async function NewEventPage() {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']);
+
   return (
     <div className='flex flex-col gap-8 max-w-9xl mx-auto'>
       {/* Header */}

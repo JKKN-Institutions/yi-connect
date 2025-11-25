@@ -10,17 +10,11 @@ import { ColumnDef } from '@tanstack/react-table'
 import Link from 'next/link'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { Progress } from '@/components/ui/progress'
 import { DataTableColumnHeader } from '@/components/data-table/data-table-column-header'
-import { MoreHorizontal, Eye, Edit, Trash, ShieldCheck } from 'lucide-react'
+import { ShieldCheck } from 'lucide-react'
+import { MemberRowActions } from './member-row-actions'
 import type { MemberListItem } from '@/types/member'
 
 function getInitials(name: string): string {
@@ -49,7 +43,12 @@ function getScoreColor(score: number): string {
   return 'text-red-600 dark:text-red-400'
 }
 
-export const memberColumns: ColumnDef<MemberListItem>[] = [
+/**
+ * Get member table columns with role-based actions
+ * @param userRoles - Current user's roles for permission checking
+ */
+export function getMemberColumns(userRoles: string[] = []): ColumnDef<MemberListItem>[] {
+  return [
   {
     id: 'select',
     header: ({ table }) => (
@@ -247,36 +246,17 @@ export const memberColumns: ColumnDef<MemberListItem>[] = [
       const member = row.original
 
       return (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              className="flex h-8 w-8 p-0 data-[state=open]:bg-muted"
-            >
-              <MoreHorizontal className="h-4 w-4" />
-              <span className="sr-only">Open menu</span>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-[160px]">
-            <DropdownMenuItem asChild>
-              <Link href={`/members/${member.id}`}>
-                <Eye className="mr-2 h-4 w-4" />
-                View
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link href={`/members/${member.id}/edit`}>
-                <Edit className="mr-2 h-4 w-4" />
-                Edit
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem className="text-destructive">
-              <Trash className="mr-2 h-4 w-4" />
-              Delete
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <MemberRowActions
+          memberId={member.id}
+          memberName={member.full_name}
+          memberStatus={member.membership_status}
+          userRoles={userRoles}
+        />
       )
     },
   },
 ]
+}
+
+// Legacy export for backward compatibility (shows no dangerous actions)
+export const memberColumns = getMemberColumns([])

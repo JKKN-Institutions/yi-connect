@@ -1,5 +1,6 @@
 import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
+import { requireRole } from '@/lib/auth';
 import { getActiveCycles, getAwardCategoryById } from '@/lib/data/awards';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { NominationForm } from '@/components/awards';
@@ -318,9 +319,11 @@ async function PageContent({
   return <NominationFormSection searchParamsPromise={searchParamsPromise} />
 }
 
-export default function NominatePage({
+export default async function NominatePage({
   searchParams
 }: NominatePageProps) {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member'])
+
   return (
     <div className='container mx-auto py-8 space-y-6 max-w-9xl'>
       {/* Header */}

@@ -14,6 +14,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { getTemplates } from "@/lib/data/communication";
+import { requireRole } from "@/lib/auth";
 import { format } from "date-fns";
 import { ChannelBadge } from "@/components/communication/status-badges";
 
@@ -23,7 +24,8 @@ export const metadata: Metadata = {
 };
 
 
-export default function TemplatesPage() {
+export default async function TemplatesPage() {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member']);
   return (
     <div className="flex flex-col gap-6">
       {/* Header */}

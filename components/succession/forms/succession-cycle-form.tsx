@@ -18,15 +18,61 @@ import {
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { createSuccessionCycle, updateSuccessionCycle } from '@/app/actions/succession'
-import { CreateSuccessionCycleSchema } from '@/lib/validations/succession'
+import { SuccessionCycleStatusSchema } from '@/lib/validations/succession'
 import type { SuccessionCycle } from '@/lib/types/succession'
 import toast from 'react-hot-toast'
 
-type FormData = z.infer<typeof CreateSuccessionCycleSchema>
+// Form schema - defined locally to avoid refinement extension issues
+const FormSchema = z.object({
+  year: z.number().int().min(2020, 'Year must be 2020 or later').max(2100, 'Invalid year'),
+  cycle_name: z.string().min(1, 'Cycle name is required').max(100, 'Cycle name too long'),
+  description: z.string().max(500, 'Description too long').optional(),
+  start_date: z.string().optional(),
+  end_date: z.string().optional(),
+  status: SuccessionCycleStatusSchema.optional(),
+})
+
+type FormData = z.infer<typeof FormSchema>
+
+// Status options with labels
+const statusOptions = [
+  { value: 'draft', label: 'Draft' },
+  { value: 'active', label: 'Active' },
+  { value: 'nominations_open', label: 'Nominations Open' },
+  { value: 'nominations_closed', label: 'Nominations Closed' },
+  { value: 'applications_open', label: 'Applications Open' },
+  { value: 'applications_closed', label: 'Applications Closed' },
+  { value: 'evaluations', label: 'Evaluations' },
+  { value: 'evaluations_closed', label: 'Evaluations Closed' },
+  { value: 'interviews', label: 'Interviews' },
+  { value: 'interviews_closed', label: 'Interviews Closed' },
+  { value: 'selection', label: 'Selection' },
+  { value: 'approval_pending', label: 'Approval Pending' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'archived', label: 'Archived' },
+]
 
 interface SuccessionCycleFormProps {
   cycle?: SuccessionCycle
+}
+
+// Helper to format date for input (YYYY-MM-DD)
+function formatDateForInput(dateString: string | null | undefined): string {
+  if (!dateString) return ''
+  try {
+    const date = new Date(dateString)
+    return date.toISOString().split('T')[0]
+  } catch {
+    return ''
+  }
 }
 
 export function SuccessionCycleForm({ cycle }: SuccessionCycleFormProps) {
@@ -34,13 +80,14 @@ export function SuccessionCycleForm({ cycle }: SuccessionCycleFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const form = useForm<FormData>({
-    resolver: zodResolver(CreateSuccessionCycleSchema),
+    resolver: zodResolver(FormSchema),
     defaultValues: {
       year: cycle?.year || new Date().getFullYear(),
       cycle_name: cycle?.cycle_name || '',
       description: cycle?.description || '',
-      start_date: cycle?.start_date || '',
-      end_date: cycle?.end_date || '',
+      start_date: formatDateForInput(cycle?.start_date),
+      end_date: formatDateForInput(cycle?.end_date),
+      status: cycle?.status || 'draft',
     },
   })
 
@@ -53,6 +100,7 @@ export function SuccessionCycleForm({ cycle }: SuccessionCycleFormProps) {
     if (data.description) formData.append('description', data.description)
     if (data.start_date) formData.append('start_date', data.start_date)
     if (data.end_date) formData.append('end_date', data.end_date)
+    if (data.status) formData.append('status', data.status)
 
     const result = cycle
       ? await updateSuccessionCycle(cycle.id, formData)
@@ -170,6 +218,37 @@ export function SuccessionCycleForm({ cycle }: SuccessionCycleFormProps) {
             )}
           />
         </div>
+
+        {/* Status field - only show for editing existing cycles */}
+        {cycle && (
+          <FormField
+            control={form.control}
+            name="status"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Status</FormLabel>
+                <Select onValueChange={field.onChange} value={field.value}>
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select status" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {statusOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormDescription>
+                  Current status of the succession cycle
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
 
         <div className="flex gap-4 justify-end">
           <Button

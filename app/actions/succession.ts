@@ -17,6 +17,74 @@ type ActionResult<T = any> = {
   error?: string
 }
 
+// Mapping of cycle status to timeline step number
+const STATUS_TO_STEP_MAP: Record<string, number> = {
+  'nominations_open': 1,
+  'nominations_closed': 1,
+  'applications_open': 2,
+  'applications_closed': 2,
+  'evaluations': 3,
+  'evaluations_closed': 3,
+  'interviews': 4,
+  'interviews_closed': 5,
+  'selection': 6,
+  'approval_pending': 6,
+  'completed': 7,
+  'archived': 7,
+}
+
+/**
+ * Sync timeline step statuses based on cycle status
+ * Called automatically when cycle status changes
+ */
+async function syncTimelineStepsWithCycleStatus(
+  supabase: any,
+  cycleId: string,
+  cycleStatus: string
+): Promise<void> {
+  const currentStepNumber = STATUS_TO_STEP_MAP[cycleStatus]
+
+  if (!currentStepNumber) return // Draft or active status, no step mapping
+
+  // Get all timeline steps for this cycle
+  const { data: steps } = await supabase
+    .from('succession_timeline_steps')
+    .select('id, step_number, status')
+    .eq('cycle_id', cycleId)
+    .order('step_number')
+
+  if (!steps || steps.length === 0) return
+
+  // Determine if current status is a "closed" status
+  const isClosedStatus = cycleStatus.endsWith('_closed') ||
+                          cycleStatus === 'completed' ||
+                          cycleStatus === 'archived'
+
+  // Update each step's status based on cycle status
+  for (const step of steps) {
+    let newStatus: string
+
+    if (step.step_number < currentStepNumber) {
+      // Previous steps should be completed
+      newStatus = 'completed'
+    } else if (step.step_number === currentStepNumber) {
+      // Current step is active or completed based on cycle status
+      newStatus = isClosedStatus ? 'completed' : 'active'
+    } else {
+      // Future steps are pending
+      newStatus = 'pending'
+    }
+
+    // Only update if status changed
+    if (step.status !== newStatus) {
+      await supabase
+        .from('succession_timeline_steps')
+        .update({ status: newStatus, updated_at: new Date().toISOString() })
+        .eq('id', step.id)
+    }
+  }
+}
+
 // ============================================================================
 // SUCCESSION CYCLE ACTIONS
 // ============================================================================
@@ -40,11 +108,17 @@ export async function createSuccessionCycle(
       return { success: false, error: 'Authentication required' }
     }
 
-    const data = Object.fromEntries(formData)
+    const rawData = Object.fromEntries(formData)
+    const data: Record<string, any> = { ...rawData }
 
     // Parse JSON fields
     if (typeof data.phase_configs === 'string') {
       data.phase_configs = JSON.parse(data.phase_configs)
+    }
+
+    // Convert year to number (FormData always returns strings)
+    if (typeof data.year === 'string') {
+      data.year = parseInt(data.year, 10)
     }
 
     const validated = CreateSuccessionCycleSchema.parse(data)
@@ -85,7 +159,8 @@ export async function updateSuccessionCycle(
   try {
     const supabase = await createClient()
 
-    const data = Object.fromEntries(formData)
+    const rawData = Object.fromEntries(formData)
+    const data: Record<string, any> = { ...rawData }
 
     // Parse JSON fields
     if (typeof data.phase_configs === 'string') {
@@ -95,23 +170,45 @@ export async function updateSuccessionCycle(
       data.selection_committee_ids = JSON.parse(data.selection_committee_ids)
     }
 
+    // Convert year to number (FormData always returns strings)
+    if (typeof data.year === 'string') {
+      data.year = parseInt(data.year, 10)
+    }
+
     const validated = UpdateSuccessionCycleSchema.parse({ ...data, id })
 
+    // Remove id from the update payload (can't update primary key)
+    const { id: _id, ...updateData } = validated
+
+    // Clean up updateData - remove undefined values and empty strings for optional fields
+    const cleanedData: Record<string, any> = {}
+    for (const [key, value] of Object.entries(updateData)) {
+      if (value !== undefined && value !== '') {
+        cleanedData[key] = value
+      } else if (value === '' && (key === 'start_date' || key === 'end_date' || key === 'description')) {
+        // Set optional fields to null if empty string
+        cleanedData[key] = null
+      }
+    }
+
+    console.log('Updating succession cycle with data:', cleanedData)
+
     // Get current version for optimistic locking
-    const { data: current } = await supabase
+    const { data: current, error: fetchError } = await supabase
       .from('succession_cycles')
       .select('version')
       .eq('id', id)
       .single()
 
-    if (!current) {
+    if (fetchError || !current) {
+      console.error('Error fetching cycle:', fetchError)
       return { success: false, error: 'Cycle not found' }
     }
 
     const { data: cycle, error } = await supabase
       .from('succession_cycles')
       .update({
-        ...validated,
+        ...cleanedData,
         version: current.version + 1,
         updated_at: new Date().toISOString(),
       })
@@ -121,6 +218,7 @@ export async function updateSuccessionCycle(
       .single()
 
     if (error) {
+      console.error('Supabase update error:', error)
       if (error.code === 'PGRST116') {
         return {
           success: false,
@@ -130,16 +228,29 @@ export async function updateSuccessionCycle(
       throw error
     }
 
+    if (!cycle) {
+      return { success: false, error: 'Failed to update cycle - no data returned' }
+    }
+
+    // Sync timeline step statuses if cycle status was updated
+    if (cleanedData.status) {
+      await syncTimelineStepsWithCycleStatus(supabase, id, cleanedData.status)
+    }
+
     revalidatePath('/succession/admin/cycles')
     revalidatePath(`/succession/admin/cycles/${id}`)
     revalidatePath('/succession')
+    revalidatePath('/succession/admin/timeline')
     return { success: true, data: cycle }
   } catch (error) {
     if (error instanceof z.ZodError) {
+      console.error('Zod validation error:', error.issues)
       return { success: false, error: error.issues[0].message }
     }
     console.error('Error updating succession cycle:', error)
-    return { success: false, error: 'Failed to update succession cycle' }
+    // Return more specific error message for debugging
+    const errorMessage = error instanceof Error ? error.message : 'Failed to update succession cycle'
+    return { success: false, error: errorMessage }
   }
 }
 
@@ -221,9 +332,13 @@ export async function advanceSuccessionStatus(
       throw error
     }
 
+    // Sync timeline step statuses with new cycle status
+    await syncTimelineStepsWithCycleStatus(supabase, cycleId, validated.new_status)
+
     revalidatePath('/succession/admin/cycles')
     revalidatePath(`/succession/admin/cycles/${cycleId}`)
     revalidatePath('/succession')
+    revalidatePath('/succession/admin/timeline')
     return { success: true, data: cycle }
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -302,11 +417,20 @@ export async function createSuccessionPosition(
 ): Promise<ActionResult> {
   try {
     const supabase = await createClient()
-    const data = Object.fromEntries(formData)
+    const rawData = Object.fromEntries(formData)
+    const data: Record<string, any> = { ...rawData }
 
     // Parse JSON fields
     if (typeof data.eligibility_criteria === 'string') {
       data.eligibility_criteria = JSON.parse(data.eligibility_criteria)
+    }
+
+    // Convert number fields (FormData always returns strings)
+    if (typeof data.hierarchy_level === 'string') {
+      data.hierarchy_level = parseInt(data.hierarchy_level, 10)
+    }
+    if (typeof data.number_of_openings === 'string') {
+      data.number_of_openings = parseInt(data.number_of_openings, 10)
     }
 
     const validated = CreateSuccessionPositionSchema.parse(data)
@@ -345,11 +469,20 @@ export async function updateSuccessionPosition(
 ): Promise<ActionResult> {
   try {
     const supabase = await createClient()
-    const data = Object.fromEntries(formData)
+    const rawData = Object.fromEntries(formData)
+    const data: Record<string, any> = { ...rawData }
 
     // Parse JSON fields
     if (typeof data.eligibility_criteria === 'string') {
       data.eligibility_criteria = JSON.parse(data.eligibility_criteria)
+    }
+
+    // Convert number fields (FormData always returns strings)
+    if (typeof data.hierarchy_level === 'string') {
+      data.hierarchy_level = parseInt(data.hierarchy_level, 10)
+    }
+    if (typeof data.number_of_openings === 'string') {
+      data.number_of_openings = parseInt(data.number_of_openings, 10)
     }
 
     const validated = UpdateSuccessionPositionSchema.parse({ ...data, id })
@@ -1265,5 +1398,947 @@ export async function submitEvaluationScores(
     }
     console.error('Error submitting evaluation scores:', error)
     return { success: false, error: 'Failed to submit evaluation scores' }
+  }
+}
+
+// ============================================================================
+// TIMELINE STEPS SERVER ACTIONS
+// ============================================================================
+
+/**
+ * Create a timeline step for a cycle
+ * Admin only action
+ */
+export async function createTimelineStep(
+  formData: FormData
+): Promise<ActionResult> {
+  try {
+    const supabase = await createClient()
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
+      return { success: false, error: 'Authentication required' }
+    }
+
+    const rawData = Object.fromEntries(formData)
+    const data: Record<string, any> = { ...rawData }
+
+    // Convert number fields (FormData always returns strings)
+    if (typeof data.step_number === 'string') {
+      data.step_number = parseInt(data.step_number, 10)
+    }
+
+    const { CreateTimelineStepSchema } = await import('@/lib/validations/succession')
+    const validated = CreateTimelineStepSchema.parse(data)
+
+    const { data: timelineStep, error } = await supabase
+      .from('succession_timeline_steps')
+      .insert(validated)
+      .select()
+      .single()
+
+    if (error) throw error
+
+    revalidatePath('/succession/admin/timeline')
+    revalidatePath(`/succession/admin/cycles/${validated.cycle_id}`)
+    return { success: true, data: timelineStep }
+  } catch (error: any) {
+    if (error.name === 'ZodError') {
+      return { success: false, error: error.issues[0].message }
+    }
+    console.error('Error creating timeline step:', error)
+    return { success: false, error: 'Failed to create timeline step' }
+  }
+}
+
+/**
+ * Update a timeline step
+ * Admin only action
+ */
+export async function updateTimelineStep(
+  id: string,
+  formData: FormData
+): Promise<ActionResult> {
+  try {
+    const supabase = await createClient()
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
+      return { success: false, error: 'Authentication required' }
+    }
+
+    const rawData = Object.fromEntries(formData)
+    const data: Record<string, any> = { ...rawData }
+
+    // Convert number fields (FormData always returns strings)
+    if (typeof data.step_number === 'string') {
+      data.step_number = parseInt(data.step_number, 10)
+    }
+
+    const { UpdateTimelineStepSchema } = await import('@/lib/validations/succession')
+    const validated = UpdateTimelineStepSchema.parse({ ...data, id })
+
+    const { data: timelineStep, error } = await supabase
+      .from('succession_timeline_steps')
+      .update({
+        ...validated,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (error) throw error
+
+    revalidatePath('/succession/admin/timeline')
+    return { success: true, data: timelineStep }
+  } catch (error: any) {
+    if (error.name === 'ZodError') {
+      return { success: false, error: error.issues[0].message }
+    }
+    console.error('Error updating timeline step:', error)
+    return { success: false, error: 'Failed to update timeline step' }
+  }
+}
+
+/**
+ * Update timeline step status
+ * Admin only action
+ */
+export async function updateTimelineStepStatus(
+  id: string,
+  status: 'pending' | 'active' | 'completed' | 'overdue'
+): Promise<ActionResult> {
+  try {
+    const supabase = await createClient()
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
+      return { success: false, error: 'Authentication required' }
+    }
+
+    const { data: timelineStep, error } = await supabase
+      .from('succession_timeline_steps')
+      .update({
+        status,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (error) throw error
+
+    revalidatePath('/succession/admin/timeline')
+    return { success: true, data: timelineStep }
+  } catch (error: any) {
+    console.error('Error updating timeline step status:', error)
+    return { success: false, error: 'Failed to update timeline step status' }
+  }
+}
+
+/**
+ * Delete a timeline step
+ * Admin only action
+ */
+export async function deleteTimelineStep(id: string): Promise<ActionResult> {
+  try {
+    const supabase = await createClient()
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
+      return { success: false, error: 'Authentication required' }
+    }
+
+    const { error } = await supabase
+      .from('succession_timeline_steps')
+      .delete()
+      .eq('id', id)
+
+    if (error) throw error
+
+    revalidatePath('/succession/admin/timeline')
+    return { success: true }
+  } catch (error: any) {
+    console.error('Error deleting timeline step:', error)
+    return { success: false, error: 'Failed to delete timeline step' }
+  }
+}
+
+// ============================================================================
+// CANDIDATE APPROACH SERVER ACTIONS
+// ============================================================================
+
+/**
+ * Record a candidate approach
+ * Admin only action
+ */
+export async function createApproach(
+  formData: FormData
+): Promise<ActionResult> {
+  try {
+    const supabase = await createClient()
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
+      return { success: false, error: 'Authentication required' }
+    }
+
+    const data = Object.fromEntries(formData)
+
+    const { CreateApproachSchema } = await import('@/lib/validations/succession')
+    const validated = CreateApproachSchema.parse({
+      ...data,
+      approached_by: user.id,
+    })
+
+    const { data: approach, error } = await supabase
+      .from('succession_approaches')
+      .insert({
+        ...validated,
+        approached_at: new Date().toISOString(),
+      })
+      .select(`
+        *,
+        cycle:succession_cycles (id, cycle_name, year),
+        position:succession_positions (id, title, hierarchy_level),
+        nominee:members!succession_approaches_nominee_id_fkey (id, first_name, last_name, email, phone, avatar_url),
+        approached_by_member:members!succession_approaches_approached_by_fkey (id, first_name, last_name)
+      `)
+      .single()
+
+    if (error) throw error
+
+    revalidatePath('/succession/admin/approaches')
+    revalidatePath(`/succession/admin/cycles/${validated.cycle_id}`)
+    return { success: true, data: approach }
+  } catch (error: any) {
+    if (error.name === 'ZodError') {
+      return { success: false, error: error.issues[0].message }
+    }
+    console.error('Error creating approach:', error)
+    return { success: false, error: 'Failed to create approach record' }
+  }
+}
+
+/**
+ * Update an approach record
+ * Admin only action
+ */
+export async function updateApproach(
+  id: string,
+  formData: FormData
+): Promise<ActionResult> {
+  try {
+    const supabase = await createClient()
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
+      return { success: false, error: 'Authentication required' }
+    }
+
+    const data = Object.fromEntries(formData)
+
+    const { UpdateApproachSchema } = await import('@/lib/validations/succession')
+    const validated = UpdateApproachSchema.parse({ ...data, id })
+
+    const { data: approach, error } = await supabase
+      .from('succession_approaches')
+      .update({
+        ...validated,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select(`
+        *,
+        cycle:succession_cycles (id, cycle_name, year),
+        position:succession_positions (id, title, hierarchy_level),
+        nominee:members!succession_approaches_nominee_id_fkey (id, first_name, last_name, email, phone, avatar_url),
+        approached_by_member:members!succession_approaches_approached_by_fkey (id, first_name, last_name)
+      `)
+      .single()
+
+    if (error) throw error
+
+    revalidatePath('/succession/admin/approaches')
+    revalidatePath(`/succession/admin/approaches/${id}`)
+    return { success: true, data: approach }
+  } catch (error: any) {
+    if (error.name === 'ZodError') {
+      return { success: false, error: error.issues[0].message }
+    }
+    console.error('Error updating approach:', error)
+    return { success: false, error: 'Failed to update approach record' }
+  }
+}
+
+/**
+ * Update approach response status
+ * Can be updated by the nominee or admin
+ */
+export async function updateApproachResponse(
+  id: string,
+  responseStatus: 'pending' | 'accepted' | 'declined' | 'conditional',
+  conditionsText?: string,
+  notes?: string
+): Promise<ActionResult> {
+  try {
+    const supabase = await createClient()
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
+      return { success: false, error: 'Authentication required' }
+    }
+
+    const { data: approach, error } = await supabase
+      .from('succession_approaches')
+      .update({
+        response_status: responseStatus,
+        response_date: new Date().toISOString(),
+        conditions_text: conditionsText || null,
+        notes: notes || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select(`
+        *,
+        nominee:members!succession_approaches_nominee_id_fkey (id, first_name, last_name)
+      `)
+      .single()
+
+    if (error) throw error
+
+    revalidatePath('/succession/admin/approaches')
+    revalidatePath(`/succession/admin/approaches/${id}`)
+    return { success: true, data: approach }
+  } catch (error: any) {
+    console.error('Error updating approach response:', error)
+    return { success: false, error: 'Failed to update approach response' }
+  }
+}
+
+/**
+ * Delete an approach record
+ * Admin only action
+ */
+export async function deleteApproach(id: string): Promise<ActionResult> {
+  try {
+    const supabase = await createClient()
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
+      return { success: false, error: 'Authentication required' }
+    }
+
+    const { error } = await supabase
+      .from('succession_approaches')
+      .delete()
+      .eq('id', id)
+
+    if (error) throw error
+
+    revalidatePath('/succession/admin/approaches')
+    return { success: true }
+  } catch (error: any) {
+    console.error('Error deleting approach:', error)
+    return { success: false, error: 'Failed to delete approach record' }
+  }
+}
+
+// ============================================================================
+// STEERING COMMITTEE MEETING SERVER ACTIONS
+// ============================================================================
+
+/**
+ * Create a steering committee meeting
+ * Admin only action
+ */
+export async function createMeeting(
+  formData: FormData
+): Promise<ActionResult> {
+  try {
+    const supabase = await createClient()
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
+      return { success: false, error: 'Authentication required' }
+    }
+
+    const data = Object.fromEntries(formData)
+
+    const { CreateMeetingSchema } = await import('@/lib/validations/succession')
+    const validated = CreateMeetingSchema.parse({
+      ...data,
+      created_by: user.id,
+    })
+
+    const { data: meeting, error } = await supabase
+      .from('succession_meetings')
+      .insert(validated)
+      .select(`
+        *,
+        cycle:succession_cycles (id, cycle_name, year),
+        created_by_member:members!succession_meetings_created_by_fkey (id, first_name, last_name)
+      `)
+      .single()
+
+    if (error) throw error
+
+    revalidatePath('/succession/admin/meetings')
+    revalidatePath(`/succession/admin/cycles/${validated.cycle_id}`)
+    return { success: true, data: meeting }
+  } catch (error: any) {
+    if (error.name === 'ZodError') {
+      return { success: false, error: error.issues[0].message }
+    }
+    console.error('Error creating meeting:', error)
+    return { success: false, error: 'Failed to create meeting' }
+  }
+}
+
+/**
+ * Update a steering committee meeting
+ * Admin only action
+ */
+export async function updateMeeting(
+  id: string,
+  formData: FormData
+): Promise<ActionResult> {
+  try {
+    const supabase = await createClient()
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
+      return { success: false, error: 'Authentication required' }
+    }
+
+    const data = Object.fromEntries(formData)
+
+    const { UpdateMeetingSchema } = await import('@/lib/validations/succession')
+    const validated = UpdateMeetingSchema.parse({ ...data, id })
+
+    const { data: meeting, error } = await supabase
+      .from('succession_meetings')
+      .update({
+        ...validated,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select(`
+        *,
+        cycle:succession_cycles (id, cycle_name, year),
+        created_by_member:members!succession_meetings_created_by_fkey (id, first_name, last_name)
+      `)
+      .single()
+
+    if (error) throw error
+
+    revalidatePath('/succession/admin/meetings')
+    revalidatePath(`/succession/admin/meetings/${id}`)
+    return { success: true, data: meeting }
+  } catch (error: any) {
+    if (error.name === 'ZodError') {
+      return { success: false, error: error.issues[0].message }
+    }
+    console.error('Error updating meeting:', error)
+    return { success: false, error: 'Failed to update meeting' }
+  }
+}
+
+/**
+ * Update meeting status
+ * Admin only action
+ */
+export async function updateMeetingStatus(
+  id: string,
+  status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled'
+): Promise<ActionResult> {
+  try {
+    const supabase = await createClient()
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
+      return { success: false, error: 'Authentication required' }
+    }
+
+    const { data: meeting, error } = await supabase
+      .from('succession_meetings')
+      .update({
+        status,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (error) throw error
+
+    revalidatePath('/succession/admin/meetings')
+    revalidatePath(`/succession/admin/meetings/${id}`)
+    return { success: true, data: meeting }
+  } catch (error: any) {
+    console.error('Error updating meeting status:', error)
+    return { success: false, error: 'Failed to update meeting status' }
+  }
+}
+
+/**
+ * Delete a meeting
+ * Admin only action - only allowed for scheduled meetings with no votes
+ */
+export async function deleteMeeting(id: string): Promise<ActionResult> {
+  try {
+    const supabase = await createClient()
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
+      return { success: false, error: 'Authentication required' }
+    }
+
+    // Check meeting status
+    const { data: meeting } = await supabase
+      .from('succession_meetings')
+      .select('status')
+      .eq('id', id)
+      .single()
+
+    if (!meeting) {
+      return { success: false, error: 'Meeting not found' }
+    }
+
+    if (meeting.status !== 'scheduled') {
+      return {
+        success: false,
+        error: 'Only scheduled meetings can be deleted',
+      }
+    }
+
+    // Check for votes
+    const { count } = await supabase
+      .from('succession_votes')
+      .select('id', { count: 'exact', head: true })
+      .eq('meeting_id', id)
+
+    if (count && count > 0) {
+      return {
+        success: false,
+        error: 'Cannot delete meeting with existing votes',
+      }
+    }
+
+    const { error } = await supabase
+      .from('succession_meetings')
+      .delete()
+      .eq('id', id)
+
+    if (error) throw error
+
+    revalidatePath('/succession/admin/meetings')
+    return { success: true }
+  } catch (error: any) {
+    console.error('Error deleting meeting:', error)
+    return { success: false, error: 'Failed to delete meeting' }
+  }
+}
+
+// ============================================================================
+// VOTING SERVER ACTIONS
+// ============================================================================
+
+/**
+ * Submit a vote for a nominee
+ * Steering committee member action
+ */
+export async function submitVote(
+  formData: FormData
+): Promise<ActionResult> {
+  try {
+    const supabase = await createClient()
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
+      return { success: false, error: 'Authentication required' }
+    }
+
+    const data = Object.fromEntries(formData)
+
+    const { CreateVoteSchema } = await import('@/lib/validations/succession')
+    const validated = CreateVoteSchema.parse({
+      ...data,
+      voter_member_id: user.id,
+    })
+
+    const { data: vote, error } = await supabase
+      .from('succession_votes')
+      .insert(validated)
+      .select(`
+        *,
+        meeting:succession_meetings (id, meeting_date, meeting_type),
+        position:succession_positions (id, title, hierarchy_level),
+        nominee:members!succession_votes_nominee_id_fkey (id, first_name, last_name, avatar_url),
+        voter:members!succession_votes_voter_member_id_fkey (id, first_name, last_name)
+      `)
+      .single()
+
+    if (error) {
+      if (error.code === '23505') {
+        return {
+          success: false,
+          error: 'You have already voted for this nominee in this meeting',
+        }
+      }
+      throw error
+    }
+
+    revalidatePath('/succession/admin/meetings')
+    revalidatePath(`/succession/admin/meetings/${validated.meeting_id}`)
+    return { success: true, data: vote }
+  } catch (error: any) {
+    if (error.name === 'ZodError') {
+      return { success: false, error: error.issues[0].message }
+    }
+    console.error('Error submitting vote:', error)
+    return { success: false, error: 'Failed to submit vote' }
+  }
+}
+
+/**
+ * Update a vote
+ * Can only update your own vote
+ */
+export async function updateVote(
+  id: string,
+  vote: 'yes' | 'no' | 'abstain',
+  comments?: string
+): Promise<ActionResult> {
+  try {
+    const supabase = await createClient()
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
+      return { success: false, error: 'Authentication required' }
+    }
+
+    // Check ownership
+    const { data: existing } = await supabase
+      .from('succession_votes')
+      .select('voter_member_id')
+      .eq('id', id)
+      .single()
+
+    if (!existing) {
+      return { success: false, error: 'Vote not found' }
+    }
+
+    if (existing.voter_member_id !== user.id) {
+      return { success: false, error: 'You can only update your own votes' }
+    }
+
+    const { data: updatedVote, error } = await supabase
+      .from('succession_votes')
+      .update({
+        vote,
+        comments: comments || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select(`
+        *,
+        meeting:succession_meetings (id, meeting_date, meeting_type),
+        position:succession_positions (id, title, hierarchy_level),
+        nominee:members!succession_votes_nominee_id_fkey (id, first_name, last_name, avatar_url)
+      `)
+      .single()
+
+    if (error) throw error
+
+    revalidatePath('/succession/admin/meetings')
+    return { success: true, data: updatedVote }
+  } catch (error: any) {
+    console.error('Error updating vote:', error)
+    return { success: false, error: 'Failed to update vote' }
+  }
+}
+
+/**
+ * Delete a vote
+ * Can only delete your own vote before meeting is completed
+ */
+export async function deleteVote(id: string): Promise<ActionResult> {
+  try {
+    const supabase = await createClient()
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
+      return { success: false, error: 'Authentication required' }
+    }
+
+    // Check ownership and meeting status
+    const { data: vote } = await supabase
+      .from('succession_votes')
+      .select(`
+        voter_member_id,
+        meeting:succession_meetings (status)
+      `)
+      .eq('id', id)
+      .single()
+
+    if (!vote) {
+      return { success: false, error: 'Vote not found' }
+    }
+
+    if (vote.voter_member_id !== user.id) {
+      return { success: false, error: 'You can only delete your own votes' }
+    }
+
+    if ((vote.meeting as any).status === 'completed') {
+      return {
+        success: false,
+        error: 'Cannot delete votes from completed meetings',
+      }
+    }
+
+    const { error } = await supabase
+      .from('succession_votes')
+      .delete()
+      .eq('id', id)
+
+    if (error) throw error
+
+    revalidatePath('/succession/admin/meetings')
+    return { success: true }
+  } catch (error: any) {
+    console.error('Error deleting vote:', error)
+    return { success: false, error: 'Failed to delete vote' }
+  }
+}
+
+// ============================================================================
+// TIMELINE AUTOMATION SERVER ACTIONS
+// ============================================================================
+
+/**
+ * Seed timeline steps for a succession cycle
+ * Creates the standard 7-week workflow automatically
+ * Admin only action
+ */
+export async function seedTimelineSteps(
+  cycleId: string,
+  startDate: Date
+): Promise<ActionResult<{ count: number }>> {
+  try {
+    const supabase = await createClient()
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
+      return { success: false, error: 'Authentication required' }
+    }
+
+    // Define the 7-week succession timeline
+    const timelineSteps = [
+      {
+        step_number: 1,
+        step_name: 'Nominations Open',
+        description: 'Members can nominate candidates for leadership positions',
+        duration_days: 7,
+        auto_trigger_action: 'open_nominations',
+      },
+      {
+        step_number: 2,
+        step_name: 'Self Applications',
+        description: 'Members can self-apply for eligible positions',
+        duration_days: 7,
+        auto_trigger_action: 'open_applications',
+      },
+      {
+        step_number: 3,
+        step_name: 'Evaluation & Scoring',
+        description: 'Evaluators score nominees based on criteria',
+        duration_days: 7,
+        auto_trigger_action: 'start_evaluations',
+      },
+      {
+        step_number: 4,
+        step_name: 'Regional Chair Review',
+        description: 'RC reviews top candidates and provides feedback',
+        duration_days: 7,
+        auto_trigger_action: 'notify_rc',
+      },
+      {
+        step_number: 5,
+        step_name: 'Steering Committee Meeting',
+        description: 'Committee meets to vote on final candidates',
+        duration_days: 7,
+        auto_trigger_action: 'schedule_meeting',
+      },
+      {
+        step_number: 6,
+        step_name: 'Candidate Approach',
+        description: 'Selected candidates are approached for acceptance',
+        duration_days: 7,
+        auto_trigger_action: 'approach_candidates',
+      },
+      {
+        step_number: 7,
+        step_name: 'Final Selection & Announcement',
+        description: 'Final selections confirmed and announced',
+        duration_days: 7,
+        auto_trigger_action: 'announce_results',
+      },
+    ]
+
+    // Calculate dates for each step
+    let currentDate = new Date(startDate)
+    const stepsToInsert = timelineSteps.map((step) => {
+      const stepStartDate = new Date(currentDate)
+      const stepEndDate = new Date(currentDate)
+      stepEndDate.setDate(stepEndDate.getDate() + step.duration_days - 1)
+
+      const stepData = {
+        cycle_id: cycleId,
+        step_number: step.step_number,
+        step_name: step.step_name,
+        description: step.description,
+        start_date: stepStartDate.toISOString().split('T')[0],
+        end_date: stepEndDate.toISOString().split('T')[0],
+        status: 'pending' as const,
+        auto_trigger_action: step.auto_trigger_action,
+      }
+
+      // Move to next week
+      currentDate.setDate(currentDate.getDate() + step.duration_days)
+
+      return stepData
+    })
+
+    const { data: insertedSteps, error } = await supabase
+      .from('succession_timeline_steps')
+      .insert(stepsToInsert)
+      .select()
+
+    if (error) throw error
+
+    revalidatePath(`/succession/admin/cycles/${cycleId}`)
+    revalidatePath('/succession/admin/timeline')
+    return { success: true, data: { count: insertedSteps?.length || 0 } }
+  } catch (error: any) {
+    console.error('Error seeding timeline steps:', error)
+    return { success: false, error: 'Failed to seed timeline steps' }
+  }
+}
+
+/**
+ * Auto-create succession cycle (typically triggered on Sept 1st)
+ * Creates a new cycle and seeds timeline steps
+ * Can be called via scheduled job or Edge Function
+ */
+export async function autoCreateSuccessionCycle(
+  year: number
+): Promise<ActionResult> {
+  try {
+    const supabase = await createClient()
+
+    // Check if cycle already exists for this year
+    const { data: existingCycle } = await supabase
+      .from('succession_cycles')
+      .select('id')
+      .eq('year', year)
+      .single()
+
+    if (existingCycle) {
+      return {
+        success: false,
+        error: `Succession cycle for ${year} already exists`,
+      }
+    }
+
+    // Create the new cycle
+    const cycleName = `Leadership Succession ${year}`
+    const startDate = new Date(year, 8, 1) // Sept 1 (month is 0-indexed)
+    const endDate = new Date(year, 10, 15) // Nov 15 (7 weeks + buffer)
+
+    const { data: cycle, error: cycleError } = await supabase
+      .from('succession_cycles')
+      .insert({
+        year,
+        cycle_name: cycleName,
+        description: `Annual leadership succession cycle for ${year}`,
+        start_date: startDate.toISOString().split('T')[0],
+        end_date: endDate.toISOString().split('T')[0],
+        status: 'active',
+        version: 1,
+      })
+      .select()
+      .single()
+
+    if (cycleError) throw cycleError
+
+    // Seed timeline steps
+    const timelineResult = await seedTimelineSteps(cycle.id, startDate)
+
+    if (!timelineResult.success) {
+      console.error('Failed to seed timeline steps:', timelineResult.error)
+    }
+
+    revalidatePath('/succession/admin/cycles')
+    revalidatePath('/succession')
+    return {
+      success: true,
+      data: {
+        cycle,
+        timelineStepsCreated: timelineResult.data?.count || 0,
+      },
+    }
+  } catch (error: any) {
+    console.error('Error auto-creating succession cycle:', error)
+    return { success: false, error: 'Failed to auto-create succession cycle' }
   }
 }

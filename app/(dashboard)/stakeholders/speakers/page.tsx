@@ -16,7 +16,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { getSpeakers } from '@/lib/data/stakeholder'
 import { SpeakersTable } from '@/components/stakeholders/speakers-table'
-import { getCurrentChapterId } from '@/lib/auth'
+import { getCurrentChapterId, requireRole } from '@/lib/auth'
 
 export const metadata = {
   title: 'Speakers',
@@ -101,7 +101,9 @@ function TableSkeleton() {
   )
 }
 
-export default function SpeakersPage() {
+export default async function SpeakersPage() {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']);
+
   return (
     <div className="flex flex-col gap-8">
       <div className="flex items-center justify-between">

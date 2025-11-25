@@ -9,7 +9,7 @@ import { Suspense } from 'react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
-import { getCurrentUser } from '@/lib/data/auth';
+import { getCurrentUser, requireRole } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { VerticalForm } from '@/components/verticals/vertical-form';
@@ -20,7 +20,8 @@ export const metadata = {
   description: 'Add a new vertical to your chapter'
 };
 
-export default function NewVerticalPage() {
+export default async function NewVerticalPage() {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member'])
   return (
     <div className='flex flex-col gap-8 max-w-9xl mx-auto'>
       {/* Header */}

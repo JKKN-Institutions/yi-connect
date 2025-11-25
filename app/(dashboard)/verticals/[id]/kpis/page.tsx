@@ -9,7 +9,7 @@ import { Suspense } from 'react'
 import Link from 'next/link'
 import { redirect, notFound } from 'next/navigation'
 import { ArrowLeft, Target, TrendingUp, AlertTriangle, CheckCircle } from 'lucide-react'
-import { getCurrentUser } from '@/lib/data/auth'
+import { getCurrentUser, requireRole } from '@/lib/auth'
 import {
   getVerticalById,
   getPlanKPIs,
@@ -34,7 +34,8 @@ interface PageProps {
   params: Promise<{ id: string }>
 }
 
-export default function KPIManagementPage({ params }: PageProps) {
+export default async function KPIManagementPage({ params }: PageProps) {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member'])
   return (
     <div className="flex flex-col gap-8">
       {/* Header */}

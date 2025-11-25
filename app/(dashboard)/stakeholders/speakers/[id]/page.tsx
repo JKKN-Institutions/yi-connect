@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { getSpeakerById } from '@/lib/data/stakeholder'
 import { StakeholderStatusBadge, HealthTierBadge } from '@/components/stakeholders/status-badges'
+import { requireRole } from '@/lib/auth'
 
 interface SpeakerDetailPageProps {
   params: Promise<{ id: string }>
@@ -154,7 +155,9 @@ async function SpeakerDetailContent({ params }: SpeakerDetailPageProps) {
   )
 }
 
-export default function SpeakerDetailPage({ params }: SpeakerDetailPageProps) {
+export default async function SpeakerDetailPage({ params }: SpeakerDetailPageProps) {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']);
+
   return (
     <Suspense fallback={<div className="p-8">Loading...</div>}>
       <SpeakerDetailContent params={params} />

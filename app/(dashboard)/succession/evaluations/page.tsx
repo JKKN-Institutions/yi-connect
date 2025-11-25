@@ -5,6 +5,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentActiveCycle } from '@/lib/data/succession'
 import { EvaluatorNominationsTable } from '@/components/succession/tables/evaluator-nominations-table'
+import { requireRole } from '@/lib/auth'
 
 export const metadata = {
   title: 'My Evaluations | Succession',
@@ -226,7 +227,9 @@ function EvaluationsLoading() {
   )
 }
 
-export default function EvaluationsPage() {
+export default async function EvaluationsPage() {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member'])
+
   return (
     <div className="space-y-6">
       <div>

@@ -53,6 +53,7 @@ import {
   InteractionOutcomeBadge
 } from '@/components/stakeholders/status-badges';
 import { getSchoolById } from '@/lib/data/stakeholder';
+import { requireRole } from '@/lib/auth';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -653,7 +654,9 @@ async function SchoolDetailPageContent({ params }: PageProps) {
   );
 }
 
-export default function SchoolDetailPage({ params }: PageProps) {
+export default async function SchoolDetailPage({ params }: PageProps) {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']);
+
   return (
     <Suspense fallback={<SchoolDetailSkeleton />}>
       <SchoolDetailPageContent params={params} />

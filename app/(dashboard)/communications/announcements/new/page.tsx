@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Skeleton } from "@/components/ui/skeleton";
 import { AnnouncementComposer } from "@/components/communication/announcement-composer";
 import { getTemplates, getSegments } from "@/lib/data/communication";
+import { requireRole } from "@/lib/auth";
 import Link from "next/link";
 
 export const metadata: Metadata = {
@@ -14,7 +15,8 @@ export const metadata: Metadata = {
 };
 
 
-export default function NewAnnouncementPage() {
+export default async function NewAnnouncementPage() {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member']);
   return (
     <div className="flex flex-col gap-6">
       {/* Header */}

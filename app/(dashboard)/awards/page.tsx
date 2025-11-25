@@ -1,5 +1,6 @@
 import { Suspense } from 'react'
 import Link from 'next/link'
+import { requireRole } from '@/lib/auth'
 import { getActiveCycles, getAwardCategories } from '@/lib/data/awards'
 import { CycleCard, CategoryCard } from '@/components/awards'
 import { Button } from '@/components/ui/button'
@@ -156,7 +157,9 @@ function QuickActions() {
   )
 }
 
-export default function AwardsPage() {
+export default async function AwardsPage() {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member', 'Member'])
+
   return (
     <div className="container mx-auto py-8 space-y-8">
       {/* Header */}

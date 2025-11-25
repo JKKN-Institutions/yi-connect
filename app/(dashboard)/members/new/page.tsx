@@ -7,6 +7,7 @@
 import { Suspense } from 'react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
+import { requireRole } from '@/lib/auth';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { getAllChapters } from '@/lib/data/chapters';
 import { MemberForm } from '@/components/members';
@@ -93,7 +94,9 @@ async function NewMemberForm() {
 }
 
 // Main page component
-export default function NewMemberPage() {
+export default async function NewMemberPage() {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member'])
+
   return (
     <div className='space-y-6 max-w-9xl mx-auto'>
       {/* Back Button */}

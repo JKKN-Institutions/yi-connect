@@ -34,6 +34,7 @@ import {
   CARPOOL_STATUS_LABELS,
   WAITLIST_STATUS_LABELS
 } from '@/types/industrial-visit';
+import { requireRole } from '@/lib/auth';
 
 export const metadata: Metadata = {
   title: 'My Industrial Visit Bookings | Yi Connect',
@@ -43,6 +44,9 @@ export const metadata: Metadata = {
 async function MyBookingsContent() {
   // Prevent caching for authenticated pages (Next.js 16)
   noStore();
+
+  // All authenticated users can view their bookings
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member', 'Member']);
 
   const [bookings, waitlistEntries] = await Promise.all([
     getMyIVBookings(),

@@ -1,6 +1,7 @@
 import { Suspense } from 'react'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import { requireRole } from '@/lib/auth'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { NominationStatusCard } from '@/components/awards'
 import { Button } from '@/components/ui/button'
@@ -230,6 +231,8 @@ async function NominationsContent({ userId }: { userId: string }) {
 }
 
 export default async function NominationsPage() {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member', 'Member'])
+
   const supabase = await createServerSupabaseClient()
 
   const {

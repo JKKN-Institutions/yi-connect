@@ -5,6 +5,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { getCurrentActiveCycle, getSuccessionPositions } from '@/lib/data/succession'
 import { ApplicationForm } from '@/components/succession/forms/application-form'
 import { createClient } from '@/lib/supabase/server'
+import { requireRole } from '@/lib/auth'
 
 export const metadata = {
   title: 'Apply for Position | Succession',
@@ -142,7 +143,9 @@ function ApplicationLoading() {
   )
 }
 
-export default function ApplyPage() {
+export default async function ApplyPage() {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member', 'Member'])
+
   return (
     <div className="space-y-6">
       <div>

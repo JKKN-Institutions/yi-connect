@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
-import { getCurrentUser } from "@/lib/auth";
+import { requireRole, getCurrentUser } from "@/lib/auth";
 import { getNotifications, getUnreadNotificationsCount } from "@/lib/data/communication";
 import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -25,6 +25,7 @@ interface NotificationsPageProps {
 }
 
 async function NotificationsPageContent({ searchParams }: NotificationsPageProps) {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member']);
   const user = await getCurrentUser();
 
   if (!user) {

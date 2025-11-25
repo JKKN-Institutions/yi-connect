@@ -17,7 +17,7 @@ import {
   CardTitle
 } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { getCurrentChapterId } from '@/lib/auth';
+import { getCurrentChapterId, requireRole } from '@/lib/auth';
 import { SchoolForm } from '@/components/stakeholders/school-form';
 
 export const metadata = {
@@ -63,7 +63,9 @@ function FormSkeleton() {
   );
 }
 
-export default function NewSchoolPage() {
+export default async function NewSchoolPage() {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']);
+
   return (
     <div className='flex flex-col gap-8 max-w-9xl mx-auto'>
       <div className='flex items-center gap-4'>

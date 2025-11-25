@@ -14,7 +14,7 @@ import {
   DollarSign,
   Heart
 } from 'lucide-react';
-import { getCurrentChapterId } from '@/lib/auth';
+import { getCurrentChapterId, requireRole } from '@/lib/auth';
 import { BenchmarkChart } from '@/components/national/benchmark-chart';
 import type { NationalBenchmark, BenchmarkSummary } from '@/types/national-integration';
 
@@ -24,6 +24,9 @@ export const metadata = {
 };
 
 async function BenchmarkDashboardContent() {
+  // Require National Admin role
+  await requireRole(['Super Admin', 'National Admin']);
+
   const chapterId = await getCurrentChapterId();
 
   if (!chapterId) {

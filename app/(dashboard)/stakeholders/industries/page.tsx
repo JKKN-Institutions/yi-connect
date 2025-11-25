@@ -19,7 +19,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { getIndustries } from '@/lib/data/stakeholder'
 import { IndustriesTable } from '@/components/stakeholders/industries-table'
-import { getCurrentChapterId } from '@/lib/auth'
+import { getCurrentChapterId, requireRole } from '@/lib/auth'
 
 export const metadata = {
   title: 'Industries',
@@ -128,7 +128,9 @@ function TableSkeleton() {
   )
 }
 
-export default function IndustriesPage() {
+export default async function IndustriesPage() {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']);
+
   return (
     <div className="flex flex-col gap-8">
       <div className="flex items-center justify-between">

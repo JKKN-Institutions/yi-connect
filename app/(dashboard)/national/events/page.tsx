@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useState } from 'react';
+import { Suspense, useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -92,6 +92,10 @@ export default function NationalEventsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [eventTypeFilter, setEventTypeFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+
+  // Note: This is a client component. Role-based access control is enforced
+  // at the layout level for the /national route segment.
+  // If additional protection is needed, implement server-side checks in the data fetching layer.
 
   // Filter events based on search and filters
   const filteredEvents = mockEvents.filter((event) => {

@@ -1,5 +1,6 @@
 import { Suspense } from 'react'
 import Link from 'next/link'
+import { requireRole } from '@/lib/auth'
 import { getAwardCycles } from '@/lib/data/awards'
 import { CycleCard } from '@/components/awards'
 import { Button } from '@/components/ui/button'
@@ -39,7 +40,9 @@ async function CyclesSection({ status }: { status?: string }) {
   )
 }
 
-export default function CyclesManagementPage() {
+export default async function CyclesManagementPage() {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member'])
+
   return (
     <div className="container mx-auto py-8 space-y-6">
       {/* Header */}

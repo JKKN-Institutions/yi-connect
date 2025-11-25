@@ -3,12 +3,15 @@ import { ArrowLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { SuccessionPositionForm } from '@/components/succession/forms/succession-position-form'
+import { requireRole } from '@/lib/auth'
 
 export default async function NewPositionPage({
   params,
 }: {
   params: Promise<{ id: string }>
 }) {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member'])
+
   const { id } = await params;
   return (
     <div className="space-y-6">

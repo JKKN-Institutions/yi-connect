@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { getVendorById } from '@/lib/data/stakeholder'
 import { StakeholderStatusBadge, HealthTierBadge } from '@/components/stakeholders/status-badges'
+import { requireRole } from '@/lib/auth'
 
 interface VendorDetailPageProps {
   params: Promise<{ id: string }>
@@ -120,7 +121,9 @@ async function VendorDetailContent({ params }: VendorDetailPageProps) {
   )
 }
 
-export default function VendorDetailPage({ params }: VendorDetailPageProps) {
+export default async function VendorDetailPage({ params }: VendorDetailPageProps) {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']);
+
   return (
     <Suspense fallback={<div className="p-8">Loading...</div>}>
       <VendorDetailContent params={params} />

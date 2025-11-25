@@ -8,6 +8,7 @@ import { Suspense } from 'react';
 import { notFound, redirect } from 'next/navigation';
 import Link from 'next/link';
 import { format } from 'date-fns';
+import { requireRole } from '@/lib/auth';
 import {
   ArrowLeft,
   Calendar,
@@ -80,7 +81,9 @@ interface PageProps {
   }>;
 }
 
-export default function EventDetailPage({ params }: PageProps) {
+export default async function EventDetailPage({ params }: PageProps) {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member', 'Member']);
+
   return (
     <Suspense fallback={<EventDetailSkeleton />}>
       <EventDetailContent params={params} />

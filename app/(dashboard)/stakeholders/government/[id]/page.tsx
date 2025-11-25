@@ -54,6 +54,7 @@ import {
   HealthTierBadge,
   MouStatusBadge,
 } from '@/components/stakeholders/status-badges'
+import { requireRole } from '@/lib/auth'
 
 interface GovernmentDetailPageProps {
   params: Promise<{ id: string }>
@@ -704,7 +705,9 @@ async function GovernmentDetailContent({ params }: GovernmentDetailPageProps) {
   )
 }
 
-export default function GovernmentDetailPage({ params }: GovernmentDetailPageProps) {
+export default async function GovernmentDetailPage({ params }: GovernmentDetailPageProps) {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']);
+
   return (
     <Suspense fallback={<div className="p-8"><ContentSkeleton /></div>}>
       <GovernmentDetailContent params={params} />

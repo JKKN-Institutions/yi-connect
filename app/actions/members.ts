@@ -10,6 +10,7 @@
 import { createServerSupabaseClient, createAdminSupabaseClient } from '@/lib/supabase/server';
 import { revalidateTag } from 'next/cache';
 import { redirect } from 'next/navigation';
+import { requireRole } from '@/lib/auth';
 import {
   createMemberSchema,
   updateMemberSchema,
@@ -307,6 +308,7 @@ export async function updateMember(
 
 /**
  * Delete a member (soft delete by setting is_active = false)
+ * Used from member detail page - redirects after deletion
  */
 export async function deleteMember(memberId: string): Promise<FormState> {
   const supabase = await createServerSupabaseClient();
@@ -328,6 +330,270 @@ export async function deleteMember(memberId: string): Promise<FormState> {
   revalidateTag('analytics-all', 'max');
 
   redirect('/members');
+}
+
+/**
+ * Deactivate a member (soft disable in both members and profiles tables)
+ * The member can no longer login but data is preserved
+ * Super Admin, National Admin, Chair, and Co-Chair can perform this action
+ */
+export async function deactivateMemberFromTable(
+  memberId: string
+): Promise<{ success: boolean; message: string }> {
+  // Check permission - Super Admin, National Admin, Chair, Co-Chair can deactivate
+  try {
+    await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair']);
+  } catch {
+    return {
+      success: false,
+      message: 'You do not have permission to deactivate members.'
+    };
+  }
+
+  const adminClient = createAdminSupabaseClient();
+
+  // First get member info for the message
+  const { data: member } = await adminClient
+    .from('members')
+    .select('id, profiles!inner(full_name, email)')
+    .eq('id', memberId)
+    .single();
+
+  if (!member) {
+    return {
+      success: false,
+      message: 'Member not found.'
+    };
+  }
+
+  const memberName = (member?.profiles as any)?.full_name || 'Member';
+  const memberEmail = (member?.profiles as any)?.email;
+
+  // Deactivate in members table
+  const { error: memberError } = await adminClient
+    .from('members')
+    .update({ is_active: false, membership_status: 'inactive' })
+    .eq('id', memberId);
+
+  if (memberError) {
+    return {
+      success: false,
+      message: memberError.message || 'Failed to deactivate member.'
+    };
+  }
+
+  // Deactivate in profiles table
+  const { error: profileError } = await adminClient
+    .from('profiles')
+    .update({ is_active: false })
+    .eq('id', memberId);
+
+  if (profileError) {
+    console.error('Failed to deactivate profile:', profileError);
+  }
+
+  // Deactivate in approved_emails table
+  if (memberEmail) {
+    await adminClient
+      .from('approved_emails')
+      .update({ is_active: false })
+      .eq('email', memberEmail);
+  }
+
+  // Invalidate caches
+  revalidateTag('members-list', 'max');
+  revalidateTag(`member-${memberId}`, 'max');
+  revalidateTag('analytics-all', 'max');
+
+  return {
+    success: true,
+    message: `${memberName} has been deactivated successfully.`
+  };
+}
+
+/**
+ * Reactivate a member (re-enable in both members and profiles tables)
+ * The member can login again after reactivation
+ * Super Admin, National Admin, Chair, and Co-Chair can perform this action
+ */
+export async function reactivateMemberFromTable(
+  memberId: string
+): Promise<{ success: boolean; message: string }> {
+  // Check permission - Super Admin, National Admin, Chair, Co-Chair can reactivate
+  try {
+    await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair']);
+  } catch {
+    return {
+      success: false,
+      message: 'You do not have permission to reactivate members.'
+    };
+  }
+
+  const adminClient = createAdminSupabaseClient();
+
+  // First get member info for the message
+  const { data: member } = await adminClient
+    .from('members')
+    .select('id, profiles!inner(full_name, email)')
+    .eq('id', memberId)
+    .single();
+
+  if (!member) {
+    return {
+      success: false,
+      message: 'Member not found.'
+    };
+  }
+
+  const memberName = (member?.profiles as any)?.full_name || 'Member';
+  const memberEmail = (member?.profiles as any)?.email;
+
+  // Reactivate in members table
+  const { error: memberError } = await adminClient
+    .from('members')
+    .update({ is_active: true, membership_status: 'active' })
+    .eq('id', memberId);
+
+  if (memberError) {
+    return {
+      success: false,
+      message: memberError.message || 'Failed to reactivate member.'
+    };
+  }
+
+  // Reactivate in profiles table
+  const { error: profileError } = await adminClient
+    .from('profiles')
+    .update({ is_active: true })
+    .eq('id', memberId);
+
+  if (profileError) {
+    console.error('Failed to reactivate profile:', profileError);
+  }
+
+  // Reactivate in approved_emails table
+  if (memberEmail) {
+    await adminClient
+      .from('approved_emails')
+      .update({ is_active: true })
+      .eq('email', memberEmail);
+  }
+
+  // Invalidate caches
+  revalidateTag('members-list', 'max');
+  revalidateTag(`member-${memberId}`, 'max');
+  revalidateTag('analytics-all', 'max');
+
+  return {
+    success: true,
+    message: `${memberName} has been reactivated successfully.`
+  };
+}
+
+/**
+ * Permanently delete a member (removes from members, profiles, and auth)
+ * WARNING: This action cannot be undone
+ * Only Super Admin and National Admin can perform this action
+ */
+export async function deleteMemberPermanently(
+  memberId: string
+): Promise<{ success: boolean; message: string }> {
+  // Check permission - only Super Admin and National Admin can delete
+  try {
+    await requireRole(['Super Admin', 'National Admin']);
+  } catch {
+    return {
+      success: false,
+      message: 'You do not have permission to delete members.'
+    };
+  }
+
+  const adminClient = createAdminSupabaseClient();
+
+  // First get member info for the message
+  const { data: member } = await adminClient
+    .from('members')
+    .select('id, profiles!inner(full_name, email)')
+    .eq('id', memberId)
+    .single();
+
+  if (!member) {
+    return {
+      success: false,
+      message: 'Member not found.'
+    };
+  }
+
+  const memberName = (member?.profiles as any)?.full_name || 'Member';
+  const memberEmail = (member?.profiles as any)?.email;
+
+  try {
+    // 1. First, handle approved_emails foreign key constraint
+    // Update approved_emails to remove the reference to this member
+    if (memberEmail) {
+      await adminClient
+        .from('approved_emails')
+        .update({ created_member_id: null, member_created: false })
+        .eq('email', memberEmail);
+    }
+
+    // Also update any approved_emails where this member was the created_member_id
+    await adminClient
+      .from('approved_emails')
+      .update({ created_member_id: null })
+      .eq('created_member_id', memberId);
+
+    // 2. Delete from members table (this will cascade delete skills, certifications, etc.)
+    const { error: memberError } = await adminClient
+      .from('members')
+      .delete()
+      .eq('id', memberId);
+
+    if (memberError) {
+      throw new Error(memberError.message);
+    }
+
+    // 3. Delete from profiles table
+    const { error: profileError } = await adminClient
+      .from('profiles')
+      .delete()
+      .eq('id', memberId);
+
+    if (profileError) {
+      console.error('Failed to delete profile:', profileError);
+    }
+
+    // 4. Delete from approved_emails table (the email whitelist entry)
+    if (memberEmail) {
+      await adminClient
+        .from('approved_emails')
+        .delete()
+        .eq('email', memberEmail);
+    }
+
+    // 5. Delete auth user
+    const { error: authError } = await adminClient.auth.admin.deleteUser(memberId);
+
+    if (authError) {
+      console.error('Failed to delete auth user:', authError);
+    }
+
+    // Invalidate caches
+    revalidateTag('members-list', 'max');
+    revalidateTag(`member-${memberId}`, 'max');
+    revalidateTag('analytics-all', 'max');
+    revalidateTag('approved-emails', 'max');
+
+    return {
+      success: true,
+      message: `${memberName} has been permanently deleted.`
+    };
+  } catch (error: any) {
+    return {
+      success: false,
+      message: error.message || 'Failed to delete member permanently.'
+    };
+  }
 }
 
 // ============================================================================

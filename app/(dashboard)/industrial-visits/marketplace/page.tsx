@@ -15,6 +15,7 @@ import { IVDataTable } from '@/components/industrial-visits/iv-data-table/iv-dat
 import { ivColumns } from '@/components/industrial-visits/iv-data-table/columns';
 import { getAvailableIVs } from '@/lib/data/industrial-visits';
 import { getCurrentUserChapter } from '@/lib/data/members';
+import { requireRole } from '@/lib/auth';
 
 export const metadata: Metadata = {
   title: 'Industrial Visits Marketplace | Yi Connect',
@@ -22,6 +23,9 @@ export const metadata: Metadata = {
 };
 
 async function IVMarketplaceContent() {
+  // All authenticated users can view the marketplace
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member', 'Member']);
+
   // Get current user's chapter
   const chapter = await getCurrentUserChapter();
 

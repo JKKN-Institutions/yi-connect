@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { getDocumentWithDetails } from '@/lib/data/knowledge';
 import { getDocumentDownloadUrl } from '@/app/actions/knowledge';
+import { requireRole } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -277,6 +278,8 @@ async function DocumentDetails({ documentId }: { documentId: string }) {
 }
 
 export default async function DocumentPage({ params }: PageProps) {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member', 'Member']);
+
   const { id } = await params;
 
   return (

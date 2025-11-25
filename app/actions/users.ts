@@ -7,9 +7,10 @@
 
 'use server'
 
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createServerSupabaseClient, createAdminSupabaseClient } from '@/lib/supabase/server'
 import { requireRole } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
+import { revalidateTag } from 'next/cache'
 import { redirect } from 'next/navigation'
 import {
   updateUserProfileSchema,
@@ -752,5 +753,280 @@ export async function inviteUser(
     return {
       message: error.message || 'An unexpected error occurred.'
     }
+  }
+}
+
+// ============================================================================
+// User Deactivate/Reactivate/Delete Actions (for Table Row Actions)
+// ============================================================================
+
+/**
+ * Deactivate a user from the table (soft disable)
+ * Updates is_active in profiles, members, and approved_emails tables
+ * Only Super Admin and National Admin can perform this action
+ */
+export async function deactivateUserFromTable(
+  userId: string
+): Promise<{ success: boolean; message: string }> {
+  try {
+    const { user } = await requireRole(['Super Admin', 'National Admin']);
+
+    // Prevent self-deactivation
+    if (userId === user.id) {
+      return {
+        success: false,
+        message: 'You cannot deactivate your own account.'
+      };
+    }
+
+    const adminClient = createAdminSupabaseClient();
+
+    // Get user info
+    const { data: profile } = await adminClient
+      .from('profiles')
+      .select('id, full_name, email')
+      .eq('id', userId)
+      .single();
+
+    if (!profile) {
+      return {
+        success: false,
+        message: 'User not found.'
+      };
+    }
+
+    const userName = profile.full_name || 'User';
+
+    // Deactivate in profiles table
+    const { error: profileError } = await adminClient
+      .from('profiles')
+      .update({ is_active: false })
+      .eq('id', userId);
+
+    if (profileError) {
+      console.error('Failed to deactivate profile:', profileError);
+    }
+
+    // Deactivate in members table (if exists)
+    await adminClient
+      .from('members')
+      .update({ is_active: false, membership_status: 'inactive' })
+      .eq('id', userId);
+
+    // Deactivate in approved_emails table
+    if (profile.email) {
+      await adminClient
+        .from('approved_emails')
+        .update({ is_active: false })
+        .eq('email', profile.email);
+    }
+
+    // Invalidate caches
+    revalidatePath('/admin/users');
+    revalidatePath(`/admin/users/${userId}`);
+    revalidateTag('members-list', 'max');
+
+    return {
+      success: true,
+      message: `${userName} has been deactivated successfully.`
+    };
+  } catch (error: any) {
+    return {
+      success: false,
+      message: error.message || 'Failed to deactivate user.'
+    };
+  }
+}
+
+/**
+ * Reactivate a user from the table
+ * Updates is_active in profiles, members, and approved_emails tables
+ * Only Super Admin and National Admin can perform this action
+ */
+export async function reactivateUserFromTable(
+  userId: string
+): Promise<{ success: boolean; message: string }> {
+  try {
+    await requireRole(['Super Admin', 'National Admin']);
+
+    const adminClient = createAdminSupabaseClient();
+
+    // Get user info
+    const { data: profile } = await adminClient
+      .from('profiles')
+      .select('id, full_name, email')
+      .eq('id', userId)
+      .single();
+
+    if (!profile) {
+      return {
+        success: false,
+        message: 'User not found.'
+      };
+    }
+
+    const userName = profile.full_name || 'User';
+
+    // Reactivate in profiles table
+    const { error: profileError } = await adminClient
+      .from('profiles')
+      .update({ is_active: true })
+      .eq('id', userId);
+
+    if (profileError) {
+      console.error('Failed to reactivate profile:', profileError);
+    }
+
+    // Reactivate in members table (if exists)
+    await adminClient
+      .from('members')
+      .update({ is_active: true, membership_status: 'active' })
+      .eq('id', userId);
+
+    // Reactivate in approved_emails table
+    if (profile.email) {
+      await adminClient
+        .from('approved_emails')
+        .update({ is_active: true })
+        .eq('email', profile.email);
+    }
+
+    // Invalidate caches
+    revalidatePath('/admin/users');
+    revalidatePath(`/admin/users/${userId}`);
+    revalidateTag('members-list', 'max');
+
+    return {
+      success: true,
+      message: `${userName} has been reactivated successfully.`
+    };
+  } catch (error: any) {
+    return {
+      success: false,
+      message: error.message || 'Failed to reactivate user.'
+    };
+  }
+}
+
+/**
+ * Permanently delete a user from the table
+ * Removes from members, profiles, approved_emails, and auth.users
+ * Only Super Admin can perform this action
+ * WARNING: This action cannot be undone
+ */
+export async function deleteUserPermanently(
+  userId: string
+): Promise<{ success: boolean; message: string }> {
+  try {
+    const { user } = await requireRole(['Super Admin']);
+
+    // Prevent self-deletion
+    if (userId === user.id) {
+      return {
+        success: false,
+        message: 'You cannot delete your own account.'
+      };
+    }
+
+    const adminClient = createAdminSupabaseClient();
+
+    // Get user info
+    const { data: profile } = await adminClient
+      .from('profiles')
+      .select('id, full_name, email')
+      .eq('id', userId)
+      .single();
+
+    if (!profile) {
+      return {
+        success: false,
+        message: 'User not found.'
+      };
+    }
+
+    const userName = profile.full_name || 'User';
+    const userEmail = profile.email;
+
+    // 1. Delete from user_role_changes (has FK to profiles.id via user_id)
+    await adminClient
+      .from('user_role_changes')
+      .delete()
+      .eq('user_id', userId);
+
+    // 2. Update user_role_changes where this user was the changed_by (set to null)
+    await adminClient
+      .from('user_role_changes')
+      .update({ changed_by: null })
+      .eq('changed_by', userId);
+
+    // 3. Delete from user_roles (has FK to profiles.id)
+    await adminClient
+      .from('user_roles')
+      .delete()
+      .eq('user_id', userId);
+
+    // 4. Handle approved_emails foreign key constraint
+    if (userEmail) {
+      await adminClient
+        .from('approved_emails')
+        .update({ created_member_id: null, member_created: false })
+        .eq('email', userEmail);
+    }
+
+    // Also update any approved_emails where this user was the created_member_id
+    await adminClient
+      .from('approved_emails')
+      .update({ created_member_id: null })
+      .eq('created_member_id', userId);
+
+    // 5. Delete from members table (cascades to skills, certifications, etc.)
+    const { error: memberError } = await adminClient
+      .from('members')
+      .delete()
+      .eq('id', userId);
+
+    if (memberError) {
+      console.error('Failed to delete member:', memberError);
+    }
+
+    // 6. Delete from profiles table
+    const { error: profileError } = await adminClient
+      .from('profiles')
+      .delete()
+      .eq('id', userId);
+
+    if (profileError) {
+      console.error('Failed to delete profile:', profileError);
+    }
+
+    // 7. Delete from approved_emails table
+    if (userEmail) {
+      await adminClient
+        .from('approved_emails')
+        .delete()
+        .eq('email', userEmail);
+    }
+
+    // 8. Delete auth user
+    const { error: authError } = await adminClient.auth.admin.deleteUser(userId);
+
+    if (authError) {
+      console.error('Failed to delete auth user:', authError);
+    }
+
+    // Invalidate caches
+    revalidatePath('/admin/users');
+    revalidateTag('members-list', 'max');
+    revalidateTag('approved-emails', 'max');
+
+    return {
+      success: true,
+      message: `${userName} has been permanently deleted.`
+    };
+  } catch (error: any) {
+    return {
+      success: false,
+      message: error.message || 'Failed to delete user permanently.'
+    };
   }
 }

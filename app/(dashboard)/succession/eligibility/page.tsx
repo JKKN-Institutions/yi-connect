@@ -16,6 +16,7 @@ import {
   getMemberEligibilityForCycle
 } from '@/lib/data/succession';
 import { CheckCircle2, XCircle, TrendingUp, Award } from 'lucide-react';
+import { requireRole } from '@/lib/auth';
 
 export const metadata = {
   title: 'My Eligibility | Succession',
@@ -300,7 +301,9 @@ function EligibilityLoading() {
   );
 }
 
-export default function MemberEligibilityPage() {
+export default async function MemberEligibilityPage() {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member', 'Member'])
+
   return (
     <div className='space-y-6'>
       <div>

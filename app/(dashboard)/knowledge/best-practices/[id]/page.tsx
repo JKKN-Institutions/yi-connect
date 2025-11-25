@@ -9,6 +9,7 @@ import { Separator } from '@/components/ui/separator';
 import { getBestPracticeById } from '@/lib/data/knowledge';
 import { getCurrentUser } from '@/lib/data/auth';
 import { hasUserUpvotedBestPractice } from '@/app/actions/knowledge';
+import { requireRole } from '@/lib/auth';
 import { BestPracticeActions } from '@/components/knowledge/best-practice-actions';
 import { BestPracticeViewTracker } from '@/components/knowledge/best-practice-view-tracker';
 import { BestPracticeUpvoteButton } from '@/components/knowledge/best-practice-upvote-button';
@@ -290,6 +291,8 @@ async function BestPracticeContent({ practiceId }: { practiceId: string }) {
 }
 
 export default async function BestPracticeDetailPage({ params }: PageProps) {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member', 'Member']);
+
   const { id } = await params;
 
   return (

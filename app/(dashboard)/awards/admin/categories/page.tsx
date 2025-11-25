@@ -1,5 +1,6 @@
 import { Suspense } from 'react'
 import Link from 'next/link'
+import { requireRole } from '@/lib/auth'
 import { getAwardCategories } from '@/lib/data/awards'
 import type { AwardCategory } from '@/types/award'
 import { CategoryCard } from '@/components/awards'
@@ -47,7 +48,9 @@ async function CategoriesSection() {
   )
 }
 
-export default function CategoriesManagementPage() {
+export default async function CategoriesManagementPage() {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member'])
+
   return (
     <div className="container mx-auto py-8 space-y-6">
       {/* Header */}

@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { StatusBadge, ChannelBadge, PriorityBadge } from "@/components/communication/status-badges";
 import { getAnnouncementById, getAnnouncementRecipients } from "@/lib/data/communication";
+import { requireRole } from "@/lib/auth";
 import { format } from "date-fns";
 
 // Static metadata to avoid issues with dynamic data access
@@ -25,6 +26,7 @@ interface AnnouncementDetailPageProps {
 }
 
 async function AnnouncementDetailContent({ params }: AnnouncementDetailPageProps) {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member']);
   const { id } = await params;
   const announcement = await getAnnouncementById(id);
 

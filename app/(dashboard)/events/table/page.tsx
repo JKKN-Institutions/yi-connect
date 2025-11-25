@@ -10,6 +10,7 @@ import { ArrowLeft, Plus } from 'lucide-react';
 import { getCurrentUser } from '@/lib/data/auth';
 import { createClient } from '@/lib/supabase/server';
 import { getEvents } from '@/lib/data/events';
+import { requireRole } from '@/lib/auth';
 import { EventsDataTable } from '@/components/events/events-data-table';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -30,7 +31,9 @@ interface PageProps {
   }>;
 }
 
-export default function EventsTablePage({ searchParams }: PageProps) {
+export default async function EventsTablePage({ searchParams }: PageProps) {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member', 'Member']);
+
   return (
     <div className='flex flex-col gap-6'>
       <Suspense fallback={<HeaderSkeleton />}>

@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { getDocumentById, getCategories } from '@/lib/data/knowledge';
 import { getCurrentUserChapter } from '@/lib/data/members';
+import { requireRole } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -47,6 +48,8 @@ async function EditFormWrapper({ documentId }: { documentId: string }) {
 }
 
 export default async function EditDocumentPage({ params }: PageProps) {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']);
+
   const { id } = await params;
 
   return (

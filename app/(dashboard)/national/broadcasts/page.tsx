@@ -12,7 +12,7 @@ import {
   CheckCircle2,
   Clock
 } from 'lucide-react';
-import { getCurrentMemberId } from '@/lib/auth';
+import { getCurrentMemberId, requireRole } from '@/lib/auth';
 import { BroadcastCenter } from '@/components/national/broadcast-center';
 import type { BroadcastWithReceipt, NationalBroadcast } from '@/types/national-integration';
 
@@ -22,6 +22,9 @@ export const metadata = {
 };
 
 async function BroadcastsContent() {
+  // Require National Admin role
+  await requireRole(['Super Admin', 'National Admin']);
+
   const memberId = await getCurrentMemberId();
 
   if (!memberId) {

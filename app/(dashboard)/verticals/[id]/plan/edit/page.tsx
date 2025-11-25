@@ -9,7 +9,7 @@ import { Suspense } from 'react';
 import Link from 'next/link';
 import { redirect, notFound } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
-import { getCurrentUser } from '@/lib/data/auth';
+import { getCurrentUser, requireRole } from '@/lib/auth';
 import {
   getVerticalById,
   getVerticalPlans,
@@ -29,7 +29,8 @@ interface PageProps {
   searchParams: Promise<{ year?: string }>;
 }
 
-export default function EditPlanPage({ params, searchParams }: PageProps) {
+export default async function EditPlanPage({ params, searchParams }: PageProps) {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member'])
   return (
     <div className='flex flex-col gap-8 max-w-9xl mx-auto'>
       {/* Header */}

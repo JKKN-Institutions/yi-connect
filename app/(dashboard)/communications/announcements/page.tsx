@@ -11,6 +11,7 @@ import {
   getAnnouncements,
   getCommunicationAnalytics
 } from "@/lib/data/communication";
+import { requireRole } from "@/lib/auth";
 
 export const metadata: Metadata = {
   title: "Announcements | Communication Hub",
@@ -18,11 +19,12 @@ export const metadata: Metadata = {
 };
 
 
-export default function AnnouncementsPage({
+export default async function AnnouncementsPage({
   searchParams,
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member']);
   return (
     <div className="flex flex-col gap-6">
       {/* Header */}

@@ -14,6 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { getMyNominations, getNominationsForMe } from '@/lib/data/succession';
 import { MyNominationsTable } from '@/components/succession/tables/my-nominations-table';
 import { NominationsForMeTable } from '@/components/succession/tables/nominations-for-me-table';
+import { requireRole } from '@/lib/auth';
 
 export const metadata = {
   title: 'My Nominations | Succession',
@@ -95,7 +96,9 @@ function NominationsLoading() {
   );
 }
 
-export default function MyNominationsPage() {
+export default async function MyNominationsPage() {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member', 'Member'])
+
   return (
     <div className='space-y-6'>
       <div>

@@ -4,6 +4,7 @@
  * Executive Members and National Admins can review and approve membership applications
  */
 
+import { requireRole } from '@/lib/auth';
 import { getMemberRequests } from '@/app/actions/member-requests';
 import { MemberRequestsTable } from '@/components/member-requests/member-requests-table';
 import { Button } from '@/components/ui/button';
@@ -47,6 +48,9 @@ export default function MemberRequestsPage({ searchParams }: PageProps) {
 }
 
 async function MemberRequestsContent({ searchParams }: PageProps) {
+  // Require leadership roles to access member requests
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']);
+
   const params = await searchParams;
   const status = params.status || 'pending';
   const page = parseInt(params.page || '1');

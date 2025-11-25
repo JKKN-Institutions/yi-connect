@@ -11,6 +11,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { getCategories, getKnowledgeAnalytics } from '@/lib/data/knowledge';
 import { getCurrentUserChapter } from '@/lib/data/members';
+import { requireRole } from '@/lib/auth';
 import {
   FileText,
   BookOpen,
@@ -147,7 +148,9 @@ async function CategoriesSection() {
   );
 }
 
-export default function KnowledgePage() {
+export default async function KnowledgePage() {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member', 'Member']);
+
   return (
     <div className='space-y-6'>
       {/* Header */}

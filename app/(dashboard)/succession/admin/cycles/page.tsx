@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { getSuccessionCycles } from '@/lib/data/succession'
 import { SuccessionCyclesTable } from '@/components/succession/tables/succession-cycles-table'
 import { Skeleton } from '@/components/ui/skeleton'
+import { requireRole } from '@/lib/auth'
 
 export const metadata = {
   title: 'Succession Cycles | Admin',
@@ -57,7 +58,9 @@ function CyclesLoading() {
   )
 }
 
-export default function SuccessionCyclesPage() {
+export default async function SuccessionCyclesPage() {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member'])
+
   return (
     <div className="space-y-6">
       <div>

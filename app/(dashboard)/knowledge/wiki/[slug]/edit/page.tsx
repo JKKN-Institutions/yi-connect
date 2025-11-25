@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { requireRole } from '@/lib/auth';
 import { WikiPageForm } from '@/components/knowledge/wiki-page-form';
 import { getWikiPageBySlug } from '@/lib/data/knowledge';
 import { getCurrentUserChapter } from '@/lib/data/members';
@@ -38,6 +39,8 @@ async function EditWikiPageContent({ slug }: { slug: string }) {
 }
 
 export default async function EditWikiPagePage({ params }: PageProps) {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']);
+
   const { slug } = await params;
 
   return (

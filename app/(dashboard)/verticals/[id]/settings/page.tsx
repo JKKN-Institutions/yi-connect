@@ -9,7 +9,7 @@ import { Suspense } from 'react';
 import Link from 'next/link';
 import { redirect, notFound } from 'next/navigation';
 import { ArrowLeft, Settings, Trash2, AlertTriangle } from 'lucide-react';
-import { getCurrentUser } from '@/lib/data/auth';
+import { getCurrentUser, requireRole } from '@/lib/auth';
 import { getVerticalById } from '@/lib/data/vertical';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -33,7 +33,8 @@ interface PageProps {
   params: Promise<{ id: string }>;
 }
 
-export default function VerticalSettingsPage({ params }: PageProps) {
+export default async function VerticalSettingsPage({ params }: PageProps) {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member'])
   return (
     <div className='flex flex-col gap-8 max-w-9xl mx-auto'>
       {/* Header */}

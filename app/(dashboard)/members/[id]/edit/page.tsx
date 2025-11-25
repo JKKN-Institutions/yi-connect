@@ -7,6 +7,7 @@
 import { Suspense } from 'react'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
+import { requireRole } from '@/lib/auth'
 import { getMemberWithProfile } from '@/lib/data/members'
 import { MemberForm } from '@/components/members'
 import { Button } from '@/components/ui/button'
@@ -57,6 +58,8 @@ async function EditMemberForm({ memberId }: { memberId: string }) {
 
 // Main page component
 export default async function EditMemberPage({ params }: PageProps) {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member'])
+
   const resolvedParams = await params
 
   return (

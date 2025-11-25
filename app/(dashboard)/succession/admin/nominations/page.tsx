@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Skeleton } from '@/components/ui/skeleton'
 import { getNominations, getCurrentActiveCycle } from '@/lib/data/succession'
 import { AdminNominationsTable } from '@/components/succession/tables/admin-nominations-table'
+import { requireRole } from '@/lib/auth'
 
 export const metadata = {
   title: 'Review Nominations | Admin',
@@ -72,7 +73,9 @@ function NominationsLoading() {
   )
 }
 
-export default function AdminNominationsPage() {
+export default async function AdminNominationsPage() {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member'])
+
   return (
     <div className="space-y-6">
       <div>

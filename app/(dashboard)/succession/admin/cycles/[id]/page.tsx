@@ -10,6 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { getSuccessionCycleWithPositions } from '@/lib/data/succession'
 import { SuccessionPositionsTable } from '@/components/succession/tables/succession-positions-table'
 import { SuccessionCycleStatusStepper } from '@/components/succession/displays/succession-cycle-status-stepper'
+import { requireRole } from '@/lib/auth'
 
 const statusColors: Record<string, string> = {
   draft: 'bg-gray-500',
@@ -216,6 +217,8 @@ export default async function SuccessionCycleDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member'])
+
   const { id } = await params;
   return (
     <div className="space-y-6">

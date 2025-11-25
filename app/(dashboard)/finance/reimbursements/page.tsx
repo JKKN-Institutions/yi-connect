@@ -8,7 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ReimbursementsTable } from '@/components/finance/reimbursements-table'
 import { getReimbursementRequests, getReimbursementAnalytics } from '@/lib/data/finance'
-import { getCurrentChapterId } from '@/lib/auth'
+import { getCurrentChapterId, requireRole } from '@/lib/auth'
 import { formatCurrency } from '@/types/finance'
 
 export const metadata: Metadata = {
@@ -100,6 +100,8 @@ async function ReimbursementStats() {
 }
 
 export default async function ReimbursementsPage() {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">

@@ -23,6 +23,7 @@ import Link from 'next/link';
 import { format } from 'date-fns';
 import { getNationalEventById } from '@/lib/data/national-integration';
 import { EventRegistrationForm } from '@/components/national/event-registration-form';
+import { requireRole } from '@/lib/auth';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -39,6 +40,9 @@ export async function generateMetadata({ params }: PageProps) {
 }
 
 async function EventDetailContent({ eventId, showRegister }: { eventId: string; showRegister: boolean }) {
+  // Require National Admin role
+  await requireRole(['Super Admin', 'National Admin']);
+
   const event = await getNationalEventById(eventId);
 
   if (!event) {

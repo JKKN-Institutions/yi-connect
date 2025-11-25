@@ -1,5 +1,6 @@
 import { Suspense } from 'react';
 import { redirect, notFound } from 'next/navigation';
+import { requireRole } from '@/lib/auth';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { JuryScoringForm } from '@/components/awards';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -115,7 +116,9 @@ async function PageContent({
   );
 }
 
-export default function JuryScorePage({ params }: JuryScorePageProps) {
+export default async function JuryScorePage({ params }: JuryScorePageProps) {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member'])
+
   return (
     <div className='container mx-auto py-8 space-y-6 max-w-4xl'>
       {/* Header */}

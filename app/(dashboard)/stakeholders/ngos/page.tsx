@@ -20,7 +20,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { getNGOs } from '@/lib/data/stakeholder'
 import { NGOsTable } from '@/components/stakeholders/ngos-table'
-import { getCurrentChapterId } from '@/lib/auth'
+import { getCurrentChapterId, requireRole } from '@/lib/auth'
 
 export const metadata = {
   title: 'NGOs',
@@ -130,7 +130,9 @@ function TableSkeleton() {
   )
 }
 
-export default function NGOsPage() {
+export default async function NGOsPage() {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']);
+
   return (
     <div className="flex flex-col gap-8">
       <div className="flex items-center justify-between">

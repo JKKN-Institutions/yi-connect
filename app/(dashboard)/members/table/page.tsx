@@ -6,16 +6,14 @@
 
 import { Suspense } from 'react'
 import Link from 'next/link'
-import { getMembers, getMemberAnalytics, getSkills } from '@/lib/data/members'
-import { DataTable } from '@/components/data-table/data-table'
-import { memberColumns } from '@/components/members/members-table-columns'
+import { getMembers, getMemberAnalytics } from '@/lib/data/members'
+import { MembersDataTable } from '@/components/members/members-data-table'
 import { MemberStats } from '@/components/members'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Plus, Grid3x3, Table as TableIcon } from 'lucide-react'
-import type { DataTableFilterField } from '@/lib/table/types'
-import type { MemberListItem } from '@/types/member'
+import { Plus, Grid3x3, Upload } from 'lucide-react'
+import { requireRole } from '@/lib/auth'
 
 interface PageProps {
   searchParams: Promise<{
@@ -69,58 +67,13 @@ function StatsSkeleton() {
 }
 
 // Members table component (Server Component)
-async function MembersTable() {
+async function MembersTable({ userRoles }: { userRoles: string[] }) {
   // Fetch all members (for client-side table)
   // In production with large datasets, use server-side pagination
   const { data: members } = await getMembers({ pageSize: 1000 })
 
-  // Fetch skills for filtering
-  const skills = await getSkills()
-
-  // Define filter fields
-  const filterFields: DataTableFilterField<MemberListItem>[] = [
-    {
-      label: 'Search',
-      value: 'full_name',
-      placeholder: 'Search members...',
-    },
-    {
-      label: 'Status',
-      value: 'membership_status',
-      options: [
-        { label: 'Active', value: 'active' },
-        { label: 'Inactive', value: 'inactive' },
-        { label: 'Suspended', value: 'suspended' },
-        { label: 'Alumni', value: 'alumni' },
-      ],
-    },
-  ]
-
-  // Export configuration - only serializable data
-  const exportConfig = {
-    filename: 'members-export',
-    sheetName: 'Members',
-    columns: [
-      { key: 'full_name' as const, label: 'Full Name' },
-      { key: 'email' as const, label: 'Email' },
-      { key: 'company' as const, label: 'Company' },
-      { key: 'designation' as const, label: 'Designation' },
-      { key: 'membership_status' as const, label: 'Status' },
-      { key: 'member_since' as const, label: 'Member Since' },
-      { key: 'engagement_score' as const, label: 'Engagement Score' },
-      { key: 'readiness_score' as const, label: 'Readiness Score' },
-      { key: 'skills_count' as const, label: 'Skills Count' },
-    ]
-  }
-
-  return (
-    <DataTable
-      columns={memberColumns}
-      data={members}
-      filterFields={filterFields}
-      exportConfig={exportConfig}
-    />
-  )
+  // Pass data and roles to client component for column generation
+  return <MembersDataTable data={members} userRoles={userRoles} />
 }
 
 // Stats component (Server Component)
@@ -131,6 +84,9 @@ async function StatsSection() {
 
 // Main page component
 export default async function MembersTablePage({ searchParams }: PageProps) {
+  // Only leadership can view full member directory
+  const { roles } = await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member'])
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -146,6 +102,12 @@ export default async function MembersTablePage({ searchParams }: PageProps) {
             <Link href="/members/grid">
               <Grid3x3 className="h-4 w-4 mr-2" />
               Grid View
+            </Link>
+          </Button>
+          <Button variant="outline" asChild>
+            <Link href="/members/bulk-upload">
+              <Upload className="h-4 w-4 mr-2" />
+              Bulk Upload
             </Link>
           </Button>
           <Button asChild>
@@ -164,7 +126,7 @@ export default async function MembersTablePage({ searchParams }: PageProps) {
 
       {/* Members Table with Suspense */}
       <Suspense fallback={<TableSkeleton />}>
-        <MembersTable />
+        <MembersTable userRoles={roles} />
       </Suspense>
     </div>
   )

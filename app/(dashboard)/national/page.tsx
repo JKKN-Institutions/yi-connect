@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { getNationalDashboardData, getUpcomingNationalEvents } from '@/lib/data/national-integration';
-import { getCurrentChapterId, getCurrentMemberId } from '@/lib/auth';
+import { getCurrentChapterId, getCurrentMemberId, requireRole } from '@/lib/auth';
 import { SyncStatusCard } from '@/components/national/sync-status-card';
 import { NationalEventsList } from '@/components/national/national-events-list';
 
@@ -26,6 +26,9 @@ export const metadata = {
 };
 
 async function DashboardContent() {
+  // Require National Admin role
+  await requireRole(['Super Admin', 'National Admin']);
+
   const [chapterId, memberId] = await Promise.all([
     getCurrentChapterId(),
     getCurrentMemberId()

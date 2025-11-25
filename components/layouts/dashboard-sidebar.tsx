@@ -90,26 +90,31 @@ const navigation: NavItem[] = [
   {
     name: 'Members',
     icon: Users,
+    requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member'],
     items: [
       {
         name: 'All Members',
         href: '/members',
-        icon: TableIcon
+        icon: TableIcon,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']
       },
       {
         name: 'Grid View',
         href: '/members/grid',
-        icon: Grid3x3
+        icon: Grid3x3,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']
       },
       {
         name: 'Analytics',
         href: '/members/analytics',
-        icon: TrendingUp
+        icon: TrendingUp,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']
       },
       {
         name: 'Add Member',
         href: '/members/new',
-        icon: Plus
+        icon: Plus,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member']
       }
     ]
   },
@@ -130,114 +135,136 @@ const navigation: NavItem[] = [
       {
         name: 'Manage Events',
         href: '/events/manage',
-        icon: List
+        icon: List,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']
       },
       {
         name: 'Create Event',
         href: '/events/new',
-        icon: Plus
+        icon: Plus,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']
       }
     ]
   },
   {
     name: 'Finance',
     icon: Wallet,
+    requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member'],
     items: [
       {
         name: 'Overview',
         href: '/finance',
-        icon: LayoutDashboard
+        icon: LayoutDashboard,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']
       },
       {
         name: 'Budgets',
         href: '/finance/budgets',
-        icon: DollarSign
+        icon: DollarSign,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']
       },
       {
         name: 'Expenses',
         href: '/finance/expenses',
-        icon: Receipt
+        icon: Receipt,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']
       },
       {
         name: 'Sponsorships',
         href: '/finance/sponsorships',
-        icon: Handshake
+        icon: Handshake,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']
       },
       {
         name: 'Reimbursements',
         href: '/finance/reimbursements',
-        icon: ReceiptText
+        icon: ReceiptText,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']
       },
       {
         name: 'Add Budget',
         href: '/finance/budgets/new',
-        icon: Plus
+        icon: Plus,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']
       },
       {
         name: 'Add Expense',
         href: '/finance/expenses/new',
-        icon: Plus
+        icon: Plus,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']
       },
       {
         name: 'Add Sponsor',
         href: '/finance/sponsorships/sponsors/new',
-        icon: Plus
+        icon: Plus,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']
       },
       {
         name: 'Add Deal',
         href: '/finance/sponsorships/new',
-        icon: Plus
+        icon: Plus,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']
       },
       {
         name: 'New Request',
         href: '/finance/reimbursements/new',
-        icon: Plus
+        icon: Plus,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']
       }
     ]
   },
   {
     name: 'Stakeholders',
     icon: Building2,
+    requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member'],
     items: [
       {
         name: 'Overview',
         href: '/stakeholders',
-        icon: LayoutDashboard
+        icon: LayoutDashboard,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']
       },
       {
         name: 'Schools',
         href: '/stakeholders/schools',
-        icon: Building2
+        icon: Building2,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']
       },
       {
         name: 'Colleges',
         href: '/stakeholders/colleges',
-        icon: GraduationCap
+        icon: GraduationCap,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']
       },
       {
         name: 'Industries',
         href: '/stakeholders/industries',
-        icon: Factory
+        icon: Factory,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']
       },
       {
         name: 'Government',
         href: '/stakeholders/government',
-        icon: Landmark
+        icon: Landmark,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']
       },
       {
         name: 'NGOs',
         href: '/stakeholders/ngos',
-        icon: Users
+        icon: Users,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']
       },
       {
         name: 'Vendors',
         href: '/stakeholders/vendors',
-        icon: Package
+        icon: Package,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']
       },
       {
         name: 'Speakers',
         href: '/stakeholders/speakers',
-        icon: Mic
+        icon: Mic,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']
       }
     ]
   },
@@ -258,53 +285,63 @@ const navigation: NavItem[] = [
       {
         name: 'Admin',
         href: '/industrial-visits/admin',
-        icon: ShieldCheck
+        icon: ShieldCheck,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member']
       },
       {
         name: 'Analytics',
         href: '/industrial-visits/analytics',
-        icon: PieChart
+        icon: PieChart,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']
       }
     ]
   },
   {
     name: 'Communication Hub',
     icon: MessageSquare,
+    requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member'],
     items: [
       {
         name: 'Overview',
         href: '/communications',
-        icon: LayoutDashboard
+        icon: LayoutDashboard,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member']
       },
       {
         name: 'Announcements',
         href: '/communications/announcements',
-        icon: Send
+        icon: Send,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member']
       },
       {
         name: 'Notifications',
         href: '/communications/notifications',
-        icon: Bell
+        icon: Bell,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member']
       },
       {
         name: 'Templates',
         href: '/communications/templates',
-        icon: FileText
+        icon: FileText,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member']
       },
       {
         name: 'Segments',
         href: '/communications/segments',
-        icon: Users2
+        icon: Users2,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member']
       },
       {
         name: 'Analytics',
         href: '/communications/analytics',
-        icon: TrendingUp
+        icon: TrendingUp,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member']
       },
       {
         name: 'New Announcement',
         href: '/communications/announcements/new',
-        icon: Plus
+        icon: Plus,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member']
       }
     ]
   },
@@ -318,9 +355,9 @@ const navigation: NavItem[] = [
         icon: LayoutDashboard
       },
       {
-        name: 'Nominate',
-        href: '/awards/nominate',
-        icon: Plus
+        name: 'Leaderboard',
+        href: '/awards/leaderboard',
+        icon: Trophy
       },
       {
         name: 'My Nominations',
@@ -328,29 +365,22 @@ const navigation: NavItem[] = [
         icon: FileText
       },
       {
-        name: 'Jury Dashboard',
+        name: 'Nominate',
+        href: '/awards/nominate',
+        icon: Plus,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']
+      },
+      {
+        name: 'Jury Portal',
         href: '/awards/jury',
-        icon: Users2
+        icon: Users2,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']
       },
       {
-        name: 'Leaderboard',
-        href: '/awards/leaderboard',
-        icon: Trophy
-      },
-      {
-        name: 'Manage Cycles',
+        name: 'Admin',
         href: '/awards/admin/cycles',
-        icon: CalendarDays
-      },
-      {
-        name: 'Review Winners',
-        href: '/awards/admin/review',
-        icon: ShieldCheck
-      },
-      {
-        name: 'Manage Categories',
-        href: '/awards/admin/categories',
-        icon: Settings
+        icon: ShieldCheck,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member']
       }
     ]
   },
@@ -381,64 +411,130 @@ const navigation: NavItem[] = [
       {
         name: 'Upload Document',
         href: '/knowledge/documents/upload',
-        icon: Plus
+        icon: Plus,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']
       }
     ]
   },
   {
     name: 'Verticals',
     icon: Target,
+    requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member'],
     items: [
       {
         name: 'Overview',
         href: '/verticals',
-        icon: LayoutDashboard
+        icon: LayoutDashboard,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']
       },
       {
         name: 'Rankings',
         href: '/verticals/rankings',
-        icon: Trophy
+        icon: Trophy,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']
       },
       {
         name: 'Add Vertical',
         href: '/verticals/new',
-        icon: Plus
+        icon: Plus,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']
+      }
+    ]
+  },
+  {
+    name: 'Succession',
+    icon: Activity,
+    items: [
+      {
+        name: 'Overview',
+        href: '/succession',
+        icon: LayoutDashboard
+      },
+      {
+        name: 'Apply',
+        href: '/succession/apply',
+        icon: FileText
+      },
+      {
+        name: 'My Applications',
+        href: '/succession/applications',
+        icon: User
+      },
+      {
+        name: 'My Nominations',
+        href: '/succession/nominations',
+        icon: Users
+      },
+      {
+        name: 'Eligibility',
+        href: '/succession/eligibility',
+        icon: ShieldCheck
+      },
+      {
+        name: 'Nominate',
+        href: '/succession/nominate',
+        icon: Plus,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']
+      },
+      {
+        name: 'Evaluations',
+        href: '/succession/evaluations',
+        icon: Target,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']
+      },
+      {
+        name: 'Knowledge Base',
+        href: '/succession/knowledge-base',
+        icon: BookOpen
+      },
+      {
+        name: 'Admin',
+        href: '/succession/admin',
+        icon: Settings,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member']
       }
     ]
   },
   {
     name: 'National',
     icon: Globe,
+    requiredRoles: ['Super Admin', 'National Admin'],
     items: [
       {
         name: 'Overview',
         href: '/national',
-        icon: LayoutDashboard
+        icon: LayoutDashboard,
+        requiredRoles: ['Super Admin', 'National Admin']
       },
       {
         name: 'Events',
         href: '/national/events',
-        icon: CalendarDays
+        icon: CalendarDays,
+        requiredRoles: ['Super Admin', 'National Admin']
       },
       {
         name: 'Benchmarks',
         href: '/national/benchmarks',
-        icon: BarChart3
+        icon: BarChart3,
+        requiredRoles: ['Super Admin', 'National Admin']
       },
       {
         name: 'Broadcasts',
         href: '/national/broadcasts',
-        icon: Megaphone
+        icon: Megaphone,
+        requiredRoles: ['Super Admin', 'National Admin']
       },
       {
         name: 'Sync Status',
         href: '/national/sync',
-        icon: RefreshCw
+        icon: RefreshCw,
+        requiredRoles: ['Super Admin', 'National Admin']
       },
       {
         name: 'Settings',
         href: '/national/settings',
-        icon: Settings
+        icon: Settings,
+        requiredRoles: ['Super Admin', 'National Admin']
       }
     ]
   },

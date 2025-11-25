@@ -18,7 +18,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { getCurrentChapterId } from '@/lib/auth'
+import { getCurrentChapterId, requireRole } from '@/lib/auth'
 import { getColleges } from '@/lib/data/stakeholder'
 import { CollegesTable } from '@/components/stakeholders/colleges-table'
 
@@ -132,6 +132,8 @@ function TableSkeleton() {
 }
 
 export default async function CollegesPage() {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']);
+
   // Opt out of static prerendering
   await connection()
 

@@ -9,7 +9,7 @@ import { Suspense } from 'react'
 import Link from 'next/link'
 import { redirect, notFound } from 'next/navigation'
 import { ArrowLeft, Plus, Users, Crown, UserMinus } from 'lucide-react'
-import { getCurrentUser } from '@/lib/data/auth'
+import { getCurrentUser, requireRole } from '@/lib/auth'
 import { getVerticalById, getVerticalMembers } from '@/lib/data/vertical'
 import { createClient } from '@/lib/supabase/server'
 import type { VerticalChair } from '@/types/vertical'
@@ -29,7 +29,8 @@ interface PageProps {
   params: Promise<{ id: string }>
 }
 
-export default function MembersPage({ params }: PageProps) {
+export default async function MembersPage({ params }: PageProps) {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member'])
   return (
     <div className="flex flex-col gap-8">
       {/* Header */}

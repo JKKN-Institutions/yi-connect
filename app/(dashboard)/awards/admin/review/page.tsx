@@ -1,5 +1,6 @@
 import { Suspense } from 'react'
 import Link from 'next/link'
+import { requireRole } from '@/lib/auth'
 import { getActiveCycles, getRankedNominations } from '@/lib/data/awards'
 import { WinnerAnnouncement } from '@/components/awards'
 import { Button } from '@/components/ui/button'
@@ -249,7 +250,9 @@ async function PageContent({
   return <RankedNominationsSection searchParamsPromise={searchParamsPromise} />
 }
 
-export default function ReviewPage({ searchParams }: ReviewPageProps) {
+export default async function ReviewPage({ searchParams }: ReviewPageProps) {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member'])
+
   return (
     <div className="container mx-auto py-8 space-y-6">
       {/* Header */}

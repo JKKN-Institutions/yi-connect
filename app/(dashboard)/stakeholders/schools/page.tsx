@@ -11,7 +11,7 @@ import { Plus, Building2, MapPin, Award, TrendingUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { getCurrentChapterId } from '@/lib/auth'
+import { getCurrentChapterId, requireRole } from '@/lib/auth'
 import { getSchools } from '@/lib/data/stakeholder'
 import { SchoolsTable } from '@/components/stakeholders/schools-table'
 import { redirect } from 'next/navigation'
@@ -145,7 +145,9 @@ function TableSkeleton() {
   )
 }
 
-export default function SchoolsPage() {
+export default async function SchoolsPage() {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']);
+
   return (
     <div className="flex flex-col gap-8">
       {/* Header */}

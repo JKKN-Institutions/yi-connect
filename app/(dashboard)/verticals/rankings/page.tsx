@@ -9,6 +9,7 @@ import { Suspense } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, Trophy, TrendingUp, Award } from 'lucide-react'
 import { getVerticalRankings, getCurrentFiscalYear } from '@/lib/data/vertical'
+import { requireRole } from '@/lib/auth'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -19,7 +20,8 @@ export const metadata = {
   description: 'Performance rankings across all verticals'
 }
 
-export default function VerticalRankingsPage() {
+export default async function VerticalRankingsPage() {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member'])
   return (
     <div className="flex flex-col gap-8">
       {/* Header */}

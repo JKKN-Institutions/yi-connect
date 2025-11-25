@@ -57,6 +57,7 @@ import {
   HealthTierBadge,
   MouStatusBadge,
 } from '@/components/stakeholders/status-badges'
+import { requireRole } from '@/lib/auth'
 
 interface IndustryDetailPageProps {
   params: Promise<{ id: string }>
@@ -711,7 +712,9 @@ async function IndustryDetailContent({ params }: IndustryDetailPageProps) {
   )
 }
 
-export default function IndustryDetailPage({ params }: IndustryDetailPageProps) {
+export default async function IndustryDetailPage({ params }: IndustryDetailPageProps) {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']);
+
   return (
     <Suspense fallback={<div className="p-8"><ContentSkeleton /></div>}>
       <IndustryDetailContent params={params} />

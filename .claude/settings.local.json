@@ -49,7 +49,10 @@
       "Bash(more:*)",
       "mcp__chrome-devtools__take_snapshot",
       "Skill(nextjs-pwa-skill)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(npm run lint:*)",
+      "Bash(npm ls:*)",
+      "mcp__supabase__get_logs"
     ],
     "deny": [],
     "ask": []

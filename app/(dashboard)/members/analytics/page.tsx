@@ -7,6 +7,7 @@
 import { Suspense } from 'react';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
+import { requireRole } from '@/lib/auth';
 import { getCurrentUser } from '@/lib/data/auth';
 import { getMemberAnalytics, getSkillGaps } from '@/lib/data/members';
 import { createClient } from '@/lib/supabase/server';
@@ -21,7 +22,9 @@ import {
   TopCompaniesChart
 } from '@/components/members/analytics';
 
-export default function MemberAnalyticsPage() {
+export default async function MemberAnalyticsPage() {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member'])
+
   return (
     <div className='flex flex-col gap-6'>
       <Suspense fallback={<HeaderSkeleton />}>

@@ -8,6 +8,7 @@ import { Suspense } from 'react'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { ArrowLeft, Edit, TrendingUp, DollarSign, Target, Award, Calendar, Building2, User, FileText } from 'lucide-react'
+import { requireRole } from '@/lib/auth'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -389,6 +390,8 @@ async function DealDetail({ dealId }: { dealId: string }) {
 }
 
 export default async function DealDetailPage({ params }: PageProps) {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']);
+
   const { id } = await params
 
   return (

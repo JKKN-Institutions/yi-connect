@@ -37,6 +37,7 @@ import { getIVById } from '@/lib/data/industrial-visits';
 import { IVBookingForm } from '@/components/industrial-visits/iv-booking-form';
 import { IVWaitlistButton } from '@/components/industrial-visits/iv-waitlist-button';
 import { IVCarpoolList } from '@/components/industrial-visits/iv-carpool-list';
+import { requireRole } from '@/lib/auth';
 
 interface IVDetailPageProps {
   params: Promise<{
@@ -51,6 +52,9 @@ export const metadata: Metadata = {
 };
 
 async function IVDetailContent({ id }: { id: string }) {
+  // All authenticated users can view IV details
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member', 'Member']);
+
   const iv = await getIVById(id);
 
   if (!iv) {

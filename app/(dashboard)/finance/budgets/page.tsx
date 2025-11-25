@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { BudgetsTable } from '@/components/finance/budgets-table'
 import { getBudgets } from '@/lib/data/finance'
-import { getCurrentChapterId } from '@/lib/auth'
+import { getCurrentChapterId, requireRole } from '@/lib/auth'
 
 export const metadata: Metadata = {
   title: 'Budgets',
@@ -63,7 +63,10 @@ function BudgetsLoading() {
   )
 }
 
-export default function BudgetsPage() {
+export default async function BudgetsPage() {
+  // Require leadership roles to view budgets
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member'])
+
   return (
     <Suspense fallback={<BudgetsLoading />}>
       <BudgetsContent />

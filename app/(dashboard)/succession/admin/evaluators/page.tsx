@@ -15,6 +15,7 @@ import { EvaluatorsTable } from '@/components/succession/tables/evaluators-table
 import { EvaluatorAssignmentForm } from '@/components/succession/forms/evaluator-assignment-form'
 import { Plus } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
+import { requireRole } from '@/lib/auth'
 
 export const metadata = {
   title: 'Manage Evaluators | Admin',
@@ -137,7 +138,9 @@ function EvaluatorsLoading() {
   )
 }
 
-export default function AdminEvaluatorsPage() {
+export default async function AdminEvaluatorsPage() {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member'])
+
   return (
     <div className="space-y-6">
       <div>

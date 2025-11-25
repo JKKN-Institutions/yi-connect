@@ -1,6 +1,7 @@
 import { Suspense } from 'react'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import { requireRole } from '@/lib/auth'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -308,7 +309,9 @@ async function JuryNominationsTable({ userId }: { userId: string }) {
   )
 }
 
-export default function JuryDashboardPage() {
+export default async function JuryDashboardPage() {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member'])
+
   return (
     <div className="container mx-auto py-8 space-y-6">
       {/* Header */}

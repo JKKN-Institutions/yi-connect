@@ -12,6 +12,7 @@ import {
   getTemplates,
   getSegments
 } from "@/lib/data/communication";
+import { requireRole } from "@/lib/auth";
 
 // Static metadata to avoid issues with dynamic data access
 export const metadata: Metadata = {
@@ -25,6 +26,7 @@ interface EditAnnouncementPageProps {
 }
 
 async function EditAnnouncementContent({ params }: EditAnnouncementPageProps) {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member']);
   const { id } = await params;
   const announcement = await getAnnouncementById(id);
 

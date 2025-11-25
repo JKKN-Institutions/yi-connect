@@ -1,4 +1,5 @@
 import { Suspense } from 'react'
+import { requireRole } from '@/lib/auth'
 import { getLeaderboard, getAwardCategories } from '@/lib/data/awards'
 import { LeaderboardTable } from '@/components/awards'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -171,7 +172,9 @@ async function LeaderboardContent({ searchParams }: LeaderboardPageProps) {
   )
 }
 
-export default function LeaderboardPage({ searchParams }: LeaderboardPageProps) {
+export default async function LeaderboardPage({ searchParams }: LeaderboardPageProps) {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member', 'Member'])
+
   return (
     <div className="container mx-auto py-8 space-y-6">
       {/* Header */}

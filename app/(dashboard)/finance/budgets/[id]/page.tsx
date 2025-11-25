@@ -8,6 +8,7 @@ import { Suspense } from 'react'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { ArrowLeft, Edit, Trash, CheckCircle, TrendingUp, Wallet, AlertTriangle } from 'lucide-react'
+import { requireRole } from '@/lib/auth'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -206,6 +207,8 @@ async function BudgetDetail({ budgetId }: { budgetId: string }) {
 }
 
 export default async function BudgetPage({ params }: PageProps) {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']);
+
   const { id } = await params
 
   return (

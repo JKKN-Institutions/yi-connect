@@ -8,6 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
 import { getWikiPageBySlug } from '@/lib/data/knowledge';
 import { getCurrentUserChapter } from '@/lib/data/members';
+import { requireRole } from '@/lib/auth';
 import {
   ArrowLeft,
   Calendar,
@@ -152,6 +153,8 @@ async function WikiPageContent({ slug }: { slug: string }) {
 }
 
 export default async function WikiPageDetailPage({ params }: PageProps) {
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member', 'Member']);
+
   const { slug } = await params;
 
   return (

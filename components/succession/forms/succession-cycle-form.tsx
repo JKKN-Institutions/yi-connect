@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -25,6 +25,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
 import { createSuccessionCycle, updateSuccessionCycle } from '@/app/actions/succession'
 import { SuccessionCycleStatusSchema } from '@/lib/validations/succession'
 import type { SuccessionCycle } from '@/lib/types/succession'
@@ -38,6 +39,7 @@ const FormSchema = z.object({
   start_date: z.string().optional(),
   end_date: z.string().optional(),
   status: SuccessionCycleStatusSchema.optional(),
+  is_published: z.boolean().optional(),
 })
 
 type FormData = z.infer<typeof FormSchema>
@@ -82,14 +84,34 @@ export function SuccessionCycleForm({ cycle }: SuccessionCycleFormProps) {
   const form = useForm<FormData>({
     resolver: zodResolver(FormSchema),
     defaultValues: {
-      year: cycle?.year || new Date().getFullYear(),
-      cycle_name: cycle?.cycle_name || '',
-      description: cycle?.description || '',
-      start_date: formatDateForInput(cycle?.start_date),
-      end_date: formatDateForInput(cycle?.end_date),
-      status: cycle?.status || 'draft',
+      year: new Date().getFullYear(),
+      cycle_name: '',
+      description: '',
+      start_date: '',
+      end_date: '',
+      status: 'draft',
+      is_published: false,
     },
   })
+
+  // Reset form values when cycle prop changes (for edit mode)
+  useEffect(() => {
+    if (cycle) {
+      console.log('Resetting form with cycle data:', cycle)
+      console.log('Formatted start_date:', formatDateForInput(cycle.start_date))
+      console.log('Formatted end_date:', formatDateForInput(cycle.end_date))
+
+      form.reset({
+        year: cycle.year,
+        cycle_name: cycle.cycle_name,
+        description: cycle.description || '',
+        start_date: formatDateForInput(cycle.start_date),
+        end_date: formatDateForInput(cycle.end_date),
+        status: cycle.status,
+        is_published: cycle.is_published || false,
+      })
+    }
+  }, [cycle, form])
 
   const onSubmit = async (data: FormData) => {
     setIsSubmitting(true)
@@ -101,6 +123,7 @@ export function SuccessionCycleForm({ cycle }: SuccessionCycleFormProps) {
     if (data.start_date) formData.append('start_date', data.start_date)
     if (data.end_date) formData.append('end_date', data.end_date)
     if (data.status) formData.append('status', data.status)
+    if (data.is_published !== undefined) formData.append('is_published', data.is_published.toString())
 
     const result = cycle
       ? await updateSuccessionCycle(cycle.id, formData)
@@ -191,7 +214,11 @@ export function SuccessionCycleForm({ cycle }: SuccessionCycleFormProps) {
               <FormItem>
                 <FormLabel>Start Date (Optional)</FormLabel>
                 <FormControl>
-                  <Input type="date" {...field} />
+                  <Input
+                    type="date"
+                    {...field}
+                    value={field.value || ''}
+                  />
                 </FormControl>
                 <FormDescription>
                   When this cycle begins
@@ -208,7 +235,11 @@ export function SuccessionCycleForm({ cycle }: SuccessionCycleFormProps) {
               <FormItem>
                 <FormLabel>End Date (Optional)</FormLabel>
                 <FormControl>
-                  <Input type="date" {...field} />
+                  <Input
+                    type="date"
+                    {...field}
+                    value={field.value || ''}
+                  />
                 </FormControl>
                 <FormDescription>
                   When this cycle ends
@@ -227,7 +258,10 @@ export function SuccessionCycleForm({ cycle }: SuccessionCycleFormProps) {
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Status</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
+                <Select
+                  onValueChange={field.onChange}
+                  value={field.value || 'draft'}
+                >
                   <FormControl>
                     <SelectTrigger>
                       <SelectValue placeholder="Select status" />
@@ -245,6 +279,30 @@ export function SuccessionCycleForm({ cycle }: SuccessionCycleFormProps) {
                   Current status of the succession cycle
                 </FormDescription>
                 <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
+
+        {/* Published toggle - only show for editing existing cycles */}
+        {cycle && (
+          <FormField
+            control={form.control}
+            name="is_published"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                <div className="space-y-0.5">
+                  <FormLabel className="text-base">Published</FormLabel>
+                  <FormDescription>
+                    Make this cycle visible to all members
+                  </FormDescription>
+                </div>
+                <FormControl>
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                </FormControl>
               </FormItem>
             )}
           />

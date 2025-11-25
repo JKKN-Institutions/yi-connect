@@ -174,6 +174,7 @@ export const UpdateSuccessionCycleSchema = CreateSuccessionCycleSchema.partial()
   status: SuccessionCycleStatusSchema.optional(),
   selection_committee_ids: z.array(uuidSchema).optional(),
   version: z.number().int().positive().optional(),
+  is_published: z.boolean().optional(),
 })
 
 export const AdvanceSuccessionStatusSchema = z.object({

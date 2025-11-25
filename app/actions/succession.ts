@@ -175,6 +175,11 @@ export async function updateSuccessionCycle(
       data.year = parseInt(data.year, 10)
     }
 
+    // Convert is_published to boolean (FormData always returns strings)
+    if (typeof data.is_published === 'string') {
+      data.is_published = data.is_published === 'true'
+    }
+
     const validated = UpdateSuccessionCycleSchema.parse({ ...data, id })
 
     // Remove id from the update payload (can't update primary key)

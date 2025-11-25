@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { MoreHorizontal, Eye, Edit, Trash2, PlayCircle } from 'lucide-react'
+import { format } from 'date-fns'
 import {
   Table,
   TableBody,
@@ -129,9 +130,9 @@ export function SuccessionCyclesTable({ cycles }: SuccessionCyclesTableProps) {
               <TableCell>
                 {cycle.start_date && cycle.end_date ? (
                   <div className="text-sm">
-                    <div>{new Date(cycle.start_date).toLocaleDateString()}</div>
+                    <div>{format(new Date(cycle.start_date), 'MMM d, yyyy')}</div>
                     <div className="text-muted-foreground">
-                      to {new Date(cycle.end_date).toLocaleDateString()}
+                      to {format(new Date(cycle.end_date), 'MMM d, yyyy')}
                     </div>
                   </div>
                 ) : (

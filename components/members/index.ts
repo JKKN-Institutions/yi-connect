@@ -24,3 +24,17 @@ export {
   BulkUploadSummary
 } from './bulk-upload'
 
+// Category Tabs
+export { MemberCategoryTabs } from './member-category-tabs'
+
+// Trainer Profile
+export { TrainerProfileTab } from './trainer-profile-tab'
+
+// Skill-Will Assessment
+export { AssessmentWizard } from './assessment-wizard'
+export { AssessmentResults } from './assessment-results'
+export { AssessmentTab } from './assessment-tab'
+
+// Availability Calendar
+export { AvailabilityCalendar } from './availability-calendar'
+

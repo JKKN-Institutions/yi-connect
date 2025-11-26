@@ -54,7 +54,8 @@
       "Bash(npm ls:*)",
       "mcp__supabase__get_logs",
       "WebFetch(domain:www.npmjs.com)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(cmd /c dir \"D:\\JKKN\\yi-connect\\app\\(dashboard)\")"
     ],
     "deny": [],
     "ask": []

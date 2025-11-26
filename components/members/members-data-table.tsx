@@ -7,14 +7,15 @@
 
 'use client'
 
-import { useTransition } from 'react'
+import { useState, useTransition, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { DataTable } from '@/components/data-table/data-table'
 import { getMemberColumns } from './members-table-columns'
+import { MemberCategoryTabs } from './member-category-tabs'
 import { Button } from '@/components/ui/button'
 import { RefreshCw } from 'lucide-react'
 import type { DataTableFilterField } from '@/lib/table/types'
-import type { MemberListItem } from '@/types/member'
+import type { MemberListItem, MemberCategoryTab } from '@/types/member'
 
 interface MembersDataTableProps {
   data: MemberListItem[]
@@ -24,6 +25,7 @@ interface MembersDataTableProps {
 export function MembersDataTable({ data, userRoles }: MembersDataTableProps) {
   const router = useRouter()
   const [isRefreshing, startRefresh] = useTransition()
+  const [activeTab, setActiveTab] = useState<MemberCategoryTab>('all')
 
   // Get columns with user role-based actions (client-side)
   const columns = getMemberColumns(userRoles)
@@ -33,6 +35,24 @@ export function MembersDataTable({ data, userRoles }: MembersDataTableProps) {
       router.refresh()
     })
   }
+
+  // Filter data based on active tab
+  const filteredData = useMemo(() => {
+    switch (activeTab) {
+      case 'trainers':
+        return data.filter(m => m.is_trainer)
+      case 'star':
+        return data.filter(m => m.skill_will_category === 'star')
+      case 'enthusiast':
+        return data.filter(m => m.skill_will_category === 'enthusiast')
+      case 'cynic':
+        return data.filter(m => m.skill_will_category === 'cynic')
+      case 'dead_wood':
+        return data.filter(m => m.skill_will_category === 'dead_wood')
+      default:
+        return data
+    }
+  }, [data, activeTab])
 
   // Define filter fields
   const filterFields: DataTableFilterField<MemberListItem>[] = [
@@ -51,6 +71,16 @@ export function MembersDataTable({ data, userRoles }: MembersDataTableProps) {
         { label: 'Alumni', value: 'alumni' },
       ],
     },
+    {
+      label: 'Category',
+      value: 'skill_will_category',
+      options: [
+        { label: 'Star', value: 'star' },
+        { label: 'Enthusiast', value: 'enthusiast' },
+        { label: 'Cynic', value: 'cynic' },
+        { label: 'Needs Attention', value: 'dead_wood' },
+      ],
+    },
   ]
 
   // Export configuration - only serializable data
@@ -64,6 +94,8 @@ export function MembersDataTable({ data, userRoles }: MembersDataTableProps) {
       { key: 'designation' as const, label: 'Designation' },
       { key: 'membership_status' as const, label: 'Status' },
       { key: 'member_since' as const, label: 'Member Since' },
+      { key: 'skill_will_category' as const, label: 'Category' },
+      { key: 'is_trainer' as const, label: 'Is Trainer' },
       { key: 'engagement_score' as const, label: 'Engagement Score' },
       { key: 'readiness_score' as const, label: 'Readiness Score' },
       { key: 'skills_count' as const, label: 'Skills Count' },
@@ -72,8 +104,15 @@ export function MembersDataTable({ data, userRoles }: MembersDataTableProps) {
 
   return (
     <div className="space-y-4">
-      {/* Refresh Button */}
-      <div className="flex justify-end">
+      {/* Category Tabs */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <MemberCategoryTabs
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          members={data}
+        />
+
+        {/* Refresh Button */}
         <Button
           variant="outline"
           size="sm"
@@ -88,7 +127,7 @@ export function MembersDataTable({ data, userRoles }: MembersDataTableProps) {
       {/* Data Table */}
       <DataTable
         columns={columns}
-        data={data}
+        data={filteredData}
         filterFields={filterFields}
         exportConfig={exportConfig}
       />

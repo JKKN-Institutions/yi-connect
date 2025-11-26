@@ -28,6 +28,10 @@ import {
 import { notFound } from 'next/navigation'
 import { MemberDetailClient } from './member-detail-client'
 import { getMemberById } from '@/lib/data/members'
+import { getTrainerProfile } from '@/lib/data/trainers'
+import { getMemberAssessment, getAvailableMentors } from '@/lib/data/assessments'
+import { getVerticals } from '@/lib/data/vertical'
+import { getMemberAvailability } from '@/lib/data/availability'
 
 interface PageProps {
   params: Promise<{ id: string }>
@@ -61,12 +65,31 @@ function getStatusColor(status: string): string {
 
 // Content component that fetches member data
 async function MemberDetailContent({ id }: { id: string }) {
-  // Fetch member data
-  const member = await getMemberById(id)
+  // Fetch member data, trainer profile, assessment, and verticals in parallel
+  const [member, trainerProfile, assessment] = await Promise.all([
+    getMemberById(id),
+    getTrainerProfile(id),
+    getMemberAssessment(id),
+  ])
 
   if (!member) {
     notFound()
   }
+
+  // Fetch verticals, mentors, and availability (need chapter_id from member)
+  const chapterId = member.chapter_id || ''
+  // Get date range for availability (3 months)
+  const today = new Date()
+  const threeMonthsLater = new Date(today)
+  threeMonthsLater.setMonth(threeMonthsLater.getMonth() + 3)
+  const startDate = today.toISOString().split('T')[0]
+  const endDate = threeMonthsLater.toISOString().split('T')[0]
+
+  const [verticals, mentors, availabilities] = await Promise.all([
+    chapterId ? getVerticals({ chapter_id: chapterId }) : Promise.resolve([]),
+    chapterId ? getAvailableMentors(chapterId) : Promise.resolve([]),
+    getMemberAvailability(id, startDate, endDate),
+  ])
 
   return (
     <div className="space-y-6">
@@ -226,8 +249,16 @@ async function MemberDetailContent({ id }: { id: string }) {
         </Card>
       </div>
 
-      {/* Skills & Certifications - Client Component */}
-      <MemberDetailClient member={member} />
+      {/* Skills, Certifications, Trainer Profile & Assessment - Client Component */}
+      <MemberDetailClient
+        member={member}
+        trainerProfile={trainerProfile}
+        assessment={assessment}
+        verticals={verticals}
+        availableMentors={mentors}
+        availabilities={availabilities}
+        canEdit={true}
+      />
 
       {/* Emergency Contact */}
       {(member.emergency_contact_name || member.emergency_contact_phone) && (

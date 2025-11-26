@@ -36,7 +36,7 @@ export const getMembers = cache(
     const supabase = await createServerSupabaseClient();
     const { page = 1, pageSize = 10, filters = {}, sort } = params;
 
-    // Simplified query to avoid RLS/FK issues with auth.users
+    // Extended query to include skill_will_category
     let query = supabase.from('members').select(
       `
       id,
@@ -47,6 +47,7 @@ export const getMembers = cache(
       membership_status,
       member_since,
       chapter_id,
+      skill_will_category,
       profiles!inner(
         email,
         full_name,
@@ -80,11 +81,10 @@ export const getMembers = cache(
       query = query.eq('is_active', filters.is_active);
     }
 
-    // TODO: Add engagement and readiness score filters when those modules are built
-    // if (filters.min_engagement_score !== undefined) { ... }
-    // if (filters.max_engagement_score !== undefined) { ... }
-    // if (filters.min_readiness_score !== undefined) { ... }
-    // if (filters.max_readiness_score !== undefined) { ... }
+    // Apply skill_will_category filter
+    if (filters.skill_will_category && filters.skill_will_category.length > 0) {
+      query = query.in('skill_will_category', filters.skill_will_category);
+    }
 
     // Apply sorting
     if (sort) {
@@ -122,6 +122,39 @@ export const getMembers = cache(
       rolesMap.set(memberId, roles || []);
     }
 
+    // Fetch verticals for all members (batch query)
+    const verticalsMap = new Map<string, Array<{ id: string; name: string; color: string | null }>>();
+    if (memberIds.length > 0) {
+      const { data: verticalMembers } = await supabase
+        .from('vertical_members')
+        .select(`
+          member_id,
+          vertical:verticals(id, name, color)
+        `)
+        .in('member_id', memberIds)
+        .eq('is_active', true);
+
+      (verticalMembers || []).forEach((vm: any) => {
+        if (vm.vertical) {
+          const existing = verticalsMap.get(vm.member_id) || [];
+          existing.push(vm.vertical);
+          verticalsMap.set(vm.member_id, existing);
+        }
+      });
+    }
+
+    // Fetch trainer status for all members (batch query)
+    const trainersSet = new Set<string>();
+    if (memberIds.length > 0) {
+      const { data: trainers } = await supabase
+        .from('trainer_profiles')
+        .select('member_id')
+        .in('member_id', memberIds)
+        .eq('is_trainer_eligible', true);
+
+      (trainers || []).forEach((t: any) => trainersSet.add(t.member_id));
+    }
+
     // Transform data to MemberListItem format
     const members: MemberListItem[] = (data || []).map((member: any) => ({
       id: member.id,
@@ -136,11 +169,31 @@ export const getMembers = cache(
       readiness_score: 0, // Will be populated when leadership module is built
       skills_count: 0, // Will be populated when skills module is built
       top_skills: [], // Will be populated when skills module is built
-      roles: rolesMap.get(member.id) || []
+      roles: rolesMap.get(member.id) || [],
+      skill_will_category: member.skill_will_category || null,
+      is_trainer: trainersSet.has(member.id),
+      verticals: verticalsMap.get(member.id) || []
     }));
 
+    // Apply category_tab filter (post-fetch for trainers since it's a separate table)
+    let filteredMembers = members;
+    if (filters.category_tab) {
+      switch (filters.category_tab) {
+        case 'trainers':
+          filteredMembers = members.filter(m => m.is_trainer);
+          break;
+        case 'star':
+        case 'enthusiast':
+        case 'cynic':
+        case 'dead_wood':
+          filteredMembers = members.filter(m => m.skill_will_category === filters.category_tab);
+          break;
+        // 'all' returns everything
+      }
+    }
+
     return {
-      data: members,
+      data: filteredMembers,
       total: count || 0,
       page,
       pageSize,

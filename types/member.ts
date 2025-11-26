@@ -118,7 +118,21 @@ export interface MemberListItem {
     role_name: string
     hierarchy_level: number
   }>
+  // New fields for vertical and category filtering
+  skill_will_category: SkillWillCategory | null
+  is_trainer: boolean
+  verticals: Array<{
+    id: string
+    name: string
+    color: string | null
+  }>
 }
+
+// Skill-Will Category type
+export type SkillWillCategory = 'star' | 'enthusiast' | 'cynic' | 'dead_wood'
+
+// Member category tab filter type
+export type MemberCategoryTab = 'all' | 'trainers' | 'star' | 'enthusiast' | 'cynic' | 'dead_wood'
 
 export interface SkillWithMembers extends Skill {
   member_count: number
@@ -161,6 +175,11 @@ export interface MemberFilters {
   city?: string[]
   company?: string[]
   is_active?: boolean
+  // New filters for category and vertical
+  category_tab?: MemberCategoryTab
+  skill_will_category?: SkillWillCategory[]
+  vertical_ids?: string[]
+  is_trainer?: boolean
 }
 
 export interface MemberSortOptions {
@@ -330,6 +349,15 @@ export const SKILL_CATEGORIES = [
 ] as const
 export const READINESS_LEVELS = ['not_ready', 'developing', 'ready', 'highly_ready'] as const
 export const GENDERS = ['male', 'female', 'other', 'prefer_not_to_say'] as const
+export const SKILL_WILL_CATEGORIES = ['star', 'enthusiast', 'cynic', 'dead_wood'] as const
+export const MEMBER_CATEGORY_TABS = [
+  { value: 'all', label: 'All Members', description: 'View all chapter members' },
+  { value: 'trainers', label: 'Trainers', description: 'Certified session trainers' },
+  { value: 'star', label: 'Stars', description: 'High skill & high will members' },
+  { value: 'enthusiast', label: 'Enthusiasts', description: 'High will, developing skills' },
+  { value: 'cynic', label: 'Cynics', description: 'High skill, lower engagement' },
+  { value: 'dead_wood', label: 'Needs Attention', description: 'Members needing development' },
+] as const
 
 // ============================================================================
 // Helper Types

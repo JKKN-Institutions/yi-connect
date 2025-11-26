@@ -55,7 +55,9 @@
       "mcp__supabase__get_logs",
       "WebFetch(domain:www.npmjs.com)",
       "WebSearch",
-      "Bash(cmd /c dir \"D:\\JKKN\\yi-connect\\app\\(dashboard)\")"
+      "Bash(cmd /c dir \"D:\\JKKN\\yi-connect\\app\\(dashboard)\")",
+      "mcp__supabase__list_edge_functions",
+      "mcp__supabase__deploy_edge_function"
     ],
     "deny": [],
     "ask": []

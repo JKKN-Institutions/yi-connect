@@ -155,29 +155,188 @@ export async function requireRole(allowedRoles: string[]) {
 /**
  * Check if user has specific permission
  *
+ * Supports both role-based permissions and context-specific permissions
+ * (vertical chair, sub-chapter lead).
+ *
  * Usage:
  * ```typescript
+ * // Basic permission check
  * const canManageEvents = await hasPermission('manage_events')
+ *
+ * // With context (for vertical-specific permissions)
+ * const canAssignTrainers = await hasPermission('assign_trainers', {
+ *   verticalId: 'some-vertical-id'
+ * })
+ *
+ * // With sub-chapter context
+ * const canManageChapter = await hasPermission('manage_chapter_members', {
+ *   subChapterId: 'some-sub-chapter-id'
+ * })
  * ```
  */
-export async function hasPermission(permission: string): Promise<boolean> {
+export async function hasPermission(
+  permission: string,
+  context?: {
+    verticalId?: string
+    subChapterId?: string
+    stakeholderId?: string
+  }
+): Promise<boolean> {
   const user = await getCurrentUser()
   if (!user) return false
 
   const supabase = await createServerSupabaseClient()
 
-  // Use the secure database function to avoid permission errors
+  // Get user roles with permissions
+  const { data: userRoles, error } = await supabase.rpc('get_user_roles', {
+    p_user_id: user.id
+  })
+
+  if (error || !userRoles || userRoles.length === 0) return false
+
+  // Get highest hierarchy level
+  const maxHierarchy = Math.max(
+    ...userRoles.map((ur: { hierarchy_level: number }) => ur.hierarchy_level)
+  )
+
+  // Admin/Executive override - has all permissions
+  if (maxHierarchy >= 5) return true
+
+  // Check role-based permissions
+  const allPermissions = userRoles.flatMap(
+    (ur: { permissions: string[] | null }) => ur.permissions || []
+  )
+  if (allPermissions.includes(permission)) return true
+
+  // Vertical-specific permissions for vertical chairs
+  if (context?.verticalId) {
+    const { data: isChair } = await supabase.rpc('is_vertical_chair', {
+      p_user_id: user.id,
+      p_vertical_id: context.verticalId
+    })
+
+    if (isChair) {
+      // Vertical chairs have these permissions for their vertical
+      const verticalChairPermissions = [
+        'view_stakeholders',
+        'manage_stakeholders',
+        'assign_trainers',
+        'approve_materials',
+        'view_vertical_dashboard',
+        'manage_vertical_activities',
+        'view_trainer_reports'
+      ]
+      if (verticalChairPermissions.includes(permission)) return true
+    }
+  }
+
+  // Sub-chapter lead permissions
+  if (context?.subChapterId) {
+    const { data: isLead } = await supabase.rpc('is_sub_chapter_lead', {
+      p_user_id: user.id,
+      p_sub_chapter_id: context.subChapterId
+    })
+
+    if (isLead) {
+      const chapterLeadPermissions = [
+        'manage_chapter_members',
+        'create_chapter_events',
+        'view_chapter_reports',
+        'mark_attendance',
+        'view_chapter_dashboard'
+      ]
+      if (chapterLeadPermissions.includes(permission)) return true
+    }
+  }
+
+  // Check if user is any vertical chair (without specific vertical context)
+  if (!context?.verticalId) {
+    const { data: isAnyChair } = await supabase.rpc('is_vertical_chair', {
+      p_user_id: user.id
+    })
+
+    if (isAnyChair) {
+      // General vertical chair permissions
+      const generalChairPermissions = [
+        'view_vertical_dashboard',
+        'view_trainer_reports'
+      ]
+      if (generalChairPermissions.includes(permission)) return true
+    }
+  }
+
+  // Check if user is any sub-chapter lead
+  if (!context?.subChapterId) {
+    const { data: isAnyLead } = await supabase.rpc('is_sub_chapter_lead', {
+      p_user_id: user.id
+    })
+
+    if (isAnyLead) {
+      const generalLeadPermissions = ['view_chapter_dashboard']
+      if (generalLeadPermissions.includes(permission)) return true
+    }
+  }
+
+  return false
+}
+
+/**
+ * Check if user has any of the specified permissions
+ */
+export async function hasAnyPermission(
+  permissions: string[],
+  context?: {
+    verticalId?: string
+    subChapterId?: string
+    stakeholderId?: string
+  }
+): Promise<boolean> {
+  for (const permission of permissions) {
+    if (await hasPermission(permission, context)) {
+      return true
+    }
+  }
+  return false
+}
+
+/**
+ * Check if user has all of the specified permissions
+ */
+export async function hasAllPermissions(
+  permissions: string[],
+  context?: {
+    verticalId?: string
+    subChapterId?: string
+    stakeholderId?: string
+  }
+): Promise<boolean> {
+  for (const permission of permissions) {
+    if (!(await hasPermission(permission, context))) {
+      return false
+    }
+  }
+  return true
+}
+
+/**
+ * Get user's hierarchy level (cached)
+ */
+export const getUserHierarchyLevel = cache(async (): Promise<number> => {
+  const user = await getCurrentUser()
+  if (!user) return 0
+
+  const supabase = await createServerSupabaseClient()
+
   const { data: userRoles } = await supabase.rpc('get_user_roles', {
     p_user_id: user.id
   })
 
-  if (!userRoles) return false
+  if (!userRoles || userRoles.length === 0) return 0
 
-  // For now, we don't have permissions column in the function result
-  // This would need to be enhanced if permission-based checks are needed
-  // For basic role checking, use requireRole() instead
-  return false
-}
+  return Math.max(
+    ...userRoles.map((ur: { hierarchy_level: number }) => ur.hierarchy_level)
+  )
+})
 
 /**
  * Sign out the current user

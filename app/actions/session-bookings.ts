@@ -4,10 +4,21 @@
  * Session Booking Server Actions
  *
  * Server actions for managing session bookings in the coordinator portal.
+ * Includes business rules enforcement from Part3.md:
+ * - Rule 1: 7-day advance booking requirement
+ * - Rule 2: Trainer max 6 sessions/month
+ * - Rule 3: Materials approval workflow
+ * - Rule 4: Booking restrictions
  */
 
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import {
+  validateBookingAdvanceTime,
+  validateTrainerAssignment,
+  validateBookingRequest,
+  getTrainerWorkload,
+} from '@/lib/business-rules'
 import type {
   CreateBookingInput,
   AssignTrainerInput,
@@ -23,7 +34,7 @@ import type {
 // ============================================================================
 
 type ActionResult<T = void> =
-  | { success: true; data?: T }
+  | { success: true; data?: T; warnings?: string[] }
   | { success: false; error: string }
 
 // ============================================================================
@@ -32,12 +43,40 @@ type ActionResult<T = void> =
 
 /**
  * Create a new session booking
+ *
+ * Validates:
+ * - Rule 1: 7-day advance booking requirement
+ * - Rule 4: Booking restrictions (limits, timing, days)
  */
 export async function createBooking(
   input: CreateBookingInput
 ): Promise<ActionResult<{ id: string }>> {
   try {
     const supabase = await createServerSupabaseClient()
+
+    // Rule 1: Validate advance time requirement
+    const advanceValidation = validateBookingAdvanceTime(new Date(input.preferred_date))
+    if (!advanceValidation.valid) {
+      return { success: false, error: advanceValidation.errors[0] }
+    }
+
+    // Rule 4: Comprehensive booking validation (if start/end times provided)
+    if (input.preferred_time_slot) {
+      const [startTime, endTime] = input.preferred_time_slot.split('-').map(t => t.trim())
+      if (startTime && endTime) {
+        const bookingValidation = await validateBookingRequest(
+          input.stakeholder_id,
+          input.stakeholder_type as 'school' | 'college' | 'industry',
+          new Date(input.preferred_date),
+          startTime,
+          endTime
+        )
+
+        if (!bookingValidation.valid) {
+          return { success: false, error: bookingValidation.errors.join('; ') }
+        }
+      }
+    }
 
     const statusHistory: StatusHistoryItem[] = [
       {
@@ -75,7 +114,11 @@ export async function createBooking(
     revalidatePath('/coordinator')
     revalidatePath('/stakeholders')
 
-    return { success: true, data: { id: data.id } }
+    return {
+      success: true,
+      data: { id: data.id },
+      warnings: advanceValidation.warnings,
+    }
   } catch (error) {
     console.error('Create booking error:', error)
     return {
@@ -87,6 +130,9 @@ export async function createBooking(
 
 /**
  * Assign a trainer to a booking
+ *
+ * Validates:
+ * - Rule 2: Trainer max 6 sessions/month
  */
 export async function assignTrainer(
   input: AssignTrainerInput
@@ -98,6 +144,17 @@ export async function assignTrainer(
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) {
       throw new Error('Not authenticated')
+    }
+
+    // Rule 2: Validate trainer workload before assignment
+    const sessionDate = new Date(input.confirmed_date)
+    const workloadValidation = await validateTrainerAssignment(
+      input.trainer_id,
+      sessionDate
+    )
+
+    if (!workloadValidation.valid) {
+      return { success: false, error: workloadValidation.errors[0] }
     }
 
     // Get current booking
@@ -299,12 +356,21 @@ export async function completeSession(
 
 /**
  * Reschedule a booking
+ *
+ * Validates:
+ * - Rule 1: 7-day advance booking requirement for new date
  */
 export async function rescheduleBooking(
   input: RescheduleBookingInput
 ): Promise<ActionResult> {
   try {
     const supabase = await createServerSupabaseClient()
+
+    // Rule 1: Validate advance time for new date
+    const advanceValidation = validateBookingAdvanceTime(new Date(input.new_date))
+    if (!advanceValidation.valid) {
+      return { success: false, error: advanceValidation.errors[0] }
+    }
 
     const { data: { user } } = await supabase.auth.getUser()
 

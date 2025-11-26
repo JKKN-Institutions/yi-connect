@@ -25,6 +25,77 @@ import type {
 import type { Skill, Certification } from '@/types/member';
 
 // ============================================================================
+// Current User Member Data
+// ============================================================================
+
+/**
+ * Get the current user's member record with profile data
+ * Returns null if user is not authenticated or has no member record
+ *
+ * Note: We don't use 'use cache' directive here because it depends on getCurrentUser()
+ * which accesses dynamic cookies. React's cache() provides request-level deduplication.
+ */
+export const getCurrentUserMember = cache(async () => {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    return null;
+  }
+
+  const supabase = await createServerSupabaseClient();
+
+  // Get the member record for the current user
+  // Note: member.id IS the profile/user id in the members table
+  const { data: member, error } = await supabase
+    .from('members')
+    .select(
+      `
+      id,
+      chapter_id,
+      company,
+      designation,
+      phone,
+      date_of_birth,
+      blood_group,
+      status,
+      membership_type,
+      renewal_date,
+      engagement_score,
+      skill_will_category,
+      leadership_readiness,
+      career_stage,
+      total_events_attended,
+      total_volunteer_hours,
+      created_at,
+      profile:profiles(
+        email,
+        full_name,
+        avatar_url,
+        role
+      ),
+      chapter:chapters(
+        id,
+        name,
+        location,
+        region
+      )
+    `
+    )
+    .eq('id', user.id)
+    .single();
+
+  if (error || !member) {
+    return null;
+  }
+
+  return {
+    ...member,
+    member_id: member.id,
+    role: (member.profile as any)?.role || 'Member',
+  };
+});
+
+// ============================================================================
 // Member Queries
 // ============================================================================
 

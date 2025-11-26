@@ -550,3 +550,536 @@ export function getRSVPStatusVariant(
   };
   return variants[status];
 }
+
+// ============================================================================
+// PART 2: SERVICE EVENT TYPES
+// ============================================================================
+
+export type ServiceEventType =
+  | 'masoom'
+  | 'thalir'
+  | 'yuva'
+  | 'road_safety'
+  | 'career_guidance'
+  | 'soft_skills'
+  | 'other';
+
+export type StakeholderType =
+  | 'school'
+  | 'college'
+  | 'industry'
+  | 'ngo'
+  | 'government';
+
+export interface ServiceEventDetails {
+  is_service_event: boolean;
+  service_type: ServiceEventType | null;
+  stakeholder_type: StakeholderType | null;
+  stakeholder_id: string | null;
+  contact_person_name: string | null;
+  contact_person_phone: string | null;
+  contact_person_email: string | null;
+  expected_students: number | null;
+  trainers_needed: number; // Generated column
+}
+
+export interface EventWithServiceDetails extends EventWithDetails {
+  // Service event fields (directly on event from database)
+  is_service_event: boolean;
+  service_type?: ServiceEventType | null;
+  stakeholder_id?: string | null;
+  contact_person_name?: string | null;
+  contact_person_phone?: string | null;
+  contact_person_email?: string | null;
+  expected_students?: number | null;
+  trainers_needed?: number | null;
+  // Nested details (optional)
+  service_details?: ServiceEventDetails;
+  stakeholder?: {
+    id: string;
+    name: string;
+    type: StakeholderType;
+    city?: string;
+    state?: string;
+  } | null;
+}
+
+// ============================================================================
+// PART 2: TRAINER ASSIGNMENT TYPES
+// ============================================================================
+
+export type TrainerAssignmentStatus =
+  | 'recommended'
+  | 'selected'
+  | 'invited'
+  | 'accepted'
+  | 'declined'
+  | 'confirmed'
+  | 'completed'
+  | 'cancelled';
+
+export interface TrainerScoreBreakdown {
+  location_score: number; // Max 30
+  distribution_score: number; // Max 30
+  performance_score: number; // Max 25
+  engagement_score: number; // Max 15
+}
+
+export interface TrainerStats {
+  days_since_last_session: number | null;
+  average_rating: number | null;
+  total_sessions: number;
+  sessions_this_month: number;
+}
+
+export interface EventTrainerAssignment {
+  id: string;
+  event_id: string;
+  trainer_profile_id: string;
+  status: TrainerAssignmentStatus;
+  is_lead_trainer: boolean;
+  match_score: number | null;
+  score_breakdown: TrainerScoreBreakdown | null;
+  assigned_by: string | null;
+  assigned_at: string | null;
+  selection_method: 'auto' | 'manual' | null;
+  response_deadline: string | null;
+  responded_at: string | null;
+  decline_reason: string | null;
+  confirmed_at: string | null;
+  confirmed_by: string | null;
+  attendance_confirmed: boolean | null;
+  trainer_rating: number | null;
+  trainer_feedback: string | null;
+  coordinator_rating: number | null;
+  coordinator_feedback: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TrainerRecommendation {
+  trainer_profile_id: string;
+  member_id: string;
+  full_name: string;
+  email: string;
+  avatar_url: string | null;
+  match_score: number;
+  score_breakdown: TrainerScoreBreakdown;
+  trainer_stats: TrainerStats;
+  eligible_session_types: string[];
+  certifications_count: number;
+  is_available: boolean;
+}
+
+export interface EventTrainerAssignmentWithDetails extends EventTrainerAssignment {
+  trainer?: {
+    id: string;
+    member_id: string;
+    member?: {
+      id: string;
+      profile?: {
+        full_name: string;
+        email: string;
+        avatar_url: string | null;
+        phone: string | null;
+      };
+    };
+    total_sessions: number;
+    average_rating: number | null;
+  };
+}
+
+// ============================================================================
+// PART 2: EVENT MATERIALS TYPES
+// ============================================================================
+
+export type MaterialApprovalStatus =
+  | 'draft'
+  | 'pending_review'
+  | 'approved'
+  | 'revision_requested'
+  | 'superseded';
+
+export type MaterialType =
+  | 'presentation'
+  | 'handout'
+  | 'worksheet'
+  | 'video'
+  | 'assessment'
+  | 'certificate_template'
+  | 'other';
+
+export interface EventMaterial {
+  id: string;
+  event_id: string;
+  trainer_assignment_id: string | null;
+  title: string;
+  description: string | null;
+  material_type: MaterialType;
+  file_url: string;
+  file_name: string;
+  file_size_kb: number | null;
+  mime_type: string | null;
+  version: number;
+  is_current_version: boolean;
+  parent_material_id: string | null;
+  version_notes: string | null;
+  status: MaterialApprovalStatus;
+  submitted_at: string | null;
+  submitted_by: string | null;
+  reviewed_at: string | null;
+  reviewed_by: string | null;
+  review_notes: string | null;
+  rejection_reason: string | null;
+  is_coordinator_visible: boolean;
+  download_count: number;
+  last_downloaded_at: string | null;
+  is_template: boolean;
+  is_shared: boolean;
+  tags: string[] | null;
+  uploaded_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EventMaterialWithUploader extends EventMaterial {
+  uploader?: {
+    id: string;
+    full_name: string;
+    avatar_url: string | null;
+  };
+  reviewer?: {
+    id: string;
+    full_name: string;
+  } | null;
+}
+
+export interface MaterialVersionHistory {
+  current: EventMaterial;
+  versions: EventMaterial[];
+}
+
+// ============================================================================
+// PART 2: SESSION REPORT TYPES
+// ============================================================================
+
+export type VenueCondition = 'excellent' | 'good' | 'adequate' | 'poor';
+export type EngagementLevel = 'very_high' | 'high' | 'moderate' | 'low' | 'very_low';
+
+export interface ClassBreakdown {
+  [className: string]: number; // e.g., { "class_8": 30, "class_9": 25 }
+}
+
+export interface EventSessionReport {
+  id: string;
+  event_id: string;
+  trainer_assignment_id: string | null;
+  expected_attendance: number | null;
+  actual_attendance: number;
+  male_count: number;
+  female_count: number;
+  staff_present: number;
+  class_breakdown: ClassBreakdown | null;
+  actual_start_time: string | null;
+  actual_end_time: string | null;
+  actual_duration_minutes: number | null;
+  topics_covered: string[] | null;
+  venue_condition: VenueCondition | null;
+  av_equipment_worked: boolean;
+  logistical_issues: string | null;
+  engagement_level: EngagementLevel | null;
+  knowledge_retention_score: number | null;
+  behavioral_change_observed: string | null;
+  coordinator_name: string | null;
+  coordinator_feedback: string | null;
+  coordinator_rating: number | null;
+  willing_to_host_again: boolean | null;
+  follow_up_required: boolean;
+  follow_up_notes: string | null;
+  follow_up_date: string | null;
+  follow_up_completed: boolean;
+  follow_up_completed_at: string | null;
+  photo_urls: string[] | null;
+  attendance_sheet_url: string | null;
+  certificate_distribution_url: string | null;
+  trainer_notes: string | null;
+  highlights: string | null;
+  challenges_faced: string | null;
+  recommendations: string | null;
+  best_practices_noted: string | null;
+  submitted_by: string;
+  submitted_at: string;
+  verified_by: string | null;
+  verified_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// ============================================================================
+// PART 2: CARPOOL TYPES
+// ============================================================================
+
+export type CarpoolMatchStatus =
+  | 'proposed'
+  | 'accepted'
+  | 'declined'
+  | 'cancelled'
+  | 'completed';
+
+export type TravelPreference =
+  | 'own_vehicle'
+  | 'need_ride'
+  | 'arrange_own'
+  | 'not_applicable';
+
+export interface EventCarpoolMatch {
+  id: string;
+  event_id: string;
+  driver_rsvp_id: string;
+  driver_member_id: string;
+  passenger_rsvp_id: string;
+  passenger_member_id: string;
+  match_status: CarpoolMatchStatus;
+  proposed_at: string;
+  driver_confirmed_at: string | null;
+  passenger_confirmed_at: string | null;
+  agreed_pickup_location: string | null;
+  agreed_pickup_time: string | null;
+  pickup_notes: string | null;
+  ride_completed: boolean | null;
+  driver_feedback: string | null;
+  passenger_feedback: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CarpoolMatchWithMembers extends EventCarpoolMatch {
+  driver?: {
+    id: string;
+    full_name: string;
+    avatar_url: string | null;
+    phone: string | null;
+  };
+  passenger?: {
+    id: string;
+    full_name: string;
+    avatar_url: string | null;
+    phone: string | null;
+  };
+}
+
+export interface CarpoolGroup {
+  driver: {
+    member_id: string;
+    full_name: string;
+    avatar_url: string | null;
+    available_seats: number;
+    pickup_location: string | null;
+  };
+  passengers: Array<{
+    member_id: string;
+    full_name: string;
+    avatar_url: string | null;
+    pickup_location: string | null;
+  }>;
+}
+
+// ============================================================================
+// PART 2: FORM INPUT TYPES
+// ============================================================================
+
+export interface CreateServiceEventInput extends CreateEventInput {
+  is_service_event: true;
+  service_type: ServiceEventType;
+  stakeholder_type: StakeholderType;
+  stakeholder_id: string;
+  contact_person_name?: string;
+  contact_person_phone?: string;
+  contact_person_email?: string;
+  expected_students: number;
+}
+
+export interface AssignTrainerInput {
+  event_id: string;
+  trainer_profile_ids: string[];
+  selection_method: 'auto' | 'manual';
+  notes?: string;
+}
+
+export interface RespondToTrainerInviteInput {
+  assignment_id: string;
+  accept: boolean;
+  decline_reason?: string;
+}
+
+export interface UploadMaterialInput {
+  event_id: string;
+  trainer_assignment_id?: string;
+  title: string;
+  description?: string;
+  material_type: MaterialType;
+  file_url: string;
+  file_name: string;
+  file_size_kb?: number;
+  mime_type?: string;
+  tags?: string[];
+}
+
+export interface ReviewMaterialInput {
+  material_id: string;
+  action: 'approve' | 'request_revision';
+  review_notes?: string;
+  rejection_reason?: string;
+}
+
+export interface SubmitSessionReportInput {
+  event_id: string;
+  trainer_assignment_id?: string;
+  actual_attendance: number;
+  male_count?: number;
+  female_count?: number;
+  staff_present?: number;
+  class_breakdown?: ClassBreakdown;
+  actual_start_time?: string;
+  actual_end_time?: string;
+  topics_covered?: string[];
+  venue_condition?: VenueCondition;
+  av_equipment_worked?: boolean;
+  logistical_issues?: string;
+  engagement_level?: EngagementLevel;
+  knowledge_retention_score?: number;
+  behavioral_change_observed?: string;
+  coordinator_name?: string;
+  coordinator_feedback?: string;
+  coordinator_rating?: number;
+  willing_to_host_again?: boolean;
+  follow_up_required?: boolean;
+  follow_up_notes?: string;
+  follow_up_date?: string;
+  photo_urls?: string[];
+  attendance_sheet_url?: string;
+  trainer_notes?: string;
+  highlights?: string;
+  challenges_faced?: string;
+  recommendations?: string;
+  best_practices_noted?: string;
+}
+
+export interface UpdateRSVPWithCarpoolInput extends UpdateRSVPInput {
+  travel_preference?: TravelPreference;
+  available_seats?: number;
+  pickup_location?: string;
+  pickup_notes?: string;
+}
+
+// ============================================================================
+// PART 2: CONSTANTS
+// ============================================================================
+
+export const SERVICE_EVENT_TYPES: Record<ServiceEventType, string> = {
+  masoom: 'Masoom',
+  thalir: 'Thalir',
+  yuva: 'Yuva',
+  road_safety: 'Road Safety',
+  career_guidance: 'Career Guidance',
+  soft_skills: 'Soft Skills',
+  other: 'Other'
+};
+
+export const STAKEHOLDER_TYPES: Record<StakeholderType, string> = {
+  school: 'School',
+  college: 'College',
+  industry: 'Industry',
+  ngo: 'NGO',
+  government: 'Government'
+};
+
+export const TRAINER_ASSIGNMENT_STATUSES: Record<TrainerAssignmentStatus, string> = {
+  recommended: 'Recommended',
+  selected: 'Selected',
+  invited: 'Invited',
+  accepted: 'Accepted',
+  declined: 'Declined',
+  confirmed: 'Confirmed',
+  completed: 'Completed',
+  cancelled: 'Cancelled'
+};
+
+export const MATERIAL_APPROVAL_STATUSES: Record<MaterialApprovalStatus, string> = {
+  draft: 'Draft',
+  pending_review: 'Pending Review',
+  approved: 'Approved',
+  revision_requested: 'Revision Requested',
+  superseded: 'Superseded'
+};
+
+export const MATERIAL_TYPES: Record<MaterialType, string> = {
+  presentation: 'Presentation',
+  handout: 'Handout',
+  worksheet: 'Worksheet',
+  video: 'Video',
+  assessment: 'Assessment',
+  certificate_template: 'Certificate Template',
+  other: 'Other'
+};
+
+export const VENUE_CONDITIONS: Record<VenueCondition, string> = {
+  excellent: 'Excellent',
+  good: 'Good',
+  adequate: 'Adequate',
+  poor: 'Poor'
+};
+
+export const ENGAGEMENT_LEVELS: Record<EngagementLevel, string> = {
+  very_high: 'Very High',
+  high: 'High',
+  moderate: 'Moderate',
+  low: 'Low',
+  very_low: 'Very Low'
+};
+
+export const TRAVEL_PREFERENCES: Record<TravelPreference, string> = {
+  own_vehicle: 'Own Vehicle',
+  need_ride: 'Need a Ride',
+  arrange_own: 'Arrange Own',
+  not_applicable: 'Not Applicable'
+};
+
+export const CARPOOL_MATCH_STATUSES: Record<CarpoolMatchStatus, string> = {
+  proposed: 'Proposed',
+  accepted: 'Accepted',
+  declined: 'Declined',
+  cancelled: 'Cancelled',
+  completed: 'Completed'
+};
+
+// Helper functions for Part 2 types
+export function getTrainerAssignmentStatusVariant(
+  status: TrainerAssignmentStatus
+): EventStatusBadgeVariant {
+  const variants: Record<TrainerAssignmentStatus, EventStatusBadgeVariant> = {
+    recommended: 'default',
+    selected: 'secondary',
+    invited: 'warning',
+    accepted: 'success',
+    declined: 'destructive',
+    confirmed: 'success',
+    completed: 'success',
+    cancelled: 'destructive'
+  };
+  return variants[status];
+}
+
+export function getMaterialApprovalStatusVariant(
+  status: MaterialApprovalStatus
+): EventStatusBadgeVariant {
+  const variants: Record<MaterialApprovalStatus, EventStatusBadgeVariant> = {
+    draft: 'default',
+    pending_review: 'warning',
+    approved: 'success',
+    revision_requested: 'destructive',
+    superseded: 'secondary'
+  };
+  return variants[status];
+}

@@ -9,7 +9,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import { requireRole, getCurrentUser } from "@/lib/auth";
-import { getNotifications, getUnreadNotificationsCount } from "@/lib/data/communication";
+import { getNotifications } from "@/lib/data/communication";
 import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
@@ -112,7 +112,21 @@ export default function NotificationsPage({ searchParams }: NotificationsPagePro
 }
 
 async function NotificationStats({ memberId }: { memberId: string }) {
-  const unreadCount = await getUnreadNotificationsCount(memberId);
+  // Fetch notifications - this already includes unread_count
+  const notificationsResult = await getNotifications(memberId, undefined, 1, 1000);
+
+  // Calculate this week's count
+  const now = new Date();
+  const startOfWeek = new Date(now);
+  startOfWeek.setDate(now.getDate() - now.getDay()); // Start of current week (Sunday)
+  startOfWeek.setHours(0, 0, 0, 0);
+
+  const thisWeekCount = notificationsResult.data.filter(
+    (n) => new Date(n.created_at) >= startOfWeek
+  ).length;
+
+  const unreadCount = notificationsResult.unread_count;
+  const totalCount = notificationsResult.total;
 
   return (
     <div className="grid gap-4 md:grid-cols-3">
@@ -135,7 +149,7 @@ async function NotificationStats({ memberId }: { memberId: string }) {
           <Bell className="h-4 w-4 text-green-600" />
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold">-</div>
+          <div className="text-2xl font-bold">{thisWeekCount}</div>
           <p className="text-xs text-muted-foreground">
             Received this week
           </p>
@@ -148,7 +162,7 @@ async function NotificationStats({ memberId }: { memberId: string }) {
           <Bell className="h-4 w-4 text-purple-600" />
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold">-</div>
+          <div className="text-2xl font-bold">{totalCount}</div>
           <p className="text-xs text-muted-foreground">
             All-time notifications
           </p>

@@ -5,7 +5,6 @@
  */
 
 import { Suspense } from 'react'
-import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { requireRole } from '@/lib/auth'
 import {
@@ -62,7 +61,19 @@ async function ManageOpportunitiesPageContent() {
   const member = await getCurrentUserMember()
 
   if (!member) {
-    redirect('/login')
+    return (
+      <div className="container py-6">
+        <Card>
+          <CardContent className="py-12 text-center">
+            <Briefcase className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+            <h3 className="text-lg font-medium">Member Profile Required</h3>
+            <p className="text-muted-foreground mt-1 max-w-md mx-auto">
+              Your member profile has not been set up yet. Please contact your chapter administrator to complete your member profile setup.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   // Get opportunities for management

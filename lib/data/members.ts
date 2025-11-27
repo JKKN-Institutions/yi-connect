@@ -54,24 +54,21 @@ export const getCurrentUserMember = cache(async () => {
       chapter_id,
       company,
       designation,
-      phone,
+      industry,
+      years_of_experience,
       date_of_birth,
-      blood_group,
-      status,
+      membership_status,
       membership_type,
       renewal_date,
-      engagement_score,
       skill_will_category,
-      leadership_readiness,
-      career_stage,
-      total_events_attended,
-      total_volunteer_hours,
+      willingness_level,
+      is_active,
       created_at,
       profile:profiles(
         email,
         full_name,
         avatar_url,
-        role
+        phone
       ),
       chapter:chapters(
         id,
@@ -85,13 +82,25 @@ export const getCurrentUserMember = cache(async () => {
     .single();
 
   if (error || !member) {
+    console.error('Error fetching member:', error);
     return null;
   }
+
+  // Get user's role from user_roles table
+  const { data: userRole } = await supabase
+    .from('user_roles')
+    .select('roles(name)')
+    .eq('user_id', user.id)
+    .single();
+
+  const roleName = (userRole?.roles as any)?.name || 'Member';
 
   return {
     ...member,
     member_id: member.id,
-    role: (member.profile as any)?.role || 'Member',
+    role: roleName,
+    status: member.membership_status,
+    phone: (member.profile as any)?.phone,
   };
 });
 

@@ -275,7 +275,7 @@ export function NotificationBell({
             )}
 
             <Button variant='ghost' size='icon' className='h-8 w-8' asChild>
-              <Link href='/communication/notifications/settings'>
+              <Link href='/communications/notifications/settings'>
                 <Settings className='h-4 w-4' />
                 <span className='sr-only'>Notification settings</span>
               </Link>
@@ -397,7 +397,7 @@ export function NotificationBell({
             <Separator />
             <div className='p-2'>
               <Button variant='ghost' className='w-full text-sm' asChild>
-                <Link href='/communication/notifications'>
+                <Link href='/communications/notifications'>
                   View All Notifications
                 </Link>
               </Button>

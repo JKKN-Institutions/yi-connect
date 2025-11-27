@@ -36,7 +36,7 @@ export default async function SegmentsPage() {
           </p>
         </div>
         <Button asChild>
-          <Link href="/communication/segments/new">
+          <Link href="/communications/segments/new">
             <Plus className="mr-2 h-4 w-4" />
             New Segment
           </Link>
@@ -64,7 +64,7 @@ async function SegmentsGrid() {
             Create audience segments to target specific groups of members based on roles, engagement, or other criteria.
           </p>
           <Button asChild>
-            <Link href="/communication/segments/new">
+            <Link href="/communications/segments/new">
               <Plus className="mr-2 h-4 w-4" />
               Create Your First Segment
             </Link>
@@ -105,7 +105,7 @@ async function SegmentsGrid() {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem asChild>
-                    <Link href={`/communication/segments/${segment.id}/edit`}>
+                    <Link href={`/communications/segments/${segment.id}/edit`}>
                       <Edit className="mr-2 h-4 w-4" />
                       Edit
                     </Link>
@@ -176,7 +176,7 @@ async function SegmentsGrid() {
 
             {/* Action Button */}
             <Button variant="outline" className="w-full" asChild>
-              <Link href={`/communication/announcements/new?segment=${segment.id}`}>
+              <Link href={`/communications/announcements/new?segment=${segment.id}`}>
                 Use Segment
               </Link>
             </Button>

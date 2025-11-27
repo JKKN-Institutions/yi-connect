@@ -57,7 +57,11 @@ import {
   Target,
   Activity,
   RefreshCw,
-  Megaphone
+  Megaphone,
+  Upload,
+  Search,
+  ClipboardList,
+  HelpCircle
 } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
@@ -128,6 +132,12 @@ const navigation: NavItem[] = [
         name: 'Add Member',
         href: '/members/new',
         icon: Plus,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member']
+      },
+      {
+        name: 'Bulk Upload',
+        href: '/members/bulk-upload',
+        icon: Upload,
         requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member']
       }
     ]
@@ -307,6 +317,48 @@ const navigation: NavItem[] = [
         href: '/industrial-visits/analytics',
         icon: PieChart,
         requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']
+      },
+      {
+        name: 'Visit Requests',
+        href: '/visit-requests',
+        icon: ClipboardList,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']
+      },
+      {
+        name: 'New Request',
+        href: '/visit-requests/new',
+        icon: Plus
+      }
+    ]
+  },
+  {
+    name: 'Opportunities',
+    icon: Briefcase,
+    requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member'],
+    items: [
+      {
+        name: 'Browse',
+        href: '/opportunities',
+        icon: Search,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member']
+      },
+      {
+        name: 'My Applications',
+        href: '/opportunities/my-applications',
+        icon: FileText,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member']
+      },
+      {
+        name: 'Manage',
+        href: '/opportunities/manage',
+        icon: Settings,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member']
+      },
+      {
+        name: 'Post New',
+        href: '/opportunities/manage/new',
+        icon: Plus,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member']
       }
     ]
   },
@@ -588,6 +640,12 @@ const adminNavigation: NavItem[] = [
     href: '/admin/users',
     icon: UserCog,
     requiredRoles: ['Super Admin', 'National Admin', 'Executive Member', 'Chair']
+  },
+  {
+    name: 'User Guide',
+    href: '/admin/docs',
+    icon: HelpCircle,
+    requiredRoles: ['Super Admin', 'National Admin', 'Executive Member', 'Chair', 'Co-Chair', 'EC Member']
   }
 ];
 

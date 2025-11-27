@@ -46,6 +46,20 @@ function mapOpportunityType(dbType: OpportunityType | null | undefined): string 
   return dbType ? typeMap[dbType] || dbType : 'other'
 }
 
+// Helper function to map UI-friendly types back to DB enum values
+function mapUiTypeToDbType(uiType: string): OpportunityType | null {
+  const reverseMap: Record<string, OpportunityType> = {
+    'visit': 'industrial_visit',
+    'internship': 'internship',
+    'mentorship': 'mentorship',
+    'training': 'training_program',
+    'job': 'job_opening',
+    'project': 'project_collaboration',
+    'other': 'other',
+  }
+  return reverseMap[uiType] || null
+}
+
 // ============================================================================
 // Opportunity Queries
 // ============================================================================
@@ -81,11 +95,10 @@ export const getOpportunities = cache(
       .select(
         `
         *,
-        industry:stakeholders!industry_id(
+        industry:industries!industry_id(
           id,
-          company_name:organization_name,
+          company_name,
           industry_sector,
-          logo_url,
           city
         )
       `,
@@ -216,12 +229,11 @@ export const getOpportunityById = cache(
       .select(
         `
         *,
-        industry:stakeholders!industry_id(
+        industry:industries!industry_id(
           id,
-          company_name:organization_name,
+          company_name,
           industry_sector,
           city,
-          logo_url,
           website
         )
       `
@@ -364,7 +376,6 @@ export const getApplications = cache(
           id,
           company,
           designation,
-          engagement_score,
           profile:profiles(
             full_name,
             email,
@@ -376,8 +387,8 @@ export const getApplications = cache(
           title,
           opportunity_type,
           application_deadline,
-          industry:stakeholders!industry_id(
-            organization_name
+          industry:industries!industry_id(
+            company_name
           )
         )
       `,
@@ -427,14 +438,14 @@ export const getApplications = cache(
         avatar_url: (app.member?.profile as any)?.avatar_url || null,
         company: app.member?.company,
         designation: app.member?.designation,
-        engagement_score: app.member?.engagement_score,
+        engagement_score: null, // engagement_score is in engagement_metrics table, not members
       },
       opportunity: app.opportunity
         ? {
             id: app.opportunity.id,
             title: app.opportunity.title,
             opportunity_type: app.opportunity.opportunity_type,
-            industry_name: app.opportunity.industry?.organization_name || 'Unknown',
+            industry_name: app.opportunity.industry?.company_name || 'Unknown',
             application_deadline: app.opportunity.application_deadline,
           }
         : undefined,
@@ -469,12 +480,11 @@ export const getApplicationById = cache(
         *,
         opportunity:industry_opportunities(
           *,
-          industry:stakeholders!industry_id(
+          industry:industries!industry_id(
             id,
-            company_name:organization_name,
+            company_name,
             industry_sector,
             city,
-            logo_url,
             website
           )
         )
@@ -595,9 +605,9 @@ export const getVisitRequests = cache(
           email,
           avatar_url
         ),
-        industry:stakeholders!industry_id(
+        industry:industries!industry_id(
           id,
-          company_name:organization_name,
+          company_name,
           city,
           industry_sector
         ),
@@ -703,9 +713,9 @@ export const getVisitRequestById = cache(
           email,
           avatar_url
         ),
-        industry:stakeholders!industry_id(
+        industry:industries!industry_id(
           id,
-          company_name:organization_name,
+          company_name,
           city,
           industry_sector
         ),
@@ -821,8 +831,8 @@ export const getTopIndustriesByEngagement = cache(
       .select(
         `
         *,
-        industry:stakeholders!industry_id(
-          organization_name
+        industry:industries!industry_id(
+          company_name
         )
       `
       )
@@ -836,7 +846,7 @@ export const getTopIndustriesByEngagement = cache(
 
     return (data || []).map((m: any) => ({
       ...m,
-      industry_name: m.industry?.organization_name || 'Unknown',
+      industry_name: m.industry?.company_name || 'Unknown',
     }))
   }
 )
@@ -971,19 +981,17 @@ export const getActiveIndustryPartners = cache(
     }
 
     let query = supabase
-      .from('stakeholders')
+      .from('industries')
       .select(`
         id,
-        name: organization_name,
+        name: company_name,
         city,
         industry_type: industry_sector,
-        logo_url,
-        contact_person: primary_contact_name,
-        contact_email: primary_contact_email
+        contact_person: csr_contact_name,
+        contact_email: csr_contact_email
       `)
-      .eq('category', 'industry')
       .eq('status', 'active')
-      .order('organization_name', { ascending: true })
+      .order('company_name', { ascending: true })
 
     if (chapterId) {
       query = query.eq('chapter_id', chapterId)
@@ -1024,13 +1032,12 @@ export const getOpportunitiesForMember = cache(
       .from('industry_opportunities')
       .select(`
         *,
-        stakeholder:stakeholders!industry_id(
+        stakeholder:industries!industry_id(
           id,
-          name: organization_name,
+          name: company_name,
           industry_type: industry_sector,
           city,
           state,
-          logo_url,
           website
         )
       `)
@@ -1038,7 +1045,10 @@ export const getOpportunitiesForMember = cache(
 
     // Apply filters
     if (filters?.type) {
-      query = query.eq('opportunity_type', filters.type)
+      const dbType = mapUiTypeToDbType(filters.type)
+      if (dbType) {
+        query = query.eq('opportunity_type', dbType)
+      }
     }
     if (filters?.status) {
       query = query.eq('status', filters.status)
@@ -1088,11 +1098,11 @@ export const getOpportunityCategories = cache(
     const { data, error } = await supabase
       .from('industry_opportunities')
       .select(`
-        stakeholder:stakeholders!industry_id(
+        stakeholder:industries!industry_id(
           industry_type: industry_sector
         )
       `)
-      .eq('status', 'open')
+      .eq('status', 'accepting_applications')
 
     if (error) {
       console.error('Error fetching categories:', error)
@@ -1187,12 +1197,11 @@ export const getMyVisitRequests = cache(
       .from('member_visit_requests')
       .select(`
         *,
-        stakeholder:stakeholders!industry_id(
+        stakeholder:industries!industry_id(
           id,
-          name: organization_name,
+          name: company_name,
           city,
-          state,
-          logo_url
+          state
         ),
         requester:profiles!requested_by(
           full_name,
@@ -1227,8 +1236,8 @@ export const getOpportunitiesForManagement = cache(
       .from('industry_opportunities')
       .select(`
         *,
-        stakeholder:stakeholders!industry_id(
-          name: organization_name
+        stakeholder:industries!industry_id(
+          name: company_name
         )
       `)
       .order('created_at', { ascending: false })
@@ -1257,7 +1266,7 @@ export const getOpportunitiesForManagement = cache(
       ;(applications || []).forEach((app: any) => {
         const current = appCounts.get(app.opportunity_id) || { total: 0, pending: 0 }
         current.total++
-        if (app.status === 'pending') {
+        if (app.status === 'pending_review' || app.status === 'under_review') {
           current.pending++
         }
         appCounts.set(app.opportunity_id, current)
@@ -1323,8 +1332,7 @@ export const getOpportunityApplications = cache(
           id,
           company,
           designation,
-          industry_background,
-          engagement_score,
+          industry,
           profile:profiles(
             full_name,
             email,
@@ -1351,8 +1359,8 @@ export const getOpportunityApplications = cache(
         avatar_url: app.member.profile?.avatar_url || null,
         company: app.member.company || null,
         designation: app.member.designation || null,
-        industry_sector: app.member.industry_background || null,
-        engagement_score: app.member.engagement_score || null,
+        industry_sector: app.member.industry || null,
+        engagement_score: null,
       } : null,
     }))
   }

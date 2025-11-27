@@ -13,6 +13,7 @@ import { revalidateTag } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentUser, getCurrentChapterId } from '@/lib/auth';
+import { sendAnnouncementPush } from '@/lib/push-notification';
 import {
   createAnnouncementSchema,
   updateAnnouncementSchema,
@@ -117,8 +118,8 @@ export async function createAnnouncement(
     }
 
     // Invalidate cache
-    revalidateTag('communications', 'page');
-    revalidateTag('announcements', 'page');
+    revalidateTag('communications', 'default');
+    revalidateTag('announcements', 'default');
 
     return {
       success: true,
@@ -179,9 +180,9 @@ export async function updateAnnouncement(
     }
 
     // Invalidate cache
-    revalidateTag('communications', 'page');
-    revalidateTag('announcements', 'page');
-    revalidateTag(`announcement-${id}`, 'page');
+    revalidateTag('communications', 'default');
+    revalidateTag('announcements', 'default');
+    revalidateTag(`announcement-${id}`, 'default');
 
     return { success: true, message: 'Announcement updated successfully' };
   } catch (error) {
@@ -267,6 +268,24 @@ export async function sendAnnouncement(id: string): Promise<ActionResponse> {
 
         await supabase.from('in_app_notifications').insert(notifications);
       }
+
+      // Send push notifications (if configured)
+      if (announcement.channels.includes('push') || announcement.channels.includes('in_app')) {
+        try {
+          const pushResult = await sendAnnouncementPush(
+            announcement.chapter_id,
+            {
+              id: announcement.id,
+              title: announcement.title,
+              content: announcement.content
+            }
+          );
+          console.log(`Push notifications sent: ${pushResult.sent} success, ${pushResult.failed} failed`);
+        } catch (pushError) {
+          // Log but don't fail the entire operation if push fails
+          console.error('Push notification error:', pushError);
+        }
+      }
     }
 
     // Update status to sent
@@ -276,9 +295,9 @@ export async function sendAnnouncement(id: string): Promise<ActionResponse> {
       .eq('id', id);
 
     // Invalidate cache
-    revalidateTag('communications', 'page');
-    revalidateTag('announcements', 'page');
-    revalidateTag(`announcement-${id}`, 'page');
+    revalidateTag('communications', 'default');
+    revalidateTag('announcements', 'default');
+    revalidateTag(`announcement-${id}`, 'default');
 
     return {
       success: true,
@@ -322,9 +341,9 @@ export async function scheduleAnnouncement(
       return { success: false, message: 'Failed to schedule announcement', error: error.message };
     }
 
-    revalidateTag('communications', 'page');
-    revalidateTag('announcements', 'page');
-    revalidateTag(`announcement-${id}`, 'page');
+    revalidateTag('communications', 'default');
+    revalidateTag('announcements', 'default');
+    revalidateTag(`announcement-${id}`, 'default');
 
     return { success: true, message: 'Announcement scheduled successfully' };
   } catch (error) {
@@ -357,9 +376,9 @@ export async function cancelAnnouncement(id: string, reason?: string): Promise<A
       return { success: false, message: 'Failed to cancel announcement', error: error.message };
     }
 
-    revalidateTag('communications', 'page');
-    revalidateTag('announcements', 'page');
-    revalidateTag(`announcement-${id}`, 'page');
+    revalidateTag('communications', 'default');
+    revalidateTag('announcements', 'default');
+    revalidateTag(`announcement-${id}`, 'default');
 
     return { success: true, message: 'Announcement cancelled successfully' };
   } catch (error) {
@@ -401,8 +420,8 @@ export async function deleteAnnouncement(id: string): Promise<ActionResponse> {
       return { success: false, message: 'Failed to delete announcement', error: error.message };
     }
 
-    revalidateTag('communications', 'page');
-    revalidateTag('announcements', 'page');
+    revalidateTag('communications', 'default');
+    revalidateTag('announcements', 'default');
 
     return { success: true, message: 'Announcement deleted successfully' };
   } catch (error) {
@@ -459,8 +478,8 @@ export async function duplicateAnnouncement(
       return { success: false, message: 'Failed to duplicate announcement', error: createError.message };
     }
 
-    revalidateTag('communications', 'page');
-    revalidateTag('announcements', 'page');
+    revalidateTag('communications', 'default');
+    revalidateTag('announcements', 'default');
 
     return {
       success: true,
@@ -519,8 +538,8 @@ export async function createTemplate(formData: unknown): Promise<ActionResponse<
       return { success: false, message: 'Failed to create template', error: error.message };
     }
 
-    revalidateTag('communications', 'page');
-    revalidateTag('templates', 'page');
+    revalidateTag('communications', 'default');
+    revalidateTag('templates', 'default');
 
     return {
       success: true,
@@ -571,9 +590,9 @@ export async function updateTemplate(id: string, formData: unknown): Promise<Act
       return { success: false, message: 'Failed to update template', error: error.message };
     }
 
-    revalidateTag('communications', 'page');
-    revalidateTag('templates', 'page');
-    revalidateTag(`template-${id}`, 'page');
+    revalidateTag('communications', 'default');
+    revalidateTag('templates', 'default');
+    revalidateTag(`template-${id}`, 'default');
 
     return { success: true, message: 'Template updated successfully' };
   } catch (error) {
@@ -600,8 +619,8 @@ export async function deleteTemplate(id: string): Promise<ActionResponse> {
       return { success: false, message: 'Failed to delete template', error: error.message };
     }
 
-    revalidateTag('communications', 'page');
-    revalidateTag('templates', 'page');
+    revalidateTag('communications', 'default');
+    revalidateTag('templates', 'default');
 
     return { success: true, message: 'Template deleted successfully' };
   } catch (error) {
@@ -653,8 +672,8 @@ export async function duplicateTemplate(
       return { success: false, message: 'Failed to duplicate template', error: createError.message };
     }
 
-    revalidateTag('communications', 'page');
-    revalidateTag('templates', 'page');
+    revalidateTag('communications', 'default');
+    revalidateTag('templates', 'default');
 
     return {
       success: true,
@@ -711,8 +730,8 @@ export async function createNotification(formData: unknown): Promise<ActionRespo
       return { success: false, message: 'Failed to create notification', error: error.message };
     }
 
-    revalidateTag('communications', 'page');
-    revalidateTag(`notifications-${data.member_id}`, 'page');
+    revalidateTag('communications', 'default');
+    revalidateTag(`notifications-${data.member_id}`, 'default');
 
     return {
       success: true,
@@ -747,8 +766,8 @@ export async function markNotificationAsRead(id: string): Promise<ActionResponse
       return { success: false, message: 'Failed to mark notification as read', error: error.message };
     }
 
-    revalidateTag('communications', 'page');
-    revalidateTag(`notifications-${user.id}`, 'page');
+    revalidateTag('communications', 'default');
+    revalidateTag(`notifications-${user.id}`, 'default');
 
     return { success: true, message: 'Notification marked as read' };
   } catch (error) {
@@ -789,8 +808,8 @@ export async function markAllNotificationsAsRead(
       return { success: false, message: 'Failed to mark all notifications as read', error: error.message };
     }
 
-    revalidateTag('communications', 'page');
-    revalidateTag(`notifications-${targetMemberId}`, 'page');
+    revalidateTag('communications', 'default');
+    revalidateTag(`notifications-${targetMemberId}`, 'default');
 
     return { success: true, message: 'All notifications marked as read' };
   } catch (error) {
@@ -821,8 +840,8 @@ export async function deleteNotification(id: string): Promise<ActionResponse> {
       return { success: false, message: 'Failed to delete notification', error: error.message };
     }
 
-    revalidateTag('communications', 'page');
-    revalidateTag(`notifications-${user.id}`, 'page');
+    revalidateTag('communications', 'default');
+    revalidateTag(`notifications-${user.id}`, 'default');
 
     return { success: true, message: 'Notification deleted successfully' };
   } catch (error) {
@@ -883,8 +902,8 @@ export async function createNewsletter(formData: unknown): Promise<ActionRespons
       return { success: false, message: 'Failed to create newsletter', error: error.message };
     }
 
-    revalidateTag('communications', 'page');
-    revalidateTag('newsletters', 'page');
+    revalidateTag('communications', 'default');
+    revalidateTag('newsletters', 'default');
 
     return {
       success: true,
@@ -934,9 +953,9 @@ export async function updateNewsletter(id: string, formData: unknown): Promise<A
       return { success: false, message: 'Failed to update newsletter', error: error.message };
     }
 
-    revalidateTag('communications', 'page');
-    revalidateTag('newsletters', 'page');
-    revalidateTag(`newsletter-${id}`, 'page');
+    revalidateTag('communications', 'default');
+    revalidateTag('newsletters', 'default');
+    revalidateTag(`newsletter-${id}`, 'default');
 
     return { success: true, message: 'Newsletter updated successfully' };
   } catch (error) {
@@ -969,9 +988,9 @@ export async function publishNewsletter(id: string): Promise<ActionResponse> {
       return { success: false, message: 'Failed to publish newsletter', error: error.message };
     }
 
-    revalidateTag('communications', 'page');
-    revalidateTag('newsletters', 'page');
-    revalidateTag(`newsletter-${id}`, 'page');
+    revalidateTag('communications', 'default');
+    revalidateTag('newsletters', 'default');
+    revalidateTag(`newsletter-${id}`, 'default');
 
     return { success: true, message: 'Newsletter published successfully' };
   } catch (error) {
@@ -1013,8 +1032,8 @@ export async function deleteNewsletter(id: string): Promise<ActionResponse> {
       return { success: false, message: 'Failed to delete newsletter', error: error.message };
     }
 
-    revalidateTag('communications', 'page');
-    revalidateTag('newsletters', 'page');
+    revalidateTag('communications', 'default');
+    revalidateTag('newsletters', 'default');
 
     return { success: true, message: 'Newsletter deleted successfully' };
   } catch (error) {
@@ -1073,8 +1092,8 @@ export async function createSegment(formData: unknown): Promise<ActionResponse<{
     // Calculate initial member count
     await supabase.rpc('calculate_segment_size', { p_segment_id: segment.id });
 
-    revalidateTag('communications', 'page');
-    revalidateTag('segments', 'page');
+    revalidateTag('communications', 'default');
+    revalidateTag('segments', 'default');
 
     return {
       success: true,
@@ -1128,9 +1147,9 @@ export async function updateSegment(id: string, formData: unknown): Promise<Acti
       await supabase.rpc('calculate_segment_size', { p_segment_id: id });
     }
 
-    revalidateTag('communications', 'page');
-    revalidateTag('segments', 'page');
-    revalidateTag(`segment-${id}`, 'page');
+    revalidateTag('communications', 'default');
+    revalidateTag('segments', 'default');
+    revalidateTag(`segment-${id}`, 'default');
 
     return { success: true, message: 'Segment updated successfully' };
   } catch (error) {
@@ -1157,8 +1176,8 @@ export async function deleteSegment(id: string): Promise<ActionResponse> {
       return { success: false, message: 'Failed to delete segment', error: error.message };
     }
 
-    revalidateTag('communications', 'page');
-    revalidateTag('segments', 'page');
+    revalidateTag('communications', 'default');
+    revalidateTag('segments', 'default');
 
     return { success: true, message: 'Segment deleted successfully' };
   } catch (error) {
@@ -1217,8 +1236,8 @@ export async function createAutomationRule(formData: unknown): Promise<ActionRes
       return { success: false, message: 'Failed to create automation rule', error: error.message };
     }
 
-    revalidateTag('communications', 'page');
-    revalidateTag('automation-rules', 'page');
+    revalidateTag('communications', 'default');
+    revalidateTag('automation-rules', 'default');
 
     return {
       success: true,
@@ -1269,9 +1288,9 @@ export async function updateAutomationRule(id: string, formData: unknown): Promi
       return { success: false, message: 'Failed to update automation rule', error: error.message };
     }
 
-    revalidateTag('communications', 'page');
-    revalidateTag('automation-rules', 'page');
-    revalidateTag(`automation-rule-${id}`, 'page');
+    revalidateTag('communications', 'default');
+    revalidateTag('automation-rules', 'default');
+    revalidateTag(`automation-rule-${id}`, 'default');
 
     return { success: true, message: 'Automation rule updated successfully' };
   } catch (error) {
@@ -1301,9 +1320,9 @@ export async function toggleAutomationRule(id: string, enabled: boolean): Promis
       return { success: false, message: 'Failed to toggle automation rule', error: error.message };
     }
 
-    revalidateTag('communications', 'page');
-    revalidateTag('automation-rules', 'page');
-    revalidateTag(`automation-rule-${id}`, 'page');
+    revalidateTag('communications', 'default');
+    revalidateTag('automation-rules', 'default');
+    revalidateTag(`automation-rule-${id}`, 'default');
 
     return {
       success: true,
@@ -1333,8 +1352,8 @@ export async function deleteAutomationRule(id: string): Promise<ActionResponse> 
       return { success: false, message: 'Failed to delete automation rule', error: error.message };
     }
 
-    revalidateTag('communications', 'page');
-    revalidateTag('automation-rules', 'page');
+    revalidateTag('communications', 'default');
+    revalidateTag('automation-rules', 'default');
 
     return { success: true, message: 'Automation rule deleted successfully' };
   } catch (error) {

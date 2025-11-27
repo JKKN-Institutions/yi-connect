@@ -129,7 +129,7 @@ export const createEventSchema = z.object({
   }
 )
 
-export const updateEventSchema = createEventSchema.partial().extend({
+export const updateEventSchema = createEventSchema.partial().safeExtend({
   status: z.enum(Constants.public.Enums.event_status).optional(),
   current_registrations: z.coerce.number().int().min(0).optional(),
   actual_expense: z.coerce.number().min(0).optional(),
@@ -195,7 +195,7 @@ export const createVenueBookingSchema = z.object({
   }
 )
 
-export const updateVenueBookingSchema = createVenueBookingSchema.partial().extend({
+export const updateVenueBookingSchema = createVenueBookingSchema.partial().safeExtend({
   status: z.enum(Constants.public.Enums.booking_status).optional(),
 })
 
@@ -497,7 +497,7 @@ export type EventQueryParams = z.infer<typeof eventQueryParamsSchema>
 const serviceEventTypes = ['masoom', 'thalir', 'yuva', 'road_safety', 'career_guidance', 'soft_skills', 'other'] as const
 const stakeholderTypes = ['school', 'college', 'industry', 'ngo', 'government'] as const
 
-export const createServiceEventSchema = createEventSchema.extend({
+export const createServiceEventSchema = createEventSchema.safeExtend({
   is_service_event: z.literal(true),
   service_type: z.enum(serviceEventTypes, {
     message: 'Service type is required',

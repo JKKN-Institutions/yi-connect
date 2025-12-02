@@ -69,9 +69,9 @@ export function MemberStats({ analytics }: MemberStatsProps) {
     : 0
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 w-full min-w-0 overflow-hidden">
       {/* Primary Stats Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 min-w-0">
         <StatCard
           title="Total Members"
           value={analytics.total_members.toLocaleString()}
@@ -99,9 +99,9 @@ export function MemberStats({ analytics }: MemberStatsProps) {
       </div>
 
       {/* Secondary Stats Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 min-w-0">
         {/* Membership Status Distribution */}
-        <Card>
+        <Card className="min-w-0 overflow-hidden">
           <CardHeader>
             <CardTitle className="text-sm font-medium">Membership Status</CardTitle>
           </CardHeader>
@@ -122,7 +122,7 @@ export function MemberStats({ analytics }: MemberStatsProps) {
         </Card>
 
         {/* Leadership Pipeline */}
-        <Card>
+        <Card className="min-w-0 overflow-hidden">
           <CardHeader>
             <CardTitle className="text-sm font-medium">Leadership Pipeline</CardTitle>
           </CardHeader>
@@ -177,7 +177,7 @@ export function MemberStats({ analytics }: MemberStatsProps) {
         </Card>
 
         {/* Top Companies */}
-        <Card>
+        <Card className="min-w-0 overflow-hidden">
           <CardHeader>
             <CardTitle className="text-sm font-medium">Top Companies</CardTitle>
           </CardHeader>

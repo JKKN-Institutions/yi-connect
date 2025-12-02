@@ -9,6 +9,7 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { requireRole } from '@/lib/auth'
 import { getMemberWithProfile } from '@/lib/data/members'
+import { getAllChapters } from '@/lib/data/chapters'
 import { MemberForm } from '@/components/members'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -44,14 +45,15 @@ function FormSkeleton() {
 
 // Form wrapper component (Server Component)
 async function EditMemberForm({ memberId }: { memberId: string }) {
-  const member = await getMemberWithProfile(memberId)
+  // Fetch member and chapters in parallel
+  const [member, chapters] = await Promise.all([
+    getMemberWithProfile(memberId),
+    getAllChapters(),
+  ])
 
   if (!member) {
     notFound()
   }
-
-  // TODO: Fetch chapters for the form
-  const chapters: any[] = [] // Replace with: await getChapters()
 
   return <MemberForm member={member} chapters={chapters} />
 }

@@ -80,9 +80,9 @@ export function DataTable<TData, TValue>({
   })
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 w-full min-w-0">
       <DataTableToolbar table={table} filterFields={filterFields} exportConfig={exportConfig} />
-      <div className="rounded-md border">
+      <div className="rounded-md border overflow-x-auto">
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (

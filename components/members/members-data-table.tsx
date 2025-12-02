@@ -103,7 +103,7 @@ export function MembersDataTable({ data, userRoles }: MembersDataTableProps) {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 w-full min-w-0">
       {/* Category Tabs */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <MemberCategoryTabs

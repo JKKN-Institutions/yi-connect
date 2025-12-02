@@ -27,7 +27,7 @@ import {
 } from 'lucide-react'
 import { notFound } from 'next/navigation'
 import { MemberDetailClient } from './member-detail-client'
-import { getMemberById } from '@/lib/data/members'
+import { getMemberById, getSkills, getCertifications } from '@/lib/data/members'
 import { getTrainerProfile } from '@/lib/data/trainers'
 import { getMemberAssessment, getAvailableMentors } from '@/lib/data/assessments'
 import { getVerticals } from '@/lib/data/vertical'
@@ -85,10 +85,12 @@ async function MemberDetailContent({ id }: { id: string }) {
   const startDate = today.toISOString().split('T')[0]
   const endDate = threeMonthsLater.toISOString().split('T')[0]
 
-  const [verticals, mentors, availabilities] = await Promise.all([
+  const [verticals, mentors, availabilities, skills, certifications] = await Promise.all([
     chapterId ? getVerticals({ chapter_id: chapterId }) : Promise.resolve([]),
     chapterId ? getAvailableMentors(chapterId) : Promise.resolve([]),
     getMemberAvailability(id, startDate, endDate),
+    getSkills(),
+    getCertifications(),
   ])
 
   return (
@@ -257,6 +259,8 @@ async function MemberDetailContent({ id }: { id: string }) {
         verticals={verticals}
         availableMentors={mentors}
         availabilities={availabilities}
+        skills={skills}
+        certifications={certifications}
         canEdit={true}
       />
 

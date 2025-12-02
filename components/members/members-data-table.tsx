@@ -12,9 +12,11 @@ import { useRouter } from 'next/navigation'
 import { DataTable } from '@/components/data-table/data-table'
 import { getMemberColumns } from './members-table-columns'
 import { MemberCategoryTabs } from './member-category-tabs'
+import { BulkMemberDeleteDialog, BulkMemberDeactivateDialog } from './member-actions-dialog'
 import { Button } from '@/components/ui/button'
-import { RefreshCw } from 'lucide-react'
+import { RefreshCw, Trash2, UserX } from 'lucide-react'
 import type { DataTableFilterField } from '@/lib/table/types'
+import type { BulkAction } from '@/components/data-table/data-table-toolbar'
 import type { MemberListItem, MemberCategoryTab } from '@/types/member'
 
 interface MembersDataTableProps {
@@ -27,8 +29,17 @@ export function MembersDataTable({ data, userRoles }: MembersDataTableProps) {
   const [isRefreshing, startRefresh] = useTransition()
   const [activeTab, setActiveTab] = useState<MemberCategoryTab>('all')
 
+  // Bulk action dialog states
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false)
+  const [bulkDeactivateOpen, setBulkDeactivateOpen] = useState(false)
+  const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([])
+
   // Get columns with user role-based actions (client-side)
   const columns = getMemberColumns(userRoles)
+
+  // Check user permissions for bulk actions
+  const canDelete = userRoles.some(role => ['Super Admin', 'National Admin'].includes(role))
+  const canDeactivate = userRoles.some(role => ['Super Admin', 'National Admin', 'Chair', 'Co-Chair'].includes(role))
 
   const handleRefresh = () => {
     startRefresh(() => {
@@ -71,16 +82,6 @@ export function MembersDataTable({ data, userRoles }: MembersDataTableProps) {
         { label: 'Alumni', value: 'alumni' },
       ],
     },
-    {
-      label: 'Category',
-      value: 'skill_will_category',
-      options: [
-        { label: 'Star', value: 'star' },
-        { label: 'Enthusiast', value: 'enthusiast' },
-        { label: 'Cynic', value: 'cynic' },
-        { label: 'Needs Attention', value: 'dead_wood' },
-      ],
-    },
   ]
 
   // Export configuration - only serializable data
@@ -94,12 +95,49 @@ export function MembersDataTable({ data, userRoles }: MembersDataTableProps) {
       { key: 'designation' as const, label: 'Designation' },
       { key: 'membership_status' as const, label: 'Status' },
       { key: 'member_since' as const, label: 'Member Since' },
-      { key: 'skill_will_category' as const, label: 'Category' },
       { key: 'is_trainer' as const, label: 'Is Trainer' },
       { key: 'engagement_score' as const, label: 'Engagement Score' },
       { key: 'readiness_score' as const, label: 'Readiness Score' },
       { key: 'skills_count' as const, label: 'Skills Count' },
     ]
+  }
+
+  // Define bulk actions based on user permissions
+  const bulkActions: BulkAction[] = useMemo(() => {
+    const actions: BulkAction[] = []
+
+    if (canDeactivate) {
+      actions.push({
+        id: 'deactivate',
+        label: 'Deactivate',
+        icon: <UserX className="mr-2 h-4 w-4" />,
+        variant: 'outline',
+        onClick: (ids) => {
+          setSelectedMemberIds(ids)
+          setBulkDeactivateOpen(true)
+        }
+      })
+    }
+
+    if (canDelete) {
+      actions.push({
+        id: 'delete',
+        label: 'Delete',
+        icon: <Trash2 className="mr-2 h-4 w-4" />,
+        variant: 'destructive',
+        onClick: (ids) => {
+          setSelectedMemberIds(ids)
+          setBulkDeleteOpen(true)
+        }
+      })
+    }
+
+    return actions
+  }, [canDelete, canDeactivate])
+
+  // Clear selection after successful bulk action
+  const handleBulkActionSuccess = () => {
+    setSelectedMemberIds([])
   }
 
   return (
@@ -130,6 +168,22 @@ export function MembersDataTable({ data, userRoles }: MembersDataTableProps) {
         data={filteredData}
         filterFields={filterFields}
         exportConfig={exportConfig}
+        bulkActions={bulkActions}
+        getRowId={(row) => row.id}
+      />
+
+      {/* Bulk Action Dialogs */}
+      <BulkMemberDeactivateDialog
+        open={bulkDeactivateOpen}
+        onOpenChange={setBulkDeactivateOpen}
+        memberIds={selectedMemberIds}
+        onSuccess={handleBulkActionSuccess}
+      />
+      <BulkMemberDeleteDialog
+        open={bulkDeleteOpen}
+        onOpenChange={setBulkDeleteOpen}
+        memberIds={selectedMemberIds}
+        onSuccess={handleBulkActionSuccess}
       />
     </div>
   )

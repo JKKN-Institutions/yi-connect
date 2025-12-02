@@ -113,13 +113,16 @@ export function BulkUploadOptionsPanel({
               </p>
             </div>
 
-            {/* Duplicate Handling */}
+            {/* Duplicate Email Handling */}
             <div className="space-y-4">
               <Label className="text-base">Duplicate Email Handling</Label>
+              <p className="text-xs text-muted-foreground -mt-2">
+                Choose how to handle emails that already exist in the system
+              </p>
 
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/30 transition-colors">
                 <div className="space-y-0.5">
-                  <Label htmlFor="skipExisting" className="font-normal">
+                  <Label htmlFor="skipExisting" className="font-normal cursor-pointer">
                     Skip existing emails
                   </Label>
                   <p className="text-xs text-muted-foreground">
@@ -130,15 +133,20 @@ export function BulkUploadOptionsPanel({
                   id="skipExisting"
                   checked={options.skipExisting}
                   onCheckedChange={(checked) => {
-                    updateOption('skipExisting', checked)
-                    if (checked) updateOption('updateExisting', false)
+                    // Single state update to avoid race condition
+                    onOptionsChange({
+                      ...options,
+                      skipExisting: checked,
+                      updateExisting: checked ? false : options.updateExisting
+                    })
                   }}
+                  className="cursor-pointer"
                 />
               </div>
 
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/30 transition-colors">
                 <div className="space-y-0.5">
-                  <Label htmlFor="updateExisting" className="font-normal">
+                  <Label htmlFor="updateExisting" className="font-normal cursor-pointer">
                     Update existing members
                   </Label>
                   <p className="text-xs text-muted-foreground">
@@ -149,12 +157,26 @@ export function BulkUploadOptionsPanel({
                   id="updateExisting"
                   checked={options.updateExisting}
                   onCheckedChange={(checked) => {
-                    updateOption('updateExisting', checked)
-                    if (checked) updateOption('skipExisting', false)
+                    // Single state update to avoid race condition
+                    onOptionsChange({
+                      ...options,
+                      updateExisting: checked,
+                      skipExisting: checked ? false : options.skipExisting
+                    })
                   }}
-                  disabled={options.skipExisting}
+                  className="cursor-pointer"
                 />
               </div>
+
+              {/* Show active mode indicator */}
+              {(options.skipExisting || options.updateExisting) && (
+                <div className="p-3 rounded-lg bg-muted/50 text-sm">
+                  <strong>Mode:</strong>{' '}
+                  {options.skipExisting && 'Existing emails will be skipped (no changes to existing members)'}
+                  {options.updateExisting && 'Existing members will be updated with new data from the file'}
+                  {!options.skipExisting && !options.updateExisting && 'Error on duplicate emails'}
+                </div>
+              )}
             </div>
 
             {/* Email Options */}

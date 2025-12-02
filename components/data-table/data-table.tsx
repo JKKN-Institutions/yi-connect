@@ -32,7 +32,7 @@ import {
 } from '@/components/ui/table'
 
 import { DataTablePagination } from './data-table-pagination'
-import { DataTableToolbar, type ExportConfig } from './data-table-toolbar'
+import { DataTableToolbar, type ExportConfig, type BulkAction } from './data-table-toolbar'
 import type { DataTableFilterField } from '@/lib/table/types'
 
 interface DataTableProps<TData, TValue> {
@@ -42,6 +42,8 @@ interface DataTableProps<TData, TValue> {
   defaultColumnFilters?: ColumnFiltersState
   defaultSorting?: SortingState
   exportConfig?: ExportConfig<TData>
+  bulkActions?: BulkAction[]
+  getRowId?: (row: TData) => string
 }
 
 export function DataTable<TData, TValue>({
@@ -51,6 +53,8 @@ export function DataTable<TData, TValue>({
   defaultColumnFilters = [],
   defaultSorting = [],
   exportConfig,
+  bulkActions = [],
+  getRowId,
 }: DataTableProps<TData, TValue>) {
   const [rowSelection, setRowSelection] = React.useState({})
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
@@ -81,7 +85,7 @@ export function DataTable<TData, TValue>({
 
   return (
     <div className="space-y-4 w-full min-w-0">
-      <DataTableToolbar table={table} filterFields={filterFields} exportConfig={exportConfig} />
+      <DataTableToolbar table={table} filterFields={filterFields} exportConfig={exportConfig} bulkActions={bulkActions} getRowId={getRowId} />
       <div className="rounded-md border overflow-x-auto">
         <Table>
           <TableHeader>

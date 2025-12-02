@@ -325,7 +325,7 @@ async function createNewMember(
 }
 
 /**
- * Update an existing member
+ * Update an existing member (or create member record if profile exists but member doesn't)
  */
 async function updateExistingMember(
   adminClient: ReturnType<typeof createAdminSupabaseClient>,
@@ -345,32 +345,58 @@ async function updateExistingMember(
       return { success: false, message: 'Profile not found for this email' }
     }
 
-    // Update member record
-    const { error: updateError } = await adminClient
+    // Check if member record exists
+    const { data: existingMember } = await adminClient
       .from('members')
-      .update({
-        company: memberData.company || null,
-        designation: memberData.designation || null,
-        industry: memberData.industry || null,
-        years_of_experience: memberData.years_of_experience || null,
-        linkedin_url: memberData.linkedin_url || null,
-        date_of_birth: memberData.date_of_birth || null,
-        gender: memberData.gender || null,
-        address: memberData.address || null,
-        city: memberData.city || null,
-        state: memberData.state || null,
-        country: memberData.country || 'India',
-        pincode: memberData.pincode || null,
-        emergency_contact_name: memberData.emergency_contact_name || null,
-        emergency_contact_phone: memberData.emergency_contact_phone || null,
-        emergency_contact_relationship: memberData.emergency_contact_relationship || null,
-        membership_number: memberData.membership_number || null,
-        membership_status: memberData.membership_status || undefined
-      })
+      .select('id')
       .eq('id', profile.id)
+      .single()
 
-    if (updateError) {
-      throw updateError
+    const memberRecord = {
+      company: memberData.company || null,
+      designation: memberData.designation || null,
+      industry: memberData.industry || null,
+      years_of_experience: memberData.years_of_experience || null,
+      linkedin_url: memberData.linkedin_url || null,
+      date_of_birth: memberData.date_of_birth || null,
+      gender: memberData.gender || null,
+      address: memberData.address || null,
+      city: memberData.city || null,
+      state: memberData.state || null,
+      country: memberData.country || 'India',
+      pincode: memberData.pincode || null,
+      emergency_contact_name: memberData.emergency_contact_name || null,
+      emergency_contact_phone: memberData.emergency_contact_phone || null,
+      emergency_contact_relationship: memberData.emergency_contact_relationship || null,
+      membership_number: memberData.membership_number || null,
+      membership_status: memberData.membership_status || 'active'
+    }
+
+    if (existingMember) {
+      // Update existing member record
+      const { error: updateError } = await adminClient
+        .from('members')
+        .update(memberRecord)
+        .eq('id', profile.id)
+
+      if (updateError) {
+        throw updateError
+      }
+    } else {
+      // Create new member record (profile exists but member doesn't)
+      const { error: insertError } = await adminClient
+        .from('members')
+        .insert({
+          id: profile.id,
+          chapter_id: options.defaultChapterId,
+          ...memberRecord,
+          is_active: true,
+          member_since: new Date().toISOString().split('T')[0]
+        })
+
+      if (insertError) {
+        throw insertError
+      }
     }
 
     // Update profile name and phone
@@ -384,7 +410,7 @@ async function updateExistingMember(
 
     return {
       success: true,
-      message: 'Updated successfully',
+      message: existingMember ? 'Updated successfully' : 'Member record created and updated',
       memberId: profile.id
     }
   } catch (error: any) {

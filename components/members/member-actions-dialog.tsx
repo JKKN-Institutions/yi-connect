@@ -25,7 +25,9 @@ import { Trash, Loader2, UserX, UserCheck, AlertTriangle } from 'lucide-react';
 import {
   deactivateMemberFromTable,
   reactivateMemberFromTable,
-  deleteMemberPermanently
+  deleteMemberPermanently,
+  bulkDeleteMembers,
+  bulkDeactivateMembers
 } from '@/app/actions/members';
 import toast from 'react-hot-toast';
 
@@ -322,6 +324,178 @@ export function MemberDeleteDialog({
               <>
                 <Trash className="mr-2 h-4 w-4" />
                 Delete Permanently
+              </>
+            )}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
+// ============================================================================
+// Bulk Action Dialogs
+// ============================================================================
+
+interface BulkActionDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  memberIds: string[];
+  onSuccess?: () => void;
+}
+
+/**
+ * Bulk Deactivate Members Dialog
+ * Soft disables multiple members at once
+ */
+export function BulkMemberDeactivateDialog({
+  open,
+  onOpenChange,
+  memberIds,
+  onSuccess
+}: BulkActionDialogProps) {
+  const [isPending, startTransition] = useTransition();
+  const router = useRouter();
+
+  const handleBulkDeactivate = () => {
+    startTransition(async () => {
+      const result = await bulkDeactivateMembers(memberIds);
+
+      if (result.success) {
+        toast.success(result.message);
+        onOpenChange(false);
+        onSuccess?.();
+        router.refresh();
+      } else {
+        toast.error(result.message);
+      }
+    });
+  };
+
+  return (
+    <AlertDialog open={open} onOpenChange={onOpenChange}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle className="flex items-center gap-2">
+            <UserX className="h-5 w-5 text-yellow-600" />
+            Deactivate {memberIds.length} Member{memberIds.length > 1 ? 's' : ''}
+          </AlertDialogTitle>
+          <AlertDialogDescription asChild>
+            <div className="text-sm text-muted-foreground">
+              Are you sure you want to deactivate <strong>{memberIds.length}</strong> member{memberIds.length > 1 ? 's' : ''}?
+              <br />
+              <br />
+              This will:
+              <ul className="list-disc list-inside mt-2 space-y-1">
+                <li>Prevent them from logging into the system</li>
+                <li>Mark their membership status as inactive</li>
+                <li>Preserve all their data for records</li>
+              </ul>
+              <p className="mt-3">You can reactivate them later if needed.</p>
+            </div>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={isPending}>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={(e) => {
+              e.preventDefault();
+              handleBulkDeactivate();
+            }}
+            disabled={isPending}
+            className="bg-yellow-600 text-white hover:bg-yellow-700"
+          >
+            {isPending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Deactivating...
+              </>
+            ) : (
+              <>
+                <UserX className="mr-2 h-4 w-4" />
+                Deactivate {memberIds.length} Member{memberIds.length > 1 ? 's' : ''}
+              </>
+            )}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
+/**
+ * Bulk Delete Members Dialog
+ * Permanently removes multiple members from the system
+ */
+export function BulkMemberDeleteDialog({
+  open,
+  onOpenChange,
+  memberIds,
+  onSuccess
+}: BulkActionDialogProps) {
+  const [isPending, startTransition] = useTransition();
+  const router = useRouter();
+
+  const handleBulkDelete = () => {
+    startTransition(async () => {
+      const result = await bulkDeleteMembers(memberIds);
+
+      if (result.success) {
+        toast.success(result.message);
+        onOpenChange(false);
+        onSuccess?.();
+        router.refresh();
+      } else {
+        toast.error(result.message);
+      }
+    });
+  };
+
+  return (
+    <AlertDialog open={open} onOpenChange={onOpenChange}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+            <AlertTriangle className="h-5 w-5" />
+            Permanently Delete {memberIds.length} Member{memberIds.length > 1 ? 's' : ''}
+          </AlertDialogTitle>
+          <AlertDialogDescription asChild>
+            <div className="text-sm text-muted-foreground">
+              <span className="text-destructive font-semibold">Warning: This action cannot be undone!</span>
+              <br />
+              <br />
+              Are you sure you want to permanently delete <strong>{memberIds.length}</strong> member{memberIds.length > 1 ? 's' : ''}?
+              <br />
+              <br />
+              This will:
+              <ul className="list-disc list-inside mt-2 space-y-1">
+                <li>Remove all member profiles completely</li>
+                <li>Delete all user accounts</li>
+                <li>Remove all associated data (skills, certifications, etc.)</li>
+                <li>Remove approved emails from the whitelist</li>
+              </ul>
+            </div>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={isPending}>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={(e) => {
+              e.preventDefault();
+              handleBulkDelete();
+            }}
+            disabled={isPending}
+            className="bg-destructive text-white hover:bg-destructive/90"
+          >
+            {isPending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Deleting...
+              </>
+            ) : (
+              <>
+                <Trash className="mr-2 h-4 w-4" />
+                Delete {memberIds.length} Member{memberIds.length > 1 ? 's' : ''}
               </>
             )}
           </AlertDialogAction>

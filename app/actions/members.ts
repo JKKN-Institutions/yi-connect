@@ -47,7 +47,8 @@ export async function createMember(
   // Check if this is an admin creating a new member (no id provided)
   let userId = formData.get('id') as string | null;
   const email = formData.get('email') as string;
-  const fullName = formData.get('full_name') as string;
+  // Always store full_name in UPPERCASE
+  const fullName = (formData.get('full_name') as string)?.toUpperCase().trim() || '';
   let isNewUser = false;
 
   // If no userId provided, create a new auth user (admin creating member)
@@ -592,6 +593,242 @@ export async function deleteMemberPermanently(
     return {
       success: false,
       message: error.message || 'Failed to delete member permanently.'
+    };
+  }
+}
+
+/**
+ * Bulk delete members permanently (removes from members, profiles, and auth)
+ * WARNING: This action cannot be undone
+ * Only Super Admin and National Admin can perform this action
+ */
+export async function bulkDeleteMembers(
+  memberIds: string[]
+): Promise<{ success: boolean; message: string; deletedCount: number; failedCount: number }> {
+  // Check permission - only Super Admin and National Admin can delete
+  try {
+    await requireRole(['Super Admin', 'National Admin']);
+  } catch {
+    return {
+      success: false,
+      message: 'You do not have permission to delete members.',
+      deletedCount: 0,
+      failedCount: memberIds.length
+    };
+  }
+
+  if (!memberIds.length) {
+    return {
+      success: false,
+      message: 'No members selected for deletion.',
+      deletedCount: 0,
+      failedCount: 0
+    };
+  }
+
+  const adminClient = createAdminSupabaseClient();
+  let deletedCount = 0;
+  let failedCount = 0;
+  const errors: string[] = [];
+
+  // Get all members info for processing
+  const { data: members } = await adminClient
+    .from('members')
+    .select('id, profiles!inner(full_name, email)')
+    .in('id', memberIds);
+
+  if (!members || members.length === 0) {
+    return {
+      success: false,
+      message: 'No valid members found for deletion.',
+      deletedCount: 0,
+      failedCount: memberIds.length
+    };
+  }
+
+  // Process each member
+  for (const member of members) {
+    const memberEmail = (member?.profiles as any)?.email;
+
+    try {
+      // 1. Handle approved_emails foreign key constraint
+      if (memberEmail) {
+        await adminClient
+          .from('approved_emails')
+          .update({ created_member_id: null, member_created: false })
+          .eq('email', memberEmail);
+      }
+
+      // Also update any approved_emails where this member was the created_member_id
+      await adminClient
+        .from('approved_emails')
+        .update({ created_member_id: null })
+        .eq('created_member_id', member.id);
+
+      // 2. Delete from members table (cascades to skills, certifications, etc.)
+      const { error: memberError } = await adminClient
+        .from('members')
+        .delete()
+        .eq('id', member.id);
+
+      if (memberError) {
+        throw new Error(memberError.message);
+      }
+
+      // 3. Delete from profiles table
+      await adminClient
+        .from('profiles')
+        .delete()
+        .eq('id', member.id);
+
+      // 4. Delete from approved_emails table
+      if (memberEmail) {
+        await adminClient
+          .from('approved_emails')
+          .delete()
+          .eq('email', memberEmail);
+      }
+
+      // 5. Delete auth user
+      await adminClient.auth.admin.deleteUser(member.id);
+
+      deletedCount++;
+    } catch (error: any) {
+      failedCount++;
+      errors.push(`Failed to delete ${(member?.profiles as any)?.full_name || member.id}: ${error.message}`);
+      console.error(`Failed to delete member ${member.id}:`, error);
+    }
+  }
+
+  // Invalidate caches
+  revalidateTag('members-list', 'max');
+  revalidateTag('analytics-all', 'max');
+  revalidateTag('approved-emails', 'max');
+
+  if (failedCount === 0) {
+    return {
+      success: true,
+      message: `Successfully deleted ${deletedCount} member${deletedCount > 1 ? 's' : ''}.`,
+      deletedCount,
+      failedCount
+    };
+  } else if (deletedCount === 0) {
+    return {
+      success: false,
+      message: `Failed to delete all members. ${errors[0]}`,
+      deletedCount,
+      failedCount
+    };
+  } else {
+    return {
+      success: true,
+      message: `Deleted ${deletedCount} member${deletedCount > 1 ? 's' : ''}, ${failedCount} failed.`,
+      deletedCount,
+      failedCount
+    };
+  }
+}
+
+/**
+ * Bulk deactivate members (soft disable)
+ * Super Admin, National Admin, Chair, and Co-Chair can perform this action
+ */
+export async function bulkDeactivateMembers(
+  memberIds: string[]
+): Promise<{ success: boolean; message: string; deactivatedCount: number; failedCount: number }> {
+  // Check permission
+  try {
+    await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair']);
+  } catch {
+    return {
+      success: false,
+      message: 'You do not have permission to deactivate members.',
+      deactivatedCount: 0,
+      failedCount: memberIds.length
+    };
+  }
+
+  if (!memberIds.length) {
+    return {
+      success: false,
+      message: 'No members selected for deactivation.',
+      deactivatedCount: 0,
+      failedCount: 0
+    };
+  }
+
+  const adminClient = createAdminSupabaseClient();
+  let deactivatedCount = 0;
+  let failedCount = 0;
+
+  // Get all members info
+  const { data: members } = await adminClient
+    .from('members')
+    .select('id, profiles!inner(full_name, email)')
+    .in('id', memberIds);
+
+  if (!members || members.length === 0) {
+    return {
+      success: false,
+      message: 'No valid members found for deactivation.',
+      deactivatedCount: 0,
+      failedCount: memberIds.length
+    };
+  }
+
+  // Process each member
+  for (const member of members) {
+    const memberEmail = (member?.profiles as any)?.email;
+
+    try {
+      // Deactivate in members table
+      const { error: memberError } = await adminClient
+        .from('members')
+        .update({ is_active: false, membership_status: 'inactive' })
+        .eq('id', member.id);
+
+      if (memberError) {
+        throw new Error(memberError.message);
+      }
+
+      // Deactivate in profiles table
+      await adminClient
+        .from('profiles')
+        .update({ is_active: false })
+        .eq('id', member.id);
+
+      // Deactivate in approved_emails table
+      if (memberEmail) {
+        await adminClient
+          .from('approved_emails')
+          .update({ is_active: false })
+          .eq('email', memberEmail);
+      }
+
+      deactivatedCount++;
+    } catch (error: any) {
+      failedCount++;
+      console.error(`Failed to deactivate member ${member.id}:`, error);
+    }
+  }
+
+  // Invalidate caches
+  revalidateTag('members-list', 'max');
+  revalidateTag('analytics-all', 'max');
+
+  if (failedCount === 0) {
+    return {
+      success: true,
+      message: `Successfully deactivated ${deactivatedCount} member${deactivatedCount > 1 ? 's' : ''}.`,
+      deactivatedCount,
+      failedCount
+    };
+  } else {
+    return {
+      success: true,
+      message: `Deactivated ${deactivatedCount} member${deactivatedCount > 1 ? 's' : ''}, ${failedCount} failed.`,
+      deactivatedCount,
+      failedCount
     };
   }
 }

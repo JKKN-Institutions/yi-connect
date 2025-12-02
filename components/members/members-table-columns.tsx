@@ -13,16 +13,9 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
 import { DataTableColumnHeader } from '@/components/data-table/data-table-column-header';
-import {
-  ShieldCheck,
-  GraduationCap,
-  Star,
-  Sparkles,
-  Frown,
-  AlertTriangle
-} from 'lucide-react';
+import { ShieldCheck } from 'lucide-react';
 import { MemberRowActions } from './member-row-actions';
-import type { MemberListItem, SkillWillCategory } from '@/types/member';
+import type { MemberListItem } from '@/types/member';
 
 function getInitials(name: string): string {
   return name
@@ -48,52 +41,6 @@ function getScoreColor(score: number): string {
   if (score >= 60) return 'text-blue-600 dark:text-blue-400';
   if (score >= 40) return 'text-yellow-600 dark:text-yellow-400';
   return 'text-red-600 dark:text-red-400';
-}
-
-function getCategoryInfo(category: SkillWillCategory | null): {
-  label: string;
-  color: string;
-  icon: React.ReactNode;
-} {
-  const categories: Record<
-    SkillWillCategory,
-    { label: string; color: string; icon: React.ReactNode }
-  > = {
-    star: {
-      label: 'Star',
-      color:
-        'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20',
-      icon: <Star className='h-3 w-3' />
-    },
-    enthusiast: {
-      label: 'Enthusiast',
-      color:
-        'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20',
-      icon: <Sparkles className='h-3 w-3' />
-    },
-    cynic: {
-      label: 'Cynic',
-      color:
-        'bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20',
-      icon: <Frown className='h-3 w-3' />
-    },
-    dead_wood: {
-      label: 'Needs Attention',
-      color: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20',
-      icon: <AlertTriangle className='h-3 w-3' />
-    }
-  };
-
-  if (!category) {
-    return {
-      label: 'Unassessed',
-      color:
-        'bg-gray-500/10 text-gray-700 dark:text-gray-400 border-gray-500/20',
-      icon: null
-    };
-  }
-
-  return categories[category];
 }
 
 /**
@@ -200,40 +147,6 @@ export function getMemberColumns(
         );
       },
       enableSorting: false
-    },
-    {
-      accessorKey: 'skill_will_category',
-      header: ({ column }) => (
-        <DataTableColumnHeader column={column} title='Category' />
-      ),
-      cell: ({ row }) => {
-        const category = row.original.skill_will_category;
-        const isTrainer = row.original.is_trainer;
-        const categoryInfo = getCategoryInfo(category);
-
-        return (
-          <div className='flex flex-col gap-1'>
-            {isTrainer && (
-              <Badge
-                variant='secondary'
-                className='bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-500/20 w-fit'
-              >
-                <GraduationCap className='mr-1 h-3 w-3' />
-                Trainer
-              </Badge>
-            )}
-            <Badge variant='outline' className={`${categoryInfo.color} w-fit`}>
-              {categoryInfo.icon && (
-                <span className='mr-1'>{categoryInfo.icon}</span>
-              )}
-              {categoryInfo.label}
-            </Badge>
-          </div>
-        );
-      },
-      filterFn: (row, id, value) => {
-        return value.includes(row.getValue(id));
-      }
     },
     {
       accessorKey: 'verticals',

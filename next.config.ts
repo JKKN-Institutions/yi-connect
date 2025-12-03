@@ -58,6 +58,19 @@ const nextConfig: NextConfig = {
     ],
   },
 
+  // Redirects configuration
+  // Using config redirects instead of page-level redirect() to avoid
+  // Turbopack performance measurement errors (Next.js issue #86060)
+  async redirects() {
+    return [
+      {
+        source: '/members',
+        destination: '/members/table',
+        permanent: false, // Use temporary redirect for flexibility
+      },
+    ];
+  },
+
   // Security headers for PWA
   async headers() {
     return [

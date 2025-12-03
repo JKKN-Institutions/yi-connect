@@ -58,7 +58,13 @@
       "Bash(cmd /c dir \"D:\\JKKN\\yi-connect\\app\\(dashboard)\")",
       "mcp__supabase__list_edge_functions",
       "mcp__supabase__deploy_edge_function",
-      "Bash(npm view:*)"
+      "Bash(npm view:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(if [ -d \"D:/Projects/JKKN/yi-connect/.next\" ])",
+      "Bash(then echo \"Cache exists\")",
+      "Bash(else echo \"Cache cleared successfully\")",
+      "Bash(fi)",
+      "Bash(node:*)"
     ],
     "deny": [],
     "ask": []

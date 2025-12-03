@@ -70,8 +70,9 @@ async function EventEditContent({ params }: PageProps) {
   }
 
   // Check permissions - only organizer or admin can edit
+  // Higher hierarchy_level = more authority (Super Admin=7, National Admin=6, etc.)
   const isOrganizer = event.organizer?.id === user.id;
-  const isAdmin = userHierarchyLevel <= 3;
+  const isAdmin = userHierarchyLevel >= 4; // Chair and above
   const canEdit = isOrganizer || isAdmin;
 
   if (!canEdit) {

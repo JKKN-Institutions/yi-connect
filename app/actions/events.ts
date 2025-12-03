@@ -86,6 +86,8 @@ function sanitizeEventData<T extends Record<string, any>>(data: T): T {
     'template_id',
     'chapter_id',
     'venue_address',
+    'venue_latitude',
+    'venue_longitude',
     'virtual_meeting_link',
     'registration_start_date',
     'registration_end_date',
@@ -1050,10 +1052,11 @@ export async function updateVolunteer(
     }
 
     // Member can update their own status, organizer can update everything
+    // Higher hierarchy_level = more authority (Super Admin=7, National Admin=6, etc.)
     const hierarchyLevel = await getUserHierarchyLevel(user.id);
     const isOrganizer = (volunteer.event as any).organizer_id === user.id;
     const isSelf = volunteer.member_id === user.id;
-    const isAdmin = hierarchyLevel <= 3;
+    const isAdmin = hierarchyLevel >= 4; // Chair and above
 
     if (!isOrganizer && !isSelf && !isAdmin) {
       return { success: false, error: 'Permission denied' };
@@ -1115,10 +1118,11 @@ export async function deleteVolunteer(
       return { success: false, error: 'Volunteer assignment not found' };
     }
 
+    // Higher hierarchy_level = more authority (Super Admin=7, National Admin=6, etc.)
     const hierarchyLevel = await getUserHierarchyLevel(user.id);
     const isOrganizer = (volunteer.event as any).organizer_id === user.id;
     const isSelf = volunteer.member_id === user.id;
-    const isAdmin = hierarchyLevel <= 3;
+    const isAdmin = hierarchyLevel >= 4; // Chair and above
 
     if (!isOrganizer && !isSelf && !isAdmin) {
       return { success: false, error: 'Permission denied' };
@@ -1510,10 +1514,11 @@ export async function deleteEventDocument(
       return { success: false, error: 'Document not found' };
     }
 
+    // Higher hierarchy_level = more authority (Super Admin=7, National Admin=6, etc.)
     const hierarchyLevel = await getUserHierarchyLevel(user.id);
     const isOrganizer = (document.event as any).organizer_id === user.id;
     const isUploader = document.uploaded_by === user.id;
-    const isAdmin = hierarchyLevel <= 3;
+    const isAdmin = hierarchyLevel >= 4; // Chair and above
 
     if (!isOrganizer && !isUploader && !isAdmin) {
       return { success: false, error: 'Permission denied' };

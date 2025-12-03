@@ -6,7 +6,7 @@
 
 import { Suspense } from 'react';
 import Link from 'next/link';
-import { Plus, Calendar, Grid3x3, Filter } from 'lucide-react';
+import { Plus, Calendar, Grid3x3, Filter, Search, X } from 'lucide-react';
 import { getEvents, getEventAnalytics } from '@/lib/data/events';
 import { getCurrentUser } from '@/lib/data/auth';
 import { createClient } from '@/lib/supabase/server';
@@ -30,7 +30,16 @@ import {
   CardHeader,
   CardTitle
 } from '@/components/ui/card';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger
+} from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Badge } from '@/components/ui/badge';
 import type { EventFilters, EventSortOptions } from '@/types/event';
 import { EVENT_CATEGORIES, EVENT_STATUSES } from '@/types/event';
 
@@ -92,60 +101,153 @@ async function EventsContent({
   const page = parseInt(params.page || '1');
   const view = params.view || 'grid';
 
+  // Count active filters
+  const activeFilters = [params.category, params.status, params.search].filter(Boolean).length;
+
   return (
     <Tabs defaultValue='all' className='w-full'>
-      <div className='flex items-center justify-between mb-4'>
-        <TabsList>
-          <TabsTrigger value='all'>All Events</TabsTrigger>
-          <TabsTrigger value='upcoming'>Upcoming</TabsTrigger>
-          <TabsTrigger value='my-events'>My Events</TabsTrigger>
-          <TabsTrigger value='past'>Past Events</TabsTrigger>
-        </TabsList>
+      {/* Mobile-first layout: Stack tabs and filters */}
+      <div className='space-y-4 mb-4'>
+        {/* Row 1: Scrollable Tabs */}
+        <div className='overflow-x-auto scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0'>
+          <TabsList className='inline-flex min-w-max sm:w-auto'>
+            <TabsTrigger value='all' className='px-3 sm:px-4'>
+              All Events
+            </TabsTrigger>
+            <TabsTrigger value='upcoming' className='px-3 sm:px-4'>
+              Upcoming
+            </TabsTrigger>
+            <TabsTrigger value='my-events' className='px-3 sm:px-4'>
+              My Events
+            </TabsTrigger>
+            <TabsTrigger value='past' className='px-3 sm:px-4'>
+              Past Events
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
-        <div className='flex gap-2'>
-          <ToggleGroup type='single' value={view}>
-            <ToggleGroupItem value='grid' asChild>
-              <Link href={`/events?view=grid`}>
-                <Grid3x3 className='h-4 w-4' />
-              </Link>
-            </ToggleGroupItem>
-            <ToggleGroupItem value='calendar' asChild>
-              <Link href={`/events?view=calendar`}>
-                <Calendar className='h-4 w-4' />
-              </Link>
-            </ToggleGroupItem>
-          </ToggleGroup>
-          <Input
-            placeholder='Search events...'
-            className='w-64'
-            defaultValue={params.search}
-          />
-          <Select defaultValue={params.category}>
-            <SelectTrigger className='w-48'>
-              <SelectValue placeholder='Category' />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value='all'>All Categories</SelectItem>
-              {(Object.entries(EVENT_CATEGORIES) as [string, string][]).map(([value, label]) => (
-                <SelectItem key={value} value={value}>
-                  {label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select defaultValue={params.status}>
-            <SelectTrigger className='w-40'>
-              <SelectValue placeholder='Status' />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value='all'>All Statuses</SelectItem>
-              {(Object.entries(EVENT_STATUSES) as [string, string][]).map(([value, label]) => (
-                <SelectItem key={value} value={value}>
-                  {label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        {/* Row 2: Search & Filters */}
+        <div className='flex flex-col sm:flex-row gap-3'>
+          {/* Search - Full width on mobile */}
+          <div className='relative flex-1'>
+            <Search className='absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground' />
+            <Input
+              placeholder='Search events...'
+              className='pl-9 w-full'
+              defaultValue={params.search}
+            />
+          </div>
+
+          {/* Filter controls - Different layout for mobile vs desktop */}
+          <div className='flex gap-2'>
+            {/* View toggle */}
+            <ToggleGroup type='single' value={view} className='flex-shrink-0'>
+              <ToggleGroupItem value='grid' asChild>
+                <Link href={`/events?view=grid`}>
+                  <Grid3x3 className='h-4 w-4' />
+                </Link>
+              </ToggleGroupItem>
+              <ToggleGroupItem value='calendar' asChild>
+                <Link href={`/events?view=calendar`}>
+                  <Calendar className='h-4 w-4' />
+                </Link>
+              </ToggleGroupItem>
+            </ToggleGroup>
+
+            {/* Mobile: Filter button with sheet */}
+            <div className='sm:hidden'>
+              <Sheet>
+                <SheetTrigger asChild>
+                  <Button variant='outline' size='icon' className='relative'>
+                    <Filter className='h-4 w-4' />
+                    {activeFilters > 0 && (
+                      <Badge
+                        variant='destructive'
+                        className='absolute -top-1.5 -right-1.5 h-5 w-5 p-0 flex items-center justify-center text-[10px]'
+                      >
+                        {activeFilters}
+                      </Badge>
+                    )}
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side='bottom' className='h-auto max-h-[80vh]'>
+                  <SheetHeader className='text-left'>
+                    <SheetTitle>Filter Events</SheetTitle>
+                    <SheetDescription>
+                      Narrow down events by category and status
+                    </SheetDescription>
+                  </SheetHeader>
+                  <div className='space-y-4 mt-6'>
+                    <div className='space-y-2'>
+                      <label className='text-sm font-medium'>Category</label>
+                      <Select defaultValue={params.category || 'all'}>
+                        <SelectTrigger className='w-full'>
+                          <SelectValue placeholder='Select category' />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value='all'>All Categories</SelectItem>
+                          {(Object.entries(EVENT_CATEGORIES) as [string, string][]).map(([value, label]) => (
+                            <SelectItem key={value} value={value}>
+                              {label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className='space-y-2'>
+                      <label className='text-sm font-medium'>Status</label>
+                      <Select defaultValue={params.status || 'all'}>
+                        <SelectTrigger className='w-full'>
+                          <SelectValue placeholder='Select status' />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value='all'>All Statuses</SelectItem>
+                          {(Object.entries(EVENT_STATUSES) as [string, string][]).map(([value, label]) => (
+                            <SelectItem key={value} value={value}>
+                              {label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <Button className='w-full mt-4'>
+                      Apply Filters
+                    </Button>
+                  </div>
+                </SheetContent>
+              </Sheet>
+            </div>
+
+            {/* Desktop: Inline filters */}
+            <div className='hidden sm:flex gap-2'>
+              <Select defaultValue={params.category}>
+                <SelectTrigger className='w-[140px] lg:w-[180px]'>
+                  <SelectValue placeholder='Category' />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value='all'>All Categories</SelectItem>
+                  {(Object.entries(EVENT_CATEGORIES) as [string, string][]).map(([value, label]) => (
+                    <SelectItem key={value} value={value}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select defaultValue={params.status}>
+                <SelectTrigger className='w-[120px] lg:w-[140px]'>
+                  <SelectValue placeholder='Status' />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value='all'>All Statuses</SelectItem>
+                  {(Object.entries(EVENT_STATUSES) as [string, string][]).map(([value, label]) => (
+                    <SelectItem key={value} value={value}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -208,6 +310,7 @@ async function EventsHeader() {
   }
 
   // Get user's hierarchy level
+  // Higher hierarchy_level = more authority (Super Admin=7, National Admin=6, etc.)
   const supabase = await createClient();
   const { data: hierarchyLevel } = await supabase.rpc(
     'get_user_hierarchy_level',
@@ -218,13 +321,13 @@ async function EventsHeader() {
   const userHierarchyLevel = hierarchyLevel || 0;
 
   return (
-    <div className='flex items-center justify-between'>
+    <div className='flex flex-col sm:flex-row sm:items-center justify-between gap-4'>
       <div>
-        <h1 className='text-3xl font-bold tracking-tight'>Events</h1>
-        <p className='text-muted-foreground'>Discover and manage Yi events</p>
+        <h1 className='text-2xl sm:text-3xl font-bold tracking-tight'>Events</h1>
+        <p className='text-sm sm:text-base text-muted-foreground'>Discover and manage Yi events</p>
       </div>
-      {userHierarchyLevel <= 4 && (
-        <Button asChild>
+      {userHierarchyLevel >= 2 && (
+        <Button asChild className='w-full sm:w-auto'>
           <Link href='/events/new'>
             <Plus className='mr-2 h-4 w-4' />
             Create Event
@@ -239,7 +342,7 @@ async function EventAnalytics() {
   const analytics = await getEventAnalytics();
 
   return (
-    <div className='grid gap-4 md:grid-cols-4'>
+    <div className='grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4'>
       <Card>
         <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
           <CardTitle className='text-sm font-medium'>Total Events</CardTitle>
@@ -346,6 +449,21 @@ async function EventsList({
   page: number;
   view: 'grid' | 'calendar';
 }) {
+  const user = await getCurrentUser();
+
+  // Get user's hierarchy level for permission checking
+  // Higher hierarchy_level = more authority (Super Admin=7, National Admin=6, etc.)
+  let userHierarchyLevel = 0; // Default to no permissions
+  if (user) {
+    const supabase = await createClient();
+    const { data: hierarchyLevel } = await supabase.rpc(
+      'get_user_hierarchy_level',
+      { user_id: user.id }
+    );
+    userHierarchyLevel = hierarchyLevel || 0;
+  }
+  const isAdmin = userHierarchyLevel >= 4; // Chair and above
+
   const { data: events, totalPages } = await getEvents({
     page: view === 'calendar' ? 1 : page,
     pageSize: view === 'calendar' ? 100 : 12,
@@ -373,10 +491,18 @@ async function EventsList({
 
   return (
     <>
-      <div className='grid gap-6 md:grid-cols-2 lg:grid-cols-3'>
-        {events.map((event) => (
-          <EventCard key={event.id} event={event} />
-        ))}
+      <div className='grid gap-4 sm:gap-6 sm:grid-cols-2 lg:grid-cols-3'>
+        {events.map((event) => {
+          // User can publish if they're the organizer or an admin
+          const canPublish = user ? (event.organizer_id === user.id || isAdmin) : false;
+          return (
+            <EventCard
+              key={event.id}
+              event={event}
+              canPublish={canPublish}
+            />
+          );
+        })}
       </div>
 
       {/* Pagination */}
@@ -423,7 +549,7 @@ function HeaderSkeleton() {
 
 function AnalyticsSkeleton() {
   return (
-    <div className='grid gap-4 md:grid-cols-4'>
+    <div className='grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4'>
       {Array.from({ length: 4 }).map((_, i) => (
         <Card key={i}>
           <CardHeader className='space-y-0 pb-2'>
@@ -441,7 +567,7 @@ function AnalyticsSkeleton() {
 
 function EventsGridSkeleton() {
   return (
-    <div className='grid gap-6 md:grid-cols-2 lg:grid-cols-3'>
+    <div className='grid gap-4 sm:gap-6 sm:grid-cols-2 lg:grid-cols-3'>
       {Array.from({ length: 6 }).map((_, i) => (
         <Card key={i}>
           <Skeleton className='aspect-video' />

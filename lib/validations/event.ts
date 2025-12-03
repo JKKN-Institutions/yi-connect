@@ -34,6 +34,14 @@ export const createEventSchema = z.object({
     message: 'Invalid UUID',
   }),
   venue_address: z.string().optional(),
+  venue_latitude: z.preprocess(
+    (val) => (val === '' || val === undefined || val === null ? null : val),
+    z.number().min(-90).max(90).nullable().optional()
+  ),
+  venue_longitude: z.preprocess(
+    (val) => (val === '' || val === undefined || val === null ? null : val),
+    z.number().min(-180).max(180).nullable().optional()
+  ),
   is_virtual: z.boolean().default(false),
   virtual_meeting_link: z.string().optional(),
   max_capacity: z.preprocess(

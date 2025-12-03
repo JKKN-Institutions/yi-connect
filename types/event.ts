@@ -62,6 +62,9 @@ export interface EventWithDetails
     location: string;
   } | null;
   tags?: string[] | null;
+  // Location coordinates for map integration
+  venue_latitude?: number | null;
+  venue_longitude?: number | null;
 }
 
 export interface EventWithRSVPs extends EventWithDetails {
@@ -303,6 +306,8 @@ export interface CreateEventInput {
   registration_end_date?: string;
   venue_id?: string;
   venue_address?: string;
+  venue_latitude?: number | null;
+  venue_longitude?: number | null;
   is_virtual: boolean;
   virtual_meeting_link?: string;
   max_capacity?: number;

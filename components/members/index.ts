@@ -38,3 +38,6 @@ export { AssessmentTab } from './assessment-tab'
 // Availability Calendar
 export { AvailabilityCalendar } from './availability-calendar'
 
+// Engagement Metrics
+export { EngagementMetricsTab } from './engagement-metrics-tab'
+

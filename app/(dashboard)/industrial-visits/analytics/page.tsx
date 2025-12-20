@@ -27,6 +27,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { getIVAnalytics, getIndustryPerformance } from '@/lib/data/industrial-visits';
 import { getCurrentUserChapter } from '@/lib/data/members';
 import { requireRole } from '@/lib/auth';
+import { createClient } from '@/lib/supabase/server';
+import { Star, StarHalf } from 'lucide-react';
+import type { IndustryPerformance } from '@/types/industrial-visit';
 
 export const metadata: Metadata = {
   title: 'IV Analytics | Yi Connect',
@@ -49,15 +52,37 @@ async function IVAnalyticsContent() {
     );
   }
 
-  const [analytics, industryPerformance] = await Promise.all([
-    getIVAnalytics(chapter.id),
-    // Get top performing industries
-    Promise.all(
-      // This would need to fetch a list of industry IDs first
-      // For now, return empty array
-      []
-    ),
-  ]);
+  const supabase = await createClient();
+
+  // Get analytics
+  const analytics = await getIVAnalytics(chapter.id);
+
+  // Get list of industries that have hosted IVs for this chapter
+  const { data: ivIndustries } = await supabase
+    .from('events')
+    .select('industry_id')
+    .eq('chapter_id', chapter.id)
+    .eq('category', 'industrial_visit')
+    .not('industry_id', 'is', null);
+
+  // Get unique industry IDs
+  const uniqueIndustryIds = [...new Set(
+    (ivIndustries || [])
+      .map(iv => iv.industry_id)
+      .filter(Boolean)
+  )] as string[];
+
+  // Fetch performance data for each industry
+  const industryPerformance: IndustryPerformance[] = [];
+  for (const industryId of uniqueIndustryIds.slice(0, 10)) { // Limit to top 10
+    const performance = await getIndustryPerformance(industryId);
+    if (performance) {
+      industryPerformance.push(performance);
+    }
+  }
+
+  // Sort by total IVs hosted
+  industryPerformance.sort((a, b) => b.total_ivs_hosted - a.total_ivs_hosted);
 
   const participationTrend =
     analytics.total_ivs > 0
@@ -400,13 +425,135 @@ async function IVAnalyticsContent() {
                 <div className="text-center py-8 text-muted-foreground">
                   <Building2 className="h-12 w-12 mx-auto mb-4 opacity-50" />
                   <p>No industry performance data available yet</p>
+                  <p className="text-xs mt-2">
+                    Industry performance metrics will appear once you have completed industrial visits.
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {/* Performance data would be rendered here */}
-                  <p className="text-sm text-muted-foreground">
-                    Industry performance metrics coming soon...
-                  </p>
+                  {/* Summary Stats */}
+                  <div className="grid gap-4 md:grid-cols-3 mb-6">
+                    <div className="text-center p-4 bg-muted rounded-lg">
+                      <div className="text-2xl font-bold">{industryPerformance.length}</div>
+                      <p className="text-sm text-muted-foreground">Partner Industries</p>
+                    </div>
+                    <div className="text-center p-4 bg-muted rounded-lg">
+                      <div className="text-2xl font-bold">
+                        {industryPerformance.reduce((sum, ip) => sum + ip.total_ivs_hosted, 0)}
+                      </div>
+                      <p className="text-sm text-muted-foreground">Total Visits</p>
+                    </div>
+                    <div className="text-center p-4 bg-muted rounded-lg">
+                      <div className="text-2xl font-bold">
+                        {industryPerformance.reduce((sum, ip) => sum + ip.total_participants, 0)}
+                      </div>
+                      <p className="text-sm text-muted-foreground">Total Participants</p>
+                    </div>
+                  </div>
+
+                  {/* Industry Performance Table */}
+                  <div className="border rounded-lg">
+                    <div className="grid grid-cols-12 gap-4 p-4 bg-muted/50 text-sm font-medium border-b">
+                      <div className="col-span-4">Industry</div>
+                      <div className="col-span-2 text-center">IVs Hosted</div>
+                      <div className="col-span-2 text-center">Participants</div>
+                      <div className="col-span-2 text-center">Rating</div>
+                      <div className="col-span-2 text-center">Last Visit</div>
+                    </div>
+                    {industryPerformance.map((industry, index) => (
+                      <div
+                        key={industry.industry_id}
+                        className="grid grid-cols-12 gap-4 p-4 items-center border-b last:border-b-0 hover:bg-muted/30 transition-colors"
+                      >
+                        <div className="col-span-4">
+                          <div className="flex items-center gap-3">
+                            <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary text-sm font-bold">
+                              {index + 1}
+                            </div>
+                            <div>
+                              <p className="font-medium">{industry.company_name}</p>
+                              <p className="text-xs text-muted-foreground">
+                                Avg {(industry.total_participants / (industry.total_ivs_hosted || 1)).toFixed(0)} participants/visit
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="col-span-2 text-center">
+                          <Badge variant="secondary">{industry.total_ivs_hosted}</Badge>
+                        </div>
+                        <div className="col-span-2 text-center font-medium">
+                          {industry.total_participants}
+                        </div>
+                        <div className="col-span-2 text-center">
+                          {industry.avg_rating ? (
+                            <div className="flex items-center justify-center gap-1">
+                              <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
+                              <span className="font-medium">{industry.avg_rating.toFixed(1)}</span>
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground text-sm">N/A</span>
+                          )}
+                        </div>
+                        <div className="col-span-2 text-center text-sm text-muted-foreground">
+                          {industry.last_iv_date
+                            ? new Date(industry.last_iv_date).toLocaleDateString('en-IN', {
+                                day: 'numeric',
+                                month: 'short',
+                                year: 'numeric',
+                              })
+                            : 'N/A'
+                          }
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Host Willingness Summary */}
+                  <Card className="mt-6">
+                    <CardHeader>
+                      <CardTitle className="text-base">Host Willingness Summary</CardTitle>
+                      <CardDescription>
+                        Industries rated by willingness to host future visits
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid gap-4 md:grid-cols-3">
+                        {(() => {
+                          const rated = industryPerformance.filter(ip => ip.willingness_to_host_again !== null);
+                          const highlyWilling = rated.filter(ip => (ip.willingness_to_host_again || 0) >= 4).length;
+                          const moderatelyWilling = rated.filter(ip => (ip.willingness_to_host_again || 0) >= 3 && (ip.willingness_to_host_again || 0) < 4).length;
+                          const lowWilling = rated.filter(ip => (ip.willingness_to_host_again || 0) < 3).length;
+
+                          return (
+                            <>
+                              <div className="p-4 border rounded-lg text-center">
+                                <div className="flex items-center justify-center gap-1 mb-2">
+                                  <Star className="h-5 w-5 text-green-500 fill-green-500" />
+                                  <Star className="h-5 w-5 text-green-500 fill-green-500" />
+                                </div>
+                                <div className="text-2xl font-bold text-green-600">{highlyWilling}</div>
+                                <p className="text-sm text-muted-foreground">Highly Willing (4-5)</p>
+                              </div>
+                              <div className="p-4 border rounded-lg text-center">
+                                <div className="flex items-center justify-center gap-1 mb-2">
+                                  <Star className="h-5 w-5 text-yellow-500 fill-yellow-500" />
+                                </div>
+                                <div className="text-2xl font-bold text-yellow-600">{moderatelyWilling}</div>
+                                <p className="text-sm text-muted-foreground">Moderate (3-4)</p>
+                              </div>
+                              <div className="p-4 border rounded-lg text-center">
+                                <div className="flex items-center justify-center gap-1 mb-2">
+                                  <StarHalf className="h-5 w-5 text-red-500" />
+                                </div>
+                                <div className="text-2xl font-bold text-red-600">{lowWilling}</div>
+                                <p className="text-sm text-muted-foreground">Needs Attention (&lt;3)</p>
+                              </div>
+                            </>
+                          );
+                        })()}
+                      </div>
+                    </CardContent>
+                  </Card>
                 </div>
               )}
             </CardContent>

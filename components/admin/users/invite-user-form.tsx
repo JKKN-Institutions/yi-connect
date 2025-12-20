@@ -156,9 +156,14 @@ export function InviteUserForm({ roles, chapters }: InviteUserFormProps) {
 
       {/* Send Email Checkbox */}
       <div className='flex items-center space-x-2'>
-        <Checkbox id='send_email' name='send_email' defaultChecked disabled />
+        <Checkbox
+          id='send_email'
+          name='send_email'
+          defaultChecked
+          disabled={isPending}
+        />
         <Label htmlFor='send_email' className='font-normal cursor-pointer'>
-          Send invitation email (Coming soon)
+          Send invitation email to the user
         </Label>
       </div>
 

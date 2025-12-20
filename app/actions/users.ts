@@ -24,6 +24,7 @@ import {
 } from '@/lib/validations/user'
 import type { FormState } from '@/types'
 import type { BulkOperationResult } from '@/types/user'
+import { sendInvitationEmail } from '@/lib/email/send-email'
 
 // ============================================================================
 // User Profile Actions
@@ -741,13 +742,62 @@ export async function inviteUser(
       }
     }
 
-    // TODO: Send invitation email if send_email is true
+    // Send invitation email if send_email is true
+    if (validation.data.send_email) {
+      // Get inviter's name
+      const { data: inviterProfile } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', user.id)
+        .single()
+
+      const inviterName = inviterProfile?.full_name || 'A Yi Connect administrator'
+
+      // Get chapter name if provided
+      let chapterName: string | undefined
+      if (validation.data.chapter_id) {
+        const { data: chapter } = await supabase
+          .from('chapters')
+          .select('name')
+          .eq('id', validation.data.chapter_id)
+          .single()
+        chapterName = chapter?.name
+      }
+
+      // Get role name if provided
+      let roleName: string | undefined
+      if (validation.data.role_ids && validation.data.role_ids.length > 0) {
+        const { data: role } = await supabase
+          .from('roles')
+          .select('name')
+          .eq('id', validation.data.role_ids[0])
+          .single()
+        roleName = role?.name
+      }
+
+      // Get base URL for sign-up link
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+      const signUpUrl = `${baseUrl}/signup`
+
+      // Send invitation email
+      await sendInvitationEmail({
+        to: validation.data.email,
+        inviterName,
+        inviteeName: validation.data.full_name,
+        chapterName,
+        roleName,
+        signUpUrl,
+        notes: validation.data.notes,
+      })
+    }
 
     revalidatePath('/admin/users')
 
     return {
       success: true,
-      message: `Invitation sent to ${validation.data.email}. They can now sign up using this email.`
+      message: validation.data.send_email
+        ? `Invitation email sent to ${validation.data.email}. They can now sign up using this email.`
+        : `${validation.data.email} added to approved list. They can now sign up using this email.`
     }
   } catch (error: any) {
     return {
@@ -1027,6 +1077,136 @@ export async function deleteUserPermanently(
     return {
       success: false,
       message: error.message || 'Failed to delete user permanently.'
+    };
+  }
+}
+
+// ============================================================================
+// Bulk User Actions
+// ============================================================================
+
+/**
+ * Bulk deactivate multiple users
+ * Deactivates multiple users at once with proper error handling
+ * Only Super Admin and National Admin can perform this action
+ */
+export async function bulkDeactivateUsers(
+  prevState: FormState,
+  formData: FormData
+): Promise<FormState & { data?: BulkOperationResult }> {
+  try {
+    const { user } = await requireRole(['Super Admin', 'National Admin']);
+
+    const userIdsJson = formData.get('user_ids');
+    if (!userIdsJson || typeof userIdsJson !== 'string') {
+      return {
+        message: 'No users selected for deactivation.'
+      };
+    }
+
+    const userIds: string[] = JSON.parse(userIdsJson);
+
+    if (userIds.length === 0) {
+      return {
+        message: 'No users selected for deactivation.'
+      };
+    }
+
+    // Filter out current user from the list (prevent self-deactivation)
+    const filteredUserIds = userIds.filter(id => id !== user.id);
+
+    if (filteredUserIds.length === 0) {
+      return {
+        message: 'You cannot deactivate your own account.'
+      };
+    }
+
+    const adminClient = createAdminSupabaseClient();
+
+    let successCount = 0;
+    let failureCount = 0;
+    const failures: Array<{ userId: string; error: string }> = [];
+
+    // Process each user
+    for (const userId of filteredUserIds) {
+      try {
+        // Get user info
+        const { data: profile } = await adminClient
+          .from('profiles')
+          .select('id, full_name, email')
+          .eq('id', userId)
+          .single();
+
+        if (!profile) {
+          failureCount++;
+          failures.push({ userId, error: 'User not found' });
+          continue;
+        }
+
+        // Deactivate in profiles table
+        const { error: profileError } = await adminClient
+          .from('profiles')
+          .update({ is_active: false })
+          .eq('id', userId);
+
+        if (profileError) {
+          failureCount++;
+          failures.push({ userId, error: profileError.message });
+          continue;
+        }
+
+        // Deactivate in members table (if exists)
+        await adminClient
+          .from('members')
+          .update({ is_active: false, membership_status: 'inactive' })
+          .eq('id', userId);
+
+        // Deactivate in approved_emails table
+        if (profile.email) {
+          await adminClient
+            .from('approved_emails')
+            .update({ is_active: false })
+            .eq('email', profile.email);
+        }
+
+        successCount++;
+      } catch (err: any) {
+        failureCount++;
+        failures.push({ userId, error: err.message || 'Unknown error' });
+      }
+    }
+
+    // Invalidate caches
+    revalidatePath('/admin/users');
+    revalidateTag('members-list');
+
+    const result: BulkOperationResult = {
+      success_count: successCount,
+      failure_count: failureCount,
+      failures
+    };
+
+    if (failureCount === 0) {
+      return {
+        success: true,
+        message: `Successfully deactivated ${successCount} user(s).`,
+        data: result
+      };
+    } else if (successCount > 0) {
+      return {
+        success: true,
+        message: `Deactivated ${successCount} user(s). ${failureCount} failed.`,
+        data: result
+      };
+    } else {
+      return {
+        message: `Failed to deactivate users. ${failureCount} error(s) occurred.`,
+        data: result
+      };
+    }
+  } catch (error: any) {
+    return {
+      message: error.message || 'An unexpected error occurred.'
     };
   }
 }

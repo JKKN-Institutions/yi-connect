@@ -17,12 +17,38 @@ import {
   UpdateCertificationDialog,
   AssessmentTab,
   AvailabilityCalendar,
+  EngagementMetricsTab,
 } from '@/components/members'
 import { TrainerProfileTab } from '@/components/members/trainer-profile-tab'
 import { Briefcase, GraduationCap, Award, Target, Calendar } from 'lucide-react'
 import type { TrainerProfileFull } from '@/types/trainer'
 import type { SkillWillAssessmentFull } from '@/types/assessment'
 import type { Availability } from '@/types/availability'
+
+interface EngagementData {
+  total_events_attended: number
+  events_this_year: number
+  events_last_year: number
+  event_attendance_rate: number
+  total_volunteer_hours: number
+  volunteer_events: number
+  volunteer_roles: string[]
+  leadership_roles_held: number
+  current_leadership_roles: string[]
+  committees_served: number
+  skills_count: number
+  certifications_count: number
+  training_sessions_attended: number
+  mentor_sessions: number
+  awards_received: number
+  nominations_received: number
+  overall_engagement_score: number
+  engagement_trend: 'increasing' | 'stable' | 'decreasing'
+  leadership_readiness_score: number
+  last_event_date: string | null
+  member_since: string
+  consecutive_active_months: number
+}
 
 interface MemberDetailClientProps {
   member: any // TODO: Add proper type
@@ -35,6 +61,7 @@ interface MemberDetailClientProps {
     mentee_count: number
   }>
   availabilities?: Availability[]
+  engagementData?: EngagementData | null
   canEdit?: boolean
 }
 
@@ -45,6 +72,7 @@ export function MemberDetailClient({
   verticals = [],
   availableMentors = [],
   availabilities = [],
+  engagementData = null,
   canEdit = true,
 }: MemberDetailClientProps) {
   const [showAddSkill, setShowAddSkill] = useState(false)
@@ -132,13 +160,12 @@ export function MemberDetailClient({
           />
         </TabsContent>
 
-        {/* Engagement Tab (Placeholder for future) */}
+        {/* Engagement Tab */}
         <TabsContent value="engagement" className="space-y-6">
-          <div className="text-center py-12 text-muted-foreground">
-            <Award className="h-12 w-12 mx-auto mb-4 opacity-50" />
-            <h3 className="text-lg font-medium">Engagement Metrics</h3>
-            <p className="text-sm">Coming soon - Track member engagement and leadership readiness.</p>
-          </div>
+          <EngagementMetricsTab
+            memberId={member.id}
+            engagementData={engagementData}
+          />
         </TabsContent>
       </Tabs>
 

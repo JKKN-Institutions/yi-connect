@@ -41,3 +41,6 @@ export { AvailabilityCalendar } from './availability-calendar'
 // Engagement Metrics
 export { EngagementMetricsTab } from './engagement-metrics-tab'
 
+// Bulk Actions
+export { MemberBulkActions } from './member-bulk-actions'
+

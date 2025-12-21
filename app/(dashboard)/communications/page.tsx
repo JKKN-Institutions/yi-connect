@@ -10,7 +10,10 @@ import {
   Clock,
   CheckCircle2,
   ArrowRight,
-  Plus
+  Plus,
+  MessageCircle,
+  Wifi,
+  WifiOff
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,7 +25,8 @@ import {
   getCommunicationAnalytics,
   getRecentNotifications
 } from "@/lib/data/communication";
-import { requireRole } from "@/lib/auth";
+import { requireRole, getCurrentChapterId } from "@/lib/auth";
+import { getConnectionStatus, getWhatsAppGroups, getRecentMessages } from "@/lib/data/whatsapp";
 
 export const metadata: Metadata = {
   title: "Communication Hub | Yi Connect",
@@ -83,6 +87,12 @@ export default async function CommunicationDashboardPage() {
             </CardHeader>
             <CardContent className="space-y-2">
               <Button variant="outline" className="w-full justify-start" asChild>
+                <Link href="/communications/whatsapp/compose">
+                  <MessageCircle className="mr-2 h-4 w-4" />
+                  Send WhatsApp
+                </Link>
+              </Button>
+              <Button variant="outline" className="w-full justify-start" asChild>
                 <Link href="/communications/announcements/new">
                   <Send className="mr-2 h-4 w-4" />
                   New Announcement
@@ -108,6 +118,11 @@ export default async function CommunicationDashboardPage() {
               </Button>
             </CardContent>
           </Card>
+
+          {/* WhatsApp Status */}
+          <Suspense fallback={<WhatsAppStatusSkeleton />}>
+            <WhatsAppStatusCard />
+          </Suspense>
 
           {/* Recent Notifications */}
           <Card>
@@ -329,5 +344,144 @@ function NotificationsSkeleton() {
         </div>
       ))}
     </div>
+  );
+}
+
+async function WhatsAppStatusCard() {
+  const chapterId = await getCurrentChapterId();
+
+  if (!chapterId) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <MessageCircle className="h-4 w-4" />
+            WhatsApp
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">No chapter selected</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const [status, groups, recentMessages] = await Promise.all([
+    getConnectionStatus(chapterId),
+    getWhatsAppGroups(chapterId, { is_active: true }),
+    getRecentMessages(chapterId, 3)
+  ]);
+
+  const isConnected = status === 'connected';
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base flex items-center gap-2">
+            <MessageCircle className="h-4 w-4" />
+            WhatsApp
+          </CardTitle>
+          <Button variant="ghost" size="sm" asChild>
+            <Link href="/communications/whatsapp">
+              Manage
+            </Link>
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Connection Status */}
+        <div className="flex items-center gap-2">
+          {isConnected ? (
+            <>
+              <div className="p-1.5 rounded-full bg-green-100 dark:bg-green-900">
+                <Wifi className="h-3 w-3 text-green-600 dark:text-green-400" />
+              </div>
+              <span className="text-sm text-green-600 dark:text-green-400 font-medium">
+                Connected
+              </span>
+            </>
+          ) : (
+            <>
+              <div className="p-1.5 rounded-full bg-gray-100 dark:bg-gray-800">
+                <WifiOff className="h-3 w-3 text-muted-foreground" />
+              </div>
+              <span className="text-sm text-muted-foreground">
+                Not Connected
+              </span>
+              <Button variant="outline" size="sm" className="ml-auto" asChild>
+                <Link href="/settings/whatsapp">
+                  Connect
+                </Link>
+              </Button>
+            </>
+          )}
+        </div>
+
+        {/* Groups Count */}
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-muted-foreground">Active Groups</span>
+          <span className="font-medium">{groups.length}</span>
+        </div>
+
+        {/* Quick Actions */}
+        <div className="space-y-2">
+          <Button variant="outline" className="w-full justify-start" size="sm" asChild>
+            <Link href="/communications/whatsapp/compose">
+              <Send className="mr-2 h-3 w-3" />
+              Send Message
+            </Link>
+          </Button>
+          <Button variant="outline" className="w-full justify-start" size="sm" asChild>
+            <Link href="/communications/whatsapp/groups">
+              <Users className="mr-2 h-3 w-3" />
+              View Groups
+            </Link>
+          </Button>
+        </div>
+
+        {/* Recent Activity */}
+        {recentMessages.length > 0 && (
+          <div className="border-t pt-3">
+            <p className="text-xs text-muted-foreground mb-2">Recent Messages</p>
+            <div className="space-y-2">
+              {recentMessages.slice(0, 2).map((msg) => (
+                <div key={msg.id} className="text-xs flex items-center gap-2">
+                  <CheckCircle2 className="h-3 w-3 text-green-500 shrink-0" />
+                  <span className="truncate">{msg.recipient_name}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function WhatsAppStatusSkeleton() {
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <Skeleton className="h-5 w-24" />
+          <Skeleton className="h-6 w-16" />
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex items-center gap-2">
+          <Skeleton className="h-6 w-6 rounded-full" />
+          <Skeleton className="h-4 w-20" />
+        </div>
+        <div className="flex items-center justify-between">
+          <Skeleton className="h-4 w-24" />
+          <Skeleton className="h-4 w-8" />
+        </div>
+        <div className="space-y-2">
+          <Skeleton className="h-8 w-full" />
+          <Skeleton className="h-8 w-full" />
+        </div>
+      </CardContent>
+    </Card>
   );
 }

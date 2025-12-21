@@ -30,6 +30,9 @@ export const metadata: Metadata = {
   description: 'Manage your industrial visit slots',
 };
 
+// Force dynamic rendering since this page uses cookies for authentication
+export const dynamic = 'force-dynamic';
+
 async function MySlotsContent() {
   const industryId = await getCurrentIndustryId();
 

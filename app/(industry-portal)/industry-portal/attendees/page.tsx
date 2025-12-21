@@ -18,6 +18,9 @@ export const metadata: Metadata = {
   description: 'View and manage attendees for your industrial visit slots',
 };
 
+// Force dynamic rendering since this page uses cookies for authentication
+export const dynamic = 'force-dynamic';
+
 // Temporary helper to get industry ID from auth
 async function getCurrentIndustryId(): Promise<string | null> {
   return 'placeholder-industry-id';

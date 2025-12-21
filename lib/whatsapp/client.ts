@@ -19,17 +19,23 @@ import path from 'path';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let client: any = null;
 let qrCodeDataUrl: string | null = null;
-let connectionStatus: 'disconnected' | 'connecting' | 'qr_ready' | 'authenticated' | 'ready' = 'disconnected';
+
+// Connection status type
+type ConnectionStatus = 'disconnected' | 'connecting' | 'qr_ready' | 'authenticated' | 'ready';
+let connectionStatus: ConnectionStatus = 'disconnected';
 let lastError: string | null = null;
 
+// Init result type
+type InitResult = { success: boolean; status: ConnectionStatus; error?: string };
+
 // Initialization lock to prevent concurrent requests
-let initializationPromise: Promise<{ success: boolean; status: typeof connectionStatus; error?: string }> | null = null;
+let initializationPromise: Promise<InitResult> | null = null;
 
 // Timeout for initialization (20 seconds)
 const INIT_TIMEOUT_MS = 20000;
 
 // Event listeners for external subscribers
-type StatusListener = (status: typeof connectionStatus, qr?: string) => void;
+type StatusListener = (status: ConnectionStatus, qr?: string) => void;
 const statusListeners: Set<StatusListener> = new Set();
 
 /**
@@ -161,11 +167,7 @@ async function cleanupClient(): Promise<void> {
 /**
  * Initialize and connect the WhatsApp client
  */
-export async function initializeWhatsApp(): Promise<{
-  success: boolean;
-  status: typeof connectionStatus;
-  error?: string;
-}> {
+export async function initializeWhatsApp(): Promise<InitResult> {
   console.log('[WhatsApp] initializeWhatsApp called, current status:', connectionStatus);
 
   // If already ready, return immediately
@@ -202,6 +204,7 @@ export async function initializeWhatsApp(): Promise<{
 
       console.log(`[WhatsApp] initialize() completed in ${Date.now() - startTime}ms`);
 
+      // Return current status - may be 'connecting', 'qr_ready', 'authenticated', or 'ready' depending on events
       return { success: true, status: connectionStatus };
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';

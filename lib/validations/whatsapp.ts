@@ -130,7 +130,7 @@ export const logMessageSchema = z.object({
     .max(10000, 'Message too long'),
   status: z.enum(MESSAGE_STATUSES).optional().default('sent'),
   error_message: z.string().max(1000).optional(),
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 })
 
 export type LogMessageInput = z.infer<typeof logMessageSchema>
@@ -161,7 +161,7 @@ export const composeMessageSchema = z.object({
     .string()
     .min(1, 'Message is required')
     .max(4000, 'Message must be less than 4000 characters'),
-  variables: z.record(z.string()).optional(),
+  variables: z.record(z.string(), z.string()).optional(),
 })
 
 /**
@@ -177,7 +177,7 @@ export const bulkComposeMessageSchema = z.object({
     .string()
     .min(1, 'Message is required')
     .max(4000, 'Message must be less than 4000 characters'),
-  variables: z.record(z.string()).optional(),
+  variables: z.record(z.string(), z.string()).optional(),
 })
 
 export type ComposeRecipient = z.infer<typeof recipientSchema>

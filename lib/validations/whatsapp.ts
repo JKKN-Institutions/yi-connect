@@ -80,9 +80,7 @@ export const createWhatsAppTemplateSchema = z.object({
     .string()
     .min(2, 'Template name must be at least 2 characters')
     .max(100, 'Template name must be less than 100 characters'),
-  category: z.enum(TEMPLATE_CATEGORIES, {
-    errorMap: () => ({ message: 'Please select a valid category' }),
-  }),
+  category: z.enum(TEMPLATE_CATEGORIES, { message: 'Please select a valid category' }),
   content: z
     .string()
     .min(10, 'Template content must be at least 10 characters')
@@ -122,9 +120,7 @@ export type UpdateWhatsAppTemplateInput = z.infer<typeof updateWhatsAppTemplateS
  */
 export const logMessageSchema = z.object({
   chapter_id: z.string().uuid('Invalid chapter ID'),
-  recipient_type: z.enum(RECIPIENT_TYPES, {
-    errorMap: () => ({ message: 'Please select a valid recipient type' }),
-  }),
+  recipient_type: z.enum(RECIPIENT_TYPES, { message: 'Please select a valid recipient type' }),
   recipient_id: z.string().max(100).optional(),
   recipient_name: z.string().max(255).optional(),
   template_id: z.string().uuid().optional(),

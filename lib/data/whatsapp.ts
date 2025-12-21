@@ -503,16 +503,22 @@ export async function getMessageLogs(
     }
   }
 
-  const items: MessageLogItem[] = (data || []).map((log) => ({
-    id: log.id,
-    recipient_type: log.recipient_type,
-    recipient_name: log.recipient_name,
-    message_preview: log.message_content.substring(0, 100) + (log.message_content.length > 100 ? '...' : ''),
-    status: log.status,
-    sent_at: log.sent_at,
-    template_name: (log.template as { name: string } | null)?.name || null,
-    sender_name: (log.sender as { full_name: string } | null)?.full_name || null,
-  }))
+  const items: MessageLogItem[] = (data || []).map((log) => {
+    // Supabase joins can return arrays or single objects depending on relationship
+    const template = Array.isArray(log.template) ? log.template[0] : log.template
+    const sender = Array.isArray(log.sender) ? log.sender[0] : log.sender
+
+    return {
+      id: log.id,
+      recipient_type: log.recipient_type,
+      recipient_name: log.recipient_name,
+      message_preview: log.message_content.substring(0, 100) + (log.message_content.length > 100 ? '...' : ''),
+      status: log.status,
+      sent_at: log.sent_at,
+      template_name: template?.name || null,
+      sender_name: sender?.full_name || null,
+    }
+  })
 
   return {
     data: items,

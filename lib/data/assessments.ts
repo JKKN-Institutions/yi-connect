@@ -32,7 +32,7 @@ export const getAssessmentById = cache(
       .select(
         `
         *,
-        member:members(
+        member:members!skill_will_assessments_member_id_fkey(
           id,
           company,
           designation,
@@ -94,7 +94,7 @@ export const getMemberAssessment = cache(
       .select(
         `
         *,
-        member:members(
+        member:members!skill_will_assessments_member_id_fkey(
           id,
           company,
           designation,
@@ -181,7 +181,7 @@ export const getAssessments = cache(
       .select(
         `
         *,
-        member:members(
+        member:members!skill_will_assessments_member_id_fkey(
           id,
           company,
           designation,
@@ -459,7 +459,7 @@ export const getAvailableMentors = cache(
       .select(
         `
         member_id,
-        member:members(
+        member:members!skill_will_assessments_member_id_fkey(
           id,
           profile:profiles(
             full_name,
@@ -512,7 +512,7 @@ export const getMentees = cache(
       .select(
         `
         *,
-        member:members(
+        member:members!skill_will_assessments_member_id_fkey(
           id,
           company,
           designation,

@@ -23,7 +23,8 @@ export const bulkMemberRowSchema = z.object({
   full_name: z
     .string()
     .min(2, { message: 'Name must be at least 2 characters' })
-    .max(200, { message: 'Name must not exceed 200 characters' }),
+    .max(200, { message: 'Name must not exceed 200 characters' })
+    .transform((val) => val.toUpperCase().trim()),
 
   // Optional fields
   phone: z

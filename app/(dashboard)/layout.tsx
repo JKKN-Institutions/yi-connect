@@ -74,21 +74,21 @@ export default async function DashboardLayout({
 
   return (
     <BugReporterWrapper userProfile={userProfile}>
-      <div className="min-h-screen flex">
+      <div className="min-h-screen flex overflow-hidden">
         {/* Sidebar */}
         <Suspense fallback={<div className="w-64 bg-background border-r" />}>
           <SidebarWrapper />
         </Suspense>
 
         {/* Main Content Area */}
-        <div className="flex-1 flex flex-col lg:ml-64">
+        <div className="flex-1 flex flex-col lg:ml-64 min-w-0 overflow-hidden">
           {/* Header */}
           <Suspense fallback={<div className="h-16 bg-background border-b" />}>
             <DashboardHeader />
           </Suspense>
 
           {/* Page Content */}
-          <main className="flex-1 p-6 bg-muted/10">
+          <main className="flex-1 p-6 bg-muted/10 overflow-x-hidden overflow-y-auto min-w-0">
             {children}
           </main>
         </div>

@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import QRCode from 'qrcode';
-import { Download, QrCode } from 'lucide-react';
+import { Download, QrCode, Printer } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -12,7 +12,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import toast from 'react-hot-toast';
 
 interface EventQRCodeProps {
@@ -24,18 +23,31 @@ interface EventQRCodeProps {
 export function EventQRCode({ eventId, eventTitle, trigger }: EventQRCodeProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
+  const [isOpen, setIsOpen] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [checkInUrl, setCheckInUrl] = useState<string>('');
 
-  // Generate check-in URL
-  const checkInUrl = typeof window !== 'undefined'
-    ? `${window.location.origin}/events/${eventId}/checkin?qr=true`
-    : '';
+  // Set check-in URL on client side only
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setCheckInUrl(`${window.location.origin}/events/${eventId}/checkin?qr=true`);
+    }
+  }, [eventId]);
 
-  const generateQRCode = async () => {
+  const generateQRCode = useCallback(async () => {
+    if (!canvasRef.current || !checkInUrl) return;
+
+    setIsGenerating(true);
     try {
-      if (!canvasRef.current) return;
+      // Clear the canvas first
+      const ctx = canvasRef.current.getContext('2d');
+      if (ctx) {
+        ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+      }
 
+      // Generate QR code on canvas
       await QRCode.toCanvas(canvasRef.current, checkInUrl, {
-        width: 300,
+        width: 250,
         margin: 2,
         color: {
           dark: '#000000',
@@ -43,7 +55,7 @@ export function EventQRCode({ eventId, eventTitle, trigger }: EventQRCodeProps) 
         },
       });
 
-      // Also generate data URL for download
+      // Also generate data URL for download (higher resolution)
       const dataUrl = await QRCode.toDataURL(checkInUrl, {
         width: 600,
         margin: 2,
@@ -52,18 +64,27 @@ export function EventQRCode({ eventId, eventTitle, trigger }: EventQRCodeProps) 
     } catch (error) {
       console.error('Error generating QR code:', error);
       toast.error('Failed to generate QR code');
+    } finally {
+      setIsGenerating(false);
     }
-  };
-
-  useEffect(() => {
-    if (canvasRef.current && checkInUrl) {
-      generateQRCode();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [checkInUrl]);
 
+  // Generate QR code when dialog opens and URL is ready
+  useEffect(() => {
+    if (isOpen && checkInUrl) {
+      // Small delay to ensure canvas is mounted
+      const timer = setTimeout(() => {
+        generateQRCode();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen, checkInUrl, generateQRCode]);
+
   const handleDownload = () => {
-    if (!qrDataUrl) return;
+    if (!qrDataUrl) {
+      toast.error('QR code not ready yet');
+      return;
+    }
 
     const link = document.createElement('a');
     link.download = `${eventTitle.replace(/\s+/g, '-')}-qr-code.png`;
@@ -75,6 +96,11 @@ export function EventQRCode({ eventId, eventTitle, trigger }: EventQRCodeProps) 
   };
 
   const handlePrint = () => {
+    if (!qrDataUrl) {
+      toast.error('QR code not ready yet');
+      return;
+    }
+
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
       toast.error('Please allow popups to print QR code');
@@ -171,73 +197,86 @@ export function EventQRCode({ eventId, eventTitle, trigger }: EventQRCodeProps) 
   };
 
   return (
-    <Dialog>
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
         {trigger || (
-          <Button variant='outline' size='sm'>
-            <QrCode className='mr-2 h-4 w-4' />
-            QR Code
+          <Button variant='outline' size='icon'>
+            <QrCode className='h-4 w-4' />
+            <span className='sr-only'>QR Code</span>
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className='sm:max-w-md'>
-        <DialogHeader>
-          <DialogTitle>Event Check-in QR Code</DialogTitle>
-          <DialogDescription>
-            Scan this QR code to check in to the event quickly
+      <DialogContent className='w-[95vw] max-w-[400px] sm:max-w-[425px] max-h-[90vh] p-0 flex flex-col'>
+        <DialogHeader className='space-y-1 p-4 sm:p-6 pb-0 sm:pb-0 shrink-0'>
+          <DialogTitle className='text-lg sm:text-xl'>Event Check-in QR Code</DialogTitle>
+          <DialogDescription className='text-sm'>
+            Scan this QR code to check in to the event
           </DialogDescription>
         </DialogHeader>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className='text-lg'>{eventTitle}</CardTitle>
-            <CardDescription>Point your camera at the QR code below</CardDescription>
-          </CardHeader>
-          <CardContent className='flex flex-col items-center gap-4'>
-            {/* QR Code Canvas */}
-            <div className='p-4 bg-white rounded-lg border'>
-              <canvas ref={canvasRef} />
-            </div>
+        <div className='flex flex-col items-center gap-4 p-4 sm:p-6 pt-4 overflow-y-auto'>
+          {/* Event Title */}
+          <div className='text-center'>
+            <h3 className='font-semibold text-base sm:text-lg line-clamp-2'>{eventTitle}</h3>
+            <p className='text-xs sm:text-sm text-muted-foreground mt-1'>
+              Point your camera at the QR code
+            </p>
+          </div>
 
-            {/* Check-in URL */}
-            <div className='w-full'>
-              <p className='text-xs text-muted-foreground text-center break-all'>
-                {checkInUrl}
-              </p>
-            </div>
+          {/* QR Code Canvas */}
+          <div className='p-3 sm:p-4 bg-white rounded-lg border-2 border-border shadow-sm'>
+            {isGenerating ? (
+              <div className='w-[200px] h-[200px] sm:w-[250px] sm:h-[250px] flex items-center justify-center'>
+                <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-primary'></div>
+              </div>
+            ) : (
+              <canvas
+                ref={canvasRef}
+                className='w-[200px] h-[200px] sm:w-[250px] sm:h-[250px]'
+              />
+            )}
+          </div>
 
-            {/* Action Buttons */}
-            <div className='flex gap-2 w-full'>
-              <Button
-                variant='outline'
-                className='flex-1'
-                onClick={handlePrint}
-              >
-                Print QR Code
-              </Button>
-              <Button
-                variant='default'
-                className='flex-1'
-                onClick={handleDownload}
-                disabled={!qrDataUrl}
-              >
-                <Download className='mr-2 h-4 w-4' />
-                Download PNG
-              </Button>
-            </div>
+          {/* Check-in URL */}
+          <div className='w-full px-2'>
+            <p className='text-[10px] sm:text-xs text-muted-foreground text-center break-all bg-muted p-2 rounded'>
+              {checkInUrl || 'Loading...'}
+            </p>
+          </div>
 
-            {/* Instructions */}
-            <div className='w-full mt-2 p-3 bg-muted rounded-lg'>
-              <h4 className='text-sm font-medium mb-2'>How to use:</h4>
-              <ol className='text-xs text-muted-foreground space-y-1 list-decimal list-inside'>
-                <li>Download or print this QR code</li>
-                <li>Display it at the event entrance</li>
-                <li>Attendees scan it with their phones</li>
-                <li>They&apos;ll be redirected to the check-in page</li>
-              </ol>
-            </div>
-          </CardContent>
-        </Card>
+          {/* Action Buttons */}
+          <div className='flex flex-col sm:flex-row gap-2 w-full'>
+            <Button
+              variant='outline'
+              className='flex-1 h-10'
+              onClick={handlePrint}
+              disabled={!qrDataUrl || isGenerating}
+            >
+              <Printer className='mr-2 h-4 w-4' />
+              Print
+            </Button>
+            <Button
+              variant='default'
+              className='flex-1 h-10'
+              onClick={handleDownload}
+              disabled={!qrDataUrl || isGenerating}
+            >
+              <Download className='mr-2 h-4 w-4' />
+              Download
+            </Button>
+          </div>
+
+          {/* Instructions */}
+          <div className='w-full p-3 bg-muted/50 rounded-lg border'>
+            <h4 className='text-xs sm:text-sm font-medium mb-2'>How to use:</h4>
+            <ol className='text-[10px] sm:text-xs text-muted-foreground space-y-1 list-decimal list-inside'>
+              <li>Download or print this QR code</li>
+              <li>Display it at the event entrance</li>
+              <li>Attendees scan it with their phones</li>
+              <li>They&apos;ll be redirected to check-in</li>
+            </ol>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   );

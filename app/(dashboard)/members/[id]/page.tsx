@@ -27,8 +27,7 @@ import {
 } from 'lucide-react'
 import { notFound } from 'next/navigation'
 import { MemberDetailClient } from './member-detail-client'
-import { getMemberById } from '@/lib/data/members'
-import { WhatsAppSendButton } from '@/components/whatsapp'
+import { getMemberById, getSkills, getCertifications } from '@/lib/data/members'
 import { getTrainerProfile } from '@/lib/data/trainers'
 import { getMemberAssessment, getAvailableMentors } from '@/lib/data/assessments'
 import { getVerticals } from '@/lib/data/vertical'
@@ -86,10 +85,12 @@ async function MemberDetailContent({ id }: { id: string }) {
   const startDate = today.toISOString().split('T')[0]
   const endDate = threeMonthsLater.toISOString().split('T')[0]
 
-  const [verticals, mentors, availabilities] = await Promise.all([
+  const [verticals, mentors, availabilities, skills, certifications] = await Promise.all([
     chapterId ? getVerticals({ chapter_id: chapterId }) : Promise.resolve([]),
     chapterId ? getAvailableMentors(chapterId) : Promise.resolve([]),
     getMemberAvailability(id, startDate, endDate),
+    getSkills(),
+    getCertifications(),
   ])
 
   return (
@@ -169,22 +170,11 @@ async function MemberDetailContent({ id }: { id: string }) {
               </a>
             </div>
             {member.profile?.phone && (
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3 text-sm">
-                  <Phone className="h-4 w-4 text-muted-foreground" />
-                  <a href={`tel:${member.profile.phone}`} className="text-primary hover:underline">
-                    {member.profile.phone}
-                  </a>
-                </div>
-                <WhatsAppSendButton
-                  contact={{
-                    phone: member.profile.phone,
-                    name: member.profile?.full_name || 'Member'
-                  }}
-                  defaultMessage={`Hi ${member.profile?.full_name?.split(' ')[0] || ''},\n\n[Your message here]\n\n_Yi Erode - Together We Can. We Will._`}
-                  variant="outline"
-                  size="sm"
-                />
+              <div className="flex items-center gap-3 text-sm">
+                <Phone className="h-4 w-4 text-muted-foreground" />
+                <a href={`tel:${member.profile.phone}`} className="text-primary hover:underline">
+                  {member.profile.phone}
+                </a>
               </div>
             )}
             {member.linkedin_url && (
@@ -269,6 +259,8 @@ async function MemberDetailContent({ id }: { id: string }) {
         verticals={verticals}
         availableMentors={mentors}
         availabilities={availabilities}
+        skills={skills}
+        certifications={certifications}
         canEdit={true}
       />
 

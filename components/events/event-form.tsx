@@ -17,7 +17,8 @@ import {
   Loader2,
   ChevronRight,
   ChevronLeft,
-  Check
+  Check,
+  Clock
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { createEvent, updateEvent } from '@/app/actions/events';
@@ -43,6 +44,7 @@ import {
   FormMessage
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { ImageUpload } from '@/components/ui/image-upload';
 import {
@@ -68,6 +70,7 @@ import {
   CardTitle
 } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+import { LocationPicker } from '@/components/ui/location-picker';
 import toast from 'react-hot-toast';
 
 interface EventFormProps {
@@ -111,6 +114,8 @@ export function EventForm(props: EventFormProps) {
       registration_end_date: event?.registration_end_date || '',
       venue_id: event?.venue?.id || '',
       venue_address: event?.venue_address || '',
+      venue_latitude: event?.venue_latitude ?? null,
+      venue_longitude: event?.venue_longitude ?? null,
       is_virtual: event?.is_virtual || false,
       virtual_meeting_link: event?.virtual_meeting_link || '',
       max_capacity: event?.max_capacity ?? ('' as any),
@@ -195,6 +200,8 @@ export function EventForm(props: EventFormProps) {
           'is_virtual',
           'venue_id',
           'venue_address',
+          'venue_latitude',
+          'venue_longitude',
           'virtual_meeting_link'
         ],
         settings: [
@@ -448,93 +455,207 @@ export function EventForm(props: EventFormProps) {
                   <FormField
                     control={form.control as any}
                     name='start_date'
-                    render={({ field }) => (
-                      <FormItem className='flex flex-col'>
-                        <FormLabel>Start Date & Time *</FormLabel>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <FormControl>
-                              <Button
-                                variant='outline'
-                                className={cn(
-                                  'w-full pl-3 text-left font-normal',
-                                  !field.value && 'text-muted-foreground'
-                                )}
-                              >
-                                {field.value ? (
-                                  format(new Date(field.value), 'PPP p')
-                                ) : (
-                                  <span>Pick a date</span>
-                                )}
-                                <CalendarIcon className='ml-auto h-4 w-4 opacity-50' />
-                              </Button>
-                            </FormControl>
-                          </PopoverTrigger>
-                          <PopoverContent className='w-auto p-0' align='start'>
-                            <Calendar
-                              mode='single'
-                              selected={
-                                field.value ? new Date(field.value) : undefined
-                              }
-                              onSelect={(date) => {
-                                if (date) {
-                                  field.onChange(date.toISOString());
-                                }
-                              }}
-                              disabled={(date) => date < new Date()}
-                              initialFocus
-                            />
-                          </PopoverContent>
-                        </Popover>
-                        <FormMessage />
-                      </FormItem>
-                    )}
+                    render={({ field }) => {
+                      const dateValue = field.value ? new Date(field.value) : undefined;
+                      const hours = dateValue ? dateValue.getHours().toString().padStart(2, '0') : '09';
+                      const minutes = dateValue ? dateValue.getMinutes().toString().padStart(2, '0') : '00';
+
+                      const handleDateChange = (date: Date | undefined) => {
+                        if (date) {
+                          const newDate = new Date(date);
+                          if (dateValue) {
+                            newDate.setHours(dateValue.getHours(), dateValue.getMinutes());
+                          } else {
+                            newDate.setHours(9, 0); // Default to 9:00 AM
+                          }
+                          field.onChange(newDate.toISOString());
+                        }
+                      };
+
+                      const handleTimeChange = (type: 'hours' | 'minutes', value: string) => {
+                        const numValue = parseInt(value) || 0;
+                        const date = dateValue ? new Date(dateValue) : new Date();
+                        if (type === 'hours') {
+                          date.setHours(Math.min(23, Math.max(0, numValue)));
+                        } else {
+                          date.setMinutes(Math.min(59, Math.max(0, numValue)));
+                        }
+                        field.onChange(date.toISOString());
+                      };
+
+                      return (
+                        <FormItem className='flex flex-col'>
+                          <FormLabel>Start Date & Time *</FormLabel>
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <FormControl>
+                                <Button
+                                  variant='outline'
+                                  className={cn(
+                                    'w-full pl-3 text-left font-normal',
+                                    !field.value && 'text-muted-foreground'
+                                  )}
+                                >
+                                  {field.value ? (
+                                    format(new Date(field.value), 'PPP hh:mm a')
+                                  ) : (
+                                    <span>Pick date & time</span>
+                                  )}
+                                  <CalendarIcon className='ml-auto h-4 w-4 opacity-50' />
+                                </Button>
+                              </FormControl>
+                            </PopoverTrigger>
+                            <PopoverContent className='w-auto p-0' align='start'>
+                              <Calendar
+                                mode='single'
+                                selected={dateValue}
+                                onSelect={handleDateChange}
+                                disabled={(date) => {
+                                  const today = new Date();
+                                  today.setHours(0, 0, 0, 0);
+                                  return date < today;
+                                }}
+                                initialFocus
+                              />
+                              <div className='border-t p-3'>
+                                <Label className='text-sm font-medium flex items-center gap-2 mb-2'>
+                                  <Clock className='h-4 w-4' />
+                                  Select Time
+                                </Label>
+                                <div className='flex items-center gap-2'>
+                                  <Input
+                                    type='number'
+                                    min='0'
+                                    max='23'
+                                    value={hours}
+                                    onChange={(e) => handleTimeChange('hours', e.target.value)}
+                                    className='w-16 text-center'
+                                    placeholder='HH'
+                                  />
+                                  <span className='text-lg font-bold'>:</span>
+                                  <Input
+                                    type='number'
+                                    min='0'
+                                    max='59'
+                                    value={minutes}
+                                    onChange={(e) => handleTimeChange('minutes', e.target.value)}
+                                    className='w-16 text-center'
+                                    placeholder='MM'
+                                  />
+                                  <span className='text-sm text-muted-foreground ml-2'>
+                                    ({dateValue ? format(dateValue, 'hh:mm a') : '--:--'})
+                                  </span>
+                                </div>
+                              </div>
+                            </PopoverContent>
+                          </Popover>
+                          <FormMessage />
+                        </FormItem>
+                      );
+                    }}
                   />
 
                   <FormField
                     control={form.control as any}
                     name='end_date'
-                    render={({ field }) => (
-                      <FormItem className='flex flex-col'>
-                        <FormLabel>End Date & Time *</FormLabel>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <FormControl>
-                              <Button
-                                variant='outline'
-                                className={cn(
-                                  'w-full pl-3 text-left font-normal',
-                                  !field.value && 'text-muted-foreground'
-                                )}
-                              >
-                                {field.value ? (
-                                  format(new Date(field.value), 'PPP p')
-                                ) : (
-                                  <span>Pick a date</span>
-                                )}
-                                <CalendarIcon className='ml-auto h-4 w-4 opacity-50' />
-                              </Button>
-                            </FormControl>
-                          </PopoverTrigger>
-                          <PopoverContent className='w-auto p-0' align='start'>
-                            <Calendar
-                              mode='single'
-                              selected={
-                                field.value ? new Date(field.value) : undefined
-                              }
-                              onSelect={(date) => {
-                                if (date) {
-                                  field.onChange(date.toISOString());
-                                }
-                              }}
-                              disabled={(date) => date < new Date()}
-                              initialFocus
-                            />
-                          </PopoverContent>
-                        </Popover>
-                        <FormMessage />
-                      </FormItem>
-                    )}
+                    render={({ field }) => {
+                      const dateValue = field.value ? new Date(field.value) : undefined;
+                      const hours = dateValue ? dateValue.getHours().toString().padStart(2, '0') : '17';
+                      const minutes = dateValue ? dateValue.getMinutes().toString().padStart(2, '0') : '00';
+
+                      const handleDateChange = (date: Date | undefined) => {
+                        if (date) {
+                          const newDate = new Date(date);
+                          if (dateValue) {
+                            newDate.setHours(dateValue.getHours(), dateValue.getMinutes());
+                          } else {
+                            newDate.setHours(17, 0); // Default to 5:00 PM
+                          }
+                          field.onChange(newDate.toISOString());
+                        }
+                      };
+
+                      const handleTimeChange = (type: 'hours' | 'minutes', value: string) => {
+                        const numValue = parseInt(value) || 0;
+                        const date = dateValue ? new Date(dateValue) : new Date();
+                        if (type === 'hours') {
+                          date.setHours(Math.min(23, Math.max(0, numValue)));
+                        } else {
+                          date.setMinutes(Math.min(59, Math.max(0, numValue)));
+                        }
+                        field.onChange(date.toISOString());
+                      };
+
+                      return (
+                        <FormItem className='flex flex-col'>
+                          <FormLabel>End Date & Time *</FormLabel>
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <FormControl>
+                                <Button
+                                  variant='outline'
+                                  className={cn(
+                                    'w-full pl-3 text-left font-normal',
+                                    !field.value && 'text-muted-foreground'
+                                  )}
+                                >
+                                  {field.value ? (
+                                    format(new Date(field.value), 'PPP hh:mm a')
+                                  ) : (
+                                    <span>Pick date & time</span>
+                                  )}
+                                  <CalendarIcon className='ml-auto h-4 w-4 opacity-50' />
+                                </Button>
+                              </FormControl>
+                            </PopoverTrigger>
+                            <PopoverContent className='w-auto p-0' align='start'>
+                              <Calendar
+                                mode='single'
+                                selected={dateValue}
+                                onSelect={handleDateChange}
+                                disabled={(date) => {
+                                  const today = new Date();
+                                  today.setHours(0, 0, 0, 0);
+                                  return date < today;
+                                }}
+                                initialFocus
+                              />
+                              <div className='border-t p-3'>
+                                <Label className='text-sm font-medium flex items-center gap-2 mb-2'>
+                                  <Clock className='h-4 w-4' />
+                                  Select Time
+                                </Label>
+                                <div className='flex items-center gap-2'>
+                                  <Input
+                                    type='number'
+                                    min='0'
+                                    max='23'
+                                    value={hours}
+                                    onChange={(e) => handleTimeChange('hours', e.target.value)}
+                                    className='w-16 text-center'
+                                    placeholder='HH'
+                                  />
+                                  <span className='text-lg font-bold'>:</span>
+                                  <Input
+                                    type='number'
+                                    min='0'
+                                    max='59'
+                                    value={minutes}
+                                    onChange={(e) => handleTimeChange('minutes', e.target.value)}
+                                    className='w-16 text-center'
+                                    placeholder='MM'
+                                  />
+                                  <span className='text-sm text-muted-foreground ml-2'>
+                                    ({dateValue ? format(dateValue, 'hh:mm a') : '--:--'})
+                                  </span>
+                                </div>
+                              </div>
+                            </PopoverContent>
+                          </Popover>
+                          <FormMessage />
+                        </FormItem>
+                      );
+                    }}
                   />
                 </div>
 
@@ -692,16 +813,24 @@ export function EventForm(props: EventFormProps) {
                     name='venue_address'
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Venue Address</FormLabel>
+                        <FormLabel>Venue Location</FormLabel>
                         <FormControl>
-                          <Textarea
-                            placeholder='Enter the venue address...'
-                            {...field}
+                          <LocationPicker
+                            address={field.value || ''}
+                            latitude={form.watch('venue_latitude')}
+                            longitude={form.watch('venue_longitude')}
+                            onAddressChange={(address) => {
+                              field.onChange(address);
+                            }}
+                            onCoordinatesChange={(lat, lng) => {
+                              form.setValue('venue_latitude', lat);
+                              form.setValue('venue_longitude', lng);
+                            }}
+                            placeholder='Search for a venue location...'
                           />
                         </FormControl>
                         <FormDescription>
-                          Provide the complete address where the event will be
-                          held
+                          Search for a location, use your current location, or enter coordinates manually
                         </FormDescription>
                         <FormMessage />
                       </FormItem>

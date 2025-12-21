@@ -100,10 +100,10 @@ export function AddSkillDialog({
           <div className='space-y-2'>
             <Label htmlFor='skill_id'>Skill *</Label>
             <Select name='skill_id' required>
-              <SelectTrigger id='skill_id'>
+              <SelectTrigger id='skill_id' className='w-full'>
                 <SelectValue placeholder='Select a skill' />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className='h-[300px]'>
                 {skills.map((skill) => (
                   <SelectItem key={skill.id} value={skill.id}>
                     {skill.name} ({skill.category})
@@ -121,7 +121,7 @@ export function AddSkillDialog({
           <div className='space-y-2'>
             <Label htmlFor='proficiency'>Proficiency Level *</Label>
             <Select name='proficiency' required defaultValue='intermediate'>
-              <SelectTrigger id='proficiency'>
+              <SelectTrigger id='proficiency' className='w-full'>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -241,7 +241,7 @@ export function UpdateSkillDialog({
           <div className='space-y-2'>
             <Label htmlFor='proficiency'>Proficiency Level</Label>
             <Select name='proficiency' defaultValue={currentProficiency}>
-              <SelectTrigger id='proficiency'>
+              <SelectTrigger id='proficiency' className='w-full'>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

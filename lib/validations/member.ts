@@ -34,7 +34,10 @@ export const createMemberSchema = z.object({
   // Profile info (inherited from signup)
   id: z.string().uuid({ message: 'Invalid user ID' }),
   email: z.string().email({ message: 'Invalid email address' }),
-  full_name: z.string().min(2, { message: 'Name must be at least 2 characters' }),
+  full_name: z
+    .string()
+    .min(2, { message: 'Name must be at least 2 characters' })
+    .transform((val) => val.toUpperCase().trim()),
   phone: z
     .string()
     .regex(phoneRegex, { message: 'Invalid phone number' })

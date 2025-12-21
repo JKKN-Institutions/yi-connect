@@ -1,9 +1,11 @@
 /**
  * Event Card Component
  *
- * Displays event information in a card format.
+ * Modern, clean event card with responsive design.
  * Used in event lists, grids, and dashboards.
  */
+
+'use client';
 
 import Link from 'next/link';
 import { format } from 'date-fns';
@@ -13,37 +15,33 @@ import {
   Users,
   Video,
   Clock,
-  TrendingUp
+  TrendingUp,
+  ArrowRight
 } from 'lucide-react';
-import type { EventListItem, EventStatusBadgeVariant } from '@/types/event';
+import type { EventListItem } from '@/types/event';
 import { EVENT_CATEGORIES, getEventStatusVariant } from '@/types/event';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle
-} from '@/components/ui/card';
+import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
+import { EventPublishButtonCompact } from './event-publish-button';
 
 interface EventCardProps {
   event: EventListItem;
   showOrganizer?: boolean;
   showCapacity?: boolean;
   compact?: boolean;
+  canPublish?: boolean;
 }
 
 export function EventCard({
   event,
   showOrganizer = true,
   showCapacity = true,
-  compact = false
+  compact = false,
+  canPublish = false
 }: EventCardProps) {
   const statusVariant = getEventStatusVariant(event.status);
   const capacityPercentage = event.max_capacity
@@ -51,6 +49,7 @@ export function EventCard({
     : 0;
   const isFull =
     event.max_capacity && event.current_registrations >= event.max_capacity;
+  const isAlmostFull = capacityPercentage >= 80;
 
   const startDate = new Date(event.start_date);
   const endDate = new Date(event.end_date);
@@ -60,158 +59,202 @@ export function EventCard({
   return (
     <Card
       className={cn(
-        'group overflow-hidden transition-all hover:shadow-lg',
-        event.is_featured && 'border-primary'
+        'group overflow-hidden transition-all duration-300 hover:shadow-xl hover:-translate-y-1 border-0 shadow-md bg-card',
+        event.is_featured && 'ring-2 ring-orange-500/50'
       )}
     >
-      {/* Banner Image */}
-      {event.banner_image_url && !compact && (
-        <div className='relative aspect-video overflow-hidden'>
-          <Image
-            src={event.banner_image_url}
-            alt={event.title}
-            className='object-cover w-full h-full transition-transform group-hover:scale-105'
-            width={1000}
-            height={1000}
-          />
+      {/* Image Section */}
+      <div className='relative'>
+        {event.banner_image_url ? (
+          <div className='relative aspect-[16/10] overflow-hidden bg-muted'>
+            <Image
+              src={event.banner_image_url}
+              alt={event.title}
+              fill
+              className='object-cover transition-transform duration-500 group-hover:scale-110'
+              sizes='(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw'
+            />
+            {/* Gradient overlay */}
+            <div className='absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent' />
+          </div>
+        ) : (
+          <div className='relative aspect-[16/10] bg-gradient-to-br from-orange-100 to-amber-50 dark:from-orange-950/50 dark:to-amber-950/30 flex items-center justify-center'>
+            <Calendar className='h-12 w-12 text-orange-300 dark:text-orange-700' />
+          </div>
+        )}
+
+        {/* Status Badge - Top Left */}
+        <div className='absolute top-3 left-3 flex flex-wrap gap-2'>
+          <Badge
+            variant={statusVariant as any}
+            className='shadow-lg backdrop-blur-sm'
+          >
+            {event.status}
+          </Badge>
           {event.is_featured && (
-            <Badge className='absolute top-2 right-2 bg-primary text-primary-foreground'>
+            <Badge className='bg-orange-500 text-white shadow-lg backdrop-blur-sm'>
               <TrendingUp className='mr-1 h-3 w-3' />
               Featured
             </Badge>
           )}
         </div>
-      )}
 
-      <CardHeader className={cn(compact && 'pb-3')}>
-        <div className='flex items-start justify-between gap-2'>
-          <div className='space-y-1 flex-1'>
-            <div className='flex items-center gap-2 flex-wrap'>
-              <Badge variant={statusVariant as any}>{event.status}</Badge>
-              <Badge variant='outline'>
-                {EVENT_CATEGORIES[event.category]}
-              </Badge>
-              {isFull && <Badge variant='destructive'>Full</Badge>}
+        {/* Category Badge - Top Right */}
+        <Badge
+          variant='secondary'
+          className='absolute top-3 right-3 bg-white/90 text-black dark:bg-black/70 backdrop-blur-sm shadow-lg text-xs'
+        >
+          {EVENT_CATEGORIES[event.category]}
+        </Badge>
+
+        {/* Date Badge - Bottom Left, overlapping */}
+        <div className='absolute -bottom-6 left-4 z-10'>
+          <div className='bg-white dark:bg-zinc-900 rounded-xl shadow-lg p-3 text-center min-w-[60px] border'>
+            <div className='text-xs font-semibold text-orange-600 dark:text-orange-400 uppercase'>
+              {format(startDate, 'MMM')}
             </div>
-            <CardTitle className='line-clamp-2 group-hover:text-primary transition-colors'>
-              <Link href={`/events/${event.id}`}>{event.title}</Link>
-            </CardTitle>
+            <div className='text-2xl font-bold text-foreground leading-none'>
+              {format(startDate, 'd')}
+            </div>
+            <div className='text-[10px] text-muted-foreground'>
+              {format(startDate, 'EEE')}
+            </div>
           </div>
         </div>
-        {event.description && !compact && (
-          <CardDescription className='line-clamp-2'>
-            {event.description}
-          </CardDescription>
-        )}
-      </CardHeader>
+      </div>
 
-      <CardContent className={cn('space-y-3', compact && 'py-3')}>
-        {/* Date & Time */}
-        <div className='flex items-start gap-2 text-sm'>
-          <Calendar className='h-4 w-4 mt-0.5 text-muted-foreground shrink-0' />
-          <div className='flex-1'>
-            <div className='font-medium'>
-              {format(startDate, 'EEE, MMM d, yyyy')}
-            </div>
-            <div className='text-muted-foreground'>
+      {/* Content Section */}
+      <CardContent className='pt-10 pb-4 px-4'>
+        {/* Title */}
+        <Link href={`/events/${event.id}`} className='block group/title'>
+          <h3 className='font-bold text-lg leading-tight line-clamp-2 group-hover/title:text-orange-600 dark:group-hover/title:text-orange-400 transition-colors'>
+            {event.title}
+          </h3>
+        </Link>
+
+        {/* Time & Location */}
+        <div className='mt-3 space-y-2'>
+          {/* Time */}
+          <div className='flex items-center gap-2 text-sm text-muted-foreground'>
+            <Clock className='h-4 w-4 flex-shrink-0 text-orange-500' />
+            <span>
               {format(startDate, 'h:mm a')}
               {isMultiDay && (
-                <>
-                  {' - '}
-                  {format(endDate, 'EEE, MMM d')} at {format(endDate, 'h:mm a')}
-                </>
+                <span className='text-xs'> · Multi-day event</span>
               )}
-              {!isMultiDay && endDate.getTime() !== startDate.getTime() && (
-                <>
-                  {' - '}
-                  {format(endDate, 'h:mm a')}
-                </>
-              )}
-            </div>
+            </span>
           </div>
-        </div>
 
-        {/* Location */}
-        <div className='flex items-start gap-2 text-sm'>
-          {event.is_virtual ? (
-            <>
-              <Video className='h-4 w-4 mt-0.5 text-muted-foreground shrink-0' />
-              <span className='text-muted-foreground'>Virtual Event</span>
-            </>
-          ) : (
-            <>
-              <MapPin className='h-4 w-4 mt-0.5 text-muted-foreground shrink-0' />
-              <div className='flex-1'>
-                {event.venue ? (
-                  <>
-                    <div className='font-medium'>{event.venue.name}</div>
-                    {event.venue.city && (
-                      <div className='text-muted-foreground'>
-                        {event.venue.city}
-                      </div>
+          {/* Location */}
+          <div className='flex items-center gap-2 text-sm text-muted-foreground'>
+            {event.is_virtual ? (
+              <>
+                <Video className='h-4 w-4 flex-shrink-0 text-blue-500' />
+                <span>Virtual Event</span>
+              </>
+            ) : (
+              <>
+                <MapPin className='h-4 w-4 flex-shrink-0 text-red-500' />
+                <span className='truncate'>
+                  {event.venue?.name ||
+                    event.venue_address?.split(',')[0] ||
+                    'Location TBD'}
+                </span>
+              </>
+            )}
+          </div>
+
+          {/* Capacity */}
+          {showCapacity && event.max_capacity && (
+            <div className='flex items-center gap-2 text-sm'>
+              <Users className='h-4 w-4 flex-shrink-0 text-purple-500' />
+              <div className='flex-1 flex items-center gap-2'>
+                <div className='flex-1 h-1.5 bg-muted rounded-full overflow-hidden'>
+                  <div
+                    className={cn(
+                      'h-full rounded-full transition-all',
+                      isFull
+                        ? 'bg-red-500'
+                        : isAlmostFull
+                        ? 'bg-orange-500'
+                        : 'bg-green-500'
                     )}
-                  </>
-                ) : event.venue_address ? (
-                  <div className='text-muted-foreground line-clamp-2'>
-                    {event.venue_address}
-                  </div>
-                ) : (
-                  <div className='text-muted-foreground'>Location TBD</div>
-                )}
+                    style={{ width: `${Math.min(capacityPercentage, 100)}%` }}
+                  />
+                </div>
+                <span
+                  className={cn(
+                    'text-xs font-medium',
+                    isFull
+                      ? 'text-red-600 dark:text-red-400'
+                      : 'text-muted-foreground'
+                  )}
+                >
+                  {event.current_registrations}/{event.max_capacity}
+                  {isFull && ' · Full'}
+                </span>
               </div>
-            </>
+            </div>
           )}
         </div>
 
-        {/* Capacity */}
-        {showCapacity && event.max_capacity && (
-          <div className='space-y-2'>
-            <div className='flex items-center justify-between text-sm'>
-              <div className='flex items-center gap-2'>
-                <Users className='h-4 w-4 text-muted-foreground' />
-                <span className='font-medium'>
-                  {event.current_registrations} / {event.max_capacity}
-                </span>
-              </div>
-              <span className='text-muted-foreground'>
-                {Math.round(capacityPercentage)}% Full
-              </span>
-            </div>
-            <Progress value={capacityPercentage} className='h-2' />
-          </div>
-        )}
-
         {/* Organizer */}
-        {showOrganizer && event.organizer?.profile && !compact && (
-          <div className='flex items-center gap-2 pt-2 border-t'>
-            <Avatar className='h-6 w-6'>
+        {showOrganizer && event.organizer?.profile && (
+          <div className='mt-4 pt-3 border-t flex items-center gap-2'>
+            <Avatar className='h-6 w-6 ring-2 ring-background'>
               <AvatarImage
                 src={event.organizer.profile.avatar_url || undefined}
               />
-              <AvatarFallback>
+              <AvatarFallback className='bg-orange-100 text-orange-700 text-xs font-semibold'>
                 {event.organizer.profile.full_name.charAt(0)}
               </AvatarFallback>
             </Avatar>
-            <div className='text-sm text-muted-foreground'>
-              Organized by{' '}
+            <span className='text-xs text-muted-foreground truncate'>
+              by{' '}
               <span className='font-medium text-foreground'>
                 {event.organizer.profile.full_name}
               </span>
-            </div>
+            </span>
           </div>
         )}
       </CardContent>
 
-      <CardFooter className={cn('pt-0', compact && 'pb-3')}>
-        <Button
-          asChild
-          className='w-full'
-          variant={event.status === 'published' ? 'default' : 'outline'}
-        >
-          <Link href={`/events/${event.id}`}>
-            {event.status === 'published' ? 'View Details' : 'View Event'}
-          </Link>
-        </Button>
+      {/* Footer */}
+      <CardFooter className='px-4 pb-4 pt-0'>
+        {event.status === 'draft' && canPublish ? (
+          <div className='flex gap-2 w-full'>
+            <EventPublishButtonCompact
+              eventId={event.id}
+              eventTitle={event.title}
+              status={event.status}
+              canPublish={canPublish}
+            />
+            <Button asChild variant='outline' size='sm' className='flex-1'>
+              <Link href={`/events/${event.id}`}>
+                View
+                <ArrowRight className='ml-1 h-3 w-3' />
+              </Link>
+            </Button>
+          </div>
+        ) : (
+          <Button
+            asChild
+            className={cn(
+              'w-full group/btn',
+              event.status === 'published'
+                ? 'bg-orange-600 hover:bg-orange-700 text-white'
+                : 'bg-muted hover:bg-muted/80 text-foreground'
+            )}
+            size='sm'
+          >
+            <Link href={`/events/${event.id}`}>
+              {event.status === 'published'
+                ? 'View & Register'
+                : 'View Details'}
+              <ArrowRight className='ml-2 h-4 w-4 transition-transform group-hover/btn:translate-x-1' />
+            </Link>
+          </Button>
+        )}
       </CardFooter>
     </Card>
   );
@@ -226,42 +269,48 @@ export function CompactEventCard({ event }: { event: EventListItem }) {
 
   return (
     <Link href={`/events/${event.id}`}>
-      <Card className='transition-all hover:shadow-md hover:border-primary'>
-        <CardContent className='p-4'>
-          <div className='flex gap-3'>
-            {/* Date Badge */}
-            <div className='shrink-0 flex flex-col items-center justify-center bg-muted rounded-lg p-2 w-16 h-16'>
-              <div className='text-xs font-medium text-muted-foreground uppercase'>
+      <Card className='transition-all duration-200 hover:shadow-md hover:border-orange-200 dark:hover:border-orange-800 overflow-hidden'>
+        <CardContent className='p-0'>
+          <div className='flex'>
+            {/* Date Section */}
+            <div className='flex-shrink-0 w-16 bg-gradient-to-br from-orange-500 to-amber-500 flex flex-col items-center justify-center text-white p-2'>
+              <div className='text-xs font-medium uppercase opacity-90'>
                 {format(startDate, 'MMM')}
               </div>
-              <div className='text-2xl font-bold'>{format(startDate, 'd')}</div>
+              <div className='text-2xl font-bold leading-none'>
+                {format(startDate, 'd')}
+              </div>
+              <div className='text-[10px] opacity-75'>
+                {format(startDate, 'EEE')}
+              </div>
             </div>
 
-            {/* Event Info */}
-            <div className='flex-1 min-w-0 space-y-1'>
-              <div className='flex items-center gap-2'>
-                <Badge variant={statusVariant as any} className='text-xs'>
+            {/* Content */}
+            <div className='flex-1 p-3 min-w-0'>
+              <div className='flex items-center gap-2 mb-1'>
+                <Badge
+                  variant={statusVariant as any}
+                  className='text-[10px] px-1.5 py-0'
+                >
                   {event.status}
                 </Badge>
                 {event.is_virtual && (
-                  <Badge variant='outline' className='text-xs'>
-                    <Video className='mr-1 h-3 w-3' />
-                    Virtual
-                  </Badge>
+                  <Video className='h-3 w-3 text-blue-500' />
                 )}
               </div>
-              <h3 className='font-semibold line-clamp-1 group-hover:text-primary'>
+              <h3 className='font-semibold text-sm line-clamp-1'>
                 {event.title}
               </h3>
-              <div className='flex items-center gap-2 text-xs text-muted-foreground'>
-                <Clock className='h-3 w-3' />
-                {format(startDate, 'h:mm a')}
+              <div className='flex items-center gap-3 mt-1 text-xs text-muted-foreground'>
+                <span className='flex items-center gap-1'>
+                  <Clock className='h-3 w-3' />
+                  {format(startDate, 'h:mm a')}
+                </span>
                 {event.max_capacity && (
-                  <>
-                    <span>•</span>
+                  <span className='flex items-center gap-1'>
                     <Users className='h-3 w-3' />
                     {event.current_registrations}/{event.max_capacity}
-                  </>
+                  </span>
                 )}
               </div>
             </div>
@@ -281,43 +330,52 @@ export function EventListItemRow({ event }: { event: EventListItem }) {
 
   return (
     <Link href={`/events/${event.id}`}>
-      <div className='flex items-center justify-between p-4 hover:bg-muted/50 rounded-lg transition-colors'>
+      <div className='flex items-center justify-between p-4 hover:bg-muted/50 rounded-xl transition-colors group'>
         <div className='flex items-center gap-4 flex-1 min-w-0'>
-          {/* Date */}
-          <div className='shrink-0 text-center'>
-            <div className='text-sm font-medium'>
-              {format(startDate, 'MMM d')}
+          {/* Date Badge */}
+          <div className='flex-shrink-0 w-14 h-14 rounded-xl bg-gradient-to-br from-orange-500 to-amber-500 flex flex-col items-center justify-center text-white shadow-md'>
+            <div className='text-[10px] font-medium uppercase'>
+              {format(startDate, 'MMM')}
             </div>
-            <div className='text-xs text-muted-foreground'>
-              {format(startDate, 'yyyy')}
+            <div className='text-xl font-bold leading-none'>
+              {format(startDate, 'd')}
             </div>
           </div>
 
           {/* Info */}
           <div className='flex-1 min-w-0'>
             <div className='flex items-center gap-2 mb-1'>
-              <h3 className='font-semibold truncate'>{event.title}</h3>
-              <Badge variant={statusVariant as any} className='shrink-0'>
+              <h3 className='font-semibold truncate group-hover:text-orange-600 transition-colors'>
+                {event.title}
+              </h3>
+              <Badge
+                variant={statusVariant as any}
+                className='shrink-0 text-[10px]'
+              >
                 {event.status}
               </Badge>
             </div>
-            <div className='flex items-center gap-3 text-sm text-muted-foreground'>
+            <div className='flex items-center gap-4 text-sm text-muted-foreground'>
+              <span className='flex items-center gap-1'>
+                <Clock className='h-3 w-3' />
+                {format(startDate, 'h:mm a')}
+              </span>
               <span className='flex items-center gap-1'>
                 {event.is_virtual ? (
                   <>
-                    <Video className='h-3 w-3' />
+                    <Video className='h-3 w-3 text-blue-500' />
                     Virtual
                   </>
                 ) : (
                   <>
-                    <MapPin className='h-3 w-3' />
+                    <MapPin className='h-3 w-3 text-red-500' />
                     {event.venue?.name || 'In-person'}
                   </>
                 )}
               </span>
               {event.max_capacity && (
                 <span className='flex items-center gap-1'>
-                  <Users className='h-3 w-3' />
+                  <Users className='h-3 w-3 text-purple-500' />
                   {event.current_registrations}/{event.max_capacity}
                 </span>
               )}
@@ -325,10 +383,8 @@ export function EventListItemRow({ event }: { event: EventListItem }) {
           </div>
         </div>
 
-        {/* Actions */}
-        <Button variant='ghost' size='sm'>
-          View
-        </Button>
+        {/* Arrow */}
+        <ArrowRight className='h-5 w-5 text-muted-foreground group-hover:text-orange-500 group-hover:translate-x-1 transition-all flex-shrink-0' />
       </div>
     </Link>
   );

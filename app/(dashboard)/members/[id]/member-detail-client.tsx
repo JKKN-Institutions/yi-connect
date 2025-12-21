@@ -23,6 +23,7 @@ import { Briefcase, GraduationCap, Award, Target, Calendar } from 'lucide-react'
 import type { TrainerProfileFull } from '@/types/trainer'
 import type { SkillWillAssessmentFull } from '@/types/assessment'
 import type { Availability } from '@/types/availability'
+import type { Skill, Certification } from '@/types/member'
 
 interface MemberDetailClientProps {
   member: any // TODO: Add proper type
@@ -35,6 +36,8 @@ interface MemberDetailClientProps {
     mentee_count: number
   }>
   availabilities?: Availability[]
+  skills?: Skill[]
+  certifications?: Certification[]
   canEdit?: boolean
 }
 
@@ -45,6 +48,8 @@ export function MemberDetailClient({
   verticals = [],
   availableMentors = [],
   availabilities = [],
+  skills = [],
+  certifications = [],
   canEdit = true,
 }: MemberDetailClientProps) {
   const [showAddSkill, setShowAddSkill] = useState(false)
@@ -146,7 +151,7 @@ export function MemberDetailClient({
       {showAddSkill && (
         <AddSkillDialog
           memberId={member.id}
-          skills={[]} // TODO: Pass skills list
+          skills={skills}
           open={showAddSkill}
           onOpenChange={setShowAddSkill}
         />
@@ -167,7 +172,7 @@ export function MemberDetailClient({
       {showAddCertification && (
         <AddCertificationDialog
           memberId={member.id}
-          certifications={[]} // TODO: Pass certifications list
+          certifications={certifications}
           open={showAddCertification}
           onOpenChange={setShowAddCertification}
         />

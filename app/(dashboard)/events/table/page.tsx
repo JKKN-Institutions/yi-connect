@@ -76,7 +76,7 @@ async function EventsTableHeader() {
             Back to Events
           </Link>
         </Button>
-        {userHierarchyLevel <= 4 && (
+        {userHierarchyLevel >= 2 && (
           <Button asChild>
             <Link href='/events/new'>
               <Plus className='mr-2 h-4 w-4' />

@@ -222,8 +222,9 @@ async function UpcomingEventsCard() {
     .from('events')
     .select('*', { count: 'exact', head: true })
     .eq('chapter_id', profile.chapter_id)
-    .gte('start_datetime', now.toISOString())
-    .lte('start_datetime', thirtyDaysFromNow.toISOString());
+    .in('status', ['published', 'ongoing'])
+    .gte('start_date', now.toISOString())
+    .lte('start_date', thirtyDaysFromNow.toISOString());
 
   return (
     <MetricCard
@@ -418,7 +419,7 @@ async function RecentActivityCard() {
   // Get recent events
   const { data: recentEvents } = await supabase
     .from('events')
-    .select('name, start_datetime, category')
+    .select('title, start_date, category')
     .eq('chapter_id', profile.chapter_id)
     .order('created_at', { ascending: false })
     .limit(3);
@@ -436,9 +437,9 @@ async function RecentActivityCard() {
               <div key={i} className='flex items-start gap-3 pb-3 border-b last:border-0'>
                 <Calendar className='h-5 w-5 text-muted-foreground mt-0.5' />
                 <div className='flex-1 space-y-1'>
-                  <p className='text-sm font-medium leading-none'>{event.name}</p>
+                  <p className='text-sm font-medium leading-none'>{event.title}</p>
                   <p className='text-xs text-muted-foreground'>
-                    {new Date(event.start_datetime).toLocaleDateString('en-IN', {
+                    {new Date(event.start_date).toLocaleDateString('en-IN', {
                       month: 'short',
                       day: 'numeric'
                     })}
@@ -486,10 +487,11 @@ async function UpcomingEventsListCard() {
 
   const { data: upcomingEvents } = await supabase
     .from('events')
-    .select('id, name, start_datetime, location')
+    .select('id, title, start_date, venue_address')
     .eq('chapter_id', profile.chapter_id)
-    .gte('start_datetime', new Date().toISOString())
-    .order('start_datetime', { ascending: true })
+    .in('status', ['published', 'ongoing'])
+    .gte('start_date', new Date().toISOString())
+    .order('start_date', { ascending: true })
     .limit(3);
 
   return (
@@ -509,9 +511,9 @@ async function UpcomingEventsListCard() {
               >
                 <Calendar className='h-5 w-5 text-primary mt-0.5' />
                 <div className='flex-1 space-y-1'>
-                  <p className='text-sm font-medium leading-none'>{event.name}</p>
+                  <p className='text-sm font-medium leading-none'>{event.title}</p>
                   <p className='text-xs text-muted-foreground'>
-                    {new Date(event.start_datetime).toLocaleDateString('en-IN', {
+                    {new Date(event.start_date).toLocaleDateString('en-IN', {
                       weekday: 'short',
                       month: 'short',
                       day: 'numeric',
@@ -519,10 +521,10 @@ async function UpcomingEventsListCard() {
                       minute: '2-digit'
                     })}
                   </p>
-                  {event.location && (
+                  {event.venue_address && (
                     <p className='text-xs text-muted-foreground flex items-center gap-1'>
                       <MapPin className='h-3 w-3' />
-                      {event.location}
+                      {event.venue_address}
                     </p>
                   )}
                 </div>

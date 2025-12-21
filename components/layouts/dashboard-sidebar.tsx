@@ -16,6 +16,7 @@ import {
   Wallet,
   Building2,
   MessageSquare,
+  MessageCircle,
   Award,
   BookOpen,
   BarChart3,
@@ -126,6 +127,12 @@ const navigation: NavItem[] = [
         name: 'Analytics',
         href: '/members/analytics',
         icon: TrendingUp,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']
+      },
+      {
+        name: 'Skill/Will Matrix',
+        href: '/members/skill-will-matrix',
+        icon: Target,
         requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']
       },
       {
@@ -365,19 +372,31 @@ const navigation: NavItem[] = [
   {
     name: 'Communication Hub',
     icon: MessageSquare,
-    requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member'],
+    requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member'],
     items: [
       {
         name: 'Overview',
         href: '/communications',
         icon: LayoutDashboard,
-        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member']
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']
       },
       {
         name: 'Announcements',
         href: '/communications/announcements',
         icon: Send,
         requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member']
+      },
+      {
+        name: 'WhatsApp',
+        href: '/communications/whatsapp',
+        icon: MessageCircle,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'EC Member']
+      },
+      {
+        name: 'WhatsApp Groups',
+        href: '/communications/whatsapp/groups',
+        icon: Users2,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair']
       },
       {
         name: 'Notifications',
@@ -702,7 +721,7 @@ function NavItemComponent({
   };
 
   return (
-    <li>
+    <li suppressHydrationWarning>
       <Collapsible open={isOpen} onOpenChange={handleOpenChange}>
         <CollapsibleTrigger asChild>
           <button

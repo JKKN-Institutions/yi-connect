@@ -1,20 +1,106 @@
 # Yi Connect - Progress Tracker
 
-## Current Session: 2025-12-21 (Night)
+## Current Session: 2025-12-22 (Night)
 
 ### Working On
-- None (Deployed to GitHub)
+- Vercel deployment - waiting for fresh build with all fixes
 
 ### Completed This Session
-- **Deployed to GitHub** - Merged local fixes with remote changes
-  - Resolved 5 merge conflicts by accepting remote's structural improvements
-  - Preserved WhatsApp client fixes (timeout, cleanup, lock)
-  - Preserved hydration fixes (3 components with mounted state)
-  - Push successful to origin/master
 
-### Vercel Deployment
-- Triggered automatically from push
-- Check status at: Vercel dashboard
+#### 1. Fixed TypeScript Build Errors (4 issues)
+- **WhatsApp types** (`types/whatsapp.ts`) - Added explicit interface definitions for WhatsAppGroup, WhatsAppConnection, WhatsAppTemplate, WhatsAppMessageLog since Supabase generated types didn't include whatsapp_* tables
+- **Supabase join handling** (`lib/data/whatsapp.ts`) - Fixed type mismatch where joins return arrays vs single objects
+- **Zod 4 API migration** (`lib/validations/whatsapp.ts`):
+  - Changed `errorMap` to `message` in `z.enum()` calls
+  - Changed `z.record(z.unknown())` to `z.record(z.string(), z.unknown())` (Zod 4 requires 2 args)
+- **WhatsApp client types** (`lib/whatsapp/client.ts`) - Added explicit `ConnectionStatus` and `InitResult` type aliases
+
+#### 2. Fixed Industry Portal Static Generation Error
+- **Root cause**: `/industry-portal/slots` page was using cookies during Next.js static page generation
+- **Fix**: Added `export const dynamic = 'force-dynamic'` to 3 pages:
+  - `app/(industry-portal)/industry-portal/page.tsx`
+  - `app/(industry-portal)/industry-portal/slots/page.tsx`
+  - `app/(industry-portal)/industry-portal/attendees/page.tsx`
+
+#### 3. Resolved Git Merge Conflicts
+- Used `git merge origin/master` instead of rebase
+- Accepted remote's structural improvements for 5 conflicted files
+- Preserved local WhatsApp/hydration fixes in non-conflicting files
+
+#### 4. Updated Next.js for CVE Fix
+- Next.js updated from 16.0.1 to 16.0.10 (via Vercel's automated PR)
+- Fixes CVE-2025-66478 vulnerability
+
+### Build Status
+```
+Local build: PASSING
+✓ Compiled successfully in 11.8s
+✓ Generating static pages (164/164) in 1004.2ms
+Next.js 16.0.10 (Turbopack)
+```
+
+### Vercel Deployment Status: PENDING
+- **Issue**: Vercel kept building from stale commit `d7a2e3d` instead of latest `efd6c1c`
+- **Action taken**: Pushed empty commit to trigger fresh build
+- **Expected**: Next Vercel build should succeed with all fixes
+
+### Commits Pushed This Session
+1. `d7a2e3d` - Fix all remaining type errors for Vercel build
+2. `f9ed73d` - Fix Zod 4 API - use message instead of errorMap
+3. `540c151` - Fix Supabase join type handling for message logs
+4. `e168477` - Fix WhatsApp types - add explicit interfaces
+5. `853338b` - Fix industry-portal pages - add force-dynamic for cookie usage
+6. `979912f` - Merge remote-tracking branch 'origin/master'
+7. `efd6c1c` - Trigger fresh Vercel deployment with all fixes
+
+---
+
+## BLOCKERS
+
+### Vercel Deployment Not Completing
+- Vercel was pulling old commit `d7a2e3d` instead of latest
+- Fresh commit pushed to trigger rebuild
+- **Next session should verify**: Check Vercel dashboard for deployment status
+
+---
+
+## DECISIONS MADE
+
+| Decision | Rationale |
+|----------|-----------|
+| Use explicit WhatsApp types instead of generated | Supabase types didn't include whatsapp_* tables |
+| Add `force-dynamic` to industry-portal pages | These pages use cookies for auth, can't be statically generated |
+| Accept remote changes in merge conflicts | Remote had structural improvements to data-table components |
+| Use `message` instead of `errorMap` in Zod | Zod 4 changed the API for enum error messages |
+
+---
+
+## NEXT SESSION SHOULD
+
+### Priority 1: Verify Vercel Deployment
+1. Check Vercel dashboard - confirm deployment succeeded with commit `efd6c1c`
+2. If still failing, check the new build logs for any new errors
+3. If caching issue persists, may need to clear Vercel build cache
+
+### Priority 2: Test Fixed Features
+1. Test WhatsApp connection flow - click Connect, verify QR appears within 15 seconds
+2. Refresh dashboard pages - verify no hydration errors in browser console
+3. Visit `/industry-portal/slots` - verify page loads without errors
+
+### Priority 3: Address Remaining Issues
+1. Fix 7 high severity npm vulnerabilities (shown in GitHub security alerts)
+2. Consider migrating middleware to "proxy" as warned by Next.js 16
+3. Update baseline-browser-mapping package (constant warnings in build)
+
+---
+
+## Previous Session: 2025-12-21 (Night)
+
+### Completed
+- **Deployed to GitHub** - Merged local fixes with remote changes
+- Resolved 5 merge conflicts by accepting remote's structural improvements
+- Preserved WhatsApp client fixes (timeout, cleanup, lock)
+- Preserved hydration fixes (3 components with mounted state)
 
 ---
 
@@ -22,62 +108,24 @@
 
 ### Completed
 - **Fixed WhatsApp Protocol Error** (`lib/whatsapp/client.ts`)
-  - Added 20-second initialization timeout (was hanging 3+ minutes)
+  - Added 20-second initialization timeout
   - Added initialization lock to prevent race conditions
-  - Added `cleanupClient()` function to destroy browser on errors
-  - Updated `auth_failure` and `disconnected` events to properly cleanup
+  - Added `cleanupClient()` function
 
-- **Fixed Hydration Mismatch Errors** (Radix UI components)
-  - `components/layouts/dashboard-sidebar.tsx` - Added `mounted` state, `hasActiveChild` starts false during SSR
-  - `components/communication/notification-bell.tsx` - Added `mounted` state, delayed Supabase subscription until after mount
-  - `components/navigation/user-menu.tsx` - Added `mounted` state, role badge only renders after mount
-
-- **Cleaned Up Zombie Chromium Processes**
-  - Killed orphaned puppeteer-core processes from previous failed WhatsApp attempts
-
-### Tested
-- WhatsApp status API: `GET /api/whatsapp/status` returns `{"success":true,"status":"disconnected"...}`
-- Build: Compiled successfully (16.3 min) with only pre-existing type error in unrelated file
-- Dev server: Running on localhost:3000
-
-### Blocked
-- Pre-existing TypeScript error in `/app/(dashboard)/communications/whatsapp/groups/[id]/edit/page.tsx:44` - Property 'name' does not exist on type 'WhatsAppGroupWithChapter'
-
-### Decisions Made
-- **Timeout**: 20 seconds for WhatsApp initialization (balance between giving enough time vs not hanging forever)
-- **Hydration Fix Pattern**: `mounted` state + useEffect to delay client-specific calculations until after hydration
-
-### Next Session Should
-1. Test WhatsApp QR code generation in browser (click Connect, verify QR appears within 15 seconds)
-2. Refresh dashboard pages and verify no hydration errors in browser console
-3. Fix pre-existing TypeScript error in WhatsApp groups edit page
-4. Consider adding WhatsApp session persistence validation after crashes
+- **Fixed Hydration Mismatch Errors**
+  - `dashboard-sidebar.tsx` - Added `mounted` state
+  - `notification-bell.tsx` - Delayed Supabase subscription
+  - `user-menu.tsx` - Role badge only renders after mount
 
 ---
 
 ## Session History
 
 ### 2025-12-21 - WhatsApp Communications Hub Integration
-
-**Completed:**
 - Moved /whatsapp to /communications/whatsapp
-- Updated all internal links in WhatsApp pages
-- Updated sidebar: WhatsApp items under Communication Hub
+- Updated sidebar and internal links
 - Added WhatsApp status card to Communications Hub dashboard
-- Added WhatsApp quick action button
-
-**Issues Encountered:**
-- Data layer functions return arrays directly, not {data: array} - fixed destructuring
-- Supabase CLI not installed - migration needs manual application
-
-**Decisions:**
-- Integrated WhatsApp into Communications Hub instead of standalone module
-- Follows DRY principle - templates shared with Communications Hub
-
-**State at End:**
-- Project status: working (auth required, redirects to /login)
-- Next priority: Apply database migration via Supabase Dashboard
 
 ---
 
-*Template: ~/.claude/templates/progress-txt.md*
+*Last updated: 2025-12-22*

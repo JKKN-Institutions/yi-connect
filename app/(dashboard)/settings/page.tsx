@@ -9,7 +9,7 @@ import Link from 'next/link'
 import { requireAuth } from '@/lib/auth'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { User, Bell, Shield, Palette, Key } from 'lucide-react'
+import { User, Bell, Shield, Palette, Key, MessageSquare } from 'lucide-react'
 import { redirect } from 'next/navigation'
 
 export const metadata = {
@@ -61,6 +61,14 @@ const settingsSections = [
     color: 'text-orange-600',
     bgColor: 'bg-orange-100',
     disabled: true,
+  },
+  {
+    title: 'WhatsApp',
+    description: 'Connect WhatsApp for event notifications',
+    icon: MessageSquare,
+    href: '/settings/whatsapp',
+    color: 'text-green-600',
+    bgColor: 'bg-green-100',
   },
 ]
 

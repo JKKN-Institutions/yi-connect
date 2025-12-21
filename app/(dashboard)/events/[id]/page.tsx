@@ -74,6 +74,7 @@ import {
 } from '@/components/ui/breadcrumb';
 import { getEventStatusVariant } from '@/types/event';
 import Image from 'next/image';
+import { WhatsAppSendButton, WhatsAppBulkButton, WhatsAppIconButton } from '@/components/whatsapp';
 
 interface PageProps {
   params: Promise<{
@@ -287,6 +288,20 @@ async function EventDetailContent({ params }: PageProps) {
                         )}
                       </p>
                     </div>
+                    {/* WhatsApp Bulk Send to Attendees */}
+                    {(event as any).rsvps && (event as any).rsvps.length > 0 && (
+                      <WhatsAppBulkButton
+                        contacts={(event as any).rsvps
+                          .filter((r: any) => r.member?.profile?.phone)
+                          .map((r: any) => ({
+                            phone: r.member.profile.phone,
+                            name: r.member.profile.full_name
+                          }))}
+                        label={`WhatsApp All (${(event as any).rsvps.filter((r: any) => r.member?.profile?.phone).length})`}
+                        dialogTitle={`Send WhatsApp to ${event.title} Attendees`}
+                        defaultMessage={`*${event.title}*\n\nHi! This is a message regarding the event.\n\n_Yi Erode - Together We Can. We Will._`}
+                      />
+                    )}
                   </div>
                   <Separator />
                   <div className='space-y-3'>
@@ -321,19 +336,30 @@ async function EventDetailContent({ params }: PageProps) {
                               </div>
                             </div>
                           </div>
-                          <Badge
-                            variant={
-                              rsvp.status === 'confirmed'
-                                ? 'success'
-                                : rsvp.status === 'pending'
-                                ? 'secondary'
-                                : rsvp.status === 'attended'
-                                ? 'default'
-                                : 'destructive'
-                            }
-                          >
-                            {rsvp.status}
-                          </Badge>
+                          <div className='flex items-center gap-2'>
+                            {rsvp.member?.profile?.phone && (
+                              <WhatsAppIconButton
+                                contact={{
+                                  phone: rsvp.member.profile.phone,
+                                  name: rsvp.member.profile.full_name
+                                }}
+                                defaultMessage={`Hi ${rsvp.member.profile.full_name?.split(' ')[0] || ''},\n\nThis is regarding *${event.title}*.\n\n_Yi Erode - Together We Can. We Will._`}
+                              />
+                            )}
+                            <Badge
+                              variant={
+                                rsvp.status === 'confirmed'
+                                  ? 'success'
+                                  : rsvp.status === 'pending'
+                                  ? 'secondary'
+                                  : rsvp.status === 'attended'
+                                  ? 'default'
+                                  : 'destructive'
+                              }
+                            >
+                              {rsvp.status}
+                            </Badge>
+                          </div>
                         </div>
                       ))
                     ) : (
@@ -354,18 +380,34 @@ async function EventDetailContent({ params }: PageProps) {
                         Event volunteers and their roles
                       </p>
                     </div>
-                    {canEdit && (
-                      <VolunteerAssignmentForm
-                        eventId={event.id}
-                        roles={volunteerRoles}
-                        trigger={
-                          <Button size='sm'>
-                            <UserPlus className='mr-2 h-4 w-4' />
-                            Assign Volunteer
-                          </Button>
-                        }
-                      />
-                    )}
+                    <div className='flex items-center gap-2'>
+                      {/* WhatsApp Bulk Send to Volunteers */}
+                      {(event as any).volunteers && (event as any).volunteers.length > 0 && (
+                        <WhatsAppBulkButton
+                          contacts={(event as any).volunteers
+                            .filter((v: any) => v.member?.profile?.phone)
+                            .map((v: any) => ({
+                              phone: v.member.profile.phone,
+                              name: v.member.profile.full_name
+                            }))}
+                          label={`WhatsApp All (${(event as any).volunteers.filter((v: any) => v.member?.profile?.phone).length})`}
+                          dialogTitle={`Send WhatsApp to ${event.title} Volunteers`}
+                          defaultMessage={`*${event.title} - Volunteer Update*\n\nHi Volunteers!\n\n[Your message here]\n\nThank you for your service!\n\n_Yi Erode - Together We Can. We Will._`}
+                        />
+                      )}
+                      {canEdit && (
+                        <VolunteerAssignmentForm
+                          eventId={event.id}
+                          roles={volunteerRoles}
+                          trigger={
+                            <Button size='sm'>
+                              <UserPlus className='mr-2 h-4 w-4' />
+                              Assign Volunteer
+                            </Button>
+                          }
+                        />
+                      )}
+                    </div>
                   </div>
                   <Separator />
                   <div className='space-y-3'>
@@ -408,19 +450,30 @@ async function EventDetailContent({ params }: PageProps) {
                               </div>
                             </div>
                           </div>
-                          <Badge
-                            variant={
-                              volunteer.status === 'accepted'
-                                ? 'success'
-                                : volunteer.status === 'completed'
-                                ? 'secondary'
-                                : volunteer.status === 'declined'
-                                ? 'destructive'
-                                : 'default'
-                            }
-                          >
-                            {volunteer.status}
-                          </Badge>
+                          <div className='flex items-center gap-2'>
+                            {volunteer.member?.profile?.phone && (
+                              <WhatsAppIconButton
+                                contact={{
+                                  phone: volunteer.member.profile.phone,
+                                  name: volunteer.member.profile.full_name
+                                }}
+                                defaultMessage={`Hi ${volunteer.member.profile.full_name?.split(' ')[0] || ''},\n\nThank you for volunteering for *${event.title}*!\n\nYour role: ${volunteer.role_name}\n\n_Yi Erode - Together We Can. We Will._`}
+                              />
+                            )}
+                            <Badge
+                              variant={
+                                volunteer.status === 'accepted'
+                                  ? 'success'
+                                  : volunteer.status === 'completed'
+                                  ? 'secondary'
+                                  : volunteer.status === 'declined'
+                                  ? 'destructive'
+                                  : 'default'
+                              }
+                            >
+                              {volunteer.status}
+                            </Badge>
+                          </div>
                         </div>
                       ))
                     ) : (
@@ -613,23 +666,34 @@ async function EventDetailContent({ params }: PageProps) {
                   <Separator />
                   <div>
                     <div className='text-sm font-medium mb-2'>Organizer</div>
-                    <div className='flex items-center gap-2'>
-                      <Avatar className='h-8 w-8'>
-                        <AvatarImage
-                          src={event.organizer.profile.avatar_url || undefined}
-                        />
-                        <AvatarFallback>
-                          {event.organizer.profile.full_name.charAt(0)}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <div className='font-medium'>
-                          {event.organizer.profile.full_name}
-                        </div>
-                        <div className='text-xs text-muted-foreground'>
-                          {event.organizer.profile.email}
+                    <div className='flex items-center justify-between'>
+                      <div className='flex items-center gap-2'>
+                        <Avatar className='h-8 w-8'>
+                          <AvatarImage
+                            src={event.organizer.profile.avatar_url || undefined}
+                          />
+                          <AvatarFallback>
+                            {event.organizer.profile.full_name.charAt(0)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <div className='font-medium'>
+                            {event.organizer.profile.full_name}
+                          </div>
+                          <div className='text-xs text-muted-foreground'>
+                            {event.organizer.profile.email}
+                          </div>
                         </div>
                       </div>
+                      {(event.organizer as any).profile?.phone && (
+                        <WhatsAppIconButton
+                          contact={{
+                            phone: (event.organizer as any).profile.phone,
+                            name: event.organizer.profile.full_name
+                          }}
+                          defaultMessage={`Hi ${event.organizer.profile.full_name.split(' ')[0]},\n\nI have a question about *${event.title}*.\n\n_Yi Erode - Together We Can. We Will._`}
+                        />
+                      )}
                     </div>
                   </div>
                 </>

@@ -21,6 +21,14 @@ const nextConfig: NextConfig = {
   // Serwist uses webpack, but we need this for Next.js 16 compatibility
   turbopack: {},
 
+  // Server-only packages that shouldn't be bundled
+  // whatsapp-web.js uses Puppeteer and internal require() calls
+  serverExternalPackages: [
+    'whatsapp-web.js',
+    'puppeteer',
+    'puppeteer-core',
+  ],
+
   // Define cache lifetime profiles for optimal performance
   cacheLife: {
     // Predefined profiles

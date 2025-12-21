@@ -6,6 +6,7 @@
 
 'use client'
 
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { signOut } from '@/app/actions/auth'
 import {
@@ -34,6 +35,13 @@ interface UserMenuProps {
 }
 
 export function UserMenu({ profile }: UserMenuProps) {
+  // Mounted state to prevent hydration mismatch
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
   if (!profile) return null
 
   const initials = profile.full_name
@@ -48,8 +56,8 @@ export function UserMenu({ profile }: UserMenuProps) {
     (b.hierarchy_level || 0) - (a.hierarchy_level || 0)
   ) || []
 
-  // Get the primary role (highest hierarchy level)
-  const primaryRole = sortedRoles[0]
+  // Get the primary role (highest hierarchy level) - only after mount
+  const primaryRole = mounted ? sortedRoles[0] : null
 
   return (
     <DropdownMenu>

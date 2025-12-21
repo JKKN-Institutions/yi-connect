@@ -1,0 +1,45 @@
+# [PROJECT_NAME] - Progress Tracker
+
+## Current Session: [DATE]
+
+### Working On
+-
+
+### Completed This Session
+-
+
+### Blocked
+- [Issue]: [Why blocked, what's needed to unblock]
+
+### Decisions Made
+- [Decision]: [Reasoning]
+
+### Next Session Should
+1.
+2.
+3.
+
+---
+
+## Session History
+
+<!-- Append each session summary below. Most recent at top. -->
+
+### [DATE] - [Brief summary of session]
+
+**Completed:**
+- [What was done]
+
+**Issues Encountered:**
+- [Problems and how they were resolved]
+
+**Decisions:**
+- [Key decisions and why]
+
+**State at End:**
+- Project status: [working/broken/partial]
+- Next priority: [what to do next]
+
+---
+
+*Template: ~/.claude/templates/progress-txt.md*

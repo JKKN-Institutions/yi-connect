@@ -35,6 +35,7 @@ import {
 import toast from 'react-hot-toast';
 import { Check, X, Eye, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
+import { WhatsAppIconButton } from '@/components/whatsapp';
 
 interface MemberRequest {
   id: string;
@@ -183,7 +184,18 @@ export function MemberRequestsTable({
                   {request.full_name}
                 </TableCell>
                 <TableCell>{request.email}</TableCell>
-                <TableCell>{request.phone}</TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-1">
+                    <span>{request.phone}</span>
+                    {request.phone && (
+                      <WhatsAppIconButton
+                        contact={{ phone: request.phone, name: request.full_name }}
+                        defaultMessage={`Hi ${request.full_name.split(' ')[0]},\n\nThank you for your interest in joining Yi Erode! We've received your membership application.\n\n[Your message here]\n\n_Yi Erode - Together We Can. We Will._`}
+                        size="sm"
+                      />
+                    )}
+                  </div>
+                </TableCell>
                 <TableCell>
                   {request.city}, {request.state}
                 </TableCell>
@@ -291,7 +303,16 @@ export function MemberRequestsTable({
                   </div>
                   <div>
                     <span className='text-muted-foreground'>Phone:</span>
-                    <p className='font-medium'>{selectedRequest.phone}</p>
+                    <div className='flex items-center gap-2'>
+                      <p className='font-medium'>{selectedRequest.phone}</p>
+                      {selectedRequest.phone && (
+                        <WhatsAppIconButton
+                          contact={{ phone: selectedRequest.phone, name: selectedRequest.full_name }}
+                          defaultMessage={`Hi ${selectedRequest.full_name.split(' ')[0]},\n\nThank you for your interest in joining Yi Erode!\n\n[Your message here]\n\n_Yi Erode - Together We Can. We Will._`}
+                          size="sm"
+                        />
+                      )}
+                    </div>
                   </div>
                   <div>
                     <span className='text-muted-foreground'>Location:</span>

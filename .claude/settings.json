@@ -1,0 +1,39 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash",
+      "Fetch(**)",
+      "Read(**)",
+      "Write(**)",
+      "Edit(**)",
+      "MultiEdit(**)",
+      "Search(**)",
+      "Glob(**)",
+      "Grep(**)",
+      "CreateDirectory(**)",
+      "MoveFile(**)",
+      "CopyFile(**)",
+      "GetFileInfo(**)",
+      "ListDirectory(**)",
+      "NotebookEdit(**)",
+      "NotebookRead(**)",
+      "KillShell",
+      "TodoWrite",
+      "AskUserQuestion",
+      "EnterPlanMode",
+      "ExitPlanMode",
+      "TaskOutput",
+      "WebFetch(domain:*)",
+      "WebSearch",
+      "Task(*)",
+      "Skill(*)",
+      "SlashCommand(*)",
+      "mcp__*"
+    ],
+    "deny": [
+      "Bash(rm -rf:*)",
+      "Bash(rm -fr:*)",
+      "Bash(sudo:*)"
+    ]
+  }
+}

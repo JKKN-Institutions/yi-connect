@@ -42,6 +42,7 @@ interface DataTableProps<TData, TValue> {
   defaultColumnFilters?: ColumnFiltersState
   defaultSorting?: SortingState
   exportConfig?: ExportConfig<TData>
+  bulkActions?: (selectedRows: TData[]) => React.ReactNode
 }
 
 export function DataTable<TData, TValue>({
@@ -51,6 +52,7 @@ export function DataTable<TData, TValue>({
   defaultColumnFilters = [],
   defaultSorting = [],
   exportConfig,
+  bulkActions,
 }: DataTableProps<TData, TValue>) {
   const [rowSelection, setRowSelection] = React.useState({})
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
@@ -81,7 +83,7 @@ export function DataTable<TData, TValue>({
 
   return (
     <div className="space-y-4">
-      <DataTableToolbar table={table} filterFields={filterFields} exportConfig={exportConfig} />
+      <DataTableToolbar table={table} filterFields={filterFields} exportConfig={exportConfig} bulkActions={bulkActions} />
       <div className="rounded-md border">
         <Table>
           <TableHeader>

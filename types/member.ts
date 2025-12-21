@@ -102,6 +102,7 @@ export interface MemberListItem {
   id: string
   full_name: string
   email: string
+  phone: string | null
   avatar_url: string | null
   company: string | null
   designation: string | null

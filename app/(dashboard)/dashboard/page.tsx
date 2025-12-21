@@ -31,10 +31,12 @@ import {
   AlertCircle,
   MapPin,
   Sparkles,
-  Target
+  Target,
+  MessageCircle
 } from 'lucide-react';
 import Link from 'next/link';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { WhatsAppGroupButton } from '@/components/whatsapp';
 
 async function WelcomeSection() {
   const profile = await getUserProfile();
@@ -156,6 +158,15 @@ async function QuickActions() {
           Browse Knowledge Base
         </Link>
       </Button>
+
+      {hasLeadershipAccess && (
+        <WhatsAppGroupButton
+          label="Message Yi Group"
+          variant="outline"
+          size="lg"
+          className="border-green-200 hover:bg-green-50"
+        />
+      )}
     </div>
   );
 }

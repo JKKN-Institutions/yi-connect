@@ -240,6 +240,7 @@ export const getMembers = cache(
       id: member.id,
       full_name: member.profiles?.full_name || '',
       email: member.profiles?.email || '',
+      phone: member.profiles?.phone || null,
       avatar_url: member.profiles?.avatar_url || null,
       company: member.company,
       designation: member.designation,

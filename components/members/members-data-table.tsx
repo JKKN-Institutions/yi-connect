@@ -14,6 +14,7 @@ import { getMemberColumns } from './members-table-columns'
 import { MemberCategoryTabs } from './member-category-tabs'
 import { Button } from '@/components/ui/button'
 import { RefreshCw } from 'lucide-react'
+import { WhatsAppBulkButton, type WhatsAppContact } from '@/components/whatsapp'
 import type { DataTableFilterField } from '@/lib/table/types'
 import type { MemberListItem, MemberCategoryTab } from '@/types/member'
 
@@ -130,6 +131,22 @@ export function MembersDataTable({ data, userRoles }: MembersDataTableProps) {
         data={filteredData}
         filterFields={filterFields}
         exportConfig={exportConfig}
+        bulkActions={(selectedRows: MemberListItem[]) => {
+          // Filter to members with phone numbers
+          const contacts: WhatsAppContact[] = selectedRows
+            .filter(m => m.phone)
+            .map(m => ({ phone: m.phone!, name: m.full_name || 'Member' }))
+
+          if (contacts.length === 0) return null
+
+          return (
+            <WhatsAppBulkButton
+              contacts={contacts}
+              label={`WhatsApp (${contacts.length})`}
+              defaultMessage="Hi,\n\n[Your message here]\n\n_Yi Erode - Together We Can. We Will._"
+            />
+          )
+        }}
       />
     </div>
   )

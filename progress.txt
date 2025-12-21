@@ -1,0 +1,68 @@
+# Yi Connect - Progress Tracker
+
+## Current Session: 2025-12-21 (Evening)
+
+### Working On
+- None (Fixes complete, testing in progress)
+
+### Completed This Session
+- **Fixed WhatsApp Protocol Error** (`lib/whatsapp/client.ts`)
+  - Added 20-second initialization timeout (was hanging 3+ minutes)
+  - Added initialization lock to prevent race conditions
+  - Added `cleanupClient()` function to destroy browser on errors
+  - Updated `auth_failure` and `disconnected` events to properly cleanup
+
+- **Fixed Hydration Mismatch Errors** (Radix UI components)
+  - `components/layouts/dashboard-sidebar.tsx` - Added `mounted` state, `hasActiveChild` starts false during SSR
+  - `components/communication/notification-bell.tsx` - Added `mounted` state, delayed Supabase subscription until after mount
+  - `components/navigation/user-menu.tsx` - Added `mounted` state, role badge only renders after mount
+
+- **Cleaned Up Zombie Chromium Processes**
+  - Killed orphaned puppeteer-core processes from previous failed WhatsApp attempts
+
+### Tested
+- WhatsApp status API: `GET /api/whatsapp/status` returns `{"success":true,"status":"disconnected"...}`
+- Build: Compiled successfully (16.3 min) with only pre-existing type error in unrelated file
+- Dev server: Running on localhost:3000
+
+### Blocked
+- Pre-existing TypeScript error in `/app/(dashboard)/communications/whatsapp/groups/[id]/edit/page.tsx:44` - Property 'name' does not exist on type 'WhatsAppGroupWithChapter'
+
+### Decisions Made
+- **Timeout**: 20 seconds for WhatsApp initialization (balance between giving enough time vs not hanging forever)
+- **Hydration Fix Pattern**: `mounted` state + useEffect to delay client-specific calculations until after hydration
+
+### Next Session Should
+1. Test WhatsApp QR code generation in browser (click Connect, verify QR appears within 15 seconds)
+2. Refresh dashboard pages and verify no hydration errors in browser console
+3. Fix pre-existing TypeScript error in WhatsApp groups edit page
+4. Consider adding WhatsApp session persistence validation after crashes
+
+---
+
+## Session History
+
+### 2025-12-21 - WhatsApp Communications Hub Integration
+
+**Completed:**
+- Moved /whatsapp to /communications/whatsapp
+- Updated all internal links in WhatsApp pages
+- Updated sidebar: WhatsApp items under Communication Hub
+- Added WhatsApp status card to Communications Hub dashboard
+- Added WhatsApp quick action button
+
+**Issues Encountered:**
+- Data layer functions return arrays directly, not {data: array} - fixed destructuring
+- Supabase CLI not installed - migration needs manual application
+
+**Decisions:**
+- Integrated WhatsApp into Communications Hub instead of standalone module
+- Follows DRY principle - templates shared with Communications Hub
+
+**State at End:**
+- Project status: working (auth required, redirects to /login)
+- Next priority: Apply database migration via Supabase Dashboard
+
+---
+
+*Template: ~/.claude/templates/progress-txt.md*

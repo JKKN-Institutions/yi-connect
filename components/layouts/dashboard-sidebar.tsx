@@ -64,7 +64,7 @@ import {
   ClipboardList,
   HelpCircle
 } from 'lucide-react';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Collapsible,
@@ -681,6 +681,14 @@ function NavItemComponent({
   const [isManuallyToggled, setIsManuallyToggled] = useState(false);
   const [manualOpenState, setManualOpenState] = useState(false);
 
+  // Mounted state to prevent hydration mismatch
+  // usePathname() returns undefined on server but actual path on client
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   // If item has no subitems, render as simple link
   if (!item.items) {
     const isActive =
@@ -707,12 +715,13 @@ function NavItemComponent({
   }
 
   // Render collapsible item with subitems
-  // Calculate if should be open based on active child
-  const hasActiveChild = item.items.some(
+  // Calculate if should be open based on active child - only after mounted to prevent hydration mismatch
+  const hasActiveChild = mounted && item.items.some(
     (child) => pathname === child.href || pathname.startsWith(child.href + '/')
   );
 
   // Determine open state: manual toggle takes precedence, otherwise use hasActiveChild
+  // Start closed during SSR to prevent hydration mismatch
   const isOpen = isManuallyToggled ? manualOpenState : hasActiveChild;
 
   const handleOpenChange = (open: boolean) => {
@@ -721,7 +730,7 @@ function NavItemComponent({
   };
 
   return (
-    <li suppressHydrationWarning>
+    <li>
       <Collapsible open={isOpen} onOpenChange={handleOpenChange}>
         <CollapsibleTrigger asChild>
           <button

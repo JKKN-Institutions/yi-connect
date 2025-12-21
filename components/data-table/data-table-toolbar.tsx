@@ -29,14 +29,17 @@ interface DataTableToolbarProps<TData> {
   table: Table<TData>
   filterFields?: DataTableFilterField<TData>[]
   exportConfig?: ExportConfig<TData>
+  bulkActions?: (selectedRows: TData[]) => React.ReactNode
 }
 
 export function DataTableToolbar<TData>({
   table,
   filterFields = [],
   exportConfig,
+  bulkActions,
 }: DataTableToolbarProps<TData>) {
   const isFiltered = table.getState().columnFilters.length > 0
+  const selectedRows = table.getFilteredSelectedRowModel().rows.map(row => row.original)
 
   // Find the primary search field (first field without options)
   const searchField = filterFields.find((field) => !field.options)
@@ -128,6 +131,8 @@ export function DataTableToolbar<TData>({
         )}
       </div>
       <div className="flex items-center gap-2">
+        {/* Bulk Actions - shown when rows are selected */}
+        {selectedRows.length > 0 && bulkActions && bulkActions(selectedRows)}
         {exportConfig && (
           <ExportDialog
             onExport={handleExport}

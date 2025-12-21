@@ -28,13 +28,46 @@ import {
 } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { collegeFormSchema } from '@/lib/validations/stakeholder';
-import { createCollege } from '@/app/actions/stakeholder';
+import { createCollege, updateCollege } from '@/app/actions/stakeholder';
 import toast from 'react-hot-toast';
 
 type CollegeFormValues = z.infer<typeof collegeFormSchema>;
 
+// Type for college data from database
+interface CollegeData {
+  id: string;
+  college_name: string;
+  college_type: string;
+  status: string;
+  address_line1?: string | null;
+  address_line2?: string | null;
+  city?: string | null;
+  state?: string | null;
+  pincode?: string | null;
+  connection_type?: string | null;
+  connected_through_member_id?: string | null;
+  total_students?: number | null;
+  total_staff?: number | null;
+  departments?: string[] | null;
+  accreditation?: string[] | null;
+  university_affiliation?: string | null;
+  has_yuva_chapter?: boolean | null;
+  yuva_chapter_strength?: number | null;
+  yuva_chapter_status?: string | null;
+  yuva_president_name?: string | null;
+  yuva_president_contact?: string | null;
+  suitable_activities?: string[] | null;
+  available_resources?: string[] | null;
+  decision_maker?: string | null;
+  decision_making_process?: string | null;
+  lead_time_required?: string | null;
+  notes?: string | null;
+}
+
 interface CollegeFormProps {
   chapterId: string | null;
+  initialData?: CollegeData;
+  mode?: 'create' | 'edit';
 }
 
 const collegeTypes = [
@@ -109,43 +142,44 @@ const resourceOptions = [
   'Transport'
 ];
 
-export function CollegeForm({ chapterId }: CollegeFormProps) {
+export function CollegeForm({ chapterId, initialData, mode = 'create' }: CollegeFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]);
-  const [selectedAccreditation, setSelectedAccreditation] = useState<string[]>([]);
-  const [selectedActivities, setSelectedActivities] = useState<string[]>([]);
-  const [selectedResources, setSelectedResources] = useState<string[]>([]);
+  const [selectedDepartments, setSelectedDepartments] = useState<string[]>(initialData?.departments || []);
+  const [selectedAccreditation, setSelectedAccreditation] = useState<string[]>(initialData?.accreditation || []);
+  const [selectedActivities, setSelectedActivities] = useState<string[]>(initialData?.suitable_activities || []);
+  const [selectedResources, setSelectedResources] = useState<string[]>(initialData?.available_resources || []);
   const router = useRouter();
+  const isEditMode = mode === 'edit';
 
   const form = useForm<CollegeFormValues>({
     resolver: zodResolver(collegeFormSchema) as any,
     defaultValues: {
-      college_name: '',
-      college_type: 'engineering',
-      status: 'prospective',
-      address_line1: '',
-      address_line2: '',
-      city: '',
-      state: '',
-      pincode: '',
-      connection_type: undefined,
-      connected_through_member_id: '',
-      total_students: undefined,
-      total_staff: undefined,
-      departments: [],
-      accreditation: [],
-      university_affiliation: '',
-      has_yuva_chapter: false,
-      yuva_chapter_strength: undefined,
-      yuva_chapter_status: '',
-      yuva_president_name: '',
-      yuva_president_contact: '',
-      suitable_activities: [],
-      available_resources: [],
-      decision_maker: '',
-      decision_making_process: '',
-      lead_time_required: '',
-      notes: ''
+      college_name: initialData?.college_name || '',
+      college_type: (initialData?.college_type as CollegeFormValues['college_type']) || 'engineering',
+      status: (initialData?.status as CollegeFormValues['status']) || 'prospective',
+      address_line1: initialData?.address_line1 || '',
+      address_line2: initialData?.address_line2 || '',
+      city: initialData?.city || '',
+      state: initialData?.state || '',
+      pincode: initialData?.pincode || '',
+      connection_type: (initialData?.connection_type as CollegeFormValues['connection_type']) || undefined,
+      connected_through_member_id: initialData?.connected_through_member_id || '',
+      total_students: initialData?.total_students || undefined,
+      total_staff: initialData?.total_staff || undefined,
+      departments: initialData?.departments || [],
+      accreditation: initialData?.accreditation || [],
+      university_affiliation: initialData?.university_affiliation || '',
+      has_yuva_chapter: initialData?.has_yuva_chapter || false,
+      yuva_chapter_strength: initialData?.yuva_chapter_strength || undefined,
+      yuva_chapter_status: initialData?.yuva_chapter_status || '',
+      yuva_president_name: initialData?.yuva_president_name || '',
+      yuva_president_contact: initialData?.yuva_president_contact || '',
+      suitable_activities: initialData?.suitable_activities || [],
+      available_resources: initialData?.available_resources || [],
+      decision_maker: initialData?.decision_maker || '',
+      decision_making_process: initialData?.decision_making_process || '',
+      lead_time_required: initialData?.lead_time_required || '',
+      notes: initialData?.notes || ''
     }
   });
 
@@ -195,11 +229,19 @@ export function CollegeForm({ chapterId }: CollegeFormProps) {
       // Add boolean fields
       formData.append('has_yuva_chapter', String(values.has_yuva_chapter));
 
-      const result = await createCollege({ message: '', success: false }, formData);
+      let result;
+      if (isEditMode && initialData?.id) {
+        result = await updateCollege(initialData.id, { message: '', success: false }, formData);
+      } else {
+        result = await createCollege({ message: '', success: false }, formData);
+      }
 
       if (result.success) {
-        toast.success('College created successfully');
-        // Redirect is handled by the server action
+        toast.success(isEditMode ? 'College updated successfully' : 'College created successfully');
+        if (isEditMode && initialData?.id) {
+          router.push(`/stakeholders/colleges/${initialData.id}`);
+        }
+        // For create, redirect is handled by the server action
       } else if (result.errors) {
         Object.entries(result.errors).forEach(([field, messages]) => {
           form.setError(field as any, {
@@ -209,7 +251,7 @@ export function CollegeForm({ chapterId }: CollegeFormProps) {
         });
         toast.error('Please check the form for errors');
       } else {
-        toast.error(result.message || 'Failed to create college');
+        toast.error(result.message || `Failed to ${isEditMode ? 'update' : 'create'} college`);
       }
     } catch (error) {
       console.error('Form submission error:', error);
@@ -748,7 +790,9 @@ export function CollegeForm({ chapterId }: CollegeFormProps) {
           </Button>
           <Button type="submit" disabled={isSubmitting}>
             {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {isSubmitting ? 'Creating...' : 'Create College'}
+            {isSubmitting
+              ? (isEditMode ? 'Updating...' : 'Creating...')
+              : (isEditMode ? 'Update College' : 'Create College')}
           </Button>
         </div>
       </form>

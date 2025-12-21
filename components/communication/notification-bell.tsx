@@ -41,8 +41,18 @@ export function NotificationBell({
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Supabase Realtime subscription for instant notifications
+  // Mounted state to prevent hydration mismatch
+  const [mounted, setMounted] = useState(false);
+
   useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Supabase Realtime subscription for instant notifications
+  // Delayed until after mount to prevent hydration issues
+  useEffect(() => {
+    if (!mounted) return;
+
     const supabase = createBrowserSupabaseClient();
 
     // Subscribe to new notifications for this member
@@ -117,7 +127,7 @@ export function NotificationBell({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [memberId]);
+  }, [memberId, mounted]);
 
   const handleMarkAsRead = useCallback(async (notificationId: string) => {
     setIsLoading(true);

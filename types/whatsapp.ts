@@ -5,16 +5,65 @@
  * Supports chapter-aware connections, groups, templates, and message logs.
  */
 
-import type { Tables } from './database'
-
 // ============================================================================
 // Base Types from Database
 // ============================================================================
+// Note: Explicit types until Supabase types are regenerated
 
-export type WhatsAppConnection = Tables<'whatsapp_connections'>
-export type WhatsAppGroup = Tables<'whatsapp_groups'>
-export type WhatsAppTemplate = Tables<'whatsapp_templates'>
-export type WhatsAppMessageLog = Tables<'whatsapp_message_logs'>
+export interface WhatsAppConnection {
+  id: string
+  chapter_id: string
+  session_path: string
+  connected_phone: string | null
+  connected_at: string | null
+  last_active_at: string | null
+  status: 'disconnected' | 'connecting' | 'connected' | 'failed'
+  created_at: string
+  updated_at: string
+}
+
+export interface WhatsAppGroup {
+  id: string
+  chapter_id: string
+  jid: string
+  name: string
+  description: string | null
+  group_type: 'chapter' | 'leadership' | 'ec_team' | 'yuva' | 'thalir' | 'fun' | 'core' | 'other' | null
+  is_default: boolean
+  member_count: number | null
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface WhatsAppTemplate {
+  id: string
+  chapter_id: string | null
+  name: string
+  category: 'event' | 'announcement' | 'reminder' | 'follow_up' | 'greeting' | 'custom'
+  content: string
+  variables: string[]
+  is_active: boolean
+  usage_count: number
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface WhatsAppMessageLog {
+  id: string
+  chapter_id: string
+  recipient_type: 'individual' | 'group' | 'bulk'
+  recipient_id: string | null
+  recipient_name: string | null
+  template_id: string | null
+  message_content: string
+  status: 'pending' | 'sent' | 'delivered' | 'read' | 'failed'
+  error_message: string | null
+  sent_by: string | null
+  sent_at: string
+  metadata: Record<string, unknown> | null
+}
 
 // ============================================================================
 // Enums / Constants

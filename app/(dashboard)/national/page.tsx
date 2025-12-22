@@ -12,13 +12,15 @@ import {
   ArrowRight,
   Globe,
   TrendingUp,
-  Users
+  Users,
+  Building
 } from 'lucide-react';
 import Link from 'next/link';
 import { getNationalDashboardData, getUpcomingNationalEvents } from '@/lib/data/national-integration';
 import { getCurrentChapterId, getCurrentMemberId, requireRole } from '@/lib/auth';
 import { SyncStatusCard } from '@/components/national/sync-status-card';
 import { NationalEventsList } from '@/components/national/national-events-list';
+import { ChaptersStatusGrid, PendingInvitationsCard } from '@/components/national/multi-chapter-overview';
 
 export const metadata = {
   title: 'National Integration | Yi Connect',
@@ -54,6 +56,12 @@ async function DashboardContent() {
 
   return (
     <div className="space-y-6">
+      {/* Multi-Chapter Overview (New) */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <ChaptersStatusGrid />
+        <PendingInvitationsCard />
+      </div>
+
       {/* Quick Stats Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>

@@ -1,17 +1,18 @@
 /**
  * Create New Chapter Page
  *
- * Form for creating a new Yi chapter (Super Admin and National Admin only).
+ * Multi-step wizard for creating a new Yi chapter with chair invitation
+ * and feature configuration (Super Admin and National Admin only).
  */
 
 import { Suspense } from 'react'
 import { requireRole } from '@/lib/auth'
-import { ChapterForm } from '@/components/admin/chapter-form'
+import { CreateChapterWizard } from '@/components/admin/chapters/create-chapter-wizard'
 import { Skeleton } from '@/components/ui/skeleton'
 
 export const metadata = {
   title: 'Create New Chapter - Yi Connect Admin',
-  description: 'Create a new Yi chapter',
+  description: 'Create a new Yi chapter with chair invitation',
 }
 
 // Content component that performs auth check
@@ -25,13 +26,13 @@ async function NewChapterContent() {
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Create New Chapter</h1>
         <p className="text-muted-foreground">
-          Add a new Yi chapter to the system
+          Set up a new Yi chapter with chair invitation and feature configuration
         </p>
       </div>
 
-      {/* Chapter Form */}
-      <div className="max-w-2xl">
-        <ChapterForm />
+      {/* Chapter Creation Wizard */}
+      <div className="max-w-3xl">
+        <CreateChapterWizard />
       </div>
     </div>
   )

@@ -12,6 +12,7 @@ import { unstable_noStore as noStore } from 'next/cache'
 import { DashboardHeader } from '@/components/layouts/dashboard-header'
 import { DashboardSidebar } from '@/components/layouts/dashboard-sidebar'
 import { BugReporterWrapper } from '@/components/bug-reporter-wrapper'
+import { AdminChapterProvider } from '@/contexts/admin-chapter-context'
 import { getCurrentUser } from '@/lib/auth'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 
@@ -74,25 +75,27 @@ export default async function DashboardLayout({
 
   return (
     <BugReporterWrapper userProfile={userProfile}>
-      <div className="min-h-screen flex overflow-hidden">
-        {/* Sidebar */}
-        <Suspense fallback={<div className="w-64 bg-background border-r" />}>
-          <SidebarWrapper />
-        </Suspense>
-
-        {/* Main Content Area */}
-        <div className="flex-1 flex flex-col lg:ml-64 min-w-0 overflow-hidden">
-          {/* Header */}
-          <Suspense fallback={<div className="h-16 bg-background border-b" />}>
-            <DashboardHeader />
+      <AdminChapterProvider>
+        <div className="min-h-screen flex overflow-hidden">
+          {/* Sidebar */}
+          <Suspense fallback={<div className="w-64 bg-background border-r" />}>
+            <SidebarWrapper />
           </Suspense>
 
-          {/* Page Content */}
-          <main className="flex-1 p-6 bg-muted/10 overflow-x-hidden overflow-y-auto min-w-0">
-            {children}
-          </main>
+          {/* Main Content Area */}
+          <div className="flex-1 flex flex-col lg:ml-64 min-w-0 overflow-hidden">
+            {/* Header */}
+            <Suspense fallback={<div className="h-16 bg-background border-b" />}>
+              <DashboardHeader />
+            </Suspense>
+
+            {/* Page Content */}
+            <main className="flex-1 p-6 bg-muted/10 overflow-x-hidden overflow-y-auto min-w-0">
+              {children}
+            </main>
+          </div>
         </div>
-      </div>
+      </AdminChapterProvider>
     </BugReporterWrapper>
   )
 }

@@ -8,6 +8,7 @@ import { Suspense } from 'react'
 import { getUserProfile, getCurrentMemberId } from '@/lib/auth'
 import { UserMenu } from '@/components/navigation/user-menu'
 import { NotificationBell } from '@/components/communication/notification-bell'
+import { ChapterSwitcher } from '@/components/admin/chapter-switcher'
 import { Bell } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -49,7 +50,10 @@ export function DashboardHeader() {
   return (
     <header className="sticky top-0 z-30 bg-background border-b">
       <div className="flex items-center justify-between px-6 py-4">
-        {/* Left side - could add breadcrumbs here */}
+        {/* Left side - Chapter Switcher for National Admin */}
+        <div className="hidden lg:block">
+          <ChapterSwitcher />
+        </div>
         <div className="lg:hidden" />
 
         {/* Right side - Notifications and User Menu */}

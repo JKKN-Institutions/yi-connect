@@ -49,6 +49,18 @@ async function getLocalClient() {
 }
 
 export async function GET() {
+  // Debug logging to diagnose serverless detection
+  const debugInfo = {
+    NODE_ENV: process.env.NODE_ENV,
+    VERCEL: process.env.VERCEL,
+    VERCEL_ENV: process.env.VERCEL_ENV,
+    hasServiceUrl: !!process.env.WHATSAPP_SERVICE_URL,
+    hasApiKey: !!process.env.WHATSAPP_API_KEY,
+    isServerlessResult: isServerless(),
+    useApiClientResult: useApiClient()
+  };
+  console.log('[WhatsApp Status] Debug:', JSON.stringify(debugInfo));
+
   try {
     if (useApiClient()) {
       // Production: Use Railway service
@@ -65,7 +77,8 @@ export async function GET() {
         qrCode: null,
         error: 'WhatsApp service not configured. Please set up the Railway WhatsApp service.',
         isReady: false,
-        setupRequired: true
+        setupRequired: true,
+        _debug: debugInfo
       });
     } else if (process.env.NODE_ENV === 'development') {
       // Development: Use local client

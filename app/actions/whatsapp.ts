@@ -2,15 +2,19 @@
 
 /**
  * WhatsApp Server Actions for Yi Connect
+ *
+ * Automatically uses Railway API service in production (Vercel)
+ * Falls back to local client in development.
  */
 
+// Local client imports (for development)
 import {
-  initializeWhatsApp,
-  disconnectWhatsApp,
-  getConnectionStatus,
-  sendTextMessage,
-  sendBulkMessages,
-  sendGroupMessage,
+  initializeWhatsApp as initializeLocal,
+  disconnectWhatsApp as disconnectLocal,
+  getConnectionStatus as getLocalStatus,
+  sendTextMessage as sendLocalMessage,
+  sendBulkMessages as sendLocalBulk,
+  sendGroupMessage as sendLocalGroup,
   formatEventCreated,
   formatRsvpConfirmation,
   formatEventReminder3Days,
@@ -25,6 +29,25 @@ import {
   type BulkSendResult
 } from '@/lib/whatsapp';
 
+// API client imports (for production)
+import {
+  isServiceConfigured,
+  connectWhatsAppAPI,
+  disconnectWhatsAppAPI,
+  getWhatsAppStatusAPI,
+  sendMessageAPI,
+  sendBulkMessagesAPI,
+  sendGroupMessageAPI
+} from '@/lib/whatsapp/api-client';
+
+// ============================================================
+// Helper: Determine which backend to use
+// ============================================================
+
+function useApiClient(): boolean {
+  return isServiceConfigured();
+}
+
 // ============================================================
 // Connection Management
 // ============================================================
@@ -32,11 +55,19 @@ import {
 export async function connectWhatsApp(): Promise<{
   success: boolean;
   status: string;
+  qrCode?: string | null;
   error?: string;
 }> {
   try {
-    const result = await initializeWhatsApp();
-    return result;
+    if (useApiClient()) {
+      console.log('[WhatsApp] Using Railway API service');
+      const result = await connectWhatsAppAPI();
+      return result;
+    } else {
+      console.log('[WhatsApp] Using local client');
+      const result = await initializeLocal();
+      return result;
+    }
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : 'Unknown error';
     return { success: false, status: 'disconnected', error: errorMsg };
@@ -45,7 +76,11 @@ export async function connectWhatsApp(): Promise<{
 
 export async function disconnectWhatsAppAction(): Promise<{ success: boolean }> {
   try {
-    await disconnectWhatsApp();
+    if (useApiClient()) {
+      await disconnectWhatsAppAPI();
+    } else {
+      await disconnectLocal();
+    }
     return { success: true };
   } catch (error) {
     console.error('[WhatsApp Action] Disconnect error:', error);
@@ -59,7 +94,10 @@ export async function getWhatsAppStatus(): Promise<{
   error: string | null;
   isReady: boolean;
 }> {
-  return getConnectionStatus();
+  if (useApiClient()) {
+    return getWhatsAppStatusAPI();
+  }
+  return getLocalStatus();
 }
 
 // ============================================================
@@ -70,21 +108,30 @@ export async function sendWhatsAppMessage(
   phoneNumber: string,
   message: string
 ): Promise<SendMessageResult> {
-  return sendTextMessage(phoneNumber, message);
+  if (useApiClient()) {
+    return sendMessageAPI(phoneNumber, message);
+  }
+  return sendLocalMessage(phoneNumber, message);
 }
 
 export async function sendBulkWhatsAppMessages(
   recipients: Array<{ phoneNumber: string; message: string }>,
   delayMs: number = 1000
 ): Promise<BulkSendResult> {
-  return sendBulkMessages(recipients, delayMs);
+  if (useApiClient()) {
+    return sendBulkMessagesAPI(recipients, delayMs);
+  }
+  return sendLocalBulk(recipients, delayMs);
 }
 
 export async function sendWhatsAppGroupMessage(
   groupId: string,
   message: string
 ): Promise<SendMessageResult> {
-  return sendGroupMessage(groupId, message);
+  if (useApiClient()) {
+    return sendGroupMessageAPI(groupId, message);
+  }
+  return sendLocalGroup(groupId, message);
 }
 
 // ============================================================
@@ -101,7 +148,7 @@ export async function notifyEventCreated(
     phoneNumber: phone,
     message
   }));
-  return sendBulkMessages(recipients, 1500); // Slightly longer delay for bulk
+  return sendBulkWhatsAppMessages(recipients, 1500);
 }
 
 export async function notifyRsvpConfirmation(
@@ -110,7 +157,7 @@ export async function notifyRsvpConfirmation(
   rsvpStatus: 'attending' | 'not_attending' | 'maybe'
 ): Promise<SendMessageResult> {
   const message = formatRsvpConfirmation(member, event, rsvpStatus);
-  return sendTextMessage(member.phoneNumber, message);
+  return sendWhatsAppMessage(member.phoneNumber, message);
 }
 
 export async function notifyEventReminder(
@@ -133,7 +180,7 @@ export async function notifyEventReminder(
       break;
   }
 
-  return sendTextMessage(memberPhone, message);
+  return sendWhatsAppMessage(memberPhone, message);
 }
 
 export async function notifyEventCancellation(
@@ -146,7 +193,7 @@ export async function notifyEventCancellation(
     phoneNumber: phone,
     message
   }));
-  return sendBulkMessages(recipients, 1500);
+  return sendBulkWhatsAppMessages(recipients, 1500);
 }
 
 export async function notifyPostEventThankYou(
@@ -157,7 +204,7 @@ export async function notifyPostEventThankYou(
     phoneNumber: attendee.phone,
     message: formatPostEventThankYou(event, attendee.name)
   }));
-  return sendBulkMessages(recipients, 1500);
+  return sendBulkWhatsAppMessages(recipients, 1500);
 }
 
 // ============================================================
@@ -175,7 +222,7 @@ export async function sendAnnouncement(
     phoneNumber: phone,
     message
   }));
-  return sendBulkMessages(recipients, 1500);
+  return sendBulkWhatsAppMessages(recipients, 1500);
 }
 
 // ============================================================
@@ -190,7 +237,7 @@ If you received this, WhatsApp integration is working correctly!
 
 _Yi Erode - Together We Can. We Will._`;
 
-  return sendTextMessage(phoneNumber, testMessage);
+  return sendWhatsAppMessage(phoneNumber, testMessage);
 }
 
 // ============================================================

@@ -15,9 +15,22 @@ import {
 
 /**
  * Check if we're running on Vercel (serverless environment)
+ * Uses multiple detection methods for reliability
  */
 function isServerless(): boolean {
-  return !!(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
+  // Check Vercel environment variables
+  if (process.env.VERCEL === '1' || process.env.VERCEL_ENV) {
+    return true;
+  }
+  // Check AWS Lambda
+  if (process.env.AWS_LAMBDA_FUNCTION_NAME) {
+    return true;
+  }
+  // If not explicitly in development and no local client configured, assume serverless
+  if (process.env.NODE_ENV === 'production' && !isServiceConfigured()) {
+    return true;
+  }
+  return false;
 }
 
 /**

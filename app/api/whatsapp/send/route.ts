@@ -45,17 +45,17 @@ export async function POST(request: NextRequest) {
       // Production: Use Railway service
       const result = await sendMessageAPI(phoneNumber, message);
       return NextResponse.json(result);
-    } else if (isServerless()) {
-      // Serverless without API configured
-      return NextResponse.json({
-        success: false,
-        error: 'WhatsApp service not configured'
-      });
-    } else {
+    } else if (process.env.NODE_ENV === 'development') {
       // Development: Use local client
       const { sendTextMessage } = await import('@/lib/whatsapp');
       const result = await sendTextMessage(phoneNumber, message);
       return NextResponse.json(result);
+    } else {
+      // Production without Railway service
+      return NextResponse.json({
+        success: false,
+        error: 'WhatsApp service not configured. Please set up the Railway WhatsApp service.'
+      });
     }
   } catch (error) {
     console.error('[API] WhatsApp send error:', error);

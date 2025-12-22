@@ -67,13 +67,23 @@ export async function GET() {
         isReady: false,
         setupRequired: true
       });
-    } else {
+    } else if (process.env.NODE_ENV === 'development') {
       // Development: Use local client
       const { getConnectionStatus } = await getLocalClient();
       const status = getConnectionStatus();
       return NextResponse.json({
         success: true,
         ...status
+      });
+    } else {
+      // Production without Railway service - return setup required
+      return NextResponse.json({
+        success: false,
+        status: 'not_configured',
+        qrCode: null,
+        error: 'WhatsApp service not configured. Please set up the Railway WhatsApp service.',
+        isReady: false,
+        setupRequired: true
       });
     }
   } catch (error) {
@@ -96,16 +106,7 @@ export async function POST() {
         qrCode: result.qrCode,
         error: result.error
       });
-    } else if (isServerless()) {
-      // Serverless without API configured - can't run local client
-      return NextResponse.json({
-        success: false,
-        status: 'not_configured',
-        qrCode: null,
-        error: 'WhatsApp service not configured. Please set up the Railway WhatsApp service.',
-        setupRequired: true
-      });
-    } else {
+    } else if (process.env.NODE_ENV === 'development') {
       // Development: Use local client
       const { initializeWhatsApp } = await getLocalClient();
       const result = await initializeWhatsApp();
@@ -113,6 +114,15 @@ export async function POST() {
         success: result.success,
         status: result.status,
         error: result.error
+      });
+    } else {
+      // Production without Railway service - return setup required
+      return NextResponse.json({
+        success: false,
+        status: 'not_configured',
+        qrCode: null,
+        error: 'WhatsApp service not configured. Please set up the Railway WhatsApp service.',
+        setupRequired: true
       });
     }
   } catch (error) {

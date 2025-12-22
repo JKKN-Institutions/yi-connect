@@ -33,15 +33,28 @@ export interface BulkSendResult {
   }>;
 }
 
-// Service configuration
-const WHATSAPP_SERVICE_URL = process.env.WHATSAPP_SERVICE_URL;
-const WHATSAPP_API_KEY = process.env.WHATSAPP_API_KEY;
+/**
+ * Get service URL (read at runtime, not module load)
+ */
+function getServiceUrl(): string | undefined {
+  return process.env.WHATSAPP_SERVICE_URL;
+}
+
+/**
+ * Get API key (read at runtime, not module load)
+ */
+function getApiKey(): string | undefined {
+  return process.env.WHATSAPP_API_KEY;
+}
 
 /**
  * Check if the WhatsApp service is configured
  */
 export function isServiceConfigured(): boolean {
-  return !!(WHATSAPP_SERVICE_URL && WHATSAPP_API_KEY);
+  const url = getServiceUrl();
+  const key = getApiKey();
+  console.log('[WhatsApp API] Checking config:', { hasUrl: !!url, hasKey: !!key });
+  return !!(url && key);
 }
 
 /**
@@ -50,7 +63,7 @@ export function isServiceConfigured(): boolean {
 function getHeaders(): HeadersInit {
   return {
     'Content-Type': 'application/json',
-    'X-API-Key': WHATSAPP_API_KEY || ''
+    'X-API-Key': getApiKey() || ''
   };
 }
 
@@ -61,15 +74,18 @@ async function apiRequest<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
-  if (!WHATSAPP_SERVICE_URL) {
+  const serviceUrl = getServiceUrl();
+  const apiKey = getApiKey();
+
+  if (!serviceUrl) {
     throw new Error('WHATSAPP_SERVICE_URL not configured');
   }
 
-  if (!WHATSAPP_API_KEY) {
+  if (!apiKey) {
     throw new Error('WHATSAPP_API_KEY not configured');
   }
 
-  const url = `${WHATSAPP_SERVICE_URL}${endpoint}`;
+  const url = `${serviceUrl}${endpoint}`;
   console.log(`[WhatsApp API] ${options.method || 'GET'} ${endpoint}`);
 
   try {
@@ -170,12 +186,13 @@ export async function sendBulkMessagesAPI(
  * Check service health
  */
 export async function checkHealthAPI(): Promise<{ status: string; timestamp: string }> {
-  if (!WHATSAPP_SERVICE_URL) {
+  const serviceUrl = getServiceUrl();
+  if (!serviceUrl) {
     return { status: 'not_configured', timestamp: new Date().toISOString() };
   }
 
   try {
-    const response = await fetch(`${WHATSAPP_SERVICE_URL}/health`);
+    const response = await fetch(`${serviceUrl}/health`);
     return await response.json();
   } catch {
     return { status: 'unreachable', timestamp: new Date().toISOString() };

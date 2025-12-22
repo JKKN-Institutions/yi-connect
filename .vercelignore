@@ -1,0 +1,10 @@
+# WhatsApp session folders (local dev only, not for serverless)
+.wwebjs_auth/
+.wwebjs_cache/
+
+# whatsapp-service (separate Railway deployment)
+whatsapp-service/
+
+# Other dev files
+.env*
+*.log

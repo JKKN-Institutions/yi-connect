@@ -114,18 +114,6 @@ export async function connectWhatsApp(): Promise<{
   qrCode?: string | null;
   error?: string;
 }> {
-  // Debug: Check environment state
-  const debugState = {
-    hasUrl: !!process.env.WHATSAPP_SERVICE_URL,
-    hasKey: !!process.env.WHATSAPP_API_KEY,
-    vercel: process.env.VERCEL,
-    vercelEnv: process.env.VERCEL_ENV,
-    nodeEnv: process.env.NODE_ENV,
-    useApiClientResult: useApiClient(),
-    isServerlessResult: isServerless()
-  };
-  console.log('[WhatsApp Connect] Debug state:', JSON.stringify(debugState));
-
   try {
     if (useApiClient()) {
       console.log('[WhatsApp] Using Railway API service');
@@ -133,11 +121,10 @@ export async function connectWhatsApp(): Promise<{
       return result;
     } else if (isServerless()) {
       // Serverless without Railway service configured
-      console.log('[WhatsApp] Serverless without service configured. Debug:', JSON.stringify(debugState));
       return {
         success: false,
         status: 'not_configured',
-        error: `WhatsApp service not configured. Debug: hasUrl=${debugState.hasUrl}, hasKey=${debugState.hasKey}`
+        error: 'WhatsApp service not configured. Please set up the Railway WhatsApp service.'
       };
     } else {
       console.log('[WhatsApp] Using local client');

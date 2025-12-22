@@ -223,7 +223,7 @@ INSERT INTO public.chapters (
   settings,
   created_at
 ) VALUES (
-  'demo0000-0000-0000-0000-000000000001'::UUID,
+  'de000001-0000-4000-a000-000000000001'::UUID,
   'Yi DemoChapter',
   'Demo City',
   'SRTN',
@@ -244,7 +244,7 @@ INSERT INTO public.chapters (
 DO $$
 DECLARE
   v_admin_id UUID;
-  v_chapter_id UUID := 'demo0000-0000-0000-0000-000000000001'::UUID;
+  v_chapter_id UUID := 'de000001-0000-4000-a000-000000000001'::UUID;
 BEGIN
   -- Find an existing admin
   SELECT ur.user_id INTO v_admin_id
@@ -335,20 +335,20 @@ END $$;
 
 INSERT INTO public.chapter_feature_toggles (chapter_id, feature, is_enabled, enabled_at)
 VALUES
-  ('demo0000-0000-0000-0000-000000000001', 'events', TRUE, NOW()),
-  ('demo0000-0000-0000-0000-000000000001', 'communications', TRUE, NOW()),
-  ('demo0000-0000-0000-0000-000000000001', 'stakeholder_crm', TRUE, NOW()),
-  ('demo0000-0000-0000-0000-000000000001', 'verticals', TRUE, NOW()),
-  ('demo0000-0000-0000-0000-000000000001', 'awards', TRUE, NOW()),
-  ('demo0000-0000-0000-0000-000000000001', 'analytics', TRUE, NOW()),
-  ('demo0000-0000-0000-0000-000000000001', 'finance', FALSE, NOW()),
-  ('demo0000-0000-0000-0000-000000000001', 'session_bookings', FALSE, NOW()),
-  ('demo0000-0000-0000-0000-000000000001', 'opportunities', FALSE, NOW()),
-  ('demo0000-0000-0000-0000-000000000001', 'knowledge_base', FALSE, NOW()),
-  ('demo0000-0000-0000-0000-000000000001', 'member_intelligence', FALSE, NOW()),
-  ('demo0000-0000-0000-0000-000000000001', 'succession_planning', FALSE, NOW()),
-  ('demo0000-0000-0000-0000-000000000001', 'sub_chapters', FALSE, NOW()),
-  ('demo0000-0000-0000-0000-000000000001', 'industrial_visits', FALSE, NOW())
+  ('de000001-0000-4000-a000-000000000001', 'events', TRUE, NOW()),
+  ('de000001-0000-4000-a000-000000000001', 'communications', TRUE, NOW()),
+  ('de000001-0000-4000-a000-000000000001', 'stakeholder_crm', TRUE, NOW()),
+  ('de000001-0000-4000-a000-000000000001', 'verticals', TRUE, NOW()),
+  ('de000001-0000-4000-a000-000000000001', 'awards', TRUE, NOW()),
+  ('de000001-0000-4000-a000-000000000001', 'analytics', TRUE, NOW()),
+  ('de000001-0000-4000-a000-000000000001', 'finance', FALSE, NOW()),
+  ('de000001-0000-4000-a000-000000000001', 'session_bookings', FALSE, NOW()),
+  ('de000001-0000-4000-a000-000000000001', 'opportunities', FALSE, NOW()),
+  ('de000001-0000-4000-a000-000000000001', 'knowledge_base', FALSE, NOW()),
+  ('de000001-0000-4000-a000-000000000001', 'member_intelligence', FALSE, NOW()),
+  ('de000001-0000-4000-a000-000000000001', 'succession_planning', FALSE, NOW()),
+  ('de000001-0000-4000-a000-000000000001', 'sub_chapters', FALSE, NOW()),
+  ('de000001-0000-4000-a000-000000000001', 'industrial_visits', FALSE, NOW())
 ON CONFLICT (chapter_id, feature) DO UPDATE SET
   is_enabled = EXCLUDED.is_enabled;
 
@@ -359,8 +359,8 @@ ON CONFLICT (chapter_id, feature) DO UPDATE SET
 INSERT INTO public.verticals (id, chapter_id, name, slug, description, color, icon, is_active, display_order)
 VALUES
   (
-    'vert0001-0000-0000-0000-000000000001'::UUID,
-    'demo0000-0000-0000-0000-000000000001',
+    'ee000001-0000-4000-a000-000000000001'::UUID,
+    'de000001-0000-4000-a000-000000000001',
     'MASOOM',
     'masoom',
     'Making Schools Safe, Oriented and Motivated - Child safety awareness program',
@@ -370,8 +370,8 @@ VALUES
     1
   ),
   (
-    'vert0002-0000-0000-0000-000000000001'::UUID,
-    'demo0000-0000-0000-0000-000000000001',
+    'ee000002-0000-4000-a000-000000000001'::UUID,
+    'de000001-0000-4000-a000-000000000001',
     'Yuva',
     'yuva',
     'Youth empowerment and skill development for college students',
@@ -381,8 +381,8 @@ VALUES
     2
   ),
   (
-    'vert0003-0000-0000-0000-000000000001'::UUID,
-    'demo0000-0000-0000-0000-000000000001',
+    'ee000003-0000-4000-a000-000000000001'::UUID,
+    'de000001-0000-4000-a000-000000000001',
     'Climate Action',
     'climate',
     'Environmental sustainability and climate awareness initiatives',
@@ -392,8 +392,8 @@ VALUES
     3
   ),
   (
-    'vert0004-0000-0000-0000-000000000001'::UUID,
-    'demo0000-0000-0000-0000-000000000001',
+    'ee000004-0000-4000-a000-000000000001'::UUID,
+    'de000001-0000-4000-a000-000000000001',
     'Road Safety',
     'road-safety',
     'Road safety awareness and accident prevention campaigns',
@@ -417,143 +417,107 @@ INSERT INTO public.events (
   status,
   start_date,
   end_date,
-  venue_name,
   venue_address,
-  venue_city,
-  max_attendees,
-  is_public,
-  registration_required
+  max_capacity
 )
 VALUES
   -- Past Events
   (
-    'evnt0001-0000-0000-0000-000000000001'::UUID,
-    'demo0000-0000-0000-0000-000000000001',
+    'ef000001-0000-4000-a000-000000000001'::UUID,
+    'de000001-0000-4000-a000-000000000001',
     'MASOOM School Awareness Session',
     'Child safety awareness session conducted at local government school. 250 students participated.',
-    'masoom',
+    'community_service',
     'completed',
     NOW() - INTERVAL '30 days',
     NOW() - INTERVAL '30 days' + INTERVAL '3 hours',
-    'Government High School',
-    'Main Road',
-    'Demo City',
-    300,
-    FALSE,
-    FALSE
+    'Government High School, Main Road, Demo City',
+    300
   ),
   (
-    'evnt0002-0000-0000-0000-000000000001'::UUID,
-    'demo0000-0000-0000-0000-000000000001',
+    'ef000002-0000-4000-a000-000000000001'::UUID,
+    'de000001-0000-4000-a000-000000000001',
     'Yuva Career Guidance Workshop',
     'Career counseling session for final year engineering students. Featured industry experts from IT and Manufacturing.',
-    'yuva',
+    'workshop',
     'completed',
     NOW() - INTERVAL '20 days',
     NOW() - INTERVAL '20 days' + INTERVAL '4 hours',
-    'Engineering College Auditorium',
-    'College Road',
-    'Demo City',
-    200,
-    TRUE,
-    TRUE
+    'Engineering College Auditorium, College Road, Demo City',
+    200
   ),
   (
-    'evnt0003-0000-0000-0000-000000000001'::UUID,
-    'demo0000-0000-0000-0000-000000000001',
+    'ef000003-0000-4000-a000-000000000001'::UUID,
+    'de000001-0000-4000-a000-000000000001',
     'Tree Plantation Drive',
     'Planted 500 saplings in the city outskirts with local community participation.',
-    'climate_action',
+    'community_service',
     'completed',
     NOW() - INTERVAL '15 days',
     NOW() - INTERVAL '15 days' + INTERVAL '5 hours',
-    'City Forest Reserve',
-    'Outer Ring Road',
-    'Demo City',
-    100,
-    TRUE,
-    TRUE
+    'City Forest Reserve, Outer Ring Road, Demo City',
+    100
   ),
   -- Upcoming Events
   (
-    'evnt0004-0000-0000-0000-000000000001'::UUID,
-    'demo0000-0000-0000-0000-000000000001',
+    'ef000004-0000-4000-a000-000000000001'::UUID,
+    'de000001-0000-4000-a000-000000000001',
     'Monthly Chapter Meeting',
     'Regular monthly meeting to discuss upcoming initiatives and review progress.',
-    'chapter_meeting',
-    'confirmed',
+    'networking',
+    'published',
     NOW() + INTERVAL '5 days',
     NOW() + INTERVAL '5 days' + INTERVAL '2 hours',
-    'Chapter Office',
-    'Business District',
-    'Demo City',
-    50,
-    FALSE,
-    TRUE
+    'Chapter Office, Business District, Demo City',
+    50
   ),
   (
-    'evnt0005-0000-0000-0000-000000000001'::UUID,
-    'demo0000-0000-0000-0000-000000000001',
+    'ef000005-0000-4000-a000-000000000001'::UUID,
+    'de000001-0000-4000-a000-000000000001',
     'Road Safety Helmet Awareness Rally',
     'Motorcycle rally to spread awareness about helmet safety. Expected 200+ participants.',
-    'road_safety',
-    'confirmed',
+    'community_service',
+    'published',
     NOW() + INTERVAL '10 days',
     NOW() + INTERVAL '10 days' + INTERVAL '4 hours',
-    'City Center',
-    'Main Circle',
-    'Demo City',
-    300,
-    TRUE,
-    TRUE
+    'City Center, Main Circle, Demo City',
+    300
   ),
   (
-    'evnt0006-0000-0000-0000-000000000001'::UUID,
-    'demo0000-0000-0000-0000-000000000001',
+    'ef000006-0000-4000-a000-000000000001'::UUID,
+    'de000001-0000-4000-a000-000000000001',
     'Yi Connect Platform Training',
     'Training session for chapter members on using the Yi Connect platform effectively.',
     'workshop',
     'draft',
     NOW() + INTERVAL '15 days',
     NOW() + INTERVAL '15 days' + INTERVAL '3 hours',
-    'Co-working Space',
-    'Tech Park',
-    'Demo City',
-    30,
-    FALSE,
-    TRUE
+    'Co-working Space, Tech Park, Demo City',
+    30
   ),
   (
-    'evnt0007-0000-0000-0000-000000000001'::UUID,
-    'demo0000-0000-0000-0000-000000000001',
+    'ef000007-0000-4000-a000-000000000001'::UUID,
+    'de000001-0000-4000-a000-000000000001',
     'Yuva Entrepreneurship Bootcamp',
     'Two-day intensive bootcamp for aspiring young entrepreneurs. Featuring startup mentors.',
-    'yuva',
-    'confirmed',
+    'workshop',
+    'published',
     NOW() + INTERVAL '25 days',
     NOW() + INTERVAL '26 days',
-    'Innovation Hub',
-    'Startup Valley',
-    'Demo City',
-    100,
-    TRUE,
-    TRUE
+    'Innovation Hub, Startup Valley, Demo City',
+    100
   ),
   (
-    'evnt0008-0000-0000-0000-000000000001'::UUID,
-    'demo0000-0000-0000-0000-000000000001',
+    'ef000008-0000-4000-a000-000000000001'::UUID,
+    'de000001-0000-4000-a000-000000000001',
     'Regional Chapter Conclave',
     'Annual gathering of all SRTN region chapters. Networking and best practices sharing.',
-    'conclave',
-    'confirmed',
+    'conference',
+    'published',
     NOW() + INTERVAL '45 days',
     NOW() + INTERVAL '46 days',
-    'Convention Center',
-    'Exhibition Road',
-    'Demo City',
-    500,
-    FALSE,
-    TRUE
+    'Convention Center, Exhibition Road, Demo City',
+    500
   )
 ON CONFLICT (id) DO NOTHING;
 
@@ -572,55 +536,49 @@ INSERT INTO public.schools (
   phone,
   email,
   connection_type,
-  student_strength,
-  principal_name,
-  principal_phone,
-  masoom_sessions_conducted,
-  last_session_date,
-  engagement_level
+  total_students,
+  decision_maker,
+  connection_notes,
+  status
 )
 VALUES
   (
-    'schl0001-0000-0000-0000-000000000001'::UUID,
-    'demo0000-0000-0000-0000-000000000001',
+    'ec000001-0000-4000-a000-000000000001'::UUID,
+    'de000001-0000-4000-a000-000000000001',
     'Government Higher Secondary School',
-    'government',
+    'state_board',
     'Main Road, Near Bus Stand',
     'Demo City',
     'Tamil Nadu',
     '0422-1234567',
     'ghss-demo@tn.gov.in',
-    'warm',
+    'direct',
     1200,
-    'Mr. Ramesh Kumar',
-    '9876543210',
-    3,
-    NOW() - INTERVAL '30 days',
-    'high'
+    'Mr. Ramesh Kumar (Principal) - 9876543210',
+    '3 MASOOM sessions conducted. Last session: 30 days ago. High engagement.',
+    'active'
   ),
   (
-    'schl0002-0000-0000-0000-000000000001'::UUID,
-    'demo0000-0000-0000-0000-000000000001',
+    'ec000002-0000-4000-a000-000000000001'::UUID,
+    'de000001-0000-4000-a000-000000000001',
     'St. Mary''s Matriculation School',
-    'private',
+    'cbse',
     'Church Street',
     'Demo City',
     'Tamil Nadu',
     '0422-2345678',
     'info@stmarysdemo.edu.in',
-    'hot',
+    'through_member',
     800,
-    'Sr. Maria Francis',
-    '9876543211',
-    5,
-    NOW() - INTERVAL '15 days',
-    'high'
+    'Sr. Maria Francis (Principal) - 9876543211',
+    '5 MASOOM sessions conducted. Last session: 15 days ago. High engagement.',
+    'active'
   ),
   (
-    'schl0003-0000-0000-0000-000000000001'::UUID,
-    'demo0000-0000-0000-0000-000000000001',
+    'ec000003-0000-4000-a000-000000000001'::UUID,
+    'de000001-0000-4000-a000-000000000001',
     'DAV Public School',
-    'private',
+    'cbse',
     'Industrial Area',
     'Demo City',
     'Tamil Nadu',
@@ -628,11 +586,9 @@ VALUES
     'principal@davdemo.edu.in',
     'cold',
     600,
-    'Mr. Suresh Babu',
-    '9876543212',
-    0,
-    NULL,
-    'low'
+    'Mr. Suresh Babu (Principal) - 9876543212',
+    'No MASOOM sessions yet. Low engagement - needs follow-up.',
+    'prospective'
   )
 ON CONFLICT (id) DO NOTHING;
 
@@ -653,17 +609,16 @@ INSERT INTO public.colleges (
   email,
   website,
   connection_type,
-  student_strength,
-  principal_name,
-  principal_phone,
-  yuva_programs_conducted,
-  last_program_date,
-  engagement_level
+  total_students,
+  decision_maker,
+  connection_notes,
+  has_yuva_chapter,
+  status
 )
 VALUES
   (
-    'clge0001-0000-0000-0000-000000000001'::UUID,
-    'demo0000-0000-0000-0000-000000000001',
+    'ed000001-0000-4000-a000-000000000001'::UUID,
+    'de000001-0000-4000-a000-000000000001',
     'Demo Engineering College',
     'engineering',
     'Anna University',
@@ -673,17 +628,16 @@ VALUES
     '0422-4567890',
     'principal@demoengcollege.edu.in',
     'www.demoengcollege.edu.in',
-    'hot',
+    'through_member',
     2500,
-    'Dr. Venkatesh',
-    '9876543220',
-    4,
-    NOW() - INTERVAL '20 days',
-    'high'
+    'Dr. Venkatesh (Principal) - 9876543220',
+    '4 Yuva programs conducted. Last program: 20 days ago. High engagement.',
+    TRUE,
+    'active'
   ),
   (
-    'clge0002-0000-0000-0000-000000000001'::UUID,
-    'demo0000-0000-0000-0000-000000000001',
+    'ed000002-0000-4000-a000-000000000001'::UUID,
+    'de000001-0000-4000-a000-000000000001',
     'Demo Arts & Science College',
     'arts_science',
     'Bharathiar University',
@@ -693,13 +647,12 @@ VALUES
     '0422-5678901',
     'info@demoarts.edu.in',
     'www.demoarts.edu.in',
-    'warm',
+    'direct',
     1800,
-    'Dr. Lakshmi Devi',
-    '9876543221',
-    2,
-    NOW() - INTERVAL '45 days',
-    'medium'
+    'Dr. Lakshmi Devi (Principal) - 9876543221',
+    '2 Yuva programs conducted. Last program: 45 days ago. Medium engagement.',
+    FALSE,
+    'active'
   )
 ON CONFLICT (id) DO NOTHING;
 

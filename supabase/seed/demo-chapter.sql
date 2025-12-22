@@ -28,7 +28,7 @@ INSERT INTO public.chapters (
   settings,
   created_at
 ) VALUES (
-  'demo0000-0000-0000-0000-000000000001'::UUID,
+  'de000001-0000-4000-a000-000000000001'::UUID,
   'Yi DemoChapter',
   'Demo City',
   'SRTN',
@@ -50,7 +50,7 @@ INSERT INTO public.chapters (
 DO $$
 DECLARE
   v_admin_id UUID;
-  v_chapter_id UUID := 'demo0000-0000-0000-0000-000000000001'::UUID;
+  v_chapter_id UUID := 'de000001-0000-4000-a000-000000000001'::UUID;
 BEGIN
   -- Try to find an existing admin
   SELECT ur.user_id INTO v_admin_id
@@ -90,20 +90,20 @@ END $$;
 
 INSERT INTO public.chapter_feature_toggles (chapter_id, feature, is_enabled, enabled_at)
 VALUES
-  ('demo0000-0000-0000-0000-000000000001', 'events', TRUE, NOW()),
-  ('demo0000-0000-0000-0000-000000000001', 'communications', TRUE, NOW()),
-  ('demo0000-0000-0000-0000-000000000001', 'stakeholder_crm', TRUE, NOW()),
-  ('demo0000-0000-0000-0000-000000000001', 'verticals', TRUE, NOW()),
-  ('demo0000-0000-0000-0000-000000000001', 'awards', TRUE, NOW()),
-  ('demo0000-0000-0000-0000-000000000001', 'analytics', TRUE, NOW()),
-  ('demo0000-0000-0000-0000-000000000001', 'finance', FALSE, NOW()),
-  ('demo0000-0000-0000-0000-000000000001', 'session_bookings', FALSE, NOW()),
-  ('demo0000-0000-0000-0000-000000000001', 'opportunities', FALSE, NOW()),
-  ('demo0000-0000-0000-0000-000000000001', 'knowledge_base', FALSE, NOW()),
-  ('demo0000-0000-0000-0000-000000000001', 'member_intelligence', FALSE, NOW()),
-  ('demo0000-0000-0000-0000-000000000001', 'succession_planning', FALSE, NOW()),
-  ('demo0000-0000-0000-0000-000000000001', 'sub_chapters', FALSE, NOW()),
-  ('demo0000-0000-0000-0000-000000000001', 'industrial_visits', FALSE, NOW())
+  ('de000001-0000-4000-a000-000000000001', 'events', TRUE, NOW()),
+  ('de000001-0000-4000-a000-000000000001', 'communications', TRUE, NOW()),
+  ('de000001-0000-4000-a000-000000000001', 'stakeholder_crm', TRUE, NOW()),
+  ('de000001-0000-4000-a000-000000000001', 'verticals', TRUE, NOW()),
+  ('de000001-0000-4000-a000-000000000001', 'awards', TRUE, NOW()),
+  ('de000001-0000-4000-a000-000000000001', 'analytics', TRUE, NOW()),
+  ('de000001-0000-4000-a000-000000000001', 'finance', FALSE, NOW()),
+  ('de000001-0000-4000-a000-000000000001', 'session_bookings', FALSE, NOW()),
+  ('de000001-0000-4000-a000-000000000001', 'opportunities', FALSE, NOW()),
+  ('de000001-0000-4000-a000-000000000001', 'knowledge_base', FALSE, NOW()),
+  ('de000001-0000-4000-a000-000000000001', 'member_intelligence', FALSE, NOW()),
+  ('de000001-0000-4000-a000-000000000001', 'succession_planning', FALSE, NOW()),
+  ('de000001-0000-4000-a000-000000000001', 'sub_chapters', FALSE, NOW()),
+  ('de000001-0000-4000-a000-000000000001', 'industrial_visits', FALSE, NOW())
 ON CONFLICT (chapter_id, feature) DO UPDATE SET
   is_enabled = EXCLUDED.is_enabled;
 
@@ -114,8 +114,8 @@ ON CONFLICT (chapter_id, feature) DO UPDATE SET
 INSERT INTO public.verticals (id, chapter_id, name, slug, description, color, icon, is_active, display_order)
 VALUES
   (
-    'vert0001-0000-0000-0000-000000000001'::UUID,
-    'demo0000-0000-0000-0000-000000000001',
+    'ee000001-0000-4000-a000-000000000001'::UUID,
+    'de000001-0000-4000-a000-000000000001',
     'MASOOM',
     'masoom',
     'Making Schools Safe, Oriented and Motivated - Child safety awareness program',
@@ -125,8 +125,8 @@ VALUES
     1
   ),
   (
-    'vert0002-0000-0000-0000-000000000001'::UUID,
-    'demo0000-0000-0000-0000-000000000001',
+    'ee000002-0000-4000-a000-000000000001'::UUID,
+    'de000001-0000-4000-a000-000000000001',
     'Yuva',
     'yuva',
     'Youth empowerment and skill development for college students',
@@ -136,8 +136,8 @@ VALUES
     2
   ),
   (
-    'vert0003-0000-0000-0000-000000000001'::UUID,
-    'demo0000-0000-0000-0000-000000000001',
+    'ee000003-0000-4000-a000-000000000001'::UUID,
+    'de000001-0000-4000-a000-000000000001',
     'Climate Action',
     'climate',
     'Environmental sustainability and climate awareness initiatives',
@@ -147,8 +147,8 @@ VALUES
     3
   ),
   (
-    'vert0004-0000-0000-0000-000000000001'::UUID,
-    'demo0000-0000-0000-0000-000000000001',
+    'ee000004-0000-4000-a000-000000000001'::UUID,
+    'de000001-0000-4000-a000-000000000001',
     'Road Safety',
     'road-safety',
     'Road safety awareness and accident prevention campaigns',
@@ -182,8 +182,8 @@ INSERT INTO public.events (
 VALUES
   -- Past Events
   (
-    'evnt0001-0000-0000-0000-000000000001'::UUID,
-    'demo0000-0000-0000-0000-000000000001',
+    'ef000001-0000-4000-a000-000000000001'::UUID,
+    'de000001-0000-4000-a000-000000000001',
     'MASOOM School Awareness Session',
     'Child safety awareness session conducted at local government school. 250 students participated.',
     'masoom',
@@ -198,8 +198,8 @@ VALUES
     FALSE
   ),
   (
-    'evnt0002-0000-0000-0000-000000000001'::UUID,
-    'demo0000-0000-0000-0000-000000000001',
+    'ef000002-0000-4000-a000-000000000001'::UUID,
+    'de000001-0000-4000-a000-000000000001',
     'Yuva Career Guidance Workshop',
     'Career counseling session for final year engineering students. Featured industry experts from IT and Manufacturing.',
     'yuva',
@@ -214,8 +214,8 @@ VALUES
     TRUE
   ),
   (
-    'evnt0003-0000-0000-0000-000000000001'::UUID,
-    'demo0000-0000-0000-0000-000000000001',
+    'ef000003-0000-4000-a000-000000000001'::UUID,
+    'de000001-0000-4000-a000-000000000001',
     'Tree Plantation Drive',
     'Planted 500 saplings in the city outskirts with local community participation.',
     'climate_action',
@@ -231,8 +231,8 @@ VALUES
   ),
   -- Upcoming Events
   (
-    'evnt0004-0000-0000-0000-000000000001'::UUID,
-    'demo0000-0000-0000-0000-000000000001',
+    'ef000004-0000-4000-a000-000000000001'::UUID,
+    'de000001-0000-4000-a000-000000000001',
     'Monthly Chapter Meeting',
     'Regular monthly meeting to discuss upcoming initiatives and review progress.',
     'chapter_meeting',
@@ -247,8 +247,8 @@ VALUES
     TRUE
   ),
   (
-    'evnt0005-0000-0000-0000-000000000001'::UUID,
-    'demo0000-0000-0000-0000-000000000001',
+    'ef000005-0000-4000-a000-000000000001'::UUID,
+    'de000001-0000-4000-a000-000000000001',
     'Road Safety Helmet Awareness Rally',
     'Motorcycle rally to spread awareness about helmet safety. Expected 200+ participants.',
     'road_safety',
@@ -263,8 +263,8 @@ VALUES
     TRUE
   ),
   (
-    'evnt0006-0000-0000-0000-000000000001'::UUID,
-    'demo0000-0000-0000-0000-000000000001',
+    'ef000006-0000-4000-a000-000000000001'::UUID,
+    'de000001-0000-4000-a000-000000000001',
     'Yi Connect Platform Training',
     'Training session for chapter members on using the Yi Connect platform effectively.',
     'workshop',
@@ -279,8 +279,8 @@ VALUES
     TRUE
   ),
   (
-    'evnt0007-0000-0000-0000-000000000001'::UUID,
-    'demo0000-0000-0000-0000-000000000001',
+    'ef000007-0000-4000-a000-000000000001'::UUID,
+    'de000001-0000-4000-a000-000000000001',
     'Yuva Entrepreneurship Bootcamp',
     'Two-day intensive bootcamp for aspiring young entrepreneurs. Featuring startup mentors.',
     'yuva',
@@ -295,8 +295,8 @@ VALUES
     TRUE
   ),
   (
-    'evnt0008-0000-0000-0000-000000000001'::UUID,
-    'demo0000-0000-0000-0000-000000000001',
+    'ef000008-0000-4000-a000-000000000001'::UUID,
+    'de000001-0000-4000-a000-000000000001',
     'Regional Chapter Conclave',
     'Annual gathering of all SRTN region chapters. Networking and best practices sharing.',
     'conclave',
@@ -336,8 +336,8 @@ INSERT INTO public.schools (
 )
 VALUES
   (
-    'schl0001-0000-0000-0000-000000000001'::UUID,
-    'demo0000-0000-0000-0000-000000000001',
+    'ec000001-0000-4000-a000-000000000001'::UUID,
+    'de000001-0000-4000-a000-000000000001',
     'Government Higher Secondary School',
     'government',
     'Main Road, Near Bus Stand',
@@ -354,8 +354,8 @@ VALUES
     'high'
   ),
   (
-    'schl0002-0000-0000-0000-000000000001'::UUID,
-    'demo0000-0000-0000-0000-000000000001',
+    'ec000002-0000-4000-a000-000000000001'::UUID,
+    'de000001-0000-4000-a000-000000000001',
     'St. Mary''s Matriculation School',
     'private',
     'Church Street',
@@ -372,8 +372,8 @@ VALUES
     'high'
   ),
   (
-    'schl0003-0000-0000-0000-000000000001'::UUID,
-    'demo0000-0000-0000-0000-000000000001',
+    'ec000003-0000-4000-a000-000000000001'::UUID,
+    'de000001-0000-4000-a000-000000000001',
     'DAV Public School',
     'private',
     'Industrial Area',
@@ -417,8 +417,8 @@ INSERT INTO public.colleges (
 )
 VALUES
   (
-    'clge0001-0000-0000-0000-000000000001'::UUID,
-    'demo0000-0000-0000-0000-000000000001',
+    'ed000001-0000-4000-a000-000000000001'::UUID,
+    'de000001-0000-4000-a000-000000000001',
     'Demo Engineering College',
     'engineering',
     'Anna University',
@@ -437,8 +437,8 @@ VALUES
     'high'
   ),
   (
-    'clge0002-0000-0000-0000-000000000001'::UUID,
-    'demo0000-0000-0000-0000-000000000001',
+    'ed000002-0000-4000-a000-000000000001'::UUID,
+    'de000001-0000-4000-a000-000000000001',
     'Demo Arts & Science College',
     'arts_science',
     'Bharathiar University',
@@ -464,7 +464,7 @@ ON CONFLICT (id) DO NOTHING;
 
 UPDATE public.chapters
 SET member_count = 12
-WHERE id = 'demo0000-0000-0000-0000-000000000001';
+WHERE id = 'de000001-0000-4000-a000-000000000001';
 
 -- ============================================================================
 -- VERIFICATION QUERIES
@@ -472,19 +472,19 @@ WHERE id = 'demo0000-0000-0000-0000-000000000001';
 
 -- Uncomment these to verify the seed data:
 
--- SELECT 'Chapters' as table_name, COUNT(*) as count FROM chapters WHERE id = 'demo0000-0000-0000-0000-000000000001'
+-- SELECT 'Chapters' as table_name, COUNT(*) as count FROM chapters WHERE id = 'de000001-0000-4000-a000-000000000001'
 -- UNION ALL
 -- SELECT 'Approved Emails', COUNT(*) FROM approved_emails WHERE email LIKE 'demo-%@yi-demo.com'
 -- UNION ALL
--- SELECT 'Feature Toggles', COUNT(*) FROM chapter_feature_toggles WHERE chapter_id = 'demo0000-0000-0000-0000-000000000001'
+-- SELECT 'Feature Toggles', COUNT(*) FROM chapter_feature_toggles WHERE chapter_id = 'de000001-0000-4000-a000-000000000001'
 -- UNION ALL
--- SELECT 'Verticals', COUNT(*) FROM verticals WHERE chapter_id = 'demo0000-0000-0000-0000-000000000001'
+-- SELECT 'Verticals', COUNT(*) FROM verticals WHERE chapter_id = 'de000001-0000-4000-a000-000000000001'
 -- UNION ALL
--- SELECT 'Events', COUNT(*) FROM events WHERE chapter_id = 'demo0000-0000-0000-0000-000000000001'
+-- SELECT 'Events', COUNT(*) FROM events WHERE chapter_id = 'de000001-0000-4000-a000-000000000001'
 -- UNION ALL
--- SELECT 'Schools', COUNT(*) FROM schools WHERE chapter_id = 'demo0000-0000-0000-0000-000000000001'
+-- SELECT 'Schools', COUNT(*) FROM schools WHERE chapter_id = 'de000001-0000-4000-a000-000000000001'
 -- UNION ALL
--- SELECT 'Colleges', COUNT(*) FROM colleges WHERE chapter_id = 'demo0000-0000-0000-0000-000000000001';
+-- SELECT 'Colleges', COUNT(*) FROM colleges WHERE chapter_id = 'de000001-0000-4000-a000-000000000001';
 
 RAISE NOTICE 'Demo chapter seed completed successfully!';
 RAISE NOTICE 'Demo accounts ready for magic link login:';

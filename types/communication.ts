@@ -141,7 +141,7 @@ export type DbCommunicationAnalytics = {
 // ENUMS AND CONSTANTS
 // ============================================================================
 
-export const ANNOUNCEMENT_CHANNELS = ['email', 'whatsapp', 'in_app'] as const;
+export const ANNOUNCEMENT_CHANNELS = ['whatsapp', 'email', 'in_app'] as const;
 export type AnnouncementChannel = typeof ANNOUNCEMENT_CHANNELS[number];
 
 export const ANNOUNCEMENT_STATUSES = [

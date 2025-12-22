@@ -28,18 +28,18 @@ export function ChannelSelector({
     color: string;
   }> = [
     {
-      id: "email",
-      label: "Email",
-      description: "Send via email to member addresses",
-      icon: Mail,
-      color: "text-purple-600 dark:text-purple-400"
-    },
-    {
       id: "whatsapp",
       label: "WhatsApp",
       description: "Send via WhatsApp Business API",
       icon: MessageCircle,
       color: "text-green-600 dark:text-green-400"
+    },
+    {
+      id: "email",
+      label: "Email",
+      description: "Send via email to member addresses",
+      icon: Mail,
+      color: "text-purple-600 dark:text-purple-400"
     },
     {
       id: "in_app",

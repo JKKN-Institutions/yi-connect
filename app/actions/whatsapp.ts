@@ -5,16 +5,13 @@
  *
  * Automatically uses Railway API service in production (Vercel)
  * Falls back to local client in development.
+ *
+ * IMPORTANT: Local client imports are DYNAMIC to avoid loading
+ * whatsapp-web.js at module load time (fails on Vercel serverless).
  */
 
-// Local client imports (for development)
+// Format functions - SAFE: no whatsapp-web.js dependency
 import {
-  initializeWhatsApp as initializeLocal,
-  disconnectWhatsApp as disconnectLocal,
-  getConnectionStatus as getLocalStatus,
-  sendTextMessage as sendLocalMessage,
-  sendBulkMessages as sendLocalBulk,
-  sendGroupMessage as sendLocalGroup,
   formatEventCreated,
   formatRsvpConfirmation,
   formatEventReminder3Days,
@@ -24,12 +21,10 @@ import {
   formatPostEventThankYou,
   formatAnnouncement,
   type EventDetails,
-  type MemberDetails,
-  type SendMessageResult,
-  type BulkSendResult
-} from '@/lib/whatsapp';
+  type MemberDetails
+} from '@/lib/whatsapp/format-message';
 
-// API client imports (for production)
+// API client imports (for production) - SAFE: no whatsapp-web.js dependency
 import {
   isServiceConfigured,
   connectWhatsAppAPI,
@@ -39,6 +34,47 @@ import {
   sendBulkMessagesAPI,
   sendGroupMessageAPI
 } from '@/lib/whatsapp/api-client';
+
+// Types defined locally to avoid importing from send-message.ts
+// (which imports from client.ts, triggering whatsapp-web.js load)
+export interface SendMessageResult {
+  success: boolean;
+  messageId?: string;
+  error?: string;
+}
+
+export interface BulkSendResult {
+  total: number;
+  sent: number;
+  failed: number;
+  results: Array<{
+    phoneNumber: string;
+    success: boolean;
+    messageId?: string;
+    error?: string;
+  }>;
+}
+
+// Dynamic import helper for local client (only loads when needed in dev)
+async function getLocalClient() {
+  const {
+    initializeWhatsApp,
+    disconnectWhatsApp,
+    getConnectionStatus,
+    sendTextMessage,
+    sendBulkMessages,
+    sendGroupMessage
+  } = await import('@/lib/whatsapp');
+
+  return {
+    initializeWhatsApp,
+    disconnectWhatsApp,
+    getConnectionStatus,
+    sendTextMessage,
+    sendBulkMessages,
+    sendGroupMessage
+  };
+}
 
 // ============================================================
 // Helper: Determine which backend to use
@@ -65,7 +101,8 @@ export async function connectWhatsApp(): Promise<{
       return result;
     } else {
       console.log('[WhatsApp] Using local client');
-      const result = await initializeLocal();
+      const { initializeWhatsApp } = await getLocalClient();
+      const result = await initializeWhatsApp();
       return result;
     }
   } catch (error) {
@@ -79,7 +116,8 @@ export async function disconnectWhatsAppAction(): Promise<{ success: boolean }> 
     if (useApiClient()) {
       await disconnectWhatsAppAPI();
     } else {
-      await disconnectLocal();
+      const { disconnectWhatsApp } = await getLocalClient();
+      await disconnectWhatsApp();
     }
     return { success: true };
   } catch (error) {
@@ -97,7 +135,8 @@ export async function getWhatsAppStatus(): Promise<{
   if (useApiClient()) {
     return getWhatsAppStatusAPI();
   }
-  return getLocalStatus();
+  const { getConnectionStatus } = await getLocalClient();
+  return getConnectionStatus();
 }
 
 // ============================================================
@@ -111,7 +150,8 @@ export async function sendWhatsAppMessage(
   if (useApiClient()) {
     return sendMessageAPI(phoneNumber, message);
   }
-  return sendLocalMessage(phoneNumber, message);
+  const { sendTextMessage } = await getLocalClient();
+  return sendTextMessage(phoneNumber, message);
 }
 
 export async function sendBulkWhatsAppMessages(
@@ -121,7 +161,8 @@ export async function sendBulkWhatsAppMessages(
   if (useApiClient()) {
     return sendBulkMessagesAPI(recipients, delayMs);
   }
-  return sendLocalBulk(recipients, delayMs);
+  const { sendBulkMessages } = await getLocalClient();
+  return sendBulkMessages(recipients, delayMs);
 }
 
 export async function sendWhatsAppGroupMessage(
@@ -131,7 +172,8 @@ export async function sendWhatsAppGroupMessage(
   if (useApiClient()) {
     return sendGroupMessageAPI(groupId, message);
   }
-  return sendLocalGroup(groupId, message);
+  const { sendGroupMessage } = await getLocalClient();
+  return sendGroupMessage(groupId, message);
 }
 
 // ============================================================

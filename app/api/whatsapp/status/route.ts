@@ -49,26 +49,13 @@ async function getLocalClient() {
 }
 
 export async function GET() {
-  // Debug logging to diagnose serverless detection
-  const debugInfo = {
-    NODE_ENV: process.env.NODE_ENV,
-    VERCEL: process.env.VERCEL,
-    VERCEL_ENV: process.env.VERCEL_ENV,
-    hasServiceUrl: !!process.env.WHATSAPP_SERVICE_URL,
-    hasApiKey: !!process.env.WHATSAPP_API_KEY,
-    isServerlessResult: isServerless(),
-    useApiClientResult: useApiClient()
-  };
-  console.log('[WhatsApp Status] Debug:', JSON.stringify(debugInfo));
-
   try {
     if (useApiClient()) {
       // Production: Use Railway service
       const status = await getWhatsAppStatusAPI();
       return NextResponse.json({
         success: true,
-        ...status,
-        _debug: { ...debugInfo, branch: 'useApiClient' }
+        ...status
       });
     } else if (isServerless()) {
       // Serverless without API configured - can't run local client
@@ -78,8 +65,7 @@ export async function GET() {
         qrCode: null,
         error: 'WhatsApp service not configured. Please set up the Railway WhatsApp service.',
         isReady: false,
-        setupRequired: true,
-        _debug: { ...debugInfo, branch: 'isServerless' }
+        setupRequired: true
       });
     } else if (process.env.NODE_ENV === 'development') {
       // Development: Use local client
@@ -87,8 +73,7 @@ export async function GET() {
       const status = getConnectionStatus();
       return NextResponse.json({
         success: true,
-        ...status,
-        _debug: { ...debugInfo, branch: 'development' }
+        ...status
       });
     } else {
       // Production without Railway service - return setup required
@@ -98,8 +83,7 @@ export async function GET() {
         qrCode: null,
         error: 'WhatsApp service not configured. Please set up the Railway WhatsApp service.',
         isReady: false,
-        setupRequired: true,
-        _debug: { ...debugInfo, branch: 'fallback' }
+        setupRequired: true
       });
     }
   } catch (error) {

@@ -80,6 +80,13 @@ async function getLocalClient() {
 // Helper: Determine which backend to use
 // ============================================================
 
+/**
+ * Check if we're running on Vercel (serverless environment)
+ */
+function isServerless(): boolean {
+  return !!(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
+}
+
 function useApiClient(): boolean {
   return isServiceConfigured();
 }
@@ -99,6 +106,14 @@ export async function connectWhatsApp(): Promise<{
       console.log('[WhatsApp] Using Railway API service');
       const result = await connectWhatsAppAPI();
       return result;
+    } else if (isServerless()) {
+      // Serverless without Railway service configured
+      console.log('[WhatsApp] Serverless without service configured');
+      return {
+        success: false,
+        status: 'not_configured',
+        error: 'WhatsApp service not configured. Please set up the Railway WhatsApp service.'
+      };
     } else {
       console.log('[WhatsApp] Using local client');
       const { initializeWhatsApp } = await getLocalClient();
@@ -115,6 +130,9 @@ export async function disconnectWhatsAppAction(): Promise<{ success: boolean }> 
   try {
     if (useApiClient()) {
       await disconnectWhatsAppAPI();
+    } else if (isServerless()) {
+      // Nothing to disconnect on serverless without service
+      return { success: true };
     } else {
       const { disconnectWhatsApp } = await getLocalClient();
       await disconnectWhatsApp();
@@ -134,6 +152,14 @@ export async function getWhatsAppStatus(): Promise<{
 }> {
   if (useApiClient()) {
     return getWhatsAppStatusAPI();
+  } else if (isServerless()) {
+    // Serverless without Railway service - return helpful error
+    return {
+      status: 'not_configured',
+      qrCode: null,
+      error: 'WhatsApp service not configured. Please set up the Railway WhatsApp service.',
+      isReady: false
+    };
   }
   const { getConnectionStatus } = await getLocalClient();
   return getConnectionStatus();
@@ -149,6 +175,8 @@ export async function sendWhatsAppMessage(
 ): Promise<SendMessageResult> {
   if (useApiClient()) {
     return sendMessageAPI(phoneNumber, message);
+  } else if (isServerless()) {
+    return { success: false, error: 'WhatsApp service not configured' };
   }
   const { sendTextMessage } = await getLocalClient();
   return sendTextMessage(phoneNumber, message);
@@ -160,6 +188,8 @@ export async function sendBulkWhatsAppMessages(
 ): Promise<BulkSendResult> {
   if (useApiClient()) {
     return sendBulkMessagesAPI(recipients, delayMs);
+  } else if (isServerless()) {
+    return { total: recipients.length, sent: 0, failed: recipients.length, results: [] };
   }
   const { sendBulkMessages } = await getLocalClient();
   return sendBulkMessages(recipients, delayMs);
@@ -171,6 +201,8 @@ export async function sendWhatsAppGroupMessage(
 ): Promise<SendMessageResult> {
   if (useApiClient()) {
     return sendGroupMessageAPI(groupId, message);
+  } else if (isServerless()) {
+    return { success: false, error: 'WhatsApp service not configured' };
   }
   const { sendGroupMessage } = await getLocalClient();
   return sendGroupMessage(groupId, message);

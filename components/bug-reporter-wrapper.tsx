@@ -14,9 +14,13 @@
  *
  * Note: User profile is fetched on the server and passed as a prop
  * to avoid client-side authentication hanging issues.
+ *
+ * Mobile positioning: Bug reporter button is moved up on mobile to avoid
+ * conflict with bottom navbar (80px from bottom on mobile, 16px on desktop).
  */
 
 import { BugReporterProvider } from '@boobalan_jkkn/bug-reporter-sdk'
+import { useEffect } from 'react'
 
 interface UserProfile {
   id: string
@@ -51,6 +55,34 @@ export function BugReporterWrapper({ children, userProfile }: BugReporterWrapper
     userId: userProfile.id,
     name: userProfile.full_name || userProfile.email?.split('@')[0] || 'Unknown User'
   })
+
+  // Adjust bug reporter button position on mobile to avoid bottom navbar conflict
+  useEffect(() => {
+    const adjustBugReporterPosition = () => {
+      const bugButton = document.querySelector('[data-bug-reporter-button]') as HTMLElement;
+      if (bugButton) {
+        // On mobile (< 1024px), move button up to avoid bottom navbar
+        if (window.innerWidth < 1024) {
+          bugButton.style.bottom = '80px'; // Above bottom navbar
+          bugButton.style.zIndex = '70'; // Below navbar (z-80) and backdrop (z-75)
+        } else {
+          bugButton.style.bottom = '16px'; // Default desktop position
+          bugButton.style.zIndex = '50'; // Default z-index
+        }
+      }
+    };
+
+    // Initial adjustment
+    const timer = setTimeout(adjustBugReporterPosition, 100);
+
+    // Re-adjust on window resize
+    window.addEventListener('resize', adjustBugReporterPosition);
+
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', adjustBugReporterPosition);
+    };
+  }, []);
 
   return (
     <BugReporterProvider

@@ -13,6 +13,7 @@ import { DashboardHeader } from '@/components/layouts/dashboard-header'
 import { DashboardSidebar } from '@/components/layouts/dashboard-sidebar'
 import { BugReporterWrapper } from '@/components/bug-reporter-wrapper'
 import { AdminChapterProvider } from '@/contexts/admin-chapter-context'
+import { AdminBottomNavbarWrapper } from '@/components/layouts/admin-bottom-navbar-wrapper'
 import { getCurrentUser } from '@/lib/auth'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 
@@ -73,6 +74,18 @@ export default async function DashboardLayout({
   // Fetch user profile for bug reporter on the server
   const userProfile = await getUserProfileForBugReporter()
 
+  // Fetch user roles for admin bottom navbar
+  const user = await getCurrentUser()
+  let userRoles: string[] = []
+
+  if (user) {
+    const supabase = await createServerSupabaseClient()
+    const { data: userRolesData } = await supabase.rpc('get_user_roles', {
+      p_user_id: user.id
+    })
+    userRoles = userRolesData?.map((ur: { role_name: string }) => ur.role_name) || []
+  }
+
   return (
     <BugReporterWrapper userProfile={userProfile}>
       <AdminChapterProvider>
@@ -90,11 +103,14 @@ export default async function DashboardLayout({
             </Suspense>
 
             {/* Page Content */}
-            <main className="flex-1 p-6 bg-muted/10 overflow-x-hidden overflow-y-auto min-w-0">
+            <main className="flex-1 p-6 bg-muted/10 overflow-x-hidden overflow-y-auto min-w-0 pb-20 lg:pb-6">
               {children}
             </main>
           </div>
         </div>
+
+        {/* Admin Bottom Navbar for Mobile */}
+        <AdminBottomNavbarWrapper userRoles={userRoles} />
       </AdminChapterProvider>
     </BugReporterWrapper>
   )

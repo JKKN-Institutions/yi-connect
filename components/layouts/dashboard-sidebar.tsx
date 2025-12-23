@@ -843,8 +843,8 @@ export function DashboardSidebar({ userRoles }: DashboardSidebarProps) {
 
   return (
     <>
-      {/* Mobile Menu Button */}
-      <div className='lg:hidden fixed top-0 left-0 right-0 z-50 bg-background border-b px-4 py-3 flex items-center justify-between'>
+      {/* Mobile Menu Button - Hidden because bottom navbar is used on mobile */}
+      <div className='hidden lg:hidden fixed top-0 left-0 right-0 z-50 bg-background border-b px-4 py-3 items-center justify-between'>
         <Link href='/dashboard' className='flex items-center gap-2'>
           <div className='h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center'>
             <span className='text-lg font-bold text-primary'>Yi</span>

@@ -49,6 +49,7 @@
     "cmdk": "^1.1.1",
     "date-fns": "^4.1.0",
     "embla-carousel-react": "^8.6.0",
+    "framer-motion": "^12.23.26",
     "html2canvas-pro": "^1.5.13",
     "html5-qrcode": "^2.3.8",
     "idb": "^8.0.3",
@@ -72,7 +73,8 @@
     "web-push": "^3.6.7",
     "whatsapp-web.js": "^1.26.1-alpha.3",
     "xlsx": "^0.18.5",
-    "zod": "^4.1.12"
+    "zod": "^4.1.12",
+    "zustand": "^5.0.9"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

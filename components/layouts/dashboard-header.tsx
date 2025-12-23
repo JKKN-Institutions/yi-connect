@@ -49,15 +49,25 @@ async function NotificationBellWrapper() {
 export function DashboardHeader() {
   return (
     <header className="sticky top-0 z-30 bg-background border-b">
-      <div className="flex items-center justify-between px-6 py-4">
-        {/* Left side - Chapter Switcher for National Admin */}
-        <div className="hidden lg:block">
-          <ChapterSwitcher />
+      <div className="flex items-center justify-between px-4 lg:px-6 py-3 lg:py-4">
+        {/* Left side - Brand on mobile, Chapter Switcher on desktop */}
+        <div className="flex items-center gap-2">
+          {/* Mobile Brand */}
+          <div className="lg:hidden flex items-center gap-2">
+            <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+              <span className="text-lg font-bold text-primary">Yi</span>
+            </div>
+            <span className="text-base font-bold">Yi Connect</span>
+          </div>
+
+          {/* Desktop Chapter Switcher */}
+          <div className="hidden lg:block">
+            <ChapterSwitcher />
+          </div>
         </div>
-        <div className="lg:hidden" />
 
         {/* Right side - Notifications and User Menu */}
-        <div className="ml-auto flex items-center gap-4">
+        <div className="flex items-center gap-2 lg:gap-4">
           {/* Notifications with Suspense */}
           <Suspense fallback={
             <Button variant="ghost" size="icon" className="relative">

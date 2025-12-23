@@ -152,3 +152,17 @@
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
+
+/* Bug Reporter Mobile Positioning - Move above bottom navbar on mobile */
+@media (max-width: 1023px) {
+  /* Target bug reporter button by common class patterns */
+  [class*="bug-reporter"],
+  [class*="BugReporter"],
+  [data-bug-reporter-button],
+  #bug-reporter-button,
+  button[aria-label*="bug" i],
+  button[aria-label*="report" i] {
+    bottom: 80px !important; /* Above bottom navbar */
+    z-index: 70 !important; /* Below navbar (z-80) and backdrop (z-75) */
+  }
+}

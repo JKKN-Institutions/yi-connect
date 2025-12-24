@@ -269,12 +269,24 @@ export function IndustryAttendeesTable({ slotId, attendees, slots }: IndustryAtt
 
       if (result.success && result.data) {
         // Create and download file
-        const blob = new Blob([result.data.data], {
-          type:
-            format === 'json'
-              ? 'application/json'
-              : 'text/csv',
-        });
+        let blob: Blob;
+
+        if (format === 'xlsx') {
+          // XLSX is returned as base64, need to decode it
+          const binaryStr = atob(result.data.data);
+          const bytes = new Uint8Array(binaryStr.length);
+          for (let i = 0; i < binaryStr.length; i++) {
+            bytes[i] = binaryStr.charCodeAt(i);
+          }
+          blob = new Blob([bytes], {
+            type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          });
+        } else {
+          blob = new Blob([result.data.data], {
+            type: format === 'json' ? 'application/json' : 'text/csv',
+          });
+        }
+
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;

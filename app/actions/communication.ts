@@ -14,6 +14,8 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentUser, getCurrentChapterId } from '@/lib/auth';
 import { sendAnnouncementPush } from '@/lib/push-notification';
+import { sendEmail, sendBatchEmails } from '@/lib/email';
+import { announcementEmail } from '@/lib/email/templates';
 import {
   createAnnouncementSchema,
   updateAnnouncementSchema,
@@ -57,6 +59,162 @@ type ActionResponse<T = any> = {
   data?: T;
   error?: string;
 };
+
+// ============================================================================
+// AUDIENCE FILTERING HELPER
+// ============================================================================
+
+/**
+ * Get member IDs that match the given audience filter
+ */
+async function getFilteredMemberIds(
+  supabase: any,
+  chapterId: string,
+  audienceFilter?: AudienceFilter | null,
+  segmentId?: string | null
+): Promise<string[]> {
+  // If segment is provided, fetch its filter rules
+  let filter = audienceFilter;
+  if (segmentId && !filter) {
+    const { data: segment } = await supabase
+      .from('communication_segments')
+      .select('filter_rules')
+      .eq('id', segmentId)
+      .single();
+    filter = segment?.filter_rules as AudienceFilter | undefined;
+  }
+
+  // Start with base query for active members in chapter
+  let query = supabase
+    .from('members')
+    .select(`
+      id,
+      is_active,
+      membership_type,
+      city,
+      state,
+      joined_at,
+      engagement_score,
+      leadership_readiness_score,
+      profile:profiles!members_id_fkey(email),
+      roles:user_roles(role:roles(name)),
+      skills:member_skills(skill_id),
+      verticals:vertical_members(vertical_id)
+    `)
+    .eq('chapter_id', chapterId);
+
+  // If no filter, return all active members
+  if (!filter) {
+    query = query.eq('is_active', true);
+    const { data: members } = await query;
+    return members?.map((m: any) => m.id) || [];
+  }
+
+  // Apply member status filter
+  if (filter.member_status && filter.member_status.length > 0) {
+    const isActiveStatuses = filter.member_status.map(s => s === 'active');
+    if (isActiveStatuses.includes(true) && !isActiveStatuses.includes(false)) {
+      query = query.eq('is_active', true);
+    } else if (!isActiveStatuses.includes(true) && isActiveStatuses.includes(false)) {
+      query = query.eq('is_active', false);
+    }
+    // If both active and inactive, no filter needed
+  } else {
+    // Default to active members only
+    query = query.eq('is_active', true);
+  }
+
+  // Apply membership type filter
+  if (filter.membership_type && filter.membership_type.length > 0) {
+    query = query.in('membership_type', filter.membership_type);
+  }
+
+  // Apply engagement score filter
+  if (filter.engagement) {
+    if (filter.engagement.min !== undefined) {
+      query = query.gte('engagement_score', filter.engagement.min);
+    }
+    if (filter.engagement.max !== undefined) {
+      query = query.lte('engagement_score', filter.engagement.max);
+    }
+  }
+
+  // Apply leadership readiness filter
+  if (filter.leadership_readiness) {
+    if (filter.leadership_readiness.min !== undefined) {
+      query = query.gte('leadership_readiness_score', filter.leadership_readiness.min);
+    }
+    if (filter.leadership_readiness.max !== undefined) {
+      query = query.lte('leadership_readiness_score', filter.leadership_readiness.max);
+    }
+  }
+
+  // Apply location filters
+  if (filter.cities && filter.cities.length > 0) {
+    query = query.in('city', filter.cities);
+  }
+  if (filter.states && filter.states.length > 0) {
+    query = query.in('state', filter.states);
+  }
+
+  // Apply join date filters
+  if (filter.joined_after) {
+    query = query.gte('joined_at', filter.joined_after);
+  }
+  if (filter.joined_before) {
+    query = query.lte('joined_at', filter.joined_before);
+  }
+
+  // Fetch all matching members
+  const { data: members, error } = await query;
+
+  if (error || !members) {
+    console.error('Error fetching filtered members:', error);
+    return [];
+  }
+
+  // Apply client-side filters for complex conditions
+  let filteredMembers = members;
+
+  // Filter by roles
+  if (filter.roles && filter.roles.length > 0) {
+    filteredMembers = filteredMembers.filter((m: any) => {
+      const memberRoles = m.roles?.map((r: any) => r.role?.name) || [];
+      return filter.roles!.some(role => memberRoles.includes(role));
+    });
+  }
+
+  // Filter by skills
+  if (filter.has_skills && filter.has_skills.length > 0) {
+    filteredMembers = filteredMembers.filter((m: any) => {
+      const memberSkills = m.skills?.map((s: any) => s.skill_id) || [];
+      return filter.has_skills!.some(skillId => memberSkills.includes(skillId));
+    });
+  }
+
+  // Filter by vertical interests
+  if (filter.vertical_interests && filter.vertical_interests.length > 0) {
+    filteredMembers = filteredMembers.filter((m: any) => {
+      const memberVerticals = m.verticals?.map((v: any) => v.vertical_id) || [];
+      return filter.vertical_interests!.some(vid => memberVerticals.includes(vid));
+    });
+  }
+
+  // Apply explicit includes/excludes
+  let memberIds = filteredMembers.map((m: any) => m.id);
+
+  if (filter.include_members && filter.include_members.length > 0) {
+    // Add included members that aren't already in the list
+    const additionalIds = filter.include_members.filter((id: string) => !memberIds.includes(id));
+    memberIds = [...memberIds, ...additionalIds];
+  }
+
+  if (filter.exclude_members && filter.exclude_members.length > 0) {
+    memberIds = memberIds.filter((id: string) => !filter.exclude_members!.includes(id));
+  }
+
+  return memberIds;
+}
 
 // ============================================================================
 // ANNOUNCEMENT ACTIONS
@@ -232,23 +390,22 @@ export async function sendAnnouncement(id: string): Promise<ActionResponse> {
       return { success: false, message: 'Failed to send announcement', error: updateError.message };
     }
 
-    // TODO: Create recipients based on audience_filter or segment
-    // TODO: Queue messages for actual sending (Email, WhatsApp, In-App)
-    // For MVP, just create in-app notifications
+    // Get filtered member IDs based on audience_filter or segment
+    const memberIds = await getFilteredMemberIds(
+      supabase,
+      announcement.chapter_id,
+      announcement.audience_filter,
+      announcement.segment_id
+    );
 
-    // Get target members (simplified - get all active members for MVP)
-    const { data: members } = await supabase
-      .from('members')
-      .select('id')
-      .eq('chapter_id', announcement.chapter_id)
-      .eq('is_active', true);
+    console.log(`[Communication] Sending to ${memberIds.length} filtered members`);
 
     // Create announcement_recipients records
-    if (members && members.length > 0) {
-      const recipients = members.flatMap(member =>
+    if (memberIds.length > 0) {
+      const recipients = memberIds.flatMap(memberId =>
         announcement.channels.map((channel: string) => ({
           announcement_id: id,
-          member_id: member.id,
+          member_id: memberId,
           channel,
           status: 'queued',
         }))
@@ -258,8 +415,8 @@ export async function sendAnnouncement(id: string): Promise<ActionResponse> {
 
       // If in_app channel is included, create notifications
       if (announcement.channels.includes('in_app')) {
-        const notifications = members.map(member => ({
-          member_id: member.id,
+        const notifications = memberIds.map(memberId => ({
+          member_id: memberId,
           title: announcement.title,
           message: announcement.content.substring(0, 200),
           category: 'announcements',
@@ -267,6 +424,60 @@ export async function sendAnnouncement(id: string): Promise<ActionResponse> {
         }));
 
         await supabase.from('in_app_notifications').insert(notifications);
+      }
+
+      // Send email notifications
+      if (announcement.channels.includes('email')) {
+        try {
+          // Fetch member emails
+          const { data: members } = await supabase
+            .from('members')
+            .select('id, profile:profiles!members_id_fkey(full_name, email)')
+            .in('id', memberIds);
+
+          // Get chapter name
+          const { data: chapter } = await supabase
+            .from('chapters')
+            .select('name')
+            .eq('id', announcement.chapter_id)
+            .single();
+
+          const chapterName = chapter?.name || 'Yi Chapter';
+          const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://yi-connect-app.vercel.app';
+
+          if (members && members.length > 0) {
+            const emailMessages = members
+              .filter((m: any) => m.profile?.email)
+              .map((member: any) => {
+                const template = announcementEmail({
+                  memberName: member.profile.full_name || 'Member',
+                  title: announcement.title,
+                  content: announcement.content,
+                  priority: announcement.priority || 'normal',
+                  chapterName,
+                  viewLink: `${APP_URL}/communications/announcements/${announcement.id}`,
+                });
+                return {
+                  to: member.profile.email,
+                  subject: template.subject,
+                  html: template.html,
+                };
+              });
+
+            const emailResult = await sendBatchEmails(emailMessages);
+            console.log(`[Communication] Emails sent: ${emailResult.sent} success, ${emailResult.failed} failed`);
+
+            // Update recipient statuses for email channel
+            await supabase
+              .from('announcement_recipients')
+              .update({ status: 'sent', sent_at: new Date().toISOString() })
+              .eq('announcement_id', id)
+              .eq('channel', 'email');
+          }
+        } catch (emailError) {
+          console.error('Email notification error:', emailError);
+          // Don't fail the entire operation if email fails
+        }
       }
 
       // Send push notifications (if configured)
@@ -301,7 +512,7 @@ export async function sendAnnouncement(id: string): Promise<ActionResponse> {
 
     return {
       success: true,
-      message: `Announcement sent successfully to ${members?.length || 0} members`,
+      message: `Announcement sent successfully to ${memberIds.length} members`,
     };
   } catch (error) {
     console.error('Send announcement error:', error);

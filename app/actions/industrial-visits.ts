@@ -5,6 +5,7 @@
 
 'use server';
 
+import * as XLSX from 'xlsx';
 import { revalidateTag } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
@@ -1300,12 +1301,47 @@ export async function exportIVAttendees(formData: FormData): Promise<IVActionRes
       };
     }
 
-    // For XLSX, we'd need a library like xlsx or exceljs
-    // For now, return CSV format with .xlsx extension
-    // TODO: Implement proper XLSX generation
+    // Generate XLSX using xlsx library
+    if (exportData.length === 0) {
+      return {
+        success: true,
+        data: {
+          data: '',
+          filename: `iv_attendees_${eventTitle}_${timestamp}.xlsx`,
+        },
+        message: 'No attendees found',
+      };
+    }
+
+    // Create worksheet from data
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+
+    // Auto-size columns based on content
+    const colWidths = Object.keys(exportData[0]).map(key => ({
+      wch: Math.max(
+        key.length,
+        ...exportData.map((row: any) => String(row[key] || '').length)
+      ) + 2
+    }));
+    worksheet['!cols'] = colWidths;
+
+    // Create workbook and add the worksheet
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Attendees');
+
+    // Generate buffer
+    const xlsxBuffer = XLSX.write(workbook, {
+      type: 'base64',
+      bookType: 'xlsx',
+    });
+
     return {
-      success: false,
-      error: 'XLSX export not yet implemented. Please use CSV format.',
+      success: true,
+      data: {
+        data: xlsxBuffer,
+        filename: `iv_attendees_${eventTitle}_${timestamp}.xlsx`,
+      },
+      message: 'Attendees exported successfully as XLSX',
     };
   } catch (error: any) {
     console.error('Error in exportIVAttendees:', error);

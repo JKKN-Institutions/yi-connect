@@ -790,3 +790,42 @@ export function opportunityApplicationShortlistedEmail(data: {
     `),
   }
 }
+
+// ============================================================================
+// ANNOUNCEMENT TEMPLATES
+// ============================================================================
+
+export function announcementEmail(data: {
+  memberName: string
+  title: string
+  content: string
+  priority: 'low' | 'normal' | 'high' | 'urgent'
+  chapterName: string
+  viewLink?: string
+}): { subject: string; html: string } {
+  const priorityBadge = data.priority === 'urgent' || data.priority === 'high'
+    ? `<span style="background-color: #dc2626; color: white; padding: 4px 12px; border-radius: 16px; font-size: 12px; font-weight: 600; margin-left: 8px;">${data.priority.toUpperCase()}</span>`
+    : '';
+
+  return {
+    subject: `${data.priority === 'urgent' ? '[URGENT] ' : ''}${data.title} - ${data.chapterName}`,
+    html: baseTemplate(`
+      <h1 style="color: #1e293b; font-size: 24px; font-weight: 700; margin: 0 0 8px;">
+        ${data.title}${priorityBadge}
+      </h1>
+      <p style="color: #64748b; font-size: 14px; margin: 0 0 24px;">
+        From ${data.chapterName}
+      </p>
+      <p style="color: #475569; line-height: 1.6; margin: 0 0 16px;">
+        Hi ${data.memberName},
+      </p>
+      <div style="color: #475569; line-height: 1.7; margin: 0 0 24px; white-space: pre-wrap;">
+        ${data.content}
+      </div>
+      ${data.viewLink ? button('View in Yi Connect', data.viewLink) : ''}
+      <p style="color: #94a3b8; font-size: 12px; margin: 24px 0 0; text-align: center;">
+        You received this because you are a member of ${data.chapterName}
+      </p>
+    `),
+  }
+}

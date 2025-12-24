@@ -12,6 +12,8 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentUser } from '@/lib/data/auth';
 import { uploadImage } from './upload';
+import { sendEmail, sendBatchEmails } from '@/lib/email';
+import { eventCancellationEmail, volunteerAssignmentEmail } from '@/lib/email/templates';
 import {
   createEventSchema,
   updateEventSchema,
@@ -390,7 +392,39 @@ export async function cancelEvent(
       return { success: false, error: 'Failed to cancel event' };
     }
 
-    // TODO: Send cancellation notifications to all RSVPs
+    // Send cancellation notifications to all RSVPs
+    const { data: eventDetails } = await supabase
+      .from('events')
+      .select('title')
+      .eq('id', validated.id)
+      .single();
+
+    const { data: rsvps } = await supabase
+      .from('event_rsvps')
+      .select('member:member_id(id, email, full_name)')
+      .eq('event_id', validated.id)
+      .eq('status', 'confirmed');
+
+    if (rsvps && rsvps.length > 0 && eventDetails) {
+      const emails = rsvps
+        .filter((r: any) => r.member?.email)
+        .map((r: any) => {
+          const template = eventCancellationEmail({
+            memberName: r.member.full_name || 'Member',
+            eventTitle: eventDetails.title,
+            reason: validated.reason,
+          });
+          return {
+            to: r.member.email,
+            subject: template.subject,
+            html: template.html,
+          };
+        });
+
+      if (emails.length > 0) {
+        await sendBatchEmails(emails);
+      }
+    }
 
     // Invalidate cache
     updateTag('events');
@@ -1010,7 +1044,45 @@ export async function assignVolunteer(
       return { success: false, error: 'Failed to assign volunteer' };
     }
 
-    // TODO: Send notification to volunteer
+    // Send notification to volunteer
+    const { data: eventDetails } = await supabase
+      .from('events')
+      .select('title, start_date')
+      .eq('id', validated.event_id)
+      .single();
+
+    const { data: volunteer } = await supabase
+      .from('profiles')
+      .select('email, full_name')
+      .eq('id', validated.member_id)
+      .single();
+
+    const { data: role } = await supabase
+      .from('volunteer_roles')
+      .select('name')
+      .eq('id', validated.role_id)
+      .single();
+
+    if (volunteer?.email && eventDetails) {
+      const template = volunteerAssignmentEmail({
+        memberName: volunteer.full_name || 'Member',
+        eventTitle: eventDetails.title,
+        role: role?.name || 'Volunteer',
+        eventDate: new Date(eventDetails.start_date).toLocaleDateString('en-IN', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        }),
+        eventLink: `${process.env.NEXT_PUBLIC_APP_URL || ''}/events/${validated.event_id}`,
+      });
+
+      await sendEmail({
+        to: volunteer.email,
+        subject: template.subject,
+        html: template.html,
+      });
+    }
 
     updateTag('events');
     updateTag('volunteers');

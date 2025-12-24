@@ -10,6 +10,12 @@
 import { revalidatePath, updateTag } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentUser } from '@/lib/data/auth'
+import { sendEmail } from '@/lib/email'
+import {
+  opportunityApplicationAcceptedEmail,
+  opportunityApplicationDeclinedEmail,
+  opportunityApplicationShortlistedEmail,
+} from '@/lib/email/templates'
 import {
   createOpportunitySchema,
   updateOpportunitySchema,
@@ -479,7 +485,20 @@ export async function reviewApplication(
 
     const { data: application } = await supabase
       .from('opportunity_applications')
-      .select('opportunity_id')
+      .select(`
+        id,
+        opportunity_id,
+        member_id,
+        member:member_id(
+          id,
+          profile:profiles(full_name, email)
+        ),
+        opportunity:opportunity_id(
+          id,
+          title,
+          industry:industry_id(name)
+        )
+      `)
       .eq('id', validated.application_id)
       .single()
 
@@ -516,7 +535,62 @@ export async function reviewApplication(
       })
     }
 
-    // TODO: Send notification to applicant
+    // Send notification to applicant
+    const memberProfile = (application.member as any)?.profile
+    const applicantEmail = memberProfile?.email
+    const applicantName = memberProfile?.full_name || 'Member'
+    const opportunityTitle = (application.opportunity as any)?.title || 'Opportunity'
+    const industryName = (application.opportunity as any)?.industry?.name || 'Industry Partner'
+
+    if (applicantEmail) {
+      const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://yi-connect-app.vercel.app'
+
+      try {
+        if (validated.status === 'accepted') {
+          const emailTemplate = opportunityApplicationAcceptedEmail({
+            applicantName,
+            opportunityTitle,
+            industryName,
+            reviewerNotes: validated.reviewer_notes || validated.outcome_notes,
+            viewLink: `${APP_URL}/my-applications`,
+          })
+          await sendEmail({
+            to: applicantEmail,
+            subject: emailTemplate.subject,
+            html: emailTemplate.html,
+          })
+        } else if (validated.status === 'declined') {
+          const emailTemplate = opportunityApplicationDeclinedEmail({
+            applicantName,
+            opportunityTitle,
+            industryName,
+            reviewerNotes: validated.reviewer_notes || validated.outcome_notes,
+            exploreLink: `${APP_URL}/opportunities`,
+          })
+          await sendEmail({
+            to: applicantEmail,
+            subject: emailTemplate.subject,
+            html: emailTemplate.html,
+          })
+        } else if (validated.status === 'shortlisted') {
+          const emailTemplate = opportunityApplicationShortlistedEmail({
+            applicantName,
+            opportunityTitle,
+            industryName,
+            reviewerNotes: validated.reviewer_notes,
+            viewLink: `${APP_URL}/my-applications`,
+          })
+          await sendEmail({
+            to: applicantEmail,
+            subject: emailTemplate.subject,
+            html: emailTemplate.html,
+          })
+        }
+      } catch (emailError) {
+        console.error('Error sending application review email:', emailError)
+        // Don't fail the review if email fails
+      }
+    }
 
     updateTag('applications')
     revalidatePath(`/opportunities/${application.opportunity_id}/applications`)

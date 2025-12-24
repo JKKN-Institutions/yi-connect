@@ -18,6 +18,8 @@ import { requireRole } from '@/lib/auth'
 import { revalidatePath, revalidateTag } from 'next/cache'
 import type { FormState } from '@/types'
 import { z } from 'zod'
+import { sendEmail } from '@/lib/email'
+import { memberApprovalEmail, memberRejectionEmail } from '@/lib/email/templates'
 
 // ============================================================================
 // VALIDATION SCHEMAS
@@ -309,12 +311,23 @@ export async function approveMemberRequest(requestId: string, notes?: string): P
 
     if (updateError) throw updateError
 
-    // 5. TODO: Send approval email to applicant
-    // await sendApprovalEmail({
-    //   email: request.email,
-    //   fullName: request.full_name,
-    //   loginUrl: `${process.env.NEXT_PUBLIC_APP_URL}/login`
-    // })
+    // 5. Send approval email to applicant
+    const { data: chapter } = await supabase
+      .from('chapters')
+      .select('name')
+      .eq('id', request.preferred_chapter_id)
+      .single()
+
+    const emailTemplate = memberApprovalEmail({
+      memberName: request.full_name,
+      chapterName: chapter?.name || 'Young Indians',
+    })
+
+    await sendEmail({
+      to: request.email,
+      subject: emailTemplate.subject,
+      html: emailTemplate.html,
+    })
 
     // 6. Invalidate caches
     revalidateTag('member-requests', 'max')
@@ -375,11 +388,24 @@ export async function rejectMemberRequest(requestId: string, notes: string): Pro
 
     if (updateError) throw updateError
 
-    // 3. TODO: Send rejection email (optional)
-    // await sendRejectionEmail({
-    //   email: request.email,
-    //   fullName: request.full_name
-    // })
+    // 3. Send rejection email
+    const { data: chapter } = await supabase
+      .from('chapters')
+      .select('name')
+      .eq('id', request.preferred_chapter_id)
+      .single()
+
+    const emailTemplate = memberRejectionEmail({
+      memberName: request.full_name,
+      chapterName: chapter?.name || 'Young Indians',
+      reason: notes,
+    })
+
+    await sendEmail({
+      to: request.email,
+      subject: emailTemplate.subject,
+      html: emailTemplate.html,
+    })
 
     // 4. Invalidate cache
     revalidateTag('member-requests', 'max')

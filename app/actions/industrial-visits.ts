@@ -8,6 +8,16 @@
 import { revalidateTag } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import { sendEmail, sendBatchEmails } from '@/lib/email';
+import {
+  eventCancellationEmail,
+  ivBookingConfirmationEmail,
+  ivWaitlistPromotionEmail,
+  industryPortalInviteEmail,
+  adminNewIVSlotEmail,
+  waitlistCapacityNotificationEmail,
+  ivRequestNotificationEmail,
+} from '@/lib/email/templates';
 import {
   createIVSchema,
   updateIVSchema,
@@ -257,7 +267,38 @@ export async function cancelIV(id: string, reason: string): Promise<IVActionResu
       return { success: false, error: `Failed to cancel industrial visit: ${error.message}` };
     }
 
-    // TODO: Send cancellation notifications to all attendees (requires Module 7)
+    // Get event details and all attendees for notification
+    const { data: eventDetails } = await supabase
+      .from('events')
+      .select('title, start_date')
+      .eq('id', validatedData.id)
+      .single();
+
+    const { data: attendees } = await supabase
+      .from('event_rsvps')
+      .select('member:profiles!event_rsvps_member_id_fkey(full_name, email)')
+      .eq('event_id', validatedData.id)
+      .eq('status', 'confirmed');
+
+    // Send cancellation emails to all attendees
+    if (attendees && attendees.length > 0 && eventDetails) {
+      const cancellationEmails = attendees
+        .filter((a: any) => a.member?.email)
+        .map((attendee: any) => {
+          const emailTemplate = eventCancellationEmail({
+            memberName: attendee.member.full_name || 'Member',
+            eventTitle: eventDetails.title,
+            reason: validatedData.reason,
+          });
+          return {
+            to: attendee.member.email,
+            subject: emailTemplate.subject,
+            html: emailTemplate.html,
+          };
+        });
+
+      await sendBatchEmails(cancellationEmails);
+    }
 
     revalidateTag('industrial-visits', 'max');
     revalidateTag(`iv-${id}`, 'max');
@@ -647,7 +688,40 @@ export async function promoteFromWaitlist(eventId: string): Promise<IVActionResu
 
     revalidateTag(`iv-${eventId}`, 'max');
 
-    // TODO: Send notification email to promoted member (requires Module 7)
+    // Get event details and promoted member's email
+    const { data: eventDetails } = await supabase
+      .from('events')
+      .select('title, start_date, industry:industries(name)')
+      .eq('id', eventId)
+      .single();
+
+    if (eventDetails && promoted.member_email) {
+      const visitDate = new Date(eventDetails.start_date).toLocaleDateString('en-IN', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      });
+      const confirmByDate = new Date(Date.now() + 24 * 60 * 60 * 1000).toLocaleDateString('en-IN', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      });
+
+      const emailTemplate = ivWaitlistPromotionEmail({
+        memberName: promoted.member_name,
+        industryName: (eventDetails.industry as any)?.name || eventDetails.title,
+        visitDate,
+        confirmByDate,
+      });
+
+      await sendEmail({
+        to: promoted.member_email,
+        subject: emailTemplate.subject,
+        html: emailTemplate.html,
+      });
+    }
 
     return {
       success: true,
@@ -743,7 +817,27 @@ export async function createIndustryPortalUser(formData: FormData): Promise<IVAc
       return { success: false, error: `Failed to create industry portal user: ${error.message}` };
     }
 
-    // TODO: Send invitation email (requires Module 7)
+    // Get industry name for the invitation email
+    const { data: industry } = await supabase
+      .from('industries')
+      .select('name')
+      .eq('id', validatedData.industry_id)
+      .single();
+
+    // Send invitation email
+    const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://yi-connect-app.vercel.app';
+    const emailTemplate = industryPortalInviteEmail({
+      userName: validatedData.full_name,
+      industryName: industry?.name || 'Your Organization',
+      role: validatedData.role || 'Portal User',
+      inviteLink: `${APP_URL}/industry-portal`,
+    });
+
+    await sendEmail({
+      to: validatedData.email,
+      subject: emailTemplate.subject,
+      html: emailTemplate.html,
+    });
 
     revalidateTag('industry-portal-users', 'max');
 
@@ -826,7 +920,52 @@ export async function industryCreateIVSlot(formData: FormData): Promise<IVAction
       return { success: false, error: `Failed to create IV slot: ${error.message}` };
     }
 
-    // TODO: Send notification to admin (requires Module 7)
+    // Get industry and chapter admin details for notification
+    const { data: industryDetails } = await supabase
+      .from('industries')
+      .select('name')
+      .eq('id', portalUser.industry_id)
+      .single();
+
+    const chapterId = (portalUser.industry as any).chapter_id;
+
+    // Get chapter Chair/Co-Chair emails
+    const { data: chapterAdmins } = await supabase
+      .from('user_roles')
+      .select(`
+        user:profiles!user_roles_user_id_fkey(full_name, email)
+      `)
+      .eq('chapter_id', chapterId)
+      .in('role_id', ['Chair', 'Co-Chair']);
+
+    // Send notification to chapter admins
+    if (chapterAdmins && chapterAdmins.length > 0) {
+      const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://yi-connect-app.vercel.app';
+      const adminEmails = chapterAdmins
+        .filter((a: any) => a.user?.email)
+        .map((admin: any) => {
+          const emailTemplate = adminNewIVSlotEmail({
+            adminName: admin.user.full_name || 'Admin',
+            industryName: industryDetails?.name || 'Industry Partner',
+            slotTitle: validatedData.title,
+            slotDate: new Date(validatedData.start_date).toLocaleDateString('en-IN', {
+              weekday: 'long',
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
+            }),
+            capacity: validatedData.max_capacity,
+            manageLink: `${APP_URL}/admin/industrial-visits/${data.id}`,
+          });
+          return {
+            to: admin.user.email,
+            subject: emailTemplate.subject,
+            html: emailTemplate.html,
+          };
+        });
+
+      await sendBatchEmails(adminEmails);
+    }
 
     revalidateTag('industrial-visits', 'max');
 
@@ -879,7 +1018,45 @@ export async function industryIncreaseCapacity(id: string, newCapacity: number):
       return { success: false, error: `Failed to increase capacity: ${error.message}` };
     }
 
-    // TODO: Notify waitlisted members (requires Module 7)
+    // Notify waitlisted members about capacity increase
+    const { data: eventDetails } = await supabase
+      .from('events')
+      .select('title, industry:industries(name)')
+      .eq('id', validatedData.id)
+      .single();
+
+    const { data: waitlistedMembers } = await supabase
+      .from('iv_waitlist')
+      .select(`
+        position,
+        member:profiles!iv_waitlist_member_id_fkey(full_name, email)
+      `)
+      .eq('event_id', validatedData.id)
+      .eq('status', 'waiting')
+      .order('position', { ascending: true });
+
+    if (waitlistedMembers && waitlistedMembers.length > 0 && eventDetails) {
+      const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://yi-connect-app.vercel.app';
+      const waitlistEmails = waitlistedMembers
+        .filter((w: any) => w.member?.email)
+        .map((waitlisted: any) => {
+          const emailTemplate = waitlistCapacityNotificationEmail({
+            memberName: waitlisted.member.full_name || 'Member',
+            eventTitle: eventDetails.title,
+            industryName: (eventDetails.industry as any)?.name || 'Industry Partner',
+            newCapacity: validatedData.new_capacity,
+            currentPosition: waitlisted.position,
+            bookingLink: `${APP_URL}/industrial-visits`,
+          });
+          return {
+            to: waitlisted.member.email,
+            subject: emailTemplate.subject,
+            html: emailTemplate.html,
+          };
+        });
+
+      await sendBatchEmails(waitlistEmails);
+    }
 
     revalidateTag(`iv-${id}`, 'max');
 
@@ -922,10 +1099,61 @@ export async function memberRequestIV(formData: FormData): Promise<IVActionResul
       return { success: false, error: 'Unauthorized' };
     }
 
-    // Store request (could be in a separate iv_requests table, for now use custom_fields in events)
-    // Or send as notification to admin
+    // Get user profile
+    const { data: userProfile } = await supabase
+      .from('profiles')
+      .select('full_name, email, chapter_id')
+      .eq('id', user.id)
+      .single();
 
-    // TODO: Create IV request record and notify admin (requires Module 7)
+    if (!userProfile?.chapter_id) {
+      return { success: false, error: 'User not associated with a chapter' };
+    }
+
+    // Get industry name if provided
+    let industryName = validatedData.suggested_industry_name || 'Not specified';
+    if (validatedData.industry_id) {
+      const { data: industry } = await supabase
+        .from('industries')
+        .select('name')
+        .eq('id', validatedData.industry_id)
+        .single();
+      industryName = industry?.name || industryName;
+    }
+
+    // Get chapter admin emails
+    const { data: chapterAdmins } = await supabase
+      .from('user_roles')
+      .select('user:profiles!user_roles_user_id_fkey(full_name, email)')
+      .eq('chapter_id', userProfile.chapter_id)
+      .in('role_id', ['Chair', 'Co-Chair']);
+
+    // Send IV request notification to chapter admins
+    if (chapterAdmins && chapterAdmins.length > 0) {
+      const adminEmails = chapterAdmins
+        .filter((a: any) => a.user?.email)
+        .map((admin: any) => {
+          const emailTemplate = ivRequestNotificationEmail({
+            adminName: admin.user.full_name || 'Admin',
+            requesterName: userProfile.full_name || 'Member',
+            requesterEmail: userProfile.email || user.email || '',
+            industryName,
+            preferredDates: validatedData.preferred_dates
+              .map((d: string) => new Date(d).toLocaleDateString('en-IN'))
+              .join(', '),
+            learningOutcomes: validatedData.desired_learning_outcomes,
+            estimatedParticipants: validatedData.estimated_participants,
+            additionalNotes: validatedData.additional_notes || undefined,
+          });
+          return {
+            to: admin.user.email,
+            subject: emailTemplate.subject,
+            html: emailTemplate.html,
+          };
+        });
+
+      await sendBatchEmails(adminEmails);
+    }
 
     return {
       success: true,

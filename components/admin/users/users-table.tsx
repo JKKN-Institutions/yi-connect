@@ -56,6 +56,7 @@ import { DataTableViewOptions } from '@/components/data-table/data-table-view-op
 import { usersTableColumns } from './users-table-columns'
 import { RoleManagerDialog } from './role-manager-dialog'
 import { BulkActionsBar } from './bulk-actions-bar'
+import { exportUsers } from '@/app/actions/users'
 import type { UserListItem } from '@/types/user'
 import type { Role } from '@/types/user'
 
@@ -114,15 +115,50 @@ export function UsersTable({ data, pageCount, roles, chapters }: UsersTableProps
     .rows.map((row) => row.original)
 
   const handleExport = async (format: 'csv' | 'xlsx' | 'json') => {
+    const toastId = toast.loading(`Exporting to ${format.toUpperCase()}...`)
+
     try {
-      toast.loading(`Exporting to ${format.toUpperCase()}...`)
+      // Get current filters from table state
+      const filters: any = {}
+      const nameFilter = table.getColumn('full_name')?.getFilterValue()
+      const roleFilter = table.getColumn('roles')?.getFilterValue()
+      const chapterFilter = table.getColumn('chapter')?.getFilterValue()
+      const statusFilter = table.getColumn('is_active')?.getFilterValue()
 
-      // TODO: Implement export functionality
-      // This would call a server action to export the data
+      if (nameFilter) filters.search = nameFilter as string
+      if (roleFilter) filters.role_id = roleFilter as string
+      if (chapterFilter) filters.chapter_id = chapterFilter as string
+      if (statusFilter) filters.is_active = statusFilter === 'true'
 
-      toast.success(`Exported ${data.length} users to ${format.toUpperCase()}`)
+      const result = await exportUsers(format, filters)
+
+      if (!result.success || !result.data) {
+        toast.error(result.message || 'Failed to export data', { id: toastId })
+        return
+      }
+
+      // Create blob and download
+      const blob = new Blob([result.data], {
+        type: format === 'json'
+          ? 'application/json'
+          : format === 'csv'
+          ? 'text/csv'
+          : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      })
+
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = result.filename || `export.${format}`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+
+      toast.success(result.message || `Exported users to ${format.toUpperCase()}`, { id: toastId })
     } catch (error) {
-      toast.error('Failed to export data')
+      console.error('Export error:', error)
+      toast.error('Failed to export data', { id: toastId })
     }
   }
 

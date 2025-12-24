@@ -66,6 +66,7 @@
     "react-hot-toast": "^2.6.0",
     "react-resizable-panels": "^3.0.6",
     "recharts": "^2.15.4",
+    "resend": "^6.6.0",
     "serwist": "^9.2.3",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.3.1",

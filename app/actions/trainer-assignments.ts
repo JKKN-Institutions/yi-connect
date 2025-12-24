@@ -9,6 +9,8 @@
 
 import { revalidatePath, updateTag } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { sendBatchEmails } from '@/lib/email'
+import { trainerAssignmentEmail } from '@/lib/email/templates'
 import { getCurrentUser } from '@/lib/data/auth'
 import {
   assignTrainersSchema,
@@ -154,10 +156,18 @@ export async function sendTrainerInvitations(
       return { success: false, error: 'Unauthorized' }
     }
 
-    // Get assignments to invite
+    // Get assignments with trainer details
     let query = supabase
       .from('event_trainer_assignments')
-      .select('id, trainer_profile_id')
+      .select(`
+        id,
+        trainer_profile_id,
+        session_topic,
+        trainer:profiles!event_trainer_assignments_trainer_profile_id_fkey(
+          full_name,
+          email
+        )
+      `)
       .eq('event_id', eventId)
       .eq('status', 'selected')
 
@@ -170,6 +180,13 @@ export async function sendTrainerInvitations(
     if (fetchError || !assignments || assignments.length === 0) {
       return { success: false, error: 'No trainers to invite' }
     }
+
+    // Get event details for email
+    const { data: event } = await supabase
+      .from('events')
+      .select('title, start_date, location')
+      .eq('id', eventId)
+      .single()
 
     // Calculate response deadline (3 days from now)
     const responseDeadline = new Date()
@@ -192,7 +209,34 @@ export async function sendTrainerInvitations(
       return { success: false, error: 'Failed to send invitations' }
     }
 
-    // TODO: Send actual notification/email to trainers
+    // Send invitation emails to trainers
+    if (event) {
+      const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://yi-connect-app.vercel.app'
+      const trainerEmails = assignments
+        .filter((a: any) => a.trainer?.email)
+        .map((assignment: any) => {
+          const emailTemplate = trainerAssignmentEmail({
+            trainerName: assignment.trainer.full_name || 'Trainer',
+            eventTitle: event.title,
+            sessionTopic: assignment.session_topic || 'Training Session',
+            eventDate: new Date(event.start_date).toLocaleDateString('en-IN', {
+              weekday: 'long',
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
+            }),
+            eventVenue: event.location || 'TBD',
+            eventLink: `${APP_URL}/events/${eventId}`,
+          })
+          return {
+            to: assignment.trainer.email,
+            subject: emailTemplate.subject,
+            html: emailTemplate.html,
+          }
+        })
+
+      await sendBatchEmails(trainerEmails)
+    }
 
     updateTag('trainer-assignments')
     revalidatePath(`/events/${eventId}`)

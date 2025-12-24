@@ -24,6 +24,8 @@ import {
 } from '@/lib/validations/user'
 import type { FormState } from '@/types'
 import type { BulkOperationResult } from '@/types/user'
+import { sendEmail } from '@/lib/email'
+import { memberInvitationEmail } from '@/lib/email/templates'
 
 // ============================================================================
 // User Profile Actions
@@ -741,13 +743,52 @@ export async function inviteUser(
       }
     }
 
-    // TODO: Send invitation email if send_email is true
+    // Send invitation email if send_email is true
+    if (validation.data.send_email) {
+      try {
+        // Get inviter's name
+        const { data: inviterProfile } = await supabase
+          .from('profiles')
+          .select('full_name')
+          .eq('id', user.id)
+          .single()
+
+        // Get chapter name if assigned
+        let chapterName = 'Young Indians'
+        if (validation.data.chapter_id) {
+          const { data: chapter } = await supabase
+            .from('chapters')
+            .select('name')
+            .eq('id', validation.data.chapter_id)
+            .single()
+          chapterName = chapter?.name || 'Young Indians'
+        }
+
+        const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://yi-connect-app.vercel.app'
+        const emailTemplate = memberInvitationEmail({
+          inviterName: inviterProfile?.full_name || 'Yi Admin',
+          chapterName,
+          inviteLink: `${APP_URL}/login`,
+        })
+
+        await sendEmail({
+          to: validation.data.email,
+          subject: emailTemplate.subject,
+          html: emailTemplate.html,
+        })
+      } catch (emailError) {
+        console.error('Error sending invitation email:', emailError)
+        // Don't fail the invitation if email fails
+      }
+    }
 
     revalidatePath('/admin/users')
 
     return {
       success: true,
-      message: `Invitation sent to ${validation.data.email}. They can now sign up using this email.`
+      message: validation.data.send_email
+        ? `Invitation sent to ${validation.data.email}. They can now sign up using this email.`
+        : `${validation.data.email} added to approved list. They can now sign up using this email.`
     }
   } catch (error: any) {
     return {
@@ -1028,5 +1069,165 @@ export async function deleteUserPermanently(
       success: false,
       message: error.message || 'Failed to delete user permanently.'
     };
+  }
+}
+
+// ============================================================================
+// User Export Actions
+// ============================================================================
+
+export interface UserExportFilters {
+  search?: string
+  role_id?: string
+  chapter_id?: string
+  is_active?: boolean
+}
+
+/**
+ * Export users to specified format
+ * Only Super Admin and National Admin can export
+ */
+export async function exportUsers(
+  format: 'csv' | 'xlsx' | 'json',
+  filters?: UserExportFilters
+): Promise<{ success: boolean; data?: string; filename?: string; message?: string }> {
+  try {
+    await requireRole(['Super Admin', 'National Admin'])
+
+    const supabase = await createServerSupabaseClient()
+
+    // Build query with filters
+    let query = supabase
+      .from('profiles')
+      .select(`
+        id,
+        full_name,
+        email,
+        phone,
+        avatar_url,
+        is_active,
+        created_at,
+        updated_at,
+        member:members(
+          company,
+          designation,
+          industry,
+          years_of_experience,
+          membership_status,
+          membership_type,
+          engagement_score,
+          chapter:chapters(name, location)
+        ),
+        roles:user_roles(
+          role:roles(name)
+        )
+      `)
+      .order('created_at', { ascending: false })
+
+    // Apply filters
+    if (filters?.search) {
+      query = query.or(`full_name.ilike.%${filters.search}%,email.ilike.%${filters.search}%`)
+    }
+
+    if (filters?.is_active !== undefined) {
+      query = query.eq('is_active', filters.is_active)
+    }
+
+    if (filters?.chapter_id) {
+      // Need to filter through members table
+      query = query.not('member', 'is', null)
+    }
+
+    const { data: users, error } = await query
+
+    if (error) throw error
+
+    if (!users || users.length === 0) {
+      return {
+        success: false,
+        message: 'No users found to export'
+      }
+    }
+
+    // Filter by chapter and role if needed (post-query filtering for nested relations)
+    let filteredUsers = users
+
+    if (filters?.chapter_id) {
+      filteredUsers = filteredUsers.filter((u: any) =>
+        u.member?.chapter?.id === filters.chapter_id
+      )
+    }
+
+    if (filters?.role_id) {
+      filteredUsers = filteredUsers.filter((u: any) =>
+        u.roles?.some((r: any) => r.role?.id === filters.role_id)
+      )
+    }
+
+    // Transform data for export
+    const exportData = filteredUsers.map((user: any) => ({
+      id: user.id,
+      full_name: user.full_name || '',
+      email: user.email || '',
+      phone: user.phone || '',
+      is_active: user.is_active ? 'Yes' : 'No',
+      company: user.member?.company || '',
+      designation: user.member?.designation || '',
+      industry: user.member?.industry || '',
+      years_of_experience: user.member?.years_of_experience || '',
+      chapter: user.member?.chapter?.name || '',
+      chapter_location: user.member?.chapter?.location || '',
+      membership_status: user.member?.membership_status || '',
+      membership_type: user.member?.membership_type || '',
+      engagement_score: user.member?.engagement_score || 0,
+      roles: user.roles?.map((r: any) => r.role?.name).filter(Boolean).join(', ') || '',
+      created_at: user.created_at ? new Date(user.created_at).toISOString().split('T')[0] : '',
+      updated_at: user.updated_at ? new Date(user.updated_at).toISOString().split('T')[0] : '',
+    }))
+
+    const timestamp = new Date().toISOString().split('T')[0]
+    let filename = `yi-users-${timestamp}`
+    let content: string
+
+    if (format === 'json') {
+      content = JSON.stringify(exportData, null, 2)
+      filename += '.json'
+    } else if (format === 'csv') {
+      // Generate CSV
+      const headers = Object.keys(exportData[0])
+      const csvRows = [
+        headers.join(','),
+        ...exportData.map((row: any) =>
+          headers.map(h => {
+            const value = row[h]
+            // Escape quotes and wrap in quotes if contains comma
+            if (typeof value === 'string' && (value.includes(',') || value.includes('"'))) {
+              return `"${value.replace(/"/g, '""')}"`
+            }
+            return value
+          }).join(',')
+        )
+      ]
+      content = csvRows.join('\n')
+      filename += '.csv'
+    } else {
+      // For XLSX, return JSON and let client handle conversion
+      // (XLSX generation typically requires client-side libraries)
+      content = JSON.stringify(exportData)
+      filename += '.xlsx'
+    }
+
+    return {
+      success: true,
+      data: content,
+      filename,
+      message: `Exported ${exportData.length} users`
+    }
+  } catch (error: any) {
+    console.error('Export error:', error)
+    return {
+      success: false,
+      message: error.message || 'Failed to export users'
+    }
   }
 }

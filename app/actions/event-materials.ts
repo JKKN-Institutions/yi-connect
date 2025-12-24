@@ -10,6 +10,8 @@
 import { revalidatePath, updateTag } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentUser } from '@/lib/data/auth'
+import { sendEmail, sendBatchEmails } from '@/lib/email'
+import { materialSubmittedEmail, materialApprovedEmail, materialRejectedEmail } from '@/lib/email/templates'
 import {
   uploadMaterialSchema,
   updateMaterialSchema,
@@ -185,7 +187,7 @@ export async function submitMaterialForReview(
     // Get material
     const { data: material, error: fetchError } = await supabase
       .from('event_materials')
-      .select('id, event_id, uploaded_by, status')
+      .select('id, event_id, uploaded_by, status, material_type')
       .eq('id', validated.material_id)
       .single()
 
@@ -218,7 +220,49 @@ export async function submitMaterialForReview(
       return { success: false, error: 'Failed to submit material' }
     }
 
-    // TODO: Notify reviewers (Chapter Chair, Vertical Chair)
+    // Get event and uploader details for notification
+    const { data: eventDetails } = await supabase
+      .from('events')
+      .select('title, chapter_id')
+      .eq('id', material.event_id)
+      .single()
+
+    const { data: uploaderProfile } = await supabase
+      .from('profiles')
+      .select('full_name')
+      .eq('id', user.id)
+      .single()
+
+    // Get chapter reviewers (Chair, Co-Chair)
+    if (eventDetails?.chapter_id) {
+      const { data: reviewers } = await supabase
+        .from('user_roles')
+        .select('user:profiles!user_roles_user_id_fkey(full_name, email)')
+        .eq('chapter_id', eventDetails.chapter_id)
+        .in('role_id', ['Chair', 'Co-Chair'])
+
+      if (reviewers && reviewers.length > 0) {
+        const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://yi-connect-app.vercel.app'
+        const reviewerEmails = reviewers
+          .filter((r: any) => r.user?.email)
+          .map((reviewer: any) => {
+            const emailTemplate = materialSubmittedEmail({
+              reviewerName: reviewer.user.full_name || 'Reviewer',
+              uploaderName: uploaderProfile?.full_name || 'Member',
+              eventTitle: eventDetails.title,
+              materialType: material.material_type || 'Material',
+              reviewLink: `${APP_URL}/admin/materials/pending`,
+            })
+            return {
+              to: reviewer.user.email,
+              subject: emailTemplate.subject,
+              html: emailTemplate.html,
+            }
+          })
+
+        await sendBatchEmails(reviewerEmails)
+      }
+    }
 
     updateTag('event-materials')
     revalidatePath(`/events/${material.event_id}`)
@@ -285,7 +329,54 @@ export async function reviewMaterial(
       return { success: false, error: 'Failed to review material' }
     }
 
-    // TODO: Notify uploader of decision
+    // Get uploader details and event title for notification
+    const { data: uploaderDetails } = await supabase
+      .from('profiles')
+      .select('full_name, email')
+      .eq('id', material.uploaded_by)
+      .single()
+
+    const { data: eventDetails } = await supabase
+      .from('events')
+      .select('title')
+      .eq('id', material.event_id)
+      .single()
+
+    const { data: materialDetails } = await supabase
+      .from('event_materials')
+      .select('material_type')
+      .eq('id', validated.material_id)
+      .single()
+
+    // Notify uploader of the decision
+    if (uploaderDetails?.email && eventDetails) {
+      if (validated.action === 'approve') {
+        const emailTemplate = materialApprovedEmail({
+          uploaderName: uploaderDetails.full_name || 'Member',
+          eventTitle: eventDetails.title,
+          materialType: materialDetails?.material_type || 'Material',
+        })
+
+        await sendEmail({
+          to: uploaderDetails.email,
+          subject: emailTemplate.subject,
+          html: emailTemplate.html,
+        })
+      } else {
+        const emailTemplate = materialRejectedEmail({
+          uploaderName: uploaderDetails.full_name || 'Member',
+          eventTitle: eventDetails.title,
+          materialType: materialDetails?.material_type || 'Material',
+          reason: validated.rejection_reason || validated.review_notes || 'Please review and make necessary changes',
+        })
+
+        await sendEmail({
+          to: uploaderDetails.email,
+          subject: emailTemplate.subject,
+          html: emailTemplate.html,
+        })
+      }
+    }
 
     updateTag('event-materials')
     revalidatePath(`/events/${material.event_id}`)

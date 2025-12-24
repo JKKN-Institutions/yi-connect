@@ -73,49 +73,13 @@ export function EventsTable({ data, pageCount, isLoading }: EventsTableProps) {
     manualPagination: !!pageCount,
   })
 
-  const handleExport = () => {
-    // Export all visible rows to CSV
-    const rows = table.getFilteredRowModel().rows
-    const headers = table.getAllColumns()
-      .filter(col => col.getIsVisible() && col.id !== 'select' && col.id !== 'actions')
-      .map(col => col.id)
-
-    const csvContent = [
-      headers.join(','),
-      ...rows.map(row =>
-        headers.map(header => {
-          const value = row.getValue(header)
-          // Handle special cases
-          if (header === 'organizer') {
-            return `"${row.original.organizer?.profile?.full_name || ''}"`
-          }
-          if (header === 'venue') {
-            return `"${row.original.venue?.name || row.original.venue_address || ''}"`
-          }
-          if (typeof value === 'string' && value.includes(',')) {
-            return `"${value}"`
-          }
-          return value
-        }).join(',')
-      ),
-    ].join('\n')
-
-    const blob = new Blob([csvContent], { type: 'text/csv' })
-    const url = window.URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `events-${new Date().toISOString().split('T')[0]}.csv`
-    a.click()
-    window.URL.revokeObjectURL(url)
-  }
-
   if (isLoading) {
     return <EventsTableSkeleton />
   }
 
   return (
     <div className="space-y-4">
-      <EventsTableToolbar table={table} onExport={handleExport} />
+      <EventsTableToolbar table={table} />
       <div className="rounded-md border">
         <Table>
           <TableHeader>

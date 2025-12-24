@@ -6,24 +6,86 @@
  * Search, filters, and actions for the events data table.
  */
 
+import { useState } from 'react'
 import { Table } from '@tanstack/react-table'
-import { X, Plus, Download, Filter } from 'lucide-react'
+import { X, Plus, Download, Filter, Loader2 } from 'lucide-react'
 import Link from 'next/link'
+import toast from 'react-hot-toast'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { DataTableViewOptions } from '@/components/data-table/data-table-view-options'
 import { DataTableFacetedFilter } from '@/components/data-table/data-table-faceted-filter'
 import { EVENT_CATEGORIES, EVENT_STATUSES } from '@/types/event'
 import type { EventListItem } from '@/types/event'
+import { exportEvents } from '@/app/actions/events'
 
 interface EventsTableToolbarProps {
   table: Table<EventListItem>
-  onExport?: () => void
 }
 
-export function EventsTableToolbar({ table, onExport }: EventsTableToolbarProps) {
+export function EventsTableToolbar({ table }: EventsTableToolbarProps) {
+  const [isExporting, setIsExporting] = useState(false)
   const isFiltered = table.getState().columnFilters.length > 0
   const selectedRows = table.getFilteredSelectedRowModel().rows
+
+  const handleExportSelected = async () => {
+    if (selectedRows.length === 0) return
+
+    setIsExporting(true)
+    try {
+      const eventIds = selectedRows.map(row => row.original.id)
+      const result = await exportEvents(eventIds)
+
+      if (result.success && result.data) {
+        // Create and download file
+        const blob = new Blob([result.data.data], { type: 'text/csv' })
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = result.data.filename
+        document.body.appendChild(a)
+        a.click()
+        window.URL.revokeObjectURL(url)
+        document.body.removeChild(a)
+
+        toast.success('Export completed')
+      } else {
+        toast.error(result.error || 'Export failed')
+      }
+    } catch {
+      toast.error('Failed to export events')
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
+  const handleExportAll = async () => {
+    setIsExporting(true)
+    try {
+      const result = await exportEvents()
+
+      if (result.success && result.data) {
+        // Create and download file
+        const blob = new Blob([result.data.data], { type: 'text/csv' })
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = result.data.filename
+        document.body.appendChild(a)
+        a.click()
+        window.URL.revokeObjectURL(url)
+        document.body.removeChild(a)
+
+        toast.success('Export completed')
+      } else {
+        toast.error(result.error || 'Export failed')
+      }
+    } catch {
+      toast.error('Failed to export events')
+    } finally {
+      setIsExporting(false)
+    }
+  }
 
   // Convert EVENT_STATUSES to options array
   const statusOptions = Object.entries(EVENT_STATUSES).map(([value, label]) => ({
@@ -107,27 +169,32 @@ export function EventsTableToolbar({ table, onExport }: EventsTableToolbarProps)
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => {
-                  // TODO: Implement bulk export
-                  console.log('Export selected:', selectedRows.length)
-                }}
+                onClick={handleExportSelected}
+                disabled={isExporting}
               >
-                <Download className="mr-2 h-4 w-4" />
+                {isExporting ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Download className="mr-2 h-4 w-4" />
+                )}
                 Export Selected
               </Button>
             </div>
           )}
 
-          {onExport && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onExport}
-            >
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExportAll}
+            disabled={isExporting}
+          >
+            {isExporting ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
               <Download className="mr-2 h-4 w-4" />
-              Export All
-            </Button>
-          )}
+            )}
+            Export All
+          </Button>
 
           <DataTableViewOptions table={table} />
 

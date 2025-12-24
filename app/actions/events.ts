@@ -1314,6 +1314,101 @@ export async function checkInAttendee(
   }
 }
 
+/**
+ * Self check-in for mobile - current user checks themselves into an event
+ */
+export async function selfCheckIn(
+  eventId: string
+): Promise<ActionResponse<{
+  eventId: string;
+  eventTitle: string;
+  venue: string | null;
+  checkInTime: string;
+}>> {
+  try {
+    const supabase = await createClient();
+    const user = await getCurrentUser();
+
+    if (!user) {
+      return { success: false, error: 'Please log in to check in' };
+    }
+
+    // Get event details
+    const { data: event } = await supabase
+      .from('events')
+      .select('id, title, status, venue, start_date, end_date')
+      .eq('id', eventId)
+      .single();
+
+    if (!event) {
+      return { success: false, error: 'Event not found' };
+    }
+
+    if (event.status !== 'ongoing' && event.status !== 'published') {
+      return {
+        success: false,
+        error: 'This event is not open for check-in'
+      };
+    }
+
+    // Check if already checked in
+    const { data: existing } = await supabase
+      .from('event_checkins')
+      .select('id, checked_in_at')
+      .eq('event_id', eventId)
+      .eq('attendee_type', 'member')
+      .eq('attendee_id', user.id)
+      .maybeSingle();
+
+    if (existing) {
+      return {
+        success: false,
+        error: 'You have already checked in to this event'
+      };
+    }
+
+    // Create check-in
+    const checkInTime = new Date().toISOString();
+    const { error: insertError } = await supabase
+      .from('event_checkins')
+      .insert({
+        event_id: eventId,
+        attendee_type: 'member',
+        attendee_id: user.id,
+        checked_in_by: user.id,
+        checked_in_at: checkInTime
+      });
+
+    if (insertError) {
+      console.error('Error creating check-in:', insertError);
+      return { success: false, error: 'Failed to check in' };
+    }
+
+    // Update RSVP status to attended
+    await supabase
+      .from('event_rsvps')
+      .update({ status: 'attended' })
+      .eq('event_id', eventId)
+      .eq('member_id', user.id);
+
+    updateTag('events');
+    updateTag('checkins');
+
+    return {
+      success: true,
+      data: {
+        eventId: event.id,
+        eventTitle: event.title,
+        venue: event.venue,
+        checkInTime: new Date(checkInTime).toLocaleTimeString()
+      }
+    };
+  } catch (error) {
+    console.error('Error in selfCheckIn:', error);
+    return { success: false, error: 'Check-in failed' };
+  }
+}
+
 // ============================================================================
 // Feedback Actions
 // ============================================================================
@@ -1616,5 +1711,110 @@ export async function deleteEventDocument(
   } catch (error) {
     console.error('Error in deleteEventDocument:', error);
     return { success: false, error: 'Failed to delete document' };
+  }
+}
+
+// ============================================================================
+// Export Actions
+// ============================================================================
+
+/**
+ * Export events to CSV format
+ */
+export async function exportEvents(
+  eventIds?: string[]
+): Promise<ActionResponse<{ data: string; filename: string }>> {
+  try {
+    const supabase = await createClient();
+    const user = await getCurrentUser();
+
+    if (!user) {
+      return { success: false, error: 'Unauthorized' };
+    }
+
+    // Build query
+    let query = supabase
+      .from('events')
+      .select(`
+        id,
+        title,
+        description,
+        category,
+        status,
+        start_date,
+        end_date,
+        venue,
+        max_attendees,
+        registration_deadline,
+        is_virtual,
+        meeting_link,
+        created_at,
+        organizer:profiles!events_organizer_id_fkey(full_name),
+        vertical:verticals(name),
+        rsvps:event_rsvps(count)
+      `)
+      .order('start_date', { ascending: false });
+
+    if (eventIds && eventIds.length > 0) {
+      query = query.in('id', eventIds);
+    }
+
+    const { data: events, error } = await query;
+
+    if (error) {
+      console.error('Error fetching events for export:', error);
+      return { success: false, error: 'Failed to fetch events' };
+    }
+
+    if (!events || events.length === 0) {
+      return { success: false, error: 'No events to export' };
+    }
+
+    // Transform data for CSV
+    const exportData = events.map(event => ({
+      'Title': event.title,
+      'Category': event.category,
+      'Status': event.status,
+      'Start Date': event.start_date ? new Date(event.start_date).toLocaleDateString() : '',
+      'End Date': event.end_date ? new Date(event.end_date).toLocaleDateString() : '',
+      'Venue': event.is_virtual ? 'Virtual' : (event.venue || 'TBD'),
+      'Max Attendees': event.max_attendees || 'Unlimited',
+      'Registrations': (event.rsvps as any)?.[0]?.count || 0,
+      'Organizer': (event.organizer as any)?.full_name || 'Unknown',
+      'Vertical': (event.vertical as any)?.name || 'General',
+      'Created': event.created_at ? new Date(event.created_at).toLocaleDateString() : ''
+    }));
+
+    // Generate CSV
+    const headers = Object.keys(exportData[0]);
+    const csvRows = [
+      headers.join(','),
+      ...exportData.map(row =>
+        headers.map(header => {
+          const value = String(row[header as keyof typeof row] || '');
+          // Escape quotes and wrap in quotes if contains comma
+          if (value.includes(',') || value.includes('"') || value.includes('\n')) {
+            return `"${value.replace(/"/g, '""')}"`;
+          }
+          return value;
+        }).join(',')
+      )
+    ];
+
+    const timestamp = new Date().toISOString().split('T')[0];
+    const filename = eventIds?.length
+      ? `events_selected_${timestamp}.csv`
+      : `events_all_${timestamp}.csv`;
+
+    return {
+      success: true,
+      data: {
+        data: csvRows.join('\n'),
+        filename
+      }
+    };
+  } catch (error) {
+    console.error('Error in exportEvents:', error);
+    return { success: false, error: 'Failed to export events' };
   }
 }

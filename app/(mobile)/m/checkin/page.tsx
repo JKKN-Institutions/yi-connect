@@ -14,6 +14,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { CheckCircle2, XCircle, Calendar, MapPin, Clock } from 'lucide-react'
 import { triggerHaptic } from '@/lib/mobile/haptics'
+import { selfCheckIn } from '@/app/actions/events'
 import type { QRScanResult } from '@/types/mobile'
 
 type CheckInStatus = 'idle' | 'loading' | 'success' | 'error'
@@ -21,7 +22,7 @@ type CheckInStatus = 'idle' | 'loading' | 'success' | 'error'
 interface CheckInResult {
   eventId: string
   eventTitle: string
-  venue?: string
+  venue?: string | null
   checkInTime: string
   message: string
 }
@@ -48,16 +49,21 @@ export default function MobileCheckInPage() {
         eventId = eventId.replace('yi-event:', '')
       }
 
-      // TODO: Call actual check-in API
-      // For now, simulate a check-in
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      // Call the check-in API
+      const response = await selfCheckIn(eventId)
 
-      // Simulate success
+      if (!response.success || !response.data) {
+        setStatus('error')
+        setError(response.error || 'Check-in failed')
+        triggerHaptic('error')
+        return
+      }
+
       const checkInResult: CheckInResult = {
-        eventId,
-        eventTitle: 'Sample Event', // Would come from API
-        venue: 'Conference Hall A',
-        checkInTime: new Date().toLocaleTimeString(),
+        eventId: response.data.eventId,
+        eventTitle: response.data.eventTitle,
+        venue: response.data.venue,
+        checkInTime: response.data.checkInTime,
         message: 'Successfully checked in!'
       }
 

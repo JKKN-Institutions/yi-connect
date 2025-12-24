@@ -6,16 +6,25 @@
 import { Metadata } from 'next';
 import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { IncreaseCapacityForm } from '@/components/industrial-visits/industry-portal/increase-capacity-form';
+import { getCurrentIndustryId } from '@/lib/auth/industry-portal';
+import { createClient } from '@/lib/supabase/server';
 
-// Placeholder - would fetch actual slot data
-async function getSlot(id: string) {
-  // TODO: Fetch slot by ID for authenticated industry
-  return null;
+async function getSlot(id: string, industryId: string) {
+  const supabase = await createClient();
+
+  const { data: slot } = await supabase
+    .from('iv_events')
+    .select('id, title, max_capacity, current_registrations, industry_id')
+    .eq('id', id)
+    .eq('industry_id', industryId)
+    .single();
+
+  return slot;
 }
 
 interface IncreaseCapacityPageProps {
@@ -37,7 +46,13 @@ export default async function IncreaseCapacityPage({
   params,
 }: IncreaseCapacityPageProps) {
   const { id } = await params;
-  const slot = await getSlot(id);
+
+  const industryId = await getCurrentIndustryId();
+  if (!industryId) {
+    redirect('/login?redirect=/industry-portal');
+  }
+
+  const slot = await getSlot(id, industryId);
 
   if (!slot) {
     notFound();
@@ -64,14 +79,18 @@ export default async function IncreaseCapacityPage({
       {/* Form */}
       <Card>
         <CardHeader>
-          <CardTitle>Current Capacity Information</CardTitle>
+          <CardTitle>{slot.title}</CardTitle>
           <CardDescription>
-            Your slot is currently full. Increase the capacity to allow more members to
-            join.
+            Your slot currently has {slot.current_registrations} registrations out of {slot.max_capacity} capacity.
+            Increase the capacity to allow more members to join.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <IncreaseCapacityForm slotId={id} currentCapacity={20} currentRegistrations={20} />
+          <IncreaseCapacityForm
+            slotId={id}
+            currentCapacity={slot.max_capacity}
+            currentRegistrations={slot.current_registrations}
+          />
         </CardContent>
       </Card>
     </div>

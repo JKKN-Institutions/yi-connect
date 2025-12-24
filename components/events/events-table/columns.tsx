@@ -8,16 +8,7 @@
 
 import { ColumnDef } from '@tanstack/react-table';
 import { format } from 'date-fns';
-import {
-  MoreHorizontal,
-  Calendar,
-  MapPin,
-  Users,
-  Video,
-  Edit,
-  Trash2,
-  Eye
-} from 'lucide-react';
+import { Calendar, MapPin, Users, Video } from 'lucide-react';
 import Link from 'next/link';
 import type { EventListItem } from '@/types/event';
 import {
@@ -26,18 +17,10 @@ import {
   getEventStatusVariant
 } from '@/types/event';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu';
 import { DataTableColumnHeader } from '@/components/data-table/data-table-column-header';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { EventRowActions } from './event-row-actions';
 import { Progress } from '@/components/ui/progress';
 
 export const columns: ColumnDef<EventListItem>[] = [
@@ -289,45 +272,6 @@ export const columns: ColumnDef<EventListItem>[] = [
   },
   {
     id: 'actions',
-    cell: ({ row }) => {
-      const event = row.original;
-
-      return (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant='ghost' className='h-8 w-8 p-0'>
-              <span className='sr-only'>Open menu</span>
-              <MoreHorizontal className='h-4 w-4' />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align='end'>
-            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-            <DropdownMenuItem asChild>
-              <Link href={`/events/${event.id}`}>
-                <Eye className='mr-2 h-4 w-4' />
-                View Details
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link href={`/events/${event.id}/edit`}>
-                <Edit className='mr-2 h-4 w-4' />
-                Edit Event
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              className='text-destructive'
-              onClick={() => {
-                // TODO: Implement delete action
-                console.log('Delete event:', event.id);
-              }}
-            >
-              <Trash2 className='mr-2 h-4 w-4' />
-              Delete
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      );
-    }
+    cell: ({ row }) => <EventRowActions event={row.original} />
   }
 ];

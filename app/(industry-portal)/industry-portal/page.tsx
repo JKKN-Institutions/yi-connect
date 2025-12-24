@@ -34,6 +34,7 @@ import {
   getIndustryDashboardStats,
   getIndustryUpcomingSlots
 } from '@/lib/data/industrial-visits';
+import { getCurrentIndustryId } from '@/lib/auth/industry-portal';
 
 export const metadata: Metadata = {
   title: 'Industry Portal Dashboard | Yi Connect',
@@ -42,14 +43,6 @@ export const metadata: Metadata = {
 
 // Force dynamic rendering since this page uses cookies for authentication
 export const dynamic = 'force-dynamic';
-
-// Temporary helper to get industry ID from auth
-// TODO: Replace with proper industry authentication
-async function getCurrentIndustryId(): Promise<string | null> {
-  // For now, return a placeholder
-  // In production, this would check auth.uid() and get the industry_id from industry_portal_users table
-  return 'placeholder-industry-id';
-}
 
 async function IndustryDashboardContent() {
   // Prevent caching for authenticated pages (Next.js 16)

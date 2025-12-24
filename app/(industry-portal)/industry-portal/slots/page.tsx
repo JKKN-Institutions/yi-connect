@@ -18,12 +18,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
 
 import { getMyIndustrySlots } from '@/lib/data/industrial-visits';
-
-// Temporary helper to get industry ID from auth
-// TODO: Replace with proper industry authentication
-async function getCurrentIndustryId(): Promise<string | null> {
-  return 'placeholder-industry-id';
-}
+import { getCurrentIndustryId } from '@/lib/auth/industry-portal';
 
 export const metadata: Metadata = {
   title: 'My Slots | Industry Portal',

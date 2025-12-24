@@ -30,6 +30,7 @@ import {
   getMyWaitlistEntries
 } from '@/lib/data/industrial-visits';
 import { IVBookingActions } from '@/components/industrial-visits/iv-booking-actions';
+import { IVWaitlistButton } from '@/components/industrial-visits/iv-waitlist-button';
 import {
   CARPOOL_STATUS_LABELS,
   WAITLIST_STATUS_LABELS
@@ -368,7 +369,13 @@ async function MyBookingsContent() {
                           View Event
                         </Link>
                       </Button>
-                      {/* TODO: Add leave waitlist button */}
+                      <div className='flex-1'>
+                        <IVWaitlistButton
+                          eventId={event.id}
+                          waitlistId={waitlist.id}
+                          variant='outline'
+                        />
+                      </div>
                     </CardFooter>
                   </Card>
                 );

@@ -58,7 +58,8 @@ export async function updateSession(request: NextRequest) {
     '/member-requests',
     '/events',
     '/finance',
-    '/stakeholders'
+    '/stakeholders',
+    '/m' // Mobile/TWA routes - all require authentication
   ]
   const isProtectedPath = protectedPaths.some(path =>
     request.nextUrl.pathname.startsWith(path)

@@ -42,9 +42,14 @@ export async function updateSession(request: NextRequest) {
   // supabase.auth.getUser(). A simple mistake could make it very hard to debug
   // issues with users being randomly logged out.
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  let user = null
+  try {
+    const response = await supabase.auth.getUser()
+    user = response.data.user
+  } catch (error) {
+    // If auth check fails (e.g., in TWA or offline), continue without user
+    console.error('Auth check failed:', error)
+  }
 
   // Protected routes - redirect to login if not authenticated
   const protectedPaths = [

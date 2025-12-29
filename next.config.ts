@@ -97,6 +97,38 @@ const nextConfig: NextConfig = {
         ],
       },
       {
+        // Digital Asset Links for TWA
+        source: "/.well-known/assetlinks.json",
+        headers: [
+          {
+            key: "Content-Type",
+            value: "application/json",
+          },
+          {
+            key: "Cache-Control",
+            value: "public, max-age=3600, must-revalidate",
+          },
+          {
+            key: "Access-Control-Allow-Origin",
+            value: "*",
+          },
+        ],
+      },
+      {
+        // Manifest for PWA
+        source: "/manifest.json",
+        headers: [
+          {
+            key: "Content-Type",
+            value: "application/json",
+          },
+          {
+            key: "Cache-Control",
+            value: "public, max-age=3600, must-revalidate",
+          },
+        ],
+      },
+      {
         // Security headers for all routes
         source: "/(.*)",
         headers: [

@@ -1,11 +1,13 @@
 [
   {
-    "relation": ["delegate_permission/common.handle_all_urls"],
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
     "target": {
       "namespace": "android_app",
       "package_name": "com.jkkninstitutions.yiconnect",
       "sha256_cert_fingerprints": [
-        "REPLACE_WITH_YOUR_SHA256_FINGERPRINT_FROM_KEYSTORE"
+        "5C:E0:69:33:1B:6F:DF:CC:D9:AE:D8:11:9F:B7:A9:FF:EE:71:3C:B9:03:89:3F:F5:DF:58:74:B9:88:C7:37:A3"
       ]
     }
   }

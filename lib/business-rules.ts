@@ -8,10 +8,18 @@
  * - Rule 4: Booking restrictions
  * - Rule 5: MoU requirements (handled in coordinator-auth.ts)
  * - Rule 6: Privacy rules (handled via RLS)
+ *
+ * Business rules are now chapter-configurable via the chapter_settings table.
+ * Functions accept optional settings parameter; uses defaults if not provided.
  */
 
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { BUSINESS_RULES } from '@/lib/permissions'
+import {
+  DEFAULT_CHAPTER_SETTINGS,
+  getCurrentChapterSettings,
+  type ChapterSettings,
+} from '@/lib/data/chapter-settings'
 
 // ============================================================================
 // TYPES
@@ -64,9 +72,16 @@ export interface BookingRestrictions {
 /**
  * Validate booking advance time requirement
  *
- * Rule 1: Sessions must be requested at least 7 days in advance
+ * Rule 1: Sessions must be requested at least X days in advance (default: 7)
+ * Now supports chapter-configurable settings.
+ *
+ * @param sessionDate - The date of the session
+ * @param settings - Optional chapter settings for custom advance days
  */
-export function validateBookingAdvanceTime(sessionDate: Date): ValidationResult {
+export function validateBookingAdvanceTime(
+  sessionDate: Date,
+  settings?: Partial<ChapterSettings>
+): ValidationResult {
   const now = new Date()
   now.setHours(0, 0, 0, 0)
 
@@ -76,7 +91,9 @@ export function validateBookingAdvanceTime(sessionDate: Date): ValidationResult 
   const diffTime = session.getTime() - now.getTime()
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
 
-  const minDays = BUSINESS_RULES.SESSION_BOOKING_ADVANCE_DAYS
+  // Use chapter settings if provided, otherwise use default
+  const minDays = settings?.sessionBookingAdvanceDays ??
+    BUSINESS_RULES.SESSION_BOOKING_ADVANCE_DAYS
 
   if (diffDays < minDays) {
     return {
@@ -96,17 +113,34 @@ export function validateBookingAdvanceTime(sessionDate: Date): ValidationResult 
   return { valid: true, errors: [], warnings }
 }
 
+/**
+ * Async version that fetches chapter settings automatically
+ */
+export async function validateBookingAdvanceTimeWithChapterSettings(
+  sessionDate: Date
+): Promise<ValidationResult> {
+  const settings = await getCurrentChapterSettings()
+  return validateBookingAdvanceTime(sessionDate, settings)
+}
+
 // ============================================================================
 // RULE 2: TRAINER WORKLOAD
 // ============================================================================
 
 /**
  * Get trainer workload for a specific month
+ * Now supports chapter-configurable max sessions.
+ *
+ * @param trainerId - The trainer's member ID
+ * @param year - Optional year (defaults to current)
+ * @param month - Optional month (defaults to current)
+ * @param settings - Optional chapter settings for custom limits
  */
 export async function getTrainerWorkload(
   trainerId: string,
   year?: number,
-  month?: number
+  month?: number,
+  settings?: Partial<ChapterSettings>
 ): Promise<TrainerWorkload | null> {
   const supabase = await createServerSupabaseClient()
 
@@ -125,7 +159,11 @@ export async function getTrainerWorkload(
   }
 
   const sessionCount = data || 0
-  const maxSessions = BUSINESS_RULES.TRAINER_MAX_SESSIONS_PER_MONTH
+  // Use chapter settings if provided, otherwise use default
+  const maxSessions = settings?.trainerMaxSessionsPerMonth ??
+    BUSINESS_RULES.TRAINER_MAX_SESSIONS_PER_MONTH
+  const warningThreshold = settings?.trainerWarningThreshold ??
+    BUSINESS_RULES.TRAINER_WARNING_THRESHOLD
 
   // Get trainer name
   const { data: member } = await supabase
@@ -145,7 +183,7 @@ export async function getTrainerWorkload(
     availabilityStatus:
       sessionCount >= maxSessions
         ? 'unavailable'
-        : sessionCount >= BUSINESS_RULES.TRAINER_WARNING_THRESHOLD
+        : sessionCount >= warningThreshold
           ? 'limited'
           : 'available',
   }
@@ -154,13 +192,25 @@ export async function getTrainerWorkload(
 /**
  * Validate trainer can be assigned to a session
  *
- * Rule 2: Trainers cannot have more than 6 sessions per month
+ * Rule 2: Trainers cannot have more than X sessions per month (default: 6)
+ * Now supports chapter-configurable limits.
+ *
+ * @param trainerId - The trainer's member ID
+ * @param sessionDate - The date of the session
+ * @param settings - Optional chapter settings for custom limits
  */
 export async function validateTrainerAssignment(
   trainerId: string,
-  sessionDate: Date
+  sessionDate: Date,
+  settings?: Partial<ChapterSettings>
 ): Promise<ValidationResult> {
   const supabase = await createServerSupabaseClient()
+
+  // Use chapter settings if provided, otherwise use default
+  const maxSessions = settings?.trainerMaxSessionsPerMonth ??
+    BUSINESS_RULES.TRAINER_MAX_SESSIONS_PER_MONTH
+  const warningThreshold = settings?.trainerWarningThreshold ??
+    BUSINESS_RULES.TRAINER_WARNING_THRESHOLD
 
   const year = sessionDate.getFullYear()
   const month = sessionDate.getMonth() + 1
@@ -168,7 +218,7 @@ export async function validateTrainerAssignment(
   const { data, error } = await supabase.rpc('validate_trainer_workload', {
     p_trainer_id: trainerId,
     p_session_date: sessionDate.toISOString().split('T')[0],
-    p_max_sessions: BUSINESS_RULES.TRAINER_MAX_SESSIONS_PER_MONTH,
+    p_max_sessions: maxSessions,
   })
 
   if (error) {
@@ -186,15 +236,24 @@ export async function validateTrainerAssignment(
   }
 
   const warnings: string[] = []
-  if (
-    result.current_count >= BUSINESS_RULES.TRAINER_WARNING_THRESHOLD
-  ) {
+  if (result.current_count >= warningThreshold) {
     warnings.push(
       `Trainer has ${result.current_count}/${result.max_allowed} sessions this month`
     )
   }
 
   return { valid: true, errors: [], warnings }
+}
+
+/**
+ * Async version that fetches chapter settings automatically
+ */
+export async function validateTrainerAssignmentWithChapterSettings(
+  trainerId: string,
+  sessionDate: Date
+): Promise<ValidationResult> {
+  const settings = await getCurrentChapterSettings()
+  return validateTrainerAssignment(trainerId, sessionDate, settings)
 }
 
 /**
@@ -259,12 +318,21 @@ export async function getAvailableTrainers(
 /**
  * Validate materials upload deadline
  *
- * Rule 3: Materials must be uploaded at least 3 days before the session
+ * Rule 3: Materials must be uploaded at least X days before the session (default: 3)
+ * Now supports chapter-configurable deadline.
+ *
+ * @param bookingId - The booking ID
+ * @param settings - Optional chapter settings for custom deadline
  */
 export async function validateMaterialsDeadline(
-  bookingId: string
+  bookingId: string,
+  settings?: Partial<ChapterSettings>
 ): Promise<ValidationResult & { deadline?: Date; daysRemaining?: number }> {
   const supabase = await createServerSupabaseClient()
+
+  // Use chapter settings if provided, otherwise use default
+  const materialsApprovalDays = settings?.materialsApprovalDaysBefore ??
+    BUSINESS_RULES.MATERIALS_APPROVAL_DAYS_BEFORE_SESSION
 
   const { data, error } = await supabase.rpc('validate_materials_deadline', {
     p_booking_id: bookingId,
@@ -282,7 +350,7 @@ export async function validateMaterialsDeadline(
   }
 
   const deadline = result.deadline_date ? new Date(result.deadline_date) : undefined
-  const daysRemaining = result.days_until_session - BUSINESS_RULES.MATERIALS_APPROVAL_DAYS_BEFORE_SESSION
+  const daysRemaining = result.days_until_session - materialsApprovalDays
 
   if (!result.can_upload) {
     return {
@@ -305,6 +373,16 @@ export async function validateMaterialsDeadline(
     deadline,
     daysRemaining,
   }
+}
+
+/**
+ * Async version that fetches chapter settings automatically
+ */
+export async function validateMaterialsDeadlineWithChapterSettings(
+  bookingId: string
+): Promise<ValidationResult & { deadline?: Date; daysRemaining?: number }> {
+  const settings = await getCurrentChapterSettings()
+  return validateMaterialsDeadline(bookingId, settings)
 }
 
 /**

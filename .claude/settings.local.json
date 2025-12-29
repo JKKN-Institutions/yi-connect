@@ -64,7 +64,9 @@
       "Bash(then echo \"Cache exists\")",
       "Bash(else echo \"Cache cleared successfully\")",
       "Bash(fi)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "WebFetch(domain:yi-connect.vercel.app)",
+      "WebFetch(domain:yi-connect-app.vercel.app)"
     ],
     "deny": [],
     "ask": []

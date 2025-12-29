@@ -1006,3 +1006,85 @@ export function getMouExpiryStatus(validTo: string | undefined): 'active' | 'exp
   if (daysUntilExpiry <= 30) return 'expiring_soon'
   return 'active'
 }
+
+// ============================================================================
+// PAGINATION TYPES
+// ============================================================================
+
+export interface StakeholderFilters {
+  search?: string
+  status?: StakeholderStatus[]
+  health_tier?: HealthTier[]
+  mou_status?: MouStatus[]
+  city?: string
+  state?: string
+}
+
+export interface StakeholderSortOptions {
+  field: string
+  direction: 'asc' | 'desc'
+}
+
+export interface StakeholderQueryParams {
+  chapterId: string | null
+  page?: number
+  pageSize?: number
+  filters?: StakeholderFilters
+  sort?: StakeholderSortOptions
+}
+
+export interface PaginatedSchools {
+  data: SchoolListItem[]
+  total: number
+  page: number
+  pageSize: number
+  totalPages: number
+}
+
+export interface PaginatedColleges {
+  data: CollegeListItem[]
+  total: number
+  page: number
+  pageSize: number
+  totalPages: number
+}
+
+export interface PaginatedIndustries {
+  data: IndustryListItem[]
+  total: number
+  page: number
+  pageSize: number
+  totalPages: number
+}
+
+export interface PaginatedGovernmentStakeholders {
+  data: GovernmentStakeholderListItem[]
+  total: number
+  page: number
+  pageSize: number
+  totalPages: number
+}
+
+export interface PaginatedNGOs {
+  data: NGOListItem[]
+  total: number
+  page: number
+  pageSize: number
+  totalPages: number
+}
+
+export interface PaginatedVendors {
+  data: VendorListItem[]
+  total: number
+  page: number
+  pageSize: number
+  totalPages: number
+}
+
+export interface PaginatedSpeakers {
+  data: SpeakerListItem[]
+  total: number
+  page: number
+  pageSize: number
+  totalPages: number
+}

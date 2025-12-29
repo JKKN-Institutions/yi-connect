@@ -1,6 +1,80 @@
 # Yi Connect - Progress Tracker
 
-## Current Session: 2025-12-23
+## Current Session: 2025-12-30
+
+### Business Rules & Pagination Improvements - COMPLETE
+
+#### What Was Done
+
+1. **Chapter-Configurable Business Rules System**
+   - Created `chapter_settings` table for per-chapter configurations
+   - Implemented `get_chapter_settings` DB function with fallback to defaults
+   - Added `ensure_chapter_settings` function for lazy creation
+   - Auto-creates settings for new chapters via trigger
+   - RLS policies: members read, Chair+ write, Admin full access
+   - Configurable rules:
+     - Session booking advance days
+     - Trainer workload (max sessions, warning threshold)
+     - Materials approval (days before, chair approval requirement)
+     - MoU rules (required for opportunities, auto-close on expiry)
+     - Privacy rules (member visibility, coordinator scope)
+     - Engagement score weights (attendance/volunteer/feedback/skills)
+     - Readiness score weights (tenure/positions/training/peer input)
+     - Financial rules (large expense threshold, approval requirement)
+     - Score normalization maximums
+
+2. **Engagement Score Calculation**
+   - Attendance component: 50% (events attended / eligible events)
+   - Volunteer component: 30% (hours normalized against chapter max)
+   - Feedback component: 15% (feedback submissions / events attended)
+   - Skills component: 5% (profile skills / chapter max for full score)
+   - Batch calculation for efficiency (single DB query)
+   - Support for chapter-configurable weights
+
+3. **Readiness Score Calculation**
+   - Tenure component: 25% (years in chapter / max tenure years)
+   - Positions component: 25% (leadership positions / max positions)
+   - Training component: 25% (certifications / training completions)
+   - Peer Input component: 25% (peer nominations / max nominations)
+   - Batch calculation for efficiency
+   - Time-based period filtering (default: 12 months)
+
+4. **Server-side Pagination for Stakeholder Data Layer**
+   - Added pagination types: `StakeholderQueryParams`, `StakeholderFilters`, `StakeholderSortOptions`
+   - Added paginated response types for all 7 stakeholder entities
+   - Implemented paginated getter functions:
+     - `getSchoolsPaginated`, `getCollegesPaginated`, `getIndustriesPaginated`
+     - `getGovernmentStakeholdersPaginated`, `getNGOsPaginated`
+     - `getVendorsPaginated`, `getSpeakersPaginated`
+   - Uses Supabase `.range()` and `count: 'exact'` for efficient pagination
+   - Support filtering by search, status, health_tier, mou_status, city, state
+   - Maintained backward compatibility with legacy functions
+
+#### Files Created
+```
+lib/data/chapter-settings.ts
+supabase/migrations/20251230000001_chapter_settings.sql
+```
+
+#### Files Modified
+```
+lib/business-rules.ts (imports chapter settings)
+lib/data/members.ts (added score calculations)
+lib/data/stakeholder.ts (added paginated functions)
+types/stakeholder.ts (added pagination types)
+```
+
+#### Commits Pushed
+```
+b8637a4 feat: Implement engagement and readiness score calculations
+cf16c71 feat: Add chapter-configurable business rules system
+18779a6 feat: Add server-side pagination support for stakeholder data layer
+67013bd Add system specification and fix settings config
+```
+
+---
+
+## Previous Session: 2025-12-23
 
 ### Demo Environment Setup - COMPLETE
 
@@ -295,4 +369,4 @@ Next.js 16.0.10 (Turbopack)
 
 ---
 
-*Last updated: 2025-12-22*
+*Last updated: 2025-12-30*

@@ -24,23 +24,38 @@ export default function manifest(): MetadataRoute.Manifest {
     dir: 'ltr',
     prefer_related_applications: false,
     icons: [
+      // SVG icon for modern browsers
       {
         src: '/icons/icon.svg',
         sizes: 'any',
         type: 'image/svg+xml',
         purpose: 'any'
       },
+      // PNG icons for Android TWA and older browsers
       {
-        src: '/icons/icon-192x192.svg',
+        src: '/icons/icon-192x192.png',
         sizes: '192x192',
-        type: 'image/svg+xml',
+        type: 'image/png',
         purpose: 'any'
       },
       {
-        src: '/icons/icon-512x512.svg',
+        src: '/icons/icon-512x512.png',
         sizes: '512x512',
-        type: 'image/svg+xml',
+        type: 'image/png',
         purpose: 'any'
+      },
+      // Maskable icons for Android adaptive icons (with safe area padding)
+      {
+        src: '/icons/icon-192x192-maskable.png',
+        sizes: '192x192',
+        type: 'image/png',
+        purpose: 'maskable'
+      },
+      {
+        src: '/icons/icon-512x512-maskable.png',
+        sizes: '512x512',
+        type: 'image/png',
+        purpose: 'maskable'
       }
     ],
     shortcuts: [

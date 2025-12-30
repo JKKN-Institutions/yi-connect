@@ -64,8 +64,27 @@ lib/data/stakeholder.ts (added paginated functions)
 types/stakeholder.ts (added pagination types)
 ```
 
+5. **Enabled Score Display on Member Detail Page**
+   - Imported score calculation functions into member detail page
+   - Calculate engagement & readiness scores on page load
+   - MemberScoreDisplay component now active with:
+     - Color-coded progress bars (green ≥80, blue ≥60, yellow ≥40, red <40)
+     - Score labels (Excellent, Good, Average, Needs Improvement)
+
+6. **Applied Chapter Settings Migration to Production**
+   - Ran `supabase db push` to apply migration
+   - `chapter_settings` table now live in production
+   - Auto-create trigger active for new chapters
+
+#### Files Modified (Additional)
+```
+app/(dashboard)/members/[id]/page.tsx (enabled score display)
+```
+
 #### Commits Pushed
 ```
+87accca feat: Enable engagement and readiness score display on member detail page
+0b62a83 docs: Update progress.txt with 2025-12-30 session work
 b8637a4 feat: Implement engagement and readiness score calculations
 cf16c71 feat: Add chapter-configurable business rules system
 18779a6 feat: Add server-side pagination support for stakeholder data layer

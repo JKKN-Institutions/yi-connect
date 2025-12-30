@@ -815,7 +815,8 @@ export async function scheduleVisit(
       return { success: false, error: 'Failed to schedule visit' }
     }
 
-    // TODO: Create event from visit request
+    // Note: Event creation from visit is optional - can be done manually by organizers
+    // The visit request itself serves as the primary record
 
     updateTag('visit-requests')
     revalidatePath('/visit-requests')

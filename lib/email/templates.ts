@@ -795,6 +795,92 @@ export function opportunityApplicationShortlistedEmail(data: {
 // ANNOUNCEMENT TEMPLATES
 // ============================================================================
 
+// ============================================================================
+// SUB-CHAPTER LEAD TEMPLATES
+// ============================================================================
+
+export function subChapterLeadWelcomeEmail(data: {
+  leadName: string
+  subChapterName: string
+  email: string
+  temporaryPassword: string
+  loginLink: string
+}): { subject: string; html: string } {
+  return {
+    subject: `Welcome to Yi Connect - Your ${data.subChapterName} Account`,
+    html: baseTemplate(`
+      <h2 style="color: #1e293b; margin: 0 0 16px; font-size: 20px;">Welcome, ${data.leadName}! 🎉</h2>
+      <p style="color: #475569; line-height: 1.6; margin: 0 0 16px;">
+        You have been added as a lead for <strong>${data.subChapterName}</strong>.
+        Your account has been created and you can now access the Chapter Lead Portal.
+      </p>
+      <div style="background-color: #f0f9ff; border-radius: 8px; padding: 20px; margin: 16px 0;">
+        <h3 style="color: #1e40af; margin: 0 0 12px; font-size: 16px;">Your Login Credentials</h3>
+        <p style="color: #1e40af; margin: 0 0 8px; font-size: 14px;">
+          📧 <strong>Email:</strong> ${data.email}
+        </p>
+        <p style="color: #1e40af; margin: 0; font-size: 14px;">
+          🔑 <strong>Temporary Password:</strong> <code style="background-color: #dbeafe; padding: 2px 8px; border-radius: 4px; font-family: monospace;">${data.temporaryPassword}</code>
+        </p>
+      </div>
+      <div style="background-color: #fef3c7; border-left: 4px solid #f59e0b; padding: 16px; margin: 16px 0; border-radius: 0 8px 8px 0;">
+        <p style="color: #92400e; margin: 0; font-size: 14px;">
+          ⚠️ <strong>Important:</strong> You will be required to change your password upon first login.
+        </p>
+      </div>
+      <p style="color: #475569; line-height: 1.6; margin: 0 0 16px;">
+        As a sub-chapter lead, you can:
+      </p>
+      <ul style="color: #475569; line-height: 1.8; margin: 0 0 16px; padding-left: 20px;">
+        <li>Manage sub-chapter members</li>
+        <li>Create and track events</li>
+        <li>Request speakers from Yi members</li>
+        <li>View attendance and engagement reports</li>
+      </ul>
+      ${button('Login to Chapter Portal', data.loginLink)}
+      <p style="color: #64748b; font-size: 14px; margin: 16px 0 0;">
+        If you have any questions, please contact your Yi mentor.
+      </p>
+    `),
+  }
+}
+
+export function subChapterLeadPasswordResetEmail(data: {
+  leadName: string
+  subChapterName: string
+  email: string
+  temporaryPassword: string
+  loginLink: string
+}): { subject: string; html: string } {
+  return {
+    subject: `Password Reset - Yi Connect ${data.subChapterName}`,
+    html: baseTemplate(`
+      <h2 style="color: #1e293b; margin: 0 0 16px; font-size: 20px;">Password Reset</h2>
+      <p style="color: #475569; line-height: 1.6; margin: 0 0 16px;">
+        Hi ${data.leadName}, your password for the <strong>${data.subChapterName}</strong> Chapter Lead Portal has been reset.
+      </p>
+      <div style="background-color: #f0f9ff; border-radius: 8px; padding: 20px; margin: 16px 0;">
+        <h3 style="color: #1e40af; margin: 0 0 12px; font-size: 16px;">New Login Credentials</h3>
+        <p style="color: #1e40af; margin: 0 0 8px; font-size: 14px;">
+          📧 <strong>Email:</strong> ${data.email}
+        </p>
+        <p style="color: #1e40af; margin: 0; font-size: 14px;">
+          🔑 <strong>New Temporary Password:</strong> <code style="background-color: #dbeafe; padding: 2px 8px; border-radius: 4px; font-family: monospace;">${data.temporaryPassword}</code>
+        </p>
+      </div>
+      <div style="background-color: #fef3c7; border-left: 4px solid #f59e0b; padding: 16px; margin: 16px 0; border-radius: 0 8px 8px 0;">
+        <p style="color: #92400e; margin: 0; font-size: 14px;">
+          ⚠️ <strong>Important:</strong> You will be required to change your password upon next login.
+        </p>
+      </div>
+      ${button('Login Now', data.loginLink)}
+      <p style="color: #64748b; font-size: 14px; margin: 16px 0 0;">
+        If you did not request this reset, please contact your Yi mentor immediately.
+      </p>
+    `),
+  }
+}
+
 export function announcementEmail(data: {
   memberName: string
   title: string

@@ -6,7 +6,8 @@
  * Displays all notifications with filtering and mark as read functionality.
  */
 
-import { Suspense } from 'react'
+import { Suspense, useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import { MobileHeader } from '@/components/mobile/mobile-header'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -22,6 +23,8 @@ import {
   Clock
 } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
+import { markAllNotificationsAsRead } from '@/app/actions/communication'
+import { toast } from 'react-hot-toast'
 
 // Notification type icons
 const notificationIcons: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -167,7 +170,21 @@ function NotificationsSkeleton() {
 }
 
 export default function MobileNotificationsPage() {
+  const router = useRouter()
+  const [isPending, startTransition] = useTransition()
   const unreadCount = sampleNotifications.filter(n => !n.read).length
+
+  const handleMarkAllAsRead = () => {
+    startTransition(async () => {
+      const result = await markAllNotificationsAsRead()
+      if (result.success) {
+        toast.success('All notifications marked as read')
+        router.refresh()
+      } else {
+        toast.error(result.message || 'Failed to mark notifications as read')
+      }
+    })
+  }
 
   return (
     <div className='min-h-screen bg-background'>
@@ -176,15 +193,13 @@ export default function MobileNotificationsPage() {
         showBack
         actions={[
           {
-            label: 'Mark all as read',
-            onClick: () => {
-              // TODO: Implement mark all as read
-            }
+            label: isPending ? 'Marking...' : 'Mark all as read',
+            onClick: handleMarkAllAsRead
           },
           {
             label: 'Notification settings',
             onClick: () => {
-              // TODO: Navigate to settings
+              router.push('/m/settings/notifications')
             }
           }
         ]}

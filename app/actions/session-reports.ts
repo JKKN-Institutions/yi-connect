@@ -20,11 +20,23 @@ import {
   type VerifySessionReportInput,
   type CompleteFollowUpInput,
 } from '@/lib/validations/event'
+import { isAdminLevel } from '@/lib/permissions'
 
 type ActionResponse<T = void> = {
   success: boolean
   data?: T
   error?: string
+}
+
+/**
+ * Get user's hierarchy level from database
+ */
+async function getUserHierarchyLevel(userId: string): Promise<number> {
+  const supabase = await createClient()
+  const { data } = await supabase.rpc('get_user_hierarchy_level', {
+    user_id: userId
+  })
+  return data || 0
 }
 
 // ============================================================================
@@ -189,8 +201,11 @@ export async function updateSessionReport(
 
     // Check if user can edit (submitter or admin)
     if (report.submitted_by !== user.id) {
-      // TODO: Check for admin role
-      return { success: false, error: 'Not authorized to edit this report' }
+      // Check if user has admin privileges (Chair level or higher)
+      const hierarchyLevel = await getUserHierarchyLevel(user.id)
+      if (!isAdminLevel(hierarchyLevel)) {
+        return { success: false, error: 'Not authorized to edit this report' }
+      }
     }
 
     // Calculate actual duration if times provided
@@ -258,7 +273,12 @@ export async function verifySessionReport(
       return { success: false, error: 'Report already verified' }
     }
 
-    // TODO: Verify user has permission to verify
+    // Permission check: Verification requires admin-level access
+    // RLS policies ensure only authorized users (Chapter leadership) can verify
+    const hierarchyLevel = await getUserHierarchyLevel(user.id)
+    if (!isAdminLevel(hierarchyLevel)) {
+      return { success: false, error: 'Not authorized to verify reports' }
+    }
 
     // Update report
     const { error } = await supabase

@@ -96,6 +96,11 @@
     "typescript": "^5"
   },
   "overrides": {
-    "html2canvas": "npm:html2canvas-pro@^1.5.13"
+    "html2canvas": "npm:html2canvas-pro@^1.5.13",
+    "tar-fs": "^3.0.6",
+    "ws": "^8.18.0"
+  },
+  "comments": {
+    "xlsx-vulnerability": "xlsx has known prototype pollution (GHSA-4r6h-8v6p-xvw6) and ReDoS (GHSA-5pgg-2g8v-p4x9) vulnerabilities with NO FIX available. The library is used for Excel export functionality. Consider migrating to exceljs if security is critical. Monitor https://github.com/SheetJS/sheetjs for updates."
   }
 }

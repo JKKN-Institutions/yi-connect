@@ -90,9 +90,9 @@ export default async function EditMemberPage({ params }: PageProps) {
 
 // Generate metadata
 export async function generateMetadata({ params }: PageProps) {
-  const resolvedParams = await params
-  // TODO: Fetch member for dynamic metadata
-  // const member = await getMemberWithProfile(resolvedParams.id)
+  // Note: Using static title to avoid extra database fetch for metadata
+  // Dynamic metadata would require fetching member data which adds latency
+  void params // Suppress unused variable warning
 
   return {
     title: `Edit Member - Yi Connect`,

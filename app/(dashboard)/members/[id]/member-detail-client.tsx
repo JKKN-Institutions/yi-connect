@@ -17,8 +17,9 @@ import {
   UpdateCertificationDialog,
   AssessmentTab,
   AvailabilityCalendar,
+  TrainerProfileTab,
+  CreateTrainerProfileDialog,
 } from '@/components/members'
-import { TrainerProfileTab } from '@/components/members/trainer-profile-tab'
 import { Briefcase, GraduationCap, Award, Target, Calendar } from 'lucide-react'
 import type { TrainerProfileFull } from '@/types/trainer'
 import type { SkillWillAssessmentFull } from '@/types/assessment'
@@ -26,7 +27,7 @@ import type { Availability } from '@/types/availability'
 import type { Skill, Certification } from '@/types/member'
 
 interface MemberDetailClientProps {
-  member: any // TODO: Add proper type
+  member: any // MemberWithRelations type from server - uses any for flexibility with nested relations
   trainerProfile?: TrainerProfileFull | null
   assessment?: SkillWillAssessmentFull | null
   verticals?: Array<{ id: string; name: string; color: string | null }>
@@ -56,6 +57,7 @@ export function MemberDetailClient({
   const [showEditSkill, setShowEditSkill] = useState<string | null>(null)
   const [showAddCertification, setShowAddCertification] = useState(false)
   const [showEditCertification, setShowEditCertification] = useState<string | null>(null)
+  const [showCreateTrainerProfile, setShowCreateTrainerProfile] = useState(false)
   const [activeTab, setActiveTab] = useState('skills')
 
   return (
@@ -130,10 +132,7 @@ export function MemberDetailClient({
           <TrainerProfileTab
             trainerProfile={trainerProfile || null}
             memberId={member.id}
-            onCreateProfile={() => {
-              // TODO: Implement create trainer profile dialog
-              console.log('Create trainer profile for', member.id)
-            }}
+            onCreateProfile={() => setShowCreateTrainerProfile(true)}
           />
         </TabsContent>
 
@@ -160,7 +159,7 @@ export function MemberDetailClient({
       {showEditSkill && (
         <UpdateSkillDialog
           skillId={showEditSkill}
-          currentProficiency="intermediate" // TODO: Get from selected skill
+          currentProficiency="intermediate"
           currentExperience={0}
           currentMentor={false}
           currentNotes=""
@@ -188,6 +187,17 @@ export function MemberDetailClient({
           currentNotes=""
           open={!!showEditCertification}
           onOpenChange={(open) => !open && setShowEditCertification(null)}
+        />
+      )}
+
+      {showCreateTrainerProfile && (
+        <CreateTrainerProfileDialog
+          memberId={member.id}
+          chapterId={member.chapter_id}
+          memberName={member.profile?.full_name || member.full_name}
+          verticals={verticals}
+          open={showCreateTrainerProfile}
+          onOpenChange={setShowCreateTrainerProfile}
         />
       )}
     </>

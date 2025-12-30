@@ -10,6 +10,8 @@ import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import bcrypt from 'bcryptjs'
+import { sendEmail } from '@/lib/email'
+import { subChapterLeadPasswordResetEmail } from '@/lib/email/templates'
 
 type ActionResult<T = void> =
   | { success: true; data?: T }
@@ -186,6 +188,23 @@ export async function resetChapterLeadPassword(
 ): Promise<ActionResult<{ temporaryPassword: string }>> {
   const supabase = await createClient()
 
+  // Fetch lead details for email
+  const { data: lead, error: fetchError } = await supabase
+    .from('sub_chapter_leads')
+    .select(`
+      id,
+      full_name,
+      email,
+      sub_chapter:sub_chapters(name)
+    `)
+    .eq('id', leadId)
+    .single()
+
+  if (fetchError || !lead) {
+    console.error('Error fetching lead:', fetchError)
+    return { success: false, error: 'Lead not found' }
+  }
+
   // Generate new temporary password
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%'
   let temporaryPassword = ''
@@ -209,7 +228,31 @@ export async function resetChapterLeadPassword(
     return { success: false, error: error.message }
   }
 
-  // TODO: Send email with temporary password
+  // Send email with temporary password
+  const subChapterData = lead.sub_chapter as unknown as { name: string } | { name: string }[] | null
+  const subChapterName = Array.isArray(subChapterData)
+    ? subChapterData[0]?.name || 'Sub-Chapter'
+    : subChapterData?.name || 'Sub-Chapter'
+  const loginLink = `${process.env.NEXT_PUBLIC_APP_URL || 'https://yi-connect-app.vercel.app'}/chapter-lead/login`
+
+  const emailTemplate = subChapterLeadPasswordResetEmail({
+    leadName: lead.full_name,
+    subChapterName,
+    email: lead.email,
+    temporaryPassword,
+    loginLink,
+  })
+
+  const emailResult = await sendEmail({
+    to: lead.email,
+    subject: emailTemplate.subject,
+    html: emailTemplate.html,
+  })
+
+  if (!emailResult.success) {
+    console.warn('[ChapterLeadAuth] Failed to send password reset email:', emailResult.error)
+    // Still return success since password was reset - email is secondary
+  }
 
   return { success: true, data: { temporaryPassword } }
 }

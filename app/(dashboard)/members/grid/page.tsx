@@ -174,7 +174,7 @@ async function MembersPageContent({ searchParams }: PageProps) {
         <StatsSection />
       </Suspense>
 
-      {/* TODO: Add filters/search bar here */}
+      {/* Note: Filters/search are available in the Table View (/members/table) */}
 
       {/* Members List with Suspense */}
       <Suspense

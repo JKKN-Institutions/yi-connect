@@ -59,11 +59,21 @@ export function BottomNav() {
   const pathname = usePathname()
   const [unreadCount, setUnreadCount] = useState(0)
 
-  // TODO: Fetch unread notifications count
+  // Fetch unread notifications count from API
   useEffect(() => {
-    // This would be replaced with actual notification count fetching
-    // For now, using a placeholder
-    setUnreadCount(0)
+    async function fetchUnreadCount() {
+      try {
+        const response = await fetch('/api/notifications/unread-count')
+        if (response.ok) {
+          const data = await response.json()
+          setUnreadCount(data.count || 0)
+        }
+      } catch {
+        // Silently fail - notifications badge will show 0
+        setUnreadCount(0)
+      }
+    }
+    fetchUnreadCount()
   }, [])
 
   const handleNavClick = () => {

@@ -9,6 +9,8 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import bcrypt from 'bcryptjs'
+import { sendEmail } from '@/lib/email'
+import { subChapterLeadWelcomeEmail } from '@/lib/email/templates'
 import type {
   CreateSubChapterInput,
   CreateSubChapterLeadInput,
@@ -183,6 +185,13 @@ export async function createSubChapterLead(
     return { success: false, error: 'A lead with this email already exists' }
   }
 
+  // Fetch sub-chapter name for the email
+  const { data: subChapter } = await supabase
+    .from('sub_chapters')
+    .select('name')
+    .eq('id', input.sub_chapter_id)
+    .single()
+
   // Generate temporary password
   const temporaryPassword = generatePassword()
   const passwordHash = await bcrypt.hash(temporaryPassword, 10)
@@ -213,7 +222,28 @@ export async function createSubChapterLead(
 
   revalidatePath(`/sub-chapters/${input.sub_chapter_id}`)
 
-  // TODO: Send welcome email with temporary password
+  // Send welcome email with temporary password
+  const subChapterName = subChapter?.name || 'Sub-Chapter'
+  const loginLink = `${process.env.NEXT_PUBLIC_APP_URL || 'https://yi-connect-app.vercel.app'}/chapter-lead/login`
+
+  const emailTemplate = subChapterLeadWelcomeEmail({
+    leadName: input.full_name,
+    subChapterName,
+    email: input.email,
+    temporaryPassword,
+    loginLink,
+  })
+
+  const emailResult = await sendEmail({
+    to: input.email,
+    subject: emailTemplate.subject,
+    html: emailTemplate.html,
+  })
+
+  if (!emailResult.success) {
+    console.warn('[SubChapters] Failed to send welcome email:', emailResult.error)
+    // Still return success since lead was created - email is secondary
+  }
 
   return {
     success: true,

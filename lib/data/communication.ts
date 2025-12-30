@@ -1146,6 +1146,13 @@ export const getCommunicationAnalytics = cache(
         created_at: a.sent_at || ''
       }));
 
+    // Calculate engagement trends (last 30 days)
+    const trends: EngagementTrend[] = await calculateEngagementTrends(
+      supabase,
+      cId,
+      dateRange
+    );
+
     return {
       overview: {
         total_announcements: total_announcements || 0,
@@ -1154,11 +1161,133 @@ export const getCommunicationAnalytics = cache(
         average_click_through_rate
       },
       by_channel,
-      trends: [], // TODO: Implement trends calculation
+      trends,
       top_performing
     };
   }
 );
+
+/**
+ * Calculate engagement trends over time
+ * Aggregates daily metrics for sent announcements
+ */
+async function calculateEngagementTrends(
+  supabase: any,
+  chapterId: string,
+  dateRange?: { start_date: string; end_date: string }
+): Promise<EngagementTrend[]> {
+  // Default to last 30 days if no date range provided
+  const endDate = dateRange?.end_date || new Date().toISOString().split('T')[0];
+  const startDate =
+    dateRange?.start_date ||
+    new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+  // Get all sent announcements in the date range
+  const { data: announcements, error: announcementsError } = await supabase
+    .from('announcements')
+    .select('id, sent_at')
+    .eq('chapter_id', chapterId)
+    .eq('status', 'sent')
+    .gte('sent_at', startDate)
+    .lte('sent_at', endDate)
+    .order('sent_at', { ascending: true });
+
+  if (announcementsError || !announcements?.length) {
+    return [];
+  }
+
+  const announcementIds = announcements.map((a: any) => a.id);
+
+  // Get recipient statuses for all announcements
+  const { data: recipients, error: recipientsError } = await supabase
+    .from('announcement_recipients')
+    .select('announcement_id, status, delivered_at, opened_at, clicked_at')
+    .in('announcement_id', announcementIds);
+
+  if (recipientsError) {
+    console.error('Error fetching recipients for trends:', recipientsError);
+    return [];
+  }
+
+  // Create a map of announcement_id to sent_date
+  const announcementDateMap = new Map<string, string>();
+  announcements.forEach((a: any) => {
+    const date = a.sent_at ? a.sent_at.split('T')[0] : null;
+    if (date) {
+      announcementDateMap.set(a.id, date);
+    }
+  });
+
+  // Aggregate metrics by date
+  const dailyMetrics = new Map<
+    string,
+    {
+      sent: number;
+      delivered: number;
+      opened: number;
+      clicked: number;
+    }
+  >();
+
+  // Initialize all dates in range
+  const currentDate = new Date(startDate);
+  const endDateObj = new Date(endDate);
+  while (currentDate <= endDateObj) {
+    const dateStr = currentDate.toISOString().split('T')[0];
+    dailyMetrics.set(dateStr, { sent: 0, delivered: 0, opened: 0, clicked: 0 });
+    currentDate.setDate(currentDate.getDate() + 1);
+  }
+
+  // Aggregate recipient data by the announcement's sent date
+  (recipients || []).forEach((recipient: any) => {
+    const announcementDate = announcementDateMap.get(recipient.announcement_id);
+    if (!announcementDate) return;
+
+    const metrics = dailyMetrics.get(announcementDate);
+    if (!metrics) return;
+
+    metrics.sent++;
+
+    if (
+      recipient.status === 'delivered' ||
+      recipient.status === 'opened' ||
+      recipient.status === 'clicked'
+    ) {
+      metrics.delivered++;
+    }
+
+    if (recipient.status === 'opened' || recipient.status === 'clicked') {
+      metrics.opened++;
+    }
+
+    if (recipient.status === 'clicked') {
+      metrics.clicked++;
+    }
+  });
+
+  // Convert to EngagementTrend array
+  const trends: EngagementTrend[] = [];
+  dailyMetrics.forEach((metrics, date) => {
+    const engagementRate =
+      metrics.delivered > 0
+        ? ((metrics.opened + metrics.clicked) / metrics.delivered) * 100
+        : 0;
+
+    trends.push({
+      date,
+      sent: metrics.sent,
+      delivered: metrics.delivered,
+      opened: metrics.opened,
+      clicked: metrics.clicked,
+      engagement_rate: Math.round(engagementRate * 100) / 100
+    });
+  });
+
+  // Sort by date
+  trends.sort((a, b) => a.date.localeCompare(b.date));
+
+  return trends;
+}
 
 // ============================================================================
 // HELPER FUNCTIONS

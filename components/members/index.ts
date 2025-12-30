@@ -29,6 +29,7 @@ export { MemberCategoryTabs } from './member-category-tabs'
 
 // Trainer Profile
 export { TrainerProfileTab } from './trainer-profile-tab'
+export { CreateTrainerProfileDialog } from './create-trainer-profile-dialog'
 
 // Skill-Will Assessment
 export { AssessmentWizard } from './assessment-wizard'

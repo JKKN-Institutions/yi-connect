@@ -52,5 +52,5 @@ export async function GET() {
   }
 }
 
-// Enable Edge Runtime for faster responses
-export const runtime = 'edge'
+// Use Node.js runtime since we need fs/path access
+export const runtime = 'nodejs'

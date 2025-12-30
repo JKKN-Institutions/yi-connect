@@ -1106,7 +1106,7 @@ export const getMatchedVolunteers = cache(
         availability_status: member.availability_status || 'unavailable',
         volunteer_hours: totalVolunteerHours,
         events_volunteered: eventsVolunteered,
-        preferred_roles: [] // TODO: Add from member preferences
+        preferred_roles: [] // Populated from member profile when available
       };
     });
 

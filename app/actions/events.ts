@@ -1691,7 +1691,28 @@ export async function deleteEventDocument(
       return { success: false, error: 'Permission denied' };
     }
 
-    // TODO: Delete file from storage
+    // Get document details to find the storage path
+    const { data: docDetails } = await supabase
+      .from('event_documents')
+      .select('file_url')
+      .eq('id', documentId)
+      .single();
+
+    // Delete file from storage if URL exists
+    if (docDetails?.file_url) {
+      try {
+        // Extract path from URL - typically stored as bucket/path format
+        const url = new URL(docDetails.file_url);
+        const pathParts = url.pathname.split('/storage/v1/object/public/');
+        if (pathParts.length > 1) {
+          const [bucket, ...filePath] = pathParts[1].split('/');
+          await supabase.storage.from(bucket).remove([filePath.join('/')]);
+        }
+      } catch {
+        // Log but don't fail if storage deletion fails
+        console.warn('Failed to delete file from storage:', docDetails.file_url);
+      }
+    }
 
     const { error } = await supabase
       .from('event_documents')

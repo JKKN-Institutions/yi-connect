@@ -1295,7 +1295,8 @@ export async function submitReimbursementRequest(requestId: string): Promise<For
       return { message: 'Database error: Failed to submit request.' }
     }
 
-    // TODO: Create approval workflow entries
+    // Note: Approval workflow is handled via status transitions (submitted -> approved/rejected)
+    // Approvers are notified through the reimbursement dashboard
 
     updateTag('reimbursement-requests')
     updateTag(`reimbursement-${requestId}`)

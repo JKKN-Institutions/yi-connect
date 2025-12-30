@@ -656,7 +656,7 @@ export const getVisitRequests = cache(
 
     // Get interested members count
     const requestIds = (data || []).map((r: any) => r.id)
-    let interestCounts = new Map<string, number>()
+    const interestCounts = new Map<string, number>()
 
     if (requestIds.length > 0) {
       const { data: interests } = await supabase

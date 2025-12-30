@@ -222,7 +222,6 @@ export async function registerBackgroundSync(): Promise<boolean> {
   if ('serviceWorker' in navigator && 'sync' in window.ServiceWorkerRegistration.prototype) {
     try {
       const registration = await navigator.serviceWorker.ready
-      // @ts-ignore - sync API types
       await registration.sync.register('sync-offline-actions')
       return true
     } catch (error) {

@@ -1,0 +1,20 @@
+# https://www.robotstxt.org/robotstxt.html
+User-agent: *
+Allow: /
+
+# Disallow admin and API routes
+Disallow: /api/
+Disallow: /admin/
+Disallow: /(dashboard)/
+Disallow: /members/
+Disallow: /events/
+Disallow: /finance/
+Disallow: /communications/
+
+# Allow public pages
+Allow: /login
+Allow: /apply
+Allow: /privacy-policy
+
+# Sitemap
+Sitemap: https://yi-connect-app.vercel.app/sitemap.xml

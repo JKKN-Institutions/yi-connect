@@ -27,7 +27,7 @@ import {
 } from 'lucide-react'
 import { notFound } from 'next/navigation'
 import { MemberDetailClient } from './member-detail-client'
-import { getMemberById, getSkills, getCertifications } from '@/lib/data/members'
+import { getMemberById, getSkills, getCertifications, calculateEngagementScores, calculateReadinessScores } from '@/lib/data/members'
 import { getTrainerProfile } from '@/lib/data/trainers'
 import { getMemberAssessment, getAvailableMentors } from '@/lib/data/assessments'
 import { getVerticals } from '@/lib/data/vertical'
@@ -85,13 +85,19 @@ async function MemberDetailContent({ id }: { id: string }) {
   const startDate = today.toISOString().split('T')[0]
   const endDate = threeMonthsLater.toISOString().split('T')[0]
 
-  const [verticals, mentors, availabilities, skills, certifications] = await Promise.all([
+  const [verticals, mentors, availabilities, skills, certifications, engagementScores, readinessScores] = await Promise.all([
     chapterId ? getVerticals({ chapter_id: chapterId }) : Promise.resolve([]),
     chapterId ? getAvailableMentors(chapterId) : Promise.resolve([]),
     getMemberAvailability(id, startDate, endDate),
     getSkills(),
     getCertifications(),
+    calculateEngagementScores([id]),
+    calculateReadinessScores([id]),
   ])
+
+  // Get scores for this member (default to 0 if not calculated)
+  const engagementScore = engagementScores.get(id) || 0
+  const readinessScore = readinessScores.get(id) || 0
 
   return (
     <div className="space-y-6">
@@ -150,11 +156,11 @@ async function MemberDetailContent({ id }: { id: string }) {
         </CardContent>
       </Card>
 
-      {/* Score Display - TODO: Enable when engagement & leadership modules are built */}
-      {/* <MemberScoreDisplay
-          engagementScore={member.engagement?.engagement_score || 0}
-          readinessScore={member.leadership?.readiness_score || 0}
-        /> */}
+      {/* Score Display */}
+      <MemberScoreDisplay
+        engagementScore={engagementScore}
+        readinessScore={readinessScore}
+      />
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Contact Information */}

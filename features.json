@@ -1,0 +1,90 @@
+{
+  "project": "yi-connect-aaa-enhancements",
+  "created": "2026-01-02",
+  "features": [
+    {
+      "id": "depth-metrics",
+      "name": "Depth Metrics",
+      "description": "Add target attendance, engagement goals, and impact measures per AAA activity",
+      "priority": 1,
+      "status": "not-started",
+      "complexity": "medium",
+      "files_to_modify": [
+        "types/aaa.ts",
+        "components/pathfinder/aaa-plan-form.tsx",
+        "lib/data/aaa-defaults.ts",
+        "supabase/migrations - new columns"
+      ],
+      "test_steps": [
+        "Navigate to Create AAA Plan page",
+        "Verify each activity has target attendance field",
+        "Verify engagement goals field exists",
+        "Verify impact measures textarea is present",
+        "Submit form and verify data saves to database",
+        "Edit existing plan and verify metrics persist"
+      ]
+    },
+    {
+      "id": "progress-tracking",
+      "name": "Progress Tracking Dashboard",
+      "description": "Dashboard showing planned vs completed activities with % progress toward goals",
+      "priority": 2,
+      "status": "not-started",
+      "complexity": "high",
+      "files_to_modify": [
+        "app/(dashboard)/pathfinder/page.tsx",
+        "components/pathfinder/progress-dashboard.tsx",
+        "lib/data/aaa.ts - progress calculations"
+      ],
+      "test_steps": [
+        "Navigate to Pathfinder dashboard",
+        "Verify progress bars show for each vertical",
+        "Verify planned vs actual attendance comparison",
+        "Verify % completion is calculated correctly",
+        "Test with multiple verticals at different stages"
+      ]
+    },
+    {
+      "id": "stretch-goals",
+      "name": "Stretch Goals Section",
+      "description": "Add optional bonus activities beyond core AAA (4th awareness, 3rd action, etc.)",
+      "priority": 3,
+      "status": "not-started",
+      "complexity": "medium",
+      "files_to_modify": [
+        "types/aaa.ts",
+        "components/pathfinder/aaa-plan-form.tsx",
+        "supabase/migrations - optional columns"
+      ],
+      "test_steps": [
+        "Navigate to Create AAA Plan page",
+        "Verify 'Add Stretch Goal' button appears",
+        "Click to add 4th awareness session",
+        "Verify optional field styling (different from required)",
+        "Submit and verify stretch goals save correctly",
+        "Verify stretch goals show separately in dashboard"
+      ]
+    },
+    {
+      "id": "activity-templates",
+      "name": "Activity Templates Library",
+      "description": "Let chairs browse and pick from a library of proven activities across verticals",
+      "priority": 4,
+      "status": "not-started",
+      "complexity": "high",
+      "files_to_modify": [
+        "lib/data/activity-templates.ts - template data",
+        "components/pathfinder/activity-template-picker.tsx",
+        "components/pathfinder/aaa-plan-form.tsx - integration"
+      ],
+      "test_steps": [
+        "Navigate to Create AAA Plan page",
+        "Click 'Browse Templates' button on any activity",
+        "Verify modal shows activities from all verticals",
+        "Filter by vertical/category",
+        "Select a template and verify it fills the form",
+        "Verify template source attribution shown"
+      ]
+    }
+  ]
+}

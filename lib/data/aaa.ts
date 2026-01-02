@@ -312,6 +312,14 @@ export async function getPathfinderDashboard(
           .filter((s) => s === 'completed').length
       : 0
 
+    // Calculate depth metrics (Feature 2: Progress Tracking)
+    const depthMetrics = plan ? calculateDepthMetrics(plan) : {
+      totalTargetAttendance: 0,
+      depthMetricsFilled: 0,
+      hasEngagementGoals: false,
+      hasImpactMeasures: false,
+    }
+
     return {
       vertical_id: v.id,
       vertical_name: v.name,
@@ -331,6 +339,10 @@ export async function getPathfinderDashboard(
       first_event_date: plan?.first_event_date || null,
       first_event_locked: plan?.first_event_locked || false,
       milestone_completion: plan ? calculateMilestoneCompletion(plan) : 0,
+      total_target_attendance: depthMetrics.totalTargetAttendance,
+      depth_metrics_filled: depthMetrics.depthMetricsFilled,
+      has_engagement_goals: depthMetrics.hasEngagementGoals,
+      has_impact_measures: depthMetrics.hasImpactMeasures,
       has_commitment: !!commitment,
       commitment_signed: !!commitment?.signed_at,
       has_mentor: !!mentor,
@@ -347,6 +359,16 @@ export async function getPathfinderDashboard(
     ? verticalStatuses.reduce((sum, v) => sum + v.milestone_completion, 0) / verticalStatuses.length
     : 0
 
+  // Depth Metrics Summary (Feature 2: Progress Tracking)
+  const totalTargetAttendance = verticalStatuses.reduce((sum, v) => sum + v.total_target_attendance, 0)
+  const totalActivitiesWithDepth = verticalStatuses.reduce((sum, v) => sum + v.depth_metrics_filled, 0)
+  const totalPossibleActivities = verticalStatuses.filter(v => v.has_plan).length * 5 // 5 activities per plan
+  const avgDepthCoverage = totalPossibleActivities > 0
+    ? Math.round((totalActivitiesWithDepth / totalPossibleActivities) * 100)
+    : 0
+  const verticalsWithEngagementGoals = verticalStatuses.filter(v => v.has_engagement_goals).length
+  const verticalsWithImpactMeasures = verticalStatuses.filter(v => v.has_impact_measures).length
+
   return {
     fiscal_year: fiscalYear,
     chapter_id: chapterId,
@@ -358,6 +380,10 @@ export async function getPathfinderDashboard(
     mentors_assigned: mentors?.length || 0,
     avg_aaa_completion: Math.round(avgAAACompletion),
     avg_milestone_completion: Math.round(avgMilestoneCompletion),
+    total_target_attendance: totalTargetAttendance,
+    avg_depth_coverage: avgDepthCoverage,
+    verticals_with_engagement_goals: verticalsWithEngagementGoals,
+    verticals_with_impact_measures: verticalsWithImpactMeasures,
     verticals: verticalStatuses,
   }
 }
@@ -395,6 +421,61 @@ function calculateMilestoneCompletion(plan: AAAPlan): number {
   if (plan.milestone_mar_status === 'completed') completedMilestones++
 
   return Math.round((completedMilestones / totalMilestones) * 100)
+}
+
+/**
+ * Calculate depth metrics coverage for a plan (Feature 2: Progress Tracking)
+ */
+function calculateDepthMetrics(plan: AAAPlan): {
+  totalTargetAttendance: number
+  depthMetricsFilled: number
+  hasEngagementGoals: boolean
+  hasImpactMeasures: boolean
+} {
+  // Sum up target attendance across all activities
+  const totalTargetAttendance =
+    (plan.awareness_1_target_attendance || 0) +
+    (plan.awareness_2_target_attendance || 0) +
+    (plan.awareness_3_target_attendance || 0) +
+    (plan.action_1_target_attendance || 0) +
+    (plan.action_2_target_attendance || 0)
+
+  // Count activities with depth metrics filled (target_attendance set)
+  const activities = [
+    plan.awareness_1_target_attendance,
+    plan.awareness_2_target_attendance,
+    plan.awareness_3_target_attendance,
+    plan.action_1_target_attendance,
+    plan.action_2_target_attendance,
+  ]
+  const depthMetricsFilled = activities.filter(a => a !== null && a !== undefined && a > 0).length
+
+  // Check for engagement goals
+  const engagementGoals = [
+    plan.awareness_1_engagement_goal,
+    plan.awareness_2_engagement_goal,
+    plan.awareness_3_engagement_goal,
+    plan.action_1_engagement_goal,
+    plan.action_2_engagement_goal,
+  ]
+  const hasEngagementGoals = engagementGoals.some(g => g && g.trim().length > 0)
+
+  // Check for impact measures
+  const impactMeasures = [
+    plan.awareness_1_impact_measures,
+    plan.awareness_2_impact_measures,
+    plan.awareness_3_impact_measures,
+    plan.action_1_impact_measures,
+    plan.action_2_impact_measures,
+  ]
+  const hasImpactMeasures = impactMeasures.some(m => m && m.trim().length > 0)
+
+  return {
+    totalTargetAttendance,
+    depthMetricsFilled,
+    hasEngagementGoals,
+    hasImpactMeasures,
+  }
 }
 
 /**

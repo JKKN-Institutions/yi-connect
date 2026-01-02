@@ -265,6 +265,12 @@ export interface VerticalAAAStatus {
   // Milestones
   milestone_completion: number // 0-100
 
+  // Depth Metrics (Feature 2: Progress Tracking)
+  total_target_attendance: number // Sum of all activity target attendances
+  depth_metrics_filled: number // 0-5, how many activities have depth metrics
+  has_engagement_goals: boolean // At least one engagement goal defined
+  has_impact_measures: boolean // At least one impact measure defined
+
   // Commitment
   has_commitment: boolean
   commitment_signed: boolean
@@ -289,6 +295,12 @@ export interface PathfinderDashboard {
   // Overall progress
   avg_aaa_completion: number
   avg_milestone_completion: number
+
+  // Depth Metrics Summary (Feature 2: Progress Tracking)
+  total_target_attendance: number // Total across all verticals
+  avg_depth_coverage: number // 0-100, % of activities with depth metrics
+  verticals_with_engagement_goals: number // Count of verticals with engagement goals
+  verticals_with_impact_measures: number // Count of verticals with impact measures
 
   // Vertical details
   verticals: VerticalAAAStatus[]

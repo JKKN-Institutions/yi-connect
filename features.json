@@ -3,11 +3,47 @@
   "created": "2026-01-02",
   "features": [
     {
+      "id": "health-card",
+      "name": "Health Card Activity Reporting",
+      "description": "Activity reporting system where EC Chairs/Vertical Heads log completed activities with participation counts (EC and Non-EC members). Links to verticals for tracking.",
+      "priority": 0,
+      "status": "in-progress",
+      "complexity": "high",
+      "files_to_modify": [
+        "types/health-card.ts - new types",
+        "lib/validations/health-card.ts - Zod schemas",
+        "supabase/migrations - health_card_entries table",
+        "app/actions/health-card.ts - server actions",
+        "components/pathfinder/health-card-form.tsx - entry form",
+        "app/(dashboard)/pathfinder/health-card/page.tsx - submission page",
+        "components/pathfinder/aaa-dashboard.tsx - integrate stats"
+      ],
+      "test_steps": [
+        "Navigate to Pathfinder > Health Card",
+        "Submit an activity report with EC/Non-EC counts",
+        "Verify entry saved with correct vertical",
+        "Check dashboard shows updated activity count",
+        "Verify aggregation by vertical works"
+      ],
+      "form_fields": [
+        "submitter_name",
+        "submitter_role (EC Chair/Vertical Head/etc)",
+        "email",
+        "activity_date",
+        "chapter_id",
+        "region",
+        "activity_name",
+        "ec_members_count",
+        "non_ec_members_count",
+        "vertical_id"
+      ]
+    },
+    {
       "id": "depth-metrics",
       "name": "Depth Metrics",
       "description": "Add target attendance, engagement goals, and impact measures per AAA activity",
       "priority": 1,
-      "status": "not-started",
+      "status": "self-verified",
       "complexity": "medium",
       "files_to_modify": [
         "types/aaa.ts",

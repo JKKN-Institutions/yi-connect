@@ -79,14 +79,13 @@ async function NewPlanContent({
 
   const supabase = await createClient()
 
-  // Get user's profile to check role
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single()
+  // Get user's roles from user_roles table (same pattern as dashboard layout)
+  const { data: userRoles } = await supabase.rpc('get_user_roles', {
+    p_user_id: user.id
+  })
+  const roles = userRoles?.map((ur: { role_name: string }) => ur.role_name) || []
 
-  const isAdmin = profile?.role === 'Super Admin' || profile?.role === 'National Admin'
+  const isAdmin = roles.includes('Super Admin') || roles.includes('National Admin')
 
   // Get user's chapter from member record
   const { data: member } = await supabase

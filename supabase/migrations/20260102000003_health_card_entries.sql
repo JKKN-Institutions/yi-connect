@@ -24,6 +24,13 @@ CREATE TYPE yi_region AS ENUM (
   'west_region'
 );
 
+-- Create aaa_type enum (Awareness, Action, Advocacy framework)
+CREATE TYPE aaa_type AS ENUM (
+  'awareness',
+  'action',
+  'advocacy'
+);
+
 -- ============================================================================
 -- HEALTH CARD ENTRIES TABLE
 -- ============================================================================
@@ -41,6 +48,7 @@ CREATE TABLE health_card_entries (
   activity_date DATE NOT NULL,
   activity_name VARCHAR(500) NOT NULL,
   activity_description TEXT,
+  aaa_type aaa_type, -- Optional: Awareness, Action, or Advocacy classification
 
   -- Chapter/Region
   chapter_id UUID NOT NULL REFERENCES chapters(id) ON DELETE CASCADE,
@@ -83,6 +91,9 @@ CREATE INDEX idx_health_card_fiscal_year ON health_card_entries(fiscal_year);
 
 -- Composite for common queries (chapter + vertical + fiscal_year)
 CREATE INDEX idx_health_card_composite ON health_card_entries(chapter_id, vertical_id, fiscal_year);
+
+-- Query by AAA type
+CREATE INDEX idx_health_card_aaa_type ON health_card_entries(aaa_type) WHERE aaa_type IS NOT NULL;
 
 -- ============================================================================
 -- TRIGGERS
@@ -158,3 +169,4 @@ COMMENT ON COLUMN health_card_entries.ec_members_count IS 'Number of EC (Executi
 COMMENT ON COLUMN health_card_entries.non_ec_members_count IS 'Number of non-EC members who participated';
 COMMENT ON COLUMN health_card_entries.vertical_specific_data IS 'JSONB for vertical-specific form fields (varies by vertical)';
 COMMENT ON COLUMN health_card_entries.fiscal_year IS 'Yi fiscal year (April-March)';
+COMMENT ON COLUMN health_card_entries.aaa_type IS 'Optional AAA Framework classification: awareness, action, or advocacy';

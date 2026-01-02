@@ -17,6 +17,12 @@ export const submitterRoleSchema = z.enum([
   'member',
 ])
 
+export const aaaTypeSchema = z.enum([
+  'awareness',
+  'action',
+  'advocacy',
+])
+
 export const yiRegionSchema = z.enum([
   'east_region',
   'jksn',
@@ -53,6 +59,9 @@ export const createHealthCardSchema = z.object({
     .string()
     .max(2000, 'Description too long')
     .optional(),
+
+  // AAA Classification (optional)
+  aaa_type: aaaTypeSchema.optional().nullable(),
 
   // Chapter/Region
   chapter_id: z
@@ -91,6 +100,7 @@ export const updateHealthCardSchema = z.object({
   activity_date: z.string().optional(),
   activity_name: z.string().max(500).optional(),
   activity_description: z.string().max(2000).optional().nullable(),
+  aaa_type: aaaTypeSchema.optional().nullable(),
   chapter_id: z.string().uuid().optional(),
   region: yiRegionSchema.optional(),
   ec_members_count: z.number().int().min(0).optional(),

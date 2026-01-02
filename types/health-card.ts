@@ -13,6 +13,12 @@
 
 export type SubmitterRole = 'chapter_em' | 'chair' | 'co_chair' | 'vertical_head' | 'member'
 
+/**
+ * AAA Framework classification
+ * Every activity must be categorized as one of these
+ */
+export type AAAType = 'awareness' | 'action' | 'advocacy'
+
 export type YiRegion =
   | 'east_region'
   | 'jksn'
@@ -41,6 +47,7 @@ export interface HealthCardEntry {
   activity_date: string // ISO date
   activity_name: string
   activity_description: string | null
+  aaa_type: AAAType | null // Optional: Awareness, Action, or Advocacy
 
   // Chapter/Region
   chapter_id: string
@@ -170,6 +177,7 @@ export interface CreateHealthCardInput {
   activity_date: string
   activity_name: string
   activity_description?: string
+  aaa_type?: AAAType // Optional: Awareness, Action, or Advocacy
 
   // Chapter/Region
   chapter_id: string
@@ -247,6 +255,24 @@ export const REGION_NAMES: Record<YiRegion, string> = {
   south_region: 'South Region',
   srtn: 'SRTN',
   west_region: 'West Region',
+}
+
+/**
+ * AAA Type options for UI (Optional classification)
+ */
+export const AAA_TYPES: { value: AAAType; label: string; description: string }[] = [
+  { value: 'awareness', label: 'Awareness', description: 'Sessions, workshops, campaigns to educate' },
+  { value: 'action', label: 'Action', description: 'Events, drives, activities with measurable output' },
+  { value: 'advocacy', label: 'Advocacy', description: 'Government meetings, policy influence, MOUs' },
+]
+
+/**
+ * AAA Type name lookup
+ */
+export const AAA_TYPE_NAMES: Record<AAAType, string> = {
+  awareness: 'Awareness',
+  action: 'Action',
+  advocacy: 'Advocacy',
 }
 
 // ============================================================================

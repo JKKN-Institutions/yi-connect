@@ -20,6 +20,7 @@ import {
   Building2,
   Activity,
   CheckCircle2,
+  Target,
 } from 'lucide-react'
 import { createHealthCardEntry } from '@/app/actions/health-card'
 import {
@@ -29,10 +30,12 @@ import {
 import {
   SUBMITTER_ROLES,
   YI_REGIONS,
+  AAA_TYPES,
   getVerticalSpecificFields,
   type VerticalSpecificField,
   type YiRegion,
   type SubmitterRole,
+  type AAAType,
 } from '@/types/health-card'
 import { Button } from '@/components/ui/button'
 import {
@@ -112,6 +115,7 @@ export function HealthCardForm({
       activity_date: new Date().toISOString().split('T')[0],
       activity_name: '',
       activity_description: '',
+      aaa_type: undefined, // Optional AAA classification
       chapter_id: chapterId,
       region: 'srtn' as YiRegion,
       ec_members_count: 0,
@@ -308,6 +312,45 @@ export function HealthCardForm({
                       value={field.value || ''}
                     />
                   </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* AAA Classification - Optional */}
+            <FormField
+              control={form.control}
+              name="aaa_type"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="flex items-center gap-2">
+                    <Target className="h-4 w-4 text-amber-600" />
+                    AAA Classification
+                    <Badge variant="outline" className="ml-1 font-normal">Optional</Badge>
+                  </FormLabel>
+                  <Select
+                    onValueChange={(value) => field.onChange(value || null)}
+                    value={field.value || ''}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select AAA type (optional)" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {AAA_TYPES.map((type) => (
+                        <SelectItem key={type.value} value={type.value}>
+                          <div className="flex flex-col">
+                            <span className="font-medium">{type.label}</span>
+                            <span className="text-xs text-muted-foreground">{type.description}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>
+                    Classify this activity in the AAA Framework (Awareness → Action → Advocacy)
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}

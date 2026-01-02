@@ -7,7 +7,7 @@
 import { Suspense } from 'react'
 import Link from 'next/link'
 import { redirect, notFound } from 'next/navigation'
-import { Plus, FileSignature, Target } from 'lucide-react'
+import { Plus, FileSignature, Target, ClipboardList } from 'lucide-react'
 import { requireRole, getCurrentUser, getCurrentChapterId } from '@/lib/auth'
 import { getPathfinderDashboard, getCurrentFiscalYear } from '@/lib/data/aaa'
 import { Button } from '@/components/ui/button'
@@ -33,6 +33,12 @@ export default async function PathfinderPage() {
           </p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" asChild>
+            <Link href="/pathfinder/health-card">
+              <ClipboardList className="h-4 w-4 mr-2" />
+              Health Card
+            </Link>
+          </Button>
           <Button variant="outline" asChild>
             <Link href="/pathfinder/commitment">
               <FileSignature className="h-4 w-4 mr-2" />

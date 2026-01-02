@@ -66,6 +66,7 @@ import {
   Compass,
   HeartPulse,
   Rocket,
+  BookTemplate,
 } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
@@ -556,6 +557,12 @@ const navigation: NavItem[] = [
         name: 'Stretch Goals',
         href: '/pathfinder/stretch-goals',
         icon: Rocket,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Vertical Head', 'Executive Member', 'EC Member']
+      },
+      {
+        name: 'Templates',
+        href: '/pathfinder/templates',
+        icon: BookTemplate,
         requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Vertical Head', 'Executive Member', 'EC Member']
       },
       {

@@ -1,0 +1,109 @@
+{
+  "project": "Yi Connect - AAA Module",
+  "version": "1.0.0",
+  "created": "2026-01-02",
+  "target_date": "2026-01-10",
+  "purpose": "Pathfinder 2026 - AAA Framework for EC Chairs",
+  "features": [
+    {
+      "id": "aaa-1",
+      "name": "Database Schema",
+      "description": "Create tables: aaa_plans, commitment_cards, mentor_assignments",
+      "status": "not-started",
+      "priority": "P0",
+      "test_steps": [
+        "Migration runs without errors",
+        "Tables visible in Supabase dashboard",
+        "RLS policies applied"
+      ]
+    },
+    {
+      "id": "aaa-2",
+      "name": "Types and Validations",
+      "description": "TypeScript types and Zod schemas for AAA module",
+      "status": "not-started",
+      "priority": "P0",
+      "test_steps": [
+        "Types compile without errors",
+        "Zod validations work for all fields"
+      ]
+    },
+    {
+      "id": "aaa-3",
+      "name": "Server Actions",
+      "description": "CRUD operations for AAA plans, commitments, mentors",
+      "status": "not-started",
+      "priority": "P0",
+      "test_steps": [
+        "createAAAPlan works",
+        "updateAAAPlan works",
+        "signCommitmentCard works",
+        "assignMentor works"
+      ]
+    },
+    {
+      "id": "aaa-4",
+      "name": "AAA Plan Builder Form",
+      "description": "UI for EC Chairs to enter 3 Awareness, 2 Action, 1 Advocacy",
+      "status": "not-started",
+      "priority": "P0",
+      "test_steps": [
+        "Form renders correctly",
+        "All fields validate",
+        "First Event date can be locked",
+        "90-day milestones editable",
+        "Form submits successfully"
+      ]
+    },
+    {
+      "id": "aaa-5",
+      "name": "Commitment Card",
+      "description": "Digital commitment card with 3 commitments and signature",
+      "status": "not-started",
+      "priority": "P0",
+      "test_steps": [
+        "Card renders with member info",
+        "3 commitment fields work",
+        "Signature captures",
+        "Card saves to database"
+      ]
+    },
+    {
+      "id": "aaa-6",
+      "name": "Chair AAA Dashboard",
+      "description": "Overview of all 13 verticals' AAA status",
+      "status": "not-started",
+      "priority": "P1",
+      "test_steps": [
+        "Shows all verticals",
+        "AAA status visible per vertical",
+        "First event dates shown",
+        "Commitment status shown"
+      ]
+    },
+    {
+      "id": "aaa-7",
+      "name": "Mentor Assignment",
+      "description": "UI to assign senior leaders as mentors to EC Chairs",
+      "status": "not-started",
+      "priority": "P2",
+      "test_steps": [
+        "Mentor dropdown works",
+        "Assignment saves",
+        "Shows on EC profile"
+      ]
+    },
+    {
+      "id": "aaa-8",
+      "name": "Routes Integration",
+      "description": "Add /pathfinder and /verticals/[id]/aaa-plan routes",
+      "status": "not-started",
+      "priority": "P0",
+      "test_steps": [
+        "Routes accessible",
+        "Navigation works",
+        "Permissions enforced"
+      ]
+    }
+  ]
+}

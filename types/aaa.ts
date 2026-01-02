@@ -1,0 +1,382 @@
+/**
+ * AAA Pathfinder Module
+ * TypeScript Type Definitions
+ *
+ * Types for AAA Framework: Awareness → Action → Advocacy
+ */
+
+// ============================================================================
+// STATUS ENUMS
+// ============================================================================
+
+export type AAAItemStatus = 'planned' | 'in_progress' | 'completed' | 'cancelled'
+export type MilestoneStatus = 'pending' | 'in_progress' | 'completed'
+export type AAAPlanStatus = 'draft' | 'submitted' | 'approved' | 'active'
+export type MentorAssignmentStatus = 'active' | 'completed' | 'cancelled'
+
+// ============================================================================
+// AAA PLAN TYPES
+// ============================================================================
+
+export interface AAAActivity {
+  title: string | null
+  description: string | null
+  audience?: string | null
+  target?: string | null
+  target_date: string | null // ISO date string
+  status: AAAItemStatus
+  event_id?: string | null
+}
+
+export interface AAAPlan {
+  id: string
+  vertical_id: string
+  fiscal_year: number
+  chapter_id: string
+
+  // Awareness (3)
+  awareness_1_title: string | null
+  awareness_1_description: string | null
+  awareness_1_audience: string | null
+  awareness_1_target_date: string | null
+  awareness_1_status: AAAItemStatus
+
+  awareness_2_title: string | null
+  awareness_2_description: string | null
+  awareness_2_audience: string | null
+  awareness_2_target_date: string | null
+  awareness_2_status: AAAItemStatus
+
+  awareness_3_title: string | null
+  awareness_3_description: string | null
+  awareness_3_audience: string | null
+  awareness_3_target_date: string | null
+  awareness_3_status: AAAItemStatus
+
+  // Action (2)
+  action_1_title: string | null
+  action_1_description: string | null
+  action_1_target: string | null
+  action_1_target_date: string | null
+  action_1_status: AAAItemStatus
+  action_1_event_id: string | null
+
+  action_2_title: string | null
+  action_2_description: string | null
+  action_2_target: string | null
+  action_2_target_date: string | null
+  action_2_status: AAAItemStatus
+  action_2_event_id: string | null
+
+  // First Event
+  first_event_date: string | null
+  first_event_locked: boolean
+  first_event_locked_at: string | null
+
+  // Advocacy (1)
+  advocacy_goal: string | null
+  advocacy_target_contact: string | null
+  advocacy_approach: string | null
+  advocacy_status: AAAItemStatus
+  advocacy_outcome: string | null
+
+  // 90-Day Milestones
+  milestone_jan_target: string | null
+  milestone_jan_status: MilestoneStatus
+  milestone_jan_notes: string | null
+
+  milestone_feb_target: string | null
+  milestone_feb_status: MilestoneStatus
+  milestone_feb_notes: string | null
+
+  milestone_mar_target: string | null
+  milestone_mar_status: MilestoneStatus
+  milestone_mar_notes: string | null
+
+  // Metadata
+  status: AAAPlanStatus
+  created_by: string
+  approved_by: string | null
+  approved_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+// Extended type with relations
+export interface AAAPlanWithDetails extends AAAPlan {
+  vertical?: {
+    id: string
+    name: string
+    slug: string
+    color: string | null
+    icon: string | null
+  }
+  created_by_member?: {
+    id: string
+    full_name: string
+    avatar_url: string | null
+  }
+  approved_by_member?: {
+    id: string
+    full_name: string
+  } | null
+  commitment_card?: CommitmentCard | null
+  mentor_assignment?: MentorAssignment | null
+  // Computed
+  aaa_completion?: number
+  milestone_completion?: number
+}
+
+// ============================================================================
+// COMMITMENT CARD TYPES
+// ============================================================================
+
+export interface CommitmentCard {
+  id: string
+  member_id: string
+  aaa_plan_id: string | null
+  chapter_id: string
+  pathfinder_year: number
+
+  commitment_1: string
+  commitment_2: string | null
+  commitment_3: string | null
+
+  signed_at: string | null
+  signature_data: string | null
+
+  created_at: string
+  updated_at: string
+}
+
+export interface CommitmentCardWithMember extends CommitmentCard {
+  member?: {
+    id: string
+    full_name: string
+    email: string
+    avatar_url: string | null
+    designation: string | null
+    company: string | null
+  }
+  aaa_plan?: {
+    id: string
+    vertical?: {
+      name: string
+    }
+  } | null
+}
+
+// ============================================================================
+// MENTOR ASSIGNMENT TYPES
+// ============================================================================
+
+export interface MentorAssignment {
+  id: string
+  ec_chair_id: string
+  mentor_id: string
+  chapter_id: string
+  vertical_id: string | null
+  pathfinder_year: number
+
+  mentor_name: string | null
+  mentor_title: string | null
+  mentor_expertise: string | null
+
+  status: MentorAssignmentStatus
+  notes: string | null
+
+  assigned_at: string
+  created_at: string
+  updated_at: string
+}
+
+export interface MentorAssignmentWithDetails extends MentorAssignment {
+  ec_chair?: {
+    id: string
+    full_name: string
+    email: string
+    avatar_url: string | null
+  }
+  mentor?: {
+    id: string
+    full_name: string
+    email: string
+    avatar_url: string | null
+    designation: string | null
+    company: string | null
+  }
+  vertical?: {
+    id: string
+    name: string
+    slug: string
+  } | null
+}
+
+// ============================================================================
+// DASHBOARD TYPES
+// ============================================================================
+
+export interface VerticalAAAStatus {
+  vertical_id: string
+  vertical_name: string
+  vertical_slug: string
+  vertical_color: string | null
+  vertical_icon: string | null
+
+  // Chair info
+  ec_chair_id: string | null
+  ec_chair_name: string | null
+  ec_chair_avatar: string | null
+
+  // AAA Plan
+  has_plan: boolean
+  plan_id: string | null
+  plan_status: AAAPlanStatus | null
+
+  // Progress
+  awareness_count: number // 0-3
+  action_count: number // 0-2
+  advocacy_done: boolean
+  aaa_completion: number // 0-100
+
+  // First Event
+  first_event_date: string | null
+  first_event_locked: boolean
+
+  // Milestones
+  milestone_completion: number // 0-100
+
+  // Commitment
+  has_commitment: boolean
+  commitment_signed: boolean
+
+  // Mentor
+  has_mentor: boolean
+  mentor_name: string | null
+}
+
+export interface PathfinderDashboard {
+  fiscal_year: number
+  chapter_id: string
+  chapter_name: string
+
+  // Summary stats
+  total_verticals: number
+  verticals_with_plans: number
+  plans_approved: number
+  commitments_signed: number
+  mentors_assigned: number
+
+  // Overall progress
+  avg_aaa_completion: number
+  avg_milestone_completion: number
+
+  // Vertical details
+  verticals: VerticalAAAStatus[]
+}
+
+// ============================================================================
+// FORM INPUT TYPES
+// ============================================================================
+
+export interface CreateAAAPlanInput {
+  vertical_id: string
+  fiscal_year: number
+  chapter_id: string
+
+  // Awareness
+  awareness_1_title?: string
+  awareness_1_description?: string
+  awareness_1_audience?: string
+  awareness_1_target_date?: string
+
+  awareness_2_title?: string
+  awareness_2_description?: string
+  awareness_2_audience?: string
+  awareness_2_target_date?: string
+
+  awareness_3_title?: string
+  awareness_3_description?: string
+  awareness_3_audience?: string
+  awareness_3_target_date?: string
+
+  // Action
+  action_1_title?: string
+  action_1_description?: string
+  action_1_target?: string
+  action_1_target_date?: string
+
+  action_2_title?: string
+  action_2_description?: string
+  action_2_target?: string
+  action_2_target_date?: string
+
+  first_event_date?: string
+
+  // Advocacy
+  advocacy_goal?: string
+  advocacy_target_contact?: string
+  advocacy_approach?: string
+
+  // Milestones
+  milestone_jan_target?: string
+  milestone_feb_target?: string
+  milestone_mar_target?: string
+}
+
+export interface UpdateAAAPlanInput extends Partial<CreateAAAPlanInput> {
+  id: string
+  // Status updates
+  awareness_1_status?: AAAItemStatus
+  awareness_2_status?: AAAItemStatus
+  awareness_3_status?: AAAItemStatus
+  action_1_status?: AAAItemStatus
+  action_2_status?: AAAItemStatus
+  advocacy_status?: AAAItemStatus
+  milestone_jan_status?: MilestoneStatus
+  milestone_feb_status?: MilestoneStatus
+  milestone_mar_status?: MilestoneStatus
+  // Lock first event
+  first_event_locked?: boolean
+}
+
+export interface SignCommitmentCardInput {
+  member_id: string
+  aaa_plan_id?: string
+  chapter_id: string
+  pathfinder_year: number
+  commitment_1: string
+  commitment_2?: string
+  commitment_3?: string
+  signature_data?: string
+}
+
+export interface AssignMentorInput {
+  ec_chair_id: string
+  mentor_id: string
+  chapter_id: string
+  vertical_id?: string
+  pathfinder_year: number
+  mentor_name?: string
+  mentor_title?: string
+  mentor_expertise?: string
+  notes?: string
+}
+
+// ============================================================================
+// FILTER TYPES
+// ============================================================================
+
+export interface AAAPlanFilters {
+  vertical_id?: string
+  fiscal_year?: number
+  status?: AAAPlanStatus
+  has_first_event?: boolean
+  chapter_id?: string
+}
+
+export interface CommitmentCardFilters {
+  pathfinder_year?: number
+  signed?: boolean
+  chapter_id?: string
+}

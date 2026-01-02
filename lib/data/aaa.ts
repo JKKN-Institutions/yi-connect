@@ -290,10 +290,15 @@ export async function getPathfinderDashboard(
   // Build vertical statuses
   const verticalStatuses: VerticalAAAStatus[] = verticals.map((v) => {
     const plan = plans?.find((p) => p.vertical_id === v.id)
-    const currentChair = Array.isArray(v.current_chair)
-      ? v.current_chair.find((c: { member?: { id: string } }) => c.member)
+    // Supabase returns nested relations as arrays
+    const currentChairEntry = Array.isArray(v.current_chair) && v.current_chair.length > 0
+      ? v.current_chair[0]
       : null
-    const chairMemberId = currentChair?.member_id
+    // member is also returned as array from Supabase nested query
+    const memberData = currentChairEntry?.member && Array.isArray(currentChairEntry.member) && currentChairEntry.member.length > 0
+      ? currentChairEntry.member[0]
+      : (currentChairEntry?.member && !Array.isArray(currentChairEntry.member) ? currentChairEntry.member : null)
+    const chairMemberId = currentChairEntry?.member_id
     const commitment = commitments?.find((c) => c.member_id === chairMemberId)
     const mentor = mentors?.find((m) => m.ec_chair_id === chairMemberId)
 
@@ -314,8 +319,8 @@ export async function getPathfinderDashboard(
       vertical_color: v.color,
       vertical_icon: v.icon,
       ec_chair_id: chairMemberId || null,
-      ec_chair_name: currentChair?.member?.full_name || null,
-      ec_chair_avatar: currentChair?.member?.avatar_url || null,
+      ec_chair_name: memberData?.full_name || null,
+      ec_chair_avatar: memberData?.avatar_url || null,
       has_plan: !!plan,
       plan_id: plan?.id || null,
       plan_status: plan?.status || null,

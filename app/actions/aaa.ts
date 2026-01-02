@@ -103,7 +103,7 @@ export async function createAAAPlan(
       return { success: false, error: error.message }
     }
 
-    revalidateTag('aaa-plans')
+    revalidateTag('aaa-plans', 'max')
     revalidatePath('/pathfinder')
     revalidatePath(`/verticals/${sanitized.vertical_id}`)
 
@@ -158,7 +158,7 @@ export async function updateAAAPlan(
       return { success: false, error: error.message }
     }
 
-    revalidateTag('aaa-plans')
+    revalidateTag('aaa-plans', 'max')
     revalidatePath('/pathfinder')
     revalidatePath(`/verticals/${existing.vertical_id}`)
 
@@ -217,7 +217,7 @@ export async function lockFirstEventDate(
       return { success: false, error: error.message }
     }
 
-    revalidateTag('aaa-plans')
+    revalidateTag('aaa-plans', 'max')
     revalidatePath('/pathfinder')
 
     return { success: true }
@@ -266,7 +266,7 @@ export async function approveAAAPlan(planId: string): Promise<ActionResponse> {
       return { success: false, error: error.message }
     }
 
-    revalidateTag('aaa-plans')
+    revalidateTag('aaa-plans', 'max')
     revalidatePath('/pathfinder')
 
     return { success: true }
@@ -312,7 +312,7 @@ export async function deleteAAAPlan(planId: string): Promise<ActionResponse> {
       return { success: false, error: error.message }
     }
 
-    revalidateTag('aaa-plans')
+    revalidateTag('aaa-plans', 'max')
     revalidatePath('/pathfinder')
     revalidatePath(`/verticals/${existing.vertical_id}`)
 
@@ -367,7 +367,7 @@ export async function signCommitmentCard(
         return { success: false, error: error.message }
       }
 
-      revalidateTag('commitment-cards')
+      revalidateTag('commitment-cards', 'max')
       revalidatePath('/pathfinder')
 
       return { success: true, data: { id: existing.id } }
@@ -388,7 +388,7 @@ export async function signCommitmentCard(
       return { success: false, error: error.message }
     }
 
-    revalidateTag('commitment-cards')
+    revalidateTag('commitment-cards', 'max')
     revalidatePath('/pathfinder')
 
     return { success: true, data: { id: data.id } }
@@ -477,7 +477,7 @@ export async function assignMentor(
         return { success: false, error: error.message }
       }
 
-      revalidateTag('mentor-assignments')
+      revalidateTag('mentor-assignments', 'max')
       revalidatePath('/pathfinder')
 
       return { success: true, data: { id: existing.id } }
@@ -495,7 +495,7 @@ export async function assignMentor(
       return { success: false, error: error.message }
     }
 
-    revalidateTag('mentor-assignments')
+    revalidateTag('mentor-assignments', 'max')
     revalidatePath('/pathfinder')
 
     return { success: true, data: { id: data.id } }
@@ -527,7 +527,7 @@ export async function removeMentorAssignment(assignmentId: string): Promise<Acti
       return { success: false, error: error.message }
     }
 
-    revalidateTag('mentor-assignments')
+    revalidateTag('mentor-assignments', 'max')
     revalidatePath('/pathfinder')
 
     return { success: true }

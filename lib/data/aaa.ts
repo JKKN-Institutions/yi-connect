@@ -399,13 +399,15 @@ function calculateMilestoneCompletion(plan: AAAPlan): number {
 
 /**
  * Get current fiscal year (Apr-Mar)
+ * Yi uses the ENDING year for naming: April 2025 - March 2026 = FY2026
  */
 export function getCurrentFiscalYear(): number {
   const now = new Date()
   const month = now.getMonth() + 1 // 1-12
   const year = now.getFullYear()
 
-  // Fiscal year starts in April
-  // If Jan-Mar, we're in previous calendar year's fiscal year
-  return month >= 4 ? year : year - 1
+  // Fiscal year runs April to March, named by ending year
+  // Apr-Dec: ending year is next calendar year
+  // Jan-Mar: ending year is current calendar year
+  return month >= 4 ? year + 1 : year
 }

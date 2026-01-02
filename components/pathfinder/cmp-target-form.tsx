@@ -35,7 +35,7 @@ import {
 } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { useToast } from '@/hooks/use-toast'
-import { FISCAL_YEAR_OPTIONS } from '@/types/cmp-targets'
+import { FISCAL_YEAR_OPTIONS, getCurrentFiscalYear, formatFiscalYear } from '@/types/cmp-targets'
 
 interface CMPTargetFormProps {
   verticals: Array<{ id: string; name: string; color: string | null }>
@@ -55,13 +55,13 @@ export function CMPTargetForm({
   const [isPending, startTransition] = useTransition()
   const [isCreatingDefaults, setIsCreatingDefaults] = useState(false)
 
-  const currentYear = new Date().getFullYear()
+  const currentFiscalYear = getCurrentFiscalYear()
 
   const form = useForm<CreateCMPTargetSchemaInput>({
     resolver: zodResolver(createCMPTargetSchema),
     defaultValues: initialData || {
       vertical_id: '',
-      fiscal_year: currentYear,
+      fiscal_year: currentFiscalYear,
       min_activities: 4,
       min_participants: 50,
       min_ec_participation: 10,
@@ -102,7 +102,7 @@ export function CMPTargetForm({
     setIsCreatingDefaults(true)
 
     const result = await createDefaultTargetsAction(
-      selectedYear || currentYear,
+      selectedYear || currentFiscalYear,
       chapterId || undefined
     )
 
@@ -145,7 +145,7 @@ export function CMPTargetForm({
               disabled={isCreatingDefaults}
             >
               {isCreatingDefaults && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Create Default Targets for FY {selectedYear ?? currentYear}-{(selectedYear ?? currentYear) + 1}
+              Create Default Targets for {formatFiscalYear(selectedYear ?? currentFiscalYear)}
             </Button>
           </CardContent>
         </Card>

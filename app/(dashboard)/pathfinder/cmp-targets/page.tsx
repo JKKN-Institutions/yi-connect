@@ -18,6 +18,8 @@ import {
   calculateOverallProgress,
   getProgressStatus,
   getProgressColor,
+  getCurrentFiscalYear,
+  formatFiscalYear,
   FISCAL_YEAR_OPTIONS,
   type CMPProgress,
   type CMPTarget,
@@ -45,13 +47,13 @@ export default async function CMPTargetsPage() {
     userRoles.includes('Super Admin') ||
     userRoles.includes('National Admin')
 
-  const currentYear = new Date().getFullYear()
+  const currentFiscalYear = getCurrentFiscalYear()
 
   // Get targets and progress
   const [targets, progressSummary] = await Promise.all([
-    getCMPTargets({ fiscal_year: currentYear }),
+    getCMPTargets({ fiscal_year: currentFiscalYear }),
     chapterId
-      ? getCMPProgressSummary(chapterId, currentYear)
+      ? getCMPProgressSummary(chapterId, currentFiscalYear)
       : { totalTargets: 0, completedTargets: 0, inProgressTargets: 0, overallProgress: 0, verticalProgress: [] },
   ])
 
@@ -64,7 +66,7 @@ export default async function CMPTargetsPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">CMP Targets</h1>
           <p className="text-muted-foreground">
-            Common Minimum Program targets for FY {currentYear}-{currentYear + 1}
+            Common Minimum Program targets for {formatFiscalYear(currentFiscalYear)}
           </p>
         </div>
         {canManageTargets && (

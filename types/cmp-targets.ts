@@ -179,15 +179,41 @@ export function getProgressColor(status: ReturnType<typeof getProgressStatus>): 
 }
 
 // ============================================================================
+// FISCAL YEAR HELPERS
+// ============================================================================
+
+/**
+ * Get the current Yi fiscal year (April to March)
+ * If we're in Jan-Mar, fiscal year started last calendar year
+ * If we're in Apr-Dec, fiscal year started this calendar year
+ */
+export function getCurrentFiscalYear(): number {
+  const now = new Date()
+  const month = now.getMonth() // 0-indexed (0 = Jan, 3 = Apr)
+  const year = now.getFullYear()
+
+  // April (month 3) starts new fiscal year
+  return month >= 3 ? year : year - 1
+}
+
+/**
+ * Format fiscal year for display (e.g., "FY 2025-26")
+ */
+export function formatFiscalYear(startYear: number): string {
+  const endYear = (startYear + 1) % 100 // Get last 2 digits
+  return `FY ${startYear}-${endYear.toString().padStart(2, '0')}`
+}
+
+// ============================================================================
 // CONSTANTS
 // ============================================================================
 
 export const FISCAL_YEAR_OPTIONS = (() => {
-  const currentYear = new Date().getFullYear()
+  const currentFY = getCurrentFiscalYear()
   return [
-    { value: currentYear - 1, label: `FY ${currentYear - 1}-${currentYear}` },
-    { value: currentYear, label: `FY ${currentYear}-${currentYear + 1}` },
-    { value: currentYear + 1, label: `FY ${currentYear + 1}-${currentYear + 2}` },
+    { value: currentFY - 1, label: formatFiscalYear(currentFY - 1) },
+    { value: currentFY, label: formatFiscalYear(currentFY) },
+    { value: currentFY + 1, label: formatFiscalYear(currentFY + 1) },
   ]
 })()
 

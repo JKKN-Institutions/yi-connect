@@ -47,8 +47,13 @@ export async function getCMPTargets(
   const { data, error } = await query
 
   if (error) {
+    // Handle case where table doesn't exist yet (migration not run)
+    if (error.code === '42P01' || error.message?.includes('does not exist')) {
+      console.warn('CMP targets table not found - migration may need to be run')
+      return []
+    }
     console.error('Error fetching CMP targets:', error)
-    throw new Error('Failed to fetch CMP targets')
+    return [] // Return empty instead of throwing to prevent page crash
   }
 
   return data as CMPTarget[]
@@ -111,8 +116,13 @@ export async function getCMPProgress(
   const { data, error } = await query
 
   if (error) {
+    // Handle case where view doesn't exist yet (migration not run)
+    if (error.code === '42P01' || error.message?.includes('does not exist')) {
+      console.warn('CMP progress view not found - migration may need to be run')
+      return []
+    }
     console.error('Error fetching CMP progress:', error)
-    throw new Error('Failed to fetch CMP progress')
+    return [] // Return empty instead of throwing to prevent page crash
   }
 
   return data as CMPProgress[]

@@ -79,13 +79,17 @@ async function NewPlanContent({
 
   const supabase = await createClient()
 
-  // Get user's roles from user_roles table (same pattern as dashboard layout)
+  // Check if user is National Admin (same pattern as admin-chapter-context)
+  const { data: isNationalAdmin } = await supabase.rpc('is_national_admin')
+
+  // Also check Super Admin role from user_roles table
   const { data: userRoles } = await supabase.rpc('get_user_roles', {
     p_user_id: user.id
   })
   const roles = userRoles?.map((ur: { role_name: string }) => ur.role_name) || []
+  const isSuperAdmin = roles.includes('Super Admin')
 
-  const isAdmin = roles.includes('Super Admin') || roles.includes('National Admin')
+  const isAdmin = !!isNationalAdmin || isSuperAdmin
 
   // Get user's chapter from member record
   const { data: member } = await supabase

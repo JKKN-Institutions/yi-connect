@@ -62,7 +62,9 @@ import {
   Upload,
   Search,
   ClipboardList,
-  HelpCircle
+  HelpCircle,
+  Compass,
+  HeartPulse
 } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
@@ -523,6 +525,43 @@ const navigation: NavItem[] = [
         href: '/verticals/new',
         icon: Plus,
         requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']
+      }
+    ]
+  },
+  {
+    name: 'Pathfinder',
+    icon: Compass,
+    requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Vertical Head', 'Executive Member', 'EC Member'],
+    items: [
+      {
+        name: 'Overview',
+        href: '/pathfinder',
+        icon: LayoutDashboard,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Vertical Head', 'Executive Member', 'EC Member']
+      },
+      {
+        name: 'Health Card',
+        href: '/pathfinder/health-card',
+        icon: HeartPulse,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Vertical Head', 'Executive Member', 'EC Member']
+      },
+      {
+        name: 'CMP Targets',
+        href: '/pathfinder/cmp-targets',
+        icon: Target,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Vertical Head', 'Executive Member', 'EC Member']
+      },
+      {
+        name: 'Commitment',
+        href: '/pathfinder/commitment',
+        icon: ClipboardList,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Vertical Head', 'Executive Member', 'EC Member']
+      },
+      {
+        name: 'Log Activity',
+        href: '/pathfinder/health-card/new',
+        icon: Plus,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Vertical Head', 'Executive Member', 'EC Member']
       }
     ]
   },

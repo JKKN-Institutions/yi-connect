@@ -35,13 +35,13 @@ export const metadata = {
 }
 
 interface PageProps {
-  searchParams: Promise<{ vertical?: string }>
+  searchParams: Promise<{ vertical?: string; chapter?: string }>
 }
 
 export default async function NewAAAPlanPage({ searchParams }: PageProps) {
   await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'EC Member'])
 
-  const { vertical: verticalId } = await searchParams
+  const { vertical: verticalId, chapter: chapterIdParam } = await searchParams
 
   return (
     <div className="flex flex-col gap-6 max-w-4xl mx-auto">
@@ -61,26 +61,99 @@ export default async function NewAAAPlanPage({ searchParams }: PageProps) {
 
       {/* Content */}
       <Suspense fallback={<FormSkeleton />}>
-        <NewPlanContent verticalId={verticalId} />
+        <NewPlanContent verticalId={verticalId} chapterIdParam={chapterIdParam} />
       </Suspense>
     </div>
   )
 }
 
-async function NewPlanContent({ verticalId }: { verticalId?: string }) {
+async function NewPlanContent({
+  verticalId,
+  chapterIdParam
+}: {
+  verticalId?: string
+  chapterIdParam?: string
+}) {
   const user = await getCurrentUser()
   if (!user) redirect('/login')
 
   const supabase = await createClient()
 
-  // Get user's chapter
+  // Get user's profile to check role
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
+  const isAdmin = profile?.role === 'Super Admin' || profile?.role === 'National Admin'
+
+  // Get user's chapter from member record
   const { data: member } = await supabase
     .from('members')
     .select('id, chapter_id')
     .eq('user_id', user.id)
     .single()
 
-  if (!member?.chapter_id) {
+  // Determine which chapter to use
+  // Admin can use chapter from URL param, regular users use their member chapter
+  let chapterId = member?.chapter_id
+
+  if (isAdmin && chapterIdParam) {
+    // Admin with chapter param - verify chapter exists
+    const { data: chapter } = await supabase
+      .from('chapters')
+      .select('id')
+      .eq('id', chapterIdParam)
+      .single()
+
+    if (chapter) {
+      chapterId = chapterIdParam
+    }
+  }
+
+  // If still no chapter and user is admin, show chapter selector
+  if (!chapterId && isAdmin) {
+    const { data: chapters } = await supabase
+      .from('chapters')
+      .select('id, name, city')
+      .eq('status', 'active')
+      .order('name')
+
+    if (chapters && chapters.length > 0) {
+      return (
+        <Card>
+          <CardHeader>
+            <CardTitle>Select a Chapter</CardTitle>
+            <CardDescription>
+              As an admin, choose which chapter to create an AAA plan for
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {chapters.map((c) => (
+                <Link
+                  key={c.id}
+                  href={`/pathfinder/plans/new?chapter=${c.id}`}
+                  className="flex items-center gap-3 p-4 border rounded-lg hover:bg-muted/50 transition-colors"
+                >
+                  <div className="p-2 rounded-lg bg-primary/10">
+                    <span className="text-xl">🏛️</span>
+                  </div>
+                  <div>
+                    <p className="font-medium">{c.name}</p>
+                    <p className="text-sm text-muted-foreground">{c.city}</p>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )
+    }
+  }
+
+  if (!chapterId) {
     return (
       <Card>
         <CardContent className="py-12 text-center">
@@ -96,7 +169,7 @@ async function NewPlanContent({ verticalId }: { verticalId?: string }) {
   const { data: verticals } = await supabase
     .from('verticals')
     .select('id, name, slug, color, icon')
-    .eq('chapter_id', member.chapter_id)
+    .eq('chapter_id', chapterId)
     .eq('is_active', true)
     .order('display_order')
 
@@ -127,7 +200,7 @@ async function NewPlanContent({ verticalId }: { verticalId?: string }) {
             {verticals.map((v) => (
               <Link
                 key={v.id}
-                href={`/pathfinder/plans/new?vertical=${v.id}`}
+                href={`/pathfinder/plans/new?vertical=${v.id}${chapterIdParam ? `&chapter=${chapterIdParam}` : ''}`}
                 className="flex items-center gap-3 p-4 border rounded-lg hover:bg-muted/50 transition-colors"
               >
                 <div
@@ -171,7 +244,7 @@ async function NewPlanContent({ verticalId }: { verticalId?: string }) {
     <AAAPlanForm
       verticalId={verticalId}
       verticalName={selectedVertical.name}
-      chapterId={member.chapter_id}
+      chapterId={chapterId}
       fiscalYear={fiscalYear}
     />
   )

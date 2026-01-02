@@ -88,22 +88,12 @@ async function NewPlanContent({
   // Admin check - Super Admin or National Admin can create for any chapter
   const isAdmin = roles.includes('Super Admin') || roles.includes('National Admin')
 
-  // Debug: Log detailed state
-  console.log('[AAA Plan] Debug:', {
-    userId: user.id,
-    roles,
-    isAdmin,
-    chapterIdParam
-  })
-
   // Get user's chapter from member record
   const { data: member, error: memberError } = await supabase
     .from('members')
     .select('id, chapter_id')
     .eq('user_id', user.id)
     .single()
-
-  console.log('[AAA Plan] Member lookup:', { member, memberError: memberError?.message })
 
   // Determine which chapter to use
   // Admin can use chapter from URL param, regular users use their member chapter
@@ -122,17 +112,13 @@ async function NewPlanContent({
     }
   }
 
-  console.log('[AAA Plan] Chapter check:', { chapterId, isAdmin, willShowSelector: !chapterId && isAdmin })
-
   // If still no chapter and user is admin, show chapter selector
   if (!chapterId && isAdmin) {
     const { data: chapters, error: chaptersError } = await supabase
       .from('chapters')
-      .select('id, name, city')
+      .select('id, name, location')
       .eq('status', 'active')
       .order('name')
-
-    console.log('[AAA Plan] Chapters query:', { count: chapters?.length, error: chaptersError?.message })
 
     if (chapters && chapters.length > 0) {
       return (
@@ -156,7 +142,7 @@ async function NewPlanContent({
                   </div>
                   <div>
                     <p className="font-medium">{c.name}</p>
-                    <p className="text-sm text-muted-foreground">{c.city}</p>
+                    <p className="text-sm text-muted-foreground">{c.location}</p>
                   </div>
                 </Link>
               ))}

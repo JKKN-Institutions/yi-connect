@@ -12,22 +12,37 @@ export interface AAADefaults {
   awareness_1_title: string
   awareness_1_description: string
   awareness_1_audience: string
+  awareness_1_target_attendance?: number
+  awareness_1_engagement_goal?: string
+  awareness_1_impact_measures?: string
   // Awareness 2
   awareness_2_title: string
   awareness_2_description: string
   awareness_2_audience: string
+  awareness_2_target_attendance?: number
+  awareness_2_engagement_goal?: string
+  awareness_2_impact_measures?: string
   // Awareness 3
   awareness_3_title: string
   awareness_3_description: string
   awareness_3_audience: string
+  awareness_3_target_attendance?: number
+  awareness_3_engagement_goal?: string
+  awareness_3_impact_measures?: string
   // Action 1
   action_1_title: string
   action_1_description: string
   action_1_target: string
+  action_1_target_attendance?: number
+  action_1_engagement_goal?: string
+  action_1_impact_measures?: string
   // Action 2
   action_2_title: string
   action_2_description: string
   action_2_target: string
+  action_2_target_attendance?: number
+  action_2_engagement_goal?: string
+  action_2_impact_measures?: string
   // Advocacy
   advocacy_goal: string
   advocacy_target_contact: string
@@ -269,22 +284,37 @@ export const aaaDefaults: Record<string, AAADefaults> = {
     awareness_1_description:
       'Civic education module launch in all schools. Pre-YIP quiz on parliamentary and civic knowledge.',
     awareness_1_audience: 'School Students',
+    awareness_1_target_attendance: 200,
+    awareness_1_engagement_goal: 'Active participation in civic quiz, student questions on parliamentary process',
+    awareness_1_impact_measures: 'Quiz scores, student feedback forms, civic knowledge improvement',
     awareness_2_title: 'YIP Roadshow - Parliament Awareness',
     awareness_2_description:
       'Young Indians Parliament awareness campaigns in target schools. Principal Connect quarterly briefings.',
     awareness_2_audience: 'Schools, School Leaders',
+    awareness_2_target_attendance: 150,
+    awareness_2_engagement_goal: 'Principal commitments to YIP participation, teacher involvement',
+    awareness_2_impact_measures: 'Schools enrolled, principal sign-offs, media coverage',
     awareness_3_title: 'Parent Sabha - Community Awareness',
     awareness_3_description:
       'Community awareness sessions for parents on YIP, Yi Young Champions booklets, and school programs.',
     awareness_3_audience: 'Parents',
+    awareness_3_target_attendance: 100,
+    awareness_3_engagement_goal: 'Parent questions and discussions, volunteer sign-ups for school events',
+    awareness_3_impact_measures: 'Parent attendance, volunteer registrations, social media shares',
     action_1_title: 'Young Indians Parliament (YIP) Chapter Round',
     action_1_description:
       'Host YIP Chapter Round with 500+ student participants. Pathway: Chapter -> Regional -> National Finals.',
     action_1_target: '500+ students in YIP Chapter Round',
+    action_1_target_attendance: 500,
+    action_1_engagement_goal: 'Full mock parliament session, all students debating assigned topics',
+    action_1_impact_measures: 'Participants count, debate quality scores, regional qualifiers selected',
     action_2_title: 'Yi Young Champions Booklet Distribution',
     action_2_description:
       'Distribute 2 Yi Young Champions booklets covering all 8 verticals to 3,000 students across 75 schools.',
     action_2_target: '3,000 copies across 75 schools',
+    action_2_target_attendance: 3000,
+    action_2_engagement_goal: 'Students reading and completing booklet activities, teacher integration in classes',
+    action_2_impact_measures: 'Distribution count, activity completion rates, teacher feedback',
     advocacy_goal:
       'Partner with DEO for government school access. Advocate for YIP modules alignment with NEP 2020 civics curriculum.',
     advocacy_target_contact: 'District Education Officer, Government School Principals',

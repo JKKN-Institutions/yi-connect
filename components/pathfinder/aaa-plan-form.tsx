@@ -21,6 +21,9 @@ import {
   Target,
   CalendarCheck,
   Info,
+  Users,
+  BarChart3,
+  ChevronDown,
 } from 'lucide-react'
 import { createAAAPlan, updateAAAPlan, lockFirstEventDate } from '@/app/actions/aaa'
 import {
@@ -70,6 +73,11 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible'
 import { cn } from '@/lib/utils'
 import toast from 'react-hot-toast'
 
@@ -104,13 +112,16 @@ export function AAAPlanForm({
   })()
 
   // Use defaults for new plans (not editing), fallback to empty strings
-  const getDefault = (field: keyof NonNullable<typeof defaults>, planField?: string | null) => {
-    // If editing, use the plan value
-    if (isEditing && planField !== undefined) {
-      return planField || ''
-    }
-    // For new plans, use defaults if available
-    return defaults?.[field] || ''
+  const getStringDefault = (field: keyof NonNullable<typeof defaults>): string => {
+    // For new plans, use defaults if available (string fields only)
+    const value = defaults?.[field]
+    return typeof value === 'string' ? value : ''
+  }
+
+  const getNumberDefault = (field: keyof NonNullable<typeof defaults>): number | undefined => {
+    // For new plans, use defaults if available (number fields only)
+    const value = defaults?.[field]
+    return typeof value === 'number' ? value : undefined
   }
 
   const form = useForm<CreateAAAPlanInput>({
@@ -122,47 +133,62 @@ export function AAAPlanForm({
       fiscal_year: plan?.fiscal_year || currentFiscalYear,
 
       // Awareness 1
-      awareness_1_title: plan?.awareness_1_title || getDefault('awareness_1_title'),
-      awareness_1_description: plan?.awareness_1_description || getDefault('awareness_1_description'),
-      awareness_1_audience: plan?.awareness_1_audience || getDefault('awareness_1_audience'),
+      awareness_1_title: plan?.awareness_1_title || getStringDefault('awareness_1_title'),
+      awareness_1_description: plan?.awareness_1_description || getStringDefault('awareness_1_description'),
+      awareness_1_audience: plan?.awareness_1_audience || getStringDefault('awareness_1_audience'),
       awareness_1_target_date: plan?.awareness_1_target_date || '',
+      awareness_1_target_attendance: plan?.awareness_1_target_attendance || defaults?.awareness_1_target_attendance || undefined,
+      awareness_1_engagement_goal: plan?.awareness_1_engagement_goal || getStringDefault('awareness_1_engagement_goal'),
+      awareness_1_impact_measures: plan?.awareness_1_impact_measures || getStringDefault('awareness_1_impact_measures'),
 
       // Awareness 2
-      awareness_2_title: plan?.awareness_2_title || getDefault('awareness_2_title'),
-      awareness_2_description: plan?.awareness_2_description || getDefault('awareness_2_description'),
-      awareness_2_audience: plan?.awareness_2_audience || getDefault('awareness_2_audience'),
+      awareness_2_title: plan?.awareness_2_title || getStringDefault('awareness_2_title'),
+      awareness_2_description: plan?.awareness_2_description || getStringDefault('awareness_2_description'),
+      awareness_2_audience: plan?.awareness_2_audience || getStringDefault('awareness_2_audience'),
       awareness_2_target_date: plan?.awareness_2_target_date || '',
+      awareness_2_target_attendance: plan?.awareness_2_target_attendance || defaults?.awareness_2_target_attendance || undefined,
+      awareness_2_engagement_goal: plan?.awareness_2_engagement_goal || getStringDefault('awareness_2_engagement_goal'),
+      awareness_2_impact_measures: plan?.awareness_2_impact_measures || getStringDefault('awareness_2_impact_measures'),
 
       // Awareness 3
-      awareness_3_title: plan?.awareness_3_title || getDefault('awareness_3_title'),
-      awareness_3_description: plan?.awareness_3_description || getDefault('awareness_3_description'),
-      awareness_3_audience: plan?.awareness_3_audience || getDefault('awareness_3_audience'),
+      awareness_3_title: plan?.awareness_3_title || getStringDefault('awareness_3_title'),
+      awareness_3_description: plan?.awareness_3_description || getStringDefault('awareness_3_description'),
+      awareness_3_audience: plan?.awareness_3_audience || getStringDefault('awareness_3_audience'),
       awareness_3_target_date: plan?.awareness_3_target_date || '',
+      awareness_3_target_attendance: plan?.awareness_3_target_attendance || defaults?.awareness_3_target_attendance || undefined,
+      awareness_3_engagement_goal: plan?.awareness_3_engagement_goal || getStringDefault('awareness_3_engagement_goal'),
+      awareness_3_impact_measures: plan?.awareness_3_impact_measures || getStringDefault('awareness_3_impact_measures'),
 
       // Action 1
-      action_1_title: plan?.action_1_title || getDefault('action_1_title'),
-      action_1_description: plan?.action_1_description || getDefault('action_1_description'),
-      action_1_target: plan?.action_1_target || getDefault('action_1_target'),
+      action_1_title: plan?.action_1_title || getStringDefault('action_1_title'),
+      action_1_description: plan?.action_1_description || getStringDefault('action_1_description'),
+      action_1_target: plan?.action_1_target || getStringDefault('action_1_target'),
       action_1_target_date: plan?.action_1_target_date || '',
+      action_1_target_attendance: plan?.action_1_target_attendance || defaults?.action_1_target_attendance || undefined,
+      action_1_engagement_goal: plan?.action_1_engagement_goal || getStringDefault('action_1_engagement_goal'),
+      action_1_impact_measures: plan?.action_1_impact_measures || getStringDefault('action_1_impact_measures'),
 
       // Action 2
-      action_2_title: plan?.action_2_title || getDefault('action_2_title'),
-      action_2_description: plan?.action_2_description || getDefault('action_2_description'),
-      action_2_target: plan?.action_2_target || getDefault('action_2_target'),
+      action_2_title: plan?.action_2_title || getStringDefault('action_2_title'),
+      action_2_description: plan?.action_2_description || getStringDefault('action_2_description'),
+      action_2_target: plan?.action_2_target || getStringDefault('action_2_target'),
       action_2_target_date: plan?.action_2_target_date || '',
+      action_2_target_attendance: plan?.action_2_target_attendance || defaults?.action_2_target_attendance || undefined,
+      action_2_engagement_goal: plan?.action_2_engagement_goal || getStringDefault('action_2_engagement_goal'),
+      action_2_impact_measures: plan?.action_2_impact_measures || getStringDefault('action_2_impact_measures'),
 
       // First Event
       first_event_date: plan?.first_event_date || '',
 
       // Advocacy
-      advocacy_goal: plan?.advocacy_goal || getDefault('advocacy_goal'),
-      advocacy_target_contact: plan?.advocacy_target_contact || getDefault('advocacy_target_contact'),
-      advocacy_approach: plan?.advocacy_approach || getDefault('advocacy_approach'),
+      advocacy_goal: plan?.advocacy_goal || getStringDefault('advocacy_goal'),
+      advocacy_target_contact: plan?.advocacy_target_contact || getStringDefault('advocacy_target_contact'),
+      advocacy_approach: plan?.advocacy_approach || getStringDefault('advocacy_approach'),
 
       // Milestones
-      milestone_jan_target: plan?.milestone_jan_target || getDefault('milestone_jan_target'),
-      milestone_feb_target: plan?.milestone_feb_target || getDefault('milestone_feb_target'),
-      milestone_mar_target: plan?.milestone_mar_target || getDefault('milestone_mar_target'),
+      milestone_jan_target: plan?.milestone_jan_target || getStringDefault('milestone_jan_target'),
+      milestone_feb_target: plan?.milestone_feb_target || getStringDefault('milestone_feb_target'),
+      milestone_mar_target: plan?.milestone_mar_target || getStringDefault('milestone_mar_target'),
     },
   })
 
@@ -344,6 +370,76 @@ export function AAAPlanForm({
                     )}
                   />
                 </div>
+                {/* Depth Metrics */}
+                <Collapsible>
+                  <CollapsibleTrigger className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+                    <BarChart3 className="h-4 w-4" />
+                    <span>Depth Metrics</span>
+                    <ChevronDown className="h-4 w-4" />
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="pt-4">
+                    <div className="grid gap-4 sm:grid-cols-3 p-3 bg-muted/50 rounded-md">
+                      <FormField
+                        control={form.control}
+                        name="awareness_1_target_attendance"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="flex items-center gap-1">
+                              <Users className="h-3 w-3" />
+                              Target Attendance
+                            </FormLabel>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                min={0}
+                                placeholder="e.g., 100"
+                                {...field}
+                                value={field.value ?? ''}
+                                onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : undefined)}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="awareness_1_engagement_goal"
+                        render={({ field }) => (
+                          <FormItem className="sm:col-span-2">
+                            <FormLabel>Engagement Goal</FormLabel>
+                            <FormControl>
+                              <Input
+                                placeholder="What does success look like?"
+                                {...field}
+                                value={field.value || ''}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="awareness_1_impact_measures"
+                        render={({ field }) => (
+                          <FormItem className="sm:col-span-3">
+                            <FormLabel>Impact Measures</FormLabel>
+                            <FormControl>
+                              <Textarea
+                                placeholder="How will you measure impact? (e.g., surveys, quiz scores, sign-ups)"
+                                className="min-h-[60px]"
+                                {...field}
+                                value={field.value || ''}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
               </div>
 
               {/* Awareness 2 */}
@@ -412,6 +508,76 @@ export function AAAPlanForm({
                     )}
                   />
                 </div>
+                {/* Depth Metrics */}
+                <Collapsible>
+                  <CollapsibleTrigger className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+                    <BarChart3 className="h-4 w-4" />
+                    <span>Depth Metrics</span>
+                    <ChevronDown className="h-4 w-4" />
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="pt-4">
+                    <div className="grid gap-4 sm:grid-cols-3 p-3 bg-muted/50 rounded-md">
+                      <FormField
+                        control={form.control}
+                        name="awareness_2_target_attendance"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="flex items-center gap-1">
+                              <Users className="h-3 w-3" />
+                              Target Attendance
+                            </FormLabel>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                min={0}
+                                placeholder="e.g., 100"
+                                {...field}
+                                value={field.value ?? ''}
+                                onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : undefined)}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="awareness_2_engagement_goal"
+                        render={({ field }) => (
+                          <FormItem className="sm:col-span-2">
+                            <FormLabel>Engagement Goal</FormLabel>
+                            <FormControl>
+                              <Input
+                                placeholder="What does success look like?"
+                                {...field}
+                                value={field.value || ''}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="awareness_2_impact_measures"
+                        render={({ field }) => (
+                          <FormItem className="sm:col-span-3">
+                            <FormLabel>Impact Measures</FormLabel>
+                            <FormControl>
+                              <Textarea
+                                placeholder="How will you measure impact? (e.g., surveys, quiz scores, sign-ups)"
+                                className="min-h-[60px]"
+                                {...field}
+                                value={field.value || ''}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
               </div>
 
               {/* Awareness 3 */}
@@ -480,6 +646,76 @@ export function AAAPlanForm({
                     )}
                   />
                 </div>
+                {/* Depth Metrics */}
+                <Collapsible>
+                  <CollapsibleTrigger className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+                    <BarChart3 className="h-4 w-4" />
+                    <span>Depth Metrics</span>
+                    <ChevronDown className="h-4 w-4" />
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="pt-4">
+                    <div className="grid gap-4 sm:grid-cols-3 p-3 bg-muted/50 rounded-md">
+                      <FormField
+                        control={form.control}
+                        name="awareness_3_target_attendance"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="flex items-center gap-1">
+                              <Users className="h-3 w-3" />
+                              Target Attendance
+                            </FormLabel>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                min={0}
+                                placeholder="e.g., 100"
+                                {...field}
+                                value={field.value ?? ''}
+                                onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : undefined)}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="awareness_3_engagement_goal"
+                        render={({ field }) => (
+                          <FormItem className="sm:col-span-2">
+                            <FormLabel>Engagement Goal</FormLabel>
+                            <FormControl>
+                              <Input
+                                placeholder="What does success look like?"
+                                {...field}
+                                value={field.value || ''}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="awareness_3_impact_measures"
+                        render={({ field }) => (
+                          <FormItem className="sm:col-span-3">
+                            <FormLabel>Impact Measures</FormLabel>
+                            <FormControl>
+                              <Textarea
+                                placeholder="How will you measure impact? (e.g., surveys, quiz scores, sign-ups)"
+                                className="min-h-[60px]"
+                                {...field}
+                                value={field.value || ''}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
               </div>
             </CardContent>
           </Card>
@@ -566,6 +802,76 @@ export function AAAPlanForm({
                     )}
                   />
                 </div>
+                {/* Depth Metrics */}
+                <Collapsible>
+                  <CollapsibleTrigger className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+                    <BarChart3 className="h-4 w-4" />
+                    <span>Depth Metrics</span>
+                    <ChevronDown className="h-4 w-4" />
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="pt-4">
+                    <div className="grid gap-4 sm:grid-cols-3 p-3 bg-muted/50 rounded-md">
+                      <FormField
+                        control={form.control}
+                        name="action_1_target_attendance"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="flex items-center gap-1">
+                              <Users className="h-3 w-3" />
+                              Target Attendance
+                            </FormLabel>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                min={0}
+                                placeholder="e.g., 500"
+                                {...field}
+                                value={field.value ?? ''}
+                                onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : undefined)}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="action_1_engagement_goal"
+                        render={({ field }) => (
+                          <FormItem className="sm:col-span-2">
+                            <FormLabel>Engagement Goal</FormLabel>
+                            <FormControl>
+                              <Input
+                                placeholder="What does success look like?"
+                                {...field}
+                                value={field.value || ''}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="action_1_impact_measures"
+                        render={({ field }) => (
+                          <FormItem className="sm:col-span-3">
+                            <FormLabel>Impact Measures</FormLabel>
+                            <FormControl>
+                              <Textarea
+                                placeholder="How will you measure impact? (e.g., trees planted, photos, beneficiaries)"
+                                className="min-h-[60px]"
+                                {...field}
+                                value={field.value || ''}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
               </div>
 
               {/* Action 2 */}
@@ -634,6 +940,76 @@ export function AAAPlanForm({
                     )}
                   />
                 </div>
+                {/* Depth Metrics */}
+                <Collapsible>
+                  <CollapsibleTrigger className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+                    <BarChart3 className="h-4 w-4" />
+                    <span>Depth Metrics</span>
+                    <ChevronDown className="h-4 w-4" />
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="pt-4">
+                    <div className="grid gap-4 sm:grid-cols-3 p-3 bg-muted/50 rounded-md">
+                      <FormField
+                        control={form.control}
+                        name="action_2_target_attendance"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="flex items-center gap-1">
+                              <Users className="h-3 w-3" />
+                              Target Attendance
+                            </FormLabel>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                min={0}
+                                placeholder="e.g., 500"
+                                {...field}
+                                value={field.value ?? ''}
+                                onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : undefined)}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="action_2_engagement_goal"
+                        render={({ field }) => (
+                          <FormItem className="sm:col-span-2">
+                            <FormLabel>Engagement Goal</FormLabel>
+                            <FormControl>
+                              <Input
+                                placeholder="What does success look like?"
+                                {...field}
+                                value={field.value || ''}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="action_2_impact_measures"
+                        render={({ field }) => (
+                          <FormItem className="sm:col-span-3">
+                            <FormLabel>Impact Measures</FormLabel>
+                            <FormControl>
+                              <Textarea
+                                placeholder="How will you measure impact? (e.g., beneficiaries, testimonials, coverage)"
+                                className="min-h-[60px]"
+                                {...field}
+                                value={field.value || ''}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
               </div>
 
               <Separator />

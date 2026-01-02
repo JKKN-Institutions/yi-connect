@@ -26,6 +26,10 @@ export interface AAAActivity {
   target_date: string | null // ISO date string
   status: AAAItemStatus
   event_id?: string | null
+  // Depth Metrics
+  target_attendance?: number | null
+  engagement_goal?: string | null
+  impact_measures?: string | null
 }
 
 export interface AAAPlan {
@@ -40,18 +44,27 @@ export interface AAAPlan {
   awareness_1_audience: string | null
   awareness_1_target_date: string | null
   awareness_1_status: AAAItemStatus
+  awareness_1_target_attendance: number | null
+  awareness_1_engagement_goal: string | null
+  awareness_1_impact_measures: string | null
 
   awareness_2_title: string | null
   awareness_2_description: string | null
   awareness_2_audience: string | null
   awareness_2_target_date: string | null
   awareness_2_status: AAAItemStatus
+  awareness_2_target_attendance: number | null
+  awareness_2_engagement_goal: string | null
+  awareness_2_impact_measures: string | null
 
   awareness_3_title: string | null
   awareness_3_description: string | null
   awareness_3_audience: string | null
   awareness_3_target_date: string | null
   awareness_3_status: AAAItemStatus
+  awareness_3_target_attendance: number | null
+  awareness_3_engagement_goal: string | null
+  awareness_3_impact_measures: string | null
 
   // Action (2)
   action_1_title: string | null
@@ -60,6 +73,9 @@ export interface AAAPlan {
   action_1_target_date: string | null
   action_1_status: AAAItemStatus
   action_1_event_id: string | null
+  action_1_target_attendance: number | null
+  action_1_engagement_goal: string | null
+  action_1_impact_measures: string | null
 
   action_2_title: string | null
   action_2_description: string | null
@@ -67,6 +83,9 @@ export interface AAAPlan {
   action_2_target_date: string | null
   action_2_status: AAAItemStatus
   action_2_event_id: string | null
+  action_2_target_attendance: number | null
+  action_2_engagement_goal: string | null
+  action_2_impact_measures: string | null
 
   // First Event
   first_event_date: string | null
@@ -289,27 +308,42 @@ export interface CreateAAAPlanInput {
   awareness_1_description?: string
   awareness_1_audience?: string
   awareness_1_target_date?: string
+  awareness_1_target_attendance?: number
+  awareness_1_engagement_goal?: string
+  awareness_1_impact_measures?: string
 
   awareness_2_title?: string
   awareness_2_description?: string
   awareness_2_audience?: string
   awareness_2_target_date?: string
+  awareness_2_target_attendance?: number
+  awareness_2_engagement_goal?: string
+  awareness_2_impact_measures?: string
 
   awareness_3_title?: string
   awareness_3_description?: string
   awareness_3_audience?: string
   awareness_3_target_date?: string
+  awareness_3_target_attendance?: number
+  awareness_3_engagement_goal?: string
+  awareness_3_impact_measures?: string
 
   // Action
   action_1_title?: string
   action_1_description?: string
   action_1_target?: string
   action_1_target_date?: string
+  action_1_target_attendance?: number
+  action_1_engagement_goal?: string
+  action_1_impact_measures?: string
 
   action_2_title?: string
   action_2_description?: string
   action_2_target?: string
   action_2_target_date?: string
+  action_2_target_attendance?: number
+  action_2_engagement_goal?: string
+  action_2_impact_measures?: string
 
   first_event_date?: string
 

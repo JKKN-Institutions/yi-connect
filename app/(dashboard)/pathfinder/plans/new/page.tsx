@@ -10,6 +10,7 @@ import { redirect, notFound } from 'next/navigation'
 import { ArrowLeft } from 'lucide-react'
 import { requireRole, getCurrentUser } from '@/lib/auth'
 import { getCurrentFiscalYear } from '@/lib/data/aaa'
+import { getAAADefaults } from '@/lib/data/aaa-defaults'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -240,12 +241,16 @@ async function NewPlanContent({
     redirect(`/pathfinder/plans/${existingPlan.id}`)
   }
 
+  // Get AAA defaults for this vertical (suggestions from Pathfinder 2026)
+  const defaults = getAAADefaults(selectedVertical.slug, selectedVertical.name)
+
   return (
     <AAAPlanForm
       verticalId={verticalId}
       verticalName={selectedVertical.name}
       chapterId={chapterId}
       fiscalYear={fiscalYear}
+      defaults={defaults}
     />
   )
 }

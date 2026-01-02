@@ -30,6 +30,7 @@ import {
   type UpdateAAAPlanInput,
 } from '@/lib/validations/aaa'
 import type { AAAPlanWithDetails } from '@/types/aaa'
+import type { AAADefaults } from '@/lib/data/aaa-defaults'
 import { Button } from '@/components/ui/button'
 import {
   Form,
@@ -78,6 +79,8 @@ interface AAAPlanFormProps {
   chapterId: string
   plan?: AAAPlanWithDetails
   fiscalYear?: number
+  /** Pre-populated suggestions from Pathfinder 2026 (only used for new plans) */
+  defaults?: AAADefaults
 }
 
 export function AAAPlanForm({
@@ -86,6 +89,7 @@ export function AAAPlanForm({
   chapterId,
   plan,
   fiscalYear,
+  defaults,
 }: AAAPlanFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -99,6 +103,16 @@ export function AAAPlanForm({
     return month >= 4 ? now.getFullYear() : now.getFullYear() - 1
   })()
 
+  // Use defaults for new plans (not editing), fallback to empty strings
+  const getDefault = (field: keyof NonNullable<typeof defaults>, planField?: string | null) => {
+    // If editing, use the plan value
+    if (isEditing && planField !== undefined) {
+      return planField || ''
+    }
+    // For new plans, use defaults if available
+    return defaults?.[field] || ''
+  }
+
   const form = useForm<CreateAAAPlanInput>({
     resolver: zodResolver(createAAAPlanSchema) as Resolver<CreateAAAPlanInput>,
     mode: 'onChange',
@@ -108,47 +122,47 @@ export function AAAPlanForm({
       fiscal_year: plan?.fiscal_year || currentFiscalYear,
 
       // Awareness 1
-      awareness_1_title: plan?.awareness_1_title || '',
-      awareness_1_description: plan?.awareness_1_description || '',
-      awareness_1_audience: plan?.awareness_1_audience || '',
+      awareness_1_title: plan?.awareness_1_title || getDefault('awareness_1_title'),
+      awareness_1_description: plan?.awareness_1_description || getDefault('awareness_1_description'),
+      awareness_1_audience: plan?.awareness_1_audience || getDefault('awareness_1_audience'),
       awareness_1_target_date: plan?.awareness_1_target_date || '',
 
       // Awareness 2
-      awareness_2_title: plan?.awareness_2_title || '',
-      awareness_2_description: plan?.awareness_2_description || '',
-      awareness_2_audience: plan?.awareness_2_audience || '',
+      awareness_2_title: plan?.awareness_2_title || getDefault('awareness_2_title'),
+      awareness_2_description: plan?.awareness_2_description || getDefault('awareness_2_description'),
+      awareness_2_audience: plan?.awareness_2_audience || getDefault('awareness_2_audience'),
       awareness_2_target_date: plan?.awareness_2_target_date || '',
 
       // Awareness 3
-      awareness_3_title: plan?.awareness_3_title || '',
-      awareness_3_description: plan?.awareness_3_description || '',
-      awareness_3_audience: plan?.awareness_3_audience || '',
+      awareness_3_title: plan?.awareness_3_title || getDefault('awareness_3_title'),
+      awareness_3_description: plan?.awareness_3_description || getDefault('awareness_3_description'),
+      awareness_3_audience: plan?.awareness_3_audience || getDefault('awareness_3_audience'),
       awareness_3_target_date: plan?.awareness_3_target_date || '',
 
       // Action 1
-      action_1_title: plan?.action_1_title || '',
-      action_1_description: plan?.action_1_description || '',
-      action_1_target: plan?.action_1_target || '',
+      action_1_title: plan?.action_1_title || getDefault('action_1_title'),
+      action_1_description: plan?.action_1_description || getDefault('action_1_description'),
+      action_1_target: plan?.action_1_target || getDefault('action_1_target'),
       action_1_target_date: plan?.action_1_target_date || '',
 
       // Action 2
-      action_2_title: plan?.action_2_title || '',
-      action_2_description: plan?.action_2_description || '',
-      action_2_target: plan?.action_2_target || '',
+      action_2_title: plan?.action_2_title || getDefault('action_2_title'),
+      action_2_description: plan?.action_2_description || getDefault('action_2_description'),
+      action_2_target: plan?.action_2_target || getDefault('action_2_target'),
       action_2_target_date: plan?.action_2_target_date || '',
 
       // First Event
       first_event_date: plan?.first_event_date || '',
 
       // Advocacy
-      advocacy_goal: plan?.advocacy_goal || '',
-      advocacy_target_contact: plan?.advocacy_target_contact || '',
-      advocacy_approach: plan?.advocacy_approach || '',
+      advocacy_goal: plan?.advocacy_goal || getDefault('advocacy_goal'),
+      advocacy_target_contact: plan?.advocacy_target_contact || getDefault('advocacy_target_contact'),
+      advocacy_approach: plan?.advocacy_approach || getDefault('advocacy_approach'),
 
       // Milestones
-      milestone_jan_target: plan?.milestone_jan_target || '',
-      milestone_feb_target: plan?.milestone_feb_target || '',
-      milestone_mar_target: plan?.milestone_mar_target || '',
+      milestone_jan_target: plan?.milestone_jan_target || getDefault('milestone_jan_target'),
+      milestone_feb_target: plan?.milestone_feb_target || getDefault('milestone_feb_target'),
+      milestone_mar_target: plan?.milestone_mar_target || getDefault('milestone_mar_target'),
     },
   })
 
@@ -233,6 +247,20 @@ export function AAAPlanForm({
               Set monthly milestones and lock your first event date commitment.
             </AlertDescription>
           </Alert>
+
+          {/* Pre-filled suggestions notice */}
+          {!isEditing && defaults && (
+            <Alert className="bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-800">
+              <Megaphone className="h-4 w-4 text-amber-600" />
+              <AlertTitle className="text-amber-800 dark:text-amber-200">
+                Pre-filled with Pathfinder 2026 Suggestions
+              </AlertTitle>
+              <AlertDescription className="text-amber-700 dark:text-amber-300">
+                This form has been pre-populated with suggested activities from the Yi Erode Pathfinder 2026 plan.
+                Feel free to edit, modify, or replace any of these suggestions to fit your chapter's needs.
+              </AlertDescription>
+            </Alert>
+          )}
 
           {/* AWARENESS SECTION */}
           <Card>

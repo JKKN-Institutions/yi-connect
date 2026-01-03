@@ -7,7 +7,7 @@
 import Link from 'next/link'
 import { Plus, Target, TrendingUp, Users, AlertCircle } from 'lucide-react'
 import { requireRole, getCurrentChapterId } from '@/lib/auth'
-import { getCMPTargets, getCMPProgressSummary } from '@/lib/data/cmp-targets'
+import { getCMPTargets, getAllCMPTargets, getCMPProgressSummary } from '@/lib/data/cmp-targets'
 import { getVerticalsForForm } from '@/lib/data/health-card'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -18,9 +18,9 @@ import {
   calculateOverallProgress,
   getProgressStatus,
   getProgressColor,
-  getCurrentFiscalYear,
-  formatFiscalYear,
-  FISCAL_YEAR_OPTIONS,
+  getCurrentCalendarYear,
+  formatCalendarYear,
+  CALENDAR_YEAR_OPTIONS,
   type CMPProgress,
   type CMPTarget,
 } from '@/types/cmp-targets'
@@ -47,15 +47,17 @@ export default async function CMPTargetsPage() {
     userRoles.includes('Super Admin') ||
     userRoles.includes('National Admin')
 
-  const currentFiscalYear = getCurrentFiscalYear()
+  const currentCalendarYear = getCurrentCalendarYear()
 
   // Get targets and progress
-  const [targets, progressSummary] = await Promise.all([
-    getCMPTargets({ fiscal_year: currentFiscalYear }),
+  const [targetsResult, progressSummary] = await Promise.all([
+    getCMPTargets(chapterId, { calendar_year: currentCalendarYear }),
     chapterId
-      ? getCMPProgressSummary(chapterId, currentFiscalYear)
-      : { totalTargets: 0, completedTargets: 0, inProgressTargets: 0, overallProgress: 0, verticalProgress: [] },
+      ? getCMPProgressSummary(chapterId, currentCalendarYear)
+      : { totalTargets: 0, completedTargets: 0, inProgressTargets: 0, notStartedTargets: 0, overallProgress: 0, verticalProgress: [] },
   ])
+
+  const targets = targetsResult.data
 
   const hasTargets = targets.length > 0
 
@@ -66,7 +68,7 @@ export default async function CMPTargetsPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">CMP Targets</h1>
           <p className="text-muted-foreground">
-            Common Minimum Program targets for {formatFiscalYear(currentFiscalYear)}
+            Common Minimum Program targets for {formatCalendarYear(currentCalendarYear)}
           </p>
         </div>
         {canManageTargets && (
@@ -148,7 +150,7 @@ export default async function CMPTargetsPage() {
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>No targets set</AlertTitle>
           <AlertDescription>
-            CMP targets haven&apos;t been set for this fiscal year yet.
+            CMP targets haven&apos;t been set for this calendar year yet.
             {canManageTargets
               ? ' Click "Set Targets" to create targets for each vertical.'
               : ' Please contact your Chapter Chair to set targets.'}

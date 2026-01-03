@@ -22,7 +22,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { getCurrentFiscalYear, formatFiscalYear } from '@/types/cmp-targets'
+import { getCurrentCalendarYear, formatCalendarYear } from '@/types/cmp-targets'
 import {
   getStretchProgressStatus,
   getStretchProgressColor,
@@ -53,15 +53,16 @@ export default async function StretchGoalsPage() {
     userRoles.includes('National Admin') ||
     userRoles.includes('Co-Chair')
 
-  const currentFiscalYear = getCurrentFiscalYear()
+  const currentCalendarYear = getCurrentCalendarYear()
 
   // Get stretch goals and summary
-  const [stretchGoals, summary, cmpTargets] = await Promise.all([
-    getStretchGoals({ fiscal_year: currentFiscalYear }),
-    getStretchGoalsSummary(chapterId, currentFiscalYear),
-    getCMPTargets({ fiscal_year: currentFiscalYear }),
+  const [stretchGoals, summary, cmpTargetsResult] = await Promise.all([
+    getStretchGoals({ calendar_year: currentCalendarYear }),
+    getStretchGoalsSummary(chapterId, currentCalendarYear),
+    getCMPTargets(chapterId, { calendar_year: currentCalendarYear }),
   ])
 
+  const cmpTargets = cmpTargetsResult.data
   const hasStretchGoals = stretchGoals.length > 0
   const hasCMPTargets = cmpTargets.length > 0
 
@@ -75,7 +76,7 @@ export default async function StretchGoalsPage() {
             Stretch Goals
           </h1>
           <p className="text-muted-foreground">
-            Ambitious targets beyond CMP minimums for {formatFiscalYear(currentFiscalYear)}
+            Ambitious targets beyond CMP minimums for {formatCalendarYear(currentCalendarYear)}
           </p>
         </div>
         {canManageGoals && (

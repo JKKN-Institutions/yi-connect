@@ -70,7 +70,7 @@ export async function createAAAPlan(
       .from('aaa_plans')
       .select('id')
       .eq('vertical_id', sanitized.vertical_id)
-      .eq('fiscal_year', sanitized.fiscal_year)
+      .eq('calendar_year', sanitized.calendar_year)
       .single()
 
     if (existing) {

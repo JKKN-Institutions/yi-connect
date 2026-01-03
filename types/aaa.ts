@@ -35,7 +35,7 @@ export interface AAAActivity {
 export interface AAAPlan {
   id: string
   vertical_id: string
-  fiscal_year: number
+  calendar_year: number
   chapter_id: string
 
   // Awareness (3)
@@ -281,7 +281,7 @@ export interface VerticalAAAStatus {
 }
 
 export interface PathfinderDashboard {
-  fiscal_year: number
+  calendar_year: number
   chapter_id: string
   chapter_name: string
 
@@ -312,7 +312,7 @@ export interface PathfinderDashboard {
 
 export interface CreateAAAPlanInput {
   vertical_id: string
-  fiscal_year: number
+  calendar_year: number
   chapter_id: string
 
   // Awareness
@@ -415,7 +415,7 @@ export interface AssignMentorInput {
 
 export interface AAAPlanFilters {
   vertical_id?: string
-  fiscal_year?: number
+  calendar_year?: number
   status?: AAAPlanStatus
   has_first_event?: boolean
   chapter_id?: string

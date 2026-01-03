@@ -9,7 +9,7 @@ import Link from 'next/link'
 import { redirect, notFound } from 'next/navigation'
 import { Plus, FileSignature, Target, ClipboardList } from 'lucide-react'
 import { requireRole, getCurrentUser, getCurrentChapterId } from '@/lib/auth'
-import { getPathfinderDashboard, getCurrentFiscalYear } from '@/lib/data/aaa'
+import { getPathfinderDashboard, getCurrentCalendarYear } from '@/lib/data/aaa'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { AAADashboard } from '@/components/pathfinder/aaa-dashboard'
@@ -29,7 +29,7 @@ export default async function PathfinderPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Pathfinder Dashboard</h1>
           <p className="text-muted-foreground mt-1">
-            AAA Framework tracking for FY{getCurrentFiscalYear()}
+            AAA Framework tracking for {getCurrentCalendarYear()}
           </p>
         </div>
         <div className="flex gap-2">
@@ -81,8 +81,8 @@ async function DashboardContent() {
     )
   }
 
-  const fiscalYear = getCurrentFiscalYear()
-  const dashboard = await getPathfinderDashboard(chapterId, fiscalYear)
+  const calendarYear = getCurrentCalendarYear()
+  const dashboard = await getPathfinderDashboard(chapterId, calendarYear)
 
   if (!dashboard) {
     return (
@@ -90,7 +90,7 @@ async function DashboardContent() {
         <Target className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
         <h2 className="text-xl font-semibold mb-2">No Data Available</h2>
         <p className="text-muted-foreground">
-          No Pathfinder data found for this chapter and fiscal year.
+          No Pathfinder data found for this chapter and calendar year.
         </p>
       </div>
     )

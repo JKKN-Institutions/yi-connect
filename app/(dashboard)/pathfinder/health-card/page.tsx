@@ -14,7 +14,7 @@ import {
   getHealthCardEntries,
   getChapterById,
   getChapterHealthStats,
-  getCurrentFiscalYear,
+  getCurrentCalendarYear,
 } from '@/lib/data/health-card'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -45,7 +45,7 @@ export default async function HealthCardPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Health Card</h1>
           <p className="text-muted-foreground mt-1">
-            Activity reporting by vertical for FY{getCurrentFiscalYear()}
+            Activity reporting by vertical for {getCurrentCalendarYear()}
           </p>
         </div>
         <Button asChild>
@@ -80,9 +80,9 @@ async function HealthCardContent() {
   }
 
   const chapter = await getChapterById(chapterId)
-  const fiscalYear = getCurrentFiscalYear()
-  const stats = await getChapterHealthStats(chapterId, fiscalYear)
-  const { entries, total } = await getHealthCardEntries(chapterId, { fiscal_year: fiscalYear }, { limit: 50 })
+  const calendarYear = getCurrentCalendarYear()
+  const stats = await getChapterHealthStats(chapterId, calendarYear)
+  const { entries, total } = await getHealthCardEntries(chapterId, { calendar_year: calendarYear }, { limit: 50 })
 
   return (
     <div className="space-y-6">

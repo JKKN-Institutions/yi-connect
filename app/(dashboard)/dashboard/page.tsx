@@ -258,7 +258,7 @@ async function BudgetUtilizationCard() {
     .from('budgets')
     .select('amount, spent_amount')
     .eq('chapter_id', profile.chapter_id)
-    .gte('fiscal_year', new Date().getFullYear());
+    .gte('calendar_year', new Date().getFullYear());
 
   const totalBudget = budgetData?.reduce((sum, b) => sum + Number(b.amount), 0) || 0;
   const totalSpent = budgetData?.reduce((sum, b) => sum + Number(b.spent_amount || 0), 0) || 0;

@@ -211,7 +211,7 @@ export function ExpenseForm({
                   <SelectContent>
                     {budgets.map((budget) => (
                       <SelectItem key={budget.id} value={budget.id}>
-                        {budget.name} - FY {budget.fiscal_year}
+                        {budget.name} - {budget.calendar_year}
                       </SelectItem>
                     ))}
                   </SelectContent>

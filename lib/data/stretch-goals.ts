@@ -30,15 +30,15 @@ export async function getStretchGoals(
       chapter:chapters(id, name),
       cmp_target:cmp_targets(id, min_activities, min_participants, min_ec_participation)
     `)
-    .order('fiscal_year', { ascending: false })
+    .order('calendar_year', { ascending: false })
     .order('created_at', { ascending: false })
 
   if (filters?.vertical_id) {
     query = query.eq('vertical_id', filters.vertical_id)
   }
 
-  if (filters?.fiscal_year) {
-    query = query.eq('fiscal_year', filters.fiscal_year)
+  if (filters?.calendar_year) {
+    query = query.eq('calendar_year', filters.calendar_year)
   }
 
   if (filters?.chapter_id) {
@@ -108,8 +108,8 @@ export async function getStretchGoalProgress(
     query = query.eq('vertical_id', filters.vertical_id)
   }
 
-  if (filters?.fiscal_year) {
-    query = query.eq('fiscal_year', filters.fiscal_year)
+  if (filters?.calendar_year) {
+    query = query.eq('calendar_year', filters.calendar_year)
   }
 
   if (filters?.chapter_id) {
@@ -140,7 +140,7 @@ export async function getStretchGoalProgress(
  */
 export async function getStretchGoalsSummary(
   chapterId: string | null,
-  fiscalYear: number
+  calendarYear: number
 ): Promise<{
   totalStretchGoals: number
   achievedCount: number
@@ -149,7 +149,7 @@ export async function getStretchGoalsSummary(
 }> {
   const progress = await getStretchGoalProgress({
     chapter_id: chapterId || undefined,
-    fiscal_year: fiscalYear,
+    calendar_year: calendarYear,
   })
 
   const achievedCount = progress.filter((p) => p.is_achieved).length
@@ -248,17 +248,17 @@ export async function deleteStretchGoal(id: string): Promise<void> {
  * Create default stretch goals from CMP targets
  */
 export async function createDefaultStretchGoals(
-  fiscalYear: number,
+  calendarYear: number,
   chapterId?: string,
   multiplier: number = 1.5
 ): Promise<{ count: number }> {
   const supabase = await createClient()
 
-  // Get CMP targets for the fiscal year
+  // Get CMP targets for the calendar year
   let cmpQuery = supabase
     .from('cmp_targets')
     .select('*')
-    .eq('fiscal_year', fiscalYear)
+    .eq('calendar_year', calendarYear)
 
   if (chapterId) {
     cmpQuery = cmpQuery.or(`chapter_id.eq.${chapterId},is_national_target.eq.true`)
@@ -282,7 +282,7 @@ export async function createDefaultStretchGoals(
     cmp_target_id: cmp.id,
     vertical_id: cmp.vertical_id,
     chapter_id: chapterId || null,
-    fiscal_year: fiscalYear,
+    calendar_year: calendarYear,
     stretch_activities: Math.ceil(cmp.min_activities * multiplier),
     stretch_participants: Math.ceil(cmp.min_participants * multiplier),
     stretch_ec_participation: Math.ceil(cmp.min_ec_participation * 2), // 2x for EC
@@ -297,7 +297,7 @@ export async function createDefaultStretchGoals(
   if (error) {
     // Handle unique constraint violation
     if (error.code === '23505') {
-      console.warn('Stretch goals already exist for this fiscal year')
+      console.warn('Stretch goals already exist for this calendar year')
       return { count: 0 }
     }
     console.error('Error creating stretch goals:', error)

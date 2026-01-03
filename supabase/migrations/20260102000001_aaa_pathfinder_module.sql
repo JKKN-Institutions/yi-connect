@@ -9,7 +9,7 @@
 -- Stores AAA plans for each vertical per fiscal year
 -- ============================================================================
 
-CREATE TABLE aaa_plans (
+CREATE TABLE IF NOT EXISTS aaa_plans (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   vertical_id UUID NOT NULL REFERENCES verticals(id) ON DELETE CASCADE,
   fiscal_year INT NOT NULL CHECK (fiscal_year >= 2020 AND fiscal_year <= 2100),
@@ -85,10 +85,10 @@ CREATE TABLE aaa_plans (
   UNIQUE(vertical_id, fiscal_year)
 );
 
-CREATE INDEX idx_aaa_plans_vertical_id ON aaa_plans(vertical_id);
-CREATE INDEX idx_aaa_plans_fiscal_year ON aaa_plans(fiscal_year);
-CREATE INDEX idx_aaa_plans_chapter_id ON aaa_plans(chapter_id);
-CREATE INDEX idx_aaa_plans_status ON aaa_plans(status);
+CREATE INDEX IF NOT EXISTS idx_aaa_plans_vertical_id ON aaa_plans(vertical_id);
+CREATE INDEX IF NOT EXISTS idx_aaa_plans_fiscal_year ON aaa_plans(fiscal_year);
+CREATE INDEX IF NOT EXISTS idx_aaa_plans_chapter_id ON aaa_plans(chapter_id);
+CREATE INDEX IF NOT EXISTS idx_aaa_plans_status ON aaa_plans(status);
 
 COMMENT ON TABLE aaa_plans IS 'AAA Framework plans: 3 Awareness, 2 Action, 1 Advocacy per vertical per year';
 
@@ -97,7 +97,7 @@ COMMENT ON TABLE aaa_plans IS 'AAA Framework plans: 3 Awareness, 2 Action, 1 Adv
 -- Digital commitment cards signed at Pathfinder
 -- ============================================================================
 
-CREATE TABLE commitment_cards (
+CREATE TABLE IF NOT EXISTS commitment_cards (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   member_id UUID NOT NULL REFERENCES members(id) ON DELETE CASCADE,
   aaa_plan_id UUID REFERENCES aaa_plans(id) ON DELETE SET NULL,
@@ -120,9 +120,9 @@ CREATE TABLE commitment_cards (
   UNIQUE(member_id, pathfinder_year)
 );
 
-CREATE INDEX idx_commitment_cards_member_id ON commitment_cards(member_id);
-CREATE INDEX idx_commitment_cards_chapter_id ON commitment_cards(chapter_id);
-CREATE INDEX idx_commitment_cards_pathfinder_year ON commitment_cards(pathfinder_year);
+CREATE INDEX IF NOT EXISTS idx_commitment_cards_member_id ON commitment_cards(member_id);
+CREATE INDEX IF NOT EXISTS idx_commitment_cards_chapter_id ON commitment_cards(chapter_id);
+CREATE INDEX IF NOT EXISTS idx_commitment_cards_pathfinder_year ON commitment_cards(pathfinder_year);
 
 COMMENT ON TABLE commitment_cards IS 'Digital commitment cards signed by EC Chairs at Pathfinder events';
 
@@ -131,7 +131,7 @@ COMMENT ON TABLE commitment_cards IS 'Digital commitment cards signed by EC Chai
 -- Mentor-mentee relationships for EC Chairs
 -- ============================================================================
 
-CREATE TABLE mentor_assignments (
+CREATE TABLE IF NOT EXISTS mentor_assignments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   ec_chair_id UUID NOT NULL REFERENCES members(id) ON DELETE CASCADE,
   mentor_id UUID NOT NULL REFERENCES members(id) ON DELETE CASCADE,
@@ -155,9 +155,19 @@ CREATE TABLE mentor_assignments (
   UNIQUE(ec_chair_id, pathfinder_year)
 );
 
-CREATE INDEX idx_mentor_assignments_ec_chair_id ON mentor_assignments(ec_chair_id);
-CREATE INDEX idx_mentor_assignments_mentor_id ON mentor_assignments(mentor_id);
-CREATE INDEX idx_mentor_assignments_chapter_id ON mentor_assignments(chapter_id);
+-- Create indexes only if columns exist (handles existing table with different schema)
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'mentor_assignments' AND column_name = 'ec_chair_id') THEN
+    CREATE INDEX IF NOT EXISTS idx_mentor_assignments_ec_chair_id ON mentor_assignments(ec_chair_id);
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'mentor_assignments' AND column_name = 'mentor_id') THEN
+    CREATE INDEX IF NOT EXISTS idx_mentor_assignments_mentor_id ON mentor_assignments(mentor_id);
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'mentor_assignments' AND column_name = 'chapter_id') THEN
+    CREATE INDEX IF NOT EXISTS idx_mentor_assignments_chapter_id ON mentor_assignments(chapter_id);
+  END IF;
+END $$;
 
 COMMENT ON TABLE mentor_assignments IS 'Mentor-mentee assignments for EC Chairs from Pathfinder';
 
@@ -174,7 +184,7 @@ ALTER TABLE mentor_assignments ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Members can view chapter AAA plans" ON aaa_plans
   FOR SELECT USING (
     chapter_id IN (
-      SELECT chapter_id FROM members WHERE user_id = auth.uid()
+      SELECT chapter_id FROM members WHERE id = auth.uid()
     )
   );
 
@@ -182,9 +192,11 @@ CREATE POLICY "EC and above can insert AAA plans" ON aaa_plans
   FOR INSERT WITH CHECK (
     EXISTS (
       SELECT 1 FROM members m
-      WHERE m.user_id = auth.uid()
+      JOIN user_roles ur ON ur.user_id = m.id
+      JOIN roles r ON r.id = ur.role_id
+      WHERE m.id = auth.uid()
       AND m.chapter_id = aaa_plans.chapter_id
-      AND m.hierarchy_level >= 3
+      AND r.hierarchy_level >= 3
     )
   );
 
@@ -192,36 +204,41 @@ CREATE POLICY "EC and above can update AAA plans" ON aaa_plans
   FOR UPDATE USING (
     EXISTS (
       SELECT 1 FROM members m
-      WHERE m.user_id = auth.uid()
+      JOIN user_roles ur ON ur.user_id = m.id
+      JOIN roles r ON r.id = ur.role_id
+      WHERE m.id = auth.uid()
       AND m.chapter_id = aaa_plans.chapter_id
-      AND m.hierarchy_level >= 3
+      AND r.hierarchy_level >= 3
     )
   );
 
 -- Commitment Cards: Members can view/edit their own
 CREATE POLICY "Members can view own commitment cards" ON commitment_cards
   FOR SELECT USING (
-    member_id IN (SELECT id FROM members WHERE user_id = auth.uid())
+    member_id IN (SELECT id FROM members WHERE id = auth.uid())
     OR chapter_id IN (
-      SELECT chapter_id FROM members WHERE user_id = auth.uid() AND hierarchy_level >= 4
+      SELECT m.chapter_id FROM members m
+      JOIN user_roles ur ON ur.user_id = m.id
+      JOIN roles r ON r.id = ur.role_id
+      WHERE m.id = auth.uid() AND r.hierarchy_level >= 4
     )
   );
 
 CREATE POLICY "Members can insert own commitment cards" ON commitment_cards
   FOR INSERT WITH CHECK (
-    member_id IN (SELECT id FROM members WHERE user_id = auth.uid())
+    member_id IN (SELECT id FROM members WHERE id = auth.uid())
   );
 
 CREATE POLICY "Members can update own commitment cards" ON commitment_cards
   FOR UPDATE USING (
-    member_id IN (SELECT id FROM members WHERE user_id = auth.uid())
+    member_id IN (SELECT id FROM members WHERE id = auth.uid())
   );
 
 -- Mentor Assignments: View chapter assignments, Chair+ can manage
 CREATE POLICY "Members can view chapter mentor assignments" ON mentor_assignments
   FOR SELECT USING (
     chapter_id IN (
-      SELECT chapter_id FROM members WHERE user_id = auth.uid()
+      SELECT chapter_id FROM members WHERE id = auth.uid()
     )
   );
 
@@ -229,9 +246,11 @@ CREATE POLICY "Chair can manage mentor assignments" ON mentor_assignments
   FOR ALL USING (
     EXISTS (
       SELECT 1 FROM members m
-      WHERE m.user_id = auth.uid()
+      JOIN user_roles ur ON ur.user_id = m.id
+      JOIN roles r ON r.id = ur.role_id
+      WHERE m.id = auth.uid()
       AND m.chapter_id = mentor_assignments.chapter_id
-      AND m.hierarchy_level >= 4
+      AND r.hierarchy_level >= 4
     )
   );
 

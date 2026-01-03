@@ -23,7 +23,7 @@ import {
 import {
   getVerticalById,
   getVerticalDashboard,
-  getCurrentFiscalYear,
+  getCurrentCalendarYear,
   getCurrentQuarter,
   getKPIAlerts,
 } from '@/lib/data/vertical'
@@ -120,10 +120,10 @@ async function VerticalHeader({ params }: { params: Promise<{ id: string }> }) {
 // Dashboard Content Component
 async function DashboardContent({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const fiscalYear = getCurrentFiscalYear()
+  const calendarYear = getCurrentCalendarYear()
   const currentQuarter = getCurrentQuarter()
 
-  const dashboard = await getVerticalDashboard(id, fiscalYear)
+  const dashboard = await getVerticalDashboard(id, calendarYear)
   const alerts = await getKPIAlerts(id, currentQuarter)
 
   return (
@@ -347,7 +347,7 @@ async function DashboardContent({ params }: { params: Promise<{ id: string }> })
             {!dashboard.current_plan ? (
               <div className="text-center py-12">
                 <Target className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <p className="text-sm text-muted-foreground mb-4">No active plan for FY{fiscalYear}</p>
+                <p className="text-sm text-muted-foreground mb-4">No active plan for {calendarYear}</p>
                 <Button asChild>
                   <Link href={`/verticals/${id}/plan?new=true`}>Create Plan</Link>
                 </Button>

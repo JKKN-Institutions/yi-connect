@@ -186,7 +186,7 @@ export const benchmarkFiltersSchema = z.object({
       z.enum(['top_10', 'above_average', 'average', 'below_average', 'bottom_10'])
     )
     .optional(),
-  fiscal_year: z.number().int().min(2020).max(2100).optional(),
+  calendar_year: z.number().int().min(2020).max(2100).optional(),
   quarter: z.number().int().min(1).max(4).optional()
 });
 

@@ -18,7 +18,7 @@ import {
   type CreateStretchGoalSchemaInput,
   type UpdateStretchGoalSchemaInput,
 } from '@/lib/validations/stretch-goals'
-import { getCurrentFiscalYear } from '@/types/cmp-targets'
+import { getCurrentCalendarYear } from '@/types/cmp-targets'
 
 // ============================================================================
 // CREATE
@@ -39,7 +39,7 @@ export async function createStretchGoalAction(
       cmp_target_id: validated.cmp_target_id ?? null,
       vertical_id: validated.vertical_id,
       chapter_id: validated.chapter_id ?? null,
-      fiscal_year: validated.fiscal_year ?? getCurrentFiscalYear(),
+      calendar_year: validated.calendar_year ?? getCurrentCalendarYear(),
       stretch_activities: validated.stretch_activities,
       stretch_participants: validated.stretch_participants,
       stretch_ec_participation: validated.stretch_ec_participation,
@@ -131,7 +131,7 @@ export async function deleteStretchGoalAction(
 // ============================================================================
 
 export async function createDefaultStretchGoalsAction(
-  fiscalYear: number,
+  calendarYear: number,
   chapterId?: string,
   multiplier?: number
 ): Promise<{ success: boolean; count?: number; error?: string }> {
@@ -140,7 +140,7 @@ export async function createDefaultStretchGoalsAction(
     await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair'])
 
     const result = await createDefaultStretchGoals(
-      fiscalYear,
+      calendarYear,
       chapterId,
       multiplier
     )

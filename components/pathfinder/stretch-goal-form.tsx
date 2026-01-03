@@ -43,9 +43,9 @@ import { Slider } from '@/components/ui/slider'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { useToast } from '@/hooks/use-toast'
 import {
-  FISCAL_YEAR_OPTIONS,
-  getCurrentFiscalYear,
-  formatFiscalYear,
+  CALENDAR_YEAR_OPTIONS,
+  getCurrentCalendarYear,
+  formatCalendarYear,
   type CMPTarget,
 } from '@/types/cmp-targets'
 import {
@@ -74,13 +74,13 @@ export function StretchGoalForm({
   const [isCreatingDefaults, setIsCreatingDefaults] = useState(false)
   const [multiplier, setMultiplier] = useState(1.5)
 
-  const currentFiscalYear = getCurrentFiscalYear()
+  const currentCalendarYear = getCurrentCalendarYear()
 
   const form = useForm<CreateStretchGoalSchemaInput>({
     resolver: zodResolver(createStretchGoalSchema),
     defaultValues: initialData || {
       vertical_id: '',
-      fiscal_year: currentFiscalYear,
+      calendar_year: currentCalendarYear,
       stretch_activities: 6,
       stretch_participants: 75,
       stretch_ec_participation: 20,
@@ -95,13 +95,13 @@ export function StretchGoalForm({
   })
 
   const selectedVerticalId = form.watch('vertical_id')
-  const selectedYear = form.watch('fiscal_year')
+  const selectedYear = form.watch('calendar_year')
 
   // Find CMP target for selected vertical
   const selectedCMPTarget = useMemo(() => {
     return cmpTargets.find(
       (t) =>
-        t.vertical_id === selectedVerticalId && t.fiscal_year === selectedYear
+        t.vertical_id === selectedVerticalId && t.calendar_year === selectedYear
     )
   }, [cmpTargets, selectedVerticalId, selectedYear])
 
@@ -109,14 +109,14 @@ export function StretchGoalForm({
     (y) => y.year === selectedYear
   )?.hasStretchGoals
 
-  const hasCMPTargets = cmpTargets.some((t) => t.fiscal_year === selectedYear)
+  const hasCMPTargets = cmpTargets.some((t) => t.calendar_year === selectedYear)
 
   // Update stretch targets when CMP target or multiplier changes
   const handleVerticalChange = (verticalId: string) => {
     form.setValue('vertical_id', verticalId)
 
     const cmpTarget = cmpTargets.find(
-      (t) => t.vertical_id === verticalId && t.fiscal_year === selectedYear
+      (t) => t.vertical_id === verticalId && t.calendar_year === selectedYear
     )
 
     if (cmpTarget) {
@@ -153,7 +153,7 @@ export function StretchGoalForm({
     setIsCreatingDefaults(true)
 
     const result = await createDefaultStretchGoalsAction(
-      selectedYear || currentFiscalYear,
+      selectedYear || currentCalendarYear,
       chapterId || undefined,
       multiplier
     )
@@ -184,7 +184,7 @@ export function StretchGoalForm({
           <Target className="h-4 w-4" />
           <AlertTitle>CMP Targets Required</AlertTitle>
           <AlertDescription>
-            No CMP targets found for {formatFiscalYear(selectedYear ?? currentFiscalYear)}.
+            No CMP targets found for {formatCalendarYear(selectedYear ?? currentCalendarYear)}.
             Please set CMP targets first before creating stretch goals.
           </AlertDescription>
         </Alert>
@@ -231,7 +231,7 @@ export function StretchGoalForm({
             >
               {isCreatingDefaults && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               <Rocket className="mr-2 h-4 w-4" />
-              Create {multiplier}x Stretch Goals for {formatFiscalYear(selectedYear ?? currentFiscalYear)}
+              Create {multiplier}x Stretch Goals for {formatCalendarYear(selectedYear ?? currentCalendarYear)}
             </Button>
           </CardContent>
         </Card>
@@ -289,10 +289,10 @@ export function StretchGoalForm({
 
                 <FormField
                   control={form.control}
-                  name="fiscal_year"
+                  name="calendar_year"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Fiscal Year *</FormLabel>
+                      <FormLabel>Calendar Year *</FormLabel>
                       <Select
                         onValueChange={(v) => field.onChange(parseInt(v))}
                         value={field.value?.toString()}
@@ -303,7 +303,7 @@ export function StretchGoalForm({
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {FISCAL_YEAR_OPTIONS.map((option) => (
+                          {CALENDAR_YEAR_OPTIONS.map((option) => (
                             <SelectItem key={option.value} value={option.value.toString()}>
                               {option.label}
                             </SelectItem>

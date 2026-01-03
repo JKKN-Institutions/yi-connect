@@ -4,13 +4,48 @@
  */
 
 // ============================================================================
+// ENUM TYPES
+// ============================================================================
+
+/**
+ * CMP Target Category - based on Yi verticals/program areas
+ * Maps to the verticals table
+ */
+export type CMPTargetCategory =
+  | 'masoom'        // Child safety
+  | 'climate'       // Climate change / environment
+  | 'health'        // Healthcare awareness
+  | 'road_safety'   // Road safety awareness
+  | 'education'     // Education initiatives
+  | 'entrepreneurship' // Business/startup support
+  | 'youth_leadership' // Youth development
+  | 'rural'         // Rural initiatives
+  | 'women_empowerment' // Women's initiatives
+  | 'other'         // Other verticals
+
+/**
+ * AAA Category - Activity types
+ */
+export type AAAType = 'awareness' | 'action' | 'advocacy'
+
+/**
+ * Progress status based on percentage
+ */
+export type CMPProgressStatus =
+  | 'not_started'
+  | 'behind'
+  | 'on_track'
+  | 'completed'
+  | 'exceeded'
+
+// ============================================================================
 // BASE TYPES
 // ============================================================================
 
 export interface CMPTarget {
   id: string
   vertical_id: string
-  fiscal_year: number
+  calendar_year: number
 
   // Target Metrics
   min_activities: number
@@ -49,7 +84,7 @@ export interface CMPProgress {
   vertical_id: string
   vertical_name: string
   vertical_color: string | null
-  fiscal_year: number
+  calendar_year: number
   chapter_id: string | null
   chapter_name: string | null
   is_national_target: boolean
@@ -76,12 +111,31 @@ export interface CMPProgress {
 }
 
 // ============================================================================
+// LIST ITEM TYPES
+// ============================================================================
+
+export interface CMPTargetListItem {
+  id: string
+  vertical_name: string
+  vertical_color: string | null
+  calendar_year: number
+  min_activities: number
+  min_participants: number
+  min_ec_participation: number
+  is_national_target: boolean
+  chapter_name: string | null
+  actual_activities: number
+  activity_progress_pct: number
+  status: CMPProgressStatus
+}
+
+// ============================================================================
 // INPUT TYPES
 // ============================================================================
 
 export interface CreateCMPTargetInput {
   vertical_id: string
-  fiscal_year?: number
+  calendar_year?: number
 
   min_activities: number
   min_participants: number
@@ -113,9 +167,73 @@ export interface UpdateCMPTargetInput {
 
 export interface CMPTargetFilters {
   vertical_id?: string
-  fiscal_year?: number
+  calendar_year?: number
   chapter_id?: string
   is_national_target?: boolean
+  search?: string
+}
+
+export interface RecordCMPProgressInput {
+  target_id: string
+  activity_count: number
+  participant_count: number
+  ec_members_count: number
+  non_ec_members_count: number
+  aaa_type: AAAType
+  activity_date: string
+  description?: string
+  event_id?: string
+}
+
+// ============================================================================
+// PAGINATED RESPONSE TYPES
+// ============================================================================
+
+export interface PaginatedCMPTargets {
+  data: CMPTarget[]
+  total: number
+  page: number
+  pageSize: number
+  totalPages: number
+}
+
+// ============================================================================
+// ANALYTICS TYPES
+// ============================================================================
+
+export interface CMPProgressSummary {
+  totalTargets: number
+  completedTargets: number
+  inProgressTargets: number
+  notStartedTargets: number
+  overallProgress: number
+  verticalProgress: CMPProgress[]
+}
+
+export interface CMPAnalytics {
+  total_verticals: number
+  total_activities_target: number
+  total_activities_actual: number
+  total_participants_target: number
+  total_participants_actual: number
+  overall_progress: number
+  verticals_completed: number
+  verticals_in_progress: number
+  verticals_not_started: number
+  progress_by_vertical: {
+    vertical_id: string
+    vertical_name: string
+    vertical_color: string | null
+    target: number
+    actual: number
+    progress_pct: number
+    status: CMPProgressStatus
+  }[]
+  aaa_breakdown: {
+    awareness: { target: number; actual: number }
+    action: { target: number; actual: number }
+    advocacy: { target: number; actual: number }
+  }
 }
 
 // ============================================================================
@@ -152,7 +270,7 @@ export function calculateOverallProgress(progress: CMPProgress): number {
  */
 export function getProgressStatus(
   percentage: number
-): 'not_started' | 'behind' | 'on_track' | 'completed' | 'exceeded' {
+): CMPProgressStatus {
   if (percentage === 0) return 'not_started'
   if (percentage < 50) return 'behind'
   if (percentage < 100) return 'on_track'
@@ -163,7 +281,7 @@ export function getProgressStatus(
 /**
  * Get status color for progress
  */
-export function getProgressColor(status: ReturnType<typeof getProgressStatus>): string {
+export function getProgressColor(status: CMPProgressStatus): string {
   switch (status) {
     case 'not_started':
       return 'text-muted-foreground'
@@ -178,42 +296,90 @@ export function getProgressColor(status: ReturnType<typeof getProgressStatus>): 
   }
 }
 
-// ============================================================================
-// FISCAL YEAR HELPERS
-// ============================================================================
-
 /**
- * Get the current Yi fiscal year (April to March)
- * If we're in Jan-Mar, fiscal year started last calendar year
- * If we're in Apr-Dec, fiscal year started this calendar year
+ * Get status badge variant for progress
  */
-export function getCurrentFiscalYear(): number {
-  const now = new Date()
-  const month = now.getMonth() // 0-indexed (0 = Jan, 3 = Apr)
-  const year = now.getFullYear()
-
-  // April (month 3) starts new fiscal year
-  return month >= 3 ? year : year - 1
+export function getProgressBadgeVariant(status: CMPProgressStatus): 'default' | 'secondary' | 'destructive' | 'outline' {
+  switch (status) {
+    case 'not_started':
+      return 'secondary'
+    case 'behind':
+      return 'destructive'
+    case 'on_track':
+      return 'outline'
+    case 'completed':
+    case 'exceeded':
+      return 'default'
+  }
 }
 
 /**
- * Format fiscal year for display (e.g., "FY 2025-26")
+ * Get status label for display
  */
-export function formatFiscalYear(startYear: number): string {
-  const endYear = (startYear + 1) % 100 // Get last 2 digits
-  return `FY ${startYear}-${endYear.toString().padStart(2, '0')}`
+export function getProgressStatusLabel(status: CMPProgressStatus): string {
+  switch (status) {
+    case 'not_started':
+      return 'Not Started'
+    case 'behind':
+      return 'Behind'
+    case 'on_track':
+      return 'On Track'
+    case 'completed':
+      return 'Completed'
+    case 'exceeded':
+      return 'Exceeded'
+  }
+}
+
+// ============================================================================
+// CALENDAR YEAR HELPERS
+// ============================================================================
+
+/**
+ * Get the current calendar year
+ */
+export function getCurrentCalendarYear(): number {
+  return new Date().getFullYear()
+}
+
+/**
+ * Format calendar year for display (e.g., "2026")
+ */
+export function formatCalendarYear(year: number): string {
+  return year.toString()
+}
+
+/**
+ * Get calendar year options for dropdowns
+ */
+export function getCalendarYearOptions(range: number = 2): {
+  value: number
+  label: string
+}[] {
+  const currentYear = getCurrentCalendarYear()
+  const options: { value: number; label: string }[] = []
+
+  for (let i = -range; i <= range; i++) {
+    const year = currentYear + i
+    options.push({
+      value: year,
+      label: formatCalendarYear(year),
+    })
+  }
+
+  return options
 }
 
 // ============================================================================
 // CONSTANTS
 // ============================================================================
 
-export const FISCAL_YEAR_OPTIONS = (() => {
-  const currentFY = getCurrentFiscalYear()
+export const CALENDAR_YEAR_OPTIONS = (() => {
+  const currentYear = getCurrentCalendarYear()
   return [
-    { value: currentFY - 1, label: formatFiscalYear(currentFY - 1) },
-    { value: currentFY, label: formatFiscalYear(currentFY) },
-    { value: currentFY + 1, label: formatFiscalYear(currentFY + 1) },
+    { value: currentYear - 1, label: formatCalendarYear(currentYear - 1) },
+    { value: currentYear, label: formatCalendarYear(currentYear) },
+    { value: currentYear + 1, label: formatCalendarYear(currentYear + 1) },
   ]
 })()
 
@@ -223,5 +389,67 @@ export const DEFAULT_CMP_TARGETS: Record<string, Partial<CreateCMPTargetInput>> 
     min_activities: 4, // 1 per quarter
     min_participants: 50,
     min_ec_participation: 10,
+    min_awareness_activities: 1,
+    min_action_activities: 2,
+    min_advocacy_activities: 1,
   },
+}
+
+export const AAA_TYPES: Record<AAAType, { label: string; color: string; description: string }> = {
+  awareness: {
+    label: 'Awareness',
+    color: 'blue',
+    description: 'Activities that spread awareness about issues',
+  },
+  action: {
+    label: 'Action',
+    color: 'green',
+    description: 'Activities that take direct action on issues',
+  },
+  advocacy: {
+    label: 'Advocacy',
+    color: 'purple',
+    description: 'Activities that advocate for policy changes',
+  },
+}
+
+export const CMP_PROGRESS_STATUSES: Record<CMPProgressStatus, { label: string; color: string }> = {
+  not_started: { label: 'Not Started', color: 'gray' },
+  behind: { label: 'Behind', color: 'red' },
+  on_track: { label: 'On Track', color: 'yellow' },
+  completed: { label: 'Completed', color: 'green' },
+  exceeded: { label: 'Exceeded', color: 'emerald' },
+}
+
+// ============================================================================
+// FORMATTING HELPERS
+// ============================================================================
+
+/**
+ * Format progress percentage for display
+ */
+export function formatProgressPercentage(percentage: number): string {
+  return `${Math.round(Math.min(percentage, 100))}%`
+}
+
+/**
+ * Format target value for display (e.g., "4/10" or "40%")
+ */
+export function formatTargetProgress(actual: number, target: number): string {
+  if (target === 0) return `${actual} (no target)`
+  return `${actual}/${target}`
+}
+
+/**
+ * Calculate remaining to target
+ */
+export function calculateRemaining(actual: number, target: number): number {
+  return Math.max(0, target - actual)
+}
+
+/**
+ * Check if target is achieved
+ */
+export function isTargetAchieved(actual: number, target: number): boolean {
+  return actual >= target
 }

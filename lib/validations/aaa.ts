@@ -20,7 +20,7 @@ export const mentorAssignmentStatusSchema = z.enum(['active', 'completed', 'canc
 
 export const createAAAPlanSchema = z.object({
   vertical_id: z.string().uuid('Invalid vertical ID'),
-  fiscal_year: z.number().int().min(2020).max(2100),
+  calendar_year: z.number().int().min(2020).max(2100),
   chapter_id: z.string().uuid('Invalid chapter ID'),
 
   // Awareness (3)
@@ -83,7 +83,7 @@ export const updateAAAPlanSchema = z.object({
 
   // All create fields optional
   vertical_id: z.string().uuid().optional(),
-  fiscal_year: z.number().int().min(2020).max(2100).optional(),
+  calendar_year: z.number().int().min(2020).max(2100).optional(),
 
   // Awareness
   awareness_1_title: z.string().max(255).optional(),
@@ -223,7 +223,7 @@ export const updateMentorAssignmentSchema = z.object({
 
 export const aaaPlanFiltersSchema = z.object({
   vertical_id: z.string().uuid().optional(),
-  fiscal_year: z.number().int().optional(),
+  calendar_year: z.number().int().optional(),
   status: aaaPlanStatusSchema.optional(),
   has_first_event: z.boolean().optional(),
   chapter_id: z.string().uuid().optional(),

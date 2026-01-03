@@ -10,7 +10,7 @@ import { getCMPTargets } from '@/lib/data/cmp-targets'
 import { getStretchGoals } from '@/lib/data/stretch-goals'
 import { Button } from '@/components/ui/button'
 import { StretchGoalForm } from '@/components/pathfinder/stretch-goal-form'
-import { getCurrentFiscalYear, FISCAL_YEAR_OPTIONS } from '@/types/cmp-targets'
+import { getCurrentCalendarYear, CALENDAR_YEAR_OPTIONS } from '@/types/cmp-targets'
 
 export const metadata = {
   title: 'Set Stretch Goal - Pathfinder',
@@ -21,20 +21,22 @@ export default async function NewStretchGoalPage() {
   await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair'])
 
   const chapterId = await getCurrentChapterId()
-  const currentFiscalYear = getCurrentFiscalYear()
+  const currentCalendarYear = getCurrentCalendarYear()
 
   // Get verticals and CMP targets
-  const [verticals, cmpTargets, existingStretchGoals] = await Promise.all([
+  const [verticals, cmpTargetsResult, existingStretchGoals] = await Promise.all([
     getVerticalsForForm(),
-    getCMPTargets({ fiscal_year: currentFiscalYear }),
-    getStretchGoals({ fiscal_year: currentFiscalYear }),
+    getCMPTargets(chapterId, { calendar_year: currentCalendarYear }),
+    getStretchGoals({ calendar_year: currentCalendarYear }),
   ])
 
+  const cmpTargets = cmpTargetsResult.data
+
   // Check which years already have stretch goals
-  const yearsWithStretchGoals = FISCAL_YEAR_OPTIONS.map((option) => ({
+  const yearsWithStretchGoals = CALENDAR_YEAR_OPTIONS.map((option) => ({
     year: option.value,
     hasStretchGoals: existingStretchGoals.some(
-      (g) => g.fiscal_year === option.value
+      (g) => g.calendar_year === option.value
     ),
   }))
 

@@ -9,7 +9,7 @@ import Link from 'next/link'
 import { redirect, notFound } from 'next/navigation'
 import { ArrowLeft, FileSignature } from 'lucide-react'
 import { requireRole, getCurrentUser } from '@/lib/auth'
-import { getCurrentFiscalYear, getCommitmentCardByMember } from '@/lib/data/aaa'
+import { getCurrentCalendarYear, getCommitmentCardByMember } from '@/lib/data/aaa'
 import { getMyCommitmentCard } from '@/app/actions/aaa'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -41,7 +41,7 @@ export default async function CommitmentCardPage() {
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Commitment Card</h1>
             <p className="text-muted-foreground">
-              Sign your personal commitments for Pathfinder {getCurrentFiscalYear()}
+              Sign your personal commitments for Pathfinder {getCurrentCalendarYear()}
             </p>
           </div>
         </div>
@@ -88,17 +88,17 @@ async function CommitmentContent() {
     )
   }
 
-  const fiscalYear = getCurrentFiscalYear()
+  const calendarYear = getCurrentCalendarYear()
 
   // Get existing commitment card
-  const existingCard = await getCommitmentCardByMember(member.id, fiscalYear)
+  const existingCard = await getCommitmentCardByMember(member.id, calendarYear)
 
   // Get user's AAA plan if they're an EC Chair
   const { data: aaaPlan } = await supabase
     .from('aaa_plans')
     .select('id')
     .eq('created_by', member.id)
-    .eq('fiscal_year', fiscalYear)
+    .eq('calendar_year', calendarYear)
     .single()
 
   return (
@@ -106,7 +106,7 @@ async function CommitmentContent() {
       memberId={member.id}
       memberName={member.full_name}
       chapterId={member.chapter_id}
-      pathfinderYear={fiscalYear}
+      pathfinderYear={calendarYear}
       aaaPlanId={aaaPlan?.id}
       existingCard={existingCard || undefined}
     />

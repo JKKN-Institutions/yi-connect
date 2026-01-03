@@ -78,8 +78,8 @@ export const getBudgets = cache(async (
   }
 
   // Apply filters
-  if (filters?.fiscal_year) {
-    query = query.eq('fiscal_year', filters.fiscal_year)
+  if (filters?.calendar_year) {
+    query = query.eq('calendar_year', filters.calendar_year)
   }
 
   if (filters?.period) {
@@ -104,7 +104,7 @@ export const getBudgets = cache(async (
   query = query.range(from, to)
 
   // Sorting
-  query = query.order('fiscal_year', { ascending: false })
+  query = query.order('calendar_year', { ascending: false })
     .order('start_date', { ascending: false })
 
   const { data, error, count } = await query
@@ -118,7 +118,7 @@ export const getBudgets = cache(async (
   const listItems: BudgetListItem[] = (data || []).map((budget) => ({
     id: budget.id,
     name: budget.name,
-    fiscal_year: budget.fiscal_year,
+    calendar_year: budget.calendar_year,
     period: budget.period as any,
     quarter: budget.quarter || undefined,
     total_amount: Number(budget.total_amount),
@@ -206,7 +206,7 @@ export const getBudgetUtilization = cache(async (budgetId: string): Promise<Budg
 /**
  * Get budget analytics for chapter
  */
-export const getBudgetAnalytics = cache(async (chapterId: string, fiscalYear?: number): Promise<BudgetAnalytics> => {
+export const getBudgetAnalytics = cache(async (chapterId: string, calendarYear?: number): Promise<BudgetAnalytics> => {
   const supabase = await createServerSupabaseClient()
 
   let query = supabase
@@ -214,8 +214,8 @@ export const getBudgetAnalytics = cache(async (chapterId: string, fiscalYear?: n
     .select('*')
     .eq('chapter_id', chapterId)
 
-  if (fiscalYear) {
-    query = query.eq('fiscal_year', fiscalYear)
+  if (calendarYear) {
+    query = query.eq('calendar_year', calendarYear)
   }
 
   const { data: budgets, error } = await query
@@ -783,8 +783,8 @@ export const getSponsorshipDeals = cache(async (
     }
   }
 
-  if (filters?.fiscal_year) {
-    query = query.eq('fiscal_year', filters.fiscal_year)
+  if (filters?.calendar_year) {
+    query = query.eq('calendar_year', filters.calendar_year)
   }
 
   if (filters?.event_id) {
@@ -836,7 +836,7 @@ export const getSponsorshipDeals = cache(async (
     weighted_value: Number(deal.weighted_value || 0),
     expected_closure_date: deal.expected_closure_date,
     assigned_to: deal.assigned_to ? { id: deal.assigned_to, full_name: 'User' } : undefined,
-    fiscal_year: deal.fiscal_year,
+    calendar_year: deal.calendar_year,
   }))
 
   return {
@@ -870,7 +870,9 @@ export const getSponsorshipDealById = cache(async (dealId: string): Promise<Spon
     return null
   }
 
-  return data as any
+  return {
+    ...data,
+  } as any
 })
 
 /**
@@ -1180,9 +1182,9 @@ export const getReimbursementAnalytics = cache(async (chapterId: string | null):
 /**
  * Get comprehensive financial dashboard summary
  */
-export const getFinancialDashboard = cache(async (chapterId: string, fiscalYear?: number): Promise<FinancialDashboardSummary> => {
+export const getFinancialDashboard = cache(async (chapterId: string, calendarYear?: number): Promise<FinancialDashboardSummary> => {
   const [budget, expenses, sponsorships, reimbursements] = await Promise.all([
-    getBudgetAnalytics(chapterId, fiscalYear),
+    getBudgetAnalytics(chapterId, calendarYear),
     getExpenseAnalytics(chapterId),
     getSponsorshipPipelineValue(chapterId),
     getReimbursementAnalytics(chapterId),

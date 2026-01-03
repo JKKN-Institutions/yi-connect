@@ -1,7 +1,7 @@
 -- ============================================================================
 -- CMP (Common Minimum Program) Targets Module
 -- Created: 2026-01-02
--- Purpose: Track minimum activity targets per vertical for chapters
+-- Purpose: Track minimum activity targets per vertical for all chapters (national targets)
 -- ============================================================================
 
 -- ============================================================================
@@ -9,12 +9,12 @@
 -- Stores the minimum targets each chapter should achieve per vertical
 -- ============================================================================
 
-CREATE TABLE cmp_targets (
+CREATE TABLE IF NOT EXISTS cmp_targets (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Target Definition
   vertical_id UUID NOT NULL REFERENCES verticals(id) ON DELETE CASCADE,
-  fiscal_year INTEGER NOT NULL DEFAULT EXTRACT(YEAR FROM CURRENT_DATE),
+  calendar_year INTEGER NOT NULL DEFAULT EXTRACT(YEAR FROM CURRENT_DATE),
 
   -- Target Metrics
   min_activities INTEGER NOT NULL DEFAULT 1 CHECK (min_activities >= 0),
@@ -36,8 +36,8 @@ CREATE TABLE cmp_targets (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
-  -- Unique constraint: One target per vertical per fiscal year per scope
-  CONSTRAINT unique_cmp_target UNIQUE (vertical_id, fiscal_year, chapter_id, is_national_target)
+  -- Unique constraint: One target per vertical per calendar year per scope
+  CONSTRAINT unique_cmp_target UNIQUE (vertical_id, calendar_year, chapter_id, is_national_target)
 );
 
 -- ============================================================================
@@ -45,19 +45,19 @@ CREATE TABLE cmp_targets (
 -- ============================================================================
 
 -- Query by vertical
-CREATE INDEX idx_cmp_targets_vertical ON cmp_targets(vertical_id);
+CREATE INDEX IF NOT EXISTS idx_cmp_targets_vertical ON cmp_targets(vertical_id);
 
--- Query by fiscal year
-CREATE INDEX idx_cmp_targets_fiscal_year ON cmp_targets(fiscal_year);
+-- Query by calendar year
+CREATE INDEX IF NOT EXISTS idx_cmp_targets_calendar_year ON cmp_targets(calendar_year);
 
 -- Query by chapter
-CREATE INDEX idx_cmp_targets_chapter ON cmp_targets(chapter_id) WHERE chapter_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_cmp_targets_chapter ON cmp_targets(chapter_id) WHERE chapter_id IS NOT NULL;
 
 -- Query national targets
-CREATE INDEX idx_cmp_targets_national ON cmp_targets(is_national_target) WHERE is_national_target = true;
+CREATE INDEX IF NOT EXISTS idx_cmp_targets_national ON cmp_targets(is_national_target) WHERE is_national_target = true;
 
 -- Composite for common lookups
-CREATE INDEX idx_cmp_targets_lookup ON cmp_targets(vertical_id, fiscal_year, is_national_target);
+CREATE INDEX IF NOT EXISTS idx_cmp_targets_lookup ON cmp_targets(vertical_id, calendar_year, is_national_target);
 
 -- ============================================================================
 -- TRIGGERS
@@ -89,7 +89,7 @@ CREATE POLICY "Members can view chapter CMP targets"
   TO authenticated
   USING (
     chapter_id IN (
-      SELECT chapter_id FROM members WHERE user_id = auth.uid()
+      SELECT chapter_id FROM members WHERE id = auth.uid()
     )
   );
 
@@ -100,9 +100,10 @@ CREATE POLICY "Admins can insert CMP targets"
   TO authenticated
   WITH CHECK (
     EXISTS (
-      SELECT 1 FROM members
-      WHERE user_id = auth.uid()
-        AND hierarchy_level >= 4
+      SELECT 1 FROM user_roles ur
+      JOIN roles r ON ur.role_id = r.id
+      WHERE ur.user_id = auth.uid()
+        AND r.hierarchy_level >= 4
     )
   );
 
@@ -113,9 +114,10 @@ CREATE POLICY "Admins can update CMP targets"
   TO authenticated
   USING (
     EXISTS (
-      SELECT 1 FROM members
-      WHERE user_id = auth.uid()
-        AND hierarchy_level >= 4
+      SELECT 1 FROM user_roles ur
+      JOIN roles r ON ur.role_id = r.id
+      WHERE ur.user_id = auth.uid()
+        AND r.hierarchy_level >= 4
     )
   );
 
@@ -126,9 +128,10 @@ CREATE POLICY "Admins can delete CMP targets"
   TO authenticated
   USING (
     EXISTS (
-      SELECT 1 FROM members
-      WHERE user_id = auth.uid()
-        AND hierarchy_level >= 5
+      SELECT 1 FROM user_roles ur
+      JOIN roles r ON ur.role_id = r.id
+      WHERE ur.user_id = auth.uid()
+        AND r.hierarchy_level >= 5
     )
   );
 
@@ -143,7 +146,7 @@ SELECT
   t.vertical_id,
   v.name AS vertical_name,
   v.color AS vertical_color,
-  t.fiscal_year,
+  t.calendar_year,
   t.chapter_id,
   c.name AS chapter_name,
   t.is_national_target,
@@ -188,7 +191,7 @@ LEFT JOIN LATERAL (
     COUNT(*) FILTER (WHERE aaa_type = 'advocacy') AS advocacy_count
   FROM health_card_entries hce
   WHERE hce.vertical_id = t.vertical_id
-    AND hce.fiscal_year = t.fiscal_year
+    AND hce.calendar_year = t.calendar_year
     AND (t.is_national_target = true OR hce.chapter_id = t.chapter_id)
 ) h ON true;
 
@@ -196,7 +199,7 @@ LEFT JOIN LATERAL (
 -- COMMENTS
 -- ============================================================================
 
-COMMENT ON TABLE cmp_targets IS 'Common Minimum Program targets per vertical per fiscal year';
+COMMENT ON TABLE cmp_targets IS 'Common Minimum Program targets per vertical per calendar year';
 COMMENT ON COLUMN cmp_targets.min_activities IS 'Minimum number of activities required';
 COMMENT ON COLUMN cmp_targets.min_participants IS 'Minimum total participants required';
 COMMENT ON COLUMN cmp_targets.min_ec_participation IS 'Minimum EC member participation required';

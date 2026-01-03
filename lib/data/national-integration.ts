@@ -290,8 +290,8 @@ export const getBenchmarks = cache(
     if (filters?.performance_tier?.length) {
       query = query.in('performance_tier', filters.performance_tier);
     }
-    if (filters?.fiscal_year) {
-      query = query.eq('fiscal_year', filters.fiscal_year);
+    if (filters?.calendar_year) {
+      query = query.eq('calendar_year', filters.calendar_year);
     }
     if (filters?.quarter) {
       query = query.eq('quarter', filters.quarter);

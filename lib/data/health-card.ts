@@ -58,8 +58,8 @@ export const getHealthCardEntries = cache(
     if (filters?.region) {
       query = query.eq('region', filters.region)
     }
-    if (filters?.fiscal_year) {
-      query = query.eq('fiscal_year', filters.fiscal_year)
+    if (filters?.calendar_year) {
+      query = query.eq('calendar_year', filters.calendar_year)
     }
     if (filters?.date_from) {
       query = query.gte('activity_date', filters.date_from)
@@ -147,7 +147,7 @@ export const getHealthCardEntryById = cache(
  * Get health card summary by vertical for dashboard
  */
 export const getHealthCardSummaryByVertical = cache(
-  async (chapterId: string, fiscalYear: number): Promise<VerticalHealthSummary[]> => {
+  async (chapterId: string, calendarYear: number): Promise<VerticalHealthSummary[]> => {
     const supabase = await createClient()
     const user = await getCurrentUser()
 
@@ -165,7 +165,7 @@ export const getHealthCardSummaryByVertical = cache(
       `
       )
       .eq('chapter_id', chapterId)
-      .eq('fiscal_year', fiscalYear)
+      .eq('calendar_year', calendarYear)
 
     if (error || !entries || entries.length === 0) {
       return []
@@ -258,7 +258,7 @@ export const getHealthCardSummaryByVertical = cache(
 export const getChapterHealthStats = cache(
   async (
     chapterId: string,
-    fiscalYear: number
+    calendarYear: number
   ): Promise<{
     total_activities: number
     total_ec_participants: number
@@ -276,7 +276,7 @@ export const getChapterHealthStats = cache(
       .from('health_card_entries')
       .select('ec_members_count, non_ec_members_count, activity_date')
       .eq('chapter_id', chapterId)
-      .eq('fiscal_year', fiscalYear)
+      .eq('calendar_year', calendarYear)
 
     if (error || !entries || entries.length === 0) {
       return {
@@ -348,13 +348,10 @@ export const getVerticalsForForm = cache(async (): Promise<{ id: string; name: s
 })
 
 /**
- * Get current fiscal year (April-March)
+ * Get current calendar year
  */
-export function getCurrentFiscalYear(): number {
-  const now = new Date()
-  const month = now.getMonth() // 0-indexed (0 = Jan, 3 = Apr)
-  const year = now.getFullYear()
-  return month < 3 ? year - 1 : year
+export function getCurrentCalendarYear(): number {
+  return new Date().getFullYear()
 }
 
 /**

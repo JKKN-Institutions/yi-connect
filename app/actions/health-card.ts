@@ -37,15 +37,10 @@ function sanitizeData<T extends Record<string, unknown>>(data: T): T {
 }
 
 /**
- * Get current fiscal year (April-March)
+ * Get current calendar year
  */
-function getCurrentFiscalYear(): number {
-  const now = new Date()
-  const month = now.getMonth() // 0-indexed (0 = Jan, 3 = Apr)
-  const year = now.getFullYear()
-  // If month is Jan-Mar (0-2), fiscal year is previous year
-  // If month is Apr-Dec (3-11), fiscal year is current year
-  return month < 3 ? year - 1 : year
+function getCurrentCalendarYear(): number {
+  return new Date().getFullYear()
 }
 
 // ============================================================================
@@ -81,7 +76,7 @@ export async function createHealthCardEntry(
       .insert({
         ...sanitized,
         member_id: member?.id || null,
-        fiscal_year: getCurrentFiscalYear(),
+        calendar_year: getCurrentCalendarYear(),
       })
       .select('id')
       .single()
@@ -207,7 +202,7 @@ export async function getHealthCardEntries(
   chapterId: string,
   options?: {
     verticalId?: string
-    fiscalYear?: number
+    calendarYear?: number
     limit?: number
     offset?: number
   }
@@ -237,8 +232,8 @@ export async function getHealthCardEntries(
       query = query.eq('vertical_id', options.verticalId)
     }
 
-    if (options?.fiscalYear) {
-      query = query.eq('fiscal_year', options.fiscalYear)
+    if (options?.calendarYear) {
+      query = query.eq('calendar_year', options.calendarYear)
     }
 
     if (options?.limit) {
@@ -268,7 +263,7 @@ export async function getHealthCardEntries(
  */
 export async function getHealthCardSummaryByVertical(
   chapterId: string,
-  fiscalYear?: number
+  calendarYear?: number
 ) {
   try {
     const user = await getCurrentUser()
@@ -277,7 +272,7 @@ export async function getHealthCardSummaryByVertical(
     }
 
     const supabase = await createClient()
-    const year = fiscalYear || getCurrentFiscalYear()
+    const year = calendarYear || getCurrentCalendarYear()
 
     // Get all entries grouped by vertical
     const { data: entries } = await supabase
@@ -291,7 +286,7 @@ export async function getHealthCardSummaryByVertical(
       `
       )
       .eq('chapter_id', chapterId)
-      .eq('fiscal_year', year)
+      .eq('calendar_year', year)
 
     if (!entries || entries.length === 0) {
       return []
@@ -384,7 +379,7 @@ export async function getHealthCardSummaryByVertical(
 /**
  * Get total chapter health stats
  */
-export async function getChapterHealthStats(chapterId: string, fiscalYear?: number) {
+export async function getChapterHealthStats(chapterId: string, calendarYear?: number) {
   try {
     const user = await getCurrentUser()
     if (!user) {
@@ -392,13 +387,13 @@ export async function getChapterHealthStats(chapterId: string, fiscalYear?: numb
     }
 
     const supabase = await createClient()
-    const year = fiscalYear || getCurrentFiscalYear()
+    const year = calendarYear || getCurrentCalendarYear()
 
     const { data: entries } = await supabase
       .from('health_card_entries')
       .select('ec_members_count, non_ec_members_count, activity_date')
       .eq('chapter_id', chapterId)
-      .eq('fiscal_year', year)
+      .eq('calendar_year', year)
 
     if (!entries || entries.length === 0) {
       return {

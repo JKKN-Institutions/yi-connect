@@ -12,7 +12,7 @@ export const createStretchGoalSchema = z.object({
   cmp_target_id: z.string().uuid().nullable().optional(),
   vertical_id: z.string().uuid({ message: 'Please select a vertical' }),
   chapter_id: z.string().uuid().nullable().optional(),
-  fiscal_year: z.number().int().min(2020).max(2100).optional(),
+  calendar_year: z.number().int().min(2020).max(2100).optional(),
 
   stretch_activities: z
     .number()

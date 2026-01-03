@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS stretch_goals (
   cmp_target_id UUID REFERENCES cmp_targets(id) ON DELETE CASCADE,
   vertical_id UUID NOT NULL REFERENCES verticals(id) ON DELETE CASCADE,
   chapter_id UUID REFERENCES chapters(id) ON DELETE SET NULL,
-  fiscal_year INTEGER NOT NULL DEFAULT EXTRACT(YEAR FROM CURRENT_DATE),
+  calendar_year INTEGER NOT NULL DEFAULT EXTRACT(YEAR FROM CURRENT_DATE),
 
   -- Stretch targets (multipliers or absolute values)
   stretch_activities INTEGER NOT NULL,
@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS stretch_goals (
   updated_at TIMESTAMPTZ DEFAULT NOW(),
 
   -- Constraints
-  UNIQUE(vertical_id, chapter_id, fiscal_year)
+  UNIQUE(vertical_id, chapter_id, calendar_year)
 );
 
 -- Enable RLS
@@ -89,7 +89,7 @@ CREATE POLICY "stretch_goals_delete_admin"
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_stretch_goals_vertical ON stretch_goals(vertical_id);
 CREATE INDEX IF NOT EXISTS idx_stretch_goals_chapter ON stretch_goals(chapter_id);
-CREATE INDEX IF NOT EXISTS idx_stretch_goals_fiscal_year ON stretch_goals(fiscal_year);
+CREATE INDEX IF NOT EXISTS idx_stretch_goals_calendar_year ON stretch_goals(calendar_year);
 
 -- Updated at trigger
 CREATE OR REPLACE FUNCTION update_stretch_goals_updated_at()
@@ -114,7 +114,7 @@ SELECT
   v.color AS vertical_color,
   sg.chapter_id,
   c.name AS chapter_name,
-  sg.fiscal_year,
+  sg.calendar_year,
   sg.name AS goal_name,
   sg.description,
   sg.reward_description,
@@ -171,7 +171,7 @@ LEFT JOIN LATERAL (
   FROM health_card_entries he
   WHERE he.vertical_id = sg.vertical_id
     AND (sg.chapter_id IS NULL OR he.chapter_id = sg.chapter_id)
-    AND EXTRACT(YEAR FROM he.activity_date) = sg.fiscal_year
+    AND he.calendar_year = sg.calendar_year
 ) hc ON true;
 
 -- Grant access to the view

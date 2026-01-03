@@ -12,7 +12,7 @@ export interface StretchGoal {
   cmp_target_id: string | null
   vertical_id: string
   chapter_id: string | null
-  fiscal_year: number
+  calendar_year: number
 
   // Stretch targets
   stretch_activities: number
@@ -63,7 +63,7 @@ export interface StretchGoalProgress {
   vertical_color: string | null
   chapter_id: string | null
   chapter_name: string | null
-  fiscal_year: number
+  calendar_year: number
   goal_name: string
   description: string | null
   reward_description: string | null
@@ -106,7 +106,7 @@ export interface CreateStretchGoalInput {
   cmp_target_id?: string | null
   vertical_id: string
   chapter_id?: string | null
-  fiscal_year?: number
+  calendar_year?: number
 
   stretch_activities: number
   stretch_participants: number
@@ -141,7 +141,7 @@ export interface UpdateStretchGoalInput {
 export interface StretchGoalFilters {
   vertical_id?: string
   chapter_id?: string
-  fiscal_year?: number
+  calendar_year?: number
   is_achieved?: boolean
 }
 

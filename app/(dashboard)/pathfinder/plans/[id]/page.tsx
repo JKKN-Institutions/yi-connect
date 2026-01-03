@@ -66,7 +66,7 @@ async function PlanHeader({ planId }: { planId: string }) {
           <StatusBadge status={plan.status} />
         </div>
         <p className="text-muted-foreground mt-1">
-          FY{plan.fiscal_year} AAA Plan
+          {plan.calendar_year} AAA Plan
         </p>
       </div>
       {plan.status === 'draft' || plan.status === 'submitted' ? (
@@ -89,7 +89,7 @@ async function PlanContent({ planId }: { planId: string }) {
       verticalName={plan.vertical?.name || 'Unknown Vertical'}
       chapterId={plan.chapter_id}
       plan={plan}
-      fiscalYear={plan.fiscal_year}
+      calendarYear={plan.calendar_year}
     />
   )
 }

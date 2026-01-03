@@ -35,7 +35,7 @@ import {
 } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { useToast } from '@/hooks/use-toast'
-import { FISCAL_YEAR_OPTIONS, getCurrentFiscalYear, formatFiscalYear } from '@/types/cmp-targets'
+import { CALENDAR_YEAR_OPTIONS, getCurrentCalendarYear, formatCalendarYear } from '@/types/cmp-targets'
 
 interface CMPTargetFormProps {
   verticals: Array<{ id: string; name: string; color: string | null }>
@@ -55,13 +55,13 @@ export function CMPTargetForm({
   const [isPending, startTransition] = useTransition()
   const [isCreatingDefaults, setIsCreatingDefaults] = useState(false)
 
-  const currentFiscalYear = getCurrentFiscalYear()
+  const currentCalendarYear = getCurrentCalendarYear()
 
   const form = useForm<CreateCMPTargetSchemaInput>({
     resolver: zodResolver(createCMPTargetSchema),
     defaultValues: initialData || {
       vertical_id: '',
-      fiscal_year: currentFiscalYear,
+      calendar_year: currentCalendarYear,
       min_activities: 4,
       min_participants: 50,
       min_ec_participation: 10,
@@ -74,7 +74,7 @@ export function CMPTargetForm({
     },
   })
 
-  const selectedYear = form.watch('fiscal_year')
+  const selectedYear = form.watch('calendar_year')
   const yearHasTargets = yearsWithTargets.find((y) => y.year === selectedYear)?.hasTargets
 
   async function onSubmit(data: CreateCMPTargetSchemaInput) {
@@ -102,7 +102,7 @@ export function CMPTargetForm({
     setIsCreatingDefaults(true)
 
     const result = await createDefaultTargetsAction(
-      selectedYear || currentFiscalYear,
+      selectedYear || currentCalendarYear,
       chapterId || undefined
     )
 
@@ -111,7 +111,7 @@ export function CMPTargetForm({
     if (result.success) {
       toast({
         title: 'Default targets created',
-        description: `Created ${result.count} targets for all verticals.`,
+        description: `Created ${result.data?.count ?? 0} targets for all verticals.`,
       })
       router.push('/pathfinder/cmp-targets')
       router.refresh()
@@ -145,7 +145,7 @@ export function CMPTargetForm({
               disabled={isCreatingDefaults}
             >
               {isCreatingDefaults && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Create Default Targets for {formatFiscalYear(selectedYear ?? currentFiscalYear)}
+              Create Default Targets for {formatCalendarYear(selectedYear ?? currentCalendarYear)}
             </Button>
           </CardContent>
         </Card>
@@ -197,10 +197,10 @@ export function CMPTargetForm({
 
                 <FormField
                   control={form.control}
-                  name="fiscal_year"
+                  name="calendar_year"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Fiscal Year *</FormLabel>
+                      <FormLabel>Calendar Year *</FormLabel>
                       <Select
                         onValueChange={(v) => field.onChange(parseInt(v))}
                         value={field.value?.toString()}
@@ -211,7 +211,7 @@ export function CMPTargetForm({
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {FISCAL_YEAR_OPTIONS.map((option) => (
+                          {CALENDAR_YEAR_OPTIONS.map((option) => (
                             <SelectItem key={option.value} value={option.value.toString()}>
                               {option.label}
                             </SelectItem>
@@ -245,7 +245,7 @@ export function CMPTargetForm({
                             onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
                           />
                         </FormControl>
-                        <FormDescription>Per fiscal year</FormDescription>
+                        <FormDescription>Per calendar year</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}

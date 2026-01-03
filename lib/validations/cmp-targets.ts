@@ -11,7 +11,7 @@ import { z } from 'zod'
 
 export const createCMPTargetSchema = z.object({
   vertical_id: z.string().uuid('Invalid vertical ID'),
-  fiscal_year: z.number().int().min(2020).max(2100).optional(),
+  calendar_year: z.number().int().min(2020).max(2100).optional(),
 
   // Target Metrics
   min_activities: z
@@ -71,7 +71,7 @@ export const updateCMPTargetSchema = z.object({
 
 export const cmpTargetFiltersSchema = z.object({
   vertical_id: z.string().uuid().optional(),
-  fiscal_year: z.number().int().optional(),
+  calendar_year: z.number().int().optional(),
   chapter_id: z.string().uuid().optional(),
   is_national_target: z.boolean().optional(),
 })

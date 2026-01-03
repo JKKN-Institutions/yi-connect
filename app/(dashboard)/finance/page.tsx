@@ -163,7 +163,7 @@ async function FinanceAnalytics() {
   const budgetsResult = await getBudgets(
     chapterId,
     {
-      fiscal_year: currentYear,
+      calendar_year: currentYear,
       status: ['active', 'approved'],
     },
     1,
@@ -199,7 +199,7 @@ async function FinanceAnalytics() {
         <CardContent>
           <div className="text-2xl font-bold">{formatCurrency(totalBudget)}</div>
           <p className="text-xs text-muted-foreground mt-1">
-            FY {currentYear} • {budgetsResult.total} budget{budgetsResult.total !== 1 ? 's' : ''}
+            {currentYear} • {budgetsResult.total} budget{budgetsResult.total !== 1 ? 's' : ''}
           </p>
         </CardContent>
       </Card>
@@ -354,7 +354,7 @@ async function ActiveBudgets() {
                       <p className="font-medium truncate">{budget.name}</p>
                       <div className="flex items-center gap-2 mt-1">
                         <BudgetStatusBadge status={budget.status} />
-                        <span className="text-xs text-muted-foreground">FY {budget.fiscal_year}</span>
+                        <span className="text-xs text-muted-foreground">{budget.calendar_year}</span>
                       </div>
                     </div>
                     <div className="text-right ml-4">

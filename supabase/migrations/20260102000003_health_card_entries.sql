@@ -35,7 +35,7 @@ CREATE TYPE aaa_type AS ENUM (
 -- HEALTH CARD ENTRIES TABLE
 -- ============================================================================
 
-CREATE TABLE health_card_entries (
+CREATE TABLE IF NOT EXISTS health_card_entries (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Submitter Info
@@ -65,7 +65,7 @@ CREATE TABLE health_card_entries (
   vertical_specific_data JSONB,
 
   -- Metadata
-  fiscal_year INTEGER NOT NULL DEFAULT EXTRACT(YEAR FROM CURRENT_DATE),
+  calendar_year INTEGER NOT NULL DEFAULT EXTRACT(YEAR FROM CURRENT_DATE),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -75,25 +75,25 @@ CREATE TABLE health_card_entries (
 -- ============================================================================
 
 -- Query by chapter
-CREATE INDEX idx_health_card_chapter ON health_card_entries(chapter_id);
+CREATE INDEX IF NOT EXISTS idx_health_card_chapter ON health_card_entries(chapter_id);
 
 -- Query by vertical
-CREATE INDEX idx_health_card_vertical ON health_card_entries(vertical_id);
+CREATE INDEX IF NOT EXISTS idx_health_card_vertical ON health_card_entries(vertical_id);
 
 -- Query by region
-CREATE INDEX idx_health_card_region ON health_card_entries(region);
+CREATE INDEX IF NOT EXISTS idx_health_card_region ON health_card_entries(region);
 
 -- Query by date range
-CREATE INDEX idx_health_card_date ON health_card_entries(activity_date);
+CREATE INDEX IF NOT EXISTS idx_health_card_date ON health_card_entries(activity_date);
 
--- Query by fiscal year
-CREATE INDEX idx_health_card_fiscal_year ON health_card_entries(fiscal_year);
+-- Query by calendar year
+CREATE INDEX IF NOT EXISTS idx_health_card_calendar_year ON health_card_entries(calendar_year);
 
--- Composite for common queries (chapter + vertical + fiscal_year)
-CREATE INDEX idx_health_card_composite ON health_card_entries(chapter_id, vertical_id, fiscal_year);
+-- Composite for common queries (chapter + vertical + calendar_year)
+CREATE INDEX IF NOT EXISTS idx_health_card_composite ON health_card_entries(chapter_id, vertical_id, calendar_year);
 
 -- Query by AAA type
-CREATE INDEX idx_health_card_aaa_type ON health_card_entries(aaa_type) WHERE aaa_type IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_health_card_aaa_type ON health_card_entries(aaa_type) WHERE aaa_type IS NOT NULL;
 
 -- ============================================================================
 -- TRIGGERS
@@ -118,7 +118,7 @@ CREATE POLICY "Members can view chapter health cards"
   TO authenticated
   USING (
     chapter_id IN (
-      SELECT chapter_id FROM members WHERE user_id = auth.uid()
+      SELECT chapter_id FROM members WHERE id = auth.uid()
     )
   );
 
@@ -129,7 +129,7 @@ CREATE POLICY "Members can submit health cards"
   TO authenticated
   WITH CHECK (
     chapter_id IN (
-      SELECT chapter_id FROM members WHERE user_id = auth.uid()
+      SELECT chapter_id FROM members WHERE id = auth.uid()
     )
   );
 
@@ -140,7 +140,7 @@ CREATE POLICY "Users can update own health cards"
   TO authenticated
   USING (
     member_id IN (
-      SELECT id FROM members WHERE user_id = auth.uid()
+      SELECT id FROM members WHERE id = auth.uid()
     )
   );
 
@@ -151,10 +151,12 @@ CREATE POLICY "Chairs can delete health cards"
   TO authenticated
   USING (
     EXISTS (
-      SELECT 1 FROM members
-      WHERE user_id = auth.uid()
-        AND chapter_id = health_card_entries.chapter_id
-        AND hierarchy_level >= 4
+      SELECT 1 FROM members m
+      JOIN user_roles ur ON ur.user_id = m.id
+      JOIN roles r ON r.id = ur.role_id
+      WHERE m.id = auth.uid()
+        AND m.chapter_id = health_card_entries.chapter_id
+        AND r.hierarchy_level >= 4
     )
   );
 
@@ -168,5 +170,5 @@ COMMENT ON COLUMN health_card_entries.region IS 'Yi region: East, JKSN, North, S
 COMMENT ON COLUMN health_card_entries.ec_members_count IS 'Number of EC (Executive Committee) members who participated';
 COMMENT ON COLUMN health_card_entries.non_ec_members_count IS 'Number of non-EC members who participated';
 COMMENT ON COLUMN health_card_entries.vertical_specific_data IS 'JSONB for vertical-specific form fields (varies by vertical)';
-COMMENT ON COLUMN health_card_entries.fiscal_year IS 'Yi fiscal year (April-March)';
+COMMENT ON COLUMN health_card_entries.calendar_year IS 'Calendar year of the activity';
 COMMENT ON COLUMN health_card_entries.aaa_type IS 'Optional AAA Framework classification: awareness, action, or advocacy';

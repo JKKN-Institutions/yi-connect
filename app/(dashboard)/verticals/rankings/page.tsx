@@ -8,7 +8,7 @@
 import { Suspense } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, Trophy, TrendingUp, Award } from 'lucide-react'
-import { getVerticalRankings, getCurrentFiscalYear } from '@/lib/data/vertical'
+import { getVerticalRankings, getCurrentCalendarYear } from '@/lib/data/vertical'
 import { requireRole } from '@/lib/auth'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -37,7 +37,7 @@ export default async function VerticalRankingsPage() {
           </div>
           <h1 className="text-3xl font-bold tracking-tight">Vertical Rankings</h1>
           <p className="text-muted-foreground mt-1">
-            Performance comparison for FY{getCurrentFiscalYear()}
+            Performance comparison for {getCurrentCalendarYear()}
           </p>
         </div>
       </div>
@@ -51,8 +51,8 @@ export default async function VerticalRankingsPage() {
 }
 
 async function RankingsContent() {
-  const fiscalYear = getCurrentFiscalYear()
-  const rankings = await getVerticalRankings(fiscalYear)
+  const calendarYear = getCurrentCalendarYear()
+  const rankings = await getVerticalRankings(calendarYear)
 
   if (rankings.length === 0) {
     return (

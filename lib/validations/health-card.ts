@@ -113,7 +113,7 @@ export const healthCardFiltersSchema = z.object({
   chapter_id: z.string().uuid().optional(),
   vertical_id: z.string().uuid().optional(),
   region: yiRegionSchema.optional(),
-  fiscal_year: z.number().int().optional(),
+  calendar_year: z.number().int().optional(),
   date_from: z.string().optional(),
   date_to: z.string().optional(),
   submitter_role: submitterRoleSchema.optional(),

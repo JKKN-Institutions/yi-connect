@@ -46,8 +46,8 @@ export async function getAAAPlans(
   if (filters.vertical_id) {
     query = query.eq('vertical_id', filters.vertical_id)
   }
-  if (filters.fiscal_year) {
-    query = query.eq('fiscal_year', filters.fiscal_year)
+  if (filters.calendar_year) {
+    query = query.eq('calendar_year', filters.calendar_year)
   }
   if (filters.status) {
     query = query.eq('status', filters.status)
@@ -109,7 +109,7 @@ export async function getAAAPlanById(id: string): Promise<AAAPlanWithDetails | n
  */
 export async function getAAAPlanByVertical(
   verticalId: string,
-  fiscalYear: number
+  calendarYear: number
 ): Promise<AAAPlanWithDetails | null> {
   const supabase = await createClient()
 
@@ -122,7 +122,7 @@ export async function getAAAPlanByVertical(
       approved_by_member:members!aaa_plans_approved_by_fkey(id, full_name)
     `)
     .eq('vertical_id', verticalId)
-    .eq('fiscal_year', fiscalYear)
+    .eq('calendar_year', calendarYear)
     .single()
 
   if (error && error.code !== 'PGRST116') {
@@ -237,7 +237,7 @@ export async function getMentorAssignments(
  */
 export async function getPathfinderDashboard(
   chapterId: string,
-  fiscalYear: number
+  calendarYear: number
 ): Promise<PathfinderDashboard | null> {
   const supabase = await createClient()
 
@@ -271,21 +271,21 @@ export async function getPathfinderDashboard(
     .from('aaa_plans')
     .select('*')
     .eq('chapter_id', chapterId)
-    .eq('fiscal_year', fiscalYear)
+    .eq('calendar_year', calendarYear)
 
   // Get all commitment cards for this year
   const { data: commitments } = await supabase
     .from('commitment_cards')
     .select('member_id, signed_at')
     .eq('chapter_id', chapterId)
-    .eq('pathfinder_year', fiscalYear)
+    .eq('pathfinder_year', calendarYear)
 
   // Get all mentor assignments for this year
   const { data: mentors } = await supabase
     .from('mentor_assignments')
     .select('ec_chair_id, mentor_name')
     .eq('chapter_id', chapterId)
-    .eq('pathfinder_year', fiscalYear)
+    .eq('pathfinder_year', calendarYear)
 
   // Build vertical statuses
   const verticalStatuses: VerticalAAAStatus[] = verticals.map((v) => {
@@ -370,7 +370,7 @@ export async function getPathfinderDashboard(
   const verticalsWithImpactMeasures = verticalStatuses.filter(v => v.has_impact_measures).length
 
   return {
-    fiscal_year: fiscalYear,
+    calendar_year: calendarYear,
     chapter_id: chapterId,
     chapter_name: chapter.name,
     total_verticals: verticals.length,
@@ -479,16 +479,8 @@ function calculateDepthMetrics(plan: AAAPlan): {
 }
 
 /**
- * Get current fiscal year (Apr-Mar)
- * Yi uses the ENDING year for naming: April 2025 - March 2026 = FY2026
+ * Get current calendar year
  */
-export function getCurrentFiscalYear(): number {
-  const now = new Date()
-  const month = now.getMonth() + 1 // 1-12
-  const year = now.getFullYear()
-
-  // Fiscal year runs April to March, named by ending year
-  // Apr-Dec: ending year is next calendar year
-  // Jan-Mar: ending year is current calendar year
-  return month >= 4 ? year + 1 : year
+export function getCurrentCalendarYear(): number {
+  return new Date().getFullYear()
 }

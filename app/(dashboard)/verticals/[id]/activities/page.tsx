@@ -10,7 +10,7 @@ import Link from 'next/link'
 import { redirect, notFound } from 'next/navigation'
 import { ArrowLeft, Plus, Calendar, Users, Clock, IndianRupee } from 'lucide-react'
 import { getCurrentUser, requireRole } from '@/lib/auth'
-import { getVerticalById, getVerticalActivities, getCurrentFiscalYear } from '@/lib/data/vertical'
+import { getVerticalById, getVerticalActivities, getCurrentCalendarYear } from '@/lib/data/vertical'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -85,8 +85,8 @@ async function ActivitiesContent({ params }: PageProps) {
   const vertical = await getVerticalById(id)
   if (!vertical) notFound()
 
-  const fiscalYear = getCurrentFiscalYear()
-  const activities = await getVerticalActivities(id, { fiscal_year: fiscalYear })
+  const calendarYear = getCurrentCalendarYear()
+  const activities = await getVerticalActivities(id, { calendar_year: calendarYear })
 
   if (activities.length === 0) {
     return (
@@ -163,7 +163,7 @@ async function ActivitiesContent({ params }: PageProps) {
       {/* Activity List */}
       <Card>
         <CardHeader>
-          <CardTitle>FY{fiscalYear} Activities</CardTitle>
+          <CardTitle>{calendarYear} Activities</CardTitle>
           <CardDescription>
             {activities.length} activities recorded
           </CardDescription>

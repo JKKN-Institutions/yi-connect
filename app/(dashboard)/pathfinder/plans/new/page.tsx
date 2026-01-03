@@ -9,7 +9,7 @@ import Link from 'next/link'
 import { redirect, notFound } from 'next/navigation'
 import { ArrowLeft } from 'lucide-react'
 import { requireRole, getCurrentUser } from '@/lib/auth'
-import { getCurrentFiscalYear } from '@/lib/data/aaa'
+import { getCurrentCalendarYear } from '@/lib/data/aaa'
 import { getAAADefaults } from '@/lib/data/aaa-defaults'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -229,12 +229,12 @@ async function NewPlanContent({
   }
 
   // Check if plan already exists for this vertical and year
-  const fiscalYear = getCurrentFiscalYear()
+  const calendarYear = getCurrentCalendarYear()
   const { data: existingPlan } = await supabase
     .from('aaa_plans')
     .select('id')
     .eq('vertical_id', verticalId)
-    .eq('fiscal_year', fiscalYear)
+    .eq('calendar_year', calendarYear)
     .single()
 
   if (existingPlan) {
@@ -249,7 +249,7 @@ async function NewPlanContent({
       verticalId={verticalId}
       verticalName={selectedVertical.name}
       chapterId={chapterId}
-      fiscalYear={fiscalYear}
+      calendarYear={calendarYear}
       defaults={defaults}
     />
   )

@@ -13,7 +13,7 @@ import { getCurrentUser, requireRole } from '@/lib/auth';
 import {
   getVerticalById,
   getVerticalPlans,
-  getCurrentFiscalYear
+  getCurrentCalendarYear
 } from '@/lib/data/vertical';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -93,11 +93,11 @@ async function PlanContent({ params, searchParams }: PageProps) {
   const vertical = await getVerticalById(id);
   if (!vertical) notFound();
 
-  const fiscalYear = getCurrentFiscalYear();
+  const calendarYear = getCurrentCalendarYear();
   const plans = await getVerticalPlans(id);
 
-  // Find current fiscal year plan
-  const currentPlan = plans.find((p) => p.fiscal_year === fiscalYear);
+  // Find current calendar year plan
+  const currentPlan = plans.find((p) => p.calendar_year === calendarYear);
 
   // If explicitly creating new plan or no current plan exists
   if (isNew || !currentPlan) {
@@ -105,7 +105,7 @@ async function PlanContent({ params, searchParams }: PageProps) {
       <PlanForm
         verticalId={id}
         verticalName={vertical.name}
-        fiscalYear={fiscalYear}
+        calendarYear={calendarYear}
       />
     );
   }
@@ -123,8 +123,7 @@ async function PlanContent({ params, searchParams }: PageProps) {
                 {(currentPlan as any).plan_name}
               </CardTitle>
               <CardDescription>
-                FY{currentPlan.fiscal_year} ({currentPlan.fiscal_year} -{' '}
-                {currentPlan.fiscal_year + 1})
+                {currentPlan.calendar_year} (Jan - Dec)
               </CardDescription>
             </div>
             <Badge
@@ -233,7 +232,7 @@ async function PlanContent({ params, searchParams }: PageProps) {
           <CardContent>
             <div className='space-y-2'>
               {plans
-                .filter((p) => p.fiscal_year !== fiscalYear)
+                .filter((p) => p.calendar_year !== calendarYear)
                 .map((plan) => (
                   <div
                     key={plan.id}
@@ -242,14 +241,14 @@ async function PlanContent({ params, searchParams }: PageProps) {
                     <div>
                       <p className='font-medium'>{plan.plan_title}</p>
                       <p className='text-sm text-muted-foreground'>
-                        FY{plan.fiscal_year}
+                        {plan.calendar_year}
                       </p>
                     </div>
                     <div className='flex items-center gap-2'>
                       <Badge variant='outline'>{plan.status}</Badge>
                       <Button variant='ghost' size='sm' asChild>
                         <Link
-                          href={`/verticals/${id}/plan?year=${plan.fiscal_year}`}
+                          href={`/verticals/${id}/plan?year=${plan.calendar_year}`}
                         >
                           View
                         </Link>

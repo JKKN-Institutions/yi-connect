@@ -11,7 +11,7 @@ import { getVerticalsForForm } from '@/lib/data/health-card'
 import { hasTargetsForYear } from '@/lib/data/cmp-targets'
 import { Button } from '@/components/ui/button'
 import { CMPTargetForm } from '@/components/pathfinder/cmp-target-form'
-import { FISCAL_YEAR_OPTIONS } from '@/types/cmp-targets'
+import { CALENDAR_YEAR_OPTIONS } from '@/types/cmp-targets'
 
 export const metadata = {
   title: 'Set CMP Targets - Pathfinder',
@@ -32,7 +32,7 @@ export default async function NewCMPTargetPage() {
 
   // Check which years already have targets
   const yearsWithTargets = await Promise.all(
-    FISCAL_YEAR_OPTIONS.map(async (option) => ({
+    CALENDAR_YEAR_OPTIONS.map(async (option) => ({
       year: option.value,
       hasTargets: await hasTargetsForYear(option.value, chapterId || undefined),
     }))

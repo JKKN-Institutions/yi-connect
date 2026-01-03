@@ -82,7 +82,7 @@ export async function createBudget(
     const validation = createBudgetSchema.safeParse({
       name: formData.get('name'),
       description: formData.get('description') || undefined,
-      fiscal_year: formData.get('fiscal_year'),
+      calendar_year: formData.get('calendar_year'),
       period: formData.get('period'),
       quarter: formData.get('quarter') || undefined,
       total_amount: formData.get('total_amount'),
@@ -935,7 +935,7 @@ export async function createSponsorshipDeal(
       proposal_date: formData.get('proposal_date') || undefined,
       expected_closure_date: formData.get('expected_closure_date') || undefined,
       event_id: formData.get('event_id') || undefined,
-      fiscal_year: formData.get('fiscal_year') || undefined,
+      calendar_year: formData.get('calendar_year') || undefined,
       probability_percentage: formData.get('probability_percentage') || 50,
       point_of_contact: formData.get('point_of_contact') || undefined,
       assigned_to: formData.get('assigned_to') || undefined,

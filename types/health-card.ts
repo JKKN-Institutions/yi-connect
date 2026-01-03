@@ -64,7 +64,7 @@ export interface HealthCardEntry {
   vertical_specific_data: Record<string, unknown> | null
 
   // Metadata
-  fiscal_year: number
+  calendar_year: number
   created_at: string
   updated_at: string
 }
@@ -137,7 +137,7 @@ export interface RegionHealthSummary {
  * Health Card dashboard overview
  */
 export interface HealthCardDashboard {
-  fiscal_year: number
+  calendar_year: number
   chapter_id: string
   chapter_name: string
 
@@ -212,7 +212,7 @@ export interface HealthCardFilters {
   chapter_id?: string
   vertical_id?: string
   region?: YiRegion
-  fiscal_year?: number
+  calendar_year?: number
   date_from?: string
   date_to?: string
   submitter_role?: SubmitterRole

@@ -268,10 +268,10 @@ export function SponsorshipDealForm({
 
           <FormField
             control={form.control}
-            name="fiscal_year"
+            name="calendar_year"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Fiscal Year</FormLabel>
+                <FormLabel>Calendar Year</FormLabel>
                 <FormControl>
                   <Input
                     type="number"

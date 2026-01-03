@@ -233,10 +233,10 @@ async function DealDetail({ dealId }: { dealId: string }) {
                   <DealStageBadge stage={deal.deal_stage} />
                 </div>
               </div>
-              {deal.fiscal_year && (
+              {deal.calendar_year && (
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Fiscal Year</p>
-                  <p className="text-sm font-semibold">FY {deal.fiscal_year}</p>
+                  <p className="text-sm font-medium text-muted-foreground">Calendar Year</p>
+                  <p className="text-sm font-semibold">{deal.calendar_year}</p>
                 </div>
               )}
             </div>

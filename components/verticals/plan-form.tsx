@@ -70,7 +70,7 @@ interface PlanFormProps {
   verticalId: string
   verticalName: string
   plan?: VerticalPlanWithKPIs
-  fiscalYear?: number
+  calendarYear?: number
 }
 
 // Default KPI structure
@@ -85,25 +85,21 @@ const defaultKPI = {
   display_order: 0,
 }
 
-export function PlanForm({ verticalId, verticalName, plan, fiscalYear }: PlanFormProps) {
+export function PlanForm({ verticalId, verticalName, plan, calendarYear }: PlanFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const isEditing = !!plan
 
-  // Calculate current fiscal year if not provided
-  const currentFiscalYear = fiscalYear || (() => {
-    const now = new Date()
-    const month = now.getMonth() + 1
-    return month >= 4 ? now.getFullYear() : now.getFullYear() - 1
-  })()
+  // Calculate current calendar year if not provided
+  const currentCalendarYear = calendarYear || new Date().getFullYear()
 
   const form = useForm<CreateVerticalPlanInput>({
     resolver: zodResolver(createVerticalPlanSchema) as Resolver<CreateVerticalPlanInput>,
     mode: 'onChange',
     defaultValues: {
       vertical_id: verticalId,
-      fiscal_year: plan?.fiscal_year || currentFiscalYear,
-      plan_name: (plan as any)?.plan_name || `${verticalName} Annual Plan FY${currentFiscalYear}`,
+      calendar_year: plan?.calendar_year || currentCalendarYear,
+      plan_name: (plan as any)?.plan_name || `${verticalName} Annual Plan ${currentCalendarYear}`,
       mission: (plan as any)?.mission || '',
       vision: (plan as any)?.vision || '',
       q1_budget: (plan as any)?.q1_budget || 0,
@@ -159,8 +155,8 @@ export function PlanForm({ verticalId, verticalName, plan, fiscalYear }: PlanFor
     if (errors.plan_name) {
       errorMessages.push(`Plan Name: ${errors.plan_name.message}`)
     }
-    if (errors.fiscal_year) {
-      errorMessages.push(`Fiscal Year: ${errors.fiscal_year.message}`)
+    if (errors.calendar_year) {
+      errorMessages.push(`Calendar Year: ${errors.calendar_year.message}`)
     }
     if (errors.total_budget) {
       errorMessages.push(`Total Budget: ${errors.total_budget.message}`)
@@ -296,27 +292,27 @@ export function PlanForm({ verticalId, verticalName, plan, fiscalYear }: PlanFor
                 )}
               />
 
-              {/* Fiscal Year */}
+              {/* Calendar Year */}
               <FormField
                 control={form.control}
-                name="fiscal_year"
+                name="calendar_year"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Fiscal Year *</FormLabel>
+                    <FormLabel>Calendar Year *</FormLabel>
                     <Select
                       onValueChange={(value) => field.onChange(parseInt(value))}
                       value={field.value?.toString()}
                     >
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Select fiscal year" />
+                          <SelectValue placeholder="Select calendar year" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {[currentFiscalYear - 1, currentFiscalYear, currentFiscalYear + 1].map(
+                        {[currentCalendarYear - 1, currentCalendarYear, currentCalendarYear + 1].map(
                           (year) => (
                             <SelectItem key={year} value={year.toString()}>
-                              FY{year} (Apr {year} - Mar {year + 1})
+                              {year} (Jan - Dec)
                             </SelectItem>
                           )
                         )}

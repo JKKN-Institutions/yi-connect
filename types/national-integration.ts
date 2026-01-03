@@ -277,7 +277,7 @@ export type NationalBenchmark = {
   period_type: BenchmarkPeriod;
   period_start: string;
   period_end: string;
-  fiscal_year: number | null;
+  calendar_year: number | null;
   quarter: number | null;
   previous_value: number | null;
   change_percentage: number | null;
@@ -292,7 +292,7 @@ export type BenchmarkFilters = {
   metric_type?: BenchmarkMetric[];
   period_type?: BenchmarkPeriod;
   performance_tier?: PerformanceTier[];
-  fiscal_year?: number;
+  calendar_year?: number;
   quarter?: number;
 };
 

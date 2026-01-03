@@ -257,7 +257,7 @@ export interface ReimbursementRequestFull
 export interface BudgetListItem {
   id: string;
   name: string;
-  fiscal_year: number;
+  calendar_year: number;
   period: BudgetPeriod;
   quarter?: number;
   total_amount: number;
@@ -340,7 +340,7 @@ export interface SponsorshipDealListItem {
     id: string;
     full_name: string;
   };
-  fiscal_year?: number;
+  calendar_year?: number;
 }
 
 export interface ReimbursementRequestListItem {
@@ -493,7 +493,7 @@ export interface FinancialDashboardSummary {
 // ================================================
 
 export interface BudgetFilters {
-  fiscal_year?: number;
+  calendar_year?: number;
   period?: BudgetPeriod;
   status?: BudgetStatus | BudgetStatus[];
   search?: string;
@@ -528,7 +528,7 @@ export interface SponsorshipDealFilters {
   sponsor_id?: string;
   tier_id?: string;
   deal_stage?: DealStage | DealStage[];
-  fiscal_year?: number;
+  calendar_year?: number;
   event_id?: string;
   assigned_to?: string;
   expected_closure_from?: string;
@@ -598,7 +598,7 @@ export interface PaginatedReimbursements {
 export interface CreateBudgetInput {
   name: string;
   description?: string;
-  fiscal_year: number;
+  calendar_year: number;
   period: BudgetPeriod;
   quarter?: number;
   total_amount: number;
@@ -738,7 +738,6 @@ export interface CreateSponsorshipDealInput {
   proposal_date?: string;
   expected_closure_date?: string;
   event_id?: string;
-  fiscal_year?: number;
   probability_percentage?: number;
   point_of_contact?: string;
   assigned_to?: string;
@@ -746,6 +745,7 @@ export interface CreateSponsorshipDealInput {
   deliverables?: string[];
   notes?: string;
   chapter_id: string;
+  calendar_year?: number;
 }
 
 export interface UpdateSponsorshipDealInput {

@@ -86,7 +86,7 @@ interface AAAPlanFormProps {
   verticalName: string
   chapterId: string
   plan?: AAAPlanWithDetails
-  fiscalYear?: number
+  calendarYear?: number
   /** Pre-populated suggestions from Pathfinder 2026 (only used for new plans) */
   defaults?: AAADefaults
 }
@@ -96,7 +96,7 @@ export function AAAPlanForm({
   verticalName,
   chapterId,
   plan,
-  fiscalYear,
+  calendarYear,
   defaults,
 }: AAAPlanFormProps) {
   const router = useRouter()
@@ -104,12 +104,8 @@ export function AAAPlanForm({
   const [isLocking, setIsLocking] = useState(false)
   const isEditing = !!plan
 
-  // Calculate current fiscal year if not provided
-  const currentFiscalYear = fiscalYear || (() => {
-    const now = new Date()
-    const month = now.getMonth() + 1
-    return month >= 4 ? now.getFullYear() : now.getFullYear() - 1
-  })()
+  // Get current calendar year if not provided
+  const currentCalendarYear = calendarYear || new Date().getFullYear()
 
   // Use defaults for new plans (not editing), fallback to empty strings
   const getStringDefault = (field: keyof NonNullable<typeof defaults>): string => {
@@ -130,7 +126,7 @@ export function AAAPlanForm({
     defaultValues: {
       vertical_id: verticalId,
       chapter_id: chapterId,
-      fiscal_year: plan?.fiscal_year || currentFiscalYear,
+      calendar_year: plan?.calendar_year || currentCalendarYear,
 
       // Awareness 1
       awareness_1_title: plan?.awareness_1_title || getStringDefault('awareness_1_title'),
@@ -1265,7 +1261,7 @@ export function AAAPlanForm({
           {/* Hidden fields */}
           <input type="hidden" {...form.register('vertical_id')} />
           <input type="hidden" {...form.register('chapter_id')} />
-          <input type="hidden" {...form.register('fiscal_year')} />
+          <input type="hidden" {...form.register('calendar_year')} />
 
           {/* Form Actions */}
           <div className="flex justify-end gap-4">

@@ -157,14 +157,15 @@
       "feature_area": "admin-tools",
       "description": "Allow National/Super Admins to temporarily assume any user's identity for debugging, QA testing, real-time support, and permission verification. Full action capability with hidden audit logging.",
       "priority": 5,
-      "status": "not-started",
+      "status": "in-progress",
       "complexity": "high",
       "spec_document": "docs/SPEC-user-impersonation.md",
       "phases": [
         {
           "id": "impersonation-mvp",
           "name": "Phase 1: Core Infrastructure (MVP)",
-          "status": "not-started",
+          "status": "deployed-awaiting-test",
+          "deployed_at": "2026-01-04",
           "items": [
             "Database schema & migrations (impersonation_sessions, impersonation_action_log)",
             "Basic start/end impersonation server actions",

@@ -31,26 +31,31 @@ import type {
  */
 export const getActiveImpersonationSession = cache(
   async (): Promise<ActiveImpersonationSession | null> => {
-    const user = await getCurrentUser()
-    if (!user) return null
+    try {
+      const user = await getCurrentUser()
+      if (!user) return null
 
-    const hierarchyLevel = await getUserHierarchyLevel()
-    if (hierarchyLevel < 6) return null
+      const hierarchyLevel = await getUserHierarchyLevel()
+      if (hierarchyLevel < 6) return null
 
-    const supabase = await createServerSupabaseClient()
+      const supabase = await createServerSupabaseClient()
 
-    const { data, error } = await supabase.rpc('get_active_impersonation', {
-      p_admin_id: user.id,
-    })
+      const { data, error } = await supabase.rpc('get_active_impersonation', {
+        p_admin_id: user.id,
+      })
 
-    if (error) {
-      console.error('Error fetching active impersonation:', error)
+      if (error) {
+        console.error('Error fetching active impersonation:', error)
+        return null
+      }
+
+      if (!data || data.length === 0) return null
+
+      return data[0] as ActiveImpersonationSession
+    } catch (err) {
+      console.error('Unexpected error in getActiveImpersonationSession:', err)
       return null
     }
-
-    if (!data || data.length === 0) return null
-
-    return data[0] as ActiveImpersonationSession
   }
 )
 

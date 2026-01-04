@@ -52,7 +52,14 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
+import { ProgressDashboard } from './progress-dashboard'
 
 interface AAAPDashboardProps {
   dashboard: PathfinderDashboard
@@ -60,138 +67,161 @@ interface AAAPDashboardProps {
 
 export function AAADashboard({ dashboard }: AAAPDashboardProps) {
   const [view, setView] = useState<'cards' | 'table'>('cards')
+  const [activeTab, setActiveTab] = useState<'overview' | 'progress'>('overview')
 
   return (
     <TooltipProvider>
       <div className="space-y-6">
-        {/* Summary Stats */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Verticals</p>
-                  <p className="text-2xl font-bold">{dashboard.total_verticals}</p>
-                </div>
-                <div className="p-3 bg-blue-100 rounded-full">
-                  <BarChart3 className="h-5 w-5 text-blue-600" />
-                </div>
-              </div>
-              <p className="text-xs text-muted-foreground mt-2">
-                {dashboard.verticals_with_plans} with AAA plans
-              </p>
-            </CardContent>
-          </Card>
+        {/* Tabs: Overview vs Progress Tracking */}
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'overview' | 'progress')}>
+          <TabsList className="grid w-full max-w-md grid-cols-2">
+            <TabsTrigger value="overview">
+              <BarChart3 className="h-4 w-4 mr-2" />
+              Overview
+            </TabsTrigger>
+            <TabsTrigger value="progress">
+              <TrendingUp className="h-4 w-4 mr-2" />
+              Progress Tracking
+            </TabsTrigger>
+          </TabsList>
 
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Plans Approved</p>
-                  <p className="text-2xl font-bold">{dashboard.plans_approved}</p>
-                </div>
-                <div className="p-3 bg-green-100 rounded-full">
-                  <CheckCircle2 className="h-5 w-5 text-green-600" />
-                </div>
-              </div>
-              <Progress
-                value={(dashboard.plans_approved / dashboard.total_verticals) * 100}
-                className="mt-2"
-              />
-            </CardContent>
-          </Card>
+          {/* Overview Tab */}
+          <TabsContent value="overview" className="mt-6 space-y-6">
+            {/* Summary Stats */}
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Verticals</p>
+                      <p className="text-2xl font-bold">{dashboard.total_verticals}</p>
+                    </div>
+                    <div className="p-3 bg-blue-100 rounded-full">
+                      <BarChart3 className="h-5 w-5 text-blue-600" />
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    {dashboard.verticals_with_plans} with AAA plans
+                  </p>
+                </CardContent>
+              </Card>
 
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Commitments</p>
-                  <p className="text-2xl font-bold">{dashboard.commitments_signed}</p>
-                </div>
-                <div className="p-3 bg-red-100 rounded-full">
-                  <FileSignature className="h-5 w-5 text-red-600" />
-                </div>
-              </div>
-              <p className="text-xs text-muted-foreground mt-2">
-                Cards signed by EC Chairs
-              </p>
-            </CardContent>
-          </Card>
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Plans Approved</p>
+                      <p className="text-2xl font-bold">{dashboard.plans_approved}</p>
+                    </div>
+                    <div className="p-3 bg-green-100 rounded-full">
+                      <CheckCircle2 className="h-5 w-5 text-green-600" />
+                    </div>
+                  </div>
+                  <Progress
+                    value={(dashboard.plans_approved / dashboard.total_verticals) * 100}
+                    className="mt-2"
+                  />
+                </CardContent>
+              </Card>
 
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Mentors</p>
-                  <p className="text-2xl font-bold">{dashboard.mentors_assigned}</p>
-                </div>
-                <div className="p-3 bg-purple-100 rounded-full">
-                  <Users className="h-5 w-5 text-purple-600" />
-                </div>
-              </div>
-              <p className="text-xs text-muted-foreground mt-2">
-                Assigned to EC Chairs
-              </p>
-            </CardContent>
-          </Card>
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Commitments</p>
+                      <p className="text-2xl font-bold">{dashboard.commitments_signed}</p>
+                    </div>
+                    <div className="p-3 bg-red-100 rounded-full">
+                      <FileSignature className="h-5 w-5 text-red-600" />
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Cards signed by EC Chairs
+                  </p>
+                </CardContent>
+              </Card>
 
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Avg. AAA Progress</p>
-                  <p className="text-2xl font-bold">{dashboard.avg_aaa_completion}%</p>
-                </div>
-                <div className="p-3 bg-orange-100 rounded-full">
-                  <TrendingUp className="h-5 w-5 text-orange-600" />
-                </div>
-              </div>
-              <Progress value={dashboard.avg_aaa_completion} className="mt-2" />
-            </CardContent>
-          </Card>
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Mentors</p>
+                      <p className="text-2xl font-bold">{dashboard.mentors_assigned}</p>
+                    </div>
+                    <div className="p-3 bg-purple-100 rounded-full">
+                      <Users className="h-5 w-5 text-purple-600" />
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Assigned to EC Chairs
+                  </p>
+                </CardContent>
+              </Card>
 
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Activities Logged</p>
-                  <p className="text-2xl font-bold">{dashboard.health_card_total_activities}</p>
-                </div>
-                <div className="p-3 bg-emerald-100 rounded-full">
-                  <ClipboardList className="h-5 w-5 text-emerald-600" />
-                </div>
-              </div>
-              <p className="text-xs text-muted-foreground mt-2">
-                {dashboard.health_card_total_participants} participants • {dashboard.health_card_activities_this_month} this month
-              </p>
-            </CardContent>
-          </Card>
-        </div>
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Avg. AAA Progress</p>
+                      <p className="text-2xl font-bold">{dashboard.avg_aaa_completion}%</p>
+                    </div>
+                    <div className="p-3 bg-orange-100 rounded-full">
+                      <TrendingUp className="h-5 w-5 text-orange-600" />
+                    </div>
+                  </div>
+                  <Progress value={dashboard.avg_aaa_completion} className="mt-2" />
+                </CardContent>
+              </Card>
 
-        {/* View Toggle */}
-        <div className="flex justify-end gap-2">
-          <Button
-            variant={view === 'cards' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setView('cards')}
-          >
-            Cards
-          </Button>
-          <Button
-            variant={view === 'table' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setView('table')}
-          >
-            Table
-          </Button>
-        </div>
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Activities Logged</p>
+                      <p className="text-2xl font-bold">{dashboard.health_card_total_activities}</p>
+                    </div>
+                    <div className="p-3 bg-emerald-100 rounded-full">
+                      <ClipboardList className="h-5 w-5 text-emerald-600" />
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    {dashboard.health_card_total_participants} participants • {dashboard.health_card_activities_this_month} this month
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
 
-        {/* Verticals Grid/Table */}
-        {view === 'cards' ? (
-          <VerticalCards verticals={dashboard.verticals} />
-        ) : (
-          <VerticalTable verticals={dashboard.verticals} />
-        )}
+            {/* View Toggle */}
+            <div className="flex justify-end gap-2">
+              <Button
+                variant={view === 'cards' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setView('cards')}
+              >
+                Cards
+              </Button>
+              <Button
+                variant={view === 'table' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setView('table')}
+              >
+                Table
+              </Button>
+            </div>
+
+            {/* Verticals Grid/Table */}
+            {view === 'cards' ? (
+              <VerticalCards verticals={dashboard.verticals} />
+            ) : (
+              <VerticalTable verticals={dashboard.verticals} />
+            )}
+          </TabsContent>
+
+          {/* Progress Tracking Tab */}
+          <TabsContent value="progress" className="mt-6">
+            <ProgressDashboard dashboard={dashboard} />
+          </TabsContent>
+        </Tabs>
       </div>
     </TooltipProvider>
   )

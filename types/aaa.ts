@@ -271,6 +271,15 @@ export interface VerticalAAAStatus {
   has_engagement_goals: boolean // At least one engagement goal defined
   has_impact_measures: boolean // At least one impact measure defined
 
+  // Progress Tracking - Planned vs Actual (Feature 3)
+  planned_activities: number // 5 (3 awareness + 2 action) or 6 with advocacy
+  completed_activities: number // Activities marked as 'completed' in plan
+  actual_activities: number // Activities logged in health card
+  activity_progress: number // 0-100, % of planned completed
+  target_attendance: number // Sum of target_attendance from plan
+  actual_attendance: number // Sum of participants from health card entries
+  attendance_progress: number // 0-100, % of target attendance achieved
+
   // Commitment
   has_commitment: boolean
   commitment_signed: boolean
@@ -301,6 +310,17 @@ export interface PathfinderDashboard {
   avg_depth_coverage: number // 0-100, % of activities with depth metrics
   verticals_with_engagement_goals: number // Count of verticals with engagement goals
   verticals_with_impact_measures: number // Count of verticals with impact measures
+
+  // Progress Tracking Summary (Feature 3)
+  total_planned_activities: number // Total activities in all plans
+  total_completed_activities: number // Activities marked completed
+  total_actual_activities: number // Activities logged in health cards
+  overall_activity_progress: number // 0-100
+  total_target_attendance_goal: number // Sum of all target attendances
+  total_actual_attendance: number // Sum of all actual participants
+  overall_attendance_progress: number // 0-100
+  verticals_on_track: number // Verticals with activity_progress >= 50%
+  verticals_behind: number // Verticals with activity_progress < 50%
 
   // Health Card Stats (Activity Logging)
   health_card_total_activities: number

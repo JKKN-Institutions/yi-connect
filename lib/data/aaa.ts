@@ -6,7 +6,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentUser } from '@/lib/data/auth'
-import { getChapterHealthStats } from '@/lib/data/health-card'
+import { getChapterHealthStats, getHealthCardSummaryByVertical } from '@/lib/data/health-card'
 import type {
   AAAPlan,
   AAAPlanWithDetails,
@@ -288,6 +288,10 @@ export async function getPathfinderDashboard(
     .eq('chapter_id', chapterId)
     .eq('pathfinder_year', calendarYear)
 
+  // Get health card summary by vertical for progress tracking
+  const healthSummary = await getHealthCardSummaryByVertical(chapterId, calendarYear)
+  const healthByVertical = new Map(healthSummary.map(h => [h.vertical_id, h]))
+
   // Build vertical statuses
   const verticalStatuses: VerticalAAAStatus[] = verticals.map((v) => {
     const plan = plans?.find((p) => p.vertical_id === v.id)
@@ -321,6 +325,22 @@ export async function getPathfinderDashboard(
       hasImpactMeasures: false,
     }
 
+    // Progress Tracking (Feature 3)
+    const healthData = healthByVertical.get(v.id)
+    const plannedActivities = plan ? 5 : 0 // 3 awareness + 2 action (excluding advocacy for now)
+    const completedActivities = awarenessCount + actionCount + (plan?.advocacy_status === 'completed' ? 1 : 0)
+    const actualActivities = healthData?.total_activities || 0
+    const targetAttendance = depthMetrics.totalTargetAttendance
+    const actualAttendance = healthData?.total_participants || 0
+
+    // Calculate progress percentages
+    const activityProgress = plannedActivities > 0
+      ? Math.min(100, Math.round((completedActivities / plannedActivities) * 100))
+      : 0
+    const attendanceProgress = targetAttendance > 0
+      ? Math.min(100, Math.round((actualAttendance / targetAttendance) * 100))
+      : 0
+
     return {
       vertical_id: v.id,
       vertical_name: v.name,
@@ -344,6 +364,14 @@ export async function getPathfinderDashboard(
       depth_metrics_filled: depthMetrics.depthMetricsFilled,
       has_engagement_goals: depthMetrics.hasEngagementGoals,
       has_impact_measures: depthMetrics.hasImpactMeasures,
+      // Progress Tracking (Feature 3)
+      planned_activities: plannedActivities,
+      completed_activities: completedActivities,
+      actual_activities: actualActivities,
+      activity_progress: activityProgress,
+      target_attendance: targetAttendance,
+      actual_attendance: actualAttendance,
+      attendance_progress: attendanceProgress,
       has_commitment: !!commitment,
       commitment_signed: !!commitment?.signed_at,
       has_mentor: !!mentor,
@@ -370,6 +398,21 @@ export async function getPathfinderDashboard(
   const verticalsWithEngagementGoals = verticalStatuses.filter(v => v.has_engagement_goals).length
   const verticalsWithImpactMeasures = verticalStatuses.filter(v => v.has_impact_measures).length
 
+  // Progress Tracking Summary (Feature 3)
+  const totalPlannedActivities = verticalStatuses.reduce((sum, v) => sum + v.planned_activities, 0)
+  const totalCompletedActivities = verticalStatuses.reduce((sum, v) => sum + v.completed_activities, 0)
+  const totalActualActivities = verticalStatuses.reduce((sum, v) => sum + v.actual_activities, 0)
+  const overallActivityProgress = totalPlannedActivities > 0
+    ? Math.round((totalCompletedActivities / totalPlannedActivities) * 100)
+    : 0
+  const totalTargetAttendanceGoal = verticalStatuses.reduce((sum, v) => sum + v.target_attendance, 0)
+  const totalActualAttendance = verticalStatuses.reduce((sum, v) => sum + v.actual_attendance, 0)
+  const overallAttendanceProgress = totalTargetAttendanceGoal > 0
+    ? Math.round((totalActualAttendance / totalTargetAttendanceGoal) * 100)
+    : 0
+  const verticalsOnTrack = verticalStatuses.filter(v => v.activity_progress >= 50).length
+  const verticalsBehind = verticalStatuses.filter(v => v.has_plan && v.activity_progress < 50).length
+
   // Health Card Stats (Activity Logging)
   const healthStats = await getChapterHealthStats(chapterId, calendarYear)
 
@@ -388,6 +431,16 @@ export async function getPathfinderDashboard(
     avg_depth_coverage: avgDepthCoverage,
     verticals_with_engagement_goals: verticalsWithEngagementGoals,
     verticals_with_impact_measures: verticalsWithImpactMeasures,
+    // Progress Tracking Summary (Feature 3)
+    total_planned_activities: totalPlannedActivities,
+    total_completed_activities: totalCompletedActivities,
+    total_actual_activities: totalActualActivities,
+    overall_activity_progress: overallActivityProgress,
+    total_target_attendance_goal: totalTargetAttendanceGoal,
+    total_actual_attendance: totalActualAttendance,
+    overall_attendance_progress: overallAttendanceProgress,
+    verticals_on_track: verticalsOnTrack,
+    verticals_behind: verticalsBehind,
     health_card_total_activities: healthStats?.total_activities || 0,
     health_card_total_participants: healthStats?.total_participants || 0,
     health_card_activities_this_month: healthStats?.activities_this_month || 0,

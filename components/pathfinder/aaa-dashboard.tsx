@@ -24,6 +24,7 @@ import {
   CheckCircle2,
   Clock,
   BarChart3,
+  ClipboardList,
 } from 'lucide-react'
 import type { PathfinderDashboard, VerticalAAAStatus } from '@/types/aaa'
 import { Button } from '@/components/ui/button'
@@ -64,7 +65,7 @@ export function AAADashboard({ dashboard }: AAAPDashboardProps) {
     <TooltipProvider>
       <div className="space-y-6">
         {/* Summary Stats */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
           <Card>
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
@@ -146,6 +147,23 @@ export function AAADashboard({ dashboard }: AAAPDashboardProps) {
                 </div>
               </div>
               <Progress value={dashboard.avg_aaa_completion} className="mt-2" />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Activities Logged</p>
+                  <p className="text-2xl font-bold">{dashboard.health_card_total_activities}</p>
+                </div>
+                <div className="p-3 bg-emerald-100 rounded-full">
+                  <ClipboardList className="h-5 w-5 text-emerald-600" />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                {dashboard.health_card_total_participants} participants • {dashboard.health_card_activities_this_month} this month
+              </p>
             </CardContent>
           </Card>
         </div>

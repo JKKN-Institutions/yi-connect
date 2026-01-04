@@ -1,6 +1,67 @@
 # Yi Connect - Progress Tracker
 
-## Current Session: 2026-01-02 - AAA Module for Pathfinder
+## Current Session: 2026-01-04 - Health Card Activity Reporting
+
+### Objective
+Complete Health Card feature for activity logging by EC Chairs/Vertical Heads
+
+### Features Built
+1. **Types & Validations**
+   - `types/health-card.ts` - Complete type definitions with vertical-specific fields
+   - `lib/validations/health-card.ts` - Zod schemas with conditional validation
+
+2. **Database**
+   - `health_card_entries` table with RLS policies
+   - Vertical-specific JSON fields for MASOOM, Climate, Road Safety, etc.
+
+3. **Server Actions**
+   - CRUD operations: createHealthCardEntry, updateHealthCardEntry, deleteHealthCardEntry
+   - Cached data fetching: getHealthCardEntries, getChapterHealthStats
+
+4. **UI Components**
+   - `components/pathfinder/health-card-form.tsx` - Dynamic form with vertical-specific fields
+   - List page with stats cards (Total Activities, EC/Non-EC Participants)
+   - New/Edit pages with proper routing
+
+5. **Dashboard Integration**
+   - Added Health Card stats to `PathfinderDashboard` type
+   - Updated `getPathfinderDashboard` to fetch health stats
+   - Added "Activities Logged" card to AAA Dashboard
+
+### Progress - ALL COMPLETE ✓
+- [x] Types and Zod validations
+- [x] Database migration with RLS
+- [x] Server actions (CRUD + queries)
+- [x] Health Card form component with dynamic fields
+- [x] List/New/Edit pages with routing
+- [x] Build compilation verified
+- [x] AAA Dashboard integration (6th stat card)
+
+### Files Modified
+- `types/health-card.ts`
+- `types/aaa.ts` - Added health card fields to PathfinderDashboard
+- `lib/validations/health-card.ts`
+- `lib/data/health-card.ts`
+- `lib/data/aaa.ts` - Import health stats
+- `app/actions/health-card.ts`
+- `components/pathfinder/health-card-form.tsx`
+- `components/pathfinder/aaa-dashboard.tsx` - Added Activities Logged card
+- `app/(dashboard)/pathfinder/health-card/page.tsx`
+- `app/(dashboard)/pathfinder/health-card/new/page.tsx`
+- `app/(dashboard)/pathfinder/health-card/[id]/page.tsx`
+
+### Next Steps
+- Deploy to production and test on live site
+- User to verify Health Card workflow:
+  1. Navigate to /pathfinder/health-card
+  2. Click "Log Activity"
+  3. Fill form with activity details
+  4. Verify entry appears in list
+  5. Check Pathfinder Dashboard shows "Activities Logged" stat
+
+---
+
+## Previous Session: 2026-01-02 - AAA Module for Pathfinder
 
 ### Objective
 Build AAA (Awareness → Action → Advocacy) Module for Pathfinder 2026 (Jan 10)

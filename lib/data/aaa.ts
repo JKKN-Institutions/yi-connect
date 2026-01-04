@@ -6,6 +6,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentUser } from '@/lib/data/auth'
+import { getChapterHealthStats } from '@/lib/data/health-card'
 import type {
   AAAPlan,
   AAAPlanWithDetails,
@@ -369,6 +370,9 @@ export async function getPathfinderDashboard(
   const verticalsWithEngagementGoals = verticalStatuses.filter(v => v.has_engagement_goals).length
   const verticalsWithImpactMeasures = verticalStatuses.filter(v => v.has_impact_measures).length
 
+  // Health Card Stats (Activity Logging)
+  const healthStats = await getChapterHealthStats(chapterId, calendarYear)
+
   return {
     calendar_year: calendarYear,
     chapter_id: chapterId,
@@ -384,6 +388,9 @@ export async function getPathfinderDashboard(
     avg_depth_coverage: avgDepthCoverage,
     verticals_with_engagement_goals: verticalsWithEngagementGoals,
     verticals_with_impact_measures: verticalsWithImpactMeasures,
+    health_card_total_activities: healthStats?.total_activities || 0,
+    health_card_total_participants: healthStats?.total_participants || 0,
+    health_card_activities_this_month: healthStats?.activities_this_month || 0,
     verticals: verticalStatuses,
   }
 }

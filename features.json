@@ -7,7 +7,7 @@
       "name": "Health Card Activity Reporting",
       "description": "Activity reporting system where EC Chairs/Vertical Heads log completed activities with participation counts (EC and Non-EC members). Links to verticals for tracking.",
       "priority": 0,
-      "status": "in-progress",
+      "status": "self-verified",
       "complexity": "high",
       "files_to_modify": [
         "types/health-card.ts - new types",

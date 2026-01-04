@@ -302,6 +302,11 @@ export interface PathfinderDashboard {
   verticals_with_engagement_goals: number // Count of verticals with engagement goals
   verticals_with_impact_measures: number // Count of verticals with impact measures
 
+  // Health Card Stats (Activity Logging)
+  health_card_total_activities: number
+  health_card_total_participants: number
+  health_card_activities_this_month: number
+
   // Vertical details
   verticals: VerticalAAAStatus[]
 }

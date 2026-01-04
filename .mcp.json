@@ -1,38 +1,54 @@
 {
   "mcpServers": {
-    "supabase": {
-      "command": "cmd",
+    "lsp-typescript": {
+      "type": "stdio",
+      "command": "bunx",
       "args": [
-        "/c",
-        "npx",
-        "-y",
-        "@supabase/mcp-server-supabase@latest",
-        "--project-ref=jxvbjpkypzedtrqewesc"
-      ],
-      "env": {
-        "SUPABASE_ACCESS_TOKEN": "sbp_47018305daf9755154b028eb0e599cbb8097c0c8"
-      }
-    },
-    "sequential-thinking": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"]
-    },
-    "chrome-devtools": {
-      "command": "cmd",
-      "args": [
-        "/c",
-        "npx",
-        "-y",
-        "chrome-devtools-mcp@latest"
+        "--bun",
+        "git+https://github.com/jonrad/lsp-mcp",
+        "--lsp",
+        "typescript-language-server --stdio"
       ]
     },
-    "actor-critic-thinking": {
-      "command": "cmd",
-      "args": ["/c", "npx", "-y", "mcp-server-actor-critic-thinking"]
+    "lsp-css": {
+      "type": "stdio",
+      "command": "bunx",
+      "args": [
+        "--bun",
+        "git+https://github.com/jonrad/lsp-mcp",
+        "--lsp",
+        "vscode-css-languageserver --stdio"
+      ]
     },
-    "next-devtools": {
+    "lsp-json": {
+      "type": "stdio",
+      "command": "bunx",
+      "args": [
+        "--bun",
+        "git+https://github.com/jonrad/lsp-mcp",
+        "--lsp",
+        "vscode-json-languageserver --stdio"
+      ]
+    },
+    "vercel": {
+      "type": "stdio",
       "command": "npx",
-      "args": ["-y", "next-devtools-mcp@latest"]
+      "args": [
+        "-y",
+        "mcp-remote",
+        "https://mcp.vercel.com"
+      ],
+      "env": {}
+    },
+    "supabase-local": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote",
+        "http://127.0.0.1:55321/mcp"
+      ],
+      "env": {}
     }
   }
 }

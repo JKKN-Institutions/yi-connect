@@ -132,25 +132,29 @@ export const getUsers = cache(
     }
 
     // Check if users have member records
-    const { data: memberRecords } = await supabase
-      .from('members')
-      .select('id')
-      .in('id', userIds)
+    let memberIds = new Set<string>()
+    if (userIds.length > 0) {
+      const { data: memberRecords } = await supabase
+        .from('members')
+        .select('id')
+        .in('id', userIds)
 
-    const memberIds = new Set(memberRecords?.map((m) => m.id) || [])
+      memberIds = new Set(memberRecords?.map((m) => m.id) || [])
+    }
 
     // Check if users are active (via approved_emails)
-    const { data: approvedEmails } = await supabase
-      .from('approved_emails')
-      .select('email, is_active')
-      .in(
-        'email',
-        (data || []).map((u: any) => u.email)
-      )
+    const emails = (data || []).map((u: any) => u.email).filter(Boolean)
+    let activeEmailsMap = new Map<string, boolean>()
+    if (emails.length > 0) {
+      const { data: approvedEmails } = await supabase
+        .from('approved_emails')
+        .select('email, is_active')
+        .in('email', emails)
 
-    const activeEmailsMap = new Map(
-      approvedEmails?.map((ae) => [ae.email, ae.is_active]) || []
-    )
+      activeEmailsMap = new Map(
+        approvedEmails?.map((ae) => [ae.email, ae.is_active]) || []
+      )
+    }
 
     // Transform data to UserListItem format
     const users: UserListItem[] = (data || []).map((user: any) => {

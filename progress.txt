@@ -1,5 +1,51 @@
 # Yi Connect - Progress Tracker
 
+## Session: 2026-01-04 - User Impersonation Phase 1 VERIFIED WORKING
+
+### Accomplished
+- Fixed PostgREST FK ambiguity error (`profiles` → `chapters` had multiple relationships)
+- Added explicit FK hints (`!profiles_chapter_id_fkey`) to `lib/data/users.ts` and `lib/auth.ts`
+- Updated RPC calls from `get_user_roles` to `get_user_roles_detailed` in 3 files
+- Deployed fix to production (commit `94d5b9b`)
+- **TESTED END-TO-END IN PRODUCTION:**
+  1. ✅ `/admin/users` page loads correctly (68 users, 5 roles)
+  2. ✅ User detail page shows "Impersonate" button in Quick Actions
+  3. ✅ Impersonate dialog opens with user search
+  4. ✅ Session Settings dialog shows duration options (15m/30m/1hr/4hr)
+  5. ✅ "Start Impersonation" creates active session
+  6. ✅ Yellow warning banner appears: "Viewing as: EC Member | 30m remaining | End Impersonation"
+
+### Phase 1 Impersonation System - COMPLETE ✅
+All core features working in production:
+- Database schema (3 tables, RLS policies)
+- Server actions (start/end impersonation)
+- UI components (banner, selector, session settings)
+- Cookie-based session management
+- Audit logging infrastructure
+
+### Files Modified This Session
+```
+lib/data/users.ts - Added explicit FK hints for chapters embed (2 locations)
+lib/auth.ts - Added explicit FK hint for getUserProfile chapters embed
+hooks/use-user-roles.ts - Updated RPC to get_user_roles_detailed
+lib/coordinator-auth.ts - Updated RPC to get_user_roles_detailed
+lib/data/members.ts - Updated RPC to get_user_roles_detailed
+lib/data/impersonation.ts - Added try-catch wrapper (from previous session)
+```
+
+### Commits
+- `94d5b9b` fix(db): Resolve PostgREST FK ambiguity for profiles-chapters relationship
+- `ee62dd3` fix(impersonation): Add try-catch wrapper to getActiveImpersonationSession
+
+### Next Steps (Phase 2)
+- Role-based user selection flow (pick role → then pick user)
+- Recent impersonations dropdown for quick access
+- Configurable timeout UI with extension option
+- Role cycling (prev/next user in same role)
+- Audit log viewer for admin transparency
+
+---
+
 ## Session: 2026-01-04 (End) - User Impersonation Phase 1 Deployed
 
 ### Accomplished

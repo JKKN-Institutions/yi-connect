@@ -116,13 +116,21 @@
       "name": "Activity Templates Library",
       "description": "Let chairs browse and pick from a library of proven activities across verticals",
       "priority": 4,
-      "status": "not-started",
+      "status": "self-verified",
       "complexity": "high",
-      "files_to_modify": [
-        "lib/data/activity-templates.ts - template data",
-        "components/pathfinder/activity-template-picker.tsx",
-        "components/pathfinder/aaa-plan-form.tsx - integration"
+      "files_created": [
+        "components/pathfinder/activity-template-picker.tsx - Modal dialog for browsing templates",
+        "app/api/activity-templates/route.ts - GET endpoint with filters"
       ],
+      "files_modified": [
+        "components/pathfinder/aaa-plan-form.tsx - Added template picker integration to all activity slots"
+      ],
+      "files_existing": [
+        "lib/data/activity-templates.ts - Supabase query layer (already existed)",
+        "types/activity-templates.ts - Type definitions (already existed)",
+        "supabase/migrations/20260102000006_activity_templates.sql - DB table with 17 seed templates"
+      ],
+      "implementation_notes": "Templates button added to: Awareness 1-3, Action 1-2, Awareness 4 (stretch), Action 3 (stretch). Picker modal supports search, vertical filter, and AAA classification filter. Template selection pre-fills: title, description, audience/target, target attendance, engagement goal, impact measures. Build verified passing.",
       "test_steps": [
         "Navigate to Create AAA Plan page",
         "Click 'Browse Templates' button on any activity",

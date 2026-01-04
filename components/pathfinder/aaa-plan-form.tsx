@@ -83,6 +83,11 @@ import {
 } from '@/components/ui/collapsible'
 import { cn } from '@/lib/utils'
 import toast from 'react-hot-toast'
+import {
+  ActivityTemplatePicker,
+  type ActivitySlotType,
+  type TemplateSelection,
+} from './activity-template-picker'
 
 interface AAAPlanFormProps {
   verticalId: string
@@ -111,6 +116,50 @@ export function AAAPlanForm({
   const [hasStretchAwareness, setHasStretchAwareness] = useState(plan?.has_stretch_awareness || false)
   const [hasStretchAction, setHasStretchAction] = useState(plan?.has_stretch_action || false)
   const [hasStretchAdvocacy, setHasStretchAdvocacy] = useState(plan?.has_stretch_advocacy || false)
+
+  // Template picker state
+  const [templatePickerOpen, setTemplatePickerOpen] = useState(false)
+  const [templatePickerSlot, setTemplatePickerSlot] = useState<{
+    type: ActivitySlotType
+    number: number
+  }>({ type: 'awareness', number: 1 })
+
+  // Open template picker for a specific slot
+  const openTemplatePicker = (type: ActivitySlotType, number: number) => {
+    setTemplatePickerSlot({ type, number })
+    setTemplatePickerOpen(true)
+  }
+
+  // Handle template selection
+  const handleTemplateSelect = (template: TemplateSelection) => {
+    const { type, number } = templatePickerSlot
+    const prefix = `${type}_${number}` as const
+
+    // Map template fields to form fields
+    if (template.title) {
+      form.setValue(`${prefix}_title` as keyof CreateAAAPlanInput, template.title)
+    }
+    if (template.description) {
+      form.setValue(`${prefix}_description` as keyof CreateAAAPlanInput, template.description)
+    }
+    if (type === 'awareness' && template.audience) {
+      form.setValue(`${prefix}_audience` as keyof CreateAAAPlanInput, template.audience)
+    }
+    if (type === 'action' && template.target) {
+      form.setValue(`${prefix}_target` as keyof CreateAAAPlanInput, template.target)
+    }
+    if (template.targetAttendance) {
+      form.setValue(`${prefix}_target_attendance` as keyof CreateAAAPlanInput, template.targetAttendance)
+    }
+    if (template.engagementGoal) {
+      form.setValue(`${prefix}_engagement_goal` as keyof CreateAAAPlanInput, template.engagementGoal)
+    }
+    if (template.impactMeasures) {
+      form.setValue(`${prefix}_impact_measures` as keyof CreateAAAPlanInput, template.impactMeasures)
+    }
+
+    toast.success('Template applied!')
+  }
 
   // Get current calendar year if not provided
   const currentCalendarYear = calendarYear || new Date().getFullYear()
@@ -342,6 +391,16 @@ export function AAAPlanForm({
                   <Badge variant="outline" className="bg-blue-100 text-blue-800">
                     Awareness #1
                   </Badge>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs gap-1.5"
+                    onClick={() => openTemplatePicker('awareness', 1)}
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    Browse Templates
+                  </Button>
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <FormField
@@ -480,6 +539,16 @@ export function AAAPlanForm({
                   <Badge variant="outline" className="bg-blue-100 text-blue-800">
                     Awareness #2
                   </Badge>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs gap-1.5"
+                    onClick={() => openTemplatePicker('awareness', 2)}
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    Browse Templates
+                  </Button>
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <FormField
@@ -618,6 +687,16 @@ export function AAAPlanForm({
                   <Badge variant="outline" className="bg-blue-100 text-blue-800">
                     Awareness #3
                   </Badge>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs gap-1.5"
+                    onClick={() => openTemplatePicker('awareness', 3)}
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    Browse Templates
+                  </Button>
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <FormField
@@ -774,25 +853,37 @@ export function AAAPlanForm({
                         Awareness #4 (Stretch)
                       </Badge>
                     </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="text-muted-foreground hover:text-destructive"
-                      onClick={() => {
-                        setHasStretchAwareness(false)
-                        form.setValue('has_stretch_awareness', false)
-                        form.setValue('awareness_4_title', '')
-                        form.setValue('awareness_4_description', '')
-                        form.setValue('awareness_4_audience', '')
-                        form.setValue('awareness_4_target_date', '')
-                        form.setValue('awareness_4_target_attendance', undefined)
-                        form.setValue('awareness_4_engagement_goal', '')
-                        form.setValue('awareness_4_impact_measures', '')
-                      }}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="text-xs gap-1.5"
+                        onClick={() => openTemplatePicker('awareness', 4)}
+                      >
+                        <Sparkles className="h-3.5 w-3.5" />
+                        Templates
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="text-muted-foreground hover:text-destructive"
+                        onClick={() => {
+                          setHasStretchAwareness(false)
+                          form.setValue('has_stretch_awareness', false)
+                          form.setValue('awareness_4_title', '')
+                          form.setValue('awareness_4_description', '')
+                          form.setValue('awareness_4_audience', '')
+                          form.setValue('awareness_4_target_date', '')
+                          form.setValue('awareness_4_target_attendance', undefined)
+                          form.setValue('awareness_4_engagement_goal', '')
+                          form.setValue('awareness_4_impact_measures', '')
+                        }}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                   <div className="grid gap-4 sm:grid-cols-2">
                     <FormField
@@ -950,6 +1041,16 @@ export function AAAPlanForm({
                   <Badge variant="outline" className="bg-orange-100 text-orange-800">
                     Action #1
                   </Badge>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs gap-1.5"
+                    onClick={() => openTemplatePicker('action', 1)}
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    Browse Templates
+                  </Button>
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <FormField
@@ -1088,6 +1189,16 @@ export function AAAPlanForm({
                   <Badge variant="outline" className="bg-orange-100 text-orange-800">
                     Action #2
                   </Badge>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs gap-1.5"
+                    onClick={() => openTemplatePicker('action', 2)}
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    Browse Templates
+                  </Button>
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <FormField
@@ -1244,25 +1355,37 @@ export function AAAPlanForm({
                         Action #3 (Stretch)
                       </Badge>
                     </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="text-muted-foreground hover:text-destructive"
-                      onClick={() => {
-                        setHasStretchAction(false)
-                        form.setValue('has_stretch_action', false)
-                        form.setValue('action_3_title', '')
-                        form.setValue('action_3_description', '')
-                        form.setValue('action_3_target', '')
-                        form.setValue('action_3_target_date', '')
-                        form.setValue('action_3_target_attendance', undefined)
-                        form.setValue('action_3_engagement_goal', '')
-                        form.setValue('action_3_impact_measures', '')
-                      }}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="text-xs gap-1.5"
+                        onClick={() => openTemplatePicker('action', 3)}
+                      >
+                        <Sparkles className="h-3.5 w-3.5" />
+                        Templates
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="text-muted-foreground hover:text-destructive"
+                        onClick={() => {
+                          setHasStretchAction(false)
+                          form.setValue('has_stretch_action', false)
+                          form.setValue('action_3_title', '')
+                          form.setValue('action_3_description', '')
+                          form.setValue('action_3_target', '')
+                          form.setValue('action_3_target_date', '')
+                          form.setValue('action_3_target_attendance', undefined)
+                          form.setValue('action_3_engagement_goal', '')
+                          form.setValue('action_3_impact_measures', '')
+                        }}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                   <div className="grid gap-4 sm:grid-cols-2">
                     <FormField
@@ -1769,6 +1892,16 @@ export function AAAPlanForm({
           </div>
         </form>
       </Form>
+
+      {/* Template Picker Dialog */}
+      <ActivityTemplatePicker
+        open={templatePickerOpen}
+        onOpenChange={setTemplatePickerOpen}
+        slotType={templatePickerSlot.type}
+        slotNumber={templatePickerSlot.number}
+        onSelect={handleTemplateSelect}
+        currentVerticalId={verticalId}
+      />
     </TooltipProvider>
   )
 }

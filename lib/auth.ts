@@ -375,3 +375,86 @@ export const getCurrentMemberId = cache(async (): Promise<string | null> => {
   if (!user) return null
   return user.id
 })
+
+/**
+ * Get the effective user ID (handles impersonation)
+ *
+ * Returns the impersonated user's ID if currently impersonating,
+ * otherwise returns the actual authenticated user's ID.
+ *
+ * Use this in data fetching where you want to respect impersonation context.
+ *
+ * Usage:
+ * ```typescript
+ * const effectiveUserId = await getEffectiveUserId()
+ * // Use this for data queries that should show impersonated user's data
+ * ```
+ */
+export const getEffectiveUserId = cache(async (): Promise<string | null> => {
+  const user = await getCurrentUser()
+  if (!user) return null
+
+  // Check for impersonation session
+  try {
+    const { cookies } = await import('next/headers')
+    const cookieStore = await cookies()
+    const impersonationCookie = cookieStore.get('yi-impersonation-session')
+
+    if (impersonationCookie?.value) {
+      const sessionData = JSON.parse(impersonationCookie.value)
+
+      // Verify the session belongs to current user and hasn't expired
+      if (
+        sessionData.admin_id === user.id &&
+        new Date(sessionData.expires_at) > new Date()
+      ) {
+        return sessionData.target_user_id
+      }
+    }
+  } catch {
+    // If cookie parsing fails, return actual user
+  }
+
+  return user.id
+})
+
+/**
+ * Check if the current session is impersonating
+ *
+ * Returns details about the impersonation if active.
+ */
+export async function getImpersonationInfo(): Promise<{
+  isImpersonating: boolean
+  adminId: string | null
+  targetUserId: string | null
+}> {
+  const user = await getCurrentUser()
+  if (!user) {
+    return { isImpersonating: false, adminId: null, targetUserId: null }
+  }
+
+  try {
+    const { cookies } = await import('next/headers')
+    const cookieStore = await cookies()
+    const impersonationCookie = cookieStore.get('yi-impersonation-session')
+
+    if (impersonationCookie?.value) {
+      const sessionData = JSON.parse(impersonationCookie.value)
+
+      if (
+        sessionData.admin_id === user.id &&
+        new Date(sessionData.expires_at) > new Date()
+      ) {
+        return {
+          isImpersonating: true,
+          adminId: sessionData.admin_id,
+          targetUserId: sessionData.target_user_id,
+        }
+      }
+    }
+  } catch {
+    // Cookie parsing failed
+  }
+
+  return { isImpersonating: false, adminId: null, targetUserId: null }
+}

@@ -1,6 +1,17 @@
 {
-  "project": "yi-connect-aaa-enhancements",
+  "project": "yi-connect",
   "created": "2026-01-02",
+  "updated": "2026-01-04",
+  "feature_areas": {
+    "aaa-enhancements": {
+      "status": "complete",
+      "description": "AAA module enhancements for Pathfinder 2026"
+    },
+    "admin-tools": {
+      "status": "in-progress",
+      "description": "National/Super Admin administrative tools"
+    }
+  },
   "features": [
     {
       "id": "health-card",
@@ -139,6 +150,113 @@
         "Select a template and verify it fills the form",
         "Verify template source attribution shown"
       ]
+    },
+    {
+      "id": "user-impersonation",
+      "name": "User Impersonation System",
+      "feature_area": "admin-tools",
+      "description": "Allow National/Super Admins to temporarily assume any user's identity for debugging, QA testing, real-time support, and permission verification. Full action capability with hidden audit logging.",
+      "priority": 5,
+      "status": "not-started",
+      "complexity": "high",
+      "spec_document": "docs/SPEC-user-impersonation.md",
+      "phases": [
+        {
+          "id": "impersonation-mvp",
+          "name": "Phase 1: Core Infrastructure (MVP)",
+          "status": "not-started",
+          "items": [
+            "Database schema & migrations (impersonation_sessions, impersonation_action_log)",
+            "Basic start/end impersonation server actions",
+            "Visual banner component",
+            "Simple user selector",
+            "Middleware integration for impersonation context"
+          ]
+        },
+        {
+          "id": "impersonation-ux",
+          "name": "Phase 2: Enhanced UX",
+          "status": "not-started",
+          "items": [
+            "Role-based selection flow (pick role → pick user)",
+            "Recent users list with persistence",
+            "Configurable timeout settings (15min/30min/1hr/4hr)",
+            "Session extension functionality",
+            "Role cycling (prev/next user of same role)"
+          ]
+        },
+        {
+          "id": "impersonation-audit",
+          "name": "Phase 3: Audit & Analytics",
+          "status": "not-started",
+          "items": [
+            "Audit log viewer page (/admin/impersonation-audit)",
+            "Action-level logging during impersonation",
+            "Analytics dashboard (most impersonated users, frequency, duration)",
+            "Export functionality for audit logs"
+          ]
+        }
+      ],
+      "files_to_create": [
+        "supabase/migrations/[timestamp]_impersonation_system.sql - Database schema",
+        "types/impersonation.ts - Type definitions",
+        "app/actions/impersonation.ts - Server actions",
+        "lib/data/impersonation.ts - Data fetching layer",
+        "contexts/impersonation-context.tsx - React context",
+        "hooks/use-impersonation.ts - Hook for state/actions",
+        "components/admin/impersonation-banner.tsx - Top banner",
+        "components/admin/impersonation-selector.tsx - Role-based selector",
+        "components/admin/recent-impersonations.tsx - Quick access dropdown",
+        "components/admin/impersonation-analytics.tsx - Analytics dashboard",
+        "app/(dashboard)/admin/impersonation-audit/page.tsx - Audit log viewer"
+      ],
+      "files_to_modify": [
+        "lib/auth.ts - Add getEffectiveUser() that checks impersonation",
+        "middleware.ts - Inject impersonation context from cookie",
+        "lib/supabase/server.ts - Pass impersonated user ID for RLS",
+        "components/layouts/dashboard-header.tsx - Add banner slot",
+        "app/(dashboard)/admin/users/[id]/page.tsx - Add Impersonate button"
+      ],
+      "test_steps": [
+        "Login as Super Admin or National Admin",
+        "Navigate to Admin > Users, find a user, click 'Impersonate'",
+        "Verify impersonation banner appears at top of screen",
+        "Navigate to a page with user-specific data (e.g., Events)",
+        "Verify data shown matches impersonated user's permissions",
+        "Perform an action (e.g., create an event)",
+        "Verify action is attributed to impersonated user in normal view",
+        "Verify action is logged in impersonation audit log",
+        "Click 'End Impersonation' in banner",
+        "Verify return to admin's normal view",
+        "Navigate to Admin > Impersonation Audit",
+        "Verify session and actions are logged correctly",
+        "Test session timeout by waiting for configured duration",
+        "Verify auto-end after timeout with proper logging",
+        "Test role-based user selection flow",
+        "Test quick-switch between users of same role",
+        "Test recent users list persistence",
+        "Test impersonation analytics dashboard"
+      ],
+      "security_requirements": [
+        "Only hierarchy_level >= 6 can impersonate",
+        "Cannot impersonate users with >= own hierarchy level",
+        "Cannot impersonate self",
+        "All impersonation activity is immutably logged",
+        "Impersonation cookie is encrypted and httpOnly",
+        "Session validation on every request"
+      ],
+      "interview_decisions": {
+        "primary_goals": ["debugging", "qa_testing", "realtime_support", "permission_verification"],
+        "action_scope": "full_action_capability",
+        "audit_trail": "user_attribution_with_hidden_admin_log",
+        "user_selection": "role_based_quick_access",
+        "session_timeout": "configurable_15min_30min_1hr_4hr",
+        "visual_indicator": "persistent_top_banner",
+        "blocked_actions": "none_full_trust_model",
+        "who_can_impersonate": "national_admin_and_super_admin_only",
+        "audit_visibility": "all_national_admins",
+        "quick_switch": "recent_list_plus_role_cycling"
+      }
     }
   ]
 }

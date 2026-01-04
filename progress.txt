@@ -1,6 +1,113 @@
 # Yi Connect - Progress Tracker
 
-## Current Session: 2026-01-04 - Activity Templates Library
+## Current Session: 2026-01-04 - User Impersonation System (Planning)
+
+### Objective
+Allow National/Super Admins to temporarily assume any user's identity for debugging, QA testing, real-time support, and permission verification.
+
+### Interview Conducted
+Comprehensive requirements interview completed with 11 questions covering:
+- Primary use cases
+- Action scope (view-only vs full)
+- Audit trail approach
+- User role structure
+- User selection UX
+- Session management
+- Visual indicators
+- Blocked actions
+- Permission model
+- Audit visibility
+- Quick-switch features
+- Success criteria
+
+### Key Decisions Made
+
+| Aspect | Decision | Rationale |
+|--------|----------|-----------|
+| **Primary Goals** | All 4 use cases (debugging, QA, support, permission verification) | Comprehensive admin tool |
+| **Action Scope** | Full action capability | Can perform any action the user could |
+| **Audit Trail** | User attribution with hidden admin log | Actions appear as user, separate audit tracks admin |
+| **User Selection** | Role-based quick access | Pick role → then pick user |
+| **Session Timeout** | Configurable (15min/30min/1hr/4hr) | Different use cases need different durations |
+| **Visual Indicator** | Persistent top banner | Clear but not intrusive |
+| **Blocked Actions** | None | Full trust model for National/Super Admin |
+| **Who Can Impersonate** | National Admin + Super Admin only | Restricted to highest trust levels |
+| **Audit Visibility** | All National Admins can view | Peer transparency/accountability |
+| **Quick-Switch** | Recent list + role cycling | Power user efficiency |
+| **Success Criteria** | Complete with analytics | Full feature set including usage analytics |
+
+### Existing Infrastructure Verified
+- User/role hierarchy exists (levels 0-7)
+- `get_user_hierarchy_level()` function available
+- RLS policies using hierarchy in place
+- Admin user management at `/admin/users`
+- Supabase Auth integration configured
+- Server Actions pattern established
+- Audit logging pattern exists (user_role_changes)
+
+### Documents Created
+1. **`docs/SPEC-user-impersonation.md`** - Full technical specification
+   - Executive summary
+   - Business requirements
+   - 17 functional requirements (FR-001 to FR-017)
+   - Technical architecture (virtual impersonation pattern)
+   - Database schema (3 tables)
+   - RLS policies
+   - Key database functions
+   - File structure
+   - UI specifications (banner, selector, audit viewer)
+   - Integration points
+   - Testing plan
+   - Security considerations
+   - Implementation phases
+
+2. **`features.json`** - Updated with impersonation feature
+   - 3 implementation phases defined
+   - 18 test steps documented
+   - 6 security requirements listed
+   - All interview decisions recorded
+
+### Implementation Phases Planned
+
+**Phase 1: Core Infrastructure (MVP)**
+- Database schema & migrations
+- Basic start/end impersonation
+- Visual banner
+- Simple user selector
+- Middleware integration
+
+**Phase 2: Enhanced UX**
+- Role-based selection flow
+- Recent users list
+- Configurable timeout
+- Session extension
+- Role cycling (prev/next)
+
+**Phase 3: Audit & Analytics**
+- Audit log viewer
+- Action-level logging
+- Analytics dashboard
+- Export functionality
+
+### Next Steps
+- Begin Phase 1 implementation when approved
+- Start with database migration
+- Then server actions
+- Then UI components
+
+### 2026-01-04 - Session End
+- **Accomplished:** Complete requirements interview (11 questions) and spec documentation for User Impersonation System
+- **Documents Created:**
+  - `docs/SPEC-user-impersonation.md` - Full technical spec with 17 functional requirements
+  - Updated `features.json` with new feature, 3 phases, 18 test steps
+  - Updated `progress.txt` with all decisions
+- **Feature Status:** `not-started` (planning complete, ready for implementation)
+- **Blockers:** None - awaiting user approval to begin implementation
+- **Next:** Start Phase 1 - Database migration, server actions, banner component, basic selector
+
+---
+
+## Previous Session: 2026-01-04 - Activity Templates Library
 
 ### Objective
 Let chairs browse and pick from a library of proven activities across verticals

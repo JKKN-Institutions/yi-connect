@@ -90,13 +90,18 @@
       "name": "Stretch Goals Section",
       "description": "Add optional bonus activities beyond core AAA (4th awareness, 3rd action, etc.)",
       "priority": 3,
-      "status": "not-started",
+      "status": "self-verified",
       "complexity": "medium",
-      "files_to_modify": [
-        "types/aaa.ts",
-        "components/pathfinder/aaa-plan-form.tsx",
-        "supabase/migrations - optional columns"
+      "files_modified": [
+        "types/aaa.ts - Added stretch goal fields to AAAPlan, VerticalAAAStatus, PathfinderDashboard",
+        "lib/validations/aaa.ts - Added Zod schemas for stretch goal fields",
+        "lib/data/aaa.ts - Added dashboard calculations for stretch goals",
+        "components/pathfinder/aaa-plan-form.tsx - Added toggle buttons and form sections"
       ],
+      "files_created": [
+        "supabase/migrations/20260104000001_aaa_stretch_goals.sql - Database columns for stretch goals"
+      ],
+      "implementation_notes": "Toggle buttons allow adding optional Awareness 4, Action 3, and Advocacy 2. Each stretch activity includes full depth metrics (target attendance, engagement goal, impact measures). Build verified passing.",
       "test_steps": [
         "Navigate to Create AAA Plan page",
         "Verify 'Add Stretch Goal' button appears",

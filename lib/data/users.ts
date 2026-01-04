@@ -45,7 +45,7 @@ export const getUsers = cache(
         updated_at,
         approved_at,
         approved_by,
-        chapter:chapters(
+        chapter:chapters!profiles_chapter_id_fkey(
           id,
           name,
           location
@@ -238,7 +238,7 @@ export const getUserById = cache(async (id: string): Promise<UserFull | null> =>
     .select(
       `
       *,
-      chapter:chapters(
+      chapter:chapters!profiles_chapter_id_fkey(
         id,
         name,
         location

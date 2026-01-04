@@ -72,12 +72,12 @@ export function useUserRoles() {
         console.log('[useUserRoles] Fetching roles via RPC...');
         const result = await withTimeout(
           (async () => {
-            return await supabase.rpc('get_user_roles', {
+            return await supabase.rpc('get_user_roles_detailed', {
               p_user_id: session.user.id
             });
           })(),
           5000,
-          'get_user_roles RPC'
+          'get_user_roles_detailed RPC'
         );
 
         const { data: userRoles, error: rolesError } = result;

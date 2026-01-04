@@ -100,14 +100,15 @@ export const getUserProfile = cache(async () => {
   // Fetch profile and chapter separately to avoid auth.users permission issues
   const { data: profile } = await supabase
     .from('profiles')
-    .select('*, chapter:chapters(*)')
+    .select('*, chapter:chapters!profiles_chapter_id_fkey(*)')
     .eq('id', user.id)
     .single()
 
   if (!profile) return null
 
   // Use the secure database function to get roles
-  const { data: userRoles } = await supabase.rpc('get_user_roles', {
+  // Note: get_user_roles_detailed returns role_id, role_name, hierarchy_level, permissions
+  const { data: userRoles } = await supabase.rpc('get_user_roles_detailed', {
     p_user_id: user.id
   })
 
@@ -133,7 +134,7 @@ export async function requireRole(allowedRoles: string[]) {
   const supabase = await createServerSupabaseClient()
 
   // Use the secure database function to avoid permission errors with auth.users
-  const { data: userRoles, error } = await supabase.rpc('get_user_roles', {
+  const { data: userRoles, error } = await supabase.rpc('get_user_roles_detailed', {
     p_user_id: user.id
   })
 
@@ -188,7 +189,7 @@ export async function hasPermission(
   const supabase = await createServerSupabaseClient()
 
   // Get user roles with permissions
-  const { data: userRoles, error } = await supabase.rpc('get_user_roles', {
+  const { data: userRoles, error } = await supabase.rpc('get_user_roles_detailed', {
     p_user_id: user.id
   })
 
@@ -327,7 +328,7 @@ export const getUserHierarchyLevel = cache(async (): Promise<number> => {
 
   const supabase = await createServerSupabaseClient()
 
-  const { data: userRoles } = await supabase.rpc('get_user_roles', {
+  const { data: userRoles } = await supabase.rpc('get_user_roles_detailed', {
     p_user_id: user.id
   })
 

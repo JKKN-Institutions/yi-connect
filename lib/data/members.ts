@@ -542,7 +542,7 @@ export const getMembers = cache(
     const rolesMap = new Map<string, Array<{ role_name: string; hierarchy_level: number }>>();
 
     for (const memberId of memberIds) {
-      const { data: roles } = await supabase.rpc('get_user_roles', {
+      const { data: roles } = await supabase.rpc('get_user_roles_detailed', {
         p_user_id: memberId
       });
       rolesMap.set(memberId, roles || []);

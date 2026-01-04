@@ -178,7 +178,9 @@
         {
           "id": "impersonation-ux",
           "name": "Phase 2: Enhanced UX",
-          "status": "not-started",
+          "status": "self-verified",
+          "completed_at": "2026-01-04",
+          "notes": "UI components enhanced. Parent components need to pass recentUsers, roleOptions to selector and roleCycleUsers to banner.",
           "items": [
             "Role-based selection flow (pick role → pick user)",
             "Recent users list with persistence",

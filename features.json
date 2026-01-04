@@ -7,7 +7,9 @@
       "name": "Health Card Activity Reporting",
       "description": "Activity reporting system where EC Chairs/Vertical Heads log completed activities with participation counts (EC and Non-EC members). Links to verticals for tracking.",
       "priority": 0,
-      "status": "self-verified",
+      "status": "deployed-awaiting-user-test",
+      "deployed_at": "2026-01-04",
+      "deployment_notes": "Code deployed to production. Demo login blocked (yi-demo.com fictional). User must test with Google OAuth (director@jkkn.ac.in).",
       "complexity": "high",
       "files_to_modify": [
         "types/health-card.ts - new types",

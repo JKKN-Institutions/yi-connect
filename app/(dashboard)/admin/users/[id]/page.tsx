@@ -19,10 +19,11 @@ import {
   Calendar,
   User,
   Building2,
-  Activity
+  Activity,
+  UserCog
 } from 'lucide-react'
 
-import { requireRole } from '@/lib/auth'
+import { requireRole, getUserHierarchyLevel } from '@/lib/auth'
 import { getUserById } from '@/lib/data/users'
 import { Button } from '@/components/ui/button'
 import {
@@ -36,6 +37,7 @@ import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
+import { ImpersonateButton } from '@/components/admin/impersonation-selector'
 
 interface PageProps {
   params: Promise<{
@@ -59,6 +61,9 @@ async function UserDetailContent({ paramsPromise }: { paramsPromise: Promise<{ i
   // Require Super Admin or National Admin
   await requireRole(['Super Admin', 'National Admin'])
 
+  // Get admin's hierarchy level for impersonation check
+  const adminHierarchyLevel = await getUserHierarchyLevel()
+
   const user = await getUserById(params.id)
 
   if (!user) {
@@ -70,6 +75,14 @@ async function UserDetailContent({ paramsPromise }: { paramsPromise: Promise<{ i
     .map((n) => n[0])
     .join('')
     .toUpperCase()
+
+  // Check if admin can impersonate this user
+  // Conditions: Admin level >= 6 and higher than user's level
+  const canImpersonate =
+    adminHierarchyLevel >= 6 && user.hierarchy_level < adminHierarchyLevel
+
+  // Get primary role name for impersonation
+  const primaryRole = user.roles[0]?.role_name || 'No Role'
 
   return (
     <div className='flex flex-1 flex-col gap-6 p-6'>
@@ -285,6 +298,18 @@ async function UserDetailContent({ paramsPromise }: { paramsPromise: Promise<{ i
               <CardTitle>Quick Actions</CardTitle>
             </CardHeader>
             <CardContent className='space-y-2'>
+              {canImpersonate && (
+                <ImpersonateButton
+                  userId={user.id}
+                  userName={user.full_name}
+                  userRole={primaryRole}
+                  userChapter={user.chapter?.name}
+                  userEmail={user.email}
+                  userAvatar={user.avatar_url}
+                  variant='outline'
+                  className='w-full justify-start'
+                />
+              )}
               <Button variant='outline' className='w-full justify-start' asChild>
                 <Link href={`/admin/users/${user.id}/edit`}>
                   <Pencil className='mr-2 h-4 w-4' />

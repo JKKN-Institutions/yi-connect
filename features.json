@@ -164,8 +164,9 @@
         {
           "id": "impersonation-mvp",
           "name": "Phase 1: Core Infrastructure (MVP)",
-          "status": "deployed-awaiting-test",
+          "status": "complete",
           "deployed_at": "2026-01-04",
+          "verified_at": "2026-01-04",
           "items": [
             "Database schema & migrations (impersonation_sessions, impersonation_action_log)",
             "Basic start/end impersonation server actions",

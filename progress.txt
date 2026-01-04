@@ -50,14 +50,23 @@ Complete Health Card feature for activity logging by EC Chairs/Vertical Heads
 - `app/(dashboard)/pathfinder/health-card/new/page.tsx`
 - `app/(dashboard)/pathfinder/health-card/[id]/page.tsx`
 
-### Next Steps
-- Deploy to production and test on live site
-- User to verify Health Card workflow:
-  1. Navigate to /pathfinder/health-card
-  2. Click "Log Activity"
-  3. Fill form with activity details
-  4. Verify entry appears in list
-  5. Check Pathfinder Dashboard shows "Activities Logged" stat
+### Deployment Status - COMPLETE ✓
+- **Commit**: `6f3bdbc` - feat(health-card): Integrate activity stats into AAA Dashboard
+- **Pushed**: 2026-01-04
+- **Vercel Build**: READY (dpl_5ShesKYv27ynSQJqELc1LmiS9VGt)
+- **Production URL**: https://yi-connect-app.vercel.app
+
+### Testing Notes
+- Demo email login shows "invalid" error (email validation issue - user exists in Supabase)
+- Google OAuth login required for production testing
+- Demo user `demo-chair@yi-demo.com` exists in auth.users (66 total users)
+
+### User Verification Steps
+1. Login with Google (director@jkkn.ac.in)
+2. Navigate to /pathfinder - see new "Activities Logged" card in dashboard
+3. Navigate to /pathfinder/health-card - test form submission
+4. Verify entry appears in list with correct vertical
+5. Check dashboard stats update
 
 ---
 

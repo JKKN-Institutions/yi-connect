@@ -15,12 +15,9 @@ import {
   Shield,
   Mail,
   Phone,
-  MapPin,
   Calendar,
-  User,
   Building2,
   Activity,
-  UserCog
 } from 'lucide-react'
 
 import { requireRole, getUserHierarchyLevel } from '@/lib/auth'
@@ -37,7 +34,7 @@ import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
-import { ImpersonateButton } from '@/components/admin/impersonation-selector'
+import { ImpersonateButtonWrapper } from '@/components/admin/impersonate-button-server'
 
 interface PageProps {
   params: Promise<{
@@ -299,7 +296,7 @@ async function UserDetailContent({ paramsPromise }: { paramsPromise: Promise<{ i
             </CardHeader>
             <CardContent className='space-y-2'>
               {canImpersonate && (
-                <ImpersonateButton
+                <ImpersonateButtonWrapper
                   userId={user.id}
                   userName={user.full_name}
                   userRole={primaryRole}

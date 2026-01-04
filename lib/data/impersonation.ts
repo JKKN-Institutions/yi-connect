@@ -22,6 +22,7 @@ import type {
   ImpersonationAuditSession,
   ImpersonationAuditFilters,
   ImpersonationActionLog,
+  ImpersonationAnalytics,
 } from '@/types/impersonation'
 
 /**
@@ -367,6 +368,76 @@ export async function getImpersonationActionLog(
 }
 
 /**
+ * Get users with the same role for role cycling in impersonation banner
+ *
+ * Returns users ordered by name for easy navigation.
+ * Note: Not wrapped in cache() due to dynamic parameters.
+ */
+export async function getUsersForRoleCycling(
+  roleName: string,
+  currentUserId: string
+): Promise<{ users: { id: string; name: string }[]; currentIndex: number }> {
+  const user = await getCurrentUser()
+  if (!user) return { users: [], currentIndex: 0 }
+
+  const hierarchyLevel = await getUserHierarchyLevel()
+  if (hierarchyLevel < 6) return { users: [], currentIndex: 0 }
+
+  const supabase = await createServerSupabaseClient()
+
+  // Get all users with this role who have lower hierarchy level than admin
+  const { data, error } = await supabase
+    .from('profiles')
+    .select(`
+      id,
+      full_name,
+      user_roles!inner (
+        role:roles!inner (
+          name,
+          hierarchy_level
+        )
+      )
+    `)
+    .neq('id', user.id) // Exclude admin
+    .order('full_name', { ascending: true })
+
+  if (error) {
+    console.error('Error fetching role cycle users:', error)
+    return { users: [], currentIndex: 0 }
+  }
+
+  // Filter users by role and hierarchy level
+  const users: { id: string; name: string }[] = []
+
+  for (const profile of data || []) {
+    const userRoles = profile.user_roles as unknown as Array<{ role: { name: string; hierarchy_level: number } }>
+    if (!userRoles || userRoles.length === 0) continue
+
+    // Check if user has the target role
+    const hasTargetRole = userRoles.some((r) => r.role.name === roleName)
+    if (!hasTargetRole) continue
+
+    // Get highest role to check hierarchy
+    const highestRole = userRoles.reduce((max, r) =>
+      r.role.hierarchy_level > max.role.hierarchy_level ? r : max
+    )
+
+    // Only include users with lower hierarchy level
+    if (highestRole.role.hierarchy_level >= hierarchyLevel) continue
+
+    users.push({
+      id: profile.id,
+      name: profile.full_name || 'Unknown',
+    })
+  }
+
+  // Find current index
+  const currentIndex = users.findIndex((u) => u.id === currentUserId)
+
+  return { users, currentIndex: currentIndex >= 0 ? currentIndex : 0 }
+}
+
+/**
  * Get user details for impersonation target display
  *
  * Note: Not wrapped in cache() due to dynamic userId parameter
@@ -416,5 +487,258 @@ export async function getImpersonationTargetDetails(userId: string) {
     avatar_url: profile.avatar_url,
     role: highestRole?.role.name || 'Member',
     chapter: member?.chapter?.name || null,
+  }
+}
+
+/**
+ * Get impersonation analytics data
+ *
+ * Aggregates session data for analytics dashboard.
+ * Note: Not wrapped in cache() due to time-sensitive calculations.
+ */
+export async function getImpersonationAnalytics(): Promise<ImpersonationAnalytics | null> {
+  const user = await getCurrentUser()
+  if (!user) return null
+
+  const hierarchyLevel = await getUserHierarchyLevel()
+  if (hierarchyLevel < 6) return null
+
+  const supabase = await createServerSupabaseClient()
+
+  // Calculate date boundaries
+  const now = new Date()
+  const startOfWeek = new Date(now)
+  startOfWeek.setDate(now.getDate() - now.getDay())
+  startOfWeek.setHours(0, 0, 0, 0)
+
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+  const thirtyDaysAgo = new Date(now)
+  thirtyDaysAgo.setDate(now.getDate() - 30)
+
+  // Fetch all sessions
+  const { data: allSessions, error: sessionsError } = await supabase
+    .from('impersonation_sessions')
+    .select(`
+      id,
+      admin_id,
+      target_user_id,
+      started_at,
+      ended_at,
+      actions_taken,
+      admin:profiles!impersonation_sessions_admin_id_fkey (
+        full_name,
+        email
+      ),
+      target:profiles!impersonation_sessions_target_user_id_fkey (
+        full_name,
+        email
+      )
+    `)
+    .order('started_at', { ascending: false })
+
+  if (sessionsError) {
+    console.error('Error fetching sessions for analytics:', sessionsError)
+    return null
+  }
+
+  const sessions = allSessions || []
+
+  // Calculate summary stats
+  const totalSessions = sessions.length
+  const sessionsThisWeek = sessions.filter(
+    (s) => new Date(s.started_at) >= startOfWeek
+  ).length
+  const sessionsThisMonth = sessions.filter(
+    (s) => new Date(s.started_at) >= startOfMonth
+  ).length
+  const totalActions = sessions.reduce((sum, s) => sum + (s.actions_taken || 0), 0)
+
+  // Calculate average duration (only for ended sessions)
+  const completedSessions = sessions.filter((s) => s.ended_at)
+  const avgDuration =
+    completedSessions.length > 0
+      ? completedSessions.reduce((sum, s) => {
+          const start = new Date(s.started_at).getTime()
+          const end = new Date(s.ended_at!).getTime()
+          return sum + (end - start) / 60000
+        }, 0) / completedSessions.length
+      : 0
+
+  // Unique users impersonated
+  const uniqueTargetIds = new Set(sessions.map((s) => s.target_user_id))
+  const uniqueAdminIds = new Set(sessions.map((s) => s.admin_id))
+
+  // Most impersonated users (top 10)
+  const userCounts = new Map<string, { count: number; user: { full_name: string; email: string } | null }>()
+  for (const session of sessions) {
+    const existing = userCounts.get(session.target_user_id)
+    if (existing) {
+      existing.count++
+    } else {
+      userCounts.set(session.target_user_id, {
+        count: 1,
+        user: session.target as unknown as { full_name: string; email: string } | null,
+      })
+    }
+  }
+
+  // Get roles for most impersonated users
+  const topUserIds = [...userCounts.entries()]
+    .sort((a, b) => b[1].count - a[1].count)
+    .slice(0, 10)
+    .map(([id]) => id)
+
+  // Fetch roles for top users
+  const { data: userRoles } = await supabase
+    .from('user_roles')
+    .select(`
+      user_id,
+      role:roles (name)
+    `)
+    .in('user_id', topUserIds)
+
+  const userRoleMap = new Map<string, string>()
+  for (const ur of userRoles || []) {
+    const roleData = ur.role as unknown as { name: string } | { name: string }[] | null
+    let roleName = 'Member'
+    if (Array.isArray(roleData)) {
+      roleName = roleData[0]?.name || 'Member'
+    } else if (roleData) {
+      roleName = roleData.name || 'Member'
+    }
+    userRoleMap.set(ur.user_id, roleName)
+  }
+
+  const mostImpersonatedUsers = [...userCounts.entries()]
+    .sort((a, b) => b[1].count - a[1].count)
+    .slice(0, 10)
+    .map(([userId, data]) => ({
+      user_id: userId,
+      user_name: data.user?.full_name || 'Unknown',
+      user_email: data.user?.email || '',
+      user_role: userRoleMap.get(userId) || 'Member',
+      count: data.count,
+    }))
+
+  // Most active admins (top 10)
+  const adminStats = new Map<
+    string,
+    { sessionCount: number; totalActions: number; admin: { full_name: string; email: string } | null }
+  >()
+  for (const session of sessions) {
+    const existing = adminStats.get(session.admin_id)
+    if (existing) {
+      existing.sessionCount++
+      existing.totalActions += session.actions_taken || 0
+    } else {
+      adminStats.set(session.admin_id, {
+        sessionCount: 1,
+        totalActions: session.actions_taken || 0,
+        admin: session.admin as unknown as { full_name: string; email: string } | null,
+      })
+    }
+  }
+
+  const mostActiveAdmins = [...adminStats.entries()]
+    .sort((a, b) => b[1].sessionCount - a[1].sessionCount)
+    .slice(0, 10)
+    .map(([adminId, data]) => ({
+      admin_id: adminId,
+      admin_name: data.admin?.full_name || 'Unknown',
+      admin_email: data.admin?.email || '',
+      session_count: data.sessionCount,
+      total_actions: data.totalActions,
+    }))
+
+  // Sessions by day (last 30 days)
+  const recentSessions = sessions.filter(
+    (s) => new Date(s.started_at) >= thirtyDaysAgo
+  )
+
+  const dailyMap = new Map<string, { count: number; actions: number }>()
+
+  // Initialize all 30 days
+  for (let i = 0; i < 30; i++) {
+    const date = new Date(now)
+    date.setDate(now.getDate() - i)
+    const dateStr = date.toISOString().split('T')[0]
+    dailyMap.set(dateStr, { count: 0, actions: 0 })
+  }
+
+  // Fill in actual data
+  for (const session of recentSessions) {
+    const dateStr = session.started_at.split('T')[0]
+    const existing = dailyMap.get(dateStr)
+    if (existing) {
+      existing.count++
+      existing.actions += session.actions_taken || 0
+    }
+  }
+
+  const sessionsByDay = [...dailyMap.entries()]
+    .map(([date, data]) => ({
+      date,
+      count: data.count,
+      actions: data.actions,
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date))
+
+  // Sessions by role
+  const roleCountMap = new Map<string, number>()
+  for (const user of mostImpersonatedUsers) {
+    const existing = roleCountMap.get(user.user_role) || 0
+    roleCountMap.set(user.user_role, existing + user.count)
+  }
+
+  // For sessions not in top 10 users, we need to aggregate by role
+  // Get all session target roles
+  const allTargetIds = [...uniqueTargetIds]
+  const { data: allUserRoles } = await supabase
+    .from('user_roles')
+    .select(`
+      user_id,
+      role:roles (name)
+    `)
+    .in('user_id', allTargetIds)
+
+  const allUserRoleMap = new Map<string, string>()
+  for (const ur of allUserRoles || []) {
+    const roleData = ur.role as unknown as { name: string } | { name: string }[] | null
+    let roleName = 'Member'
+    if (Array.isArray(roleData)) {
+      roleName = roleData[0]?.name || 'Member'
+    } else if (roleData) {
+      roleName = roleData.name || 'Member'
+    }
+    allUserRoleMap.set(ur.user_id, roleName)
+  }
+
+  // Recalculate by role with all users
+  const fullRoleCountMap = new Map<string, number>()
+  for (const session of sessions) {
+    const role = allUserRoleMap.get(session.target_user_id) || 'Member'
+    const existing = fullRoleCountMap.get(role) || 0
+    fullRoleCountMap.set(role, existing + 1)
+  }
+
+  const sessionsByRole = [...fullRoleCountMap.entries()]
+    .map(([role_name, count]) => ({
+      role_name,
+      count,
+    }))
+    .sort((a, b) => b.count - a.count)
+
+  return {
+    total_sessions: totalSessions,
+    sessions_this_week: sessionsThisWeek,
+    sessions_this_month: sessionsThisMonth,
+    total_actions: totalActions,
+    avg_duration_minutes: Math.round(avgDuration * 10) / 10,
+    unique_users_impersonated: uniqueTargetIds.size,
+    active_admins_count: uniqueAdminIds.size,
+    most_impersonated_users: mostImpersonatedUsers,
+    most_active_admins: mostActiveAdmins,
+    sessions_by_day: sessionsByDay,
+    sessions_by_role: sessionsByRole,
   }
 }

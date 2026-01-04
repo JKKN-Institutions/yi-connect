@@ -3,6 +3,70 @@
  *
  * Server actions for the user impersonation system.
  * Only National Admin (level 6) and Super Admin (level 7) can use these.
+ *
+ * ## Action Logging Integration Guide
+ *
+ * Other server actions should integrate impersonation logging to track
+ * all changes made during impersonation sessions for audit purposes.
+ *
+ * ### Server Action Integration (Recommended)
+ *
+ * Add logging at the end of your mutation actions:
+ *
+ * ```typescript
+ * import { logImpersonationAction } from '@/app/actions/impersonation'
+ *
+ * export async function createEvent(data: CreateEventData) {
+ *   // Perform the mutation
+ *   const supabase = await createServerSupabaseClient()
+ *   const { data: event, error } = await supabase
+ *     .from('events')
+ *     .insert(data)
+ *     .select()
+ *     .single()
+ *
+ *   if (error) throw error
+ *
+ *   // Log the action (safe to call - no-op if not impersonating)
+ *   await logImpersonationAction({
+ *     action_type: 'create',
+ *     affected_resource_type: 'events',
+ *     affected_resource_id: event.id,
+ *     action_details: {
+ *       title: data.title,
+ *       start_date: data.start_date,
+ *     }
+ *   })
+ *
+ *   return event
+ * }
+ * ```
+ *
+ * ### Client Component Integration
+ *
+ * Use the `useImpersonationLogging` hook for client-side logging:
+ *
+ * ```tsx
+ * import { useImpersonationLogging } from '@/hooks/use-impersonation-logging'
+ *
+ * function EventForm() {
+ *   const { logAction, isImpersonating } = useImpersonationLogging()
+ *
+ *   const handleSubmit = async (data) => {
+ *     const result = await createEvent(data)
+ *     // Hook auto-captures route context
+ *     logAction('create', { title: data.title }, 'events', result.id)
+ *   }
+ * }
+ * ```
+ *
+ * ### Best Practices
+ *
+ * 1. Log AFTER successful mutations, not before
+ * 2. Include enough detail to understand what changed
+ * 3. Don't include sensitive data (passwords, tokens)
+ * 4. Use descriptive action_type: 'create', 'update', 'delete', 'view', 'export'
+ * 5. Always include affected_resource_type for filtering
  */
 
 'use server'
@@ -248,13 +312,66 @@ export async function isImpersonating(): Promise<boolean> {
 }
 
 /**
+ * Action types for impersonation logging
+ */
+export type ImpersonationActionType = 'create' | 'update' | 'delete' | 'view' | 'export' | 'other'
+
+/**
+ * Parameters for logging an impersonation action
+ */
+export interface LogActionParams {
+  /** Type of action performed */
+  action_type: ImpersonationActionType
+  /** Additional details about the action (e.g., { eventName: '...', oldStatus: '...', newStatus: '...' }) */
+  action_details?: Record<string, unknown>
+  /** Resource type affected (e.g., 'members', 'events', 'finances') */
+  affected_resource_type: string
+  /** ID of the affected record (optional for list views or exports) */
+  affected_resource_id?: string
+}
+
+/**
  * Log an action during impersonation
  *
  * Called by other server actions when mutations occur during impersonation.
+ * This function is safe to call even when not impersonating - it will simply return early.
+ *
+ * @example
+ * ```typescript
+ * // In your server action after a successful mutation:
+ * import { logImpersonationAction } from '@/app/actions/impersonation'
+ *
+ * export async function createEvent(data: CreateEventData) {
+ *   // ... perform the create ...
+ *   const newEvent = await supabase.from('events').insert(data).select().single()
+ *
+ *   // Log the action (safe to call, no-op if not impersonating)
+ *   await logImpersonationAction({
+ *     action_type: 'create',
+ *     affected_resource_type: 'events',
+ *     affected_resource_id: newEvent.id,
+ *     action_details: { title: data.title, date: data.start_date }
+ *   })
+ *
+ *   return newEvent
+ * }
+ * ```
  */
 export async function logImpersonationAction(
-  actionType: 'create' | 'update' | 'delete' | 'other',
+  params: LogActionParams
+): Promise<void>
+/**
+ * @deprecated Use object parameter format instead
+ */
+export async function logImpersonationAction(
+  actionType: ImpersonationActionType,
   tableName: string,
+  recordId?: string,
+  payloadSummary?: Record<string, unknown>
+): Promise<void>
+export async function logImpersonationAction(
+  paramsOrActionType: LogActionParams | ImpersonationActionType,
+  tableName?: string,
   recordId?: string,
   payloadSummary?: Record<string, unknown>
 ): Promise<void> {
@@ -262,17 +379,74 @@ export async function logImpersonationAction(
     const session = await getImpersonationSession()
     if (!session) return
 
+    // Handle both old and new call signatures
+    let actionType: ImpersonationActionType
+    let resourceType: string
+    let resourceId: string | undefined
+    let details: Record<string, unknown> | undefined
+
+    if (typeof paramsOrActionType === 'object') {
+      // New object-based signature
+      actionType = paramsOrActionType.action_type
+      resourceType = paramsOrActionType.affected_resource_type
+      resourceId = paramsOrActionType.affected_resource_id
+      details = paramsOrActionType.action_details
+    } else {
+      // Legacy positional signature
+      actionType = paramsOrActionType
+      resourceType = tableName!
+      resourceId = recordId
+      details = payloadSummary
+    }
+
+    // Map 'view' and 'export' to 'other' for DB compatibility
+    const dbActionType = ['view', 'export'].includes(actionType) ? 'other' : actionType
+
     const supabase = await createServerSupabaseClient()
     await supabase.rpc('log_impersonation_action', {
       p_session_id: session.session_id,
-      p_action_type: actionType,
-      p_table_name: tableName,
-      p_record_id: recordId || null,
-      p_payload_summary: payloadSummary || null,
+      p_action_type: dbActionType,
+      p_table_name: resourceType,
+      p_record_id: resourceId || null,
+      p_payload_summary: details ? { ...details, original_action_type: actionType } : null,
     })
   } catch (error) {
     // Don't fail the main action if logging fails
     console.error('Failed to log impersonation action:', error)
+  }
+}
+
+/**
+ * Check if there's an active impersonation and return session details
+ *
+ * Useful for components that want to conditionally show impersonation info
+ * without making repeated cookie checks.
+ */
+export async function getActiveImpersonationDetails(): Promise<{
+  isActive: boolean
+  sessionId: string | null
+  adminId: string | null
+  targetUserId: string | null
+  expiresAt: Date | null
+}> {
+  const session = await getImpersonationSession()
+
+  if (!session) {
+    return {
+      isActive: false,
+      sessionId: null,
+      adminId: null,
+      targetUserId: null,
+      expiresAt: null,
+    }
+  }
+
+  return {
+    isActive: true,
+    sessionId: session.session_id,
+    adminId: session.admin_id,
+    targetUserId: session.target_user_id,
+    expiresAt: new Date(session.expires_at),
   }
 }
 

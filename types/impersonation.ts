@@ -182,21 +182,41 @@ export interface ImpersonationAuditFilters {
  * Analytics summary for impersonation usage
  */
 export interface ImpersonationAnalytics {
+  // Summary stats
   total_sessions: number
+  sessions_this_week: number
+  sessions_this_month: number
   total_actions: number
   avg_duration_minutes: number
+  unique_users_impersonated: number
+  active_admins_count: number
+
+  // Top lists
   most_impersonated_users: {
     user_id: string
     user_name: string
+    user_email: string
+    user_role: string
     count: number
   }[]
-  sessions_by_admin: {
+  most_active_admins: {
     admin_id: string
     admin_name: string
-    count: number
+    admin_email: string
+    session_count: number
+    total_actions: number
   }[]
+
+  // Time series
   sessions_by_day: {
     date: string
+    count: number
+    actions: number
+  }[]
+
+  // Breakdown by role
+  sessions_by_role: {
+    role_name: string
     count: number
   }[]
 }
@@ -248,3 +268,78 @@ export interface ImpersonationCookieData {
 
 export const IMPERSONATION_COOKIE_NAME = 'yi-impersonation-session'
 export const IMPERSONATION_COOKIE_MAX_AGE = 60 * 60 * 4 // 4 hours max
+
+// ============================================================================
+// Export Types
+// ============================================================================
+
+/**
+ * Supported export formats for audit logs
+ */
+export type AuditExportFormat = 'csv' | 'json'
+
+/**
+ * Query parameters for audit log export
+ */
+export interface AuditExportParams {
+  /** Export format: 'csv' or 'json' */
+  format: AuditExportFormat
+  /** Start date filter (ISO string) */
+  dateFrom?: string
+  /** End date filter (ISO string) */
+  dateTo?: string
+  /** Filter by admin who performed impersonation */
+  adminId?: string
+  /** Filter by target user who was impersonated */
+  targetUserId?: string
+  /** Filter by session ID */
+  sessionId?: string
+  /** Include action details in export */
+  includeActions?: boolean
+}
+
+/**
+ * Flattened session entry for export
+ */
+export interface SessionExportEntry {
+  session_id: string
+  admin_id: string
+  admin_name: string
+  admin_email: string
+  target_user_id: string
+  target_user_name: string
+  target_user_email: string
+  target_user_role: string
+  reason: string | null
+  started_at: string
+  ended_at: string | null
+  end_reason: string | null
+  duration_minutes: number | null
+  pages_visited: number
+  actions_taken: number
+}
+
+/**
+ * Action log entry for export
+ */
+export interface ActionExportEntry {
+  action_id: string
+  session_id: string
+  action_type: string
+  resource_type: string
+  resource_id: string | null
+  action_details: string | null
+  executed_at: string
+  admin_name: string
+  target_user_name: string
+}
+
+/**
+ * Combined export response
+ */
+export interface AuditExportResponse {
+  sessions: SessionExportEntry[]
+  actions?: ActionExportEntry[]
+  exportedAt: string
+  filters: Partial<AuditExportParams>
+}

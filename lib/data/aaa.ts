@@ -341,6 +341,16 @@ export async function getPathfinderDashboard(
       ? Math.min(100, Math.round((actualAttendance / targetAttendance) * 100))
       : 0
 
+    // Stretch Goals calculations
+    const hasStretchAwareness = plan?.has_stretch_awareness || false
+    const hasStretchAction = plan?.has_stretch_action || false
+    const hasStretchAdvocacy = plan?.has_stretch_advocacy || false
+    const stretchAwarenessCompleted = hasStretchAwareness && plan?.awareness_4_status === 'completed'
+    const stretchActionCompleted = hasStretchAction && plan?.action_3_status === 'completed'
+    const stretchAdvocacyCompleted = hasStretchAdvocacy && plan?.advocacy_2_status === 'completed'
+    const totalStretchActivities = (hasStretchAwareness ? 1 : 0) + (hasStretchAction ? 1 : 0) + (hasStretchAdvocacy ? 1 : 0)
+    const completedStretchActivities = (stretchAwarenessCompleted ? 1 : 0) + (stretchActionCompleted ? 1 : 0) + (stretchAdvocacyCompleted ? 1 : 0)
+
     return {
       vertical_id: v.id,
       vertical_name: v.name,
@@ -376,6 +386,15 @@ export async function getPathfinderDashboard(
       commitment_signed: !!commitment?.signed_at,
       has_mentor: !!mentor,
       mentor_name: mentor?.mentor_name || null,
+      // Stretch Goals
+      has_stretch_awareness: hasStretchAwareness,
+      has_stretch_action: hasStretchAction,
+      has_stretch_advocacy: hasStretchAdvocacy,
+      stretch_awareness_completed: stretchAwarenessCompleted,
+      stretch_action_completed: stretchActionCompleted,
+      stretch_advocacy_completed: stretchAdvocacyCompleted,
+      total_stretch_activities: totalStretchActivities,
+      completed_stretch_activities: completedStretchActivities,
     }
   })
 
@@ -416,6 +435,11 @@ export async function getPathfinderDashboard(
   // Health Card Stats (Activity Logging)
   const healthStats = await getChapterHealthStats(chapterId, calendarYear)
 
+  // Stretch Goals Summary
+  const verticalsWithStretchGoals = verticalStatuses.filter(v => v.total_stretch_activities > 0).length
+  const dashboardTotalStretchActivities = verticalStatuses.reduce((sum, v) => sum + v.total_stretch_activities, 0)
+  const dashboardCompletedStretchActivities = verticalStatuses.reduce((sum, v) => sum + v.completed_stretch_activities, 0)
+
   return {
     calendar_year: calendarYear,
     chapter_id: chapterId,
@@ -444,6 +468,10 @@ export async function getPathfinderDashboard(
     health_card_total_activities: healthStats?.total_activities || 0,
     health_card_total_participants: healthStats?.total_participants || 0,
     health_card_activities_this_month: healthStats?.activities_this_month || 0,
+    // Stretch Goals Summary
+    verticals_with_stretch_goals: verticalsWithStretchGoals,
+    total_stretch_activities: dashboardTotalStretchActivities,
+    completed_stretch_activities: dashboardCompletedStretchActivities,
     verticals: verticalStatuses,
   }
 }

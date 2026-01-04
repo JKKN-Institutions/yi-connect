@@ -112,6 +112,43 @@ export interface AAAPlan {
   milestone_mar_status: MilestoneStatus
   milestone_mar_notes: string | null
 
+  // ============================================================================
+  // STRETCH GOALS - Optional bonus activities beyond core AAA
+  // ============================================================================
+
+  // Stretch Goal Flags (which stretch goals are enabled)
+  has_stretch_awareness: boolean
+  has_stretch_action: boolean
+  has_stretch_advocacy: boolean
+
+  // Awareness 4 (Optional Stretch)
+  awareness_4_title: string | null
+  awareness_4_description: string | null
+  awareness_4_audience: string | null
+  awareness_4_target_date: string | null
+  awareness_4_status: AAAItemStatus
+  awareness_4_target_attendance: number | null
+  awareness_4_engagement_goal: string | null
+  awareness_4_impact_measures: string | null
+
+  // Action 3 (Optional Stretch)
+  action_3_title: string | null
+  action_3_description: string | null
+  action_3_target: string | null
+  action_3_target_date: string | null
+  action_3_status: AAAItemStatus
+  action_3_event_id: string | null
+  action_3_target_attendance: number | null
+  action_3_engagement_goal: string | null
+  action_3_impact_measures: string | null
+
+  // Advocacy 2 (Optional Stretch)
+  advocacy_2_goal: string | null
+  advocacy_2_target_contact: string | null
+  advocacy_2_approach: string | null
+  advocacy_2_status: AAAItemStatus
+  advocacy_2_outcome: string | null
+
   // Metadata
   status: AAAPlanStatus
   created_by: string
@@ -287,6 +324,16 @@ export interface VerticalAAAStatus {
   // Mentor
   has_mentor: boolean
   mentor_name: string | null
+
+  // Stretch Goals Summary
+  has_stretch_awareness: boolean
+  has_stretch_action: boolean
+  has_stretch_advocacy: boolean
+  stretch_awareness_completed: boolean
+  stretch_action_completed: boolean
+  stretch_advocacy_completed: boolean
+  total_stretch_activities: number // 0-3 (how many stretch goals added)
+  completed_stretch_activities: number // 0-3 (how many stretch goals completed)
 }
 
 export interface PathfinderDashboard {
@@ -326,6 +373,11 @@ export interface PathfinderDashboard {
   health_card_total_activities: number
   health_card_total_participants: number
   health_card_activities_this_month: number
+
+  // Stretch Goals Summary
+  verticals_with_stretch_goals: number
+  total_stretch_activities: number // Total across all verticals
+  completed_stretch_activities: number // Completed stretch activities
 
   // Vertical details
   verticals: VerticalAAAStatus[]
@@ -393,6 +445,34 @@ export interface CreateAAAPlanInput {
   milestone_jan_target?: string
   milestone_feb_target?: string
   milestone_mar_target?: string
+
+  // Stretch Goals (Optional)
+  has_stretch_awareness?: boolean
+  has_stretch_action?: boolean
+  has_stretch_advocacy?: boolean
+
+  // Awareness 4 (Stretch)
+  awareness_4_title?: string
+  awareness_4_description?: string
+  awareness_4_audience?: string
+  awareness_4_target_date?: string
+  awareness_4_target_attendance?: number
+  awareness_4_engagement_goal?: string
+  awareness_4_impact_measures?: string
+
+  // Action 3 (Stretch)
+  action_3_title?: string
+  action_3_description?: string
+  action_3_target?: string
+  action_3_target_date?: string
+  action_3_target_attendance?: number
+  action_3_engagement_goal?: string
+  action_3_impact_measures?: string
+
+  // Advocacy 2 (Stretch)
+  advocacy_2_goal?: string
+  advocacy_2_target_contact?: string
+  advocacy_2_approach?: string
 }
 
 export interface UpdateAAAPlanInput extends Partial<CreateAAAPlanInput> {
@@ -407,6 +487,11 @@ export interface UpdateAAAPlanInput extends Partial<CreateAAAPlanInput> {
   milestone_jan_status?: MilestoneStatus
   milestone_feb_status?: MilestoneStatus
   milestone_mar_status?: MilestoneStatus
+  // Stretch goal status updates
+  awareness_4_status?: AAAItemStatus
+  action_3_status?: AAAItemStatus
+  advocacy_2_status?: AAAItemStatus
+  advocacy_2_outcome?: string
   // Lock first event
   first_event_locked?: boolean
 }

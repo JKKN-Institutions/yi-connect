@@ -24,6 +24,9 @@ import {
   Users,
   BarChart3,
   ChevronDown,
+  Plus,
+  X,
+  Sparkles,
 } from 'lucide-react'
 import { createAAAPlan, updateAAAPlan, lockFirstEventDate } from '@/app/actions/aaa'
 import {
@@ -103,6 +106,11 @@ export function AAAPlanForm({
   const [isPending, startTransition] = useTransition()
   const [isLocking, setIsLocking] = useState(false)
   const isEditing = !!plan
+
+  // Stretch goal toggles
+  const [hasStretchAwareness, setHasStretchAwareness] = useState(plan?.has_stretch_awareness || false)
+  const [hasStretchAction, setHasStretchAction] = useState(plan?.has_stretch_action || false)
+  const [hasStretchAdvocacy, setHasStretchAdvocacy] = useState(plan?.has_stretch_advocacy || false)
 
   // Get current calendar year if not provided
   const currentCalendarYear = calendarYear || new Date().getFullYear()
@@ -185,6 +193,34 @@ export function AAAPlanForm({
       milestone_jan_target: plan?.milestone_jan_target || getStringDefault('milestone_jan_target'),
       milestone_feb_target: plan?.milestone_feb_target || getStringDefault('milestone_feb_target'),
       milestone_mar_target: plan?.milestone_mar_target || getStringDefault('milestone_mar_target'),
+
+      // Stretch Goals
+      has_stretch_awareness: plan?.has_stretch_awareness || false,
+      has_stretch_action: plan?.has_stretch_action || false,
+      has_stretch_advocacy: plan?.has_stretch_advocacy || false,
+
+      // Awareness 4 (Stretch)
+      awareness_4_title: plan?.awareness_4_title || '',
+      awareness_4_description: plan?.awareness_4_description || '',
+      awareness_4_audience: plan?.awareness_4_audience || '',
+      awareness_4_target_date: plan?.awareness_4_target_date || '',
+      awareness_4_target_attendance: plan?.awareness_4_target_attendance || undefined,
+      awareness_4_engagement_goal: plan?.awareness_4_engagement_goal || '',
+      awareness_4_impact_measures: plan?.awareness_4_impact_measures || '',
+
+      // Action 3 (Stretch)
+      action_3_title: plan?.action_3_title || '',
+      action_3_description: plan?.action_3_description || '',
+      action_3_target: plan?.action_3_target || '',
+      action_3_target_date: plan?.action_3_target_date || '',
+      action_3_target_attendance: plan?.action_3_target_attendance || undefined,
+      action_3_engagement_goal: plan?.action_3_engagement_goal || '',
+      action_3_impact_measures: plan?.action_3_impact_measures || '',
+
+      // Advocacy 2 (Stretch)
+      advocacy_2_goal: plan?.advocacy_2_goal || '',
+      advocacy_2_target_contact: plan?.advocacy_2_target_contact || '',
+      advocacy_2_approach: plan?.advocacy_2_approach || '',
     },
   })
 
@@ -713,6 +749,182 @@ export function AAAPlanForm({
                   </CollapsibleContent>
                 </Collapsible>
               </div>
+
+              {/* Stretch Goal: Awareness 4 */}
+              {!hasStretchAwareness ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full border-dashed border-blue-300 text-blue-600 hover:bg-blue-50"
+                  onClick={() => {
+                    setHasStretchAwareness(true)
+                    form.setValue('has_stretch_awareness', true)
+                  }}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  <Sparkles className="h-4 w-4 mr-1" />
+                  Add 4th Awareness (Stretch Goal)
+                </Button>
+              ) : (
+                <div className="space-y-4 p-4 border-2 border-dashed border-blue-300 rounded-lg bg-blue-50/50 dark:bg-blue-950/20">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className="bg-blue-100 text-blue-800">
+                        <Sparkles className="h-3 w-3 mr-1" />
+                        Awareness #4 (Stretch)
+                      </Badge>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="text-muted-foreground hover:text-destructive"
+                      onClick={() => {
+                        setHasStretchAwareness(false)
+                        form.setValue('has_stretch_awareness', false)
+                        form.setValue('awareness_4_title', '')
+                        form.setValue('awareness_4_description', '')
+                        form.setValue('awareness_4_audience', '')
+                        form.setValue('awareness_4_target_date', '')
+                        form.setValue('awareness_4_target_attendance', undefined)
+                        form.setValue('awareness_4_engagement_goal', '')
+                        form.setValue('awareness_4_impact_measures', '')
+                      }}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <FormField
+                      control={form.control}
+                      name="awareness_4_title"
+                      render={({ field }) => (
+                        <FormItem className="sm:col-span-2">
+                          <FormLabel>Session Title</FormLabel>
+                          <FormControl>
+                            <Input placeholder="e.g., Advanced Workshop Series" {...field} value={field.value || ''} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="awareness_4_audience"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Target Audience</FormLabel>
+                          <FormControl>
+                            <Input placeholder="e.g., Community Leaders" {...field} value={field.value || ''} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="awareness_4_target_date"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Target Date</FormLabel>
+                          <FormControl>
+                            <Input type="date" {...field} value={field.value || ''} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="awareness_4_description"
+                      render={({ field }) => (
+                        <FormItem className="sm:col-span-2">
+                          <FormLabel>Description</FormLabel>
+                          <FormControl>
+                            <Textarea
+                              placeholder="Describe the session objectives and format..."
+                              className="min-h-[80px]"
+                              {...field}
+                              value={field.value || ''}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                  {/* Depth Metrics */}
+                  <Collapsible>
+                    <CollapsibleTrigger className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+                      <BarChart3 className="h-4 w-4" />
+                      <span>Depth Metrics</span>
+                      <ChevronDown className="h-4 w-4" />
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="pt-4">
+                      <div className="grid gap-4 sm:grid-cols-3 p-3 bg-muted/50 rounded-md">
+                        <FormField
+                          control={form.control}
+                          name="awareness_4_target_attendance"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="flex items-center gap-1">
+                                <Users className="h-3 w-3" />
+                                Target Attendance
+                              </FormLabel>
+                              <FormControl>
+                                <Input
+                                  type="number"
+                                  min={0}
+                                  placeholder="e.g., 100"
+                                  {...field}
+                                  value={field.value ?? ''}
+                                  onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : undefined)}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="awareness_4_engagement_goal"
+                          render={({ field }) => (
+                            <FormItem className="sm:col-span-2">
+                              <FormLabel>Engagement Goal</FormLabel>
+                              <FormControl>
+                                <Input
+                                  placeholder="What does success look like?"
+                                  {...field}
+                                  value={field.value || ''}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="awareness_4_impact_measures"
+                          render={({ field }) => (
+                            <FormItem className="sm:col-span-3">
+                              <FormLabel>Impact Measures</FormLabel>
+                              <FormControl>
+                                <Textarea
+                                  placeholder="How will you measure impact? (e.g., surveys, quiz scores, sign-ups)"
+                                  className="min-h-[60px]"
+                                  {...field}
+                                  value={field.value || ''}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    </CollapsibleContent>
+                  </Collapsible>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -1008,6 +1220,182 @@ export function AAAPlanForm({
                 </Collapsible>
               </div>
 
+              {/* Stretch Goal: Action 3 */}
+              {!hasStretchAction ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full border-dashed border-orange-300 text-orange-600 hover:bg-orange-50"
+                  onClick={() => {
+                    setHasStretchAction(true)
+                    form.setValue('has_stretch_action', true)
+                  }}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  <Sparkles className="h-4 w-4 mr-1" />
+                  Add 3rd Action (Stretch Goal)
+                </Button>
+              ) : (
+                <div className="space-y-4 p-4 border-2 border-dashed border-orange-300 rounded-lg bg-orange-50/50 dark:bg-orange-950/20">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className="bg-orange-100 text-orange-800">
+                        <Sparkles className="h-3 w-3 mr-1" />
+                        Action #3 (Stretch)
+                      </Badge>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="text-muted-foreground hover:text-destructive"
+                      onClick={() => {
+                        setHasStretchAction(false)
+                        form.setValue('has_stretch_action', false)
+                        form.setValue('action_3_title', '')
+                        form.setValue('action_3_description', '')
+                        form.setValue('action_3_target', '')
+                        form.setValue('action_3_target_date', '')
+                        form.setValue('action_3_target_attendance', undefined)
+                        form.setValue('action_3_engagement_goal', '')
+                        form.setValue('action_3_impact_measures', '')
+                      }}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <FormField
+                      control={form.control}
+                      name="action_3_title"
+                      render={({ field }) => (
+                        <FormItem className="sm:col-span-2">
+                          <FormLabel>Event Title</FormLabel>
+                          <FormControl>
+                            <Input placeholder="e.g., Community Service Day" {...field} value={field.value || ''} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="action_3_target"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Impact Target</FormLabel>
+                          <FormControl>
+                            <Input placeholder="e.g., 300 volunteers" {...field} value={field.value || ''} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="action_3_target_date"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Target Date</FormLabel>
+                          <FormControl>
+                            <Input type="date" {...field} value={field.value || ''} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="action_3_description"
+                      render={({ field }) => (
+                        <FormItem className="sm:col-span-2">
+                          <FormLabel>Description</FormLabel>
+                          <FormControl>
+                            <Textarea
+                              placeholder="Describe the event plan and expected outcomes..."
+                              className="min-h-[80px]"
+                              {...field}
+                              value={field.value || ''}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                  {/* Depth Metrics */}
+                  <Collapsible>
+                    <CollapsibleTrigger className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+                      <BarChart3 className="h-4 w-4" />
+                      <span>Depth Metrics</span>
+                      <ChevronDown className="h-4 w-4" />
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="pt-4">
+                      <div className="grid gap-4 sm:grid-cols-3 p-3 bg-muted/50 rounded-md">
+                        <FormField
+                          control={form.control}
+                          name="action_3_target_attendance"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="flex items-center gap-1">
+                                <Users className="h-3 w-3" />
+                                Target Attendance
+                              </FormLabel>
+                              <FormControl>
+                                <Input
+                                  type="number"
+                                  min={0}
+                                  placeholder="e.g., 300"
+                                  {...field}
+                                  value={field.value ?? ''}
+                                  onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : undefined)}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="action_3_engagement_goal"
+                          render={({ field }) => (
+                            <FormItem className="sm:col-span-2">
+                              <FormLabel>Engagement Goal</FormLabel>
+                              <FormControl>
+                                <Input
+                                  placeholder="What does success look like?"
+                                  {...field}
+                                  value={field.value || ''}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="action_3_impact_measures"
+                          render={({ field }) => (
+                            <FormItem className="sm:col-span-3">
+                              <FormLabel>Impact Measures</FormLabel>
+                              <FormControl>
+                                <Textarea
+                                  placeholder="How will you measure impact? (e.g., beneficiaries, testimonials, coverage)"
+                                  className="min-h-[60px]"
+                                  {...field}
+                                  value={field.value || ''}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    </CollapsibleContent>
+                  </Collapsible>
+                </div>
+              )}
+
               <Separator />
 
               {/* First Event Date */}
@@ -1171,6 +1559,107 @@ export function AAAPlanForm({
                   </FormItem>
                 )}
               />
+
+              {/* Stretch Goal: Advocacy 2 */}
+              {!hasStretchAdvocacy ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full border-dashed border-purple-300 text-purple-600 hover:bg-purple-50"
+                  onClick={() => {
+                    setHasStretchAdvocacy(true)
+                    form.setValue('has_stretch_advocacy', true)
+                  }}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  <Sparkles className="h-4 w-4 mr-1" />
+                  Add 2nd Advocacy (Stretch Goal)
+                </Button>
+              ) : (
+                <div className="space-y-4 p-4 border-2 border-dashed border-purple-300 rounded-lg bg-purple-50/50 dark:bg-purple-950/20">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className="bg-purple-100 text-purple-800">
+                        <Sparkles className="h-3 w-3 mr-1" />
+                        Advocacy #2 (Stretch)
+                      </Badge>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="text-muted-foreground hover:text-destructive"
+                      onClick={() => {
+                        setHasStretchAdvocacy(false)
+                        form.setValue('has_stretch_advocacy', false)
+                        form.setValue('advocacy_2_goal', '')
+                        form.setValue('advocacy_2_target_contact', '')
+                        form.setValue('advocacy_2_approach', '')
+                      }}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <FormField
+                    control={form.control}
+                    name="advocacy_2_goal"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Advocacy Goal</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            placeholder="e.g., Propose environmental policy changes..."
+                            className="min-h-[100px]"
+                            {...field}
+                            value={field.value || ''}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          What additional policy change or systemic improvement are you advocating for?
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <FormField
+                      control={form.control}
+                      name="advocacy_2_target_contact"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Target Contact / Authority</FormLabel>
+                          <FormControl>
+                            <Input
+                              placeholder="e.g., Mayor, State Minister"
+                              {...field}
+                              value={field.value || ''}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                  <FormField
+                    control={form.control}
+                    name="advocacy_2_approach"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Approach / Strategy</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            placeholder="How do you plan to approach and achieve this advocacy goal?"
+                            className="min-h-[80px]"
+                            {...field}
+                            value={field.value || ''}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              )}
             </CardContent>
           </Card>
 

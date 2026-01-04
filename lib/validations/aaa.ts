@@ -76,6 +76,34 @@ export const createAAAPlanSchema = z.object({
   milestone_jan_target: z.string().optional(),
   milestone_feb_target: z.string().optional(),
   milestone_mar_target: z.string().optional(),
+
+  // Stretch Goals (Optional)
+  has_stretch_awareness: z.boolean().optional(),
+  has_stretch_action: z.boolean().optional(),
+  has_stretch_advocacy: z.boolean().optional(),
+
+  // Awareness 4 (Stretch)
+  awareness_4_title: z.string().max(255).optional(),
+  awareness_4_description: z.string().optional(),
+  awareness_4_audience: z.string().max(255).optional(),
+  awareness_4_target_date: z.string().optional(),
+  awareness_4_target_attendance: z.number().int().min(0).optional(),
+  awareness_4_engagement_goal: z.string().optional(),
+  awareness_4_impact_measures: z.string().optional(),
+
+  // Action 3 (Stretch)
+  action_3_title: z.string().max(255).optional(),
+  action_3_description: z.string().optional(),
+  action_3_target: z.string().max(255).optional(),
+  action_3_target_date: z.string().optional(),
+  action_3_target_attendance: z.number().int().min(0).optional(),
+  action_3_engagement_goal: z.string().optional(),
+  action_3_impact_measures: z.string().optional(),
+
+  // Advocacy 2 (Stretch)
+  advocacy_2_goal: z.string().optional(),
+  advocacy_2_target_contact: z.string().max(255).optional(),
+  advocacy_2_approach: z.string().optional(),
 })
 
 export const updateAAAPlanSchema = z.object({
@@ -157,6 +185,38 @@ export const updateAAAPlanSchema = z.object({
 
   // Status
   status: aaaPlanStatusSchema.optional(),
+
+  // Stretch Goals
+  has_stretch_awareness: z.boolean().optional(),
+  has_stretch_action: z.boolean().optional(),
+  has_stretch_advocacy: z.boolean().optional(),
+
+  // Awareness 4 (Stretch)
+  awareness_4_title: z.string().max(255).optional(),
+  awareness_4_description: z.string().optional(),
+  awareness_4_audience: z.string().max(255).optional(),
+  awareness_4_target_date: z.string().optional(),
+  awareness_4_status: aaaItemStatusSchema.optional(),
+  awareness_4_target_attendance: z.number().int().min(0).optional(),
+  awareness_4_engagement_goal: z.string().optional(),
+  awareness_4_impact_measures: z.string().optional(),
+
+  // Action 3 (Stretch)
+  action_3_title: z.string().max(255).optional(),
+  action_3_description: z.string().optional(),
+  action_3_target: z.string().max(255).optional(),
+  action_3_target_date: z.string().optional(),
+  action_3_status: aaaItemStatusSchema.optional(),
+  action_3_target_attendance: z.number().int().min(0).optional(),
+  action_3_engagement_goal: z.string().optional(),
+  action_3_impact_measures: z.string().optional(),
+
+  // Advocacy 2 (Stretch)
+  advocacy_2_goal: z.string().optional(),
+  advocacy_2_target_contact: z.string().max(255).optional(),
+  advocacy_2_approach: z.string().optional(),
+  advocacy_2_status: aaaItemStatusSchema.optional(),
+  advocacy_2_outcome: z.string().optional(),
 })
 
 export const lockFirstEventSchema = z.object({

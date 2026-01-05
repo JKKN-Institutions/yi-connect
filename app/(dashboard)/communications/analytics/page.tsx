@@ -15,6 +15,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getCommunicationAnalytics } from "@/lib/data/communication";
 import { requireRole } from "@/lib/auth";
+import {
+  EngagementOverTimeChart,
+  DeliverySuccessRateChart,
+} from "./communication-analytics-charts";
 
 export const metadata: Metadata = {
   title: "Analytics | Communication Hub",
@@ -55,35 +59,9 @@ export default async function AnalyticsPage() {
           </Suspense>
 
           {/* Engagement Metrics */}
-          <div className="grid gap-6 lg:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle>Engagement Over Time</CardTitle>
-                <CardDescription>
-                  Open and click rates for the last 30 days
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="h-[300px] flex items-center justify-center text-muted-foreground">
-                  <p className="text-sm">Chart placeholder - Integrate with recharts</p>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Delivery Success Rate</CardTitle>
-                <CardDescription>
-                  Successful vs failed deliveries
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="h-[300px] flex items-center justify-center text-muted-foreground">
-                  <p className="text-sm">Chart placeholder - Integrate with recharts</p>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+          <Suspense fallback={<ChartsSkeleton />}>
+            <EngagementChartsSection />
+          </Suspense>
 
           {/* Top Performing Announcements */}
           <Card>
@@ -298,5 +276,62 @@ function ChannelPerformanceSkeleton() {
         ))}
       </CardContent>
     </Card>
+  );
+}
+
+async function EngagementChartsSection() {
+  const analytics = await getCommunicationAnalytics();
+
+  return (
+    <div className="grid gap-6 lg:grid-cols-2">
+      <Card>
+        <CardHeader>
+          <CardTitle>Engagement Over Time</CardTitle>
+          <CardDescription>
+            Open and click rates for the last 30 days
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <EngagementOverTimeChart data={analytics.trends} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Delivery Success Rate</CardTitle>
+          <CardDescription>
+            Successful vs failed deliveries
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <DeliverySuccessRateChart data={analytics.by_channel} />
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function ChartsSkeleton() {
+  return (
+    <div className="grid gap-6 lg:grid-cols-2">
+      <Card>
+        <CardHeader>
+          <Skeleton className="h-6 w-48" />
+          <Skeleton className="h-4 w-64" />
+        </CardHeader>
+        <CardContent>
+          <Skeleton className="h-[300px] w-full" />
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <Skeleton className="h-6 w-48" />
+          <Skeleton className="h-4 w-64" />
+        </CardHeader>
+        <CardContent>
+          <Skeleton className="h-[300px] w-full" />
+        </CardContent>
+      </Card>
+    </div>
   );
 }

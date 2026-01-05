@@ -106,10 +106,6 @@ export const getEvents = cache(
       { count: 'exact' }
     );
 
-    console.log('Fetching events for user:', user.id);
-    console.log('Query filters:', filters);
-    console.log('Query sort:', sort);
-
     // Apply filters
     if (filters?.search) {
       query = query.or(
@@ -156,19 +152,11 @@ export const getEvents = cache(
 
     // Only treat as error if error object has meaningful content
     if (error && error.message) {
-      console.error('Error fetching events:', error);
-      console.error('Error details:', {
-        message: error.message,
-        details: error.details,
-        hint: error.hint,
-        code: error.code
-      });
       throw new Error(`Failed to fetch events: ${error.message}`);
     }
 
     // Handle empty results (no events in database)
     if (!data || data.length === 0) {
-      console.log('No events found in database, returning empty result');
       return {
         data: [],
         total: count || 0,
@@ -276,7 +264,6 @@ export const getEventById = cache(
       .single();
 
     if (error) {
-      console.error('Error fetching event:', error);
       return null;
     }
 
@@ -337,7 +324,6 @@ export const getEventWithRSVPs = cache(
       .single();
 
     if (error) {
-      console.error('Error fetching event with RSVPs:', error);
       return null;
     }
 
@@ -398,7 +384,6 @@ export const getEventWithVolunteers = cache(
       .single();
 
     if (error) {
-      console.error('Error fetching event with volunteers:', error);
       return null;
     }
 
@@ -445,7 +430,6 @@ export const getEventWithMetrics = cache(
       .single();
 
     if (error) {
-      console.error('Error fetching event with metrics:', error);
       return null;
     }
 
@@ -529,7 +513,6 @@ export const getEventFull = cache(
       .single();
 
     if (error) {
-      console.error('Error fetching full event details:', error);
       return null;
     }
 
@@ -698,7 +681,6 @@ export const getVenues = cache(
     const { data, error } = await query;
 
     if (error) {
-      console.error('Error fetching venues:', error);
       throw new Error('Failed to fetch venues');
     }
 
@@ -730,7 +712,6 @@ export const getVenueWithBookings = cache(
       .single();
 
     if (error) {
-      console.error('Error fetching venue with bookings:', error);
       return null;
     }
 
@@ -805,7 +786,6 @@ export const getRSVPs = cache(
     const { data, error } = await query;
 
     if (error) {
-      console.error('Error fetching RSVPs:', error);
       throw new Error('Failed to fetch RSVPs');
     }
 
@@ -837,7 +817,6 @@ export const getMemberRSVP = cache(
         // No RSVP found
         return null;
       }
-      console.error('Error fetching member RSVP:', error);
       throw new Error('Failed to fetch RSVP');
     }
 
@@ -864,7 +843,6 @@ export const getGuestRSVPs = cache(
       .order('created_at', { ascending: false });
 
     if (error) {
-      console.error('Error fetching guest RSVPs:', error);
       throw new Error('Failed to fetch guest RSVPs');
     }
 
@@ -894,7 +872,6 @@ export const getVolunteerRoles = cache(async (): Promise<VolunteerRole[]> => {
     .order('name', { ascending: true });
 
   if (error) {
-    console.error('Error fetching volunteer roles:', error);
     throw new Error('Failed to fetch volunteer roles');
   }
 
@@ -952,7 +929,6 @@ export const getVolunteers = cache(
     const { data, error } = await query;
 
     if (error) {
-      console.error('Error fetching volunteers:', error);
       throw new Error('Failed to fetch volunteers');
     }
 
@@ -997,7 +973,6 @@ export const getVolunteerRoleWithMembers = cache(
       .single();
 
     if (error) {
-      console.error('Error fetching volunteer role with members:', error);
       return null;
     }
 
@@ -1271,7 +1246,6 @@ export const getEventFeedback = cache(
       .order('created_at', { ascending: false });
 
     if (error) {
-      console.error('Error fetching event feedback:', error);
       throw new Error('Failed to fetch event feedback');
     }
 
@@ -1298,7 +1272,6 @@ export const getEventDocuments = cache(
       .order('created_at', { ascending: false });
 
     if (error) {
-      console.error('Error fetching event documents:', error);
       throw new Error('Failed to fetch event documents');
     }
 
@@ -1323,7 +1296,6 @@ export const getEventTemplates = cache(async (): Promise<EventTemplate[]> => {
     .order('name', { ascending: true });
 
   if (error) {
-    console.error('Error fetching event templates:', error);
     throw new Error('Failed to fetch event templates');
   }
 
@@ -1381,7 +1353,6 @@ export const getVolunteerMatches = cache(
       .eq('is_active', true);
 
     if (error || !members) {
-      console.error('Error fetching members for matching:', error);
       return [];
     }
 

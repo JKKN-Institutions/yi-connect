@@ -1,5 +1,33 @@
 # Yi Connect - Progress Tracker
 
+## Session: 2026-01-05 - PRODUCTION ERROR FIX ✅
+
+### Issue
+Production `/admin/users` page crashed with "Application error: a server-side exception has occurred" (Digest: 619091185)
+
+### Root Cause
+Database function signature mismatch:
+- `get_user_roles` returns: `(role_name TEXT, hierarchy_level INTEGER)` only
+- Code expected: `(role_id UUID, role_name TEXT, hierarchy_level INTEGER, permissions TEXT[])`
+- The `hasPermission()` function crashed trying to access `ur.permissions` which was undefined
+
+### Solution
+Updated all code to use `get_user_roles_detailed` (which has correct signature) instead of `get_user_roles`:
+
+| File | Occurrences Fixed |
+|------|-------------------|
+| `lib/auth.ts` | 4 |
+| `hooks/use-user-roles.ts` | 1 |
+| `lib/coordinator-auth.ts` | 1 |
+| `lib/data/members.ts` | 1 |
+
+### Verification
+- Build passed
+- Deployed to Vercel (commit `94d5b9b`)
+- Production page verified working with all user data displaying correctly
+
+---
+
 ## Session: 2026-01-04 - USER IMPERSONATION SYSTEM 100% COMPLETE 🎉
 
 ### Accomplished (Multi-Agent Parallel Execution)

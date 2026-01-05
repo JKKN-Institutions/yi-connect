@@ -20,6 +20,7 @@ import {
   bulkRemoveRoleSchema,
   changeUserStatusSchema,
   bulkAssignChapterSchema,
+  bulkDeactivateUsersSchema,
   inviteUserSchema
 } from '@/lib/validations/user'
 import type { FormState } from '@/types'
@@ -527,6 +528,123 @@ export async function changeUserStatus(
     return {
       success: true,
       message: `User ${validation.data.is_active ? 'activated' : 'deactivated'} successfully!`
+    }
+  } catch (error: any) {
+    return {
+      message: error.message || 'An unexpected error occurred.'
+    }
+  }
+}
+
+/**
+ * Bulk deactivate multiple users
+ * Updates is_active in profiles, members, and approved_emails tables
+ * Only Super Admin and National Admin can perform this action
+ */
+export async function bulkDeactivateUsers(
+  prevState: FormState,
+  formData: FormData
+): Promise<FormState> {
+  try {
+    const { user } = await requireRole(['Super Admin', 'National Admin'])
+
+    const userIdsRaw = formData.get('user_ids')
+    const userIds = userIdsRaw ? JSON.parse(userIdsRaw as string) : []
+
+    const validation = bulkDeactivateUsersSchema.safeParse({
+      user_ids: userIds,
+      notes: formData.get('notes')
+    })
+
+    if (!validation.success) {
+      return {
+        errors: validation.error.flatten().fieldErrors,
+        message: 'Invalid input. Please check the form.'
+      }
+    }
+
+    const adminClient = createAdminSupabaseClient()
+
+    const result: BulkOperationResult = {
+      success_count: 0,
+      failure_count: 0,
+      failures: []
+    }
+
+    // Process each user
+    for (const userId of validation.data.user_ids) {
+      try {
+        // Prevent self-deactivation
+        if (userId === user.id) {
+          result.failure_count++
+          result.failures.push({
+            user_id: userId,
+            user_name: 'Current User',
+            error: 'Cannot deactivate your own account'
+          })
+          continue
+        }
+
+        // Get user info
+        const { data: profile } = await adminClient
+          .from('profiles')
+          .select('id, full_name, email')
+          .eq('id', userId)
+          .single()
+
+        if (!profile) {
+          result.failure_count++
+          result.failures.push({
+            user_id: userId,
+            user_name: 'Unknown',
+            error: 'User not found'
+          })
+          continue
+        }
+
+        // Deactivate in profiles table
+        const { error: profileError } = await adminClient
+          .from('profiles')
+          .update({ is_active: false })
+          .eq('id', userId)
+
+        if (profileError) {
+          throw profileError
+        }
+
+        // Deactivate in members table (if exists)
+        await adminClient
+          .from('members')
+          .update({ is_active: false, membership_status: 'inactive' })
+          .eq('id', userId)
+
+        // Deactivate in approved_emails table
+        if (profile.email) {
+          await adminClient
+            .from('approved_emails')
+            .update({ is_active: false })
+            .eq('email', profile.email)
+        }
+
+        result.success_count++
+      } catch (error: any) {
+        result.failure_count++
+        result.failures.push({
+          user_id: userId,
+          user_name: 'Unknown',
+          error: error.message
+        })
+      }
+    }
+
+    // Invalidate caches
+    revalidatePath('/admin/users')
+    revalidateTag('members-list', 'max')
+
+    return {
+      success: true,
+      message: `Deactivated ${result.success_count} user(s). ${result.failure_count} failed.`,
+      data: result
     }
   } catch (error: any) {
     return {

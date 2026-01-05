@@ -1075,6 +1075,318 @@ export const getEngagementTrend = cache(
 );
 
 // ============================================================================
+// Detailed Engagement Data (for Member Detail Page)
+// ============================================================================
+
+export interface EngagementBreakdown {
+  // Engagement metrics
+  engagementScore: number;
+  attendanceScore: number;
+  volunteerScore: number;
+  feedbackScore: number;
+  skillsScore: number;
+
+  // Raw counts
+  eventsRsvpd: number;
+  eventsAttended: number;
+  volunteerHours: number;
+  feedbackCount: number;
+  skillsCount: number;
+
+  // Readiness metrics
+  readinessScore: number;
+  tenureScore: number;
+  positionsScore: number;
+  trainingScore: number;
+  peerInputScore: number;
+
+  // Raw readiness data
+  tenureYears: number;
+  positionsHeld: number;
+  eventsParticipated: number;
+  nominationsReceived: number;
+
+  // Activity timeline
+  recentActivities: Array<{
+    type: 'event_attended' | 'volunteer' | 'feedback' | 'skill_added' | 'nomination';
+    title: string;
+    date: string;
+    details?: string;
+  }>;
+
+  // Trend data (last 6 months)
+  monthlyTrend: Array<{
+    month: string;
+    engagementScore: number;
+    eventsAttended: number;
+  }>;
+}
+
+/**
+ * Get detailed engagement breakdown for a single member
+ * Used on the Member Detail page Engagement tab
+ */
+export const getMemberEngagementBreakdown = cache(
+  async (memberId: string, periodMonths: number = 12): Promise<EngagementBreakdown> => {
+    const supabase = await createServerSupabaseClient();
+    const periodStart = new Date();
+    periodStart.setMonth(periodStart.getMonth() - periodMonths);
+    const periodStartStr = periodStart.toISOString();
+
+    // Use default settings
+    const weights = DEFAULT_ENGAGEMENT_WEIGHTS;
+    const maxVolunteerHours = DEFAULT_MAX_VOLUNTEER_HOURS_PER_YEAR;
+    const maxSkills = DEFAULT_MAX_SKILLS_FOR_FULL_SCORE;
+    const readinessWeights = DEFAULT_READINESS_WEIGHTS;
+    const maxTenureYears = DEFAULT_MAX_TENURE_YEARS;
+    const maxLeadershipPositions = DEFAULT_MAX_LEADERSHIP_POSITIONS;
+    const maxNominations = DEFAULT_MAX_NOMINATIONS;
+
+    // Fetch all data in parallel
+    const [
+      rsvpData,
+      volunteerData,
+      feedbackData,
+      skillsData,
+      memberData,
+      rolesData,
+      nominationsData,
+      eventParticipation,
+      recentEvents,
+      recentSkills,
+    ] = await Promise.all([
+      // RSVP data with event details
+      supabase
+        .from('event_rsvps')
+        .select('member_id, status, checked_in_at, event_id, created_at, event:events(title, start_date)')
+        .eq('member_id', memberId)
+        .gte('created_at', periodStartStr)
+        .order('created_at', { ascending: false }),
+
+      // Volunteer data with event details
+      supabase
+        .from('event_volunteers')
+        .select('member_id, hours_contributed, status, created_at, event:events(title, start_date)')
+        .eq('member_id', memberId)
+        .eq('status', 'completed')
+        .gte('created_at', periodStartStr)
+        .order('created_at', { ascending: false }),
+
+      // Feedback data with event details
+      supabase
+        .from('event_feedback')
+        .select('member_id, created_at, event:events(title, start_date)')
+        .eq('member_id', memberId)
+        .gte('created_at', periodStartStr)
+        .order('created_at', { ascending: false }),
+
+      // Skills data
+      supabase
+        .from('member_skills')
+        .select('member_id, created_at, skill:skills(name)')
+        .eq('member_id', memberId)
+        .order('created_at', { ascending: false }),
+
+      // Member tenure data
+      supabase
+        .from('members')
+        .select('id, member_since')
+        .eq('id', memberId)
+        .single(),
+
+      // Leadership roles
+      supabase
+        .from('user_roles')
+        .select('user_id, role:roles(name, hierarchy_level)')
+        .eq('user_id', memberId),
+
+      // Nominations received
+      supabase
+        .from('nominations')
+        .select('nominee_id, created_at, nominator:profiles!nominations_nominator_id_fkey(full_name)')
+        .eq('nominee_id', memberId)
+        .eq('status', 'approved')
+        .order('created_at', { ascending: false }),
+
+      // Event participation count
+      supabase
+        .from('event_rsvps')
+        .select('member_id')
+        .eq('member_id', memberId)
+        .not('checked_in_at', 'is', null),
+
+      // Recent events for timeline (last 10)
+      supabase
+        .from('event_rsvps')
+        .select('member_id, checked_in_at, created_at, event:events(title, start_date)')
+        .eq('member_id', memberId)
+        .not('checked_in_at', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(10),
+
+      // Recent skills added (last 5)
+      supabase
+        .from('member_skills')
+        .select('created_at, skill:skills(name)')
+        .eq('member_id', memberId)
+        .order('created_at', { ascending: false })
+        .limit(5),
+    ]);
+
+    // Calculate engagement components
+    const rsvps = rsvpData.data || [];
+    const volunteers = volunteerData.data || [];
+    const feedbacks = feedbackData.data || [];
+    const skills = skillsData.data || [];
+
+    const eventsRsvpd = rsvps.filter((r: any) => r.status === 'attending' || r.status === 'attended').length;
+    const eventsAttended = rsvps.filter((r: any) => r.checked_in_at).length;
+    const volunteerHours = volunteers.reduce((sum: number, v: any) => sum + (v.hours_contributed || 0), 0);
+    const feedbackCount = feedbacks.length;
+    const skillsCount = skills.length;
+
+    // Calculate sub-scores
+    const attendanceScore = eventsRsvpd > 0 ? Math.round((eventsAttended / eventsRsvpd) * 100) : 0;
+    const volunteerScore = Math.min(Math.round((volunteerHours / maxVolunteerHours) * 100), 100);
+    const feedbackScore = eventsAttended > 0 ? Math.min(Math.round((feedbackCount / eventsAttended) * 100), 100) : 0;
+    const skillsScore = Math.min(Math.round((skillsCount / maxSkills) * 100), 100);
+
+    // Calculate overall engagement score
+    const engagementScore = Math.round(
+      (attendanceScore * weights.attendance) +
+      (volunteerScore * weights.volunteer) +
+      (feedbackScore * weights.feedback) +
+      (skillsScore * weights.skills)
+    );
+
+    // Calculate readiness components
+    const now = new Date();
+    const memberSince = memberData.data?.member_since ? new Date(memberData.data.member_since) : now;
+    const tenureYears = Math.max(0, (now.getTime() - memberSince.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
+
+    const positionsHeld = (rolesData.data || []).filter((r: any) => (r.role as any)?.hierarchy_level >= 2).length;
+    const eventsParticipated = eventParticipation.data?.length || 0;
+    const nominationsReceived = nominationsData.data?.length || 0;
+
+    // Calculate readiness sub-scores
+    const tenureScore = Math.min(Math.round((tenureYears / maxTenureYears) * 100), 100);
+    const positionsScore = Math.min(Math.round((positionsHeld / maxLeadershipPositions) * 100), 100);
+    const trainingScore = Math.min(Math.round((eventsParticipated / 20) * 100), 100);
+    const peerInputScore = Math.min(Math.round((nominationsReceived / maxNominations) * 100), 100);
+
+    // Calculate overall readiness score
+    const readinessScore = Math.round(
+      (tenureScore * readinessWeights.tenure) +
+      (positionsScore * readinessWeights.positions) +
+      (trainingScore * readinessWeights.training) +
+      (peerInputScore * readinessWeights.peerInput)
+    );
+
+    // Build activity timeline
+    const recentActivities: EngagementBreakdown['recentActivities'] = [];
+
+    // Add recent events attended
+    (recentEvents.data || []).slice(0, 5).forEach((e: any) => {
+      recentActivities.push({
+        type: 'event_attended',
+        title: (e.event as any)?.title || 'Event',
+        date: e.checked_in_at || e.created_at,
+        details: 'Attended event',
+      });
+    });
+
+    // Add recent volunteer activities
+    volunteers.slice(0, 3).forEach((v: any) => {
+      recentActivities.push({
+        type: 'volunteer',
+        title: (v.event as any)?.title || 'Volunteer Activity',
+        date: v.created_at,
+        details: `${v.hours_contributed || 0} hours contributed`,
+      });
+    });
+
+    // Add recent feedback submissions
+    feedbacks.slice(0, 3).forEach((f: any) => {
+      recentActivities.push({
+        type: 'feedback',
+        title: (f.event as any)?.title || 'Event',
+        date: f.created_at,
+        details: 'Submitted feedback',
+      });
+    });
+
+    // Add recent skills added
+    (recentSkills.data || []).forEach((s: any) => {
+      recentActivities.push({
+        type: 'skill_added',
+        title: (s.skill as any)?.name || 'Skill',
+        date: s.created_at,
+        details: 'Added to profile',
+      });
+    });
+
+    // Add recent nominations received
+    (nominationsData.data || []).slice(0, 3).forEach((n: any) => {
+      recentActivities.push({
+        type: 'nomination',
+        title: 'Peer Nomination',
+        date: n.created_at,
+        details: `Nominated by ${(n.nominator as any)?.full_name || 'a peer'}`,
+      });
+    });
+
+    // Sort activities by date (most recent first)
+    recentActivities.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    // Calculate monthly trend (last 6 months)
+    const monthlyTrend: EngagementBreakdown['monthlyTrend'] = [];
+    for (let i = 5; i >= 0; i--) {
+      const monthDate = new Date();
+      monthDate.setMonth(monthDate.getMonth() - i);
+      const monthStart = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
+      const monthEnd = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0);
+
+      // Count events attended in this month
+      const monthEvents = rsvps.filter((r: any) => {
+        if (!r.checked_in_at) return false;
+        const eventDate = new Date(r.checked_in_at);
+        return eventDate >= monthStart && eventDate <= monthEnd;
+      }).length;
+
+      monthlyTrend.push({
+        month: monthDate.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
+        engagementScore: Math.min(100, monthEvents * 20), // Simplified scoring
+        eventsAttended: monthEvents,
+      });
+    }
+
+    return {
+      engagementScore,
+      attendanceScore,
+      volunteerScore,
+      feedbackScore,
+      skillsScore,
+      eventsRsvpd,
+      eventsAttended,
+      volunteerHours,
+      feedbackCount,
+      skillsCount,
+      readinessScore,
+      tenureScore,
+      positionsScore,
+      trainingScore,
+      peerInputScore,
+      tenureYears: Math.round(tenureYears * 10) / 10,
+      positionsHeld,
+      eventsParticipated,
+      nominationsReceived,
+      recentActivities: recentActivities.slice(0, 15),
+      monthlyTrend,
+    };
+  }
+);
+
+// ============================================================================
 // Availability Queries
 // ============================================================================
 

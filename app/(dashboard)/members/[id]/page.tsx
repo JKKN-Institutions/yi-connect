@@ -27,7 +27,7 @@ import {
 } from 'lucide-react'
 import { notFound } from 'next/navigation'
 import { MemberDetailClient } from './member-detail-client'
-import { getMemberById, getSkills, getCertifications, calculateEngagementScores, calculateReadinessScores } from '@/lib/data/members'
+import { getMemberById, getSkills, getCertifications, calculateEngagementScores, calculateReadinessScores, getMemberEngagementBreakdown } from '@/lib/data/members'
 import { getTrainerProfile } from '@/lib/data/trainers'
 import { getMemberAssessment, getAvailableMentors } from '@/lib/data/assessments'
 import { getVerticals } from '@/lib/data/vertical'
@@ -85,7 +85,7 @@ async function MemberDetailContent({ id }: { id: string }) {
   const startDate = today.toISOString().split('T')[0]
   const endDate = threeMonthsLater.toISOString().split('T')[0]
 
-  const [verticals, mentors, availabilities, skills, certifications, engagementScores, readinessScores] = await Promise.all([
+  const [verticals, mentors, availabilities, skills, certifications, engagementScores, readinessScores, engagementBreakdown] = await Promise.all([
     chapterId ? getVerticals({ chapter_id: chapterId }) : Promise.resolve([]),
     chapterId ? getAvailableMentors(chapterId) : Promise.resolve([]),
     getMemberAvailability(id, startDate, endDate),
@@ -93,6 +93,7 @@ async function MemberDetailContent({ id }: { id: string }) {
     getCertifications(),
     calculateEngagementScores([id]),
     calculateReadinessScores([id]),
+    getMemberEngagementBreakdown(id),
   ])
 
   // Get scores for this member (default to 0 if not calculated)
@@ -267,6 +268,7 @@ async function MemberDetailContent({ id }: { id: string }) {
         availabilities={availabilities}
         skills={skills}
         certifications={certifications}
+        engagementBreakdown={engagementBreakdown}
         canEdit={true}
       />
 

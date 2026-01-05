@@ -665,6 +665,252 @@ export const getIVAnalytics = cache(async (
 });
 
 /**
+ * Get all industries performance for a chapter
+ */
+export const getChapterIndustriesPerformance = cache(async (
+  chapterId: string,
+  dateFrom?: string,
+  dateTo?: string
+): Promise<IndustryPerformance[]> => {
+  'use server';
+
+  try {
+    const supabase = await createClient();
+
+    // Get all industries that have hosted IVs in this chapter
+    let eventsQuery = supabase
+      .from('events')
+      .select(`
+        id,
+        industry_id,
+        host_willingness_rating,
+        start_date,
+        current_registrations,
+        industry:industries!inner(id, company_name, industry_sector)
+      `)
+      .eq('chapter_id', chapterId)
+      .eq('category', 'industrial_visit')
+      .not('industry_id', 'is', null);
+
+    if (dateFrom) {
+      eventsQuery = eventsQuery.gte('start_date', dateFrom);
+    }
+
+    if (dateTo) {
+      eventsQuery = eventsQuery.lte('start_date', dateTo);
+    }
+
+    const { data: events, error } = await eventsQuery.order('start_date', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching chapter industries performance:', error);
+      throw new Error(`Failed to fetch industries performance: ${error.message}`);
+    }
+
+    if (!events || events.length === 0) {
+      return [];
+    }
+
+    // Group by industry
+    const industryMap = new Map<string, {
+      industry_id: string;
+      company_name: string;
+      industry_sector: string | null;
+      events: typeof events;
+      ratings: number[];
+    }>();
+
+    events.forEach((event: any) => {
+      const industryId = event.industry_id;
+      if (!industryId) return;
+
+      if (!industryMap.has(industryId)) {
+        industryMap.set(industryId, {
+          industry_id: industryId,
+          company_name: event.industry?.company_name || 'Unknown',
+          industry_sector: event.industry?.industry_sector || null,
+          events: [],
+          ratings: [],
+        });
+      }
+
+      const industryData = industryMap.get(industryId)!;
+      industryData.events.push(event);
+      if (event.host_willingness_rating) {
+        industryData.ratings.push(event.host_willingness_rating);
+      }
+    });
+
+    // Get participant counts per event
+    const eventIds = events.map(e => e.id);
+    const { data: rsvps } = await supabase
+      .from('event_rsvps')
+      .select('event_id')
+      .in('event_id', eventIds)
+      .eq('status', 'confirmed');
+
+    // Count RSVPs per event
+    const rsvpCounts = new Map<string, number>();
+    (rsvps || []).forEach((rsvp: any) => {
+      const count = rsvpCounts.get(rsvp.event_id) || 0;
+      rsvpCounts.set(rsvp.event_id, count + 1);
+    });
+
+    // Build performance data
+    const performanceData: IndustryPerformance[] = [];
+
+    industryMap.forEach((data, industryId) => {
+      const totalParticipants = data.events.reduce((sum, event: any) => {
+        return sum + (rsvpCounts.get(event.id) || event.current_registrations || 0);
+      }, 0);
+
+      const avgRating = data.ratings.length > 0
+        ? data.ratings.reduce((sum, r) => sum + r, 0) / data.ratings.length
+        : null;
+
+      const lastIVDate = data.events.length > 0
+        ? data.events[0].start_date
+        : null;
+
+      performanceData.push({
+        industry_id: industryId,
+        company_name: data.company_name,
+        total_ivs_hosted: data.events.length,
+        total_participants: totalParticipants,
+        avg_rating: avgRating ? Math.round(avgRating * 10) / 10 : null,
+        last_iv_date: lastIVDate,
+        willingness_to_host_again: avgRating,
+      });
+    });
+
+    // Sort by total IVs hosted (descending)
+    performanceData.sort((a, b) => b.total_ivs_hosted - a.total_ivs_hosted);
+
+    return performanceData;
+  } catch (error) {
+    console.error('Error in getChapterIndustriesPerformance:', error);
+    throw error;
+  }
+});
+
+/**
+ * Get industry categories/sectors distribution for a chapter
+ */
+export const getIndustryCategoriesDistribution = cache(async (
+  chapterId: string
+): Promise<Array<{ sector: string; count: number; participants: number }>> => {
+  'use server';
+
+  try {
+    const supabase = await createClient();
+
+    const { data: events, error } = await supabase
+      .from('events')
+      .select(`
+        id,
+        current_registrations,
+        industry:industries!inner(industry_sector)
+      `)
+      .eq('chapter_id', chapterId)
+      .eq('category', 'industrial_visit')
+      .not('industry_id', 'is', null);
+
+    if (error) {
+      console.error('Error fetching industry categories:', error);
+      return [];
+    }
+
+    // Group by sector
+    const sectorMap = new Map<string, { count: number; participants: number }>();
+
+    (events || []).forEach((event: any) => {
+      const sector = event.industry?.industry_sector || 'Other';
+      const current = sectorMap.get(sector) || { count: 0, participants: 0 };
+      sectorMap.set(sector, {
+        count: current.count + 1,
+        participants: current.participants + (event.current_registrations || 0),
+      });
+    });
+
+    return Array.from(sectorMap.entries())
+      .map(([sector, data]) => ({
+        sector,
+        count: data.count,
+        participants: data.participants,
+      }))
+      .sort((a, b) => b.count - a.count);
+  } catch (error) {
+    console.error('Error in getIndustryCategoriesDistribution:', error);
+    return [];
+  }
+});
+
+/**
+ * Get monthly IV trends for a chapter
+ */
+export const getMonthlyIVTrends = cache(async (
+  chapterId: string,
+  months: number = 12
+): Promise<Array<{ month: string; visits: number; participants: number }>> => {
+  'use server';
+
+  try {
+    const supabase = await createClient();
+
+    const startDate = new Date();
+    startDate.setMonth(startDate.getMonth() - months);
+
+    const { data: events, error } = await supabase
+      .from('events')
+      .select('id, start_date, current_registrations')
+      .eq('chapter_id', chapterId)
+      .eq('category', 'industrial_visit')
+      .gte('start_date', startDate.toISOString())
+      .order('start_date', { ascending: true });
+
+    if (error) {
+      console.error('Error fetching monthly trends:', error);
+      return [];
+    }
+
+    // Group by month
+    const monthMap = new Map<string, { visits: number; participants: number }>();
+
+    (events || []).forEach((event: any) => {
+      const date = new Date(event.start_date);
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      const current = monthMap.get(monthKey) || { visits: 0, participants: 0 };
+      monthMap.set(monthKey, {
+        visits: current.visits + 1,
+        participants: current.participants + (event.current_registrations || 0),
+      });
+    });
+
+    // Fill in missing months
+    const result: Array<{ month: string; visits: number; participants: number }> = [];
+    const current = new Date();
+
+    for (let i = months - 1; i >= 0; i--) {
+      const date = new Date(current);
+      date.setMonth(date.getMonth() - i);
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      const monthLabel = date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+      const data = monthMap.get(monthKey) || { visits: 0, participants: 0 };
+      result.push({
+        month: monthLabel,
+        visits: data.visits,
+        participants: data.participants,
+      });
+    }
+
+    return result;
+  } catch (error) {
+    console.error('Error in getMonthlyIVTrends:', error);
+    return [];
+  }
+});
+
+/**
  * Get industry performance metrics
  */
 export const getIndustryPerformance = cache(async (

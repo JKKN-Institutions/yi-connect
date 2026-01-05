@@ -19,12 +19,14 @@ import {
   AvailabilityCalendar,
   TrainerProfileTab,
   CreateTrainerProfileDialog,
+  EngagementMetricsTab,
 } from '@/components/members'
 import { Briefcase, GraduationCap, Award, Target, Calendar } from 'lucide-react'
 import type { TrainerProfileFull } from '@/types/trainer'
 import type { SkillWillAssessmentFull } from '@/types/assessment'
 import type { Availability } from '@/types/availability'
 import type { Skill, Certification } from '@/types/member'
+import type { EngagementBreakdown } from '@/lib/data/members'
 
 interface MemberDetailClientProps {
   member: any // MemberWithRelations type from server - uses any for flexibility with nested relations
@@ -39,6 +41,7 @@ interface MemberDetailClientProps {
   availabilities?: Availability[]
   skills?: Skill[]
   certifications?: Certification[]
+  engagementBreakdown?: EngagementBreakdown | null
   canEdit?: boolean
 }
 
@@ -51,6 +54,7 @@ export function MemberDetailClient({
   availabilities = [],
   skills = [],
   certifications = [],
+  engagementBreakdown,
   canEdit = true,
 }: MemberDetailClientProps) {
   const [showAddSkill, setShowAddSkill] = useState(false)
@@ -136,13 +140,17 @@ export function MemberDetailClient({
           />
         </TabsContent>
 
-        {/* Engagement Tab (Placeholder for future) */}
+        {/* Engagement Tab */}
         <TabsContent value="engagement" className="space-y-6">
-          <div className="text-center py-12 text-muted-foreground">
-            <Award className="h-12 w-12 mx-auto mb-4 opacity-50" />
-            <h3 className="text-lg font-medium">Engagement Metrics</h3>
-            <p className="text-sm">Coming soon - Track member engagement and leadership readiness.</p>
-          </div>
+          {engagementBreakdown ? (
+            <EngagementMetricsTab breakdown={engagementBreakdown} />
+          ) : (
+            <div className="text-center py-12 text-muted-foreground">
+              <Award className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <h3 className="text-lg font-medium">Engagement Metrics</h3>
+              <p className="text-sm">Unable to load engagement data. Please try again later.</p>
+            </div>
+          )}
         </TabsContent>
       </Tabs>
 

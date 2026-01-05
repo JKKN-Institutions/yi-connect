@@ -97,19 +97,15 @@ export async function submitMemberRequest(formData: FormData): Promise<FormState
     preferred_chapter_id: formData.get('preferred_chapter_id') as string,
   }
 
-  console.log('🔍 Validating member request data...')
   const validation = memberRequestSchema.safeParse(rawData)
 
   if (!validation.success) {
-    console.error('❌ Validation failed:', validation.error.flatten().fieldErrors)
     return {
       success: false,
       message: 'Please check your form for errors',
       errors: validation.error.flatten().fieldErrors as Record<string, string[]>,
     }
   }
-
-  console.log('✅ Validation passed. Checking for existing requests...')
 
   try {
     // Check if email already has a pending or approved request
@@ -121,7 +117,6 @@ export async function submitMemberRequest(formData: FormData): Promise<FormState
       .single()
 
     if (existingRequest) {
-      console.log('⚠️ Existing request found:', existingRequest)
       return {
         success: false,
         message: existingRequest.status === 'pending'
@@ -131,7 +126,6 @@ export async function submitMemberRequest(formData: FormData): Promise<FormState
       }
     }
 
-    console.log('📝 Creating member request...')
     // Create member request
     const { data, error } = await supabase
       .from('member_requests')
@@ -143,11 +137,8 @@ export async function submitMemberRequest(formData: FormData): Promise<FormState
       .single()
 
     if (error) {
-      console.error('❌ Error creating member request:', error)
       throw error
     }
-
-    console.log('✅ Member request created successfully:', data?.id)
 
     // Invalidate cache
     revalidateTag('member-requests', 'max')
@@ -158,7 +149,6 @@ export async function submitMemberRequest(formData: FormData): Promise<FormState
       data,
     }
   } catch (error: any) {
-    console.error('Error submitting member request:', error)
     return {
       success: false,
       message: 'Failed to submit application. Please try again.',
@@ -340,7 +330,6 @@ export async function approveMemberRequest(requestId: string, notes?: string): P
       data: approvedEmail,
     }
   } catch (error: any) {
-    console.error('Error approving member request:', error)
     return {
       success: false,
       message: 'Failed to approve request',
@@ -416,7 +405,6 @@ export async function rejectMemberRequest(requestId: string, notes: string): Pro
       message: `Application from ${request.full_name} has been rejected.`,
     }
   } catch (error: any) {
-    console.error('Error rejecting member request:', error)
     return {
       success: false,
       message: 'Failed to reject request',
@@ -487,7 +475,6 @@ export async function withdrawMemberRequest(requestId: string): Promise<FormStat
       message: 'Application withdrawn successfully',
     }
   } catch (error: any) {
-    console.error('Error withdrawing member request:', error)
     return {
       success: false,
       message: 'Failed to withdraw request',

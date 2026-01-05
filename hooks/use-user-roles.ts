@@ -24,8 +24,6 @@ export function useUserRoles() {
 
     async function fetchRoles() {
       try {
-        console.log('[useUserRoles] Starting to fetch roles...');
-
         // Create timeout promise wrapper
         const withTimeout = <T,>(promise: Promise<T>, timeoutMs: number, operation: string): Promise<T> => {
           return Promise.race([
@@ -43,22 +41,17 @@ export function useUserRoles() {
         }
 
         // Get session with timeout
-        console.log('[useUserRoles] Fetching session...');
         const sessionPromise = supabase.auth.getSession();
         const {
           data: { session },
           error: sessionError
         } = await withTimeout(sessionPromise, 5000, 'getSession');
 
-        console.log('[useUserRoles] Session fetch completed');
-
         if (sessionError) {
-          console.error('[useUserRoles] Session error:', sessionError);
           throw sessionError;
         }
 
         if (!session?.user) {
-          console.log('[useUserRoles] No user session found');
           if (isMounted) {
             setRoles([]);
             setLoading(false);
@@ -66,10 +59,7 @@ export function useUserRoles() {
           return;
         }
 
-        console.log('[useUserRoles] User found:', session.user.id);
-
         // Fetch user roles with timeout
-        console.log('[useUserRoles] Fetching roles via RPC...');
         const result = await withTimeout(
           (async () => {
             return await supabase.rpc('get_user_roles_detailed', {
@@ -82,30 +72,21 @@ export function useUserRoles() {
 
         const { data: userRoles, error: rolesError } = result;
 
-        console.log('[useUserRoles] RPC fetch completed');
-
         if (rolesError) {
-          console.error('[useUserRoles] Roles error:', rolesError);
           throw rolesError;
         }
 
-        console.log('[useUserRoles] Roles fetched:', userRoles);
-
         const roleNames = userRoles?.map((ur: UserRole) => ur.role_name) || [];
-
-        console.log('[useUserRoles] Processed role names:', roleNames);
 
         if (isMounted) {
           setRoles(roleNames);
         }
       } catch (err) {
-        console.error('[useUserRoles] Error fetching user roles:', err);
         if (isMounted) {
           setError(err as Error);
           setRoles([]);
         }
       } finally {
-        console.log('[useUserRoles] Finally block - setting loading to false');
         if (isMounted) {
           setLoading(false);
         }

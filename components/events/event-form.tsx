@@ -148,9 +148,6 @@ export function EventForm(props: EventFormProps) {
   };
 
   const onSubmit = (data: CreateEventInput) => {
-    console.log('Form submitted with data:', data);
-    console.log('Form errors:', form.formState.errors);
-
     startTransition(async () => {
       try {
         if (isEditing && event) {
@@ -159,23 +156,18 @@ export function EventForm(props: EventFormProps) {
             toast.success('Event updated successfully');
             router.push(`/events/${event.id}`);
           } else {
-            console.error('Update error:', result.error);
             toast.error(result.error || 'Failed to update event');
           }
         } else {
-          console.log('Creating event...');
           const result = await createEvent(data);
-          console.log('Create result:', result);
           if (result.success && result.data) {
             toast.success('Event created successfully');
             router.push(`/events/${result.data.id}`);
           } else {
-            console.error('Create error:', result.error);
             toast.error(result.error || 'Failed to create event');
           }
         }
       } catch (error) {
-        console.error('Unexpected error:', error);
         toast.error('An unexpected error occurred');
       }
     });
@@ -218,19 +210,8 @@ export function EventForm(props: EventFormProps) {
       // Validate only current tab fields
       const fieldsToValidate = tabFields[currentTab] || [];
 
-      console.log('Current tab:', currentTab);
-      console.log('Fields to validate:', fieldsToValidate);
-      console.log('Current form values:', form.getValues());
-      console.log(
-        'Current form errors before validation:',
-        form.formState.errors
-      );
-
       // Trigger validation only for current tab fields
       const isValid = await form.trigger(fieldsToValidate as any);
-
-      console.log('Validation result:', isValid);
-      console.log('Form errors after validation:', form.formState.errors);
 
       if (isValid) {
         setCurrentTab(tabs[currentIndex + 1]);
@@ -242,11 +223,6 @@ export function EventForm(props: EventFormProps) {
           venue: 'Please provide venue details or mark as virtual event',
           settings: 'Please check event settings'
         };
-
-        // Log specific errors
-        const currentErrors = form.formState.errors;
-        console.error('Validation failed for tab:', currentTab);
-        console.error('Field errors:', currentErrors);
 
         toast.error(
           errorMessages[currentTab] ||

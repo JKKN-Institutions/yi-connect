@@ -96,6 +96,26 @@ export async function loginAsDemoUser(email: string): Promise<{
 
   if (error) {
     console.error('Demo login error:', error)
+
+    // If user doesn't exist, try to create them first
+    if (error.message === 'Invalid login credentials') {
+      const created = await ensureDemoUserExists(email)
+      if (created) {
+        // Retry login after creating user
+        const { error: retryError } = await supabase.auth.signInWithPassword({
+          email,
+          password: 'DemoMember2024!',
+        })
+        if (!retryError) {
+          return { success: true }
+        }
+        return {
+          success: false,
+          error: retryError.message,
+        }
+      }
+    }
+
     return {
       success: false,
       error: error.message,
@@ -103,4 +123,54 @@ export async function loginAsDemoUser(email: string): Promise<{
   }
 
   return { success: true }
+}
+
+/**
+ * Ensure demo user exists in Supabase Auth
+ * Creates the user if they don't exist using admin API
+ */
+async function ensureDemoUserExists(email: string): Promise<boolean> {
+  const { createAdminSupabaseClient } = await import('@/lib/supabase/server')
+  const adminClient = createAdminSupabaseClient()
+
+  try {
+    // Try to create the demo user - will fail if already exists
+    const { data, error } = await adminClient.auth.admin.createUser({
+      email,
+      password: 'DemoMember2024!',
+      email_confirm: true, // Auto-confirm email
+      user_metadata: {
+        full_name: getDemoUserName(email),
+        is_demo: true,
+      },
+    })
+
+    if (error) {
+      // User might already exist
+      if (error.message.includes('already been registered') || error.message.includes('already exists')) {
+        console.log('Demo user already exists:', email)
+        return true
+      }
+      console.error('Failed to create demo user:', error)
+      return false
+    }
+
+    console.log('Created demo user:', data.user?.email)
+    return true
+  } catch (err) {
+    console.error('Error in ensureDemoUserExists:', err)
+    return false
+  }
+}
+
+/**
+ * Get display name for demo user based on email
+ */
+function getDemoUserName(email: string): string {
+  const names: Record<string, string> = {
+    'demo-chair@yi-demo.com': 'Demo Chair',
+    'demo-cochair@yi-demo.com': 'Demo Co-Chair',
+    'demo-ec@yi-demo.com': 'Demo EC Member',
+  }
+  return names[email] || 'Demo User'
 }

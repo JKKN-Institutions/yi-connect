@@ -58,3 +58,49 @@ export async function signOut() {
   await supabase.auth.signOut()
   redirect('/login')
 }
+
+/**
+ * Demo account emails (allowed for one-click login)
+ */
+const DEMO_ACCOUNTS = [
+  'demo-chair@yi-demo.com',
+  'demo-cochair@yi-demo.com',
+  'demo-ec@yi-demo.com',
+] as const
+
+/**
+ * Demo login action - allows one-click login for demo accounts
+ *
+ * This action is restricted to demo accounts only for security.
+ * It uses the service role to sign in the user directly.
+ */
+export async function loginAsDemoUser(email: string): Promise<{
+  success: boolean
+  error?: string
+}> {
+  // Validate this is a demo account
+  if (!DEMO_ACCOUNTS.includes(email as typeof DEMO_ACCOUNTS[number])) {
+    return {
+      success: false,
+      error: 'Only demo accounts can use one-click login',
+    }
+  }
+
+  const supabase = await createServerSupabaseClient()
+
+  // Sign in with the demo account password
+  const { error } = await supabase.auth.signInWithPassword({
+    email,
+    password: 'DemoMember2024!',
+  })
+
+  if (error) {
+    console.error('Demo login error:', error)
+    return {
+      success: false,
+      error: error.message,
+    }
+  }
+
+  return { success: true }
+}

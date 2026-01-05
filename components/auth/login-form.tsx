@@ -6,7 +6,7 @@
 
 'use client'
 
-import { useState } from 'react'
+import { useState, useTransition } from 'react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
   Card,
@@ -17,13 +17,44 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { OAuthButtons } from './oauth-buttons'
 import { MagicLinkForm } from './magic-link-form'
-import { useSearchParams } from 'next/navigation'
-import { AlertCircle, Info, ShieldCheck, Mail, Chrome } from 'lucide-react'
+import { useSearchParams, useRouter } from 'next/navigation'
+import { AlertCircle, Info, ShieldCheck, Mail, Chrome, Loader2, Users } from 'lucide-react'
+import { loginAsDemoUser } from '@/app/actions/auth'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+
+// Demo accounts with their roles for display
+const DEMO_ACCOUNTS = [
+  { email: 'demo-chair@yi-demo.com', role: 'Chair', variant: 'default' as const },
+  { email: 'demo-cochair@yi-demo.com', role: 'Co-Chair', variant: 'secondary' as const },
+  { email: 'demo-ec@yi-demo.com', role: 'EC Member', variant: 'outline' as const },
+]
 
 export function LoginForm() {
   const searchParams = useSearchParams()
+  const router = useRouter()
   const error = searchParams.get('error')
   const [authMethod, setAuthMethod] = useState<'google' | 'email'>('google')
+  const [isPending, startTransition] = useTransition()
+  const [demoLoginEmail, setDemoLoginEmail] = useState<string | null>(null)
+  const [demoError, setDemoError] = useState<string | null>(null)
+
+  const handleDemoLogin = (email: string) => {
+    setDemoLoginEmail(email)
+    setDemoError(null)
+
+    startTransition(async () => {
+      const result = await loginAsDemoUser(email)
+
+      if (result.success) {
+        router.push('/dashboard')
+        router.refresh()
+      } else {
+        setDemoError(result.error || 'Failed to login')
+        setDemoLoginEmail(null)
+      }
+    })
+  }
 
   return (
     <div className="w-full space-y-6">
@@ -134,25 +165,69 @@ export function LoginForm() {
         </CardContent>
       </Card>
 
-      {/* Demo Accounts Notice */}
-      <Card className="border-dashed border-2 bg-muted/30">
-        <CardContent className="py-4">
-          <div className="text-center space-y-2">
-            <p className="text-sm font-medium">Demo Accounts Available</p>
-            <p className="text-xs text-muted-foreground">
-              Try the system with demo accounts using the Email Link option:
-            </p>
-            <div className="flex flex-wrap justify-center gap-2 mt-2">
-              <code className="text-xs bg-background px-2 py-1 rounded border">
-                demo-chair@yi-demo.com
-              </code>
-              <code className="text-xs bg-background px-2 py-1 rounded border">
-                demo-cochair@yi-demo.com
-              </code>
-              <code className="text-xs bg-background px-2 py-1 rounded border">
-                demo-ec@yi-demo.com
-              </code>
+      {/* Demo Accounts - One-Click Login */}
+      <Card className="border-2 border-primary/20 bg-gradient-to-b from-primary/5 to-transparent">
+        <CardContent className="py-5">
+          <div className="space-y-4">
+            <div className="text-center space-y-1">
+              <div className="flex items-center justify-center gap-2">
+                <Users className="h-4 w-4 text-primary" />
+                <p className="text-sm font-semibold">Try Demo Accounts</p>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Click any account below to instantly login and explore
+              </p>
             </div>
+
+            {demoError && (
+              <Alert variant="destructive" className="py-2">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription className="text-xs ml-2">
+                  {demoError}
+                </AlertDescription>
+              </Alert>
+            )}
+
+            <div className="flex flex-col gap-2">
+              {DEMO_ACCOUNTS.map((account) => (
+                <Button
+                  key={account.email}
+                  variant="outline"
+                  className="w-full justify-between h-auto py-3 hover:bg-primary/5 hover:border-primary/40 transition-all group"
+                  onClick={() => handleDemoLogin(account.email)}
+                  disabled={isPending}
+                >
+                  <div className="flex items-center gap-3">
+                    {isPending && demoLoginEmail === account.email ? (
+                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                    ) : (
+                      <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
+                        <span className="text-xs font-bold text-primary">
+                          {account.role.charAt(0)}
+                        </span>
+                      </div>
+                    )}
+                    <div className="text-left">
+                      <p className="text-sm font-medium">
+                        {isPending && demoLoginEmail === account.email
+                          ? 'Logging in...'
+                          : `Login as ${account.role}`}
+                      </p>
+                      <p className="text-xs text-muted-foreground font-mono">
+                        {account.email}
+                      </p>
+                    </div>
+                  </div>
+                  <Badge variant={account.variant} className="ml-2">
+                    {account.role}
+                  </Badge>
+                </Button>
+              ))}
+            </div>
+
+            <p className="text-xs text-center text-muted-foreground">
+              Demo accounts are pre-configured with sample data
+            </p>
           </div>
         </CardContent>
       </Card>

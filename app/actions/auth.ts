@@ -130,11 +130,16 @@ export async function loginAsDemoUser(email: string): Promise<{
  * Creates the user if they don't exist using admin API
  */
 async function ensureDemoUserExists(email: string): Promise<boolean> {
+  console.log('[ensureDemoUserExists] Starting for:', email)
+
   const { createAdminSupabaseClient } = await import('@/lib/supabase/server')
   const adminClient = createAdminSupabaseClient()
 
+  console.log('[ensureDemoUserExists] Admin client created, service role key exists:', !!process.env.SUPABASE_SERVICE_ROLE_KEY)
+
   try {
     // Try to create the demo user - will fail if already exists
+    console.log('[ensureDemoUserExists] Attempting to create user...')
     const { data, error } = await adminClient.auth.admin.createUser({
       email,
       password: 'DemoMember2024!',
@@ -145,20 +150,43 @@ async function ensureDemoUserExists(email: string): Promise<boolean> {
       },
     })
 
+    console.log('[ensureDemoUserExists] Result - data:', data?.user?.email, 'error:', error?.message)
+
     if (error) {
-      // User might already exist
+      // User might already exist - need to update their password
       if (error.message.includes('already been registered') || error.message.includes('already exists')) {
-        console.log('Demo user already exists:', email)
-        return true
+        console.log('[ensureDemoUserExists] User already exists, updating password:', email)
+
+        // Find the user and update their password
+        const { data: listData } = await adminClient.auth.admin.listUsers()
+        const existingUser = listData?.users?.find(u => u.email === email)
+
+        if (existingUser) {
+          console.log('[ensureDemoUserExists] Found existing user:', existingUser.id)
+          const { error: updateError } = await adminClient.auth.admin.updateUserById(existingUser.id, {
+            password: 'DemoMember2024!',
+            email_confirm: true,
+          })
+
+          if (updateError) {
+            console.error('[ensureDemoUserExists] Failed to update password:', updateError.message)
+            return false
+          }
+          console.log('[ensureDemoUserExists] Password updated successfully')
+          return true
+        }
+
+        console.error('[ensureDemoUserExists] User exists but could not find them')
+        return false
       }
-      console.error('Failed to create demo user:', error)
+      console.error('[ensureDemoUserExists] Failed to create demo user:', error.message)
       return false
     }
 
-    console.log('Created demo user:', data.user?.email)
+    console.log('[ensureDemoUserExists] Successfully created demo user:', data.user?.email)
     return true
   } catch (err) {
-    console.error('Error in ensureDemoUserExists:', err)
+    console.error('[ensureDemoUserExists] Caught exception:', err)
     return false
   }
 }

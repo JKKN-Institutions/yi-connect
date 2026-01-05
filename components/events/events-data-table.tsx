@@ -6,6 +6,7 @@
  * Advanced data table with server-side operations.
  */
 
+import { useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ColumnDef,
@@ -40,6 +41,18 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle
+} from '@/components/ui/alert-dialog';
+import { deleteEvent } from '@/app/actions/events';
+import { toast } from 'react-hot-toast';
+import {
   Table,
   TableBody,
   TableCell,
@@ -69,6 +82,25 @@ export function EventsDataTable({
 }: EventsDataTableProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [isPending, startTransition] = useTransition();
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [eventToDelete, setEventToDelete] = useState<EventListItem | null>(null);
+
+  const handleDeleteEvent = async () => {
+    if (!eventToDelete) return;
+
+    startTransition(async () => {
+      const result = await deleteEvent(eventToDelete.id);
+      if (result.success) {
+        toast.success('Event deleted successfully');
+        router.refresh();
+      } else {
+        toast.error(result.error || 'Failed to delete event');
+      }
+      setDeleteDialogOpen(false);
+      setEventToDelete(null);
+    });
+  };
 
   const updateSort = (field: string, direction: 'asc' | 'desc') => {
     const params = new URLSearchParams(searchParams.toString());
@@ -292,7 +324,8 @@ export function EventsDataTable({
               <DropdownMenuItem
                 className='text-destructive'
                 onClick={() => {
-                  // TODO: Handle delete event
+                  setEventToDelete(event);
+                  setDeleteDialogOpen(true);
                 }}
               >
                 <Trash className='mr-2 h-4 w-4' />
@@ -375,6 +408,30 @@ export function EventsDataTable({
         pageSize={pageSize}
         selectedRowsCount={table.getFilteredSelectedRowModel().rows.length}
       />
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Event</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete &quot;{eventToDelete?.title}&quot;? This action
+              cannot be undone. All RSVPs, volunteers, and associated data will be
+              permanently removed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteEvent}
+              disabled={isPending}
+              className='bg-destructive text-destructive-foreground hover:bg-destructive/90'
+            >
+              {isPending ? 'Deleting...' : 'Delete Event'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -42,6 +42,11 @@ async function BenchmarkDashboardContent() {
   }
 
   // Sample data for demonstration - Connect Yi National API for real data
+  // Using Q4 2024 as the sample period (Oct 1 - Dec 31, 2024)
+  const SAMPLE_PERIOD_START = '2024-10-01T00:00:00.000Z';
+  const SAMPLE_PERIOD_END = '2024-12-31T23:59:59.999Z';
+  const SAMPLE_NOW = '2025-01-05T10:00:00.000Z';
+
   const mockBenchmarks: NationalBenchmark[] = [
     {
       id: '1',
@@ -50,8 +55,8 @@ async function BenchmarkDashboardContent() {
       metric_name: 'Events Organized',
       metric_description: 'Total chapter events including verticals and sub-chapter activities',
       period_type: 'quarterly',
-      period_start: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString(),
-      period_end: new Date().toISOString(),
+      period_start: SAMPLE_PERIOD_START,
+      period_end: SAMPLE_PERIOD_END,
       calendar_year: 2025,
       quarter: 4,
       chapter_value: 28,
@@ -68,8 +73,8 @@ async function BenchmarkDashboardContent() {
       performance_tier: 'above_average',
       synced_from_national_at: null,
       national_benchmark_id: null,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
+      created_at: SAMPLE_NOW,
+      updated_at: SAMPLE_NOW
     },
     {
       id: '2',
@@ -78,8 +83,8 @@ async function BenchmarkDashboardContent() {
       metric_name: 'Member Engagement Score',
       metric_description: 'Based on event attendance, volunteering, and committee participation',
       period_type: 'quarterly',
-      period_start: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString(),
-      period_end: new Date().toISOString(),
+      period_start: SAMPLE_PERIOD_START,
+      period_end: SAMPLE_PERIOD_END,
       calendar_year: 2025,
       quarter: 4,
       chapter_value: 78,
@@ -96,8 +101,8 @@ async function BenchmarkDashboardContent() {
       performance_tier: 'top_10',
       synced_from_national_at: null,
       national_benchmark_id: null,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
+      created_at: SAMPLE_NOW,
+      updated_at: SAMPLE_NOW
     },
     {
       id: '3',
@@ -106,8 +111,8 @@ async function BenchmarkDashboardContent() {
       metric_name: 'CSR Impact Value',
       metric_description: 'Monetary value of CSR initiatives and in-kind contributions',
       period_type: 'quarterly',
-      period_start: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString(),
-      period_end: new Date().toISOString(),
+      period_start: SAMPLE_PERIOD_START,
+      period_end: SAMPLE_PERIOD_END,
       calendar_year: 2025,
       quarter: 4,
       chapter_value: 850000,
@@ -124,8 +129,8 @@ async function BenchmarkDashboardContent() {
       performance_tier: 'above_average',
       synced_from_national_at: null,
       national_benchmark_id: null,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
+      created_at: SAMPLE_NOW,
+      updated_at: SAMPLE_NOW
     },
     {
       id: '4',
@@ -134,8 +139,8 @@ async function BenchmarkDashboardContent() {
       metric_name: 'Membership Growth',
       metric_description: 'Net new members added during the period',
       period_type: 'quarterly',
-      period_start: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString(),
-      period_end: new Date().toISOString(),
+      period_start: SAMPLE_PERIOD_START,
+      period_end: SAMPLE_PERIOD_END,
       calendar_year: 2025,
       quarter: 4,
       chapter_value: 8,
@@ -152,8 +157,8 @@ async function BenchmarkDashboardContent() {
       performance_tier: 'below_average',
       synced_from_national_at: null,
       national_benchmark_id: null,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
+      created_at: SAMPLE_NOW,
+      updated_at: SAMPLE_NOW
     },
     {
       id: '5',
@@ -162,8 +167,8 @@ async function BenchmarkDashboardContent() {
       metric_name: 'Volunteer Hours',
       metric_description: 'Total volunteer hours contributed by chapter members',
       period_type: 'quarterly',
-      period_start: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString(),
-      period_end: new Date().toISOString(),
+      period_start: SAMPLE_PERIOD_START,
+      period_end: SAMPLE_PERIOD_END,
       calendar_year: 2025,
       quarter: 4,
       chapter_value: 1850,
@@ -180,8 +185,8 @@ async function BenchmarkDashboardContent() {
       performance_tier: 'above_average',
       synced_from_national_at: null,
       national_benchmark_id: null,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
+      created_at: SAMPLE_NOW,
+      updated_at: SAMPLE_NOW
     },
     {
       id: '6',
@@ -190,8 +195,8 @@ async function BenchmarkDashboardContent() {
       metric_name: 'Sponsorship Raised',
       metric_description: 'Total sponsorship amount secured for chapter activities',
       period_type: 'quarterly',
-      period_start: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString(),
-      period_end: new Date().toISOString(),
+      period_start: SAMPLE_PERIOD_START,
+      period_end: SAMPLE_PERIOD_END,
       calendar_year: 2025,
       quarter: 4,
       chapter_value: 425000,
@@ -208,8 +213,8 @@ async function BenchmarkDashboardContent() {
       performance_tier: 'average',
       synced_from_national_at: null,
       national_benchmark_id: null,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
+      created_at: SAMPLE_NOW,
+      updated_at: SAMPLE_NOW
     }
   ];
 
@@ -414,7 +419,7 @@ export default function BenchmarksPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">National Benchmarks</h1>
           <p className="text-muted-foreground">
-            Compare your chapter's performance against regional and national averages
+            Compare your chapter&apos;s performance against regional and national averages
           </p>
         </div>
         <Badge variant="outline" className="text-blue-600">

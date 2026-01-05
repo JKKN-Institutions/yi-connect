@@ -22,69 +22,130 @@ import {
   Globe
 } from 'lucide-react';
 import { NationalEventsList } from '@/components/national/national-events-list';
+import { SampleDataNotice } from '@/components/national/sample-data-notice';
 import type { NationalEventListItem } from '@/types/national-integration';
 
-// Mock data for demonstration - in production this would come from server
+// Sample data for demonstration - Connect Yi National API for real data
 const mockEvents: NationalEventListItem[] = [
   {
     id: '1',
     national_event_id: 'nat-1',
-    title: 'Yi National Summit 2025',
+    title: 'Yi National Summit 2025 - Building India @100',
     event_type: 'summit',
-    start_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-    end_date: new Date(Date.now() + 32 * 24 * 60 * 60 * 1000).toISOString(),
-    city: 'Mumbai',
+    start_date: new Date(Date.now() + 68 * 24 * 60 * 60 * 1000).toISOString(),
+    end_date: new Date(Date.now() + 70 * 24 * 60 * 60 * 1000).toISOString(),
+    city: 'Udaipur',
     status: 'registration_open',
-    registration_deadline: new Date(Date.now() + 20 * 24 * 60 * 60 * 1000).toISOString(),
-    max_participants: 500,
-    current_registrations: 342,
+    registration_deadline: new Date(Date.now() + 40 * 24 * 60 * 60 * 1000).toISOString(),
+    max_participants: 600,
+    current_registrations: 423,
     is_featured: true,
     is_virtual: false
   },
   {
     id: '2',
     national_event_id: 'nat-2',
-    title: 'Regional Chapter Meet - South Zone',
+    title: 'South Zone RCM - Q1 2025',
     event_type: 'rcm',
-    start_date: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString(),
-    end_date: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString(),
-    city: 'Chennai',
+    start_date: new Date(Date.now() + 21 * 24 * 60 * 60 * 1000).toISOString(),
+    end_date: new Date(Date.now() + 22 * 24 * 60 * 60 * 1000).toISOString(),
+    city: 'Bengaluru',
     status: 'registration_open',
-    registration_deadline: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString(),
-    max_participants: 200,
-    current_registrations: 156,
+    registration_deadline: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+    max_participants: 300,
+    current_registrations: 198,
     is_featured: false,
     is_virtual: false
   },
   {
     id: '3',
     national_event_id: 'nat-3',
-    title: 'Yuva Conclave 2025',
-    event_type: 'yuva_conclave',
-    start_date: new Date(Date.now() + 45 * 24 * 60 * 60 * 1000).toISOString(),
-    end_date: new Date(Date.now() + 47 * 24 * 60 * 60 * 1000).toISOString(),
-    city: 'Delhi',
-    status: 'upcoming',
-    registration_deadline: new Date(Date.now() + 35 * 24 * 60 * 60 * 1000).toISOString(),
-    max_participants: 1000,
-    current_registrations: 0,
-    is_featured: true,
+    title: 'West Zone RCM - Q1 2025',
+    event_type: 'rcm',
+    start_date: new Date(Date.now() + 28 * 24 * 60 * 60 * 1000).toISOString(),
+    end_date: new Date(Date.now() + 29 * 24 * 60 * 60 * 1000).toISOString(),
+    city: 'Ahmedabad',
+    status: 'registration_open',
+    registration_deadline: new Date(Date.now() + 21 * 24 * 60 * 60 * 1000).toISOString(),
+    max_participants: 250,
+    current_registrations: 112,
+    is_featured: false,
     is_virtual: false
   },
   {
     id: '4',
     national_event_id: 'nat-4',
-    title: 'Leadership Training Workshop',
+    title: 'Yuva Conclave 2025 - Igniting Young Minds',
+    event_type: 'yuva_conclave',
+    start_date: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(),
+    end_date: new Date(Date.now() + 92 * 24 * 60 * 60 * 1000).toISOString(),
+    city: 'Hyderabad',
+    status: 'upcoming',
+    registration_deadline: new Date(Date.now() + 75 * 24 * 60 * 60 * 1000).toISOString(),
+    max_participants: 1500,
+    current_registrations: 0,
+    is_featured: true,
+    is_virtual: false
+  },
+  {
+    id: '5',
+    national_event_id: 'nat-5',
+    title: 'Chapter Chair Leadership Bootcamp',
     event_type: 'training',
-    start_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-    end_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+    start_date: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString(),
+    end_date: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString(),
     city: null,
     status: 'registration_open',
-    registration_deadline: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
-    max_participants: 100,
-    current_registrations: 87,
+    registration_deadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+    max_participants: 150,
+    current_registrations: 124,
     is_featured: false,
     is_virtual: true
+  },
+  {
+    id: '6',
+    national_event_id: 'nat-6',
+    title: 'Yi Startup Ecosystem Summit',
+    event_type: 'conference',
+    start_date: new Date(Date.now() + 45 * 24 * 60 * 60 * 1000).toISOString(),
+    end_date: new Date(Date.now() + 45 * 24 * 60 * 60 * 1000).toISOString(),
+    city: 'Pune',
+    status: 'registration_open',
+    registration_deadline: new Date(Date.now() + 35 * 24 * 60 * 60 * 1000).toISOString(),
+    max_participants: 400,
+    current_registrations: 156,
+    is_featured: true,
+    is_virtual: false
+  },
+  {
+    id: '7',
+    national_event_id: 'nat-7',
+    title: 'NIMHANS Mental Health ToT Program',
+    event_type: 'training',
+    start_date: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+    end_date: new Date(Date.now() + 16 * 24 * 60 * 60 * 1000).toISOString(),
+    city: 'Bengaluru',
+    status: 'registration_open',
+    registration_deadline: new Date(Date.now() + 8 * 24 * 60 * 60 * 1000).toISOString(),
+    max_participants: 50,
+    current_registrations: 42,
+    is_featured: false,
+    is_virtual: false
+  },
+  {
+    id: '8',
+    national_event_id: 'nat-8',
+    title: 'North Zone RCM - Q1 2025',
+    event_type: 'rcm',
+    start_date: new Date(Date.now() + 35 * 24 * 60 * 60 * 1000).toISOString(),
+    end_date: new Date(Date.now() + 36 * 24 * 60 * 60 * 1000).toISOString(),
+    city: 'Jaipur',
+    status: 'upcoming',
+    registration_deadline: new Date(Date.now() + 28 * 24 * 60 * 60 * 1000).toISOString(),
+    max_participants: 280,
+    current_registrations: 0,
+    is_featured: false,
+    is_virtual: false
   }
 ];
 
@@ -123,6 +184,9 @@ export default function NationalEventsPage() {
           {upcomingCount} Upcoming
         </Badge>
       </div>
+
+      {/* Sample Data Notice */}
+      <SampleDataNotice module="National Events" />
 
       {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-4">

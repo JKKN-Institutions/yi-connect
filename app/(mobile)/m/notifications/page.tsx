@@ -37,13 +37,14 @@ const notificationIcons: Record<string, React.ComponentType<{ className?: string
   reminder: Clock
 }
 
-// Sample notification data (would come from API)
+// Sample notification data for offline PWA demo
+// When online, notifications are fetched via getNotifications() from lib/data/communication.ts
 const sampleNotifications = [
   {
     id: '1',
     type: 'event',
     title: 'Event Reminder',
-    message: 'Annual Yi Summit starts tomorrow at 9:00 AM',
+    message: 'EC Committee Meeting starts in 1 hour at the Chapter Office. Don\'t forget the monthly report.',
     createdAt: new Date(Date.now() - 1000 * 60 * 30), // 30 mins ago
     read: false,
     actionUrl: '/events/123'
@@ -51,8 +52,8 @@ const sampleNotifications = [
   {
     id: '2',
     type: 'announcement',
-    title: 'New Announcement',
-    message: 'Important update from the Chapter Chair regarding membership renewals',
+    title: 'CMP Submission Due',
+    message: 'Your Chapter Management Plan for Q1 2025 is due in 3 days. Please complete all sections.',
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 2), // 2 hours ago
     read: false,
     actionUrl: '/communications/announcements/456'
@@ -60,11 +61,29 @@ const sampleNotifications = [
   {
     id: '3',
     type: 'award',
-    title: 'Nomination Received',
-    message: 'You have been nominated for the Rising Star Award',
+    title: 'Take Pride Award Nomination',
+    message: 'You have been nominated for the Take Pride Award - Best Volunteer category. Review your nomination.',
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24), // 1 day ago
     read: true,
     actionUrl: '/awards/nominations'
+  },
+  {
+    id: '4',
+    type: 'member',
+    title: 'New Member Joined',
+    message: 'Priya Sharma has joined Yi Erode Chapter. Welcome them to the family!',
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 48), // 2 days ago
+    read: true,
+    actionUrl: '/members/new'
+  },
+  {
+    id: '5',
+    type: 'approval',
+    title: 'Event Approved',
+    message: 'Your event "Industry Visit to Lakshmi Mills" has been approved by the Chapter Chair.',
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 72), // 3 days ago
+    read: true,
+    actionUrl: '/events/456'
   }
 ]
 

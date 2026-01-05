@@ -23,6 +23,7 @@ import { SyncStatusCard } from '@/components/national/sync-status-card';
 import { SyncLogsTable } from '@/components/national/sync-logs-table';
 import { ConflictsTable } from '@/components/national/conflicts-table';
 import { ManualSyncButton } from '@/components/national/manual-sync-button';
+import { SampleDataNotice } from '@/components/national/sample-data-notice';
 import type { SyncHealthStatus, NationalDataConflict } from '@/types/national-integration';
 
 export const metadata = {
@@ -47,21 +48,21 @@ async function SyncDashboardContent() {
     );
   }
 
-  // Mock data for demonstration
+  // Sample data for demonstration - Connect Yi National API for real data
   const mockHealth: SyncHealthStatus = {
     sync_enabled: true,
     connection_status: 'connected',
-    health_score: 85,
-    last_successful_sync: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-    pending_conflicts: 2,
+    health_score: 92,
+    last_successful_sync: new Date(Date.now() - 45 * 60 * 1000).toISOString(),
+    pending_conflicts: 1,
     consecutive_failures: 0,
-    entities_synced: 1245,
+    entities_synced: 2847,
     last_24h: {
-      successful_syncs: 12,
+      successful_syncs: 24,
       failed_syncs: 1,
       in_progress: 0,
-      records_synced: 450,
-      records_failed: 3
+      records_synced: 1256,
+      records_failed: 8
     }
   };
 
@@ -71,11 +72,11 @@ async function SyncDashboardContent() {
       sync_type: 'members' as const,
       direction: 'push' as const,
       status: 'completed' as const,
-      started_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-      completed_at: new Date(Date.now() - 2 * 60 * 60 * 1000 + 45000).toISOString(),
-      records_processed: 150,
-      records_succeeded: 148,
-      records_failed: 2,
+      started_at: new Date(Date.now() - 45 * 60 * 1000).toISOString(),
+      completed_at: new Date(Date.now() - 45 * 60 * 1000 + 32000).toISOString(),
+      records_processed: 186,
+      records_succeeded: 186,
+      records_failed: 0,
       error_message: null
     },
     {
@@ -83,38 +84,65 @@ async function SyncDashboardContent() {
       sync_type: 'events' as const,
       direction: 'pull' as const,
       status: 'completed' as const,
-      started_at: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
-      completed_at: new Date(Date.now() - 4 * 60 * 60 * 1000 + 30000).toISOString(),
-      records_processed: 25,
-      records_succeeded: 25,
+      started_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+      completed_at: new Date(Date.now() - 2 * 60 * 60 * 1000 + 18000).toISOString(),
+      records_processed: 42,
+      records_succeeded: 42,
       records_failed: 0,
       error_message: null
     },
     {
       id: '3',
+      sync_type: 'leadership' as const,
+      direction: 'pull' as const,
+      status: 'completed' as const,
+      started_at: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
+      completed_at: new Date(Date.now() - 4 * 60 * 60 * 1000 + 12000).toISOString(),
+      records_processed: 28,
+      records_succeeded: 28,
+      records_failed: 0,
+      error_message: null
+    },
+    {
+      id: '4',
       sync_type: 'benchmarks' as const,
       direction: 'pull' as const,
       status: 'failed' as const,
-      started_at: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
-      completed_at: new Date(Date.now() - 6 * 60 * 60 * 1000 + 5000).toISOString(),
+      started_at: new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString(),
+      completed_at: new Date(Date.now() - 8 * 60 * 60 * 1000 + 5000).toISOString(),
       records_processed: 0,
       records_succeeded: 0,
       records_failed: 0,
-      error_message: 'Connection timeout'
+      error_message: 'National API rate limit exceeded. Will retry in 15 minutes.'
+    },
+    {
+      id: '5',
+      sync_type: 'benchmarks' as const,
+      direction: 'pull' as const,
+      status: 'completed' as const,
+      started_at: new Date(Date.now() - 8 * 60 * 60 * 1000 + 20 * 60 * 1000).toISOString(),
+      completed_at: new Date(Date.now() - 8 * 60 * 60 * 1000 + 20 * 60 * 1000 + 8000).toISOString(),
+      records_processed: 12,
+      records_succeeded: 12,
+      records_failed: 0,
+      error_message: null
     }
   ];
 
   const mockConflicts: NationalDataConflict[] = [];
 
   const entityStats = [
-    { name: 'Members', icon: Users, synced: 450, pending: 5 },
-    { name: 'Events', icon: Calendar, synced: 120, pending: 0 },
-    { name: 'Documents', icon: FileText, synced: 340, pending: 2 },
-    { name: 'Metrics', icon: Activity, synced: 890, pending: 0 }
+    { name: 'Members', icon: Users, synced: 186, pending: 0 },
+    { name: 'Events', icon: Calendar, synced: 42, pending: 3 },
+    { name: 'Documents', icon: FileText, synced: 156, pending: 0 },
+    { name: 'Metrics', icon: Activity, synced: 2463, pending: 0 }
   ];
 
   return (
     <div className="space-y-6">
+      {/* Sample Data Notice */}
+      <SampleDataNotice module="Sync Management" />
+
       {/* Top Stats */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {entityStats.map((entity) => (

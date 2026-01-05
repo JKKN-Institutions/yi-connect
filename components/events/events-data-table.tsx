@@ -292,8 +292,7 @@ export function EventsDataTable({
               <DropdownMenuItem
                 className='text-destructive'
                 onClick={() => {
-                  // Handle delete
-                  console.log('Delete event:', event.id);
+                  // TODO: Handle delete event
                 }}
               >
                 <Trash className='mr-2 h-4 w-4' />

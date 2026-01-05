@@ -89,7 +89,6 @@ async function createMemberFromRequest(userId: string, email: string) {
       .single();
 
     if (!approvedEmail || !approvedEmail.request) {
-      console.log('No approved request found for email:', email);
       return;
     }
 
@@ -156,8 +155,6 @@ async function createMemberFromRequest(userId: string, email: string) {
         created_member_id: userId
       })
       .eq('id', request.id);
-
-    console.log('✅ Member record created automatically for:', email);
   } catch (error) {
     console.error('Error in createMemberFromRequest:', error);
   }

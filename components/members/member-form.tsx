@@ -253,18 +253,6 @@ export function MemberForm({
         })
       );
 
-      // Debug: Log form data being submitted
-      console.log('📤 Submitting form data:', {
-        mode: isApplyMode ? 'apply' : 'create',
-        fields: Array.from(submitData.entries()).map(([key, value]) => ({
-          key,
-          value:
-            typeof value === 'string' && value.length > 50
-              ? value.substring(0, 50) + '...'
-              : value
-        }))
-      });
-
       // Call appropriate server action based on mode
       let result;
       if (isApplyMode) {
@@ -277,14 +265,6 @@ export function MemberForm({
           : await createMember({ message: '', errors: {} }, submitData);
       }
 
-      // Debug: Log result
-      console.log('📥 Form submission result:', {
-        success: result.success,
-        message: result.message,
-        errors: result.errors,
-        hasRedirect: !!result.redirectTo
-      });
-
       if (result.success) {
         toast.success(result.message);
         if (result.redirectTo) {
@@ -295,12 +275,10 @@ export function MemberForm({
           // Map preferred_chapter_id error back to chapter_id for apply mode
           const mappedErrors = { ...result.errors } as Record<string, string[]>;
           if (isApplyMode && mappedErrors.preferred_chapter_id) {
-            console.log('📝 Mapping preferred_chapter_id error to chapter_id');
             mappedErrors.chapter_id = mappedErrors.preferred_chapter_id;
             delete mappedErrors.preferred_chapter_id;
           }
 
-          console.log('📝 Setting errors:', mappedErrors);
           setErrors(mappedErrors);
           // Find which step has errors and navigate to it
           const errorFields = Object.keys(mappedErrors);

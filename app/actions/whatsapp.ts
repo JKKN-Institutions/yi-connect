@@ -116,7 +116,6 @@ export async function connectWhatsApp(): Promise<{
 }> {
   try {
     if (useApiClient()) {
-      console.log('[WhatsApp] Using Railway API service');
       const result = await connectWhatsAppAPI();
       return result;
     } else if (isServerless()) {
@@ -127,7 +126,6 @@ export async function connectWhatsApp(): Promise<{
         error: 'WhatsApp service not configured. Please set up the Railway WhatsApp service.'
       };
     } else {
-      console.log('[WhatsApp] Using local client');
       const { initializeWhatsApp } = await getLocalClient();
       const result = await initializeWhatsApp();
       return result;

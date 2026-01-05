@@ -56,8 +56,6 @@ export function getAdminBottomNavPages(
   pathname: string,
   userRoles: string[] = []
 ): AdminMenuGroup[] {
-  console.log('[adminBottomNavConfig] User roles:', userRoles);
-
   // Helper function to check if user has required roles
   const hasRequiredRoles = (requiredRoles?: string[]): boolean => {
     if (!requiredRoles || requiredRoles.length === 0) return true;
@@ -68,7 +66,6 @@ export function getAdminBottomNavPages(
     }
 
     const hasRole = requiredRoles.some(role => userRoles.includes(role));
-    console.log('[hasRequiredRoles] Required:', requiredRoles, 'User has:', hasRole);
     return hasRole;
   };
 

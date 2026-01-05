@@ -192,12 +192,10 @@ export async function queueOfflineAction(
  */
 export function setupSyncListeners(): () => void {
   const handleOnline = () => {
-    console.log('Back online, syncing pending actions...')
     syncPendingActions()
   }
 
   const handleOffline = () => {
-    console.log('Went offline, actions will be queued')
     notifyStatusChange()
   }
 

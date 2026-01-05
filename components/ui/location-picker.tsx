@@ -182,20 +182,14 @@ export function LocationPicker({
         }
       }
 
-      console.log('Parsing Google Maps URL:', url);
-      console.log('Cleaned URL:', cleanUrl);
-      console.log('Decoded URL:', decodedUrl);
-
       // Check for short links that can't be parsed directly
       if (/^https?:\/\/(goo\.gl|maps\.app\.goo\.gl)/i.test(cleanUrl)) {
-        console.log('Short link detected - cannot parse directly');
         return null;
       }
 
       // Helper function to validate and return coordinates
       const validateCoords = (lat: number, lng: number): { lat: number; lng: number } | null => {
         if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
-          console.log(`Valid coordinates found: ${lat}, ${lng}`);
           return { lat, lng };
         }
         return null;
@@ -205,7 +199,6 @@ export function LocationPicker({
       const qPattern = /[?&]q=(-?\d+\.?\d*),\s*(-?\d+\.?\d*)/;
       const qMatch = decodedUrl.match(qPattern);
       if (qMatch) {
-        console.log('Matched q pattern:', qMatch);
         const result = validateCoords(parseFloat(qMatch[1]), parseFloat(qMatch[2]));
         if (result) return result;
       }
@@ -214,7 +207,6 @@ export function LocationPicker({
       const atPattern = /@(-?\d+\.?\d*),\s*(-?\d+\.?\d*)/;
       const atMatch = decodedUrl.match(atPattern);
       if (atMatch) {
-        console.log('Matched @ pattern:', atMatch);
         const result = validateCoords(parseFloat(atMatch[1]), parseFloat(atMatch[2]));
         if (result) return result;
       }
@@ -223,7 +215,6 @@ export function LocationPicker({
       const embedPattern = /!3d(-?\d+\.?\d*)!4d(-?\d+\.?\d*)/;
       const embedMatch = decodedUrl.match(embedPattern);
       if (embedMatch) {
-        console.log('Matched embed pattern:', embedMatch);
         const result = validateCoords(parseFloat(embedMatch[1]), parseFloat(embedMatch[2]));
         if (result) return result;
       }
@@ -232,7 +223,6 @@ export function LocationPicker({
       const llPattern = /[?&]ll=(-?\d+\.?\d*),\s*(-?\d+\.?\d*)/;
       const llMatch = decodedUrl.match(llPattern);
       if (llMatch) {
-        console.log('Matched ll pattern:', llMatch);
         const result = validateCoords(parseFloat(llMatch[1]), parseFloat(llMatch[2]));
         if (result) return result;
       }
@@ -241,7 +231,6 @@ export function LocationPicker({
       const centerPattern = /[?&]center=(-?\d+\.?\d*),\s*(-?\d+\.?\d*)/;
       const centerMatch = decodedUrl.match(centerPattern);
       if (centerMatch) {
-        console.log('Matched center pattern:', centerMatch);
         const result = validateCoords(parseFloat(centerMatch[1]), parseFloat(centerMatch[2]));
         if (result) return result;
       }
@@ -250,7 +239,6 @@ export function LocationPicker({
       const placePattern = /\/place\/[^/]*\/@?(-?\d+\.?\d*),\s*(-?\d+\.?\d*)/;
       const placeMatch = decodedUrl.match(placePattern);
       if (placeMatch) {
-        console.log('Matched place pattern:', placeMatch);
         const result = validateCoords(parseFloat(placeMatch[1]), parseFloat(placeMatch[2]));
         if (result) return result;
       }
@@ -259,7 +247,6 @@ export function LocationPicker({
       const dirPattern = /\/dir\/[^/]*\/(-?\d+\.?\d*),\s*(-?\d+\.?\d*)/;
       const dirMatch = decodedUrl.match(dirPattern);
       if (dirMatch) {
-        console.log('Matched dir pattern:', dirMatch);
         const result = validateCoords(parseFloat(dirMatch[1]), parseFloat(dirMatch[2]));
         if (result) return result;
       }
@@ -268,7 +255,6 @@ export function LocationPicker({
       const ftidPattern = /!8m2!3d(-?\d+\.?\d*)!4d(-?\d+\.?\d*)/;
       const ftidMatch = decodedUrl.match(ftidPattern);
       if (ftidMatch) {
-        console.log('Matched ftid pattern:', ftidMatch);
         const result = validateCoords(parseFloat(ftidMatch[1]), parseFloat(ftidMatch[2]));
         if (result) return result;
       }
@@ -277,7 +263,6 @@ export function LocationPicker({
       // Match coordinates like 11.34,77.71 or 11.3410364,77.7171642
       const genericPattern = /(-?\d{1,3}\.\d{2,}),\s*(-?\d{1,3}\.\d{2,})/g;
       const matches = [...decodedUrl.matchAll(genericPattern)];
-      console.log('Generic pattern matches:', matches);
       if (matches.length > 0) {
         // Try each match and return the first valid one
         for (const match of matches) {
@@ -285,7 +270,6 @@ export function LocationPicker({
           const lng = parseFloat(match[2]);
           const result = validateCoords(lat, lng);
           if (result) {
-            console.log('Matched generic pattern:', match);
             return result;
           }
         }
@@ -300,7 +284,6 @@ export function LocationPicker({
           const lng = parseFloat(match[2]);
           const result = validateCoords(lat, lng);
           if (result) {
-            console.log('Matched encoded comma pattern:', match);
             return result;
           }
         }
@@ -310,12 +293,10 @@ export function LocationPicker({
       const spacePattern = /(-?\d{1,3}\.\d{2,})\s+(-?\d{1,3}\.\d{2,})/;
       const spaceMatch = decodedUrl.match(spacePattern);
       if (spaceMatch) {
-        console.log('Matched space pattern:', spaceMatch);
         const result = validateCoords(parseFloat(spaceMatch[1]), parseFloat(spaceMatch[2]));
         if (result) return result;
       }
 
-      console.log('No pattern matched for URL');
       return null;
     } catch (error) {
       console.error('Error parsing URL:', error);
@@ -349,7 +330,6 @@ export function LocationPicker({
       if (response.ok) {
         const data = await response.json();
         if (data.expandedUrl) {
-          console.log('Expanded URL:', data.expandedUrl);
           return data.expandedUrl;
         }
       }
@@ -383,7 +363,6 @@ export function LocationPicker({
 
       if (expandedUrl) {
         urlToParse = expandedUrl;
-        console.log('Using expanded URL:', urlToParse);
       } else {
         // If expansion fails, try to parse the short URL's path for any embedded coordinates
         // or show a helpful message
@@ -433,7 +412,6 @@ export function LocationPicker({
       'Could not extract coordinates. Try:\n• Copy URL from browser address bar\n• Or enter coordinates manually below',
       { duration: 5000 }
     );
-    console.log('Failed to parse URL. Check browser console for details.');
     return false;
   };
 

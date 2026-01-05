@@ -54,7 +54,6 @@ export async function createMember(
   // If no userId provided, create a new auth user (admin creating member)
   if (!userId && email && fullName) {
     isNewUser = true;
-    console.log('Admin creating new member - creating auth user first');
 
     // Get the chapter_id from form data to add to approved_emails
     const chapterId = formData.get('chapter_id') as string;
@@ -97,7 +96,6 @@ export async function createMember(
     }
 
     userId = newUser.user.id;
-    console.log('Created new auth user with ID:', userId);
 
     // Note: Profile is automatically created by handle_new_user() trigger
 

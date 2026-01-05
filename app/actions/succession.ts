@@ -196,8 +196,6 @@ export async function updateSuccessionCycle(
       }
     }
 
-    console.log('Updating succession cycle with data:', cleanedData)
-
     // Get current version for optimistic locking
     const { data: current, error: fetchError } = await supabase
       .from('succession_cycles')

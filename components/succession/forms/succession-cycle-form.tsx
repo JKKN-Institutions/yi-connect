@@ -97,10 +97,6 @@ export function SuccessionCycleForm({ cycle }: SuccessionCycleFormProps) {
   // Reset form values when cycle prop changes (for edit mode)
   useEffect(() => {
     if (cycle) {
-      console.log('Resetting form with cycle data:', cycle)
-      console.log('Formatted start_date:', formatDateForInput(cycle.start_date))
-      console.log('Formatted end_date:', formatDateForInput(cycle.end_date))
-
       form.reset({
         year: cycle.year,
         cycle_name: cycle.cycle_name,

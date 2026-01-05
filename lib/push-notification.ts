@@ -249,7 +249,6 @@ export async function sendAnnouncementPush(
   }
 ): Promise<SendPushResult> {
   if (!isPushConfigured()) {
-    console.log('Push notifications not configured, skipping...')
     return { success: true, sent: 0, failed: 0 }
   }
 

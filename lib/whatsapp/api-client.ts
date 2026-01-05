@@ -53,7 +53,6 @@ function getApiKey(): string | undefined {
 export function isServiceConfigured(): boolean {
   const url = getServiceUrl();
   const key = getApiKey();
-  console.log('[WhatsApp API] Checking config:', { hasUrl: !!url, hasKey: !!key });
   return !!(url && key);
 }
 
@@ -86,7 +85,6 @@ async function apiRequest<T>(
   }
 
   const url = `${serviceUrl}${endpoint}`;
-  console.log(`[WhatsApp API] ${options.method || 'GET'} ${endpoint}`);
 
   try {
     const response = await fetch(url, {

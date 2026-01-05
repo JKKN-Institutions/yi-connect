@@ -84,8 +84,6 @@ export async function sendTextMessage(
     // Send the message
     const sentMessage = await client.sendMessage(chatId, message);
 
-    console.log(`[WhatsApp] Message sent to ${phoneNumber}: ${sentMessage.id._serialized}`);
-
     return {
       success: true,
       messageId: sentMessage.id._serialized
@@ -172,15 +170,12 @@ export async function sendGroupMessage(
 
     const sentMessage = await client.sendMessage(chatId, message);
 
-    console.log(`[WhatsApp] Group message sent: ${sentMessage.id._serialized}`);
-
     return {
       success: true,
       messageId: sentMessage.id._serialized
     };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-    console.error(`[WhatsApp] Group send error:`, errorMsg);
     return {
       success: false,
       error: errorMsg

@@ -592,9 +592,8 @@ export async function updateNotificationSettings(
       });
 
     if (error) {
-      // If the table doesn't exist, log it but don't fail
+      // If the table doesn't exist, don't fail
       if (error.code === '42P01') {
-        console.log('Notification settings table does not exist yet');
         return {
           success: true,
           message: 'Notification preferences saved (demo mode)',

@@ -113,8 +113,8 @@ export function ShareButton({
           if (navigator.canShare({ files: [file] })) {
             shareData.files = [file];
           }
-        } catch (e) {
-          console.log('Could not fetch image for sharing:', e);
+        } catch {
+          // Image fetch failed, continue without image
         }
       }
 

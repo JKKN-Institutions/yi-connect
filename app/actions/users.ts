@@ -72,7 +72,7 @@ export async function updateUserProfile(
 
     if (error) {
       return {
-        message: error.message || 'Failed to update user profile. Please try again.'
+        message: error instanceof Error ? error.message : 'Failed to update user profile. Please try again.'
       }
     }
 
@@ -84,9 +84,9 @@ export async function updateUserProfile(
       success: true,
       message: 'User profile updated successfully!'
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
-      message: error.message || 'An unexpected error occurred.'
+      message: error instanceof Error ? error.message : 'An unexpected error occurred.'
     }
   }
 }
@@ -154,7 +154,7 @@ export async function assignRole(
 
     if (error) {
       return {
-        message: error.message || 'Failed to assign role. Please try again.'
+        message: error instanceof Error ? error.message : 'Failed to assign role. Please try again.'
       }
     }
 
@@ -168,9 +168,9 @@ export async function assignRole(
       success: true,
       message: 'Role assigned successfully!'
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
-      message: error.message || 'An unexpected error occurred.'
+      message: error instanceof Error ? error.message : 'An unexpected error occurred.'
     }
   }
 }
@@ -247,7 +247,7 @@ export async function removeRole(
 
     if (error) {
       return {
-        message: error.message || 'Failed to remove role. Please try again.'
+        message: error instanceof Error ? error.message : 'Failed to remove role. Please try again.'
       }
     }
 
@@ -261,9 +261,9 @@ export async function removeRole(
       success: true,
       message: 'Role removed successfully!'
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
-      message: error.message || 'An unexpected error occurred.'
+      message: error instanceof Error ? error.message : 'An unexpected error occurred.'
     }
   }
 }
@@ -341,12 +341,12 @@ export async function bulkAssignRole(
         }
 
         result.success_count++
-      } catch (error: any) {
+      } catch (error: unknown) {
         result.failure_count++
         result.failures.push({
           user_id: userId,
           user_name: 'Unknown',
-          error: error.message
+          error: error instanceof Error ? error.message : 'Unknown error'
         })
       }
     }
@@ -359,9 +359,9 @@ export async function bulkAssignRole(
       message: `Role assigned to ${result.success_count} user(s). ${result.failure_count} failed.`,
       data: result
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
-      message: error.message || 'An unexpected error occurred.'
+      message: error instanceof Error ? error.message : 'An unexpected error occurred.'
     }
   }
 }
@@ -440,12 +440,12 @@ export async function bulkRemoveRole(
         }
 
         result.success_count++
-      } catch (error: any) {
+      } catch (error: unknown) {
         result.failure_count++
         result.failures.push({
           user_id: userId,
           user_name: 'Unknown',
-          error: error.message
+          error: error instanceof Error ? error.message : 'Unknown error'
         })
       }
     }
@@ -458,9 +458,9 @@ export async function bulkRemoveRole(
       message: `Role removed from ${result.success_count} user(s). ${result.failure_count} failed.`,
       data: result
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
-      message: error.message || 'An unexpected error occurred.'
+      message: error instanceof Error ? error.message : 'An unexpected error occurred.'
     }
   }
 }
@@ -517,7 +517,7 @@ export async function changeUserStatus(
 
     if (error) {
       return {
-        message: error.message || 'Failed to update user status. Please try again.'
+        message: error instanceof Error ? error.message : 'Failed to update user status. Please try again.'
       }
     }
 
@@ -529,9 +529,9 @@ export async function changeUserStatus(
       success: true,
       message: `User ${validation.data.is_active ? 'activated' : 'deactivated'} successfully!`
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
-      message: error.message || 'An unexpected error occurred.'
+      message: error instanceof Error ? error.message : 'An unexpected error occurred.'
     }
   }
 }
@@ -627,12 +627,12 @@ export async function bulkDeactivateUsers(
         }
 
         result.success_count++
-      } catch (error: any) {
+      } catch (error: unknown) {
         result.failure_count++
         result.failures.push({
           user_id: userId,
           user_name: 'Unknown',
-          error: error.message
+          error: error instanceof Error ? error.message : 'Unknown error'
         })
       }
     }
@@ -646,9 +646,9 @@ export async function bulkDeactivateUsers(
       message: `Deactivated ${result.success_count} user(s). ${result.failure_count} failed.`,
       data: result
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
-      message: error.message || 'An unexpected error occurred.'
+      message: error instanceof Error ? error.message : 'An unexpected error occurred.'
     }
   }
 }
@@ -706,12 +706,12 @@ export async function bulkAssignChapter(
         }
 
         result.success_count++
-      } catch (error: any) {
+      } catch (error: unknown) {
         result.failure_count++
         result.failures.push({
           user_id: userId,
           user_name: 'Unknown',
-          error: error.message
+          error: error instanceof Error ? error.message : 'Unknown error'
         })
       }
     }
@@ -724,9 +724,9 @@ export async function bulkAssignChapter(
       message: `Chapter assigned to ${result.success_count} user(s). ${result.failure_count} failed.`,
       data: result
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
-      message: error.message || 'An unexpected error occurred.'
+      message: error instanceof Error ? error.message : 'An unexpected error occurred.'
     }
   }
 }
@@ -770,7 +770,7 @@ export async function deleteUser(userId: string): Promise<FormState> {
 
     if (error) {
       return {
-        message: error.message || 'Failed to delete user. Please try again.'
+        message: error instanceof Error ? error.message : 'Failed to delete user. Please try again.'
       }
     }
 
@@ -779,9 +779,9 @@ export async function deleteUser(userId: string): Promise<FormState> {
     revalidatePath(`/admin/users/${userId}`)
 
     redirect('/admin/users')
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
-      message: error.message || 'An unexpected error occurred.'
+      message: error instanceof Error ? error.message : 'An unexpected error occurred.'
     }
   }
 }
@@ -835,7 +835,7 @@ export async function inviteUser(
     }
 
     // Prepare metadata for future use (when user signs up)
-    const metadata: any = {}
+    const metadata: Record<string, unknown> = {}
     if (validation.data.full_name) metadata.full_name = validation.data.full_name
     if (validation.data.chapter_id) metadata.chapter_id = validation.data.chapter_id
     if (validation.data.role_ids && validation.data.role_ids.length > 0) {
@@ -857,7 +857,7 @@ export async function inviteUser(
 
     if (error) {
       return {
-        message: error.message || 'Failed to invite user. Please try again.'
+        message: error instanceof Error ? error.message : 'Failed to invite user. Please try again.'
       }
     }
 
@@ -908,9 +908,9 @@ export async function inviteUser(
         ? `Invitation sent to ${validation.data.email}. They can now sign up using this email.`
         : `${validation.data.email} added to approved list. They can now sign up using this email.`
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
-      message: error.message || 'An unexpected error occurred.'
+      message: error instanceof Error ? error.message : 'An unexpected error occurred.'
     }
   }
 }
@@ -989,10 +989,10 @@ export async function deactivateUserFromTable(
       success: true,
       message: `${userName} has been deactivated successfully.`
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || 'Failed to deactivate user.'
+      message: error instanceof Error ? error.message : 'Failed to deactivate user.'
     };
   }
 }
@@ -1059,10 +1059,10 @@ export async function reactivateUserFromTable(
       success: true,
       message: `${userName} has been reactivated successfully.`
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || 'Failed to reactivate user.'
+      message: error instanceof Error ? error.message : 'Failed to reactivate user.'
     };
   }
 }
@@ -1182,10 +1182,10 @@ export async function deleteUserPermanently(
       success: true,
       message: `${userName} has been permanently deleted.`
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || 'Failed to delete user permanently.'
+      message: error instanceof Error ? error.message : 'Failed to delete user permanently.'
     };
   }
 }
@@ -1271,37 +1271,45 @@ export async function exportUsers(
     let filteredUsers = users
 
     if (filters?.chapter_id) {
-      filteredUsers = filteredUsers.filter((u: any) =>
-        u.member?.chapter?.id === filters.chapter_id
-      )
+      filteredUsers = filteredUsers.filter((u) => {
+        const member = u.member as { chapter?: { id?: string }[] }[] | null;
+        return member?.[0]?.chapter?.[0]?.id === filters.chapter_id;
+      })
     }
 
     if (filters?.role_id) {
-      filteredUsers = filteredUsers.filter((u: any) =>
-        u.roles?.some((r: any) => r.role?.id === filters.role_id)
-      )
+      filteredUsers = filteredUsers.filter((u) => {
+        const roles = u.roles as { role?: { id?: string }[] }[] | null;
+        return roles?.some((r) => r.role?.[0]?.id === filters.role_id);
+      })
     }
 
     // Transform data for export
-    const exportData = filteredUsers.map((user: any) => ({
-      id: user.id,
-      full_name: user.full_name || '',
-      email: user.email || '',
-      phone: user.phone || '',
-      is_active: user.is_active ? 'Yes' : 'No',
-      company: user.member?.company || '',
-      designation: user.member?.designation || '',
-      industry: user.member?.industry || '',
-      years_of_experience: user.member?.years_of_experience || '',
-      chapter: user.member?.chapter?.name || '',
-      chapter_location: user.member?.chapter?.location || '',
-      membership_status: user.member?.membership_status || '',
-      membership_type: user.member?.membership_type || '',
-      engagement_score: user.member?.engagement_score || 0,
-      roles: user.roles?.map((r: any) => r.role?.name).filter(Boolean).join(', ') || '',
-      created_at: user.created_at ? new Date(user.created_at).toISOString().split('T')[0] : '',
-      updated_at: user.updated_at ? new Date(user.updated_at).toISOString().split('T')[0] : '',
-    }))
+    type MemberData = { company?: string; designation?: string; industry?: string; years_of_experience?: number; membership_status?: string; membership_type?: string; engagement_score?: number; chapter?: { name?: string; location?: string }[] }[];
+    type RolesData = { role?: { name?: string }[] }[];
+    const exportData = filteredUsers.map((user) => {
+      const member = user.member as MemberData | null;
+      const roles = user.roles as RolesData | null;
+      return {
+        id: user.id,
+        full_name: user.full_name || '',
+        email: user.email || '',
+        phone: user.phone || '',
+        is_active: user.is_active ? 'Yes' : 'No',
+        company: member?.[0]?.company || '',
+        designation: member?.[0]?.designation || '',
+        industry: member?.[0]?.industry || '',
+        years_of_experience: member?.[0]?.years_of_experience || '',
+        chapter: member?.[0]?.chapter?.[0]?.name || '',
+        chapter_location: member?.[0]?.chapter?.[0]?.location || '',
+        membership_status: member?.[0]?.membership_status || '',
+        membership_type: member?.[0]?.membership_type || '',
+        engagement_score: member?.[0]?.engagement_score || 0,
+        roles: roles?.map((r) => r.role?.[0]?.name).filter(Boolean).join(', ') || '',
+        created_at: user.created_at ? new Date(user.created_at).toISOString().split('T')[0] : '',
+        updated_at: user.updated_at ? new Date(user.updated_at).toISOString().split('T')[0] : '',
+      };
+    })
 
     const timestamp = new Date().toISOString().split('T')[0]
     let filename = `yi-users-${timestamp}`
@@ -1315,9 +1323,9 @@ export async function exportUsers(
       const headers = Object.keys(exportData[0])
       const csvRows = [
         headers.join(','),
-        ...exportData.map((row: any) =>
+        ...exportData.map((row) =>
           headers.map(h => {
-            const value = row[h]
+            const value = row[h as keyof typeof row]
             // Escape quotes and wrap in quotes if contains comma
             if (typeof value === 'string' && (value.includes(',') || value.includes('"'))) {
               return `"${value.replace(/"/g, '""')}"`
@@ -1341,11 +1349,11 @@ export async function exportUsers(
       filename,
       message: `Exported ${exportData.length} users`
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Export error:', error)
     return {
       success: false,
-      message: error.message || 'Failed to export users'
+      message: error instanceof Error ? error.message : 'Failed to export users'
     }
   }
 }

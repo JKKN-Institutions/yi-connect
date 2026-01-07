@@ -26,6 +26,7 @@ import {
   type RateTrainerInput,
   type RateCoordinatorInput,
 } from '@/lib/validations/event'
+import type { TrainerScoreBreakdown } from '@/types/event'
 import { getEligibleTrainersForEvent } from '@/lib/data/trainer-scoring'
 
 type ActionResponse<T = void> = {
@@ -79,7 +80,7 @@ export async function assignTrainersToEvent(
     }
 
     // Get trainer scores if auto selection
-    let trainerScores = new Map<string, { score: number; breakdown: any }>()
+    let trainerScores = new Map<string, { score: number; breakdown: TrainerScoreBreakdown }>()
     if (validated.selection_method === 'auto') {
       const recommendations = await getEligibleTrainersForEvent({
         eventId: validated.event_id,
@@ -133,7 +134,7 @@ export async function assignTrainersToEvent(
 
     return {
       success: true,
-      data: { assignmentIds: data.map((d: any) => d.id) },
+      data: { assignmentIds: data.map((d) => d.id) },
     }
   } catch (error) {
     console.error('Error in assignTrainersToEvent:', error)
@@ -201,7 +202,7 @@ export async function sendTrainerInvitations(
       })
       .in(
         'id',
-        assignments.map((a: any) => a.id)
+        assignments.map((a) => a.id)
       )
 
     if (updateError) {
@@ -213,10 +214,14 @@ export async function sendTrainerInvitations(
     if (event) {
       const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://yi-connect-app.vercel.app'
       const trainerEmails = assignments
-        .filter((a: any) => a.trainer?.email)
-        .map((assignment: any) => {
+        .filter((a) => {
+          const trainer = a.trainer as { email?: string; full_name?: string }[] | null;
+          return trainer?.[0]?.email;
+        })
+        .map((assignment) => {
+          const trainer = assignment.trainer as { email: string; full_name?: string }[];
           const emailTemplate = trainerAssignmentEmail({
-            trainerName: assignment.trainer.full_name || 'Trainer',
+            trainerName: trainer[0]?.full_name || 'Trainer',
             eventTitle: event.title,
             sessionTopic: assignment.session_topic || 'Training Session',
             eventDate: new Date(event.start_date).toLocaleDateString('en-IN', {
@@ -229,7 +234,7 @@ export async function sendTrainerInvitations(
             eventLink: `${APP_URL}/events/${eventId}`,
           })
           return {
-            to: assignment.trainer.email,
+            to: trainer[0].email,
             subject: emailTemplate.subject,
             html: emailTemplate.html,
           }
@@ -616,7 +621,7 @@ async function updateTrainerAverageRating(trainerProfileId: string): Promise<voi
   }
 
   const avgRating =
-    assignments.reduce((sum: number, a: any) => sum + a.trainer_rating, 0) /
+    assignments.reduce((sum, a) => sum + (a.trainer_rating || 0), 0) /
     assignments.length
 
   // Update trainer profile

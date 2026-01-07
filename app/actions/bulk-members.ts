@@ -159,13 +159,13 @@ export async function processBulkMemberUpload(
       } else {
         errorCount++
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       results.push({
         rowNumber,
         email: data.email || 'Unknown',
         fullName: data.full_name || 'Unknown',
         status: 'error',
-        message: `Unexpected error: ${error.message}`
+        message: `Unexpected error: ${error instanceof Error ? error.message : 'Unknown error'}`
       })
       errorCount++
     }
@@ -315,11 +315,11 @@ async function createNewMember(
         : 'Created successfully.',
       memberId: userId
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error creating member:', error)
     return {
       success: false,
-      message: error.message || 'Failed to create member'
+      message: error instanceof Error ? error.message : 'Failed to create member'
     }
   }
 }
@@ -413,10 +413,10 @@ async function updateExistingMember(
       message: existingMember ? 'Updated successfully' : 'Member record created and updated',
       memberId: profile.id
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || 'Failed to update member'
+      message: error instanceof Error ? error.message : 'Failed to update member'
     }
   }
 }

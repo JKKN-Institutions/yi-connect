@@ -148,11 +148,11 @@ export async function submitMemberRequest(formData: FormData): Promise<FormState
       message: 'Application submitted successfully! We will review your application and contact you soon.',
       data,
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
       message: 'Failed to submit application. Please try again.',
-      errors: { _form: [error.message] },
+      errors: { _form: [error instanceof Error ? error.message : 'Unknown error'] },
     }
   }
 }
@@ -329,11 +329,11 @@ export async function approveMemberRequest(requestId: string, notes?: string): P
       message: `${request.full_name} has been approved! They can now login with Google.`,
       data: approvedEmail,
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
       message: 'Failed to approve request',
-      errors: { _form: [error.message] },
+      errors: { _form: [error instanceof Error ? error.message : 'Unknown error'] },
     }
   }
 }
@@ -404,11 +404,11 @@ export async function rejectMemberRequest(requestId: string, notes: string): Pro
       success: true,
       message: `Application from ${request.full_name} has been rejected.`,
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
       message: 'Failed to reject request',
-      errors: { _form: [error.message] },
+      errors: { _form: [error instanceof Error ? error.message : 'Unknown error'] },
     }
   }
 }
@@ -452,7 +452,10 @@ export async function withdrawMemberRequest(requestId: string): Promise<FormStat
         .select('role:roles(hierarchy_level)')
         .eq('user_id', user.id)
 
-      const isAdmin = roles?.some((r: any) => r.role?.hierarchy_level >= 5)
+      const isAdmin = roles?.some((r) => {
+        const role = r.role as { hierarchy_level?: number }[] | undefined;
+        return (role?.[0]?.hierarchy_level ?? 0) >= 5;
+      })
 
       if (!isAdmin) {
         return { success: false, message: 'Not authorized' }
@@ -474,11 +477,11 @@ export async function withdrawMemberRequest(requestId: string): Promise<FormStat
       success: true,
       message: 'Application withdrawn successfully',
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
       message: 'Failed to withdraw request',
-      errors: { _form: [error.message] },
+      errors: { _form: [error instanceof Error ? error.message : 'Unknown error'] },
     }
   }
 }

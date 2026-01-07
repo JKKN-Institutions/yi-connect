@@ -123,11 +123,11 @@ export async function createIV(formData: FormData): Promise<IVActionResult<{ id:
       data: { id: data.id },
       message: 'Industrial visit created successfully',
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error in createIV:', error);
     return {
       success: false,
-      error: error.message || 'Failed to create industrial visit',
+      error: error instanceof Error ? error.message : 'Failed to create industrial visit',
     };
   }
 }
@@ -145,7 +145,7 @@ export async function updateIV(formData: FormData): Promise<IVActionResult> {
     }
 
     // Parse updates
-    const updates: any = {};
+    const updates: Record<string, unknown> = {};
     const fields = [
       'title', 'description', 'start_date', 'end_date', 'max_capacity',
       'requirements', 'learning_outcomes',
@@ -200,11 +200,11 @@ export async function updateIV(formData: FormData): Promise<IVActionResult> {
       success: true,
       message: 'Industrial visit updated successfully',
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error in updateIV:', error);
     return {
       success: false,
-      error: error.message || 'Failed to update industrial visit',
+      error: error instanceof Error ? error.message : 'Failed to update industrial visit',
     };
   }
 }
@@ -236,11 +236,11 @@ export async function publishIV(id: string): Promise<IVActionResult> {
       success: true,
       message: 'Industrial visit published successfully',
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error in publishIV:', error);
     return {
       success: false,
-      error: error.message || 'Failed to publish industrial visit',
+      error: error instanceof Error ? error.message : 'Failed to publish industrial visit',
     };
   }
 }
@@ -284,15 +284,19 @@ export async function cancelIV(id: string, reason: string): Promise<IVActionResu
     // Send cancellation emails to all attendees
     if (attendees && attendees.length > 0 && eventDetails) {
       const cancellationEmails = attendees
-        .filter((a: any) => a.member?.email)
-        .map((attendee: any) => {
+        .filter((a) => {
+          const member = a.member as { email?: string }[] | undefined;
+          return member?.[0]?.email;
+        })
+        .map((attendee) => {
+          const member = attendee.member as { email: string; full_name?: string }[];
           const emailTemplate = eventCancellationEmail({
-            memberName: attendee.member.full_name || 'Member',
+            memberName: member[0]?.full_name || 'Member',
             eventTitle: eventDetails.title,
             reason: validatedData.reason,
           });
           return {
-            to: attendee.member.email,
+            to: member[0].email,
             subject: emailTemplate.subject,
             html: emailTemplate.html,
           };
@@ -308,11 +312,11 @@ export async function cancelIV(id: string, reason: string): Promise<IVActionResu
       success: true,
       message: 'Industrial visit cancelled. All attendees will be notified.',
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error in cancelIV:', error);
     return {
       success: false,
-      error: error.message || 'Failed to cancel industrial visit',
+      error: error instanceof Error ? error.message : 'Failed to cancel industrial visit',
     };
   }
 }
@@ -355,11 +359,11 @@ export async function deleteIV(id: string): Promise<IVActionResult> {
       success: true,
       message: 'Industrial visit deleted successfully',
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error in deleteIV:', error);
     return {
       success: false,
-      error: error.message || 'Failed to delete industrial visit',
+      error: error instanceof Error ? error.message : 'Failed to delete industrial visit',
     };
   }
 }
@@ -393,11 +397,11 @@ export async function rateHost(id: string, rating: number, comments?: string): P
       success: true,
       message: 'Thank you for your feedback!',
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error in rateHost:', error);
     return {
       success: false,
-      error: error.message || 'Failed to rate host',
+      error: error instanceof Error ? error.message : 'Failed to rate host',
     };
   }
 }
@@ -467,11 +471,11 @@ export async function createIVBooking(formData: FormData): Promise<IVActionResul
       data: { id: data.id },
       message: 'Booking confirmed! You will receive a confirmation email shortly.',
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error in createIVBooking:', error);
     return {
       success: false,
-      error: error.message || 'Failed to create booking',
+      error: error instanceof Error ? error.message : 'Failed to create booking',
     };
   }
 }
@@ -488,7 +492,7 @@ export async function updateIVBooking(formData: FormData): Promise<IVActionResul
       return { success: false, error: 'Booking ID is required' };
     }
 
-    const updates: any = {};
+    const updates: Record<string, unknown> = {};
     const fields = ['family_count', 'carpool_status', 'seats_available', 'pickup_location', 'pickup_details'];
 
     fields.forEach(field => {
@@ -520,11 +524,11 @@ export async function updateIVBooking(formData: FormData): Promise<IVActionResul
       success: true,
       message: 'Booking updated successfully',
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error in updateIVBooking:', error);
     return {
       success: false,
-      error: error.message || 'Failed to update booking',
+      error: error instanceof Error ? error.message : 'Failed to update booking',
     };
   }
 }
@@ -574,11 +578,11 @@ export async function cancelIVBooking(id: string, reason?: string): Promise<IVAc
       success: true,
       message: 'Booking cancelled successfully',
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error in cancelIVBooking:', error);
     return {
       success: false,
-      error: error.message || 'Failed to cancel booking',
+      error: error instanceof Error ? error.message : 'Failed to cancel booking',
     };
   }
 }
@@ -619,11 +623,11 @@ export async function joinWaitlist(eventId: string): Promise<IVActionResult<{ id
       data: { id: data },
       message: 'Added to waitlist. You will be notified when a spot opens up.',
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error in joinWaitlist:', error);
     return {
       success: false,
-      error: error.message || 'Failed to join waitlist',
+      error: error instanceof Error ? error.message : 'Failed to join waitlist',
     };
   }
 }
@@ -653,11 +657,11 @@ export async function leaveWaitlist(id: string): Promise<IVActionResult> {
       success: true,
       message: 'Removed from waitlist',
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error in leaveWaitlist:', error);
     return {
       success: false,
-      error: error.message || 'Failed to leave waitlist',
+      error: error instanceof Error ? error.message : 'Failed to leave waitlist',
     };
   }
 }
@@ -729,11 +733,11 @@ export async function promoteFromWaitlist(eventId: string): Promise<IVActionResu
       data: promoted,
       message: `${promoted.member_name} has been promoted from waitlist`,
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error in promoteFromWaitlist:', error);
     return {
       success: false,
-      error: error.message || 'Failed to promote from waitlist',
+      error: error instanceof Error ? error.message : 'Failed to promote from waitlist',
     };
   }
 }
@@ -778,11 +782,11 @@ export async function updateCarpoolPreference(formData: FormData): Promise<IVAct
       success: true,
       message: 'Carpool preference updated successfully',
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error in updateCarpoolPreference:', error);
     return {
       success: false,
-      error: error.message || 'Failed to update carpool preference',
+      error: error instanceof Error ? error.message : 'Failed to update carpool preference',
     };
   }
 }
@@ -847,11 +851,11 @@ export async function createIndustryPortalUser(formData: FormData): Promise<IVAc
       data: { id: data.id },
       message: 'Industry portal user created. Invitation email sent.',
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error in createIndustryPortalUser:', error);
     return {
       success: false,
-      error: error.message || 'Failed to create industry portal user',
+      error: error instanceof Error ? error.message : 'Failed to create industry portal user',
     };
   }
 }
@@ -943,10 +947,14 @@ export async function industryCreateIVSlot(formData: FormData): Promise<IVAction
     if (chapterAdmins && chapterAdmins.length > 0) {
       const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://yi-connect-app.vercel.app';
       const adminEmails = chapterAdmins
-        .filter((a: any) => a.user?.email)
-        .map((admin: any) => {
+        .filter((a) => {
+          const user = a.user as { email?: string }[] | undefined;
+          return user?.[0]?.email;
+        })
+        .map((admin) => {
+          const user = admin.user as { email: string; full_name?: string }[];
           const emailTemplate = adminNewIVSlotEmail({
-            adminName: admin.user.full_name || 'Admin',
+            adminName: user[0]?.full_name || 'Admin',
             industryName: industryDetails?.name || 'Industry Partner',
             slotTitle: validatedData.title,
             slotDate: new Date(validatedData.start_date).toLocaleDateString('en-IN', {
@@ -959,7 +967,7 @@ export async function industryCreateIVSlot(formData: FormData): Promise<IVAction
             manageLink: `${APP_URL}/admin/industrial-visits/${data.id}`,
           });
           return {
-            to: admin.user.email,
+            to: user[0].email,
             subject: emailTemplate.subject,
             html: emailTemplate.html,
           };
@@ -975,11 +983,11 @@ export async function industryCreateIVSlot(formData: FormData): Promise<IVAction
       data: { id: data.id },
       message: 'IV slot created successfully and is now visible to members!',
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error in industryCreateIVSlot:', error);
     return {
       success: false,
-      error: error.message || 'Failed to create IV slot',
+      error: error instanceof Error ? error.message : 'Failed to create IV slot',
     };
   }
 }
@@ -1039,18 +1047,23 @@ export async function industryIncreaseCapacity(id: string, newCapacity: number):
     if (waitlistedMembers && waitlistedMembers.length > 0 && eventDetails) {
       const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://yi-connect-app.vercel.app';
       const waitlistEmails = waitlistedMembers
-        .filter((w: any) => w.member?.email)
-        .map((waitlisted: any) => {
+        .filter((w) => {
+          const member = w.member as { email?: string }[] | undefined;
+          return member?.[0]?.email;
+        })
+        .map((waitlisted) => {
+          const member = waitlisted.member as { email: string; full_name?: string }[];
+          const position = waitlisted.position;
           const emailTemplate = waitlistCapacityNotificationEmail({
-            memberName: waitlisted.member.full_name || 'Member',
+            memberName: member[0]?.full_name || 'Member',
             eventTitle: eventDetails.title,
-            industryName: (eventDetails.industry as any)?.name || 'Industry Partner',
+            industryName: (eventDetails.industry as { name?: string } | null)?.name || 'Industry Partner',
             newCapacity: validatedData.new_capacity,
-            currentPosition: waitlisted.position,
+            currentPosition: position,
             bookingLink: `${APP_URL}/industrial-visits`,
           });
           return {
-            to: waitlisted.member.email,
+            to: member[0].email,
             subject: emailTemplate.subject,
             html: emailTemplate.html,
           };
@@ -1065,11 +1078,11 @@ export async function industryIncreaseCapacity(id: string, newCapacity: number):
       success: true,
       message: 'Capacity increased. Waitlisted members will be notified.',
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error in industryIncreaseCapacity:', error);
     return {
       success: false,
-      error: error.message || 'Failed to increase capacity',
+      error: error instanceof Error ? error.message : 'Failed to increase capacity',
     };
   }
 }
@@ -1132,12 +1145,16 @@ export async function memberRequestIV(formData: FormData): Promise<IVActionResul
     // Send IV request notification to chapter admins
     if (chapterAdmins && chapterAdmins.length > 0) {
       const adminEmails = chapterAdmins
-        .filter((a: any) => a.user?.email)
-        .map((admin: any) => {
+        .filter((a) => {
+          const user = a.user as { email?: string }[] | undefined;
+          return user?.[0]?.email;
+        })
+        .map((admin) => {
+          const user = admin.user as { email: string; full_name?: string }[];
           const emailTemplate = ivRequestNotificationEmail({
-            adminName: admin.user.full_name || 'Admin',
+            adminName: user[0]?.full_name || 'Admin',
             requesterName: userProfile.full_name || 'Member',
-            requesterEmail: userProfile.email || user.email || '',
+            requesterEmail: userProfile.email || user[0]?.email || '',
             industryName,
             preferredDates: validatedData.preferred_dates
               .map((d: string) => new Date(d).toLocaleDateString('en-IN'))
@@ -1147,7 +1164,7 @@ export async function memberRequestIV(formData: FormData): Promise<IVActionResul
             additionalNotes: validatedData.additional_notes || undefined,
           });
           return {
-            to: admin.user.email,
+            to: user[0].email,
             subject: emailTemplate.subject,
             html: emailTemplate.html,
           };
@@ -1160,11 +1177,11 @@ export async function memberRequestIV(formData: FormData): Promise<IVActionResul
       success: true,
       message: 'Your IV request has been submitted. The admin team will review it shortly.',
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error in memberRequestIV:', error);
     return {
       success: false,
-      error: error.message || 'Failed to submit IV request',
+      error: error instanceof Error ? error.message : 'Failed to submit IV request',
     };
   }
 }
@@ -1221,8 +1238,19 @@ export async function exportIVAttendees(formData: FormData): Promise<IVActionRes
     }
 
     // Transform data based on format
-    const exportData = (attendees || []).map((rsvp: any) => {
-      const baseData: any = {
+    type RsvpData = {
+      member?: { full_name?: string; email?: string; phone?: string; company?: string };
+      created_at: string;
+      family_count?: number;
+      family_names?: string[];
+      carpool_status?: string;
+      seats_available?: number;
+      pickup_location?: string;
+      dietary_restrictions?: string;
+      special_requirements?: string;
+    };
+    const exportData = (attendees || []).map((rsvp: RsvpData) => {
+      const baseData: Record<string, unknown> = {
         Name: rsvp.member?.full_name || 'Unknown',
         Email: rsvp.member?.email || '',
         Phone: rsvp.member?.phone || '',
@@ -1281,7 +1309,7 @@ export async function exportIVAttendees(formData: FormData): Promise<IVActionRes
       const headers = Object.keys(exportData[0]);
       const csvRows = [
         headers.join(','),
-        ...exportData.map((row: any) =>
+        ...exportData.map((row: Record<string, unknown>) =>
           headers.map((header) => {
             const value = row[header] || '';
             // Escape commas and quotes
@@ -1320,7 +1348,7 @@ export async function exportIVAttendees(formData: FormData): Promise<IVActionRes
     const colWidths = Object.keys(exportData[0]).map(key => ({
       wch: Math.max(
         key.length,
-        ...exportData.map((row: any) => String(row[key] || '').length)
+        ...exportData.map((row: Record<string, unknown>) => String(row[key] || '').length)
       ) + 2
     }));
     worksheet['!cols'] = colWidths;
@@ -1343,11 +1371,11 @@ export async function exportIVAttendees(formData: FormData): Promise<IVActionRes
       },
       message: 'Attendees exported successfully as XLSX',
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error in exportIVAttendees:', error);
     return {
       success: false,
-      error: error.message || 'Failed to export attendees',
+      error: error instanceof Error ? error.message : 'Failed to export attendees',
     };
   }
 }

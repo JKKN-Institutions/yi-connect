@@ -44,7 +44,10 @@ async function requireNationalAdmin() {
     .eq('user_id', user.id)
 
   const hasNationalAdminRole = userRoles?.some(
-    (ur: any) => ur.role?.name === 'National Admin'
+    (ur) => {
+      const role = ur.role as { name?: string; hierarchy_level?: number } | null;
+      return role?.name === 'National Admin';
+    }
   )
 
   if (!hasNationalAdminRole) {
@@ -119,16 +122,16 @@ export async function createChapter(
       message: 'Chapter created successfully!',
       redirectTo: '/admin/chapters',
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     // Don't catch NEXT_REDIRECT errors
-    if (error.message === 'NEXT_REDIRECT') {
+    if (error instanceof Error && error.message === 'NEXT_REDIRECT') {
       throw error
     }
 
     console.error('Unexpected error in createChapter:', error)
     return {
       success: false,
-      message: error.message || 'An unexpected error occurred.',
+      message: error instanceof Error ? error.message : 'An unexpected error occurred.',
     }
   }
 }
@@ -194,11 +197,11 @@ export async function updateChapter(
       success: true,
       message: 'Chapter updated successfully',
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Unexpected error in updateChapter:', error)
     return {
       success: false,
-      message: error.message || 'An unexpected error occurred.',
+      message: error instanceof Error ? error.message : 'An unexpected error occurred.',
     }
   }
 }
@@ -308,11 +311,11 @@ export async function createChapterWithInvitation(
       invitation_id: invitation?.id,
       invitation_token: invitation?.token,
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error in createChapterWithInvitation:', error)
     return {
       success: false,
-      error: error.message || 'An unexpected error occurred',
+      error: error instanceof Error ? error.message : 'An unexpected error occurred',
     }
   }
 }
@@ -364,11 +367,11 @@ export async function deleteChapter(id: string): Promise<ActionResponse> {
       success: true,
       message: 'Chapter deleted successfully',
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Unexpected error in deleteChapter:', error)
     return {
       success: false,
-      message: error.message || 'An unexpected error occurred.',
+      message: error instanceof Error ? error.message : 'An unexpected error occurred.',
     }
   }
 }
@@ -447,11 +450,11 @@ Yi Connect`
       success: true,
       message: 'Invitation sent via WhatsApp successfully!',
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error sending invitation:', error)
     return {
       success: false,
-      message: error.message || 'Failed to send invitation',
+      message: error instanceof Error ? error.message : 'Failed to send invitation',
     }
   }
 }
@@ -480,9 +483,9 @@ export async function getInvitationByToken(token: string): Promise<{
       found: data?.found ?? false,
       invitation: data as import('@/types/chapter').InvitationLookup,
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error in getInvitationByToken:', error)
-    return { found: false, error: error.message }
+    return { found: false, error: error instanceof Error ? error.message : 'Unknown error' }
   }
 }
 
@@ -525,9 +528,9 @@ export async function acceptInvitation(token: string): Promise<{
       success: true,
       chapter_id: data.chapter_id,
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error in acceptInvitation:', error)
-    return { success: false, error: error.message }
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
   }
 }
 
@@ -559,8 +562,8 @@ export async function resendInvitation(
 
     // Send via WhatsApp
     return sendChairInvitationWhatsApp(invitationId)
-  } catch (error: any) {
-    return { success: false, message: error.message }
+  } catch (error: unknown) {
+    return { success: false, message: error instanceof Error ? error.message : 'Unknown error' }
   }
 }
 
@@ -585,7 +588,7 @@ export async function revokeInvitation(
 
     updateTag('chapter-invitations')
     return { success: true, message: 'Invitation revoked' }
-  } catch (error: any) {
-    return { success: false, message: error.message }
+  } catch (error: unknown) {
+    return { success: false, message: error instanceof Error ? error.message : 'Unknown error' }
   }
 }

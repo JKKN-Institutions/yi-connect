@@ -11,6 +11,7 @@
 
 import { revalidateTag } from 'next/cache';
 import { redirect } from 'next/navigation';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentUser, getCurrentChapterId } from '@/lib/auth';
 import { sendAnnouncementPush } from '@/lib/push-notification';
@@ -68,7 +69,7 @@ type ActionResponse<T = any> = {
  * Get member IDs that match the given audience filter
  */
 async function getFilteredMemberIds(
-  supabase: any,
+  supabase: SupabaseClient,
   chapterId: string,
   audienceFilter?: AudienceFilter | null,
   segmentId?: string | null
@@ -107,7 +108,7 @@ async function getFilteredMemberIds(
   if (!filter) {
     query = query.eq('is_active', true);
     const { data: members } = await query;
-    return members?.map((m: any) => m.id) || [];
+    return members?.map((m: { id: string }) => m.id) || [];
   }
 
   // Apply member status filter
@@ -177,30 +178,33 @@ async function getFilteredMemberIds(
 
   // Filter by roles
   if (filter.roles && filter.roles.length > 0) {
-    filteredMembers = filteredMembers.filter((m: any) => {
-      const memberRoles = m.roles?.map((r: any) => r.role?.name) || [];
+    filteredMembers = filteredMembers.filter((m) => {
+      const roles = m.roles as { role: { name: string }[] }[] | undefined;
+      const memberRoles = roles?.flatMap((r) => r.role?.map((role) => role.name) || []) || [];
       return filter.roles!.some(role => memberRoles.includes(role));
     });
   }
 
   // Filter by skills
   if (filter.has_skills && filter.has_skills.length > 0) {
-    filteredMembers = filteredMembers.filter((m: any) => {
-      const memberSkills = m.skills?.map((s: any) => s.skill_id) || [];
+    filteredMembers = filteredMembers.filter((m) => {
+      const skills = m.skills as { skill_id?: string }[] | undefined;
+      const memberSkills = skills?.map((s) => s.skill_id) || [];
       return filter.has_skills!.some(skillId => memberSkills.includes(skillId));
     });
   }
 
   // Filter by vertical interests
   if (filter.vertical_interests && filter.vertical_interests.length > 0) {
-    filteredMembers = filteredMembers.filter((m: any) => {
-      const memberVerticals = m.verticals?.map((v: any) => v.vertical_id) || [];
+    filteredMembers = filteredMembers.filter((m) => {
+      const verticals = m.verticals as { vertical_id?: string }[] | undefined;
+      const memberVerticals = verticals?.map((v) => v.vertical_id) || [];
       return filter.vertical_interests!.some(vid => memberVerticals.includes(vid));
     });
   }
 
   // Apply explicit includes/excludes
-  let memberIds = filteredMembers.map((m: any) => m.id);
+  let memberIds = filteredMembers.map((m) => m.id);
 
   if (filter.include_members && filter.include_members.length > 0) {
     // Add included members that aren't already in the list
@@ -441,10 +445,14 @@ export async function sendAnnouncement(id: string): Promise<ActionResponse> {
 
           if (members && members.length > 0) {
             const emailMessages = members
-              .filter((m: any) => m.profile?.email)
-              .map((member: any) => {
+              .filter((m) => {
+                const profile = m.profile as { email?: string }[] | undefined;
+                return profile?.[0]?.email;
+              })
+              .map((member) => {
+                const profile = member.profile as { email: string; full_name?: string }[];
                 const template = announcementEmail({
-                  memberName: member.profile.full_name || 'Member',
+                  memberName: profile[0]?.full_name || 'Member',
                   title: announcement.title,
                   content: announcement.content,
                   priority: announcement.priority || 'normal',
@@ -452,7 +460,7 @@ export async function sendAnnouncement(id: string): Promise<ActionResponse> {
                   viewLink: `${APP_URL}/communications/announcements/${announcement.id}`,
                 });
                 return {
-                  to: member.profile.email,
+                  to: profile[0].email,
                   subject: template.subject,
                   html: template.html,
                 };

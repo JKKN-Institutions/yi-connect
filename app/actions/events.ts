@@ -407,15 +407,19 @@ export async function cancelEvent(
 
     if (rsvps && rsvps.length > 0 && eventDetails) {
       const emails = rsvps
-        .filter((r: any) => r.member?.email)
-        .map((r: any) => {
+        .filter((r) => {
+          const member = r.member as { email?: string }[] | undefined;
+          return member?.[0]?.email;
+        })
+        .map((r) => {
+          const member = r.member as { email: string; full_name?: string }[];
           const template = eventCancellationEmail({
-            memberName: r.member.full_name || 'Member',
+            memberName: member[0]?.full_name || 'Member',
             eventTitle: eventDetails.title,
             reason: validated.reason,
           });
           return {
-            to: r.member.email,
+            to: member[0].email,
             subject: template.subject,
             html: template.html,
           };

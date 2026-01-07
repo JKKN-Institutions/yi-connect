@@ -24,7 +24,7 @@ export type DbAnnouncement = {
   channels: string[];
   status: string;
   priority: string;
-  audience_filter: any;
+  audience_filter: Record<string, unknown> | null;
   segment_id: string | null;
   template_id: string | null;
   scheduled_at: string | null;
@@ -82,7 +82,7 @@ export type DbNewsletter = {
   chapter_id: string;
   title: string;
   description: string | null;
-  content: any;
+  content: Record<string, unknown> | null;
   status: string;
   published_at: string | null;
   created_by: string;
@@ -95,7 +95,7 @@ export type DbCommunicationSegment = {
   chapter_id: string;
   name: string;
   description: string | null;
-  filter: any;
+  filter: Record<string, unknown> | null;
   member_count: number | null;
   created_by: string;
 };
@@ -108,10 +108,10 @@ export type DbAutomationRule = {
   name: string;
   description: string | null;
   trigger_type: string;
-  trigger_config: any;
+  trigger_config: Record<string, unknown> | null;
   template_id: string | null;
   channels: string[];
-  audience_filter: any | null;
+  audience_filter: Record<string, unknown> | null;
   segment_id: string | null;
   is_enabled: boolean;
   last_triggered_at: string | null;
@@ -227,7 +227,7 @@ export interface Announcement {
   created_by: string;
   created_at: string;
   updated_at: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface AnnouncementListItem {
@@ -347,7 +347,7 @@ export interface AnnouncementRecipient {
   opened_at?: string;
   clicked_at?: string;
   failed_reason?: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   created_at: string;
 }
 
@@ -377,7 +377,7 @@ export interface InAppNotification {
   read_at?: string;
   action_url?: string;
   announcement_id?: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   created_at: string;
   expires_at?: string;
 }
@@ -417,16 +417,16 @@ export interface Newsletter {
 
 export interface NewsletterContent {
   sections: NewsletterSection[];
-  events?: any[];
-  awards?: any[];
-  achievements?: any[];
+  events?: Record<string, unknown>[];
+  awards?: Record<string, unknown>[];
+  achievements?: Record<string, unknown>[];
 }
 
 export interface NewsletterSection {
   id: string;
   type: 'events' | 'awards' | 'achievements' | 'article' | 'custom';
   title: string;
-  content: string | Record<string, any>;
+  content: string | Record<string, unknown>;
   order: number;
 }
 
@@ -507,7 +507,7 @@ export interface AudienceFilter {
   vertical_interests?: string[];
 
   // Custom filters
-  custom_filters?: Record<string, any>;
+  custom_filters?: Record<string, unknown>;
 
   // Specific inclusions/exclusions
   include_members?: string[]; // Member IDs to include
@@ -596,7 +596,7 @@ export interface AutomationConditions {
   };
 
   // Custom conditions
-  custom?: Record<string, any>;
+  custom?: Record<string, unknown>;
 }
 
 export interface AutomationRuleWithTemplate extends AutomationRule {
@@ -678,7 +678,7 @@ export interface CreateAnnouncementInput {
   segment_id?: string;
   template_id?: string;
   scheduled_at?: string; // ISO string
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface UpdateAnnouncementInput {
@@ -689,7 +689,7 @@ export interface UpdateAnnouncementInput {
   audience_filter?: AudienceFilter;
   segment_id?: string;
   scheduled_at?: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface CreateTemplateInput {
@@ -714,7 +714,7 @@ export interface CreateNotificationInput {
   message: string;
   category: NotificationCategory;
   action_url?: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   expires_at?: string;
 }
 
@@ -894,7 +894,7 @@ export const AVAILABLE_DYNAMIC_TAGS: DynamicTag[] = [
 // Helper function to replace placeholders in template
 export function replacePlaceholders(
   template: string,
-  data: Record<string, any>
+  data: Record<string, unknown>
 ): string {
   return template.replace(/\{(\w+)\}/g, (match, key) => {
     return data[key] !== undefined ? String(data[key]) : match;

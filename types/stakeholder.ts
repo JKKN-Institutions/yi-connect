@@ -279,7 +279,7 @@ export interface College {
   // Collaboration
   suitable_activities?: string[]
   available_resources?: string[]
-  collaboration_history?: any
+  collaboration_history?: Record<string, unknown>
 
   // Operational
   decision_maker?: string
@@ -619,7 +619,7 @@ export interface Vendor {
 
   // Pricing
   pricing_model?: string
-  pricing_details?: any
+  pricing_details?: Record<string, unknown>
   accepts_negotiation: boolean
 
   // Business Terms
@@ -716,7 +716,7 @@ export interface Speaker {
   years_of_experience?: number
   organizations_associated?: string[]
   notable_achievements?: string[]
-  social_media_links?: any
+  social_media_links?: Record<string, unknown>
 
   // Session Details
   typical_session_duration?: string

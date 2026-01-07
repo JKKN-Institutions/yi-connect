@@ -24,8 +24,8 @@ export type Database = {
           color: string | null;
           display_order: number;
           frequency: string;
-          criteria_template: any;
-          scoring_weights: any;
+          criteria_template: Json | null;
+          scoring_weights: Json | null;
           is_active: boolean;
           created_at: string;
           updated_at: string;
@@ -39,8 +39,8 @@ export type Database = {
           color?: string | null;
           display_order?: number;
           frequency: string;
-          criteria_template?: any;
-          scoring_weights?: any;
+          criteria_template?: Json | null;
+          scoring_weights?: Json | null;
           is_active?: boolean;
           created_at?: string;
           updated_at?: string;
@@ -54,8 +54,8 @@ export type Database = {
           color?: string | null;
           display_order?: number;
           frequency?: string;
-          criteria_template?: any;
-          scoring_weights?: any;
+          criteria_template?: Json | null;
+          scoring_weights?: Json | null;
           is_active?: boolean;
           created_at?: string;
           updated_at?: string;
@@ -181,7 +181,7 @@ export type Database = {
           id: string;
           nomination_id: string;
           jury_member_id: string;
-          scores: any;
+          scores: Json;
           total_score: number;
           created_at: string;
           updated_at: string;
@@ -190,7 +190,7 @@ export type Database = {
           id?: string;
           nomination_id: string;
           jury_member_id: string;
-          scores: any;
+          scores: Json;
           total_score: number;
           created_at?: string;
           updated_at?: string;
@@ -199,7 +199,7 @@ export type Database = {
           id?: string;
           nomination_id?: string;
           jury_member_id?: string;
-          scores?: any;
+          scores?: Json;
           total_score?: number;
           created_at?: string;
           updated_at?: string;
@@ -1366,8 +1366,8 @@ export type Database = {
           banner_url: string | null;
           banner_image_url: string | null;
           estimated_budget: number | null;
-          attachments: any;
-          custom_fields: any;
+          attachments: Json | null;
+          custom_fields: Json | null;
           created_at: string;
           updated_at: string;
         };
@@ -1399,8 +1399,8 @@ export type Database = {
           banner_url?: string | null;
           banner_image_url?: string | null;
           estimated_budget?: number | null;
-          attachments?: any;
-          custom_fields?: any;
+          attachments?: Json | null;
+          custom_fields?: Json | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -1432,8 +1432,8 @@ export type Database = {
           banner_url?: string | null;
           banner_image_url?: string | null;
           estimated_budget?: number | null;
-          attachments?: any;
-          custom_fields?: any;
+          attachments?: Json | null;
+          custom_fields?: Json | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -1446,7 +1446,7 @@ export type Database = {
           description: string | null;
           category: string;
           default_duration_hours: number;
-          template_data: any;
+          template_data: Json | null;
           created_at: string;
           updated_at: string;
         };
@@ -1456,7 +1456,7 @@ export type Database = {
           description?: string | null;
           category: string;
           default_duration_hours: number;
-          template_data?: any;
+          template_data?: Json | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -1466,7 +1466,7 @@ export type Database = {
           description?: string | null;
           category?: string;
           default_duration_hours?: number;
-          template_data?: any;
+          template_data?: Json | null;
           created_at?: string;
           updated_at?: string;
         };

@@ -259,17 +259,21 @@ export async function submitMaterialForReview(
       if (reviewers && reviewers.length > 0) {
         const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://yi-connect-app.vercel.app'
         const reviewerEmails = reviewers
-          .filter((r: any) => r.user?.email)
-          .map((reviewer: any) => {
+          .filter((r) => {
+            const user = r.user as { email?: string }[] | undefined;
+            return user?.[0]?.email;
+          })
+          .map((reviewer) => {
+            const user = reviewer.user as { email: string; full_name?: string }[];
             const emailTemplate = materialSubmittedEmail({
-              reviewerName: reviewer.user.full_name || 'Reviewer',
+              reviewerName: user[0]?.full_name || 'Reviewer',
               uploaderName: uploaderProfile?.full_name || 'Member',
               eventTitle: eventDetails.title,
               materialType: material.material_type || 'Material',
               reviewLink: `${APP_URL}/admin/materials/pending`,
             })
             return {
-              to: reviewer.user.email,
+              to: user[0].email,
               subject: emailTemplate.subject,
               html: emailTemplate.html,
             }

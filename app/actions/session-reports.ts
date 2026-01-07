@@ -551,10 +551,10 @@ export async function getSessionReportSummary(): Promise<ActionResponse<{
     }
 
     const reports = data || []
-    const verified = reports.filter((r: any) => r.verified_at).length
-    const pending = reports.filter((r: any) => !r.verified_at).length
+    const verified = reports.filter((r: { verified_at?: string | null }) => r.verified_at).length
+    const pending = reports.filter((r: { verified_at?: string | null }) => !r.verified_at).length
     const pendingFollowUps = reports.filter(
-      (r: any) => r.follow_up_required && !r.follow_up_completed
+      (r: { follow_up_required?: boolean; follow_up_completed?: boolean }) => r.follow_up_required && !r.follow_up_completed
     ).length
 
     return {

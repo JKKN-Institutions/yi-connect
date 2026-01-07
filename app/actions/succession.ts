@@ -2240,7 +2240,7 @@ export async function seedTimelineSteps(
     ]
 
     // Calculate dates for each step
-    let currentDate = new Date(startDate)
+    const currentDate = new Date(startDate)
     const stepsToInsert = timelineSteps.map((step) => {
       const stepStartDate = new Date(currentDate)
       const stepEndDate = new Date(currentDate)

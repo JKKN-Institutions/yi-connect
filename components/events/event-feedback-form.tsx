@@ -7,7 +7,7 @@
  */
 
 import { useState, useTransition } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Loader2, Star, MessageSquare } from 'lucide-react';
 import { submitEventFeedback } from '@/app/actions/events';
@@ -72,8 +72,7 @@ export function EventFeedbackForm({
   const [isPending, startTransition] = useTransition();
 
   const form = useForm<EventFeedbackFormValues>({
-    // @ts-expect-error - zodResolver infers input type (with optional defaults) but form needs output type
-    resolver: zodResolver(createEventFeedbackSchema),
+    resolver: zodResolver(createEventFeedbackSchema) as Resolver<EventFeedbackFormValues>,
     defaultValues: {
       event_id: eventId,
       member_id: memberId,

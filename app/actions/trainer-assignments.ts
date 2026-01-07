@@ -80,7 +80,7 @@ export async function assignTrainersToEvent(
     }
 
     // Get trainer scores if auto selection
-    let trainerScores = new Map<string, { score: number; breakdown: TrainerScoreBreakdown }>()
+    const trainerScores = new Map<string, { score: number; breakdown: TrainerScoreBreakdown }>()
     if (validated.selection_method === 'auto') {
       const recommendations = await getEligibleTrainersForEvent({
         eventId: validated.event_id,

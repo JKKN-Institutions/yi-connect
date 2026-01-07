@@ -10,7 +10,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { useForm } from 'react-hook-form';
+import { useForm, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   CalendarIcon,
@@ -101,8 +101,7 @@ export function EventForm(props: EventFormProps) {
   const tabs = ['basic', 'schedule', 'venue', 'settings'];
 
   const form = useForm<CreateEventInput>({
-    // @ts-expect-error - zodResolver infers input type (with optional defaults) but form needs output type
-    resolver: zodResolver(createEventSchema),
+    resolver: zodResolver(createEventSchema) as Resolver<CreateEventInput>,
     mode: 'onChange', // Enable real-time validation
     defaultValues: {
       title: event?.title || '',

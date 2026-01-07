@@ -16,7 +16,7 @@ import * as QRCode from 'qrcode';
 import path from 'path';
 
 // Singleton state
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 let client: any = null;
 let qrCodeDataUrl: string | null = null;
 
@@ -41,7 +41,7 @@ const statusListeners: Set<StatusListener> = new Set();
 /**
  * Get or create the WhatsApp client instance
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 export function getWhatsAppClient(): any {
   if (!client) {
     client = new Client({
@@ -73,7 +73,7 @@ export function getWhatsAppClient(): any {
 /**
  * Set up all WhatsApp client event handlers
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 function setupEventHandlers(whatsappClient: any) {
   whatsappClient.on('qr', async (qr: string) => {
     connectionStatus = 'qr_ready';
@@ -265,7 +265,7 @@ export function isReady(): boolean {
  * Get the raw client for advanced operations
  * Only use if isReady() returns true
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 export function getRawClient(): any {
   return client;
 }

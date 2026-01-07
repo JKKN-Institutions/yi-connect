@@ -168,7 +168,7 @@ export function LocationPicker({
   const parseGoogleMapsUrl = (url: string): { lat: number; lng: number } | null => {
     try {
       // Clean the URL - trim whitespace, newlines, and handle encoding
-      let cleanUrl = url.trim().replace(/[\n\r\t]/g, '');
+      const cleanUrl = url.trim().replace(/[\n\r\t]/g, '');
 
       // Try to decode URL-encoded characters (may be encoded multiple times)
       let decodedUrl = cleanUrl;

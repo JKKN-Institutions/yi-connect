@@ -8,7 +8,7 @@
  */
 
 import { useState, useTransition } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Loader2, UserPlus } from 'lucide-react';
 import { createOrUpdateRSVP } from '@/app/actions/events';
@@ -88,8 +88,7 @@ export function RSVPForm({
     : null;
 
   const form = useForm<RSVPFormValues>({
-    // @ts-expect-error - zodResolver infers input type (with optional defaults) but form needs output type
-    resolver: zodResolver(createRSVPSchema),
+    resolver: zodResolver(createRSVPSchema) as Resolver<RSVPFormValues>,
     defaultValues: {
       event_id: event.id,
       member_id: memberId,

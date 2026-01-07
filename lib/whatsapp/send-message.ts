@@ -203,7 +203,7 @@ export async function getAllChats(): Promise<Array<{
 
     const chats = await client.getChats();
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     return chats.map((chat: any) => ({
       id: chat.id._serialized,
       name: chat.name,

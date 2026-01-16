@@ -1,45 +1,28 @@
-/**
- * Disconnect Route - Disconnect WhatsApp client
- */
+import { Router } from 'express';
+import { disconnect, getState } from '../whatsapp';
 
-import { Router, Request, Response } from 'express';
-import { disconnect, getStatus } from '../whatsapp';
+export const disconnectRoute = Router();
 
-const router = Router();
-
-/**
- * POST /disconnect
- * Disconnect the WhatsApp client
- */
-router.post('/', async (_req: Request, res: Response) => {
+disconnectRoute.post('/', async (req, res) => {
   try {
-    console.log('[Disconnect] Received disconnect request');
+    if (getState() === 'disconnected') {
+      return res.json({
+        success: true,
+        message: 'Already disconnected'
+      });
+    }
 
     await disconnect();
 
-    console.log('[Disconnect] Disconnected successfully');
-
     res.json({
       success: true,
-      status: 'disconnected'
+      message: 'Disconnected successfully'
     });
   } catch (error) {
-    const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-    console.error('[Disconnect] Error:', errorMsg);
+    const err = error as Error;
     res.status(500).json({
       success: false,
-      error: errorMsg
+      error: err.message
     });
   }
 });
-
-/**
- * GET /disconnect
- * Get current status (for checking after disconnect)
- */
-router.get('/', (_req: Request, res: Response) => {
-  const status = getStatus();
-  res.json(status);
-});
-
-export { router as disconnectRouter };

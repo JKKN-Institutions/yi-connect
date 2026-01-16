@@ -197,7 +197,21 @@ export async function sendBulkWhatsAppMessages(
   delayMs: number = 1000
 ): Promise<BulkSendResult> {
   if (useApiClient()) {
-    return sendBulkMessagesAPI(recipients, delayMs);
+    // Transform to API format (phone instead of phoneNumber)
+    const apiRecipients = recipients.map(r => ({ phone: r.phoneNumber, message: r.message }));
+    const result = await sendBulkMessagesAPI(apiRecipients, delayMs);
+    // Transform back to app format (phoneNumber instead of phone)
+    return {
+      total: result.total,
+      sent: result.sent,
+      failed: result.failed,
+      results: result.results.map(r => ({
+        phoneNumber: r.phone,
+        success: r.success,
+        messageId: r.messageId,
+        error: r.error
+      }))
+    };
   } else if (isServerless()) {
     return { total: recipients.length, sent: 0, failed: recipients.length, results: [] };
   }

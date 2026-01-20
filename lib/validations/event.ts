@@ -20,7 +20,8 @@ const phoneRegex = /^[\d\s\-\+\(\)]+$/
 // Event Schemas
 // ============================================================================
 
-export const createEventSchema = z.object({
+// Base schema without refinements - used for .partial() operations
+const eventBaseSchema = z.object({
   title: z.string().min(1, 'Title is required').max(255, 'Title is too long'),
   description: z.string().optional(),
   category: z.enum(Constants.public.Enums.event_category, {
@@ -70,7 +71,10 @@ export const createEventSchema = z.object({
   chapter_id: z.string().optional().refine((val) => !val || z.string().uuid().safeParse(val).success, {
     message: 'Invalid UUID',
   }),
-}).refine(
+})
+
+// Full schema with refinements - used for create operations
+export const createEventSchema = eventBaseSchema.refine(
   (data) => {
     if (data.end_date && data.start_date) {
       return new Date(data.end_date) > new Date(data.start_date)
@@ -137,7 +141,8 @@ export const createEventSchema = z.object({
   }
 )
 
-export const updateEventSchema = createEventSchema.partial().safeExtend({
+// Update schema uses base schema (without refinements) for .partial()
+export const updateEventSchema = eventBaseSchema.partial().extend({
   status: z.enum(Constants.public.Enums.event_status).optional(),
   current_registrations: z.coerce.number().int().min(0).optional(),
   actual_expense: z.coerce.number().min(0).optional(),
@@ -183,14 +188,17 @@ export const deleteVenueSchema = z.object({
 // Venue Booking Schemas
 // ============================================================================
 
-export const createVenueBookingSchema = z.object({
+// Base schema for venue booking without refinements
+const venueBookingBaseSchema = z.object({
   event_id: z.string().uuid(),
   venue_id: z.string().uuid(),
   start_time: z.string().min(1, 'Start time is required'),
   end_time: z.string().min(1, 'End time is required'),
   booking_reference: z.string().optional(),
   notes: z.string().optional(),
-}).refine(
+})
+
+export const createVenueBookingSchema = venueBookingBaseSchema.refine(
   (data) => {
     if (data.end_time && data.start_time) {
       return new Date(data.end_time) > new Date(data.start_time)
@@ -203,7 +211,7 @@ export const createVenueBookingSchema = z.object({
   }
 )
 
-export const updateVenueBookingSchema = createVenueBookingSchema.partial().safeExtend({
+export const updateVenueBookingSchema = venueBookingBaseSchema.partial().extend({
   status: z.enum(Constants.public.Enums.booking_status).optional(),
 })
 
@@ -647,7 +655,8 @@ const engagementLevels = ['very_high', 'high', 'moderate', 'low', 'very_low'] as
 
 export const classBreakdownSchema = z.record(z.string(), z.number().int().min(0))
 
-export const submitSessionReportSchema = z.object({
+// Base schema for session report without refinements
+const sessionReportBaseSchema = z.object({
   event_id: z.string().uuid(),
   trainer_assignment_id: z.string().uuid().optional(),
 
@@ -696,7 +705,9 @@ export const submitSessionReportSchema = z.object({
   challenges_faced: z.string().max(1000).optional(),
   recommendations: z.string().max(1000).optional(),
   best_practices_noted: z.string().max(1000).optional(),
-}).refine(
+})
+
+export const submitSessionReportSchema = sessionReportBaseSchema.refine(
   (data) => {
     if (data.actual_start_time && data.actual_end_time) {
       return new Date(data.actual_end_time) > new Date(data.actual_start_time)
@@ -721,7 +732,7 @@ export const submitSessionReportSchema = z.object({
   }
 )
 
-export const updateSessionReportSchema = submitSessionReportSchema.partial().omit({
+export const updateSessionReportSchema = sessionReportBaseSchema.partial().omit({
   event_id: true,
   trainer_assignment_id: true,
 })

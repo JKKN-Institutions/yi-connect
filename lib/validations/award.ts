@@ -51,7 +51,8 @@ export const UpdateAwardCategorySchema = CreateAwardCategorySchema.partial().ext
 // Award Cycle Schemas
 // ============================================================================
 
-export const CreateAwardCycleSchema = z.object({
+// Base schema for award cycle without refinements
+const AwardCycleBaseSchema = z.object({
   category_id: z.string().uuid('Invalid category ID'),
   cycle_name: z.string()
     .min(1, 'Cycle name is required')
@@ -78,7 +79,9 @@ export const CreateAwardCycleSchema = z.object({
   status: z.enum(['draft', 'open', 'nominations_closed', 'judging', 'completed', 'cancelled']).optional(),
   description: z.string().max(1000).optional(),
   max_nominations_per_member: z.number().int().min(1).default(1).optional(),
-}).refine(
+})
+
+export const CreateAwardCycleSchema = AwardCycleBaseSchema.refine(
   (data) => new Date(data.start_date) <= new Date(data.end_date),
   { message: 'Start date must be before or equal to end date', path: ['end_date'] }
 ).refine(
@@ -86,7 +89,7 @@ export const CreateAwardCycleSchema = z.object({
   { message: 'Nomination deadline must be before or equal to jury deadline', path: ['jury_deadline'] }
 )
 
-export const UpdateAwardCycleSchema = CreateAwardCycleSchema.partial().extend({
+export const UpdateAwardCycleSchema = AwardCycleBaseSchema.partial().extend({
   id: z.string().uuid('Invalid cycle ID'),
 })
 
@@ -101,7 +104,8 @@ export const SupportingDocumentSchema = z.object({
   size: z.number().int().positive('Document size must be positive'),
 })
 
-export const CreateNominationSchema = z.object({
+// Base schema for nomination without refinements
+const NominationBaseSchema = z.object({
   cycle_id: z.string().uuid('Invalid cycle ID'),
   nominee_id: z.string().uuid('Invalid nominee ID'),
   nominator_id: z.string().uuid('Invalid nominator ID'),
@@ -110,12 +114,14 @@ export const CreateNominationSchema = z.object({
     .max(2000, 'Justification is too long'),
   supporting_documents: z.array(SupportingDocumentSchema).optional(),
   status: z.enum(['draft', 'submitted', 'under_review', 'shortlisted', 'rejected', 'winner']).optional(),
-}).refine(
+})
+
+export const CreateNominationSchema = NominationBaseSchema.refine(
   (data) => data.nominee_id !== data.nominator_id,
   { message: 'Cannot nominate yourself', path: ['nominee_id'] }
 )
 
-export const UpdateNominationSchema = CreateNominationSchema.partial().extend({
+export const UpdateNominationSchema = NominationBaseSchema.partial().extend({
   id: z.string().uuid('Invalid nomination ID'),
 })
 

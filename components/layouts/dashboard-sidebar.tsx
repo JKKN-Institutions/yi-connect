@@ -548,6 +548,12 @@ const navigation: NavItem[] = [
         requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Vertical Head', 'Executive Member', 'EC Member']
       },
       {
+        name: 'Tracking',
+        href: '/pathfinder/health-card-tracking',
+        icon: BarChart3,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Vertical Head']
+      },
+      {
         name: 'CMP Targets',
         href: '/pathfinder/cmp-targets',
         icon: Target,

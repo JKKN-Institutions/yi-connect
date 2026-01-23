@@ -130,26 +130,38 @@ export const getUserProfile = cache(async () => {
  * ```
  */
 export async function requireRole(allowedRoles: string[]) {
+  console.log('[requireRole] Starting role check for allowed roles:', allowedRoles)
+
   const user = await requireAuth()
+  console.log('[requireRole] User authenticated:', user.id, user.email)
+
   const supabase = await createServerSupabaseClient()
+  console.log('[requireRole] Supabase client created')
 
   // Use the secure database function to avoid permission errors with auth.users
   const { data: userRoles, error } = await supabase.rpc('get_user_roles_detailed', {
     p_user_id: user.id
   })
 
+  console.log('[requireRole] RPC result - userRoles:', JSON.stringify(userRoles), 'error:', error?.message)
+
   if (error) {
-    console.error('Error fetching user roles:', error)
+    console.error('[requireRole] ERROR fetching user roles:', error.message, error.code, error.details)
     redirect('/unauthorized')
   }
 
   const userRoleNames = userRoles?.map((ur: { role_name: string }) => ur.role_name) || []
+  console.log('[requireRole] User role names:', userRoleNames)
+
   const hasRequiredRole = allowedRoles.some((role: string) => userRoleNames.includes(role))
+  console.log('[requireRole] hasRequiredRole:', hasRequiredRole)
 
   if (!hasRequiredRole) {
+    console.log('[requireRole] DENYING ACCESS - no matching role found')
     redirect('/unauthorized')
   }
 
+  console.log('[requireRole] ACCESS GRANTED')
   return { user, roles: userRoleNames }
 }
 

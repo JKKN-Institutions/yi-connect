@@ -17,8 +17,10 @@ import { getUserProfile } from '@/lib/auth'
 import { format } from 'date-fns'
 
 // Event card component for mobile
+// Note: isUpcoming is pre-computed on server to avoid hydration mismatch
 function MobileEventCard({
-  event
+  event,
+  isUpcoming
 }: {
   event: {
     id: string
@@ -32,9 +34,9 @@ function MobileEventCard({
     rsvp_count?: number
     capacity?: number
   }
+  isUpcoming: boolean
 }) {
   const startDate = new Date(event.start_date)
-  const isUpcoming = startDate > new Date()
 
   return (
     <Link href={`/m/events/${event.id}`}>
@@ -132,24 +134,33 @@ async function EventsList() {
     )
   }
 
+  // Compute current time once on server for consistent hydration
+  const serverNow = new Date()
+
   return (
     <div className='space-y-3 px-4'>
-      {result.data.map((event) => (
-        <MobileEventCard
-          key={event.id}
-          event={{
-            id: event.id,
-            title: event.title,
-            description: event.description,
-            start_date: event.start_date,
-            end_date: event.end_date,
-            venue: typeof event.venue === 'object' && event.venue ? event.venue.name : event.venue_address || null,
-            status: event.status,
-            category: event.category,
-            capacity: event.max_capacity || undefined
-          }}
-        />
-      ))}
+      {result.data.map((event) => {
+        const startDate = new Date(event.start_date)
+        const isUpcoming = startDate > serverNow
+
+        return (
+          <MobileEventCard
+            key={event.id}
+            event={{
+              id: event.id,
+              title: event.title,
+              description: event.description,
+              start_date: event.start_date,
+              end_date: event.end_date,
+              venue: typeof event.venue === 'object' && event.venue ? event.venue.name : event.venue_address || null,
+              status: event.status,
+              category: event.category,
+              capacity: event.max_capacity || undefined
+            }}
+            isUpcoming={isUpcoming}
+          />
+        )
+      })}
     </div>
   )
 }

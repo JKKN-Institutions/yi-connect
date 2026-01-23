@@ -9,7 +9,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Trophy, Users, FileText, Award, Plus } from 'lucide-react'
 
 async function ActiveCyclesSection() {
-  const cycles = await getActiveCycles()
+  let cycles: Awaited<ReturnType<typeof getActiveCycles>> = []
+
+  try {
+    cycles = await getActiveCycles()
+  } catch (error) {
+    console.error('Error fetching active cycles:', error)
+    // Return empty state on error
+  }
 
   return (
     <div className="space-y-4">
@@ -46,7 +53,15 @@ async function ActiveCyclesSection() {
 }
 
 async function CategoriesSection() {
-  const { data: categories } = await getAwardCategories({ is_active: true })
+  let categories: Awaited<ReturnType<typeof getAwardCategories>>['data'] = []
+
+  try {
+    const result = await getAwardCategories({ is_active: true })
+    categories = result?.data || []
+  } catch (error) {
+    console.error('Error fetching award categories:', error)
+    // Return empty state on error
+  }
 
   return (
     <div className="space-y-4">

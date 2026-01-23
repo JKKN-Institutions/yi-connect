@@ -2,7 +2,7 @@
  * Admin Users List Page
  *
  * Main page for managing all users in the system.
- * Restricted to Super Admin and National Admin only.
+ * Restricted to Super Admin, National Admin, and Chair.
  */
 
 import { Suspense } from 'react'
@@ -148,8 +148,8 @@ async function UsersTableWrapper({ searchParamsPromise }: { searchParamsPromise:
 }
 
 async function PageContent(props: PageProps) {
-  // Require Super Admin or National Admin
-  await requireRole(['Super Admin', 'National Admin'])
+  // Require Super Admin, National Admin, or Chair
+  await requireRole(['Super Admin', 'National Admin', 'Chair'])
 
   return (
     <div className='flex flex-1 flex-col gap-6 p-6'>

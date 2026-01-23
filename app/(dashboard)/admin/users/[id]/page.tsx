@@ -2,7 +2,7 @@
  * Admin User Detail Page
  *
  * Detailed view of a single user with full profile, roles, and activity history.
- * Restricted to Super Admin and National Admin only.
+ * Restricted to Super Admin, National Admin, and Chair.
  */
 
 import { Suspense } from 'react'
@@ -55,8 +55,8 @@ async function UserDetailContent({ paramsPromise }: { paramsPromise: Promise<{ i
   // Await params inside Suspense boundary
   const params = await paramsPromise
 
-  // Require Super Admin or National Admin
-  await requireRole(['Super Admin', 'National Admin'])
+  // Require Super Admin, National Admin, or Chair
+  await requireRole(['Super Admin', 'National Admin', 'Chair'])
 
   // Get admin's hierarchy level for impersonation check
   const adminHierarchyLevel = await getUserHierarchyLevel()

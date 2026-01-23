@@ -1,5 +1,32 @@
 # Yi Connect - Progress Tracker
 
+## Session: 2026-01-23 - Browser Testing & Bug Fix
+
+### Accomplished
+- Continued browser-use multi-session testing from previous session
+- Found and fixed BUG-001: Chair role denied access to User Management
+
+### BUG-001 Fix Details
+- **Issue:** Chair logged in at `/admin/users` saw "Access Denied" error
+- **Root Cause:** `requireRole()` only allowed `['Super Admin', 'National Admin']`
+- **Fix:** Added 'Chair' to allowed roles in all 4 user management pages:
+  - `app/(dashboard)/admin/users/page.tsx` (line 152)
+  - `app/(dashboard)/admin/users/invite/page.tsx` (line 27)
+  - `app/(dashboard)/admin/users/[id]/page.tsx` (line 59)
+  - `app/(dashboard)/admin/users/[id]/edit/page.tsx` (line 38)
+
+### Commits
+- `723d374` fix(admin): grant Chair role access to User Management
+- `3f31ee9` docs: mark BUG-001 as verified in production
+
+### Verification
+- Deployed to Vercel (dpl_FChnaPNBZJMiwvM5xyeLKPkA4CRV)
+- Browser tested in production as Chair role
+- User Management page now loads with full functionality (76 users, stats, filters)
+- Bug tracking in `bugs.md` updated with FIXED ✅ VERIFIED status
+
+---
+
 ## Session: 2026-01-05 - MASSIVE FEATURE IMPLEMENTATION 🚀
 
 ### Accomplished (6 Parallel Agents)

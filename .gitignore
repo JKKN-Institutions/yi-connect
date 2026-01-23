@@ -47,3 +47,4 @@ next-env.d.ts
 # supabase temp files
 supabase/.temp/
 .env*.local
+.obsidian/

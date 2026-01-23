@@ -2,6 +2,7 @@
  * Member Requests Dashboard (Admin Only)
  *
  * Executive Members and National Admins can review and approve membership applications
+ * BUG-004 FIX: requireRole moved to page level (not inside Suspense boundary)
  */
 
 import { requireRole } from '@/lib/auth';

@@ -170,8 +170,8 @@ export async function getMemberRequests(params?: {
   limit?: number
   offset?: number
 }) {
-  // Require Executive Member or above
-  await requireRole(['Super Admin', 'National Admin', 'Executive Member'])
+  // Require leadership roles (Chair, Co-Chair, EC Member) or above
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member'])
 
   // Use admin client to avoid FK validation issues with auth.users
   // This is safe because requireRole() ensures only admins can access this
@@ -213,7 +213,7 @@ export async function getMemberRequests(params?: {
  * Get single member request by ID (ADMIN ONLY)
  */
 export async function getMemberRequestById(id: string) {
-  await requireRole(['Super Admin', 'National Admin', 'Executive Member'])
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member'])
 
   // Use admin client to avoid FK validation issues with auth.users
   const supabase = createAdminSupabaseClient()
@@ -237,8 +237,8 @@ export async function getMemberRequestById(id: string) {
  */
 export async function approveMemberRequest(requestId: string, notes?: string): Promise<FormState> {
   try {
-    // Require Executive Member or above
-    const { user } = await requireRole(['Super Admin', 'National Admin', 'Executive Member'])
+    // Require leadership roles (Chair, Co-Chair, EC Member) or above
+    const { user } = await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member'])
 
     // Use admin client to avoid FK validation issues with auth.users
     const supabase = createAdminSupabaseClient()
@@ -343,8 +343,8 @@ export async function approveMemberRequest(requestId: string, notes?: string): P
  */
 export async function rejectMemberRequest(requestId: string, notes: string): Promise<FormState> {
   try {
-    // Require Executive Member or above
-    const { user } = await requireRole(['Super Admin', 'National Admin', 'Executive Member'])
+    // Require leadership roles (Chair, Co-Chair, EC Member) or above
+    const { user } = await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member'])
 
     // Use admin client to avoid FK validation issues with auth.users
     const supabase = createAdminSupabaseClient()

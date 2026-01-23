@@ -30,11 +30,14 @@ export async function processBulkMemberUpload(
   members: Array<{ rowNumber: number; data: Record<string, any> }>,
   options: BulkUploadOptions
 ): Promise<BulkUploadResult> {
-  // Require admin role
+  // Require leadership roles (Chair, Co-Chair, EC Member) or above
   const { user: currentUser } = await requireRole([
     'Super Admin',
     'National Admin',
-    'Executive Member'
+    'Chair',
+    'Co-Chair',
+    'Executive Member',
+    'EC Member'
   ])
 
   const adminClient = createAdminSupabaseClient()
@@ -430,7 +433,7 @@ export async function checkDuplicateEmails(
   existing: string[]
   duplicatesInFile: string[]
 }> {
-  await requireRole(['Super Admin', 'National Admin', 'Executive Member'])
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member'])
 
   const adminClient = createAdminSupabaseClient()
 
@@ -463,7 +466,7 @@ export async function checkDuplicateEmails(
 export async function getChaptersForBulkUpload(): Promise<
   Array<{ id: string; name: string; location: string }>
 > {
-  await requireRole(['Super Admin', 'National Admin', 'Executive Member'])
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member'])
 
   const supabase = await createServerSupabaseClient()
 

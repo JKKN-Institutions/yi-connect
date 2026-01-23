@@ -12,7 +12,7 @@
 | BUG-001 | Chair denied access to User Management | Chair | HIGH | FIXED | ✅ |
 | BUG-002 | EC Member denied access to Communication Hub | EC Member | MEDIUM | FIXED | ✅ |
 | BUG-003 | EC Member denied access to Pathfinder | EC Member | MEDIUM | FIXED | ✅ |
-| BUG-004 | ALL roles denied access to Member Requests | ALL | HIGH | INVESTIGATING | ❌ |
+| BUG-004 | ALL roles denied access to Member Requests | ALL | HIGH | FIXED | ✅ |
 
 ## Bug Details
 

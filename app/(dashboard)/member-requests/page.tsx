@@ -26,7 +26,10 @@ interface PageProps {
   }>;
 }
 
-export default function MemberRequestsPage({ searchParams }: PageProps) {
+export default async function MemberRequestsPage({ searchParams }: PageProps) {
+  // Require leadership roles to access member requests - must be at page level, not inside Suspense
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']);
+
   return (
     <div className='space-y-6'>
       {/* Header */}
@@ -48,9 +51,6 @@ export default function MemberRequestsPage({ searchParams }: PageProps) {
 }
 
 async function MemberRequestsContent({ searchParams }: PageProps) {
-  // Require leadership roles to access member requests
-  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']);
-
   const params = await searchParams;
   const status = params.status || 'pending';
   const page = parseInt(params.page || '1');

@@ -10,8 +10,8 @@
 | ID | Description | Role | Severity | Status | Verified |
 |----|-------------|------|----------|--------|----------|
 | BUG-001 | Chair denied access to User Management | Chair | HIGH | FIXED | ✅ |
-| BUG-002 | EC Member denied access to Communication Hub | EC Member | MEDIUM | FIXED | ⏳ |
-| BUG-003 | EC Member denied access to Pathfinder | EC Member | MEDIUM | FIXED | ⏳ |
+| BUG-002 | EC Member denied access to Communication Hub | EC Member | MEDIUM | FIXED | ✅ |
+| BUG-003 | EC Member denied access to Pathfinder | EC Member | MEDIUM | FIXED | ✅ |
 | BUG-004 | ALL roles denied access to Member Requests | ALL | HIGH | INVESTIGATING | ❌ |
 
 ## Bug Details
@@ -43,10 +43,10 @@
 - **Actual:** "Access Denied - You don't have permission to access this page"
 - **Other roles affected:** No - Co-Chair and Chair can access Communication Hub
 - **Severity:** MEDIUM - Inconsistent permission (shown in sidebar but can't access)
-- **Status:** FIXED ⏳ PENDING VERIFICATION
+- **Status:** FIXED ✅ VERIFIED IN PRODUCTION
 - **Fix:** Added 'EC Member' role to requireRole() in communications/page.tsx
 - **Commit:** f504214 - fix(permissions): grant EC Member access to Communications and Pathfinder
-- **Verified:** Pending browser verification
+- **Verified:** 2026-01-23 - EC Member can now access /communications with full functionality
 
 ### BUG-003: EC Member denied access to Pathfinder
 - **Session/Role:** EC Member (demo-ec@yi-demo.com)
@@ -59,10 +59,10 @@
 - **Actual:** "Access Denied - You don't have permission to access this page"
 - **Other roles affected:** No - Co-Chair and Chair can access Pathfinder
 - **Severity:** MEDIUM - Inconsistent permission (shown in sidebar but can't access)
-- **Status:** FIXED ⏳ PENDING VERIFICATION
+- **Status:** FIXED ✅ VERIFIED IN PRODUCTION
 - **Fix:** Added 'EC Member' role to requireRole() in pathfinder/page.tsx
 - **Commit:** f504214 - fix(permissions): grant EC Member access to Communications and Pathfinder
-- **Verified:** Pending browser verification
+- **Verified:** 2026-01-23 - EC Member can now access /pathfinder (shows "No Data Available" which is expected)
 
 ### BUG-004: ALL roles denied access to Member Requests
 - **Session/Role:** ALL (Chair, Co-Chair, EC Member)

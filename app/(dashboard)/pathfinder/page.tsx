@@ -20,7 +20,7 @@ export const metadata = {
 }
 
 export default async function PathfinderPage() {
-  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair'])
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'EC Member'])
 
   return (
     <div className="flex flex-col gap-6 max-w-7xl mx-auto">

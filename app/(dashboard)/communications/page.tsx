@@ -35,7 +35,7 @@ export const metadata: Metadata = {
 
 
 export default async function CommunicationDashboardPage() {
-  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member']);
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']);
   return (
     <div className="flex flex-col gap-6">
       {/* Header */}

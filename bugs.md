@@ -24,5 +24,7 @@
 - **Actual:** "Access Denied - You don't have permission to access this page"
 - **Other roles affected:** No (Co-Chair and EC Member correctly don't have access)
 - **Severity:** HIGH - Core admin functionality broken
-- **Status:** FIXED
+- **Status:** FIXED ✅ VERIFIED IN PRODUCTION
 - **Fix:** Added 'Chair' role to requireRole() in all 4 admin/users pages
+- **Commit:** 723d374 - fix(admin): grant Chair role access to User Management
+- **Verified:** 2026-01-23 - Chair can now access /admin/users with full functionality

@@ -693,7 +693,7 @@ const navigation: NavItem[] = [
       },
       {
         name: 'General',
-        href: '/settings',
+        href: '/settings/general',
         icon: Settings
       }
     ]

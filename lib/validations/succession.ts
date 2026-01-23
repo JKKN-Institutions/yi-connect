@@ -206,8 +206,8 @@ export const UpdateSuccessionPositionSchema = CreateSuccessionPositionSchema.par
 // NOMINATION SCHEMAS
 // ============================================================================
 
-// Base schema for nomination without refinements
-const SuccessionNominationBaseSchema = z.object({
+// Base schema for nomination without refinements (exported for form use)
+export const SuccessionNominationBaseSchema = z.object({
   cycle_id: uuidSchema,
   position_id: uuidSchema,
   nominee_id: uuidSchema,
@@ -217,6 +217,18 @@ const SuccessionNominationBaseSchema = z.object({
     .max(2000, 'Justification too long'),
   supporting_evidence: z.array(SupportingEvidenceSchema).optional(),
   status: SuccessionApplicationStatusSchema.optional(),
+})
+
+// Form schema without nominated_by_id (added server-side)
+// Zod v4 doesn't allow .omit() on schemas, so we define this separately
+export const NominationFormSchema = z.object({
+  cycle_id: uuidSchema,
+  position_id: uuidSchema,
+  nominee_id: uuidSchema,
+  justification: z.string()
+    .min(100, 'Justification must be at least 100 characters')
+    .max(2000, 'Justification too long'),
+  supporting_evidence: z.array(SupportingEvidenceSchema).optional(),
 })
 
 export const CreateNominationSchema = SuccessionNominationBaseSchema.refine(
@@ -578,6 +590,7 @@ export type CreateSuccessionCycleInput = z.infer<typeof CreateSuccessionCycleSch
 export type UpdateSuccessionCycleInput = z.infer<typeof UpdateSuccessionCycleSchema>
 export type CreateSuccessionPositionInput = z.infer<typeof CreateSuccessionPositionSchema>
 export type CreateNominationInput = z.infer<typeof CreateNominationSchema>
+export type NominationFormInput = z.infer<typeof NominationFormSchema>
 export type CreateApplicationInput = z.infer<typeof CreateApplicationSchema>
 export type SubmitEvaluationScoresInput = z.infer<typeof SubmitEvaluationScoresSchema>
 export type ScheduleInterviewInput = z.infer<typeof ScheduleInterviewSchema>

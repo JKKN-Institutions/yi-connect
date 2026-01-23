@@ -10,9 +10,9 @@
 | ID | Description | Role | Severity | Status | Verified |
 |----|-------------|------|----------|--------|----------|
 | BUG-001 | Chair denied access to User Management | Chair | HIGH | FIXED | ✅ |
-| BUG-002 | EC Member denied access to Communication Hub | EC Member | MEDIUM | NEW | ❌ |
-| BUG-003 | EC Member denied access to Pathfinder | EC Member | MEDIUM | NEW | ❌ |
-| BUG-004 | ALL roles denied access to Member Requests | ALL | HIGH | NEW | ❌ |
+| BUG-002 | EC Member denied access to Communication Hub | EC Member | MEDIUM | FIXED | ⏳ |
+| BUG-003 | EC Member denied access to Pathfinder | EC Member | MEDIUM | FIXED | ⏳ |
+| BUG-004 | ALL roles denied access to Member Requests | ALL | HIGH | INVESTIGATING | ❌ |
 
 ## Bug Details
 
@@ -34,7 +34,7 @@
 
 ### BUG-002: EC Member denied access to Communication Hub
 - **Session/Role:** EC Member (demo-ec@yi-demo.com)
-- **Found at:** https://yi-connect-app.vercel.app/communication
+- **Found at:** https://yi-connect-app.vercel.app/communications
 - **Steps to reproduce:**
   1. Login as EC Member using demo account
   2. Click "Communication Hub" > "Overview" in sidebar
@@ -43,8 +43,10 @@
 - **Actual:** "Access Denied - You don't have permission to access this page"
 - **Other roles affected:** No - Co-Chair and Chair can access Communication Hub
 - **Severity:** MEDIUM - Inconsistent permission (shown in sidebar but can't access)
-- **Status:** NEW
-- **Notes:** Either hide Communication Hub from EC Member sidebar OR grant access
+- **Status:** FIXED ⏳ PENDING VERIFICATION
+- **Fix:** Added 'EC Member' role to requireRole() in communications/page.tsx
+- **Commit:** f504214 - fix(permissions): grant EC Member access to Communications and Pathfinder
+- **Verified:** Pending browser verification
 
 ### BUG-003: EC Member denied access to Pathfinder
 - **Session/Role:** EC Member (demo-ec@yi-demo.com)
@@ -57,12 +59,14 @@
 - **Actual:** "Access Denied - You don't have permission to access this page"
 - **Other roles affected:** No - Co-Chair and Chair can access Pathfinder
 - **Severity:** MEDIUM - Inconsistent permission (shown in sidebar but can't access)
-- **Status:** NEW
-- **Notes:** Either hide Pathfinder from EC Member sidebar OR grant access
+- **Status:** FIXED ⏳ PENDING VERIFICATION
+- **Fix:** Added 'EC Member' role to requireRole() in pathfinder/page.tsx
+- **Commit:** f504214 - fix(permissions): grant EC Member access to Communications and Pathfinder
+- **Verified:** Pending browser verification
 
 ### BUG-004: ALL roles denied access to Member Requests
 - **Session/Role:** ALL (Chair, Co-Chair, EC Member)
-- **Found at:** https://yi-connect-app.vercel.app/admin/member-requests
+- **Found at:** https://yi-connect-app.vercel.app/member-requests
 - **Steps to reproduce:**
   1. Login as any demo account
   2. Click "Administration" > "Member Requests" in sidebar
@@ -71,8 +75,13 @@
 - **Actual:** "Access Denied - You don't have permission to access this page" for ALL
 - **Other roles affected:** ALL roles are affected
 - **Severity:** HIGH - Core admin functionality broken for all users
-- **Status:** NEW
-- **Notes:** Need to add appropriate roles to requireRole() in member-requests page
+- **Status:** INVESTIGATING
+- **Notes:**
+  - Sidebar links to `/member-requests` (not `/admin/member-requests`)
+  - Page code at `app/(dashboard)/member-requests/page.tsx` already has correct roles:
+    `['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']`
+  - If code is correct but access denied, may be a data issue (demo account role names differ?)
+  - Need to verify demo account roles in database match expected role names exactly
 
 ---
 

@@ -29,7 +29,7 @@ interface PageProps {
 
 export default async function MemberRequestsPage({ searchParams }: PageProps) {
   // Require leadership roles to access member requests - must be at page level, not inside Suspense
-  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']);
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member']);
 
   return (
     <div className='space-y-6'>

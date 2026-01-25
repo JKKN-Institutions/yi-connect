@@ -398,14 +398,14 @@ export function getAdminBottomNavPages(
           label: 'Member Requests',
           icon: UserCheck,
           active: pathname === '/member-requests',
-          requiredRoles: ['Super Admin', 'National Admin', 'Executive Member', 'Chair', 'Co-Chair', 'EC Member'],
+          requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member'],
           submenus: [
             {
               href: '/member-requests',
               label: 'Pending Requests',
               icon: UserCheck,
               active: pathname === '/member-requests',
-              requiredRoles: ['Super Admin', 'National Admin', 'Executive Member', 'Chair', 'Co-Chair', 'EC Member']
+              requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member']
             }
           ]
         },

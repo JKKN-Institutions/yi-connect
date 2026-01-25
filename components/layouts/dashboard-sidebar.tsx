@@ -705,7 +705,7 @@ const adminNavigation: NavItem[] = [
     name: 'Member Requests',
     href: '/member-requests',
     icon: UserCheck,
-    requiredRoles: ['Executive Member', 'Chair', 'Co-Chair', 'EC Member']
+    requiredRoles: ['Executive Member', 'Chair', 'Co-Chair']
   },
   {
     name: 'Chapters',

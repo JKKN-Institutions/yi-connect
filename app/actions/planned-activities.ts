@@ -123,7 +123,7 @@ export async function getPlannedActivities(
         *,
         vertical:verticals(id, name, slug, color, icon),
         chapter:chapters(id, name),
-        member:members!created_by(id, profile:profiles(full_name, avatar_url))
+        member:members!planned_activities_created_by_fkey(id, profile:profiles(full_name, avatar_url))
       `)
       .eq('chapter_id', member.chapter_id)
       .order('planned_date', { ascending: true })
@@ -183,7 +183,7 @@ export async function getPlannedActivityById(
         *,
         vertical:verticals(id, name, slug, color, icon),
         chapter:chapters(id, name),
-        member:members!created_by(id, profile:profiles(full_name, avatar_url))
+        member:members!planned_activities_created_by_fkey(id, profile:profiles(full_name, avatar_url))
       `)
       .eq('id', id)
       .single()

@@ -1,5 +1,33 @@
 # Yi Connect - Progress Tracker
 
+## Session: 2026-01-25 - Activity Planner Bug Fixes
+
+### Accomplished
+Fixed two critical bugs in the Activity Planner feature:
+
+**Bug 1: "Member not found" when saving activity**
+- Root cause: Server action queried `.eq('user_id', user.id)` but members table has no `user_id` column
+- Fix: Changed to `.eq('id', user.id)` since `members.id` = `profiles.id` = auth user id
+- Affected 4 locations in `app/actions/planned-activities.ts`
+
+**Bug 2: "column members_1.full_name does not exist" error**
+- Root cause: Query tried to select `full_name` and `avatar_url` from members table
+- Fix: These fields are in `profiles` table, updated to use nested join: `member:members!created_by(id, profile:profiles(full_name, avatar_url))`
+- Updated type definition in `types/planned-activity.ts` to match
+
+### Verification
+- Browser tested complete flow:
+  1. Open Planned Activities page → Now shows 2 activities (was empty)
+  2. Click "Complete Now" → Health card form pre-filled correctly
+  3. Pre-fill data verified: activity name, date, vertical, EC/Non-EC counts
+- Build passes
+- Screenshots captured
+
+### Commits
+- `27c5ae8` fix(planned-activities): correct member lookup and profile join
+
+---
+
 ## Session: 2026-01-25 - Production Verification
 
 ### Accomplished

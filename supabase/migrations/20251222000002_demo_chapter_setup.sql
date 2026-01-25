@@ -677,5 +677,5 @@ BEGIN
   RAISE NOTICE '   • 3 Schools';
   RAISE NOTICE '   • 2 Colleges';
   RAISE NOTICE '';
-  RAISE NOTICE '🔗 Login URL: https://yi-connect.vercel.app/login';
+  RAISE NOTICE '🔗 Login URL: https://yi-connect-app.vercel.app/login';
 END $$;

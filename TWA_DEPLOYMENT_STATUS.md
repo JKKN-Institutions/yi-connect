@@ -131,7 +131,7 @@ Size: 30KB
 https://yi-connect-app.vercel.app
 ```
 
-**NOT:** `https://yi-connect.vercel.app` (this was incorrect)
+**NOT:** `https://yi-connect-app.vercel.app` (this was incorrect)
 
 ### Bubblewrap Initialization Command
 When you run `bubblewrap init`, use this exact URL:

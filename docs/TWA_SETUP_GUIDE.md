@@ -61,7 +61,7 @@ cd yi-connect-twa
 **Run Bubblewrap initialization:**
 
 ```bash
-bubblewrap init --manifest https://yi-connect.vercel.app/manifest.json
+bubblewrap init --manifest https://yi-connect-app.vercel.app/manifest.json
 ```
 
 **Bubblewrap will prompt you for the following information:**
@@ -69,7 +69,7 @@ bubblewrap init --manifest https://yi-connect.vercel.app/manifest.json
 1. **Application name:** `Yi Connect`
 2. **Short name:** `Yi Connect`
 3. **Package ID (must be unique):** `com.jkkninstitutions.yiconnect`
-4. **Host:** `yi-connect.vercel.app`
+4. **Host:** `yi-connect-app.vercel.app`
 5. **Start URL:** `/m`
 6. **Display mode:** `standalone` (should auto-detect from manifest)
 7. **Theme color:** `#3b82f6` (should auto-detect from manifest)
@@ -246,13 +246,13 @@ git push
 **Verify the file is accessible:**
 
 ```bash
-curl https://yi-connect.vercel.app/.well-known/assetlinks.json
+curl https://yi-connect-app.vercel.app/.well-known/assetlinks.json
 ```
 
 **You should see your assetlinks.json content returned.**
 
 **Alternative: Test in browser:**
-Open: `https://yi-connect.vercel.app/.well-known/assetlinks.json`
+Open: `https://yi-connect-app.vercel.app/.well-known/assetlinks.json`
 
 You should see the JSON file (not a 404 error).
 
@@ -606,9 +606,9 @@ adb pull /sdcard/Pictures/Screenshots D:\Projects\yi-connect-twa\screenshots
 10. **Contact details:**
     - Email: support@yiconnect.com (or your actual support email)
     - Phone: (optional)
-    - Website: https://yi-connect.vercel.app
+    - Website: https://yi-connect-app.vercel.app
 
-11. **Privacy policy URL:** `https://yi-connect.vercel.app/privacy-policy`
+11. **Privacy policy URL:** `https://yi-connect-app.vercel.app/privacy-policy`
 
 ---
 
@@ -773,7 +773,7 @@ Google will assign age ratings (ESRB, PEGI, etc.) based on your responses.
 **Symptom:** App shows address bar instead of fullscreen
 
 **Solutions:**
-1. Verify assetlinks.json is accessible: `curl https://yi-connect.vercel.app/.well-known/assetlinks.json`
+1. Verify assetlinks.json is accessible: `curl https://yi-connect-app.vercel.app/.well-known/assetlinks.json`
 2. Check SHA-256 fingerprint matches keystore
 3. Ensure package name matches exactly
 4. Wait 5-10 minutes for Google's cache to update

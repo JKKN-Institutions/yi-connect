@@ -49,7 +49,7 @@ try {
   console.log(`🔑 SHA-256: ${sha256Fingerprint}`);
   console.log('\n📋 Next steps:');
   console.log('1. Commit and push to deploy assetlinks.json to Vercel');
-  console.log('2. Verify accessibility: https://yi-connect.vercel.app/.well-known/assetlinks.json');
+  console.log('2. Verify accessibility: https://yi-connect-app.vercel.app/.well-known/assetlinks.json');
   console.log('3. Continue with TWA build in Bubblewrap');
 } catch (error) {
   console.error('❌ Error writing assetlinks.json:', error.message);

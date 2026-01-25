@@ -1120,13 +1120,13 @@ Allow Yi chapter leaders to demo the system from different role perspectives wit
 ### Completed This Session
 
 #### WhatsApp Live Site Connection - WORKING!
-- **Tested WhatsApp API** on `yi-connect.vercel.app` - QR code generated successfully
+- **Tested WhatsApp API** on `yi-connect-app.vercel.app` - QR code generated successfully
 - **Improved error handling** - Added serverless detection to prevent Puppeteer crash
 - **Verified connection flow** - API returns `status: qr_ready` with valid QR code
 
 ### QR Code Ready to Scan
 The WhatsApp QR code is ready at:
-- **Web UI**: yi-connect.vercel.app → Settings → WhatsApp
+- **Web UI**: yi-connect-app.vercel.app → Settings → WhatsApp
 - **Local file**: `/tmp/whatsapp-qr.png`
 
 To connect: Open WhatsApp on phone → Settings → Linked Devices → Link a Device → Scan QR

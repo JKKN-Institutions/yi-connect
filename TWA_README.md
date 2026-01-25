@@ -33,7 +33,7 @@ All automated setup has been completed for you:
 ### 3. Privacy Policy Created ✅
 - Comprehensive privacy policy at `app/(public)/privacy-policy/page.tsx`
 - Covers all Play Store requirements
-- URL: `https://yi-connect.vercel.app/privacy-policy` (after deployment)
+- URL: `https://yi-connect-app.vercel.app/privacy-policy` (after deployment)
 
 ### 4. Digital Asset Links Template ✅
 - Template created at `public/.well-known/assetlinks.json`
@@ -102,13 +102,13 @@ cd yi-connect-twa
 
 **Run Bubblewrap:**
 ```bash
-bubblewrap init --manifest https://yi-connect.vercel.app/manifest.json
+bubblewrap init --manifest https://yi-connect-app.vercel.app/manifest.json
 ```
 
 **Use these values when prompted:**
 - App name: `Yi Connect`
 - Package: `com.jkkninstitutions.yiconnect`
-- Host: `yi-connect.vercel.app`
+- Host: `yi-connect-app.vercel.app`
 - Start URL: `/m`
 - Enable notifications: `Yes`
 - Location delegation: `Yes`
@@ -168,7 +168,7 @@ git push
 ```
 
 **Verify:**
-https://yi-connect.vercel.app/.well-known/assetlinks.json
+https://yi-connect-app.vercel.app/.well-known/assetlinks.json
 
 ---
 

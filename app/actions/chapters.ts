@@ -410,7 +410,7 @@ export async function sendChairInvitationWhatsApp(
     }
 
     // Build the accept URL
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://yi-connect.vercel.app'
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://yi-connect-app.vercel.app'
     const acceptUrl = `${baseUrl}/accept-invite?token=${invitation.token}`
 
     // Format message

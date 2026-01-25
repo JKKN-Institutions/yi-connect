@@ -51,13 +51,13 @@ cd yi-connect-twa
 **Run Bubblewrap:**
 
 ```bash
-bubblewrap init --manifest https://yi-connect.vercel.app/manifest.json
+bubblewrap init --manifest https://yi-connect-app.vercel.app/manifest.json
 ```
 
 **Prompts (use these values):**
 - App name: `Yi Connect`
 - Package: `com.jkkninstitutions.yiconnect`
-- Host: `yi-connect.vercel.app`
+- Host: `yi-connect-app.vercel.app`
 - Start URL: `/m`
 - (Accept other defaults)
 
@@ -107,10 +107,10 @@ git push
 **Verify deployment:**
 
 ```bash
-curl https://yi-connect.vercel.app/.well-known/assetlinks.json
+curl https://yi-connect-app.vercel.app/.well-known/assetlinks.json
 ```
 
-Or open in browser: https://yi-connect.vercel.app/.well-known/assetlinks.json
+Or open in browser: https://yi-connect-app.vercel.app/.well-known/assetlinks.json
 
 ### Step 8: Build Debug APK
 
@@ -225,7 +225,7 @@ adb pull /sdcard/Pictures/Screenshots screenshots/
 - Feature graphic: Your 1024x500 banner
 - Screenshots: Upload 2-6 phone screenshots
 - Category: Business/Productivity
-- Privacy policy: `https://yi-connect.vercel.app/privacy-policy`
+- Privacy policy: `https://yi-connect-app.vercel.app/privacy-policy`
 
 **Content Rating:**
 - Category: Productivity
@@ -298,7 +298,7 @@ npm run twa:update-assetlinks "SHA256_FINGERPRINT"
 npm install -g @bubblewrap/cli
 
 # Init TWA (run outside project)
-bubblewrap init --manifest https://yi-connect.vercel.app/manifest.json
+bubblewrap init --manifest https://yi-connect-app.vercel.app/manifest.json
 
 # Generate keystore
 keytool -genkey -v -keystore yi-connect-release.keystore -alias yi-connect-key -keyalg RSA -keysize 2048 -validity 10000

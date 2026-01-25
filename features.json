@@ -1,7 +1,7 @@
 {
   "project": "yi-connect",
   "created": "2026-01-02",
-  "updated": "2026-01-04",
+  "updated": "2026-01-25",
   "feature_areas": {
     "aaa-enhancements": {
       "status": "complete",
@@ -263,6 +263,45 @@
         "audit_visibility": "all_national_admins",
         "quick_switch": "recent_list_plus_role_cycling"
       }
+    },
+    {
+      "id": "activity-planner",
+      "name": "Activity Planner Chatbot",
+      "feature_area": "aaa-enhancements",
+      "description": "Floating chat bubble with guided questions to help EC members plan activities upfront. Saves as 'Planned' status, shows data collection checklist, and pre-fills health card form when activity is completed.",
+      "priority": 6,
+      "status": "complete",
+      "completed_at": "2026-01-25",
+      "complexity": "high",
+      "files_created": [
+        "supabase/migrations/20260125000002_planned_activities.sql - Database schema",
+        "types/planned-activity.ts - Type definitions",
+        "app/actions/planned-activities.ts - Server actions (CRUD)",
+        "components/activity-planner/activity-planner-provider.tsx - Context + floating button",
+        "components/activity-planner/activity-planner-chatbot.tsx - Sheet/drawer container",
+        "components/activity-planner/activity-planner-wizard.tsx - Step orchestrator",
+        "components/activity-planner/steps/*.tsx - Wizard step components",
+        "components/activity-planner/planned-activities-list.tsx - List view",
+        "components/activity-planner/planned-activity-card.tsx - Card with actions",
+        "app/(dashboard)/pathfinder/planned-activities/page.tsx - List page"
+      ],
+      "files_modified": [
+        "app/(dashboard)/layout.tsx - Added ActivityPlannerProvider wrapper",
+        "app/(dashboard)/pathfinder/health-card/new/page.tsx - Read query params, fetch prefill data"
+      ],
+      "bug_fixes": [
+        "2026-01-25: Fixed member lookup using .eq('id', user.id) instead of .eq('user_id', user.id)",
+        "2026-01-25: Fixed profile join using nested query profile:profiles(full_name, avatar_url)"
+      ],
+      "test_steps": [
+        "Click floating 'Plan Activity' button",
+        "Complete 5 wizard steps (name, date, vertical, participation, review)",
+        "Activity saved with 'Planned' status",
+        "See data collection checklist based on vertical",
+        "View in Planned Activities list",
+        "Click 'Complete Now' → Health card form pre-filled",
+        "Submit health card → Planned activity marked completed"
+      ]
     }
   ]
 }

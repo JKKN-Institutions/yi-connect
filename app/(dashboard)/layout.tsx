@@ -13,6 +13,7 @@ import { DashboardHeader } from '@/components/layouts/dashboard-header'
 import { DashboardSidebar } from '@/components/layouts/dashboard-sidebar'
 import { BugReporterWrapper } from '@/components/bug-reporter-wrapper'
 import { AdminChapterProvider } from '@/contexts/admin-chapter-context'
+import { ActivityPlannerProvider } from '@/components/activity-planner'
 import { AdminBottomNavbarWrapper } from '@/components/layouts/admin-bottom-navbar-wrapper'
 import { ImpersonationBannerWrapper } from '@/components/admin/impersonation-banner-server'
 import { getCurrentUser } from '@/lib/auth'
@@ -115,6 +116,9 @@ export default async function DashboardLayout({
 
         {/* Admin Bottom Navbar for Mobile */}
         <AdminBottomNavbarWrapper userRoles={userRoles} />
+
+        {/* Activity Planner Floating Button */}
+        <ActivityPlannerProvider />
       </AdminChapterProvider>
     </BugReporterWrapper>
   )

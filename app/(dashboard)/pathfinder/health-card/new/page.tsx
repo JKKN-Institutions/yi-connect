@@ -19,7 +19,7 @@ export const metadata = {
 }
 
 export default async function NewHealthCardPage() {
-  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Vertical Head', 'Executive Member'])
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Vertical Head', 'EC Member'])
 
   const chapterId = await getCurrentChapterId()
 
@@ -61,7 +61,7 @@ export default async function NewHealthCardPage() {
   if (userRoles.includes('Chair')) defaultRole = 'chair'
   else if (userRoles.includes('Co-Chair')) defaultRole = 'co_chair'
   else if (userRoles.includes('Vertical Head')) defaultRole = 'vertical_head'
-  else if (userRoles.includes('Executive Member')) defaultRole = 'chapter_em'
+  else if (userRoles.includes('EC Member')) defaultRole = 'chapter_em'
 
   return (
     <div className="max-w-3xl mx-auto">

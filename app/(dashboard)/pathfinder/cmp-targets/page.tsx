@@ -37,7 +37,7 @@ export default async function CMPTargetsPage() {
     'Chair',
     'Co-Chair',
     'Vertical Head',
-    'Executive Member',
+    'EC Member',
   ])
 
   const chapterId = await getCurrentChapterId()

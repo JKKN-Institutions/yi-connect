@@ -51,7 +51,7 @@ export default async function HealthCardEntryPage({ params }: PageProps) {
     'Chair',
     'Co-Chair',
     'Vertical Head',
-    'Executive Member',
+    'EC Member',
   ])
 
   const { id } = await params

@@ -42,7 +42,7 @@ export default async function StretchGoalsPage() {
     'Chair',
     'Co-Chair',
     'Vertical Head',
-    'Executive Member',
+    'EC Member',
   ])
 
   const chapterId = await getCurrentChapterId()

@@ -36,7 +36,7 @@ export const metadata = {
 }
 
 export default async function HealthCardPage() {
-  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Vertical Head', 'Executive Member'])
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Vertical Head', 'EC Member'])
 
   return (
     <div className="flex flex-col gap-6 max-w-7xl mx-auto">

@@ -39,7 +39,7 @@ export default async function TemplatesPage() {
     'Chair',
     'Co-Chair',
     'Vertical Head',
-    'Executive Member',
+    'EC Member',
   ])
 
   const userRoles = roles || []

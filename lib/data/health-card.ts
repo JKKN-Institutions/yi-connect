@@ -42,7 +42,7 @@ export const getHealthCardEntries = cache(
       .select(
         `
         *,
-        chapter:chapters(id, name, short_name),
+        chapter:chapters(id, name),
         vertical:verticals(id, name, slug, color, icon),
         member:members(id, avatar_url, profile:profiles(full_name))
       `,
@@ -114,7 +114,7 @@ export const getHealthCardEntryById = cache(
       .select(
         `
         *,
-        chapter:chapters(id, name, short_name),
+        chapter:chapters(id, name),
         vertical:verticals(id, name, slug, color, icon),
         member:members(id, avatar_url, profile:profiles(full_name))
       `
@@ -357,7 +357,7 @@ export function getCurrentCalendarYear(): number {
 /**
  * Get chapter info by ID
  */
-export const getChapterById = cache(async (chapterId: string): Promise<{ id: string; name: string; short_name: string | null } | null> => {
+export const getChapterById = cache(async (chapterId: string): Promise<{ id: string; name: string } | null> => {
   const supabase = await createClient()
   const user = await getCurrentUser()
 
@@ -365,7 +365,7 @@ export const getChapterById = cache(async (chapterId: string): Promise<{ id: str
 
   const { data, error } = await supabase
     .from('chapters')
-    .select('id, name, short_name')
+    .select('id, name')
     .eq('id', chapterId)
     .single()
 
@@ -380,7 +380,7 @@ export const getChapterById = cache(async (chapterId: string): Promise<{ id: str
 /**
  * Get all chapters (for super admin)
  */
-export const getAllChapters = cache(async (): Promise<{ id: string; name: string; short_name: string | null }[]> => {
+export const getAllChapters = cache(async (): Promise<{ id: string; name: string }[]> => {
   const supabase = await createClient()
   const user = await getCurrentUser()
 
@@ -388,7 +388,7 @@ export const getAllChapters = cache(async (): Promise<{ id: string; name: string
 
   const { data, error } = await supabase
     .from('chapters')
-    .select('id, name, short_name')
+    .select('id, name')
     .order('name', { ascending: true })
 
   if (error) {

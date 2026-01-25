@@ -23,6 +23,7 @@ import {
   Target,
 } from 'lucide-react'
 import { createHealthCardEntry } from '@/app/actions/health-card'
+import { completePlannedActivity } from '@/app/actions/planned-activities'
 import {
   createHealthCardSchema,
   type CreateHealthCardInput,
@@ -81,6 +82,16 @@ interface Chapter {
   short_name: string | null
 }
 
+interface PrefillData {
+  planned_activity_id: string
+  activity_name: string
+  activity_description: string | null
+  activity_date: string
+  vertical_id: string
+  expected_ec_count: number
+  expected_non_ec_count: number
+}
+
 interface HealthCardFormProps {
   chapterId: string
   chapterName: string
@@ -89,6 +100,7 @@ interface HealthCardFormProps {
   defaultEmail?: string
   defaultName?: string
   defaultRole?: SubmitterRole
+  prefillData?: PrefillData
 }
 
 export function HealthCardForm({
@@ -99,10 +111,19 @@ export function HealthCardForm({
   defaultEmail = '',
   defaultName = '',
   defaultRole = 'member',
+  prefillData,
 }: HealthCardFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const [selectedVertical, setSelectedVertical] = useState<Vertical | null>(null)
+  const [plannedActivityId, setPlannedActivityId] = useState<string | null>(
+    prefillData?.planned_activity_id || null
+  )
+
+  // Initialize selected vertical from prefill data
+  const initialVertical = prefillData
+    ? verticals.find((v) => v.id === prefillData.vertical_id) || null
+    : null
+  const [selectedVertical, setSelectedVertical] = useState<Vertical | null>(initialVertical)
   const [verticalSpecificFields, setVerticalSpecificFields] = useState<VerticalSpecificField[]>([])
   const [verticalData, setVerticalData] = useState<Record<string, unknown>>({})
 
@@ -112,15 +133,15 @@ export function HealthCardForm({
       submitter_name: defaultName,
       submitter_role: defaultRole,
       email: defaultEmail,
-      activity_date: new Date().toISOString().split('T')[0],
-      activity_name: '',
-      activity_description: '',
+      activity_date: prefillData?.activity_date || new Date().toISOString().split('T')[0],
+      activity_name: prefillData?.activity_name || '',
+      activity_description: prefillData?.activity_description || '',
       aaa_type: undefined, // Optional AAA classification
       chapter_id: chapterId,
       region: 'srtn' as YiRegion,
-      ec_members_count: 0,
-      non_ec_members_count: 0,
-      vertical_id: '',
+      ec_members_count: prefillData?.expected_ec_count || 0,
+      non_ec_members_count: prefillData?.expected_non_ec_count || 0,
+      vertical_id: prefillData?.vertical_id || '',
       vertical_specific_data: {},
     },
   })
@@ -159,13 +180,22 @@ export function HealthCardForm({
           vertical_specific_data: verticalData,
         })
         if (result.success) {
+          // If this was from a planned activity, mark it as completed
+          if (plannedActivityId && result.data?.id) {
+            await completePlannedActivity(plannedActivityId, result.data.id)
+          }
+
           toast.success(
             <div className="flex flex-col">
               <span className="font-semibold">Activity Submitted!</span>
-              <span className="text-sm">Health card entry recorded successfully.</span>
+              <span className="text-sm">
+                {plannedActivityId
+                  ? 'Health card entry recorded and planned activity completed.'
+                  : 'Health card entry recorded successfully.'}
+              </span>
             </div>
           )
-          router.push('/pathfinder/health-card')
+          router.push(plannedActivityId ? '/pathfinder/planned-activities' : '/pathfinder/health-card')
           router.refresh()
         } else {
           toast.error(result.error || 'Failed to submit activity')

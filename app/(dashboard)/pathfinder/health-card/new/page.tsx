@@ -2,14 +2,17 @@
  * New Health Card Entry Page
  *
  * Form to submit a new health card activity entry.
+ * Supports pre-filling from planned activities via query params.
  */
 
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Building2 } from 'lucide-react'
+import { ArrowLeft, Building2, CalendarCheck } from 'lucide-react'
 import { requireRole, getCurrentChapterId, getUserProfile } from '@/lib/auth'
 import { getChapterById, getVerticalsForForm } from '@/lib/data/health-card'
+import { getPlannedActivityPrefillData } from '@/app/actions/planned-activities'
 import { Button } from '@/components/ui/button'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { HealthCardForm } from '@/components/pathfinder/health-card-form'
 import type { SubmitterRole } from '@/types/health-card'
 
@@ -18,7 +21,12 @@ export const metadata = {
   description: 'Submit a new health card activity entry',
 }
 
-export default async function NewHealthCardPage() {
+interface PageProps {
+  searchParams: Promise<{ from?: string; id?: string }>
+}
+
+export default async function NewHealthCardPage({ searchParams }: PageProps) {
+  const params = await searchParams
   await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Vertical Head', 'EC Member'])
 
   const chapterId = await getCurrentChapterId()
@@ -36,6 +44,12 @@ export default async function NewHealthCardPage() {
       </div>
     )
   }
+
+  // Check if pre-filling from a planned activity
+  const isFromPlanned = params.from === 'planned' && params.id
+  const prefillData = isFromPlanned && params.id
+    ? await getPlannedActivityPrefillData(params.id)
+    : null
 
   const [chapter, verticals, profile] = await Promise.all([
     getChapterById(chapterId),
@@ -68,7 +82,7 @@ export default async function NewHealthCardPage() {
       {/* Header */}
       <div className="flex items-center gap-4 mb-6">
         <Button variant="ghost" size="icon" asChild>
-          <Link href="/pathfinder/health-card">
+          <Link href={prefillData ? '/pathfinder/planned-activities' : '/pathfinder/health-card'}>
             <ArrowLeft className="h-4 w-4" />
             <span className="sr-only">Back</span>
           </Link>
@@ -81,6 +95,16 @@ export default async function NewHealthCardPage() {
         </div>
       </div>
 
+      {/* Pre-fill alert */}
+      {prefillData && (
+        <Alert className="mb-6 border-primary/50 bg-primary/5">
+          <CalendarCheck className="h-4 w-4 text-primary" />
+          <AlertDescription>
+            Pre-filled from your planned activity: <strong>{prefillData.activity_name}</strong>
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Form */}
       <HealthCardForm
         chapterId={chapterId}
@@ -89,6 +113,7 @@ export default async function NewHealthCardPage() {
         defaultEmail={profile?.email || ''}
         defaultName={profile?.full_name || ''}
         defaultRole={defaultRole}
+        prefillData={prefillData || undefined}
       />
     </div>
   )

@@ -76,8 +76,10 @@ export interface PlannedActivityWithDetails extends PlannedActivity {
   }
   member?: {
     id: string
-    full_name: string
-    avatar_url: string | null
+    profile: {
+      full_name: string
+      avatar_url: string | null
+    } | null
   }
 }
 

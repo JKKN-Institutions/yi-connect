@@ -45,10 +45,11 @@ export async function createPlannedActivity(
     const supabase = await createClient()
 
     // Get member info for chapter_id and created_by
+    // Note: members.id = profiles.id = auth user id
     const { data: member } = await supabase
       .from('members')
       .select('id, chapter_id')
-      .eq('user_id', user.id)
+      .eq('id', user.id)
       .single()
 
     if (!member) {
@@ -109,7 +110,7 @@ export async function getPlannedActivities(
     const { data: member } = await supabase
       .from('members')
       .select('id, chapter_id')
-      .eq('user_id', user.id)
+      .eq('id', user.id)
       .single()
 
     if (!member) {
@@ -122,7 +123,7 @@ export async function getPlannedActivities(
         *,
         vertical:verticals(id, name, slug, color, icon),
         chapter:chapters(id, name),
-        member:members!created_by(id, full_name, avatar_url)
+        member:members!created_by(id, profile:profiles(full_name, avatar_url))
       `)
       .eq('chapter_id', member.chapter_id)
       .order('planned_date', { ascending: true })
@@ -182,7 +183,7 @@ export async function getPlannedActivityById(
         *,
         vertical:verticals(id, name, slug, color, icon),
         chapter:chapters(id, name),
-        member:members!created_by(id, full_name, avatar_url)
+        member:members!created_by(id, profile:profiles(full_name, avatar_url))
       `)
       .eq('id', id)
       .single()
@@ -217,7 +218,7 @@ export async function getMyPlannedActivities(
     const { data: member } = await supabase
       .from('members')
       .select('id')
-      .eq('user_id', user.id)
+      .eq('id', user.id)
       .single()
 
     if (!member) {
@@ -458,7 +459,7 @@ export async function getPlannedActivitiesStats(): Promise<{
     const { data: member } = await supabase
       .from('members')
       .select('chapter_id')
-      .eq('user_id', user.id)
+      .eq('id', user.id)
       .single()
 
     if (!member) {

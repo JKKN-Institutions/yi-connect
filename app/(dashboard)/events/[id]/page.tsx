@@ -210,6 +210,7 @@ async function EventDetailContent({ params }: PageProps) {
                 eventTime={format(startDate, 'h:mm a')}
                 eventVenue={event.venue_address || (event as any).venue?.name || undefined}
                 eventImageUrl={event.banner_image_url || undefined}
+                rsvpToken={(event as any).rsvp_token || undefined}
               />
             </div>
           </div>

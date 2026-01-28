@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Share2, Copy, Check, Facebook, Twitter, Mail, Download, Smartphone } from 'lucide-react';
+import { Share2, Copy, Check, Facebook, Twitter, Mail, Download, Smartphone, Zap } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Button } from '@/components/ui/button';
 import {
@@ -22,6 +22,7 @@ interface ShareButtonProps {
   eventTime?: string;
   eventVenue?: string;
   eventImageUrl?: string;
+  rsvpToken?: string;
 }
 
 export function ShareButton({
@@ -32,12 +33,27 @@ export function ShareButton({
   eventTime,
   eventVenue,
   eventImageUrl,
+  rsvpToken,
 }: ShareButtonProps) {
   const [copied, setCopied] = useState(false);
 
   const eventUrl = typeof window !== 'undefined'
     ? `${window.location.origin}/events/${eventId}`
     : '';
+
+  const rsvpUrl = rsvpToken && typeof window !== 'undefined'
+    ? `${window.location.origin}/rsvp/${rsvpToken}`
+    : '';
+
+  const handleCopyRSVPLink = async () => {
+    if (!rsvpUrl) return;
+    try {
+      await navigator.clipboard.writeText(rsvpUrl);
+      toast.success('RSVP link copied!');
+    } catch {
+      toast.error('Failed to copy link');
+    }
+  };
 
   // Format WhatsApp message with event details
   const formatWhatsAppMessage = () => {
@@ -149,7 +165,17 @@ export function ShareButton({
         shareUrl = `mailto:?subject=${encodedTitle}&body=${emailBody}`;
         break;
       case 'whatsapp':
-        shareUrl = `https://wa.me/?text=${encodedMessage}`;
+        if (rsvpToken && rsvpUrl) {
+          const rsvpMessage = `*${eventTitle}*\n\n`;
+          const rsvpMsg = rsvpMessage +
+            (eventDate ? `📅 ${eventDate}\n` : '') +
+            (eventTime ? `⏰ ${eventTime}\n` : '') +
+            (eventVenue ? `📍 ${eventVenue}\n` : '') +
+            `\n👉 *Tap your name to RSVP:*\n${rsvpUrl}\n\n_No login needed. Just tap and you're in._`;
+          shareUrl = `https://wa.me/?text=${encodeURIComponent(rsvpMsg)}`;
+        } else {
+          shareUrl = `https://wa.me/?text=${encodedMessage}`;
+        }
         break;
     }
 
@@ -193,6 +219,18 @@ export function ShareButton({
       <DropdownMenuContent align='end' className='w-56'>
         <DropdownMenuLabel>Share Event</DropdownMenuLabel>
         <DropdownMenuSeparator />
+
+        {rsvpToken && rsvpUrl && (
+          <>
+            <DropdownMenuItem onClick={handleCopyRSVPLink} className="text-orange-600 font-medium">
+              <svg className='mr-2 h-4 w-4' fill='none' stroke='currentColor' viewBox='0 0 24 24' strokeWidth={2}>
+                <path strokeLinecap='round' strokeLinejoin='round' d='M13 10V3L4 14h7v7l9-11h-7z' />
+              </svg>
+              Quick RSVP Link
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+          </>
+        )}
 
         {/* Native Share (Mobile-friendly with image) */}
         {typeof window !== 'undefined' && 'share' in navigator && (

@@ -234,3 +234,30 @@ ${body}
 
 _${chapterName} - Together We Can. We Will._`;
 }
+
+/**
+ * Quick RSVP WhatsApp Message
+ * Optimized for WhatsApp sharing with RSVP link
+ */
+export function formatQuickRSVPMessage(
+  event: EventDetails,
+  rsvpUrl: string,
+  attendeeCount: number,
+  chapterName: string = 'Yi Erode'
+): string {
+  let message = `*${event.title}*\n\n`;
+
+  message += `📅 ${event.date}\n`;
+  message += `⏰ ${event.time}\n`;
+
+  if (event.venue) {
+    message += `📍 ${event.venue}\n`;
+  }
+
+  message += `\n✅ *${attendeeCount} attending* so far\n`;
+  message += `\n👉 *Tap your name to RSVP:*\n${rsvpUrl}\n`;
+  message += `\n_No login needed. Just tap and you're in._\n`;
+  message += `\n_${chapterName} — Together We Can. We Will._`;
+
+  return message;
+}

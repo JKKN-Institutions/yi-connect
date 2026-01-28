@@ -328,6 +328,25 @@ export async function publishEvent(
       return { success: false, error: 'Failed to publish event' };
     }
 
+    // Ensure rsvp_token exists (for pre-migration events)
+    const { data: publishedEvent } = await supabase
+      .from('events')
+      .select('rsvp_token')
+      .eq('id', validated.id)
+      .single();
+
+    if (publishedEvent && !publishedEvent.rsvp_token) {
+      // Generate a token using crypto
+      const token = Array.from(crypto.getRandomValues(new Uint8Array(16)))
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+
+      await supabase
+        .from('events')
+        .update({ rsvp_token: token })
+        .eq('id', validated.id);
+    }
+
     // Invalidate cache
     updateTag('events');
     revalidatePath('/events');

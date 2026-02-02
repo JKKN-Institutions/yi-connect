@@ -14,6 +14,7 @@ import { getCurrentUser } from '@/lib/data/auth';
 import { uploadImage } from './upload';
 import { sendEmail, sendBatchEmails } from '@/lib/email';
 import { eventCancellationEmail, volunteerAssignmentEmail } from '@/lib/email/templates';
+import { syncEventByIdToYiStudio, syncEventToYiStudio } from '@/lib/webhooks/yi-studio-sync';
 import {
   createEventSchema,
   updateEventSchema,
@@ -189,6 +190,9 @@ export async function createEvent(
       return { success: false, error: 'Failed to create event' };
     }
 
+    // Sync to Yi Creative Studio (non-blocking)
+    syncEventByIdToYiStudio('create', data.id).catch(console.error);
+
     // Invalidate cache
     updateTag('events');
     revalidatePath('/events');
@@ -270,6 +274,9 @@ export async function updateEvent(
       return { success: false, error: 'Failed to update event' };
     }
 
+    // Sync to Yi Creative Studio (non-blocking)
+    syncEventByIdToYiStudio('update', eventId).catch(console.error);
+
     // Invalidate cache
     updateTag('events');
     revalidatePath('/events');
@@ -346,6 +353,9 @@ export async function publishEvent(
         .update({ rsvp_token: token })
         .eq('id', validated.id);
     }
+
+    // Sync to Yi Creative Studio (non-blocking) - publish triggers update sync
+    syncEventByIdToYiStudio('update', validated.id).catch(console.error);
 
     // Invalidate cache
     updateTag('events');
@@ -449,6 +459,9 @@ export async function cancelEvent(
       }
     }
 
+    // Sync to Yi Creative Studio (non-blocking) - cancel triggers update sync
+    syncEventByIdToYiStudio('update', validated.id).catch(console.error);
+
     // Invalidate cache
     updateTag('events');
     revalidatePath('/events');
@@ -504,6 +517,9 @@ export async function deleteEvent(eventId: string): Promise<ActionResponse> {
       console.error('Error deleting event:', error);
       return { success: false, error: 'Failed to delete event' };
     }
+
+    // Sync deletion to Yi Creative Studio (non-blocking)
+    syncEventToYiStudio('delete', { id: eventId }).catch(console.error);
 
     // Invalidate cache
     updateTag('events');

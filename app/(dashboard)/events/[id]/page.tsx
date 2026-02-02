@@ -45,6 +45,7 @@ import {
   VolunteerMatcher,
   EventPublishButton
 } from '@/components/events';
+import { CreatePosterButton } from '@/components/events/create-poster-button';
 import { FeedbackDisplay } from '@/components/events/event-feedback-form';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -200,6 +201,15 @@ async function EventDetailContent({ params }: PageProps) {
                     Edit
                   </Link>
                 </Button>
+              )}
+              {canEdit && event.status !== 'draft' && (
+                <CreatePosterButton
+                  eventId={event.id}
+                  eventName={event.title}
+                  variant='outline'
+                  size='sm'
+                  className='shadow-sm'
+                />
               )}
               <EventQRCode eventId={event.id} eventTitle={event.title} />
               <ShareButton

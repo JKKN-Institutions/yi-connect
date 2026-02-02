@@ -48,3 +48,6 @@ next-env.d.ts
 supabase/.temp/
 .env*.local
 .obsidian/
+
+# MCP configuration (contains secrets)
+.mcp.json

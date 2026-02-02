@@ -164,7 +164,7 @@ function transformYiConnectEvent(event: YiConnectEventForSync): ExternalEvent {
     guestLimit: event.guest_limit || undefined,
 
     // Media
-    bannerImageUrl: event.banner_image_url || event.banner_url || undefined,
+    bannerImageUrl: event.banner_image_url || undefined,
   }
 }
 
@@ -197,6 +197,28 @@ function mapYiConnectStatus(
 // ============================================================================
 // Helper Functions
 // ============================================================================
+
+/**
+ * Transform organizer data from Supabase query result
+ * Handles array vs object for nested profile relation
+ */
+function transformOrganizer(
+  organizer: unknown
+): YiConnectEventForSync['organizer'] {
+  if (!organizer) return null
+
+  // Handle array case (Supabase sometimes returns arrays for relations)
+  const org = Array.isArray(organizer) ? organizer[0] : organizer
+  if (!org) return null
+
+  const profile = org.profile
+  const profileData = Array.isArray(profile) ? profile[0] : profile
+
+  return {
+    id: org.id,
+    profile: profileData || null,
+  }
+}
 
 /**
  * Fetch event with full details for Yi Studio sync
@@ -234,7 +256,6 @@ export async function getEventForSync(
       guest_limit,
       is_featured,
       banner_image_url,
-      banner_url,
       tags,
       created_at,
       updated_at,
@@ -290,13 +311,12 @@ export async function getEventForSync(
     guest_limit: data.guest_limit,
     is_featured: data.is_featured,
     banner_image_url: data.banner_image_url,
-    banner_url: data.banner_url,
     tags: data.tags,
     created_at: data.created_at,
     updated_at: data.updated_at,
-    venue: data.venue as YiConnectEventForSync['venue'],
-    chapter: data.chapter as YiConnectEventForSync['chapter'],
-    organizer: data.organizer as YiConnectEventForSync['organizer'],
+    venue: (Array.isArray(data.venue) ? data.venue[0] : data.venue) as unknown as YiConnectEventForSync['venue'],
+    chapter: (Array.isArray(data.chapter) ? data.chapter[0] : data.chapter) as unknown as YiConnectEventForSync['chapter'],
+    organizer: transformOrganizer(data.organizer),
   }
 }
 

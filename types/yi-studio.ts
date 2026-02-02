@@ -144,7 +144,6 @@ export interface YiConnectEventForSync {
   guest_limit: number | null
   is_featured: boolean
   banner_image_url: string | null
-  banner_url: string | null
   tags: string[] | null
   created_at: string
   updated_at: string

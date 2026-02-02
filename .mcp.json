@@ -1,54 +1,88 @@
 {
   "mcpServers": {
-    "lsp-typescript": {
-      "type": "stdio",
-      "command": "bunx",
+    "supabase": {
+      "command": "cmd",
       "args": [
-        "--bun",
-        "git+https://github.com/jonrad/lsp-mcp",
-        "--lsp",
-        "typescript-language-server --stdio"
-      ]
-    },
-    "lsp-css": {
-      "type": "stdio",
-      "command": "bunx",
-      "args": [
-        "--bun",
-        "git+https://github.com/jonrad/lsp-mcp",
-        "--lsp",
-        "vscode-css-languageserver --stdio"
-      ]
-    },
-    "lsp-json": {
-      "type": "stdio",
-      "command": "bunx",
-      "args": [
-        "--bun",
-        "git+https://github.com/jonrad/lsp-mcp",
-        "--lsp",
-        "vscode-json-languageserver --stdio"
-      ]
-    },
-    "vercel": {
-      "type": "stdio",
-      "command": "npx",
-      "args": [
+        "/c",
+        "npx",
         "-y",
-        "mcp-remote",
-        "https://mcp.vercel.com"
+        "@supabase/mcp-server-supabase@latest",
+        "--project-ref=jxvbjpkypzedtrqewesc"
       ],
-      "env": {}
+      "env": {
+        "SUPABASE_ACCESS_TOKEN": "sbp_02a8ed6194297bdebeb4874abce1bbf5f83819ed"
+      }
     },
-    "supabase-local": {
-      "type": "stdio",
-      "command": "npx",
+    "filesystem": {
+      "command": "cmd",
       "args": [
+        "/c",
+        "npx",
         "-y",
-        "mcp-remote",
-        "http://127.0.0.1:55321/mcp"
+        "@modelcontextprotocol/server-filesystem",
+        "C:\\Users\\Admin\\Documents\\GitHub",
+        "C:\\Users\\Admin\\Documents"
+      ]
+    },
+    "context7": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "@upstash/context7-mcp"
       ],
-      "env": {}
+      "env": {
+        "CONTEXT7_API_KEY": "ctx7sk-7734ba9a-408a-453f-a62e-7fad05ed36be"
+      }
+    },
+    "actor-critic-thinking": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "mcp-server-actor-critic-thinking"
+      ]
+    },
+    "chrome-devtools": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "chrome-devtools-mcp@latest"
+      ]
+    },
+    "shadcn": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "shadcn@latest",
+        "mcp"
+      ]
+    },
+    "mui-mcp": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "@mui/mcp@latest"
+      ]
+    },
+    "memory": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "@modelcontextprotocol/server-memory"
+      ],
+      "env": {
+        "MEMORY_FILE_PATH": "C:\\Users\\Admin\\Documents\\GitHub\\genposterai\\memory.jsonl"
+      }
     }
   }
 }

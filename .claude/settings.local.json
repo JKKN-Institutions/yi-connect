@@ -36,5 +36,16 @@
       "Bash(rm -fr:*)",
       "Bash(sudo:*)"
     ]
-  }
+  },
+  "enabledMcpjsonServers": [
+    "supabase",
+    "filesystem",
+    "context7",
+    "actor-critic-thinking",
+    "chrome-devtools",
+    "shadcn",
+    "mui-mcp",
+    "memory"
+  ],
+  "enableAllProjectMcpServers": true
 }

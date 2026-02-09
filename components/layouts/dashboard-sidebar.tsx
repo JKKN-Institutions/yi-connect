@@ -67,6 +67,7 @@ import {
   HeartPulse,
   Rocket,
   BookTemplate,
+  Palette,
 } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
@@ -695,6 +696,12 @@ const navigation: NavItem[] = [
         name: 'General',
         href: '/settings/general',
         icon: Settings
+      },
+      {
+        name: 'Integrations',
+        href: '/settings/integrations',
+        icon: Palette,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair']
       }
     ]
   }

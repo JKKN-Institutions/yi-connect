@@ -7,7 +7,8 @@
 'use server'
 
 import { requireAuth } from '@/lib/auth'
-import { createYiCreativeSSOSession, isYiCreativeSSOEnabled } from '@/lib/sso/yi-creative'
+import { createYiCreativeSSOSession, isYiCreativeSSOEnabled, isYiCreativeSSOEnabledForChapter } from '@/lib/sso/yi-creative'
+import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 
 // ============================================================================
@@ -38,18 +39,37 @@ export async function redirectToYiCreative(
     // Require authentication
     const user = await requireAuth()
 
-    // Check if SSO is enabled
-    if (!isYiCreativeSSOEnabled()) {
+    // Get event's chapter_id if eventId is provided
+    let chapterId: string | undefined
+    if (eventId) {
+      const supabase = await createServerSupabaseClient()
+      const { data: event } = await supabase
+        .from('events')
+        .select('chapter_id')
+        .eq('id', eventId)
+        .single()
+
+      chapterId = event?.chapter_id || undefined
+      console.log('[Yi Creative] Event chapter_id:', chapterId)
+    }
+
+    // Check if SSO is enabled (either via env var or chapter-specific config)
+    const ssoEnabled = chapterId
+      ? await isYiCreativeSSOEnabledForChapter(chapterId)
+      : isYiCreativeSSOEnabled()
+
+    if (!ssoEnabled) {
       return {
         success: false,
-        error: 'Yi Creative SSO is not configured. Please contact administrator.',
+        error: 'Yi Creative SSO is not configured. Please connect Yi Creative Studio in Settings > Integrations.',
       }
     }
 
-    // Generate SSO session
+    // Generate SSO session with the event's chapter_id
     const result = await createYiCreativeSSOSession(user.id, {
       event_id: eventId,
       redirect_to: redirectTo,
+      chapter_id: chapterId,  // Pass the event's chapter for SSO config lookup
     })
 
     if (!result.success || !result.redirect_url) {
@@ -92,8 +112,13 @@ export async function goToYiCreative(eventId?: string): Promise<void> {
 }
 
 /**
- * Check if Yi Creative integration is available
+ * Check if Yi Creative integration is available for a specific chapter
+ *
+ * @param chapterId - Optional chapter ID to check for chapter-specific config
  */
-export async function isYiCreativeAvailable(): Promise<boolean> {
+export async function isYiCreativeAvailable(chapterId?: string): Promise<boolean> {
+  if (chapterId) {
+    return isYiCreativeSSOEnabledForChapter(chapterId)
+  }
   return isYiCreativeSSOEnabled()
 }

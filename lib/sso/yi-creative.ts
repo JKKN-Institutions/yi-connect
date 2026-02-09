@@ -13,6 +13,7 @@
 
 import * as jose from 'jose'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { getChapterSSOConfig } from '@/lib/data/yi-creative-connections'
 
 // ============================================================================
 // Types
@@ -105,14 +106,40 @@ const TOKEN_EXPIRY = '5m'
 // Private Key Handling
 // ============================================================================
 
-let cachedPrivateKey: PrivateKey | null = null
+// Cache for env var private key (global fallback)
+let cachedEnvPrivateKey: PrivateKey | null = null
+
+// Cache for chapter-specific private keys
+const chapterPrivateKeyCache = new Map<string, PrivateKey>()
 
 /**
  * Get the RSA private key for signing tokens
+ * Supports both environment variable (global) and chapter-specific keys
+ *
+ * @param privateKeyBase64 - Optional base64-encoded private key (for chapter-specific)
+ * @param chapterId - Optional chapter ID for caching
  */
-async function getPrivateKey(): Promise<PrivateKey> {
-  if (cachedPrivateKey) {
-    return cachedPrivateKey
+async function getPrivateKey(privateKeyBase64?: string, chapterId?: string): Promise<PrivateKey> {
+  // If chapter-specific key provided
+  if (privateKeyBase64 && chapterId) {
+    // Check cache first
+    const cached = chapterPrivateKeyCache.get(chapterId)
+    if (cached) {
+      return cached
+    }
+
+    // Decode and import
+    const pemKey = Buffer.from(privateKeyBase64, 'base64').toString('utf-8')
+    const privateKey = await jose.importPKCS8(pemKey, 'RS256')
+
+    // Cache it
+    chapterPrivateKeyCache.set(chapterId, privateKey)
+    return privateKey
+  }
+
+  // Fall back to environment variable
+  if (cachedEnvPrivateKey) {
+    return cachedEnvPrivateKey
   }
 
   if (!YI_CREATIVE_SSO_PRIVATE_KEY) {
@@ -123,9 +150,16 @@ async function getPrivateKey(): Promise<PrivateKey> {
   const pemKey = Buffer.from(YI_CREATIVE_SSO_PRIVATE_KEY, 'base64').toString('utf-8')
 
   // Import the private key
-  cachedPrivateKey = await jose.importPKCS8(pemKey, 'RS256')
+  cachedEnvPrivateKey = await jose.importPKCS8(pemKey, 'RS256')
 
-  return cachedPrivateKey
+  return cachedEnvPrivateKey
+}
+
+/**
+ * Clear chapter private key from cache (e.g., on disconnect)
+ */
+export function clearChapterPrivateKeyCache(chapterId: string): void {
+  chapterPrivateKeyCache.delete(chapterId)
 }
 
 // ============================================================================
@@ -136,10 +170,14 @@ async function getPrivateKey(): Promise<PrivateKey> {
  * Generate a signed SSO token for Yi Creative
  *
  * @param payload - User and chapter information
+ * @param ssoConfig - Optional chapter-specific SSO configuration
  * @returns Signed JWT token
  */
-export async function generateSSOToken(payload: YiCreativeSSOPayload): Promise<string> {
-  const privateKey = await getPrivateKey()
+export async function generateSSOToken(
+  payload: YiCreativeSSOPayload,
+  ssoConfig?: { privateKey: string; chapterId: string }
+): Promise<string> {
+  const privateKey = await getPrivateKey(ssoConfig?.privateKey, ssoConfig?.chapterId)
 
   const jwt = await new jose.SignJWT({
     ...payload,
@@ -397,9 +435,11 @@ export async function getUserSSOPayload(
  * Generate SSO token and redirect URL for a user
  *
  * This is the main function to use for SSO. It:
- * 1. Fetches user data from database
- * 2. Generates signed JWT token
- * 3. Returns redirect URL with token
+ * 1. Checks for chapter-specific SSO config in database
+ * 2. Falls back to environment variables if no chapter config
+ * 3. Fetches user data from database
+ * 4. Generates signed JWT token
+ * 5. Returns redirect URL with token
  *
  * @param userId - Yi Connect user ID
  * @param options - Optional event_id or redirect_to
@@ -410,14 +450,43 @@ export async function createYiCreativeSSOSession(
   options?: {
     event_id?: string
     redirect_to?: string
+    chapter_id?: string  // Allow explicit chapter override (e.g., from event's chapter)
   }
 ): Promise<SSOTokenResult> {
   try {
-    // Check if SSO is configured
-    if (!YI_CREATIVE_SSO_PRIVATE_KEY) {
+    const supabase = await createServerSupabaseClient()
+
+    // Get user's chapter as fallback
+    const { data: member } = await supabase
+      .from('members')
+      .select('chapter_id')
+      .eq('id', userId)
+      .single()
+
+    // Use explicit chapter_id if provided, otherwise fall back to user's chapter
+    const chapterIdForConfig = options?.chapter_id || member?.chapter_id
+
+    let ssoConfig: { privateKey: string; chapterId: string } | undefined
+    let useChapterConfig = false
+
+    // Try to get chapter-specific SSO config
+    if (chapterIdForConfig) {
+      const chapterConfig = await getChapterSSOConfig(chapterIdForConfig)
+      if (chapterConfig?.privateKey) {
+        ssoConfig = {
+          privateKey: chapterConfig.privateKey,
+          chapterId: chapterIdForConfig,
+        }
+        useChapterConfig = true
+        console.log('[Yi Creative SSO] Using chapter-specific SSO config for chapter:', chapterIdForConfig)
+      }
+    }
+
+    // Fall back to environment variable if no chapter config
+    if (!useChapterConfig && !YI_CREATIVE_SSO_PRIVATE_KEY) {
       return {
         success: false,
-        error: 'Yi Creative SSO is not configured',
+        error: 'Yi Creative SSO is not configured. Please connect Yi Creative Studio in Settings > Integrations.',
       }
     }
 
@@ -431,10 +500,10 @@ export async function createYiCreativeSSOSession(
     }
 
     // Generate token and redirect URL
-    const token = await generateSSOToken(payload)
+    const token = await generateSSOToken(payload, ssoConfig)
     const redirect_url = `${YI_CREATIVE_SSO_URL}?token=${encodeURIComponent(token)}`
 
-    console.log('[Yi Creative SSO] Token generated for user:', userId)
+    console.log('[Yi Creative SSO] Token generated for user:', userId, useChapterConfig ? '(chapter config)' : '(env config)')
 
     return {
       success: true,
@@ -452,8 +521,24 @@ export async function createYiCreativeSSOSession(
 }
 
 /**
- * Check if Yi Creative SSO is enabled
+ * Check if Yi Creative SSO is enabled (env var only - synchronous check)
+ * For chapter-specific check, use isYiCreativeSSOEnabledForChapter
  */
 export function isYiCreativeSSOEnabled(): boolean {
+  return Boolean(YI_CREATIVE_SSO_PRIVATE_KEY)
+}
+
+/**
+ * Check if Yi Creative SSO is enabled for a specific chapter
+ * Checks both database config and environment variable
+ */
+export async function isYiCreativeSSOEnabledForChapter(chapterId: string): Promise<boolean> {
+  // First check chapter-specific config
+  const chapterConfig = await getChapterSSOConfig(chapterId)
+  if (chapterConfig?.privateKey) {
+    return true
+  }
+
+  // Fall back to environment variable
   return Boolean(YI_CREATIVE_SSO_PRIVATE_KEY)
 }

@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { ImageIcon, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { redirectToYiCreative } from '@/app/actions/yi-creative'
-import { toast } from 'react-hot-toast'
+import { toast } from 'sonner'
 
 interface CreatePosterButtonProps {
   eventId: string
@@ -45,17 +45,33 @@ export function CreatePosterButton({
       } else if (yiStudioUrl) {
         // Fallback to direct URL if SSO failed but Yi Studio URL is configured
         console.warn('[Create Poster] SSO failed, using direct URL:', result.error)
+        toast.info('Opening Yi Creative Studio', {
+          description: 'You may need to sign in separately.',
+        })
         const fallbackUrl = `${yiStudioUrl}/dashboard/create?eventId=${encodeURIComponent(eventId)}&source=yi-connect`
         window.open(fallbackUrl, '_blank', 'noopener,noreferrer')
         setIsLoading(false)
       } else {
-        // No fallback available
-        toast.error(result.error || 'Failed to connect to Yi Creative')
+        // Provide actionable error message based on the error type
+        const isNotConfigured = result.error?.includes('not configured')
+
+        if (isNotConfigured) {
+          toast.error('Yi Creative Studio not connected', {
+            description: 'Ask your Chapter Chair to connect Yi Creative in Settings > Integrations.',
+            duration: 6000,
+          })
+        } else {
+          toast.error('Unable to open Yi Creative', {
+            description: result.error || 'Please try again or contact support.',
+          })
+        }
         setIsLoading(false)
       }
     } catch (error) {
       console.error('[Create Poster] Error:', error)
-      toast.error('Failed to open Yi Creative')
+      toast.error('Connection error', {
+        description: 'Please check your internet connection and try again.',
+      })
       setIsLoading(false)
     }
   }
@@ -72,16 +88,24 @@ export function CreatePosterButton({
       onClick={handleClick}
       disabled={isLoading}
       title={eventName ? `Create poster for ${eventName}` : 'Create poster'}
+      aria-label={
+        isLoading
+          ? 'Opening Yi Creative Studio...'
+          : eventName
+            ? `Create poster for ${eventName}`
+            : 'Create event poster'
+      }
+      aria-busy={isLoading}
     >
       {isLoading ? (
         <>
-          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          Opening...
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+          <span>Opening...</span>
         </>
       ) : (
         <>
-          <ImageIcon className="mr-2 h-4 w-4" />
-          Create Poster
+          <ImageIcon className="mr-2 h-4 w-4" aria-hidden="true" />
+          <span>Create Poster</span>
         </>
       )}
     </Button>

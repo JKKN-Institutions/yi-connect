@@ -22,23 +22,41 @@ type PrivateKey = Awaited<ReturnType<typeof jose.importPKCS8>>
 
 /**
  * Event data to include in SSO token for poster creation
+ * Aligned with ExternalEvent schema from Yi Creative Studio
  */
 export interface YiCreativeEventData {
-  event_id: string
-  event_name: string
-  event_date: string
-  event_time: string
+  /** Event ID */
+  id: string
+  /** Event title/name */
+  name: string
+  /** ISO date only: "2026-02-15" */
+  date: string
+  /** 24h format: "10:00" */
+  startTime: string
+  /** 24h format: "17:00" */
+  endTime: string
+  /** Venue name only */
   venue: string | null
-  venue_address: string | null
+  /** Venue address (camelCase to match ExternalEvent) */
+  venueAddress: string | null
+  /** City */
   city: string | null
+  /** Event description */
   description: string | null
-  banner_image_url: string | null
-  event_type: string
-  chapter_id: string
-  chapter_name: string
-  chapter_location: string
-  is_virtual: boolean
-  virtual_meeting_link?: string | null
+  /** Banner image URL (camelCase) */
+  bannerImageUrl: string | null
+  /** Event type/category (camelCase) */
+  eventType: string
+  /** Chapter ID (camelCase) */
+  chapterId: string
+  /** Chapter name (camelCase) */
+  chapterName: string
+  /** Chapter location (camelCase) */
+  chapterLocation: string
+  /** Virtual event flag (camelCase) */
+  isVirtual: boolean
+  /** Virtual meeting link (camelCase) */
+  virtualMeetingLink?: string | null
 }
 
 export interface YiCreativeSSOPayload {
@@ -203,25 +221,38 @@ async function getEventDataForSSO(
   const venue = Array.isArray(event.venue) ? event.venue[0] : event.venue
   const chapter = Array.isArray(event.chapter) ? event.chapter[0] : event.chapter
 
+  // Format date as ISO date only (YYYY-MM-DD)
+  const startDate = new Date(event.start_date)
+  const endDate = new Date(event.end_date)
+
+  // Format time in 24h format (HH:MM)
+  const formatTime24h = (date: Date): string => {
+    const hours = date.getUTCHours().toString().padStart(2, '0')
+    const minutes = date.getUTCMinutes().toString().padStart(2, '0')
+    return `${hours}:${minutes}`
+  }
+
   return {
-    event_id: event.id,
-    event_name: event.title,
-    event_date: event.start_date,
-    event_time: new Date(event.start_date).toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-    }),
-    venue: venue?.name || event.venue_address || null,
-    venue_address: event.venue_address || venue?.address || null,
+    id: event.id,
+    name: event.title,
+    // Extract date only from ISO timestamp
+    date: event.start_date.split('T')[0],
+    // Format times in 24h format
+    startTime: formatTime24h(startDate),
+    endTime: formatTime24h(endDate),
+    // Venue name only (not concatenated with address)
+    venue: venue?.name || null,
+    // Venue address as separate field
+    venueAddress: event.venue_address || venue?.address || null,
     city: venue?.city || null,
     description: event.description,
-    banner_image_url: event.banner_image_url,
-    event_type: event.category,
-    chapter_id: event.chapter_id,
-    chapter_name: chapter?.name || '',
-    chapter_location: chapter?.location || '',
-    is_virtual: event.is_virtual,
-    virtual_meeting_link: event.virtual_meeting_link,
+    bannerImageUrl: event.banner_image_url,
+    eventType: event.category,
+    chapterId: event.chapter_id,
+    chapterName: chapter?.name || '',
+    chapterLocation: chapter?.location || '',
+    isVirtual: event.is_virtual,
+    virtualMeetingLink: event.virtual_meeting_link,
   }
 }
 
@@ -342,7 +373,7 @@ export async function getUserSSOPayload(
   if (options?.event_id) {
     eventData = await getEventDataForSSO(supabase, options.event_id)
     if (eventData) {
-      console.log('[Yi Creative SSO] Event data fetched:', eventData.event_name)
+      console.log('[Yi Creative SSO] Event data fetched:', eventData.name)
     }
   }
 

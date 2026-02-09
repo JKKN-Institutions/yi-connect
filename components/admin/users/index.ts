@@ -6,7 +6,7 @@
 
 export { UsersTable } from './users-table'
 export { BulkActionsBar } from './bulk-actions-bar'
-export { RoleManagerDialog } from './role-manager-dialog'
+export { RoleManagerDialog, RoleManagerDialogTrigger } from './role-manager-dialog'
 export { EditUserForm } from './edit-user-form'
 export { InviteUserForm } from './invite-user-form'
-export { usersTableColumns } from './users-table-columns'
+export { getUsersTableColumns } from './users-table-columns'

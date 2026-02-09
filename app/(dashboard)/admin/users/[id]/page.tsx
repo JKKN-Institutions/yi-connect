@@ -22,6 +22,7 @@ import {
 
 import { requireRole, getUserHierarchyLevel } from '@/lib/auth'
 import { getUserById } from '@/lib/data/users'
+import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -35,6 +36,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ImpersonateButtonWrapper } from '@/components/admin/impersonate-button-server'
+import { RoleManagerDialogTrigger } from '@/components/admin/users/role-manager-dialog'
 
 interface PageProps {
   params: Promise<{
@@ -66,6 +68,13 @@ async function UserDetailContent({ paramsPromise }: { paramsPromise: Promise<{ i
   if (!user) {
     notFound()
   }
+
+  // Fetch roles for role management
+  const supabase = await createServerSupabaseClient()
+  const { data: roles } = await supabase
+    .from('roles')
+    .select('*')
+    .order('hierarchy_level', { ascending: false })
 
   const initials = user.full_name
     .split(' ')
@@ -313,10 +322,11 @@ async function UserDetailContent({ paramsPromise }: { paramsPromise: Promise<{ i
                   Edit Profile
                 </Link>
               </Button>
-              <Button variant='outline' className='w-full justify-start'>
-                <Shield className='mr-2 h-4 w-4' />
-                Manage Roles
-              </Button>
+              <RoleManagerDialogTrigger
+                user={user}
+                roles={roles || []}
+                trigger='button'
+              />
               <Button
                 variant='outline'
                 className='w-full justify-start'

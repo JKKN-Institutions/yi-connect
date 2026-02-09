@@ -788,6 +788,25 @@ function NavItemComponent({
     setManualOpenState(open);
   };
 
+  // During SSR, render a non-interactive version to prevent hydration mismatch
+  // Radix UI generates different IDs on server vs client
+  if (!mounted) {
+    return (
+      <li>
+        <button
+          className={cn(
+            'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
+            'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+          )}
+        >
+          <item.icon className='h-5 w-5 shrink-0' />
+          <span className='flex-1 text-left'>{item.name}</span>
+          <ChevronRight className='h-4 w-4 shrink-0' />
+        </button>
+      </li>
+    );
+  }
+
   return (
     <li>
       <Collapsible open={isOpen} onOpenChange={handleOpenChange}>

@@ -120,18 +120,6 @@ export async function assignRole(
 
     const supabase = await createServerSupabaseClient()
 
-    // Check if user can manage this role
-    const { data: canManage } = await supabase.rpc('can_manage_role', {
-      manager_id: user.id,
-      target_role_id: validation.data.role_id
-    })
-
-    if (!canManage) {
-      return {
-        message: 'You do not have permission to assign this role.'
-      }
-    }
-
     // Check if role is already assigned
     const { data: existing } = await supabase
       .from('user_roles')
@@ -153,6 +141,13 @@ export async function assignRole(
     })
 
     if (error) {
+      console.error('[assignRole] Failed to insert role:', {
+        user_id: validation.data.user_id,
+        role_id: validation.data.role_id,
+        error: error.message,
+        code: error.code
+      })
+
       return {
         message: error instanceof Error ? error.message : 'Failed to assign role. Please try again.'
       }

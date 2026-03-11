@@ -1,9 +1,9 @@
 # Yi Connect - Progress Tracker
 
-## Session: 2026-01-25 - Activity Planner Bug Fixes
+## Session: 2026-01-25 - Activity Planner Bug Fixes & Workflow Test
 
 ### Accomplished
-Fixed two critical bugs in the Activity Planner feature:
+Fixed three critical bugs in the Activity Planner feature:
 
 **Bug 1: "Member not found" when saving activity**
 - Root cause: Server action queried `.eq('user_id', user.id)` but members table has no `user_id` column
@@ -15,6 +15,12 @@ Fixed two critical bugs in the Activity Planner feature:
 - Fix: These fields are in `profiles` table, updated to use nested join: `member:members!created_by(id, profile:profiles(full_name, avatar_url))`
 - Updated type definition in `types/planned-activity.ts` to match
 
+**Bug 3: Foreign key ambiguity in nested profile join**
+- Root cause: Query `member:members!created_by(...)` was ambiguous - Supabase couldn't resolve the nested profile join
+- Fix: Changed to explicit FK name `member:members!planned_activities_created_by_fkey(id, profile:profiles(full_name, avatar_url))`
+- Affected 2 locations in `app/actions/planned-activities.ts` (lines 126, 186)
+- Referenced working pattern from `lib/data/knowledge.ts`
+
 ### Verification
 - Browser tested complete flow:
   1. Open Planned Activities page → Now shows 2 activities (was empty)
@@ -23,8 +29,29 @@ Fixed two critical bugs in the Activity Planner feature:
 - Build passes
 - Screenshots captured
 
+### Workflow Test Verification (browser-use)
+Complete end-to-end test of Activity Planner wizard:
+1. ✅ Logged in as EC Member (demo-ec@yi-demo.com)
+2. ✅ Clicked floating "Plan an Activity" button
+3. ✅ Step 1: Entered activity name "YI Health Camp - Village A"
+4. ✅ Step 2: Selected planned date
+5. ✅ Step 3: Selected "Health" vertical
+6. ✅ Step 4: Entered EC count (10), Non-EC count (100)
+7. ✅ Step 5: Review showed correct vertical ("Health")
+8. ✅ Activity saved successfully
+9. ✅ Activity appears in Planned Activities list with correct vertical
+
 ### Commits
 - `27c5ae8` fix(planned-activities): correct member lookup and profile join
+- `548ebf6` fix: use explicit foreign key name in planned activities queries
+
+### Feature Status: COMPLETE ✅
+Activity Planner feature is fully functional:
+- Floating button opens wizard
+- 6-step wizard flow works correctly
+- Vertical selection saves correctly
+- Activities appear in list view
+- "Complete Now" pre-fills health card form
 
 ---
 

@@ -61,6 +61,186 @@ function mapUiTypeToDbType(uiType: string): OpportunityType | null {
 }
 
 // ============================================================================
+// Deterministic Match Score Helpers
+// ============================================================================
+
+/**
+ * Simple deterministic hash function for generating stable numeric values
+ * from two string IDs. Used as a fallback when real data is unavailable.
+ */
+function deterministicHash(str1: string, str2: string): number {
+  const combined = str1 + ':' + str2
+  let hash = 0
+  for (let i = 0; i < combined.length; i++) {
+    const char = combined.charCodeAt(i)
+    hash = ((hash << 5) - hash) + char
+    hash = hash & hash // Convert to 32-bit integer
+  }
+  return Math.abs(hash)
+}
+
+/**
+ * Map a deterministic hash to a range [min, max]
+ */
+function hashToRange(hash: number, min: number, max: number): number {
+  return min + (hash % (max - min + 1))
+}
+
+interface MemberMatchData {
+  industry: string | null
+  skills: string[] // skill names
+  years_of_experience: number | null
+  engagement_score: number | null
+  total_events_attended: number | null
+  volunteer_hours: number | null
+}
+
+/**
+ * Calculate a deterministic match score between member data and an opportunity.
+ * Uses real data where available, falls back to hash-based scores where not.
+ */
+function calculateMatchScore(
+  memberId: string,
+  opportunityId: string,
+  memberData: MemberMatchData | null,
+  opportunity: {
+    industry_id?: string
+    eligibility_criteria?: EligibilityCriteria | null
+    industry?: { industry_sector?: string } | null
+  }
+): { match_score: number; match_breakdown: { industry: number; skills: number; experience: number; engagement: number } } {
+  const criteria = opportunity.eligibility_criteria
+  const hash = deterministicHash(memberId, opportunityId)
+
+  // --- Industry Score ---
+  let industryScore: number
+  if (memberData?.industry && criteria?.industries && criteria.industries.length > 0) {
+    const memberIndustry = memberData.industry.toLowerCase()
+    const matchFound = criteria.industries.some(
+      (ind) => memberIndustry.includes(ind.toLowerCase()) || ind.toLowerCase().includes(memberIndustry)
+    )
+    industryScore = matchFound ? 95 : 30
+  } else if (memberData?.industry && opportunity.industry?.industry_sector) {
+    const memberIndustry = memberData.industry.toLowerCase()
+    const oppSector = opportunity.industry.industry_sector.toLowerCase()
+    industryScore = memberIndustry.includes(oppSector) || oppSector.includes(memberIndustry) ? 85 : 50
+  } else {
+    // Fallback: deterministic based on IDs, range 40-80
+    industryScore = hashToRange(hash, 40, 80)
+  }
+
+  // --- Skills Score ---
+  let skillsScore: number
+  if (memberData && memberData.skills.length > 0 && criteria?.skills && criteria.skills.length > 0) {
+    const memberSkillsLower = memberData.skills.map((s) => s.toLowerCase())
+    const requiredSkillsLower = criteria.skills.map((s) => s.toLowerCase())
+    const matchedCount = requiredSkillsLower.filter((rs) =>
+      memberSkillsLower.some((ms) => ms.includes(rs) || rs.includes(ms))
+    ).length
+    skillsScore = requiredSkillsLower.length > 0
+      ? Math.round((matchedCount / requiredSkillsLower.length) * 100)
+      : 70
+  } else if (memberData && memberData.skills.length > 0) {
+    // Member has skills but no required skills on opp: give decent baseline
+    skillsScore = Math.min(70 + memberData.skills.length * 3, 90)
+  } else {
+    // Fallback: deterministic, range 35-75
+    skillsScore = hashToRange(hash >>> 4, 35, 75)
+  }
+
+  // --- Experience Score ---
+  let experienceScore: number
+  if (memberData?.years_of_experience != null && criteria?.min_experience_years != null) {
+    const ratio = memberData.years_of_experience / Math.max(criteria.min_experience_years, 1)
+    if (ratio >= 1) {
+      experienceScore = Math.min(90 + Math.round(ratio * 2), 100)
+    } else {
+      experienceScore = Math.round(ratio * 70)
+    }
+  } else if (memberData?.years_of_experience != null) {
+    // Scale experience: 0 yrs = 40, 5 yrs = 70, 10+ yrs = 90
+    experienceScore = Math.min(40 + memberData.years_of_experience * 6, 95)
+  } else {
+    // Fallback: deterministic, range 45-80
+    experienceScore = hashToRange(hash >>> 8, 45, 80)
+  }
+
+  // --- Engagement Score ---
+  let engagementScore: number
+  if (memberData?.engagement_score != null) {
+    // engagement_score is typically 0-100 already
+    engagementScore = Math.min(Math.max(Math.round(memberData.engagement_score), 0), 100)
+  } else if (memberData?.total_events_attended != null) {
+    // Derive from events attended: 0 = 30, 5 = 55, 10 = 75, 20+ = 90
+    engagementScore = Math.min(30 + (memberData.total_events_attended || 0) * 3, 95)
+  } else {
+    // Fallback: deterministic, range 40-75
+    engagementScore = hashToRange(hash >>> 12, 40, 75)
+  }
+
+  // Weighted overall: industry 25%, skills 30%, experience 25%, engagement 20%
+  const overall = Math.round(
+    industryScore * 0.25 +
+    skillsScore * 0.30 +
+    experienceScore * 0.25 +
+    engagementScore * 0.20
+  )
+
+  return {
+    match_score: Math.max(10, Math.min(100, overall)),
+    match_breakdown: {
+      industry: industryScore,
+      skills: skillsScore,
+      experience: experienceScore,
+      engagement: engagementScore,
+    },
+  }
+}
+
+/**
+ * Fetch member data needed for match scoring.
+ * Returns null if member not found.
+ */
+async function fetchMemberMatchData(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  memberId: string
+): Promise<MemberMatchData | null> {
+  const [memberResult, skillsResult, engagementResult] = await Promise.all([
+    supabase
+      .from('members')
+      .select('industry, years_of_experience')
+      .eq('id', memberId)
+      .single(),
+    supabase
+      .from('member_skills')
+      .select('skill:skills(name)')
+      .eq('member_id', memberId),
+    supabase
+      .from('engagement_metrics')
+      .select('engagement_score, total_events_attended, volunteer_hours')
+      .eq('member_id', memberId)
+      .single(),
+  ])
+
+  if (memberResult.error && memberResult.error.code !== 'PGRST116') {
+    return null
+  }
+
+  const member = memberResult.data
+  const skills = (skillsResult.data || []).map((s: any) => s.skill?.name).filter(Boolean) as string[]
+  const engagement = engagementResult.data
+
+  return {
+    industry: member?.industry || null,
+    skills,
+    years_of_experience: member?.years_of_experience ?? null,
+    engagement_score: engagement?.engagement_score ?? null,
+    total_events_attended: engagement?.total_events_attended ?? null,
+    volunteer_hours: engagement?.volunteer_hours ?? null,
+  }
+}
+
+// ============================================================================
 // Opportunity Queries
 // ============================================================================
 

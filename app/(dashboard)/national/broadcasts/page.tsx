@@ -5,9 +5,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Bell,
   Megaphone,
-  FileText,
-  AlertTriangle,
-  Info,
   CheckCircle2,
   Clock
 } from 'lucide-react';

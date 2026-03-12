@@ -1337,6 +1337,108 @@ export type Database = {
         };
         Relationships: [];
       };
+      payment_methods: {
+        Row: {
+          id: string;
+          chapter_id: string;
+          name: string;
+          type: string;
+          account_number: string | null;
+          bank_name: string | null;
+          ifsc_code: string | null;
+          upi_id: string | null;
+          account_details: Json | null;
+          is_active: boolean;
+          is_default: boolean;
+          notes: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          chapter_id: string;
+          name: string;
+          type: string;
+          account_number?: string | null;
+          bank_name?: string | null;
+          ifsc_code?: string | null;
+          upi_id?: string | null;
+          account_details?: Json | null;
+          is_active?: boolean;
+          is_default?: boolean;
+          notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          chapter_id?: string;
+          name?: string;
+          type?: string;
+          account_number?: string | null;
+          bank_name?: string | null;
+          ifsc_code?: string | null;
+          upi_id?: string | null;
+          account_details?: Json | null;
+          is_active?: boolean;
+          is_default?: boolean;
+          notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      financial_audit_logs: {
+        Row: {
+          id: string;
+          chapter_id: string;
+          entity_type: string;
+          entity_id: string;
+          action: string;
+          old_values: Json | null;
+          new_values: Json | null;
+          changed_fields: string[] | null;
+          amount_changed: number | null;
+          performed_by: string;
+          ip_address: string | null;
+          user_agent: string | null;
+          description: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          chapter_id: string;
+          entity_type: string;
+          entity_id: string;
+          action: string;
+          old_values?: Json | null;
+          new_values?: Json | null;
+          changed_fields?: string[] | null;
+          amount_changed?: number | null;
+          performed_by: string;
+          ip_address?: string | null;
+          user_agent?: string | null;
+          description?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          chapter_id?: string;
+          entity_type?: string;
+          entity_id?: string;
+          action?: string;
+          old_values?: Json | null;
+          new_values?: Json | null;
+          changed_fields?: string[] | null;
+          amount_changed?: number | null;
+          performed_by?: string;
+          ip_address?: string | null;
+          user_agent?: string | null;
+          description?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       events: {
         Row: {
           id: string;

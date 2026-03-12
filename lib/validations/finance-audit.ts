@@ -29,8 +29,8 @@ export const logFinancialActionSchema = z.object({
     .min(1, 'Entity type is required')
     .max(50, 'Entity type is too long'),
   entity_id: z.string().uuid('Invalid entity ID'),
-  old_values: z.record(z.unknown()).optional().nullable(),
-  new_values: z.record(z.unknown()).optional().nullable(),
+  old_values: z.record(z.string(), z.unknown()).optional().nullable(),
+  new_values: z.record(z.string(), z.unknown()).optional().nullable(),
   changed_fields: z.array(z.string()).optional(),
   amount_changed: z.number().optional().nullable(),
   description: z.string().max(1000).optional(),

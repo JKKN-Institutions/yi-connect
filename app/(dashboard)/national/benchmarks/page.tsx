@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { getCurrentChapterId, requireRole } from '@/lib/auth';
 import { BenchmarkChart } from '@/components/national/benchmark-chart';
-import { SampleDataNotice } from '@/components/national/sample-data-notice';
+import { getBenchmarks, getBenchmarkSummary } from '@/lib/data/national-integration';
 import type { NationalBenchmark, BenchmarkSummary } from '@/types/national-integration';
 
 export const metadata = {
@@ -41,189 +41,38 @@ async function BenchmarkDashboardContent() {
     );
   }
 
-  // Sample data for demonstration - Connect Yi National API for real data
-  // Using Q4 2024 as the sample period (Oct 1 - Dec 31, 2024)
-  const SAMPLE_PERIOD_START = '2024-10-01T00:00:00.000Z';
-  const SAMPLE_PERIOD_END = '2024-12-31T23:59:59.999Z';
-  const SAMPLE_NOW = '2025-01-05T10:00:00.000Z';
+  // Fetch real benchmarks and summary from the database
+  const [benchmarks, benchmarkSummary] = await Promise.all([
+    getBenchmarks(undefined, chapterId),
+    getBenchmarkSummary('quarterly', chapterId)
+  ]);
 
-  const mockBenchmarks: NationalBenchmark[] = [
-    {
-      id: '1',
-      chapter_id: chapterId,
-      metric_type: 'event_count',
-      metric_name: 'Events Organized',
-      metric_description: 'Total chapter events including verticals and sub-chapter activities',
-      period_type: 'quarterly',
-      period_start: SAMPLE_PERIOD_START,
-      period_end: SAMPLE_PERIOD_END,
-      calendar_year: 2025,
-      quarter: 4,
-      chapter_value: 28,
-      regional_avg: 22,
-      national_avg: 18,
-      regional_rank: 2,
-      regional_total: 12,
-      national_rank: 18,
-      national_total: 95,
-      percentile_rank: 82,
-      trend: 'improving',
-      change_percentage: 16.7,
-      previous_value: 24,
-      performance_tier: 'above_average',
-      synced_from_national_at: null,
-      national_benchmark_id: null,
-      created_at: SAMPLE_NOW,
-      updated_at: SAMPLE_NOW
-    },
-    {
-      id: '2',
-      chapter_id: chapterId,
-      metric_type: 'member_engagement',
-      metric_name: 'Member Engagement Score',
-      metric_description: 'Based on event attendance, volunteering, and committee participation',
-      period_type: 'quarterly',
-      period_start: SAMPLE_PERIOD_START,
-      period_end: SAMPLE_PERIOD_END,
-      calendar_year: 2025,
-      quarter: 4,
-      chapter_value: 78,
-      regional_avg: 68,
-      national_avg: 62,
-      regional_rank: 1,
-      regional_total: 12,
-      national_rank: 8,
-      national_total: 95,
-      percentile_rank: 92,
-      trend: 'improving',
-      change_percentage: 10.5,
-      previous_value: 71,
-      performance_tier: 'top_10',
-      synced_from_national_at: null,
-      national_benchmark_id: null,
-      created_at: SAMPLE_NOW,
-      updated_at: SAMPLE_NOW
-    },
-    {
-      id: '3',
-      chapter_id: chapterId,
-      metric_type: 'csr_value',
-      metric_name: 'CSR Impact Value',
-      metric_description: 'Monetary value of CSR initiatives and in-kind contributions',
-      period_type: 'quarterly',
-      period_start: SAMPLE_PERIOD_START,
-      period_end: SAMPLE_PERIOD_END,
-      calendar_year: 2025,
-      quarter: 4,
-      chapter_value: 850000,
-      regional_avg: 620000,
-      national_avg: 480000,
-      regional_rank: 3,
-      regional_total: 12,
-      national_rank: 22,
-      national_total: 95,
-      percentile_rank: 77,
-      trend: 'improving',
-      change_percentage: 25.0,
-      previous_value: 680000,
-      performance_tier: 'above_average',
-      synced_from_national_at: null,
-      national_benchmark_id: null,
-      created_at: SAMPLE_NOW,
-      updated_at: SAMPLE_NOW
-    },
-    {
-      id: '4',
-      chapter_id: chapterId,
-      metric_type: 'membership_growth',
-      metric_name: 'Membership Growth',
-      metric_description: 'Net new members added during the period',
-      period_type: 'quarterly',
-      period_start: SAMPLE_PERIOD_START,
-      period_end: SAMPLE_PERIOD_END,
-      calendar_year: 2025,
-      quarter: 4,
-      chapter_value: 8,
-      regional_avg: 12,
-      national_avg: 10,
-      regional_rank: 8,
-      regional_total: 12,
-      national_rank: 65,
-      national_total: 95,
-      percentile_rank: 32,
-      trend: 'stable',
-      change_percentage: 0,
-      previous_value: 8,
-      performance_tier: 'below_average',
-      synced_from_national_at: null,
-      national_benchmark_id: null,
-      created_at: SAMPLE_NOW,
-      updated_at: SAMPLE_NOW
-    },
-    {
-      id: '5',
-      chapter_id: chapterId,
-      metric_type: 'volunteer_hours',
-      metric_name: 'Volunteer Hours',
-      metric_description: 'Total volunteer hours contributed by chapter members',
-      period_type: 'quarterly',
-      period_start: SAMPLE_PERIOD_START,
-      period_end: SAMPLE_PERIOD_END,
-      calendar_year: 2025,
-      quarter: 4,
-      chapter_value: 1850,
-      regional_avg: 1420,
-      national_avg: 1200,
-      regional_rank: 2,
-      regional_total: 12,
-      national_rank: 15,
-      national_total: 95,
-      percentile_rank: 84,
-      trend: 'improving',
-      change_percentage: 18.2,
-      previous_value: 1565,
-      performance_tier: 'above_average',
-      synced_from_national_at: null,
-      national_benchmark_id: null,
-      created_at: SAMPLE_NOW,
-      updated_at: SAMPLE_NOW
-    },
-    {
-      id: '6',
-      chapter_id: chapterId,
-      metric_type: 'sponsorship_raised',
-      metric_name: 'Sponsorship Raised',
-      metric_description: 'Total sponsorship amount secured for chapter activities',
-      period_type: 'quarterly',
-      period_start: SAMPLE_PERIOD_START,
-      period_end: SAMPLE_PERIOD_END,
-      calendar_year: 2025,
-      quarter: 4,
-      chapter_value: 425000,
-      regional_avg: 380000,
-      national_avg: 320000,
-      regional_rank: 4,
-      regional_total: 12,
-      national_rank: 28,
-      national_total: 95,
-      percentile_rank: 71,
-      trend: 'declining',
-      change_percentage: -8.6,
-      previous_value: 465000,
-      performance_tier: 'average',
-      synced_from_national_at: null,
-      national_benchmark_id: null,
-      created_at: SAMPLE_NOW,
-      updated_at: SAMPLE_NOW
-    }
-  ];
+  // Handle empty state
+  if (benchmarks.length === 0) {
+    return (
+      <Card>
+        <CardContent className="flex flex-col items-center justify-center py-10">
+          <BarChart3 className="h-12 w-12 text-muted-foreground mb-4" />
+          <h3 className="text-lg font-semibold mb-2">No benchmark data yet</h3>
+          <p className="text-muted-foreground text-center max-w-md">
+            Benchmark comparisons will appear here once data is synced from Yi National.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
 
-  const mockSummary: BenchmarkSummary = {
-    benchmarks: mockBenchmarks,
-    average_percentile: 73.0,
-    overall_tier: 'above_average',
-    top_performing_metrics: ['member_engagement', 'volunteer_hours'],
-    improvement_areas: ['membership_growth', 'sponsorship_raised']
+  // Use the summary from the database, or build a fallback from the benchmarks
+  const summary: BenchmarkSummary = benchmarkSummary ?? {
+    benchmarks,
+    average_percentile: benchmarks.reduce((sum, b) => sum + (b.percentile_rank ?? 0), 0) / benchmarks.length,
+    top_performing_metrics: benchmarks
+      .filter((b) => b.performance_tier === 'top_10' || b.performance_tier === 'above_average')
+      .map((b) => b.metric_type),
+    improvement_areas: benchmarks
+      .filter((b) => b.performance_tier === 'below_average' || b.performance_tier === 'bottom_10')
+      .map((b) => b.metric_type),
+    overall_tier: 'average'
   };
 
   const getTrendIcon = (trend: string | null) => {
@@ -256,9 +105,6 @@ async function BenchmarkDashboardContent() {
 
   return (
     <div className="space-y-6">
-      {/* Sample Data Notice */}
-      <SampleDataNotice module="National Benchmarks" />
-
       {/* Overview Stats */}
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
@@ -268,10 +114,10 @@ async function BenchmarkDashboardContent() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {mockSummary.average_percentile.toFixed(0)}%
+              {summary.average_percentile.toFixed(0)}%
             </div>
-            <Badge className={tierColors[mockSummary.overall_tier]}>
-              {mockSummary.overall_tier.replace('_', ' ')}
+            <Badge className={tierColors[summary.overall_tier]}>
+              {summary.overall_tier.replace('_', ' ')}
             </Badge>
           </CardContent>
         </Card>
@@ -282,7 +128,7 @@ async function BenchmarkDashboardContent() {
             <Target className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{mockBenchmarks.length}</div>
+            <div className="text-2xl font-bold">{benchmarks.length}</div>
             <p className="text-xs text-muted-foreground">Active benchmarks</p>
           </CardContent>
         </Card>
@@ -294,7 +140,7 @@ async function BenchmarkDashboardContent() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {mockBenchmarks.filter((b) => b.performance_tier === 'top_10').length}
+              {benchmarks.filter((b) => b.performance_tier === 'top_10').length}
             </div>
             <p className="text-xs text-muted-foreground">Metrics in top 10%</p>
           </CardContent>
@@ -307,7 +153,7 @@ async function BenchmarkDashboardContent() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {mockBenchmarks.filter((b) => b.trend === 'improving').length}
+              {benchmarks.filter((b) => b.trend === 'improving').length}
             </div>
             <p className="text-xs text-muted-foreground">Metrics trending up</p>
           </CardContent>
@@ -315,11 +161,11 @@ async function BenchmarkDashboardContent() {
       </div>
 
       {/* Benchmark Charts */}
-      <BenchmarkChart benchmarks={mockBenchmarks} summary={mockSummary} />
+      <BenchmarkChart benchmarks={benchmarks} summary={summary} />
 
       {/* Individual Metric Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {mockBenchmarks.map((benchmark) => (
+        {benchmarks.map((benchmark) => (
           <Card key={benchmark.id}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium flex items-center gap-2">

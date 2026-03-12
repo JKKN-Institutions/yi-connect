@@ -237,6 +237,29 @@ export function NotificationBell({
     return icons[category] || '📌';
   };
 
+  // Render static button during SSR to prevent hydration mismatch
+  // Radix UI Popover generates different IDs on server vs client
+  if (!mounted) {
+    return (
+      <Button
+        variant='ghost'
+        size='icon'
+        className='relative'
+        aria-label='Notifications'
+      >
+        <Bell className='h-5 w-5' />
+        {unreadCount > 0 && (
+          <Badge
+            variant='destructive'
+            className='absolute -top-1 -right-1 h-5 min-w-5 flex items-center justify-center p-0 text-xs'
+          >
+            {unreadCount > 99 ? '99+' : unreadCount}
+          </Badge>
+        )}
+      </Button>
+    );
+  }
+
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>

@@ -28,7 +28,8 @@ import {
   UserReactivateDialog,
   UserDeleteDialog
 } from './user-actions-dialog'
-import type { UserListItem } from '@/types/user'
+import { RoleManagerDialogTrigger } from './role-manager-dialog'
+import type { UserListItem, Role } from '@/types/user'
 
 // Helper function to get role badge variant
 function getRoleBadgeVariant(hierarchyLevel: number) {
@@ -39,7 +40,7 @@ function getRoleBadgeVariant(hierarchyLevel: number) {
   return 'outline' // Regular members
 }
 
-export const usersTableColumns: ColumnDef<UserListItem>[] = [
+export const getUsersTableColumns = (roles: Role[]): ColumnDef<UserListItem>[] => [
   {
     id: 'select',
     header: ({ table }) => (
@@ -230,10 +231,11 @@ export const usersTableColumns: ColumnDef<UserListItem>[] = [
                 Edit Profile
               </Link>
             </DropdownMenuItem>
-            <DropdownMenuItem>
-              <Shield className='mr-2 h-4 w-4' />
-              Manage Roles
-            </DropdownMenuItem>
+            <RoleManagerDialogTrigger
+              user={user}
+              roles={roles}
+              trigger='dropdown'
+            />
             <DropdownMenuSeparator />
             {isInactive ? (
               <UserReactivateDialog

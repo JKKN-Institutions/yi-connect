@@ -1245,20 +1245,33 @@ export const getOpportunitiesForMember = cache(
       return []
     }
 
-    // Calculate mock match scores and add UI-friendly aliases
-    const opportunitiesWithScores = (data || []).map((opp: any) => ({
-      ...opp,
-      // UI-friendly aliases
-      type: mapOpportunityType(opp.opportunity_type),
-      deadline: opp.application_deadline,
-      match_score: Math.floor(Math.random() * 40) + 60, // Mock score 60-100
-      match_breakdown: {
-        industry: Math.floor(Math.random() * 100),
-        skills: Math.floor(Math.random() * 100),
-        experience: Math.floor(Math.random() * 100),
-        engagement: Math.floor(Math.random() * 100),
+    // Fetch member data for deterministic match scoring
+    const memberData = await fetchMemberMatchData(supabase, memberId)
+
+    // Calculate deterministic match scores and add UI-friendly aliases
+    const opportunitiesWithScores = (data || []).map((opp: any) => {
+      const { match_score, match_breakdown } = calculateMatchScore(
+        memberId,
+        opp.id,
+        memberData,
+        {
+          industry_id: opp.industry_id,
+          eligibility_criteria: opp.eligibility_criteria,
+          industry: opp.stakeholder
+            ? { industry_sector: opp.stakeholder.industry_type }
+            : null,
+        }
+      )
+
+      return {
+        ...opp,
+        // UI-friendly aliases
+        type: mapOpportunityType(opp.opportunity_type),
+        deadline: opp.application_deadline,
+        match_score,
+        match_breakdown,
       }
-    }))
+    })
 
     return opportunitiesWithScores
   }

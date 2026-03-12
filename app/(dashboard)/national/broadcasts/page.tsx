@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { getCurrentMemberId, requireRole } from '@/lib/auth';
 import { BroadcastCenter } from '@/components/national/broadcast-center';
-import { SampleDataNotice } from '@/components/national/sample-data-notice';
+import { getBroadcasts } from '@/lib/data/national-integration';
 import type { BroadcastWithReceipt, NationalBroadcast } from '@/types/national-integration';
 
 export const metadata = {

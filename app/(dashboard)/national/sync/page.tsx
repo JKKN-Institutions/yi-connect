@@ -5,31 +5,60 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
-  RefreshCw,
   Activity,
-  CheckCircle2,
-  XCircle,
-  Clock,
   AlertTriangle,
   Database,
   Users,
   Calendar,
   FileText,
+  Clock,
   Settings
 } from 'lucide-react';
 import Link from 'next/link';
 import { getCurrentChapterId, requireRole } from '@/lib/auth';
+import { getSyncHealth, getSyncLogs, getDataConflicts } from '@/lib/data/national-integration';
 import { SyncStatusCard } from '@/components/national/sync-status-card';
 import { SyncLogsTable } from '@/components/national/sync-logs-table';
 import { ConflictsTable } from '@/components/national/conflicts-table';
 import { ManualSyncButton } from '@/components/national/manual-sync-button';
-import { SampleDataNotice } from '@/components/national/sample-data-notice';
-import type { SyncHealthStatus, NationalDataConflict } from '@/types/national-integration';
+import type { SyncHealthStatus } from '@/types/national-integration';
 
 export const metadata = {
   title: 'Sync Management | Yi Connect',
   description: 'Manage data synchronization with Yi National systems'
 };
+
+// Default health when no sync config exists yet
+const defaultHealth: SyncHealthStatus = {
+  sync_enabled: false,
+  connection_status: 'disconnected',
+  last_successful_sync: null,
+  consecutive_failures: 0,
+  last_24h: {
+    successful_syncs: 0,
+    failed_syncs: 0,
+    in_progress: 0,
+    records_synced: 0,
+    records_failed: 0
+  },
+  pending_conflicts: 0,
+  entities_synced: 0,
+  health_score: 0
+};
+
+// Map data layer sync direction values to what the SyncLogsTable component expects
+function mapDirection(direction: string): 'push' | 'pull' | 'bidirectional' {
+  switch (direction) {
+    case 'outbound':
+      return 'push';
+    case 'inbound':
+      return 'pull';
+    case 'bidirectional':
+      return 'bidirectional';
+    default:
+      return 'push';
+  }
+}
 
 async function SyncDashboardContent() {
   // Require National Admin role
@@ -48,101 +77,73 @@ async function SyncDashboardContent() {
     );
   }
 
-  // Sample data for demonstration - Connect Yi National API for real data
-  const mockHealth: SyncHealthStatus = {
-    sync_enabled: true,
-    connection_status: 'connected',
-    health_score: 92,
-    last_successful_sync: new Date(Date.now() - 45 * 60 * 1000).toISOString(),
-    pending_conflicts: 1,
-    consecutive_failures: 0,
-    entities_synced: 2847,
-    last_24h: {
-      successful_syncs: 24,
-      failed_syncs: 1,
-      in_progress: 0,
-      records_synced: 1256,
-      records_failed: 8
-    }
-  };
+  // Fetch real data from the database
+  const [healthData, syncLogsData, conflictsData] = await Promise.all([
+    getSyncHealth(chapterId),
+    getSyncLogs(undefined, 1, 20, chapterId),
+    getDataConflicts(undefined, chapterId)
+  ]);
 
-  const mockLogs = [
-    {
-      id: '1',
-      sync_type: 'members' as const,
-      direction: 'push' as const,
-      status: 'completed' as const,
-      started_at: new Date(Date.now() - 45 * 60 * 1000).toISOString(),
-      completed_at: new Date(Date.now() - 45 * 60 * 1000 + 32000).toISOString(),
-      records_processed: 186,
-      records_succeeded: 186,
-      records_failed: 0,
-      error_message: null
-    },
-    {
-      id: '2',
-      sync_type: 'events' as const,
-      direction: 'pull' as const,
-      status: 'completed' as const,
-      started_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-      completed_at: new Date(Date.now() - 2 * 60 * 60 * 1000 + 18000).toISOString(),
-      records_processed: 42,
-      records_succeeded: 42,
-      records_failed: 0,
-      error_message: null
-    },
-    {
-      id: '3',
-      sync_type: 'leadership' as const,
-      direction: 'pull' as const,
-      status: 'completed' as const,
-      started_at: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
-      completed_at: new Date(Date.now() - 4 * 60 * 60 * 1000 + 12000).toISOString(),
-      records_processed: 28,
-      records_succeeded: 28,
-      records_failed: 0,
-      error_message: null
-    },
-    {
-      id: '4',
-      sync_type: 'benchmarks' as const,
-      direction: 'pull' as const,
-      status: 'failed' as const,
-      started_at: new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString(),
-      completed_at: new Date(Date.now() - 8 * 60 * 60 * 1000 + 5000).toISOString(),
-      records_processed: 0,
-      records_succeeded: 0,
-      records_failed: 0,
-      error_message: 'National API rate limit exceeded. Will retry in 15 minutes.'
-    },
-    {
-      id: '5',
-      sync_type: 'benchmarks' as const,
-      direction: 'pull' as const,
-      status: 'completed' as const,
-      started_at: new Date(Date.now() - 8 * 60 * 60 * 1000 + 20 * 60 * 1000).toISOString(),
-      completed_at: new Date(Date.now() - 8 * 60 * 60 * 1000 + 20 * 60 * 1000 + 8000).toISOString(),
-      records_processed: 12,
-      records_succeeded: 12,
-      records_failed: 0,
-      error_message: null
-    }
-  ];
+  const health = healthData || defaultHealth;
+  const syncLogs = syncLogsData.data;
+  const conflicts = conflictsData;
 
-  const mockConflicts: NationalDataConflict[] = [];
+  // Transform sync logs to match the SyncLogsTable component interface
+  const logsForTable = syncLogs.map((log) => ({
+    id: log.id,
+    sync_type: log.sync_type,
+    direction: mapDirection(log.sync_direction),
+    status: log.status as 'pending' | 'in_progress' | 'completed' | 'failed' | 'partial',
+    started_at: log.started_at,
+    completed_at: log.completed_at,
+    records_processed: log.records_processed,
+    records_succeeded: log.records_succeeded,
+    records_failed: log.records_failed,
+    error_message: log.error_message
+  }));
 
+  // Compute entity stats from sync logs
   const entityStats = [
-    { name: 'Members', icon: Users, synced: 186, pending: 0 },
-    { name: 'Events', icon: Calendar, synced: 42, pending: 3 },
-    { name: 'Documents', icon: FileText, synced: 156, pending: 0 },
-    { name: 'Metrics', icon: Activity, synced: 2463, pending: 0 }
+    {
+      name: 'Members',
+      icon: Users,
+      synced: syncLogs
+        .filter((l) => l.sync_type === 'members' && l.status === 'completed')
+        .reduce((sum, l) => sum + l.records_succeeded, 0),
+      pending: syncLogs
+        .filter((l) => l.sync_type === 'members' && (l.status === 'pending' || l.status === 'in_progress'))
+        .length
+    },
+    {
+      name: 'Events',
+      icon: Calendar,
+      synced: syncLogs
+        .filter((l) => l.sync_type === 'events' && l.status === 'completed')
+        .reduce((sum, l) => sum + l.records_succeeded, 0),
+      pending: syncLogs
+        .filter((l) => l.sync_type === 'events' && (l.status === 'pending' || l.status === 'in_progress'))
+        .length
+    },
+    {
+      name: 'Documents',
+      icon: FileText,
+      synced: syncLogs
+        .filter((l) => l.sync_type === 'projects' && l.status === 'completed')
+        .reduce((sum, l) => sum + l.records_succeeded, 0),
+      pending: syncLogs
+        .filter((l) => l.sync_type === 'projects' && (l.status === 'pending' || l.status === 'in_progress'))
+        .length
+    },
+    {
+      name: 'Metrics',
+      icon: Activity,
+      synced: health.entities_synced,
+      pending: 0
+    }
   ];
 
   return (
     <div className="space-y-6">
-      {/* Sample Data Notice */}
-      <SampleDataNotice module="Sync Management" />
-
       {/* Top Stats */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {entityStats.map((entity) => (
@@ -169,7 +170,7 @@ async function SyncDashboardContent() {
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Sync Status Card */}
         <div className="lg:col-span-1">
-          <SyncStatusCard health={mockHealth} />
+          <SyncStatusCard health={health} />
 
           {/* Manual Sync Button */}
           <Card className="mt-4">
@@ -193,7 +194,7 @@ async function SyncDashboardContent() {
               </TabsTrigger>
               <TabsTrigger value="conflicts">
                 <AlertTriangle className="h-4 w-4 mr-2" />
-                Conflicts ({mockHealth.pending_conflicts})
+                Conflicts ({health.pending_conflicts})
               </TabsTrigger>
             </TabsList>
 
@@ -211,7 +212,7 @@ async function SyncDashboardContent() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <SyncLogsTable logs={mockLogs} />
+                  <SyncLogsTable logs={logsForTable} />
                 </CardContent>
               </Card>
             </TabsContent>
@@ -229,7 +230,7 @@ async function SyncDashboardContent() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <ConflictsTable conflicts={mockConflicts} />
+                  <ConflictsTable conflicts={conflicts} />
                 </CardContent>
               </Card>
             </TabsContent>
@@ -312,10 +313,6 @@ export default function SyncManagementPage() {
             Monitor and manage data synchronization with Yi National
           </p>
         </div>
-        <Badge variant="outline" className="text-green-600">
-          <Activity className="h-4 w-4 mr-1" />
-          Connected
-        </Badge>
       </div>
 
       <Suspense fallback={<SyncDashboardSkeleton />}>

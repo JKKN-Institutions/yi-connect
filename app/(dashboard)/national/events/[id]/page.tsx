@@ -24,6 +24,7 @@ import { format } from 'date-fns';
 import { getNationalEventById } from '@/lib/data/national-integration';
 import { EventRegistrationForm } from '@/components/national/event-registration-form';
 import { requireRole } from '@/lib/auth';
+import type { NationalEvent } from '@/types/national-integration';
 
 interface PageProps {
   params: Promise<{ id: string }>;

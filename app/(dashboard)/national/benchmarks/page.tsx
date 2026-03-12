@@ -117,10 +117,10 @@ async function BenchmarkDashboardContent() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {mockSummary.average_percentile.toFixed(0)}%
+              {summary.average_percentile.toFixed(0)}%
             </div>
-            <Badge className={tierColors[mockSummary.overall_tier]}>
-              {mockSummary.overall_tier.replace('_', ' ')}
+            <Badge className={tierColors[summary.overall_tier]}>
+              {summary.overall_tier.replace('_', ' ')}
             </Badge>
           </CardContent>
         </Card>
@@ -164,7 +164,7 @@ async function BenchmarkDashboardContent() {
       </div>
 
       {/* Benchmark Charts */}
-      <BenchmarkChart benchmarks={benchmarks} summary={mockSummary} />
+      <BenchmarkChart benchmarks={benchmarks} summary={summary} />
 
       {/* Individual Metric Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">

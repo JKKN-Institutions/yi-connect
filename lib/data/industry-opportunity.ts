@@ -1324,25 +1324,33 @@ export const getOpportunityWithMatchScore = cache(
     opportunityId: string,
     memberId: string
   ): Promise<(any & { match_score?: number; match_breakdown?: any }) | null> => {
+    const supabase = await createClient()
     const opportunity = await getOpportunityById(opportunityId)
 
     if (!opportunity) {
       return null
     }
 
-    // Calculate match score (mock implementation)
-    const matchScore = Math.floor(Math.random() * 40) + 60
-    const matchBreakdown = {
-      industry: Math.floor(Math.random() * 100),
-      skills: Math.floor(Math.random() * 100),
-      experience: Math.floor(Math.random() * 100),
-      engagement: Math.floor(Math.random() * 100),
-    }
+    // Fetch member data and calculate deterministic match score
+    const memberData = await fetchMemberMatchData(supabase, memberId)
+    const oppData = opportunity as any
+    const { match_score, match_breakdown } = calculateMatchScore(
+      memberId,
+      opportunityId,
+      memberData,
+      {
+        industry_id: oppData.industry_id,
+        eligibility_criteria: oppData.eligibility_criteria,
+        industry: oppData.industry
+          ? { industry_sector: oppData.industry.industry_sector }
+          : null,
+      }
+    )
 
     return {
       ...opportunity,
-      match_score: matchScore,
-      match_breakdown: matchBreakdown,
+      match_score,
+      match_breakdown,
     }
   }
 )

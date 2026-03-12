@@ -27,6 +27,7 @@ import type {
   OpportunityType,
   OpportunityStatus,
   MatchScoreBreakdown,
+  EligibilityCriteria,
 } from '@/types/industry-opportunity'
 
 // Helper function to map DB opportunity types to UI-friendly types

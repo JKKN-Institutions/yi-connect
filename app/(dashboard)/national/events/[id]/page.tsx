@@ -14,10 +14,7 @@ import {
   ArrowLeft,
   CheckCircle2,
   ExternalLink,
-  Building,
-  User,
-  Mail,
-  Phone
+  User
 } from 'lucide-react';
 import Link from 'next/link';
 import { format } from 'date-fns';

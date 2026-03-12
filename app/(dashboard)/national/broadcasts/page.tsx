@@ -69,9 +69,6 @@ async function BroadcastsContent() {
 
   return (
     <div className="space-y-6">
-      {/* Sample Data Notice */}
-      <SampleDataNotice module="National Broadcasts" />
-
       {/* Stats */}
       <div className="grid gap-4 md:grid-cols-4">
         <Card>

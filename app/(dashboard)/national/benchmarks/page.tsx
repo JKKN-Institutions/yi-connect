@@ -131,7 +131,7 @@ async function BenchmarkDashboardContent() {
             <Target className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{mockBenchmarks.length}</div>
+            <div className="text-2xl font-bold">{benchmarks.length}</div>
             <p className="text-xs text-muted-foreground">Active benchmarks</p>
           </CardContent>
         </Card>
@@ -143,7 +143,7 @@ async function BenchmarkDashboardContent() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {mockBenchmarks.filter((b) => b.performance_tier === 'top_10').length}
+              {benchmarks.filter((b) => b.performance_tier === 'top_10').length}
             </div>
             <p className="text-xs text-muted-foreground">Metrics in top 10%</p>
           </CardContent>
@@ -156,7 +156,7 @@ async function BenchmarkDashboardContent() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {mockBenchmarks.filter((b) => b.trend === 'improving').length}
+              {benchmarks.filter((b) => b.trend === 'improving').length}
             </div>
             <p className="text-xs text-muted-foreground">Metrics trending up</p>
           </CardContent>
@@ -164,11 +164,11 @@ async function BenchmarkDashboardContent() {
       </div>
 
       {/* Benchmark Charts */}
-      <BenchmarkChart benchmarks={mockBenchmarks} summary={mockSummary} />
+      <BenchmarkChart benchmarks={benchmarks} summary={mockSummary} />
 
       {/* Individual Metric Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {mockBenchmarks.map((benchmark) => (
+        {benchmarks.map((benchmark) => (
           <Card key={benchmark.id}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium flex items-center gap-2">

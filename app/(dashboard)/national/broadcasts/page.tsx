@@ -80,7 +80,7 @@ async function BroadcastsContent() {
             <Bell className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{mockBroadcasts.length}</div>
+            <div className="text-2xl font-bold">{allBroadcasts.length}</div>
             <p className="text-xs text-muted-foreground">Active broadcasts</p>
           </CardContent>
         </Card>
@@ -114,7 +114,7 @@ async function BroadcastsContent() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {mockBroadcasts.filter((b) => b.receipt?.acknowledged_at).length}
+              {allBroadcasts.filter((b) => b.receipt?.acknowledged_at).length}
             </div>
             <p className="text-xs text-muted-foreground">Completed</p>
           </CardContent>

@@ -11,7 +11,6 @@ import {
 import { getCurrentMemberId, requireRole } from '@/lib/auth';
 import { BroadcastCenter } from '@/components/national/broadcast-center';
 import { getBroadcasts } from '@/lib/data/national-integration';
-import type { BroadcastWithReceipt } from '@/types/national-integration';
 
 export const metadata = {
   title: 'National Broadcasts | Yi Connect',

@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { getCurrentChapterId, requireRole } from '@/lib/auth';
 import { BenchmarkChart } from '@/components/national/benchmark-chart';
-import { SampleDataNotice } from '@/components/national/sample-data-notice';
+import { getBenchmarks, getBenchmarkSummary } from '@/lib/data/national-integration';
 import type { NationalBenchmark, BenchmarkSummary } from '@/types/national-integration';
 
 export const metadata = {

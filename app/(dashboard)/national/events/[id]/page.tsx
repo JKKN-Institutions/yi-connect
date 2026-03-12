@@ -46,47 +46,7 @@ async function EventDetailContent({ eventId, showRegister }: { eventId: string; 
   const event = await getNationalEventById(eventId);
 
   if (!event) {
-    // Mock event for demonstration
-    const mockEvent = {
-      id: eventId,
-      national_event_id: `nat-${eventId}`,
-      title: 'Yi National Summit 2025',
-      description: `Join us for the Yi National Summit 2025, the premier gathering of Yi members from across the country. This three-day event will feature:
-
-• Keynote speeches from industry leaders
-• Interactive workshops on leadership development
-• Networking sessions with fellow Yi members
-• Panel discussions on emerging trends
-• Awards ceremony recognizing outstanding chapters
-
-Don't miss this opportunity to connect, learn, and grow with the Yi community!`,
-      event_type: 'summit' as const,
-      start_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-      end_date: new Date(Date.now() + 32 * 24 * 60 * 60 * 1000).toISOString(),
-      venue: 'Taj Palace Hotel',
-      city: 'Mumbai',
-      state: 'Maharashtra',
-      address: '2, Sardar Patel Marg, Diplomatic Enclave',
-      is_virtual: false,
-      virtual_link: null,
-      status: 'registration_open' as const,
-      registration_deadline: new Date(Date.now() + 20 * 24 * 60 * 60 * 1000).toISOString(),
-      registration_fee: 5000,
-      early_bird_fee: 4000,
-      early_bird_deadline: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString(),
-      max_participants: 500,
-      current_registrations: 342,
-      is_featured: true,
-      contact_name: 'Yi National Office',
-      contact_email: 'events@yinational.org',
-      contact_phone: '+91 98765 43210',
-      agenda_url: 'https://example.com/agenda.pdf',
-      brochure_url: 'https://example.com/brochure.pdf',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
-
-    return <EventDetail event={mockEvent} showRegister={showRegister} />;
+    notFound();
   }
 
   return <EventDetail event={event} showRegister={showRegister} />;

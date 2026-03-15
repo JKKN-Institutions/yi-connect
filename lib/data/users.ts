@@ -387,7 +387,7 @@ export const getAvailableRoles = cache(
     const { data: currentUserLevel } = await supabase.rpc(
       'get_user_hierarchy_level',
       {
-        user_id: currentUserId
+        p_user_id: currentUserId
       }
     )
 

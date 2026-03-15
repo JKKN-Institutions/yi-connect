@@ -1273,8 +1273,11 @@ export async function exportUsers(
 
     // Apply filters
     if (filters?.search) {
-      // Sanitize search to prevent PostgREST filter injection
-      const sanitizedSearch = filters.search.replace(/[.,()]/g, '')
+      // Sanitize search to prevent PostgREST filter injection and SQL wildcard abuse
+      const sanitizedSearch = filters.search
+        .replace(/[.,()]/g, '')
+        .replace(/%/g, '\\%')
+        .replace(/_/g, '\\_')
       query = query.or(`full_name.ilike.%${sanitizedSearch}%,email.ilike.%${sanitizedSearch}%`)
     }
 

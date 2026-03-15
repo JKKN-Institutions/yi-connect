@@ -328,7 +328,8 @@ export async function bulkAssignRole(
           .single()
 
         if (existing) {
-          // Skip if already assigned
+          // Already assigned - count as success
+          result.success_count++
           continue
         }
 

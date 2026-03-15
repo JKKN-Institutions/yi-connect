@@ -478,7 +478,7 @@ async function logFinancialActionInternal(params: {
         old_values: params.oldValues,
         new_values: params.newValues,
         changed_fields: changedFields,
-        amount_changed: params.amountChanged || null,
+        amount_changed: params.amountChanged ?? null,
         performed_by: params.performedBy,
         description: params.description || null,
       }])

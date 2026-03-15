@@ -811,7 +811,8 @@ export async function deleteUser(userId: string): Promise<FormState> {
     }
   }
 
-  redirect('/admin/users')
+  // redirect throws internally, so this acts as the final action
+  return redirect('/admin/users')
 }
 
 // ============================================================================

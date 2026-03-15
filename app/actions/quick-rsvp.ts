@@ -2,11 +2,13 @@
 
 import { createAdminSupabaseClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
+import { verifyMemberHMAC } from '@/lib/crypto/hmac';
 
 interface ToggleRSVPInput {
   event_id: string;
   token: string;
   member_id: string;
+  member_hmac: string; // HMAC proof that member_id was served by the server
   guests_count?: number;
 }
 

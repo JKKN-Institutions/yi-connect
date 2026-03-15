@@ -43,7 +43,8 @@ _${chapterName} - Together We Can. We Will._`;
 export function formatRsvpConfirmation(
   member: MemberDetails,
   event: EventDetails,
-  rsvpStatus: 'attending' | 'not_attending' | 'maybe'
+  rsvpStatus: 'attending' | 'not_attending' | 'maybe',
+  chapterName: string = 'Yi Erode'
 ): string {
   const statusEmoji = {
     attending: '✅',

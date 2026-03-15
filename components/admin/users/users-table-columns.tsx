@@ -67,11 +67,12 @@ export const getUsersTableColumns = (roles: Role[]): ColumnDef<UserListItem>[] =
     ),
     cell: ({ row }) => {
       const user = row.original
-      const initials = user.full_name
+      const initials = (user.full_name || 'U')
         .split(' ')
-        .map((n) => n[0])
+        .map((n) => n?.[0] || '')
+        .filter(Boolean)
         .join('')
-        .toUpperCase()
+        .toUpperCase() || 'U'
 
       return (
         <Link

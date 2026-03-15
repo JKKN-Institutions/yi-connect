@@ -23,10 +23,10 @@ function getHmacSecret(): string {
  */
 export function generateMemberHMAC(memberId: string, eventToken: string): string {
   return crypto
-    .createHmac('sha256', HMAC_SECRET)
+    .createHmac('sha256', getHmacSecret())
     .update(`${eventToken}:${memberId}`)
     .digest('hex')
-    .substring(0, 16) // Short enough for URL params, long enough to be secure
+    .substring(0, 32) // 128 bits - sufficient for IDOR prevention
 }
 
 /**

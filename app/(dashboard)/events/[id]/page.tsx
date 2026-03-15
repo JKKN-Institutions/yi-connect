@@ -492,7 +492,7 @@ async function EventDetailContent({ params }: PageProps) {
                   </div>
                   {canEdit && (
                     <Button size='sm' className='shadow-sm'>
-                      <Download className='mr-2 h-4 w-4' />
+                      <Upload className='mr-2 h-4 w-4' />
                       Upload
                     </Button>
                   )}

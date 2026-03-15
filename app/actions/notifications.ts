@@ -46,7 +46,7 @@ export async function markAsRead(notificationId: string): Promise<ActionResponse
       return { success: false, message: 'Failed to mark notification as read', error: error.message };
     }
 
-    revalidateTag('notifications', 'default');
+    revalidateTag('notifications');
 
     return { success: true, message: 'Notification marked as read' };
   } catch (error) {
@@ -80,7 +80,7 @@ export async function markAllAsRead(): Promise<ActionResponse> {
       return { success: false, message: 'Failed to mark all notifications as read', error: error.message };
     }
 
-    revalidateTag('notifications', 'default');
+    revalidateTag('notifications');
 
     return { success: true, message: 'All notifications marked as read' };
   } catch (error) {
@@ -114,7 +114,7 @@ export async function deleteNotification(notificationId: string): Promise<Action
       return { success: false, message: 'Failed to delete notification', error: error.message };
     }
 
-    revalidateTag('notifications', 'default');
+    revalidateTag('notifications');
 
     return { success: true, message: 'Notification deleted successfully' };
   } catch (error) {

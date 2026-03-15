@@ -9,7 +9,6 @@
 
 import * as crypto from 'crypto'
 import { updateTag } from 'next/cache'
-import { redirect } from 'next/navigation'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import {
   createYiCreativeConnection,

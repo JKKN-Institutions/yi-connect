@@ -89,21 +89,31 @@ function MemberRow({ member, isAttending, guestsCount, eventId, token, memberHMA
 
   const handleGuestIncrement = () => {
     if (guestsCount >= 5) return;
+    const oldCount = guestsCount;
     const newCount = guestsCount + 1;
     onGuestChange(member.id, newCount);
 
     startTransition(async () => {
-      await updateGuestCount({ event_id: eventId, token, member_id: member.id, member_hmac: memberHMAC, guests_count: newCount });
+      const result = await updateGuestCount({ event_id: eventId, token, member_id: member.id, member_hmac: memberHMAC, guests_count: newCount });
+      if (!result.success) {
+        onGuestChange(member.id, oldCount);
+        toast.error(result.error || 'Failed to update guest count');
+      }
     });
   };
 
   const handleGuestDecrement = () => {
     if (guestsCount <= 0) return;
+    const oldCount = guestsCount;
     const newCount = guestsCount - 1;
     onGuestChange(member.id, newCount);
 
     startTransition(async () => {
-      await updateGuestCount({ event_id: eventId, token, member_id: member.id, member_hmac: memberHMAC, guests_count: newCount });
+      const result = await updateGuestCount({ event_id: eventId, token, member_id: member.id, member_hmac: memberHMAC, guests_count: newCount });
+      if (!result.success) {
+        onGuestChange(member.id, oldCount);
+        toast.error(result.error || 'Failed to update guest count');
+      }
     });
   };
 

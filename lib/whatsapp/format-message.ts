@@ -77,7 +77,7 @@ _${chapterName} - Together We Can. We Will._`;
 /**
  * Event Reminder (3 days before)
  */
-export function formatEventReminder3Days(event: EventDetails, memberName: string): string {
+export function formatEventReminder3Days(event: EventDetails, memberName: string, chapterName: string = 'Yi Erode'): string {
   return `*Event Reminder* 🔔
 
 Hi ${memberName},

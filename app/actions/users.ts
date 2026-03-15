@@ -1356,7 +1356,7 @@ export async function exportUsers(
           headers.map(h => {
             const value = row[h as keyof typeof row]
             // Escape quotes and wrap in quotes if contains comma
-            if (typeof value === 'string' && (value.includes(',') || value.includes('"'))) {
+            if (typeof value === 'string' && (value.includes(',') || value.includes('"') || value.includes('\n') || value.includes('\r'))) {
               return `"${value.replace(/"/g, '""')}"`
             }
             return value

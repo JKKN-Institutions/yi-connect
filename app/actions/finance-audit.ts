@@ -195,17 +195,21 @@ export async function updatePaymentMethod(
       })
       .eq('id', methodId)
 
-    // If setting as default, atomically update via DB function (prevents race conditions)
-    if (!error && validation.data.is_default) {
-      await supabase.rpc('set_default_payment_method', {
-        p_method_id: methodId,
-        p_chapter_id: existing.chapter_id,
-      })
-    }
-
     if (error) {
       console.error('Error updating payment method:', error)
       return { message: 'Database error: Failed to update payment method.' }
+    }
+
+    // If setting as default, atomically update via DB function (prevents race conditions)
+    if (validation.data.is_default) {
+      const { error: rpcError } = await supabase.rpc('set_default_payment_method', {
+        p_method_id: methodId,
+        p_chapter_id: existing.chapter_id,
+      })
+      if (rpcError) {
+        console.error('Error setting default payment method:', rpcError)
+        return { success: true, message: 'Payment method updated but could not be set as default.' }
+      }
     }
 
     // Log the action

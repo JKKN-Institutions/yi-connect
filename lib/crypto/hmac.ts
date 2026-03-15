@@ -5,7 +5,17 @@
 
 import * as crypto from 'crypto'
 
-const HMAC_SECRET = process.env.RSVP_HMAC_SECRET || process.env.NEXTAUTH_SECRET || 'yi-connect-rsvp-hmac-fallback-key'
+function getHmacSecret(): string {
+  const secret = process.env.RSVP_HMAC_SECRET || process.env.NEXTAUTH_SECRET
+  if (!secret) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('RSVP_HMAC_SECRET or NEXTAUTH_SECRET must be set in production')
+    }
+    // Development fallback only
+    return 'yi-connect-rsvp-hmac-fallback-key'
+  }
+  return secret
+}
 
 /**
  * Generate an HMAC for a member_id scoped to a specific event token.

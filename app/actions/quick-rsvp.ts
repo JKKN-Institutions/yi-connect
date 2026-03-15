@@ -127,9 +127,14 @@ export async function toggleMemberRSVP(
  * Update guest count for an existing RSVP
  */
 export async function updateGuestCount(
-  input: { event_id: string; token: string; member_id: string; guests_count: number }
+  input: { event_id: string; token: string; member_id: string; member_hmac: string; guests_count: number }
 ): Promise<ActionResponse> {
   try {
+    // Verify HMAC to prevent IDOR
+    if (!verifyMemberHMAC(input.member_id, input.token, input.member_hmac)) {
+      return { success: false, error: 'Invalid member verification' };
+    }
+
     const supabase = createAdminSupabaseClient();
 
     // Validate token

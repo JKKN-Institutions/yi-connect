@@ -220,7 +220,7 @@ You have been assigned as *${role}* for:
 Thank you for volunteering! Please confirm your availability.
 ${event.eventUrl ? `\n🔗 Event Details: ${event.eventUrl}` : ''}
 
-_Yi Erode - Together We Can. We Will._`;
+_${chapterName} - Together We Can. We Will._`;
 }
 
 /**

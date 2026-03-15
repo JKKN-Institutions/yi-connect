@@ -20,15 +20,7 @@ import {
   togglePaymentMethodSchema,
 } from '@/lib/validations/finance-audit'
 
-// ================================================
-// SHARED TYPES
-// ================================================
-
-export type FormState = {
-  errors?: Record<string, string[]>
-  message?: string
-  success?: boolean
-}
+import type { FormState } from '@/types'
 
 // ================================================
 // PAYMENT METHOD ACTIONS

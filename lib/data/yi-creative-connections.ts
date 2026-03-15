@@ -7,6 +7,7 @@
 
 import { cache } from 'react'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { encryptSecret, decryptSecret } from '@/lib/crypto/encryption'
 import type {
   YiCreativeConnection,
   YiCreativeConnectionWithDetails,
@@ -14,6 +15,37 @@ import type {
   UpdateConnectionData,
   YiCreativeConnectionUIStatus,
 } from '@/types/yi-creative'
+
+// Fields that should be encrypted at rest
+const ENCRYPTED_FIELDS = ['access_token', 'refresh_token', 'webhook_secret', 'sso_private_key'] as const
+
+/**
+ * Decrypt sensitive fields in a connection record
+ */
+function decryptConnection<T extends Partial<YiCreativeConnection>>(connection: T): T {
+  const result = { ...connection }
+  for (const field of ENCRYPTED_FIELDS) {
+    if (field in result && (result as Record<string, unknown>)[field]) {
+      (result as Record<string, unknown>)[field] = decryptSecret(
+        (result as Record<string, unknown>)[field] as string
+      )
+    }
+  }
+  return result
+}
+
+/**
+ * Encrypt sensitive fields before storing
+ */
+function encryptConnectionFields(data: Record<string, unknown>): Record<string, unknown> {
+  const result = { ...data }
+  for (const field of ENCRYPTED_FIELDS) {
+    if (field in result && result[field] && typeof result[field] === 'string') {
+      result[field] = encryptSecret(result[field] as string)
+    }
+  }
+  return result
+}
 
 // ============================================================================
 // Read Operations

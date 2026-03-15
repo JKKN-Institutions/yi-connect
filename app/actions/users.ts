@@ -1011,7 +1011,7 @@ export async function deactivateUserFromTable(
     // Invalidate caches
     revalidatePath('/admin/users');
     revalidatePath(`/admin/users/${userId}`);
-    revalidateTag('members-list', 'max');
+    revalidateTag('members-list');
 
     return {
       success: true,
@@ -1081,7 +1081,7 @@ export async function reactivateUserFromTable(
     // Invalidate caches
     revalidatePath('/admin/users');
     revalidatePath(`/admin/users/${userId}`);
-    revalidateTag('members-list', 'max');
+    revalidateTag('members-list');
 
     return {
       success: true,
@@ -1203,7 +1203,7 @@ export async function deleteUserPermanently(
 
     // Invalidate caches
     revalidatePath('/admin/users');
-    revalidateTag('members-list', 'max');
+    revalidateTag('members-list');
     revalidateTag('approved-emails', 'max');
 
     return {

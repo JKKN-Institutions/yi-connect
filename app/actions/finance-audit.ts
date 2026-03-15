@@ -86,20 +86,25 @@ export async function createPaymentMethod(
       .select()
       .single()
 
-    // If this is set as default, atomically update via DB function (prevents race conditions)
-    if (!error && data && validation.data.is_default) {
-      await supabase.rpc('set_default_payment_method', {
-        p_method_id: data.id,
-        p_chapter_id: validation.data.chapter_id,
-      })
-    }
-
     if (error) {
       console.error('Error creating payment method:', error)
       if (error.code === '23505') {
         return { message: 'A payment method with this name already exists for this chapter.' }
       }
       return { message: 'Database error: Failed to create payment method.' }
+    }
+
+    // If this is set as default, atomically update via DB function (prevents race conditions)
+    if (data && validation.data.is_default) {
+      const { error: rpcError } = await supabase.rpc('set_default_payment_method', {
+        p_method_id: data.id,
+        p_chapter_id: validation.data.chapter_id,
+      })
+      if (rpcError) {
+        console.error('Error setting default payment method:', rpcError)
+        // Payment method was created but default not set - inform user
+        return { success: true, message: 'Payment method created but could not be set as default. Please try setting it as default manually.' }
+      }
     }
 
     // Log the action

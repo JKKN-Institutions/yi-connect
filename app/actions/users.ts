@@ -274,7 +274,14 @@ export async function bulkAssignRole(
     const { user } = await requireRole(['Super Admin', 'National Admin'])
 
     const userIdsRaw = formData.get('user_ids')
-    const userIds = userIdsRaw ? JSON.parse(userIdsRaw as string) : []
+    let userIds: string[] = []
+    try {
+      const parsed = userIdsRaw ? JSON.parse(userIdsRaw as string) : []
+      if (!Array.isArray(parsed)) throw new Error('Expected array')
+      userIds = parsed
+    } catch {
+      return { message: 'Invalid user IDs format.' }
+    }
 
     const validation = bulkAssignRoleSchema.safeParse({
       user_ids: userIds,
@@ -372,7 +379,14 @@ export async function bulkRemoveRole(
     const { user } = await requireRole(['Super Admin', 'National Admin'])
 
     const userIdsRaw = formData.get('user_ids')
-    const userIds = userIdsRaw ? JSON.parse(userIdsRaw as string) : []
+    let userIds: string[] = []
+    try {
+      const parsed = userIdsRaw ? JSON.parse(userIdsRaw as string) : []
+      if (!Array.isArray(parsed)) throw new Error('Expected array')
+      userIds = parsed
+    } catch {
+      return { message: 'Invalid user IDs format.' }
+    }
 
     const validation = bulkRemoveRoleSchema.safeParse({
       user_ids: userIds,
@@ -544,7 +558,14 @@ export async function bulkDeactivateUsers(
     const { user } = await requireRole(['Super Admin', 'National Admin'])
 
     const userIdsRaw = formData.get('user_ids')
-    const userIds = userIdsRaw ? JSON.parse(userIdsRaw as string) : []
+    let userIds: string[] = []
+    try {
+      const parsed = userIdsRaw ? JSON.parse(userIdsRaw as string) : []
+      if (!Array.isArray(parsed)) throw new Error('Expected array')
+      userIds = parsed
+    } catch {
+      return { message: 'Invalid user IDs format.' }
+    }
 
     const validation = bulkDeactivateUsersSchema.safeParse({
       user_ids: userIds,
@@ -663,7 +684,14 @@ export async function bulkAssignChapter(
     await requireRole(['Super Admin', 'National Admin'])
 
     const userIdsRaw = formData.get('user_ids')
-    const userIds = userIdsRaw ? JSON.parse(userIdsRaw as string) : []
+    let userIds: string[] = []
+    try {
+      const parsed = userIdsRaw ? JSON.parse(userIdsRaw as string) : []
+      if (!Array.isArray(parsed)) throw new Error('Expected array')
+      userIds = parsed
+    } catch {
+      return { message: 'Invalid user IDs format.' }
+    }
 
     const validation = bulkAssignChapterSchema.safeParse({
       user_ids: userIds,

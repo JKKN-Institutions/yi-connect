@@ -52,9 +52,9 @@ export function UserMenu({ profile }: UserMenuProps) {
     .slice(0, 2)
 
   // Sort roles by hierarchy level (highest first)
-  const sortedRoles = profile.roles?.sort((a, b) =>
+  const sortedRoles = [...(profile.roles || [])].sort((a, b) =>
     (b.hierarchy_level || 0) - (a.hierarchy_level || 0)
-  ) || []
+  )
 
   // Get the primary role (highest hierarchy level)
   const primaryRole = sortedRoles[0] || null

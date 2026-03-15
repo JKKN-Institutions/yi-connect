@@ -75,15 +75,6 @@ export async function createPaymentMethod(
     if (validation.data.ifsc_code) accountDetails.ifsc_code = validation.data.ifsc_code
     if (validation.data.upi_id) accountDetails.upi_id = validation.data.upi_id
 
-    // If this is set as default, unset other defaults first
-    if (validation.data.is_default) {
-      await supabase
-        .from('payment_methods')
-        .update({ is_default: false })
-        .eq('chapter_id', validation.data.chapter_id)
-        .eq('is_default', true)
-    }
-
     // Destructure non-DB fields before spreading into insert
     const { account_number: _an, bank_name: _bn, ifsc_code: _ic, upi_id: _ui, ...createDbFields } = validation.data
     const { data, error } = await supabase
@@ -94,6 +85,14 @@ export async function createPaymentMethod(
       }])
       .select()
       .single()
+
+    // If this is set as default, atomically update via DB function (prevents race conditions)
+    if (!error && data && validation.data.is_default) {
+      await supabase.rpc('set_default_payment_method', {
+        p_method_id: data.id,
+        p_chapter_id: validation.data.chapter_id,
+      })
+    }
 
     if (error) {
       console.error('Error creating payment method:', error)

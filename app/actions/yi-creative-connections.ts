@@ -212,8 +212,8 @@ export async function initiateYiCreativeConnect(chapterId?: string): Promise<Ini
       return { success: false, error: 'Chapter is already connected to Yi Creative Studio' }
     }
 
-    // Generate OAuth state
-    const state = generateOAuthState(targetChapterId, user.id)
+    // Generate OAuth state (stored in DB for serverless compatibility)
+    const state = await generateOAuthState(targetChapterId, user.id)
 
     // Build OAuth authorization URL
     const authUrl = new URL(`${YI_CREATIVE_BASE_URL}/oauth/authorize`)

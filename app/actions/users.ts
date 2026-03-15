@@ -1271,7 +1271,9 @@ export async function exportUsers(
 
     // Apply filters
     if (filters?.search) {
-      query = query.or(`full_name.ilike.%${filters.search}%,email.ilike.%${filters.search}%`)
+      // Sanitize search to prevent PostgREST filter injection
+      const sanitizedSearch = filters.search.replace(/[.,()]/g, '')
+      query = query.or(`full_name.ilike.%${sanitizedSearch}%,email.ilike.%${sanitizedSearch}%`)
     }
 
     if (filters?.is_active !== undefined) {

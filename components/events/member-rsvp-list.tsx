@@ -59,7 +59,7 @@ function MemberAvatar({ name, avatarUrl }: { name: string; avatarUrl: string | n
   );
 }
 
-function MemberRow({ member, isAttending, guestsCount, eventId, token, disabled, onToggle, onGuestChange }: MemberRowProps) {
+function MemberRow({ member, isAttending, guestsCount, eventId, token, memberHMAC, disabled, onToggle, onGuestChange }: MemberRowProps) {
   const [isPending, startTransition] = useTransition();
 
   const handleToggle = () => {
@@ -75,6 +75,7 @@ function MemberRow({ member, isAttending, guestsCount, eventId, token, disabled,
         event_id: eventId,
         token,
         member_id: member.id,
+        member_hmac: memberHMAC,
         guests_count: isAttending ? 0 : guestsCount,
       });
 
@@ -92,7 +93,7 @@ function MemberRow({ member, isAttending, guestsCount, eventId, token, disabled,
     onGuestChange(member.id, newCount);
 
     startTransition(async () => {
-      await updateGuestCount({ event_id: eventId, token, member_id: member.id, guests_count: newCount });
+      await updateGuestCount({ event_id: eventId, token, member_id: member.id, member_hmac: memberHMAC, guests_count: newCount });
     });
   };
 
@@ -102,7 +103,7 @@ function MemberRow({ member, isAttending, guestsCount, eventId, token, disabled,
     onGuestChange(member.id, newCount);
 
     startTransition(async () => {
-      await updateGuestCount({ event_id: eventId, token, member_id: member.id, guests_count: newCount });
+      await updateGuestCount({ event_id: eventId, token, member_id: member.id, member_hmac: memberHMAC, guests_count: newCount });
     });
   };
 

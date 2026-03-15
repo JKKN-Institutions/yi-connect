@@ -193,21 +193,24 @@ export async function createYiCreativeConnection(
 ): Promise<YiCreativeConnection | null> {
   const supabase = await createServerSupabaseClient()
 
+  // Encrypt sensitive fields before storage
+  const insertData = encryptConnectionFields({
+    chapter_id: data.chapter_id,
+    organization_id: data.organization_id,
+    organization_name: data.organization_name,
+    connected_by: data.connected_by,
+    status: 'active',
+    access_token: data.access_token,
+    refresh_token: data.refresh_token,
+    token_expires_at: data.token_expires_at,
+    webhook_secret: data.webhook_secret,
+    sso_private_key: data.sso_private_key,
+    sso_public_key: data.sso_public_key,
+  })
+
   const { data: connection, error } = await supabase
     .from('yi_creative_connections')
-    .insert({
-      chapter_id: data.chapter_id,
-      organization_id: data.organization_id,
-      organization_name: data.organization_name,
-      connected_by: data.connected_by,
-      status: 'active',
-      access_token: data.access_token,
-      refresh_token: data.refresh_token,
-      token_expires_at: data.token_expires_at,
-      webhook_secret: data.webhook_secret,
-      sso_private_key: data.sso_private_key,
-      sso_public_key: data.sso_public_key,
-    })
+    .insert(insertData)
     .select()
     .single()
 
@@ -216,7 +219,7 @@ export async function createYiCreativeConnection(
     return null
   }
 
-  return connection as YiCreativeConnection
+  return decryptConnection(connection as YiCreativeConnection)
 }
 
 /**

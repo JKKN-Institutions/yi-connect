@@ -315,7 +315,7 @@ async function EventsHeader() {
   const { data: hierarchyLevel } = await supabase.rpc(
     'get_user_hierarchy_level',
     {
-      user_id: user.id
+      p_user_id: user.id
     }
   );
   const userHierarchyLevel = hierarchyLevel || 0;

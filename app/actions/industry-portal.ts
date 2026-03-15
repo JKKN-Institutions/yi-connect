@@ -204,7 +204,7 @@ export async function getActiveSessions() {
     // Build session entry from real auth data
     return [
       {
-        id: session.access_token ? 'current' : session.access_token,
+        id: 'current',
         device: userMetadata.device || appMetadata.provider || 'Web',
         browser: userMetadata.browser || 'Web Browser',
         location: userMetadata.location || user.email?.split('@')[1] || 'Unknown',

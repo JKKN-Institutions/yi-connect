@@ -184,7 +184,7 @@ export async function addGuestRSVP(
       .insert({
         event_id: input.event_id,
         full_name: input.full_name.trim(),
-        email: 'guest@quickrsvp.local', // Placeholder - guest_rsvps requires email
+        email: `guest-${crypto.randomUUID()}@quickrsvp.local`, // Unique placeholder per guest
         phone: input.phone?.trim() || null,
         status: 'confirmed',
       })

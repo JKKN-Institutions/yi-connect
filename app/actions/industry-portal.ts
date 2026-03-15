@@ -669,6 +669,19 @@ export async function changePassword(
 
     const supabase = await createClient();
 
+    // Verify current password before allowing change
+    const { error: verifyError } = await supabase.auth.signInWithPassword({
+      email: user.email!,
+      password: validation.data.current_password,
+    });
+
+    if (verifyError) {
+      return {
+        success: false,
+        message: 'Current password is incorrect',
+      };
+    }
+
     // Update password using Supabase Auth
     const { error } = await supabase.auth.updateUser({
       password: validation.data.new_password,

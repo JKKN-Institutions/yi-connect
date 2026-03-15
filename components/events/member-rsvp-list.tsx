@@ -287,8 +287,8 @@ export function MemberRSVPList({ attending: initialAttending, notYet: initialNot
         </div>
       </div>
 
-      {/* Divider */}
-      <div className="border-t" />
+      {/* Divider - only show when there are items below */}
+      {(notYet.length > 0 || isEventFull) && <div className="border-t" />}
 
       {/* Event Full Banner */}
       {isEventFull && !isEventOver && (

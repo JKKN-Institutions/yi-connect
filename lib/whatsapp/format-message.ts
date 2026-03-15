@@ -155,7 +155,8 @@ _${chapterName} - Together We Can. We Will._`;
  */
 export function formatEventUpdate(
   event: EventDetails,
-  changes: { field: string; oldValue: string; newValue: string }[]
+  changes: { field: string; oldValue: string; newValue: string }[],
+  chapterName: string = 'Yi Erode'
 ): string {
   const changesList = changes
     .map(c => `• *${c.field}:* ${c.oldValue} → ${c.newValue}`)

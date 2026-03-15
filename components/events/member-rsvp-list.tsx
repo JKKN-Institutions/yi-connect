@@ -136,6 +136,7 @@ function MemberRow({ member, isAttending, guestsCount, eventId, token, memberHMA
               onClick={handleGuestDecrement}
               disabled={disabled || isPending || guestsCount <= 0}
               className="h-6 w-6 rounded-full border flex items-center justify-center text-muted-foreground hover:bg-muted disabled:opacity-30"
+              aria-label="Remove one guest"
             >
               <Minus className="h-3 w-3" />
             </button>
@@ -144,6 +145,7 @@ function MemberRow({ member, isAttending, guestsCount, eventId, token, memberHMA
               onClick={handleGuestIncrement}
               disabled={disabled || isPending || guestsCount >= 5}
               className="h-6 w-6 rounded-full border flex items-center justify-center text-muted-foreground hover:bg-muted disabled:opacity-30"
+              aria-label={guestsCount >= 5 ? 'Maximum 5 guests reached' : 'Add one guest'}
             >
               <Plus className="h-3 w-3" />
             </button>

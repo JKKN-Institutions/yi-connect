@@ -84,10 +84,12 @@ export async function createPaymentMethod(
         .eq('is_default', true)
     }
 
+    // Destructure non-DB fields before spreading into insert
+    const { account_number: _an, bank_name: _bn, ifsc_code: _ic, upi_id: _ui, ...createDbFields } = validation.data
     const { data, error } = await supabase
       .from('payment_methods')
       .insert([{
-        ...validation.data,
+        ...createDbFields,
         account_details: accountDetails,
       }])
       .select()

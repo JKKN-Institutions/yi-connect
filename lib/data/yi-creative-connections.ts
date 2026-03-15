@@ -119,11 +119,11 @@ export async function getChapterYiCreativeConnectionWithDetails(
     ? data.connected_by_profile[0]
     : data.connected_by_profile
 
-  return {
+  return decryptConnection({
     ...data,
     chapter,
     connected_by_profile: connectedByProfile,
-  } as YiCreativeConnectionWithDetails
+  } as YiCreativeConnectionWithDetails)
 }
 
 /**

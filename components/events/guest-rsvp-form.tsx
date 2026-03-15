@@ -99,7 +99,7 @@ export function GuestRSVPForm({ eventId, token, existingGuests }: GuestRSVPFormP
               <div className="space-y-1">
                 {guests.map((guest) => (
                   <div key={guest.id} className="flex items-center gap-2 text-sm py-1">
-                    <div className="h-6 w-6 rounded-full bg-gray-300 flex items-center justify-center text-xs text-white">
+                    <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center text-xs text-muted-foreground">
                       {guest.full_name.charAt(0).toUpperCase()}
                     </div>
                     <span>{guest.full_name}</span>

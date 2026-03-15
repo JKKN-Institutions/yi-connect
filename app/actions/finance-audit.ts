@@ -168,12 +168,13 @@ export async function updatePaymentMethod(
       return { message: 'Payment method not found.' }
     }
 
-    // Build updated account_details
+    // Build updated account_details (read existing values from JSONB column, not individual columns)
+    const existingDetails = (existing.account_details as Record<string, string> | null) ?? {}
     const accountDetails: Record<string, string> = {}
-    const accountNumber = validation.data.account_number ?? existing.account_number
-    const bankName = validation.data.bank_name ?? existing.bank_name
-    const ifscCode = validation.data.ifsc_code ?? existing.ifsc_code
-    const upiId = validation.data.upi_id ?? existing.upi_id
+    const accountNumber = validation.data.account_number ?? existingDetails.account_number ?? existing.account_number
+    const bankName = validation.data.bank_name ?? existingDetails.bank_name ?? existing.bank_name
+    const ifscCode = validation.data.ifsc_code ?? existingDetails.ifsc_code ?? existing.ifsc_code
+    const upiId = validation.data.upi_id ?? existingDetails.upi_id ?? existing.upi_id
     if (accountNumber) accountDetails.account_number = accountNumber
     if (bankName) accountDetails.bank_name = bankName
     if (ifscCode) accountDetails.ifsc_code = ifscCode

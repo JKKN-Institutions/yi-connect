@@ -158,9 +158,9 @@ export function formatEventUpdate(
   changes: { field: string; oldValue: string; newValue: string }[],
   chapterName: string = 'Yi Erode'
 ): string {
-  const changesList = changes
-    .map(c => `• *${c.field}:* ${c.oldValue} → ${c.newValue}`)
-    .join('\n');
+  const changesList = changes.length > 0
+    ? changes.map(c => `• *${c.field}:* ${c.oldValue} → ${c.newValue}`).join('\n')
+    : '• Details updated';
 
   return `*Event Update* 📝
 

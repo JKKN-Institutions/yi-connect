@@ -165,7 +165,7 @@ function MemberRow({ member, isAttending, guestsCount, eventId, token, memberHMA
   );
 }
 
-export function MemberRSVPList({ attending: initialAttending, notYet: initialNotYet, rsvpMap: initialRsvpMap, eventId, token, isEventOver, isEventFull }: MemberRSVPListProps) {
+export function MemberRSVPList({ attending: initialAttending, notYet: initialNotYet, rsvpMap: initialRsvpMap, memberHMACs, eventId, token, isEventOver, isEventFull }: MemberRSVPListProps) {
   const [searchQuery, setSearchQuery] = useState('');
 
   // Local state for optimistic updates

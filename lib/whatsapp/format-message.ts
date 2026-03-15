@@ -97,7 +97,7 @@ _${chapterName} - Together We Can. We Will._`;
 /**
  * Event Reminder (1 day before)
  */
-export function formatEventReminder1Day(event: EventDetails, memberName: string): string {
+export function formatEventReminder1Day(event: EventDetails, memberName: string, chapterName: string = 'Yi Erode'): string {
   return `*Tomorrow's Event!* 🌟
 
 Hi ${memberName},

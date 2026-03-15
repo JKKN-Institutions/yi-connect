@@ -25,6 +25,7 @@ interface MemberRowProps {
   guestsCount: number;
   eventId: string;
   token: string;
+  memberHMAC: string;
   disabled: boolean;
   onToggle: (memberId: string, newStatus: 'confirmed' | 'declined') => void;
   onGuestChange: (memberId: string, count: number) => void;

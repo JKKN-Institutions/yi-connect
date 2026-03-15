@@ -203,7 +203,8 @@ _${chapterName} - Together We Can. We Will._`;
 export function formatVolunteerAssignment(
   event: EventDetails,
   memberName: string,
-  role: string
+  role: string,
+  chapterName: string = 'Yi Erode'
 ): string {
   return `*Volunteer Assignment* 🤝
 

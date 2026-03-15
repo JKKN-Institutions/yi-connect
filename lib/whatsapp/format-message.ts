@@ -147,7 +147,7 @@ ${reason ? `\n📝 Reason: ${reason}` : ''}
 
 We apologize for any inconvenience caused.
 
-_Yi Erode - Together We Can. We Will._`;
+_${chapterName} - Together We Can. We Will._`;
 }
 
 /**

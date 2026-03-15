@@ -1203,7 +1203,7 @@ export async function deleteUserPermanently(
     // Invalidate caches
     revalidatePath('/admin/users');
     revalidateTag('members-list');
-    revalidateTag('approved-emails', 'max');
+    revalidateTag('approved-emails');
 
     return {
       success: true,

@@ -39,7 +39,7 @@ type ActionResponse<T = void> = {
 async function getUserHierarchyLevel(userId: string): Promise<number> {
   const supabase = await createClient()
   const { data } = await supabase.rpc('get_user_hierarchy_level', {
-    user_id: userId
+    p_user_id: userId
   })
   return data || 0
 }

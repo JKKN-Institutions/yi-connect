@@ -50,6 +50,7 @@ function EventsPageSkeleton() {
 }
 
 async function NationalEventsContent() {
+  await requireRole(['Super Admin', 'National Admin']);
   const events = await getNationalEvents();
 
   if (events.length === 0) {

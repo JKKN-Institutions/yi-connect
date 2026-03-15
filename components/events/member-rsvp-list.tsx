@@ -12,6 +12,7 @@ interface MemberRSVPListProps {
   attending: PublicMember[];
   notYet: PublicMember[];
   rsvpMap: Record<string, { id: string; guests_count: number }>;
+  memberHMACs: Record<string, string>; // HMAC per member for IDOR prevention
   eventId: string;
   token: string;
   isEventOver: boolean;

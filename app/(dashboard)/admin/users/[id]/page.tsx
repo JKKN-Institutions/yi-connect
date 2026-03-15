@@ -76,11 +76,12 @@ async function UserDetailContent({ paramsPromise }: { paramsPromise: Promise<{ i
     .select('*')
     .order('hierarchy_level', { ascending: false })
 
-  const initials = user.full_name
+  const initials = (user.full_name || 'U')
     .split(' ')
-    .map((n) => n[0])
+    .map((n) => n?.[0] || '')
+    .filter(Boolean)
     .join('')
-    .toUpperCase()
+    .toUpperCase() || 'U'
 
   // Check if admin can impersonate this user
   // Conditions: Admin level >= 6 and higher than user's level

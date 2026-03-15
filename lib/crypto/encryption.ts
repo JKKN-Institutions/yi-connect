@@ -84,14 +84,20 @@ export function decryptSecret(encrypted: string): string | null {
 
 /**
  * Check if a value appears to be encrypted (has the iv:tag:cipher format).
+ * Validates IV length (12 bytes = 16 base64 chars) and auth tag length (16 bytes = 24 base64 chars)
+ * to avoid false positives on plaintext strings containing colons.
  */
 export function isEncrypted(value: string): boolean {
   const parts = value.split(':')
   if (parts.length !== 3) return false
-  // Check that all parts are valid base64
+  if (parts[2].length === 0) return false
   try {
-    Buffer.from(parts[0], 'base64')
-    Buffer.from(parts[1], 'base64')
+    const iv = Buffer.from(parts[0], 'base64')
+    const authTag = Buffer.from(parts[1], 'base64')
+    // IV must be exactly 12 bytes (96 bits for GCM)
+    if (iv.length !== IV_LENGTH) return false
+    // Auth tag must be exactly 16 bytes (128 bits)
+    if (authTag.length !== AUTH_TAG_LENGTH) return false
     return true
   } catch {
     return false

@@ -140,7 +140,7 @@ function MemberRow({ member, isAttending, guestsCount, eventId, token, disabled,
           <Button
             size="sm"
             variant="ghost"
-            className="h-8 px-2 text-green-600 hover:text-red-600 hover:bg-red-50"
+            className="h-8 px-2 text-green-600 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20"
             onClick={handleToggle}
             disabled={disabled || isPending}
           >

@@ -7,6 +7,7 @@ import {
   getEventRSVPsByToken,
   getGuestRSVPs,
 } from '@/lib/data/public-events';
+import { generateMemberHMACs } from '@/lib/crypto/hmac';
 import { QuickRSVPHero } from '@/components/events/quick-rsvp-hero';
 import { MemberRSVPList } from '@/components/events/member-rsvp-list';
 import { GuestRSVPForm } from '@/components/events/guest-rsvp-form';

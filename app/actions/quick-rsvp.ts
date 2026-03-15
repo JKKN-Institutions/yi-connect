@@ -33,6 +33,11 @@ export async function toggleMemberRSVP(
   input: ToggleRSVPInput
 ): Promise<ActionResponse<{ status: string }>> {
   try {
+    // 0. Verify HMAC to prevent IDOR (member_id was served by the server)
+    if (!verifyMemberHMAC(input.member_id, input.token, input.member_hmac)) {
+      return { success: false, error: 'Invalid member verification' };
+    }
+
     const supabase = createAdminSupabaseClient();
 
     // 1. Validate token matches event

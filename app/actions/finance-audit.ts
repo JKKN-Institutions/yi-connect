@@ -188,10 +188,12 @@ export async function updatePaymentMethod(
         .neq('id', methodId)
     }
 
+    // Destructure non-DB fields before spreading into update
+    const { account_number, bank_name, ifsc_code, upi_id, ...dbFields } = validation.data
     const { error } = await supabase
       .from('payment_methods')
       .update({
-        ...validation.data,
+        ...dbFields,
         account_details: accountDetails,
       })
       .eq('id', methodId)

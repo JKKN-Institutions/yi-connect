@@ -179,16 +179,6 @@ export async function updatePaymentMethod(
     if (ifscCode) accountDetails.ifsc_code = ifscCode
     if (upiId) accountDetails.upi_id = upiId
 
-    // If setting as default, unset other defaults first
-    if (validation.data.is_default) {
-      await supabase
-        .from('payment_methods')
-        .update({ is_default: false })
-        .eq('chapter_id', existing.chapter_id)
-        .eq('is_default', true)
-        .neq('id', methodId)
-    }
-
     // Destructure non-DB fields before spreading into update
     const { account_number, bank_name, ifsc_code, upi_id, ...dbFields } = validation.data
     const { error } = await supabase
@@ -198,6 +188,14 @@ export async function updatePaymentMethod(
         account_details: accountDetails,
       })
       .eq('id', methodId)
+
+    // If setting as default, atomically update via DB function (prevents race conditions)
+    if (!error && validation.data.is_default) {
+      await supabase.rpc('set_default_payment_method', {
+        p_method_id: methodId,
+        p_chapter_id: existing.chapter_id,
+      })
+    }
 
     if (error) {
       console.error('Error updating payment method:', error)

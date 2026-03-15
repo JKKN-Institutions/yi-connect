@@ -224,8 +224,10 @@ export const getFinancialAuditLogs = cache(async (
   }
 
   if (filters?.search) {
+    // Sanitize search to prevent PostgREST filter injection
+    const sanitizedSearch = filters.search.replace(/[.,()]/g, '')
     query = query.or(
-      `action.ilike.%${filters.search}%,entity_type.ilike.%${filters.search}%,description.ilike.%${filters.search}%`
+      `action.ilike.%${sanitizedSearch}%,entity_type.ilike.%${sanitizedSearch}%,description.ilike.%${sanitizedSearch}%`
     )
   }
 

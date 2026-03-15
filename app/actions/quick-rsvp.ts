@@ -176,12 +176,18 @@ export async function addGuestRSVP(
   input: AddGuestRSVPInput
 ): Promise<ActionResponse<{ id: string }>> {
   try {
+    // Validate guest name length
+    const trimmedName = input.full_name.trim();
+    if (trimmedName.length === 0 || trimmedName.length > 100) {
+      return { success: false, error: 'Guest name must be between 1 and 100 characters' };
+    }
+
     const supabase = createAdminSupabaseClient();
 
-    // Validate token
+    // Validate token and check capacity
     const { data: event } = await supabase
       .from('events')
-      .select('id, status')
+      .select('id, status, max_capacity, current_registrations')
       .eq('id', input.event_id)
       .eq('rsvp_token', input.token)
       .in('status', ['published', 'ongoing'])
@@ -191,11 +197,16 @@ export async function addGuestRSVP(
       return { success: false, error: 'Event not found or RSVP closed' };
     }
 
+    // Check capacity before adding guest
+    if (event.max_capacity && event.current_registrations >= event.max_capacity) {
+      return { success: false, error: 'Event is full' };
+    }
+
     const { data, error } = await supabase
       .from('guest_rsvps')
       .insert({
         event_id: input.event_id,
-        full_name: input.full_name.trim(),
+        full_name: trimmedName,
         email: `guest-${crypto.randomUUID()}@quickrsvp.local`, // Unique placeholder per guest
         phone: input.phone?.trim() || null,
         status: 'confirmed',

@@ -18,6 +18,7 @@ import {
   Clock,
   Edit,
   Download,
+  Upload,
   DollarSign,
   Award,
   UserPlus,

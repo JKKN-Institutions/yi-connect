@@ -91,7 +91,7 @@ ${event.eventUrl ? `\n🔗 Details: ${event.eventUrl}` : ''}
 
 Looking forward to seeing you there!
 
-_Yi Erode - Together We Can. We Will._`;
+_${chapterName} - Together We Can. We Will._`;
 }
 
 /**

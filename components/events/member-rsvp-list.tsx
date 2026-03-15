@@ -260,6 +260,7 @@ export function MemberRSVPList({ attending: initialAttending, notYet: initialNot
                 guestsCount={localGuests[member.id] ?? 0}
                 eventId={eventId}
                 token={token}
+                memberHMAC={memberHMACs[member.id] || ''}
                 disabled={disabled}
                 onToggle={handleToggle}
                 onGuestChange={handleGuestChange}

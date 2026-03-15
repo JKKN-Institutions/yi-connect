@@ -4,6 +4,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Calendar } from 'lucide-react';
 import { getNationalEvents } from '@/lib/data/national-integration';
 import { NationalEventsPageClient } from '@/components/national/national-events-page-client';
+import { requireRole } from '@/lib/auth';
 
 export const metadata = {
   title: 'National Events | Yi Connect',

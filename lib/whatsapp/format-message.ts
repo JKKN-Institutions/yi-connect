@@ -117,7 +117,7 @@ _${chapterName} - Together We Can. We Will._`;
 /**
  * Event Reminder (Day of event)
  */
-export function formatEventReminderToday(event: EventDetails, memberName: string): string {
+export function formatEventReminderToday(event: EventDetails, memberName: string, chapterName: string = 'Yi Erode'): string {
   return `*Today's Event!* 🎉
 
 Hi ${memberName},

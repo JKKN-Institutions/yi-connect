@@ -772,13 +772,17 @@ export async function deleteUser(userId: string): Promise<FormState> {
     // Invalidate caches
     revalidatePath('/admin/users')
     revalidatePath(`/admin/users/${userId}`)
-
-    redirect('/admin/users')
   } catch (error: unknown) {
+    // Re-throw Next.js redirect errors (they use throw internally)
+    if (error && typeof error === 'object' && 'digest' in error) {
+      throw error
+    }
     return {
       message: error instanceof Error ? error.message : 'An unexpected error occurred.'
     }
   }
+
+  redirect('/admin/users')
 }
 
 // ============================================================================

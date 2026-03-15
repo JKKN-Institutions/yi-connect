@@ -353,8 +353,8 @@ export async function handleYiCreativeOAuthCallback(
   stateString: string
 ): Promise<OAuthCallbackResult> {
   try {
-    // Verify state
-    const state = verifyOAuthState(stateString)
+    // Verify state (from DB)
+    const state = await verifyOAuthState(stateString)
     if (!state) {
       return { success: false, error: 'Invalid or expired OAuth state' }
     }

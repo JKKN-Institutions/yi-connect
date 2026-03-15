@@ -183,7 +183,7 @@ _${chapterName} - Together We Can. We Will._`;
 /**
  * Post-Event Thank You
  */
-export function formatPostEventThankYou(event: EventDetails, memberName: string): string {
+export function formatPostEventThankYou(event: EventDetails, memberName: string, chapterName: string = 'Yi Erode'): string {
   return `*Thank You!* 🙏
 
 Hi ${memberName},

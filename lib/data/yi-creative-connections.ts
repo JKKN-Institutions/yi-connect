@@ -73,7 +73,7 @@ export const getChapterYiCreativeConnection = cache(
       return null
     }
 
-    return data as YiCreativeConnection
+    return decryptConnection(data as YiCreativeConnection)
   }
 )
 

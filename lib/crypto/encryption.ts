@@ -67,6 +67,12 @@ export function decryptSecret(encrypted: string): string | null {
     const authTag = Buffer.from(parts[1], 'base64')
     const ciphertext = parts[2]
 
+    // Validate IV and auth tag lengths before attempting decryption
+    if (iv.length !== IV_LENGTH || authTag.length !== AUTH_TAG_LENGTH) {
+      // Format doesn't match encrypted data - treat as legacy plaintext
+      return encrypted
+    }
+
     const decipher = crypto.createDecipheriv(ALGORITHM, key, iv, {
       authTagLength: AUTH_TAG_LENGTH,
     })
@@ -77,8 +83,10 @@ export function decryptSecret(encrypted: string): string | null {
 
     return decrypted
   } catch {
-    // If decryption fails, the value might be legacy plaintext
-    return encrypted
+    // Value looks encrypted but decryption failed (wrong key, corrupted data, key rotation).
+    // Return null instead of ciphertext to prevent leaking encrypted data as plaintext.
+    console.error('[decryptSecret] Decryption failed - possible key rotation or data corruption')
+    return null
   }
 }
 

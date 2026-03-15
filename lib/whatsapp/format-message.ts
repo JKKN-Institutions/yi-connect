@@ -194,7 +194,7 @@ Your participation made the event a success. We hope you found it valuable.
 
 We'd love your feedback! Please take a moment to share your thoughts.
 
-_Yi Erode - Together We Can. We Will._`;
+_${chapterName} - Together We Can. We Will._`;
 }
 
 /**

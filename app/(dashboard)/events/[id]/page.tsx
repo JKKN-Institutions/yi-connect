@@ -808,7 +808,9 @@ async function DocumentsList({ eventId }: { eventId: string }) {
               </Badge>
               {doc.file_size_kb && (
                 <span className='text-xs text-muted-foreground'>
-                  {(doc.file_size_kb / 1024).toFixed(1)} MB
+                  {doc.file_size_kb < 1024
+                    ? `${doc.file_size_kb} KB`
+                    : `${(doc.file_size_kb / 1024).toFixed(1)} MB`}
                 </span>
               )}
             </div>

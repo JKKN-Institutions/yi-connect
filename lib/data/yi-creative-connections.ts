@@ -231,12 +231,15 @@ export async function updateYiCreativeConnection(
 ): Promise<YiCreativeConnection | null> {
   const supabase = await createServerSupabaseClient()
 
+  // Encrypt sensitive fields before storage
+  const updateData = encryptConnectionFields({
+    ...data,
+    updated_at: new Date().toISOString(),
+  })
+
   const { data: connection, error } = await supabase
     .from('yi_creative_connections')
-    .update({
-      ...data,
-      updated_at: new Date().toISOString(),
-    })
+    .update(updateData)
     .eq('chapter_id', chapterId)
     .select()
     .single()
@@ -246,7 +249,7 @@ export async function updateYiCreativeConnection(
     return null
   }
 
-  return connection as YiCreativeConnection
+  return decryptConnection(connection as YiCreativeConnection)
 }
 
 /**

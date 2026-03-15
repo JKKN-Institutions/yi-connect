@@ -136,7 +136,7 @@ _${chapterName} - Together We Can. We Will._`;
 /**
  * Event Cancellation
  */
-export function formatEventCancellation(event: EventDetails, reason?: string): string {
+export function formatEventCancellation(event: EventDetails, reason?: string, chapterName: string = 'Yi Erode'): string {
   return `*Event Cancelled* ❌
 
 We regret to inform you that the following event has been cancelled:

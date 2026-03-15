@@ -270,7 +270,7 @@ export default function BenchmarksPage() {
         </div>
         <Badge variant="outline" className="text-blue-600">
           <BarChart3 className="h-4 w-4 mr-1" />
-          Q4 2024
+          {`Q${Math.ceil((new Date().getMonth() + 1) / 3)} ${new Date().getFullYear()}`}
         </Badge>
       </div>
 

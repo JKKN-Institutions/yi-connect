@@ -290,6 +290,13 @@ export function MemberRSVPList({ attending: initialAttending, notYet: initialNot
       {/* Divider */}
       <div className="border-t" />
 
+      {/* Event Full Banner */}
+      {isEventFull && !isEventOver && (
+        <div className="rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
+          This event is at capacity. New RSVPs are currently disabled.
+        </div>
+      )}
+
       {/* Not Yet Section */}
       {notYet.length > 0 && (
         <div>
@@ -297,7 +304,9 @@ export function MemberRSVPList({ attending: initialAttending, notYet: initialNot
             Not Yet Responded ({notYet.length})
           </h2>
           <div className="space-y-1">
-            {filteredNotYet.map((member) => (
+            {filteredNotYet.length === 0 && searchQuery ? (
+              <p className="text-sm text-muted-foreground py-3 text-center">No matching members</p>
+            ) : filteredNotYet.map((member) => (
               <MemberRow
                 key={member.id}
                 member={member}

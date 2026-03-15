@@ -71,7 +71,7 @@ ${event.eventUrl ? `\n🔗 Event Details: ${event.eventUrl}` : ''}
 
 Thank you for your response!
 
-_Yi Erode - Together We Can. We Will._`;
+_${chapterName} - Together We Can. We Will._`;
 }
 
 /**

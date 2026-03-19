@@ -11,7 +11,7 @@ import { useEffect, useState } from 'react';
 
 export interface UserRole {
   role_name: string;
-  hierarchy_level?: number; // Optional since we don't always use it
+  hierarchy_level: number; // ✅ Required - RPC always returns this value
 }
 
 export function useUserRoles() {

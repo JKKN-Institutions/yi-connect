@@ -60,9 +60,23 @@ export async function createServerSupabaseClient() {
  * ```
  */
 export function createAdminSupabaseClient() {
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+  if (!serviceRoleKey) {
+    console.error('[createAdminSupabaseClient] SUPABASE_SERVICE_ROLE_KEY is not set!')
+    throw new Error('SUPABASE_SERVICE_ROLE_KEY environment variable is missing')
+  }
+
+  // Don't log the full key, just verify it exists and show metadata
+  console.log('[createAdminSupabaseClient] Service role key loaded:', {
+    length: serviceRoleKey.length,
+    prefix: serviceRoleKey.substring(0, 20) + '...',
+    isValid: serviceRoleKey.length > 0
+  })
+
   return createSupabaseClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    serviceRoleKey,
     {
       auth: {
         autoRefreshToken: false,

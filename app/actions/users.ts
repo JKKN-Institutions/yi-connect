@@ -112,6 +112,7 @@ export async function assignRole(
     })
 
     if (!validation.success) {
+      console.error('[assignRole] Validation failed:', validation.error.flatten())
       return {
         errors: validation.error.flatten().fieldErrors,
         message: 'Invalid input. Please check the form.'
@@ -120,50 +121,116 @@ export async function assignRole(
 
     const supabase = await createServerSupabaseClient()
 
-    // Check if role is already assigned
-    const { data: existing } = await supabase
-      .from('user_roles')
-      .select('id')
-      .eq('user_id', validation.data.user_id)
-      .eq('role_id', validation.data.role_id)
-      .single()
+    // Check if user can manage this role
+    console.log('[assignRole] Checking permissions for:', {
+      manager_id: user.id,
+      target_role_id: validation.data.role_id
+    })
 
-    if (existing) {
+    const { data: canManage, error: rpcError } = await supabase.rpc('can_manage_role', {
+      manager_id: user.id,
+      target_role_id: validation.data.role_id
+    })
+
+    if (rpcError) {
+      console.error('[assignRole] RPC error:', rpcError)
       return {
-        message: 'This role is already assigned to the user.'
+        message: `Permission check failed: ${rpcError.message}`
       }
     }
 
-    // Assign the role
-    const { error } = await supabase.from('user_roles').insert({
+    if (!canManage) {
+      console.warn('[assignRole] Permission denied:', {
+        manager_id: user.id,
+        target_role_id: validation.data.role_id
+      })
+      return {
+        message: 'You do not have permission to assign this role.'
+      }
+    }
+
+    // Use admin client to bypass RLS (permission already validated above)
+    console.log('[assignRole] Creating admin client')
+    const adminClient = createAdminSupabaseClient()
+
+    if (!adminClient) {
+      console.error('[assignRole] Admin client creation failed')
+      return {
+        message: 'Failed to create admin client. Please check server configuration.'
+      }
+    }
+
+    // Assign the role (UNIQUE constraint will prevent duplicates)
+    console.log('[assignRole] Inserting role:', {
       user_id: validation.data.user_id,
       role_id: validation.data.role_id
     })
 
-    if (error) {
-      console.error('[assignRole] Failed to insert role:', {
+    const { error: insertError, data: insertData } = await adminClient
+      .from('user_roles')
+      .insert({
         user_id: validation.data.user_id,
-        role_id: validation.data.role_id,
-        error: error.message,
-        code: error.code
+        role_id: validation.data.role_id
+      })
+      .select()
+
+    console.log('[assignRole] Insert result:', {
+      success: !insertError,
+      data: insertData,
+      error: insertError
+    })
+
+    if (insertError) {
+      // Handle duplicate role assignment (caught by UNIQUE constraint)
+      if (insertError.code === '23505') {
+        return {
+          message: 'This role is already assigned to the user.'
+        }
+      }
+
+      console.error('[assignRole] Insert failed:', {
+        code: insertError.code,
+        message: insertError.message,
+        details: insertError.details,
+        hint: insertError.hint
       })
 
       return {
-        message: error instanceof Error ? error.message : 'Failed to assign role. Please try again.'
+        message: `Failed to assign role: ${insertError.message}`
       }
     }
 
-    // The trigger will automatically log the change to user_role_changes
+    // ✅ Explicitly log to audit trail (admin client may bypass triggers)
+    const { error: auditError } = await adminClient.from('user_role_changes').insert({
+      user_id: validation.data.user_id,
+      role_id: validation.data.role_id,
+      action: 'assigned',
+      changed_by: user.id,
+      notes: validation.data.notes || null
+    })
+
+    if (auditError) {
+      console.error('[assignRole] Failed to log audit trail:', {
+        user_id: validation.data.user_id,
+        role_id: validation.data.role_id,
+        changed_by: user.id,
+        error: auditError.message
+      })
+      // Don't fail the operation if audit logging fails, just log the error
+    }
 
     // Invalidate caches
     revalidatePath('/admin/users')
     revalidatePath(`/admin/users/${validation.data.user_id}`)
 
+    console.log('[assignRole] Success!')
     return {
       success: true,
       message: 'Role assigned successfully!'
     }
   } catch (error: unknown) {
+    // CRITICAL: Catch all unexpected errors
+    console.error('[assignRole] Unexpected error:', error)
     return {
       message: error instanceof Error ? error.message : 'An unexpected error occurred.'
     }
@@ -303,6 +370,16 @@ export async function bulkAssignRole(
       }
     }
 
+    // ✅ Pre-fetch user names for better error reporting
+    const { data: users } = await supabase
+      .from('profiles')
+      .select('id, full_name, email')
+      .in('id', validation.data.user_ids)
+
+    const userMap = new Map(
+      users?.map(u => [u.id, u.full_name || u.email]) || []
+    )
+
     const result: BulkOperationResult = {
       success_count: 0,
       failure_count: 0,
@@ -340,7 +417,7 @@ export async function bulkAssignRole(
         result.failure_count++
         result.failures.push({
           user_id: userId,
-          user_name: 'Unknown',
+          user_name: userMap.get(userId) || 'Unknown',  // ✅ Use actual name
           error: error instanceof Error ? error.message : 'Unknown error'
         })
       }
@@ -401,6 +478,16 @@ export async function bulkRemoveRole(
       }
     }
 
+    // ✅ Pre-fetch user names for better error reporting
+    const { data: users } = await supabase
+      .from('profiles')
+      .select('id, full_name, email')
+      .in('id', validation.data.user_ids)
+
+    const userMap = new Map(
+      users?.map(u => [u.id, u.full_name || u.email]) || []
+    )
+
     const result: BulkOperationResult = {
       success_count: 0,
       failure_count: 0,
@@ -439,7 +526,7 @@ export async function bulkRemoveRole(
         result.failure_count++
         result.failures.push({
           user_id: userId,
-          user_name: 'Unknown',
+          user_name: userMap.get(userId) || 'Unknown',  // ✅ Use actual name
           error: error instanceof Error ? error.message : 'Unknown error'
         })
       }
@@ -597,31 +684,46 @@ export async function bulkDeactivateUsers(
           continue
         }
 
-        // Deactivate in profiles table
+        // ✅ Track errors from all database operations
+        const errors: string[] = []
+
+        // 1. Deactivate in profiles table
         const { error: profileError } = await adminClient
           .from('profiles')
           .update({ is_active: false })
           .eq('id', userId)
 
-        if (profileError) {
-          throw profileError
-        }
+        if (profileError) errors.push(`Profile: ${profileError.message}`)
 
-        // Deactivate in members table (if exists)
-        await adminClient
+        // 2. Deactivate in members table (if exists)
+        const { error: memberError } = await adminClient
           .from('members')
           .update({ is_active: false, membership_status: 'inactive' })
           .eq('id', userId)
 
-        // Deactivate in approved_emails table
+        if (memberError) errors.push(`Member: ${memberError.message}`)
+
+        // 3. Deactivate in approved_emails table
         if (profile.email) {
-          await adminClient
+          const { error: emailError } = await adminClient
             .from('approved_emails')
             .update({ is_active: false })
             .eq('email', profile.email)
+
+          if (emailError) errors.push(`Approved Email: ${emailError.message}`)
         }
 
-        result.success_count++
+        // Check if any operations failed
+        if (errors.length > 0) {
+          result.failure_count++
+          result.failures.push({
+            user_id: userId,
+            user_name: profile.full_name || profile.email,
+            error: `Partial failure: ${errors.join('; ')}`
+          })
+        } else {
+          result.success_count++
+        }
       } catch (error: unknown) {
         result.failure_count++
         result.failures.push({
@@ -1101,10 +1203,13 @@ export async function deleteUserPermanently(
     const userName = profile.full_name || 'User';
     const userEmail = profile.email;
 
-    // 1. Delete from user_role_changes (has FK to profiles.id via user_id)
+    // 1. ✅ Anonymize audit trail records (preserve for compliance, don't delete)
     await adminClient
       .from('user_role_changes')
-      .delete()
+      .update({
+        user_id: '00000000-0000-0000-0000-000000000000',  // Placeholder UUID
+        notes: `Original user deleted: ${userId} (${profile.full_name || profile.email})`
+      })
       .eq('user_id', userId);
 
     // 2. Update user_role_changes where this user was the changed_by (set to null)

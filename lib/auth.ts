@@ -194,7 +194,19 @@ export async function hasPermission(
     p_user_id: user.id
   })
 
-  if (error || !userRoles || userRoles.length === 0) return false
+  // ✅ Log RPC errors for debugging
+  if (error) {
+    console.error('[hasPermission] RPC failed:', {
+      user_id: user.id,
+      permission,
+      error: error.message,
+      code: error.code,
+      context
+    })
+    return false
+  }
+
+  if (!userRoles || userRoles.length === 0) return false
 
   // Get highest hierarchy level
   const maxHierarchy = Math.max(

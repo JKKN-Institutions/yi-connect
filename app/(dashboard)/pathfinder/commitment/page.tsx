@@ -62,10 +62,11 @@ async function CommitmentContent() {
   const supabase = await createClient()
 
   // Get user's member profile
+  // Note: members.id = profiles.id = auth user id (NOT user_id)
   const { data: member } = await supabase
     .from('members')
     .select('id, full_name, chapter_id')
-    .eq('user_id', user.id)
+    .eq('id', user.id)
     .single()
 
   if (!member) {

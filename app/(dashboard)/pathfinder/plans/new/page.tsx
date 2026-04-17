@@ -90,10 +90,11 @@ async function NewPlanContent({
   const isAdmin = roles.includes('Super Admin') || roles.includes('National Admin')
 
   // Get user's chapter from member record
+  // Note: members.id = profiles.id = auth user id (NOT user_id)
   const { data: member, error: memberError } = await supabase
     .from('members')
     .select('id, chapter_id')
-    .eq('user_id', user.id)
+    .eq('id', user.id)
     .single()
 
   // Determine which chapter to use

@@ -104,7 +104,7 @@ export default async function NewHealthCardPage({ searchParams }: PageProps) {
       {/* Form */}
       <HealthCardForm
         chapterId={chapterId}
-        chapterName={chapter.name}
+        chapterName={chapterName}
         verticals={verticals}
         defaultEmail={profile?.email || ''}
         defaultName={profile?.full_name || ''}

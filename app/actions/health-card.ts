@@ -65,10 +65,11 @@ export async function createHealthCardEntry(
     const supabase = await createClient()
 
     // Get member ID for tracking who submitted
+    // Note: members.id = profiles.id = auth user id (NOT user_id)
     const { data: member } = await supabase
       .from('members')
       .select('id')
-      .eq('user_id', user.id)
+      .eq('id', user.id)
       .single()
 
     const { data, error } = await supabase

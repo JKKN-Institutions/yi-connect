@@ -86,7 +86,7 @@ export default async function NewHealthCardPage({ searchParams }: PageProps) {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Log Activity</h1>
           <p className="text-muted-foreground">
-            Submit a new health card entry for {chapter.name}
+            Submit a new health card entry for {chapterName}
           </p>
         </div>
       </div>

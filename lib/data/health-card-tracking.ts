@@ -355,7 +355,7 @@ export const getChapterSubmissionRate = cache(
     const { data: member } = await supabase
       .from('members')
       .select('chapter:chapters(id, name)')
-      .eq('user_id', user.id)
+      .eq('id', user.id)
       .single()
 
     const chapterData = member?.chapter as { id: string; name: string }[] | { id: string; name: string } | null
@@ -656,7 +656,7 @@ export const getChapterQualitySummary = cache(
     const { data: member } = await supabase
       .from('members')
       .select('chapter:chapters(id)')
-      .eq('user_id', user.id)
+      .eq('id', user.id)
       .single()
 
     return {
@@ -761,7 +761,7 @@ export const getHealthCardTrackingDashboard = cache(
     const { data: member } = await supabase
       .from('members')
       .select('chapter:chapters(id, name)')
-      .eq('user_id', user.id)
+      .eq('id', user.id)
       .single()
 
     const chapterData = member?.chapter as { id: string; name: string }[] | { id: string; name: string } | null

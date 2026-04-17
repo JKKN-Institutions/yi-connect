@@ -5,7 +5,6 @@
  * Supports pre-filling from planned activities via query params.
  */
 
-import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Building2, CalendarCheck } from 'lucide-react'
 import { requireRole, getCurrentChapterId, getUserProfile } from '@/lib/auth'
@@ -57,17 +56,13 @@ export default async function NewHealthCardPage({ searchParams }: PageProps) {
     getUserProfile(),
   ])
 
-  if (!chapter) {
-    return (
-      <div className="max-w-3xl mx-auto">
-        <div className="text-center py-12">
-          <Building2 className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-          <h2 className="text-xl font-semibold mb-2">Chapter Not Found</h2>
-          <p className="text-muted-foreground">Unable to load chapter information.</p>
-        </div>
-      </div>
-    )
-  }
+  // Graceful fallback: if chapter record can't be fetched (e.g. restrictive RLS)
+  // but we already know the chapterId, still render the form so the user is not
+  // blocked. We derive a display name from the user's profile when possible.
+  const chapterName =
+    chapter?.name ||
+    (profile as { chapter?: { name?: string | null } } | null)?.chapter?.name ||
+    'your chapter'
 
   // Determine default role based on user's actual role
   const userRoles = profile?.roles?.map((r: { role_name: string }) => r.role_name) || []
@@ -90,7 +85,7 @@ export default async function NewHealthCardPage({ searchParams }: PageProps) {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Log Activity</h1>
           <p className="text-muted-foreground">
-            Submit a new health card entry for {chapter.name}
+            Submit a new health card entry for {chapterName}
           </p>
         </div>
       </div>
@@ -108,7 +103,7 @@ export default async function NewHealthCardPage({ searchParams }: PageProps) {
       {/* Form */}
       <HealthCardForm
         chapterId={chapterId}
-        chapterName={chapter.name}
+        chapterName={chapterName}
         verticals={verticals}
         defaultEmail={profile?.email || ''}
         defaultName={profile?.full_name || ''}

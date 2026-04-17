@@ -81,7 +81,7 @@ async function OverviewSection() {
   const { data: member } = await supabase
     .from('members')
     .select('chapter_id')
-    .eq('user_id', user.id)
+    .eq('id', user.id)
     .single();
 
   const analytics = await getMemberAnalytics(member?.chapter_id);
@@ -97,7 +97,7 @@ async function ChartsSection() {
   const { data: member } = await supabase
     .from('members')
     .select('chapter_id')
-    .eq('user_id', user.id)
+    .eq('id', user.id)
     .single();
 
   const analytics = await getMemberAnalytics(member?.chapter_id);
@@ -119,7 +119,7 @@ async function SkillsGapSection() {
   const { data: member } = await supabase
     .from('members')
     .select('chapter_id')
-    .eq('user_id', user.id)
+    .eq('id', user.id)
     .single();
 
   if (!member?.chapter_id) {

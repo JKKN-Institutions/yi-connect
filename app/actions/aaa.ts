@@ -243,10 +243,11 @@ export async function approveAAAPlan(planId: string): Promise<ActionResponse> {
     const supabase = await createClient()
 
     // Get member for approved_by
+    // Note: members.id = profiles.id = auth user id (NOT user_id)
     const { data: member } = await supabase
       .from('members')
       .select('id, hierarchy_level')
-      .eq('user_id', user.id)
+      .eq('id', user.id)
       .single()
 
     if (!member || member.hierarchy_level < 4) {

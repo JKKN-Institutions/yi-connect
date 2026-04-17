@@ -1,6 +1,6 @@
 import { Suspense } from 'react'
 import Link from 'next/link'
-import { requireUser } from '@/lib/auth'
+import { requireAuth } from '@/lib/auth'
 import { getSuccessionCycles } from '@/lib/data/succession'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -69,7 +69,7 @@ async function CyclesList() {
 }
 
 export default async function SuccessionCyclesPage() {
-  await requireUser()
+  await requireAuth()
 
   return (
     <div className="container mx-auto py-8 space-y-6">

@@ -1,6 +1,6 @@
 import { Suspense } from 'react'
 import Link from 'next/link'
-import { requireUser } from '@/lib/auth'
+import { requireAuth } from '@/lib/auth'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { NominationStatusCard } from '@/components/awards'
 import { Button } from '@/components/ui/button'
@@ -58,7 +58,7 @@ async function MyNominationsSection({ userId }: { userId: string }) {
 }
 
 export default async function MyNominationsPage() {
-  const user = await requireUser()
+  const user = await requireAuth()
 
   return (
     <div className="container mx-auto py-8 space-y-6">

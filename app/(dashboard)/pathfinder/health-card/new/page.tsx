@@ -5,7 +5,6 @@
  * Supports pre-filling from planned activities via query params.
  */
 
-import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Building2, CalendarCheck } from 'lucide-react'
 import { requireRole, getCurrentChapterId, getUserProfile } from '@/lib/auth'

@@ -410,10 +410,11 @@ export async function getMyCommitmentCard(pathfinderYear: number) {
 
     const supabase = await createClient()
 
+    // Note: members.id = profiles.id = auth user id (NOT user_id)
     const { data: member } = await supabase
       .from('members')
       .select('id')
-      .eq('user_id', user.id)
+      .eq('id', user.id)
       .single()
 
     if (!member) return null

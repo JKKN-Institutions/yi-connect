@@ -61,14 +61,22 @@ for entry in "${accounts[@]}"; do
   echo ""
   echo "=== $email → $role ==="
 
-  # Step 1: create auth user (idempotent via email_confirm=true)
+  # Step 1: upsert approved_emails FIRST (trigger on auth.users insert checks this)
+  curl -s -X POST "$URL/rest/v1/approved_emails?on_conflict=email" \
+    -H "apikey: $KEY" \
+    -H "Authorization: Bearer $KEY" \
+    -H "Content-Type: application/json" \
+    -H "Prefer: resolution=merge-duplicates,return=minimal" \
+    -d "{\"email\":\"$email\",\"approved_by\":\"$ADMIN_ID\",\"assigned_chapter_id\":\"$CHAPTER_ID\",\"assigned_role_name\":\"$role\",\"notes\":\"Demo $role account for workflow testing\",\"is_active\":true}" > /dev/null
+  echo "  Upserted approved_emails"
+
+  # Step 2: create auth user
   resp=$(curl -s -X POST "$URL/auth/v1/admin/users" \
     -H "apikey: $KEY" \
     -H "Authorization: Bearer $KEY" \
     -H "Content-Type: application/json" \
     -d "{\"email\":\"$email\",\"password\":\"$PASSWORD\",\"email_confirm\":true,\"user_metadata\":{\"full_name\":\"$fullname\"}}")
 
-  # Parse user id from response or existing user lookup
   user_id=$(echo "$resp" | grep -oE '"id":"[^"]+"' | head -1 | cut -d'"' -f4)
 
   if [ -z "$user_id" ]; then
@@ -77,7 +85,9 @@ for entry in "${accounts[@]}"; do
       -H "apikey: $KEY" \
       -H "Authorization: Bearer $KEY")
     user_id=$(echo "$lookup" | grep -oE '"id":"[^"]+"' | head -1 | cut -d'"' -f4)
-    echo "  User already exists: $user_id"
+    if [ -n "$user_id" ]; then
+      echo "  User already exists: $user_id"
+    fi
   else
     echo "  Created auth user: $user_id"
   fi
@@ -87,15 +97,6 @@ for entry in "${accounts[@]}"; do
     echo "  Response: $resp"
     continue
   fi
-
-  # Step 2: upsert approved_emails (so trigger assigns the role next login)
-  curl -s -X POST "$URL/rest/v1/approved_emails?on_conflict=email" \
-    -H "apikey: $KEY" \
-    -H "Authorization: Bearer $KEY" \
-    -H "Content-Type: application/json" \
-    -H "Prefer: resolution=merge-duplicates,return=minimal" \
-    -d "{\"email\":\"$email\",\"approved_by\":\"$ADMIN_ID\",\"assigned_chapter_id\":\"$CHAPTER_ID\",\"assigned_role_name\":\"$role\",\"notes\":\"Demo $role account for workflow testing\",\"is_active\":true}" > /dev/null
-  echo "  Upserted approved_emails"
 
   # Step 3: ensure user_roles is set (handle_new_user trigger may not re-fire on existing users)
   role_id=$(curl -s "$URL/rest/v1/roles?select=id&name=eq.$(echo $role | sed 's/ /%20/g')" \

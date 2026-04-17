@@ -161,10 +161,11 @@ export async function deleteHealthCardEntry(entryId: string): Promise<ActionResp
     const supabase = await createClient()
 
     // Check if user is a chair (hierarchy_level >= 4)
+    // Note: members.id = profiles.id = auth user id (NOT user_id)
     const { data: member } = await supabase
       .from('members')
       .select('id, hierarchy_level')
-      .eq('user_id', user.id)
+      .eq('id', user.id)
       .single()
 
     if (!member || member.hierarchy_level < 4) {

@@ -5,6 +5,8 @@
  */
 
 import { Suspense } from 'react'
+import { cookies } from 'next/headers'
+import { redirect } from 'next/navigation'
 import {
   Card,
   CardContent,
@@ -22,7 +24,16 @@ export const metadata = {
   description: 'View available session types',
 }
 
+async function requireCoordinator() {
+  const cookieStore = await cookies()
+  const coordinatorId = cookieStore.get('coordinator_id')?.value
+  if (!coordinatorId) {
+    redirect('/coordinator/login')
+  }
+}
+
 async function SessionTypesContent() {
+  await requireCoordinator()
   const sessionTypes = await getSessionTypes()
 
   const activeTypes = sessionTypes.filter((t) => t.is_active)

@@ -36,12 +36,13 @@ function ToggleGroup({
       data-spacing={spacing}
       style={{ "--gap": `${spacing * 0.25}rem` } as React.CSSProperties}
       className={cn(
-        // BUG-CD-006: The previous class `gap-[--spacing(var(--gap))]` produced
-        // malformed CSS under Tailwind v4 + Turbopack, breaking CSS compilation
-        // for every dashboard page (including /member-requests) and surfacing
-        // as a generic "Server Components render" error in production. Use a
-        // plain CSS var gap instead and convert the spacing number to rem in
-        // the inline style above.
+        // BUG-CD-006: Previously used a Tailwind arbitrary-value gap built
+        // from the theme spacing function around a CSS var, which Tailwind v4
+        // + Turbopack transformed into malformed CSS and broke the entire
+        // dashboard CSS bundle (every page rendered as a generic Server
+        // Components render error in production). Switched to a plain
+        // CSS-variable gap; the spacing prop is converted to rem in the
+        // inline style above.
         "group/toggle-group flex w-fit items-center gap-[var(--gap)] rounded-md data-[spacing=default]:data-[variant=outline]:shadow-xs",
         className
       )}

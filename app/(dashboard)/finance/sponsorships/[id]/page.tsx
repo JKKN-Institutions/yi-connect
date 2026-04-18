@@ -7,7 +7,7 @@
 import { Suspense } from 'react'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ArrowLeft, Edit, TrendingUp, DollarSign, Target, Award, Calendar, Building2, User, FileText } from 'lucide-react'
+import { ArrowLeft, Edit, TrendingUp, DollarSign, Target, Award, Calendar, Building2, User, FileText, Users } from 'lucide-react'
 import { requireRole } from '@/lib/auth'
 
 import { Button } from '@/components/ui/button'
@@ -16,9 +16,12 @@ import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { DealStageBadge } from '@/components/finance/status-badges'
 import { getSponsorshipDealById } from '@/lib/data/finance'
 import { formatCurrency } from '@/types/finance'
+import { getSponsorLeadsForSponsor } from '@/lib/data/sponsor-leads'
+import { SponsorLeadsTable } from '@/components/events/sponsor-leads-table'
 
 interface PageProps {
   params: Promise<{ id: string }>

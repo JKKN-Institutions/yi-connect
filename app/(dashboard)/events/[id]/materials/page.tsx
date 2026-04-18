@@ -143,7 +143,7 @@ async function MaterialsPageServerContent({ params }: PageProps) {
           </h1>
           <p className="text-muted-foreground mt-1">
             {event.title}
-            {event.service_type && ` - ${event.service_type.toUpperCase()}`}
+            {event.service_type && ` - ${String(event.service_type).toUpperCase()}`}
           </p>
         </div>
         <Button asChild variant="outline">

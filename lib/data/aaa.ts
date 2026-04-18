@@ -255,23 +255,21 @@ export async function getPathfinderDashboard(
   }
 
   // Get all verticals for the chapter
-  const { data: verticals, error: vErr } = await supabase
+  // NOTE: vertical_chairs has TWO FKs to members (member_id + appointed_by) — disambiguate
+  const { data: verticals } = await supabase
     .from('verticals')
     .select(`
       id, name, slug, color, icon,
       current_chair:vertical_chairs(
         id, member_id,
-        member:members(id, full_name, avatar_url)
+        member:members!vertical_chairs_member_id_fkey(id, full_name, avatar_url)
       )
     `)
     .eq('chapter_id', chapterId)
     .eq('is_active', true)
     .order('display_order')
 
-  if (!verticals) {
-    console.error('[getPathfinderDashboard] verticals null', { chapterId, vErr })
-    return null
-  }
+  if (!verticals) return null
 
   // Get all AAA plans for this year
   const { data: plans } = await supabase

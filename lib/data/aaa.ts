@@ -243,16 +243,13 @@ export async function getPathfinderDashboard(
   const supabase = await createClient()
 
   // Get chapter info
-  const { data: chapter, error: chErr } = await supabase
+  const { data: chapter } = await supabase
     .from('chapters')
     .select('id, name')
     .eq('id', chapterId)
     .single()
 
-  if (!chapter) {
-    console.error('[getPathfinderDashboard] chapter missing', { chapterId, chErr })
-    return null
-  }
+  if (!chapter) return null
 
   // Get all verticals for the chapter
   // NOTE: vertical_chairs has TWO FKs to members (member_id + appointed_by) — disambiguate

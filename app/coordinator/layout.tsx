@@ -4,7 +4,6 @@
  * Separate layout for stakeholder coordinators with their own auth.
  */
 
-import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import {
   Calendar,
@@ -13,7 +12,7 @@ import {
   BookOpen,
   User,
 } from 'lucide-react'
-import { cookies, headers } from 'next/headers'
+import { cookies } from 'next/headers'
 import { Button } from '@/components/ui/button'
 
 export const metadata = {
@@ -36,41 +35,20 @@ async function getCoordinatorSession() {
   }
 }
 
-async function getCurrentPath(): Promise<string> {
-  // Use x-url / x-pathname headers if present, otherwise fall back to referrer.
-  // Next.js exposes the current pathname via a dedicated header set by the
-  // runtime (`next-url`).
-  const h = await headers()
-  return (
-    h.get('x-pathname') ||
-    h.get('x-invoke-path') ||
-    h.get('next-url') ||
-    ''
-  )
-}
-
 export default async function CoordinatorLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const pathname = await getCurrentPath()
-
-  // The login + logout routes must render WITHOUT the authenticated shell,
-  // otherwise hitting /coordinator/login while unauthenticated triggers an
-  // infinite redirect loop (login page lives under this layout).
-  const isPublicCoordinatorRoute =
-    pathname.includes('/coordinator/login') ||
-    pathname.includes('/coordinator/logout')
-
-  if (isPublicCoordinatorRoute) {
-    return <>{children}</>
-  }
-
+  // Auth is enforced per-page (coordinator/page.tsx, bookings, sessions, etc.)
+  // so that /coordinator/login + /coordinator/logout can render without an
+  // infinite redirect loop. If no session cookie is present, the layout just
+  // renders the public shell with no authed chrome.
   const session = await getCoordinatorSession()
 
+  // Unauthenticated: render children only (login/logout pages render clean).
   if (!session) {
-    redirect('/coordinator/login')
+    return <>{children}</>
   }
 
   return (

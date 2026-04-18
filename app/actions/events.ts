@@ -1878,3 +1878,223 @@ export async function exportEvents(
     return { success: false, error: 'Failed to export events' };
   }
 }
+
+// ============================================================================
+// Per-Attendee QR Ticket Check-in (Stutzee Feature 2A)
+// ============================================================================
+
+export type TicketAttendeeProfile = {
+  attendeeType: 'member' | 'guest';
+  attendeeId: string;
+  eventId: string;
+  eventTitle: string;
+  fullName: string;
+  email: string | null;
+  avatarUrl: string | null;
+  company: string | null;
+  designation: string | null;
+  rsvpStatus: string;
+  alreadyCheckedIn: boolean;
+  checkedInAt: string;
+};
+
+/**
+ * Check in an attendee by scanning their personal ticket QR token.
+ *
+ * Looks up ticket_token across event_rsvps and guest_rsvps, verifies the
+ * event is accepting check-ins, idempotently records the check-in, and
+ * returns the attendee's display profile for the scanner UI.
+ *
+ * Idempotent: scanning the same ticket twice returns success with
+ * `alreadyCheckedIn: true` rather than an error.
+ */
+export async function checkInByTicketToken(
+  ticketToken: string
+): Promise<ActionResponse<TicketAttendeeProfile>> {
+  try {
+    if (!ticketToken || typeof ticketToken !== 'string' || ticketToken.length < 16) {
+      return { success: false, error: 'Invalid ticket' };
+    }
+
+    const supabase = await createClient();
+    const user = await getCurrentUser();
+
+    if (!user) {
+      return { success: false, error: 'Unauthorized' };
+    }
+
+    // ------------------------------------------------------------------
+    // 1. Try member RSVP first
+    // ------------------------------------------------------------------
+    let attendeeType: 'member' | 'guest' | null = null;
+    let attendeeId: string | null = null;
+    let eventId: string | null = null;
+    let rsvpStatus = 'pending';
+    let displayName = '';
+    let displayEmail: string | null = null;
+    let displayAvatar: string | null = null;
+    let displayCompany: string | null = null;
+    let displayDesignation: string | null = null;
+
+    const { data: memberRsvp } = await supabase
+      .from('event_rsvps')
+      .select(`
+        id,
+        event_id,
+        member_id,
+        status,
+        members:member_id (
+          id,
+          company,
+          designation,
+          profiles:id ( full_name, email, avatar_url )
+        )
+      `)
+      .eq('ticket_token', ticketToken)
+      .maybeSingle();
+
+    if (memberRsvp) {
+      attendeeType = 'member';
+      attendeeId = memberRsvp.member_id;
+      eventId = memberRsvp.event_id;
+      rsvpStatus = memberRsvp.status;
+      const memberRow = memberRsvp.members as unknown as {
+        company: string | null;
+        designation: string | null;
+        profiles: { full_name: string; email: string; avatar_url: string | null } | null;
+      } | null;
+      displayCompany = memberRow?.company ?? null;
+      displayDesignation = memberRow?.designation ?? null;
+      displayName = memberRow?.profiles?.full_name ?? 'Member';
+      displayEmail = memberRow?.profiles?.email ?? null;
+      displayAvatar = memberRow?.profiles?.avatar_url ?? null;
+    } else {
+      // ----------------------------------------------------------------
+      // 2. Fall back to guest RSVP
+      // ----------------------------------------------------------------
+      const { data: guestRsvp } = await supabase
+        .from('guest_rsvps')
+        .select('id, event_id, status, full_name, email, company, designation')
+        .eq('ticket_token', ticketToken)
+        .maybeSingle();
+
+      if (!guestRsvp) {
+        return { success: false, error: 'Ticket not found' };
+      }
+
+      attendeeType = 'guest';
+      attendeeId = guestRsvp.id;
+      eventId = guestRsvp.event_id;
+      rsvpStatus = guestRsvp.status;
+      displayName = guestRsvp.full_name;
+      displayEmail = guestRsvp.email;
+      displayCompany = guestRsvp.company;
+      displayDesignation = guestRsvp.designation;
+    }
+
+    if (!eventId || !attendeeType || !attendeeId) {
+      return { success: false, error: 'Ticket not found' };
+    }
+
+    // ------------------------------------------------------------------
+    // 3. Verify event is accepting check-ins
+    // ------------------------------------------------------------------
+    const { data: event } = await supabase
+      .from('events')
+      .select('id, title, status')
+      .eq('id', eventId)
+      .single();
+
+    if (!event) {
+      return { success: false, error: 'Event not found' };
+    }
+
+    if (event.status !== 'published' && event.status !== 'ongoing') {
+      return {
+        success: false,
+        error: `Event is ${event.status} — check-in is closed`
+      };
+    }
+
+    // ------------------------------------------------------------------
+    // 4. Idempotent insert — rely on uq_event_checkins_attendee
+    // ------------------------------------------------------------------
+    const nowIso = new Date().toISOString();
+    const { data: existingCheckin } = await supabase
+      .from('event_checkins')
+      .select('id, checked_in_at')
+      .eq('event_id', eventId)
+      .eq('attendee_type', attendeeType)
+      .eq('attendee_id', attendeeId)
+      .maybeSingle();
+
+    let alreadyCheckedIn = false;
+    let checkedInAt = nowIso;
+
+    if (existingCheckin) {
+      alreadyCheckedIn = true;
+      checkedInAt = existingCheckin.checked_in_at ?? nowIso;
+    } else {
+      const { error: insertError } = await supabase
+        .from('event_checkins')
+        .insert({
+          event_id: eventId,
+          attendee_type: attendeeType,
+          attendee_id: attendeeId,
+          checked_in_by: user.id,
+          checked_in_at: nowIso,
+          check_in_method: 'qr_code'
+        });
+
+      if (insertError) {
+        // Unique-violation race → treat as already checked in
+        if ((insertError as { code?: string }).code === '23505') {
+          alreadyCheckedIn = true;
+        } else {
+          console.error('Error inserting event_checkin:', insertError);
+          return { success: false, error: 'Failed to record check-in' };
+        }
+      }
+
+      // Flip RSVP status → attended
+      if (attendeeType === 'member') {
+        await supabase
+          .from('event_rsvps')
+          .update({ status: 'attended', checked_in_at: nowIso, checked_in_by: user.id })
+          .eq('event_id', eventId)
+          .eq('member_id', attendeeId);
+      } else {
+        await supabase
+          .from('guest_rsvps')
+          .update({ status: 'attended', checked_in_at: nowIso, checked_in_by: user.id })
+          .eq('id', attendeeId);
+      }
+      rsvpStatus = 'attended';
+    }
+
+    updateTag('events');
+    updateTag('checkins');
+    revalidatePath(`/events/${eventId}`);
+
+    return {
+      success: true,
+      data: {
+        attendeeType,
+        attendeeId,
+        eventId,
+        eventTitle: event.title,
+        fullName: displayName,
+        email: displayEmail,
+        avatarUrl: displayAvatar,
+        company: displayCompany,
+        designation: displayDesignation,
+        rsvpStatus,
+        alreadyCheckedIn,
+        checkedInAt
+      }
+    };
+  } catch (error) {
+    console.error('Error in checkInByTicketToken:', error);
+    return { success: false, error: 'Check-in failed' };
+  }
+}

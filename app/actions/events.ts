@@ -2430,6 +2430,5 @@ export async function checkInByTicketToken(
   } catch (error) {
     console.error('Error in checkInByTicketToken:', error);
     return { success: false, error: 'Check-in failed' };
->>>>>>> worktree-agent-a4aae42e
   }
 }

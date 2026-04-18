@@ -534,3 +534,217 @@ export async function unsubscribeFromReport(
     return { success: false, error: 'An unexpected error occurred' }
   }
 }
+
+// ============================================================================
+// QUARTERLY REPORT TO NATIONAL (Event Auto-Pilot spec, 2026-04-18)
+// ============================================================================
+
+import { createClient as createSSRClient } from '@/lib/supabase/server'
+import { aggregateQuarterlyReport } from '@/lib/data/reports-quarterly'
+import { renderQuarterlyReportHTML } from '@/lib/reports/quarterly-generator'
+import {
+  generateQuarterlyReportSchema,
+  sendReportToNationalSchema,
+  type GenerateQuarterlyReportInput,
+  type SendReportToNationalInput,
+} from '@/lib/validations/autopilot'
+import { getQuarterRange } from '@/types/report'
+import { sendEmail } from '@/lib/email'
+import { quarterlyReportEmail } from '@/lib/email/templates'
+
+/**
+ * Generate a quarterly report for a chapter × quarter and store it in
+ * chapter_reports + Supabase Storage.
+ */
+export async function generateQuarterlyReport(
+  input: GenerateQuarterlyReportInput
+): Promise<
+  | { success: true; data: { report_id: string; pdf_url: string | null } }
+  | { success: false; error: string }
+> {
+  try {
+    const validated = generateQuarterlyReportSchema.parse(input)
+    const supabase = await createSSRClient()
+    const user = await getCurrentUser()
+    if (!user) return { success: false, error: 'Unauthorized' }
+
+    // Permission: Chair+ of this chapter OR National Admin
+    const { data: rolesRow } = await supabase
+      .from('user_roles')
+      .select('role:roles(hierarchy_level)')
+      .eq('user_id', user.id)
+    const maxLevel = Math.max(
+      0,
+      ...(rolesRow ?? []).map((r: unknown) => {
+        const role = (r as { role?: unknown }).role
+        const roleObj = Array.isArray(role) ? role[0] : role
+        return (roleObj as { hierarchy_level?: number } | null)?.hierarchy_level ?? 0
+      })
+    )
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('chapter_id')
+      .eq('id', user.id)
+      .single()
+    const isNational = maxLevel >= 6
+    const isChair = maxLevel >= 4 && profile?.chapter_id === validated.chapter_id
+    if (!isNational && !isChair) {
+      return { success: false, error: 'Chair access required' }
+    }
+
+    // Aggregate data
+    const snapshot = await aggregateQuarterlyReport(
+      validated.chapter_id,
+      validated.fiscal_year,
+      validated.quarter,
+      user.id
+    )
+
+    const { start, end } = getQuarterRange(validated.fiscal_year, validated.quarter)
+    const periodStart = start.toISOString().slice(0, 10)
+    const periodEnd = end.toISOString().slice(0, 10)
+
+    // Render HTML
+    const html = renderQuarterlyReportHTML(snapshot)
+
+    // Upload to storage
+    let pdfUrl: string | null = null
+    try {
+      const bucket = 'chapter-reports'
+      // Ensure bucket exists (idempotent attempt)
+      try {
+        await supabase.storage.createBucket(bucket, {
+          public: false,
+          fileSizeLimit: 5 * 1024 * 1024,
+        })
+      } catch {
+        // Already exists — ignore
+      }
+
+      const filename = `${validated.chapter_id}/FY${validated.fiscal_year}-Q${validated.quarter}-${Date.now()}.html`
+      const { error: uploadErr } = await supabase.storage
+        .from(bucket)
+        .upload(filename, new Blob([html], { type: 'text/html' }), {
+          contentType: 'text/html',
+          upsert: true,
+        })
+
+      if (!uploadErr) {
+        const { data: signed } = await supabase.storage
+          .from(bucket)
+          .createSignedUrl(filename, 60 * 60 * 24 * 30) // 30 days
+        pdfUrl = signed?.signedUrl ?? null
+      } else {
+        console.warn('Storage upload failed (continuing):', uploadErr)
+      }
+    } catch (storageErr) {
+      console.warn('Storage path failed (continuing):', storageErr)
+    }
+
+    // Upsert the report (overwrite if regenerated)
+    const { data: report, error: upsertErr } = await supabase
+      .from('chapter_reports')
+      .upsert(
+        {
+          chapter_id: validated.chapter_id,
+          report_type: 'quarterly',
+          period_start: periodStart,
+          period_end: periodEnd,
+          fiscal_year: validated.fiscal_year,
+          generated_by: user.id,
+          generated_at: new Date().toISOString(),
+          pdf_url: pdfUrl,
+          data_snapshot: snapshot as unknown as Record<string, unknown>,
+          sent_to_national: false,
+          sent_at: null,
+        },
+        {
+          onConflict: 'chapter_id,report_type,period_start,period_end',
+        }
+      )
+      .select('id')
+      .single()
+
+    if (upsertErr || !report) {
+      console.error('chapter_reports upsert failed:', upsertErr)
+      return { success: false, error: 'Failed to save report' }
+    }
+
+    revalidatePath('/reports/quarterly')
+    revalidatePath('/reports/history')
+
+    return {
+      success: true,
+      data: { report_id: report.id, pdf_url: pdfUrl },
+    }
+  } catch (err) {
+    console.error('generateQuarterlyReport error:', err)
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Unknown error',
+    }
+  }
+}
+
+/**
+ * Email a generated report to National (or any recipient list).
+ */
+export async function sendReportToNational(
+  input: SendReportToNationalInput
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const validated = sendReportToNationalSchema.parse(input)
+    const supabase = await createSSRClient()
+    const user = await getCurrentUser()
+    if (!user) return { success: false, error: 'Unauthorized' }
+
+    const { data: report } = await supabase
+      .from('chapter_reports')
+      .select('*, chapter:chapters(name)')
+      .eq('id', validated.report_id)
+      .maybeSingle()
+
+    if (!report || !report.pdf_url) {
+      return { success: false, error: 'Report not found or missing PDF URL' }
+    }
+
+    const snapshot = report.data_snapshot as {
+      period: { label: string; start: string; end: string }
+      events: { total_count: number; total_attendance: number }
+    }
+    const chapterName =
+      (report.chapter as { name: string } | null)?.name ?? 'Yi Chapter'
+
+    const { recipient_emails } = validated
+    for (const email of recipient_emails) {
+      const template = quarterlyReportEmail({
+        chapterName,
+        recipientName: 'Yi National Office',
+        quarter: snapshot.period.label,
+        periodLabel: snapshot.period.label,
+        pdfUrl: report.pdf_url,
+        eventsCount: snapshot.events.total_count,
+        totalAttendance: snapshot.events.total_attendance,
+      })
+      await sendEmail({
+        to: email,
+        subject: template.subject,
+        html: template.html,
+      })
+    }
+
+    await supabase
+      .from('chapter_reports')
+      .update({ sent_to_national: true, sent_at: new Date().toISOString() })
+      .eq('id', validated.report_id)
+
+    revalidatePath('/reports/history')
+    return { success: true }
+  } catch (err) {
+    console.error('sendReportToNational error:', err)
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Unknown error',
+    }
+  }
+}

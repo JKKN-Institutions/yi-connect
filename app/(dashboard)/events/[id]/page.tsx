@@ -41,6 +41,11 @@ import {
   getSessions,
   getMemberSessionInterests
 } from '@/lib/data/events';
+import {
+  isAutopilotEnabled,
+  getLatestAutopilotRun
+} from '@/lib/data/autopilot';
+import { AutoPilotPanel } from '@/components/autopilot/autopilot-panel';
 import { AgendaTimeline } from '@/components/events/sessions/agenda-timeline';
 import { AttendeeTicket } from '@/components/events/attendee-ticket';
 import { EventSponsors } from '@/components/events/event-sponsors';
@@ -126,6 +131,13 @@ async function EventDetailContent({ params }: PageProps) {
 
   const userRSVP = await getMemberRSVP(event.id, user.id);
   const volunteerRoles = await getVolunteerRoles();
+
+  // Auto-pilot feature flag + latest run (Chair+ only)
+  const chapterIdForAutopilot = event.chapter?.id;
+  const autopilotEnabled = chapterIdForAutopilot
+    ? await isAutopilotEnabled(chapterIdForAutopilot)
+    : false;
+  const autopilotLatestRun = await getLatestAutopilotRun(event.id);
 
   // Load agenda (sessions + current member's interest set)
   const sessions = await getSessions(event.id);
@@ -869,6 +881,17 @@ async function EventDetailContent({ params }: PageProps) {
                 </div>
               </CardContent>
             </Card>
+          )}
+
+          {/* Event Auto-Pilot Panel — Chair+ only */}
+          {canEdit && (
+            <AutoPilotPanel
+              eventId={event.id}
+              eventStatus={event.status}
+              featureEnabled={autopilotEnabled}
+              latestRun={autopilotLatestRun}
+              canManage={canEdit}
+            />
           )}
         </div>
       </div>

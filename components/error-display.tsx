@@ -28,6 +28,8 @@ export function ErrorDisplay({
   description = "We're sorry, but something unexpected happened. Please try again."
 }: ErrorDisplayProps) {
   useEffect(() => {
+    // Show a toast so the user always gets visible feedback on error boundary activation
+    toast.error(error.message || 'Something went wrong. Please try again.');
     // Log error to console in development
     if (process.env.NODE_ENV === 'development') {
       console.error('Error caught by ErrorBoundary:', error);

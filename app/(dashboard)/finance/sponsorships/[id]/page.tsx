@@ -400,7 +400,50 @@ async function DealDetail({ dealId }: { dealId: string }) {
           </CardContent>
         </Card>
       )}
+        </TabsContent>
+
+        <TabsContent value="leads" className="space-y-6">
+          <Suspense fallback={<Skeleton className="h-[400px] w-full" />}>
+            <SponsorLeadsTab sponsorId={deal.sponsor.id} />
+          </Suspense>
+        </TabsContent>
+      </Tabs>
     </div>
+  )
+}
+
+async function SponsorLeadsTab({ sponsorId }: { sponsorId: string }) {
+  const leads = await getSponsorLeadsForSponsor(sponsorId)
+
+  if (leads.length === 0) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>No leads captured yet</CardTitle>
+          <CardDescription>
+            When EC members use the sponsor portal at events, captured leads
+            for this sponsor will appear here.
+          </CardDescription>
+        </CardHeader>
+      </Card>
+    )
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>
+          <Users className="h-5 w-5 inline mr-2" />
+          Leads ({leads.length})
+        </CardTitle>
+        <CardDescription>
+          Leads captured for this sponsor across all events.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <SponsorLeadsTable leads={leads} showEventColumn />
+      </CardContent>
+    </Card>
   )
 }
 

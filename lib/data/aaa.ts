@@ -305,9 +305,14 @@ export async function getPathfinderDashboard(
       ? v.current_chair[0]
       : null
     // member is also returned as array from Supabase nested query
-    const memberData = currentChairEntry?.member && Array.isArray(currentChairEntry.member) && currentChairEntry.member.length > 0
+    const memberRaw = currentChairEntry?.member && Array.isArray(currentChairEntry.member) && currentChairEntry.member.length > 0
       ? currentChairEntry.member[0]
       : (currentChairEntry?.member && !Array.isArray(currentChairEntry.member) ? currentChairEntry.member : null)
+    // profile is nested inside member (name + avatar live on profiles, not members)
+    const profileData = memberRaw?.profile && Array.isArray(memberRaw.profile) && memberRaw.profile.length > 0
+      ? memberRaw.profile[0]
+      : (memberRaw?.profile && !Array.isArray(memberRaw.profile) ? memberRaw.profile : null)
+    const memberData = profileData ? { full_name: profileData.full_name, avatar_url: profileData.avatar_url } : null
     const chairMemberId = currentChairEntry?.member_id
     const commitment = commitments?.find((c) => c.member_id === chairMemberId)
     const mentor = mentors?.find((m) => m.ec_chair_id === chairMemberId)

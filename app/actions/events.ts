@@ -15,6 +15,7 @@ import { uploadImage } from './upload';
 import { sendEmail, sendBatchEmails } from '@/lib/email';
 import { eventCancellationEmail, volunteerAssignmentEmail } from '@/lib/email/templates';
 import { syncEventByIdToYiStudio, syncEventToYiStudio } from '@/lib/webhooks/yi-studio-sync';
+import { generateEventSlug, rotateSlugSuffix } from '@/lib/utils/slug';
 import {
   createEventSchema,
   updateEventSchema,

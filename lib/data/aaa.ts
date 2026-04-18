@@ -266,7 +266,11 @@ export async function getPathfinderDashboard(
     .eq('is_active', true)
     .order('display_order')
 
-  if (!verticals) return null
+  if (!verticals) {
+    console.error('[getPathfinderDashboard] verticals still null')
+    return null
+  }
+  console.log('[getPathfinderDashboard] OK', { chapterId, verticalCount: verticals.length })
 
   // Get all AAA plans for this year
   const { data: plans } = await supabase

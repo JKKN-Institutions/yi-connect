@@ -309,7 +309,7 @@ export async function publishEvent(
     // Check permission
     const { data: event } = await supabase
       .from('events')
-      .select('organizer_id, status')
+      .select('organizer_id, status, title, public_slug')
       .eq('id', validated.id)
       .single();
 
@@ -353,6 +353,35 @@ export async function publishEvent(
         .from('events')
         .update({ rsvp_token: token })
         .eq('id', validated.id);
+    }
+
+    // Generate public_slug for the public landing page (if not already set).
+    // Retry up to 3 times on UNIQUE violation by rotating the suffix.
+    if (!(event as { public_slug?: string | null }).public_slug) {
+      let slug = generateEventSlug(event.title || 'event');
+      let attempts = 0;
+      const MAX_ATTEMPTS = 3;
+
+      while (attempts < MAX_ATTEMPTS) {
+        const { error: slugError } = await supabase
+          .from('events')
+          .update({ public_slug: slug })
+          .eq('id', validated.id);
+
+        if (!slugError) break;
+
+        // Postgres unique-violation code is 23505
+        const code = (slugError as { code?: string }).code;
+        if (code === '23505') {
+          slug = rotateSlugSuffix(slug);
+          attempts++;
+          continue;
+        }
+
+        // Non-unique error — log but don't fail the publish action
+        console.error('Error setting public_slug:', slugError);
+        break;
+      }
     }
 
     // Sync to Yi Creative Studio (non-blocking) - publish triggers update sync

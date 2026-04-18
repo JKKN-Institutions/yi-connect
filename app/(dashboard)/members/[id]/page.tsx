@@ -109,25 +109,31 @@ async function MemberDetailContent({ id }: { id: string }) {
   const engagementScore = engagementScores.get(id) || 0
   const readinessScore = readinessScores.get(id) || 0
 
-  // Scan-to-connect (Feature 4A) context — only meaningful when viewing
-  // someone else's profile.
+  // Scan-to-connect (Feature 4A) — only meaningful when viewing someone else.
   const viewerId = currentUser?.id ?? null
   const isSelf = viewerId === id
-  const [mutualCount, alreadyConnected, myQr] = await Promise.all([
+
+  // Fetch the target's profile_qr_token so the "Connect" button can drop
+  // the viewer directly into the same scan flow as an in-person QR scan.
+  // Uses admin client because profile_qr_token is not exposed via members RLS.
+  let targetQrToken: string | null = null
+  let targetAllowsNetworking = false
+  if (!isSelf && viewerId) {
+    const { createAdminSupabaseClient } = await import('@/lib/supabase/server')
+    const admin = createAdminSupabaseClient()
+    const { data: tgt } = await admin
+      .from('members')
+      .select('profile_qr_token, allow_networking_qr')
+      .eq('id', id)
+      .maybeSingle()
+    targetQrToken = (tgt as any)?.profile_qr_token ?? null
+    targetAllowsNetworking = Boolean((tgt as any)?.allow_networking_qr)
+  }
+
+  const [mutualCount, alreadyConnected] = await Promise.all([
     !isSelf && viewerId ? getMutualConnectionCount(viewerId, id) : Promise.resolve(0),
     !isSelf && viewerId ? hasConnectedTo(viewerId, id) : Promise.resolve(false),
-    !isSelf ? getMyProfileQr() : Promise.resolve(null),
   ])
-  const connectHref = myQr
-    ? `/connect?token=${encodeURIComponent(myQr.profile_qr_token)}`
-    : null
-  // Note: we pass the *viewer's* own QR URL variant only as a safe fallback.
-  // The real scan flow uses the target member's QR. Here we expose a direct
-  // shortcut: clicking "Connect" opens the scan landing populated with the
-  // target's token via /members/[id]/connect style link — implemented as a
-  // pass-through to /connect using the target's token we look up below.
-  // (Simpler: we fetch the target's profile_qr_token here, protected by RLS
-  // which already allows same-chapter views, and build the URL directly.)
 
   return (
     <div className="space-y-6">

@@ -13,7 +13,7 @@ import {
   BookOpen,
   User,
 } from 'lucide-react'
-import { cookies } from 'next/headers'
+import { cookies, headers } from 'next/headers'
 import { Button } from '@/components/ui/button'
 
 export const metadata = {

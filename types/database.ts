@@ -930,6 +930,8 @@ export type Database = {
           id: string;
           chapter_id: string;
           organization_name: string;
+          display_name: string | null;
+          logo_url: string | null;
           industry: string | null;
           website: string | null;
           contact_person_name: string | null;
@@ -960,6 +962,8 @@ export type Database = {
           id?: string;
           chapter_id: string;
           organization_name: string;
+          display_name?: string | null;
+          logo_url?: string | null;
           industry?: string | null;
           website?: string | null;
           contact_person_name?: string | null;
@@ -990,6 +994,8 @@ export type Database = {
           id?: string;
           chapter_id?: string;
           organization_name?: string;
+          display_name?: string | null;
+          logo_url?: string | null;
           industry?: string | null;
           website?: string | null;
           contact_person_name?: string | null;

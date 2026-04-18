@@ -327,10 +327,20 @@ async function EventDetailContent({ params }: PageProps) {
 
           {/* Tabs Section */}
           <Card className='overflow-hidden border-0 shadow-sm'>
-            <Tabs defaultValue='rsvps' className='w-full'>
+            <Tabs defaultValue='agenda' className='w-full'>
               {/* Scrollable tabs container for mobile */}
               <div className='border-b bg-muted/30 overflow-x-auto scrollbar-hide'>
                 <TabsList className='h-auto p-0 bg-transparent inline-flex min-w-full sm:w-full justify-start rounded-none'>
+                  <TabsTrigger
+                    value='agenda'
+                    className='relative flex-shrink-0 px-3 sm:px-5 py-3 sm:py-4 rounded-none border-b-2 border-transparent data-[state=active]:border-orange-500 data-[state=active]:bg-transparent data-[state=active]:shadow-none transition-all'
+                  >
+                    <LayoutList className='h-4 w-4 sm:mr-2' />
+                    <span className='hidden sm:inline font-medium'>Agenda</span>
+                    <span className='ml-1 sm:ml-2 text-xs bg-muted px-1.5 sm:px-2 py-0.5 rounded-full'>
+                      {sessions.length}
+                    </span>
+                  </TabsTrigger>
                   <TabsTrigger
                     value='rsvps'
                     className='relative flex-shrink-0 px-3 sm:px-5 py-3 sm:py-4 rounded-none border-b-2 border-transparent data-[state=active]:border-orange-500 data-[state=active]:bg-transparent data-[state=active]:shadow-none transition-all'

@@ -863,3 +863,72 @@ export type CancelCarpoolInput = z.infer<typeof cancelCarpoolSchema>
 export type ServiceEventFilters = z.infer<typeof serviceEventFiltersSchema>
 export type TrainerAssignmentFilters = z.infer<typeof trainerAssignmentFiltersSchema>
 export type MaterialFilters = z.infer<typeof materialFiltersSchema>
+
+// ============================================================================
+// STUTZEE FEATURE 1A: Event Sessions (Multi-session agenda)
+// ============================================================================
+
+const sessionTypes = [
+  'keynote',
+  'workshop',
+  'panel',
+  'networking',
+  'break',
+  'presentation',
+  'qa',
+  'other',
+] as const
+
+const sessionBaseSchema = z.object({
+  event_id: z.string().uuid('Invalid event id'),
+  title: z.string().min(1, 'Session title is required').max(255, 'Title is too long'),
+  description: z.string().max(2000, 'Description is too long').optional(),
+  session_type: z.enum(sessionTypes, { message: 'Invalid session type' }),
+  start_time: z.string().min(1, 'Start time is required'),
+  end_time: z.string().min(1, 'End time is required'),
+  room_or_track: z.string().max(120, 'Room name too long').optional(),
+  capacity: z.preprocess(
+    (v) => (v === '' || v === undefined || v === null ? undefined : v),
+    z.coerce.number().int().min(1, 'Capacity must be at least 1').optional()
+  ),
+  sort_order: z.coerce.number().int().min(0).optional(),
+  is_active: z.boolean().optional(),
+  speaker_ids: z.array(z.string().uuid()).optional(),
+})
+
+export const createSessionSchema = sessionBaseSchema.refine(
+  (data) => new Date(data.end_time) > new Date(data.start_time),
+  { message: 'End time must be after start time', path: ['end_time'] }
+)
+
+export const updateSessionSchema = sessionBaseSchema
+  .omit({ event_id: true })
+  .partial()
+  .refine(
+    (data) => {
+      if (data.start_time && data.end_time) {
+        return new Date(data.end_time) > new Date(data.start_time)
+      }
+      return true
+    },
+    { message: 'End time must be after start time', path: ['end_time'] }
+  )
+
+export const reorderSessionsSchema = z.object({
+  event_id: z.string().uuid('Invalid event id'),
+  session_ids: z.array(z.string().uuid()).min(1, 'Provide session ids'),
+})
+
+export const toggleSessionInterestSchema = z.object({
+  session_id: z.string().uuid('Invalid session id'),
+})
+
+export const deleteSessionSchema = z.object({
+  id: z.string().uuid('Invalid session id'),
+})
+
+export type CreateSessionInputZ = z.infer<typeof createSessionSchema>
+export type UpdateSessionInputZ = z.infer<typeof updateSessionSchema>
+export type ReorderSessionsInputZ = z.infer<typeof reorderSessionsSchema>
+export type ToggleSessionInterestInputZ = z.infer<typeof toggleSessionInterestSchema>
+export type DeleteSessionInputZ = z.infer<typeof deleteSessionSchema>

@@ -182,12 +182,46 @@ async function MemberDetailContent({ id }: { id: string }) {
               </div>
             </div>
 
-            <Button asChild>
-              <Link href={`/members/${member.id}/edit`}>
-                <Edit className="h-4 w-4 mr-2" />
-                Edit Profile
-              </Link>
-            </Button>
+            <div className="flex flex-col items-stretch gap-2 sm:items-end">
+              {!isSelf && (
+                <div className="flex items-center gap-2">
+                  {alreadyConnected ? (
+                    <Button asChild variant="secondary" size="sm">
+                      <Link href="/connections">
+                        <UserCheck className="h-4 w-4 mr-2" />
+                        Connected
+                      </Link>
+                    </Button>
+                  ) : targetQrToken && targetAllowsNetworking ? (
+                    <Button asChild size="sm">
+                      <Link
+                        href={`/connect?token=${encodeURIComponent(targetQrToken)}`}
+                      >
+                        <UserPlus className="h-4 w-4 mr-2" />
+                        Connect
+                      </Link>
+                    </Button>
+                  ) : (
+                    <Button size="sm" disabled variant="outline">
+                      <UserPlus className="h-4 w-4 mr-2" />
+                      Not accepting connections
+                    </Button>
+                  )}
+                  {mutualCount > 0 && (
+                    <Badge variant="outline" className="whitespace-nowrap">
+                      <Users className="h-3 w-3 mr-1" />
+                      {mutualCount} mutual
+                    </Badge>
+                  )}
+                </div>
+              )}
+              <Button asChild>
+                <Link href={`/members/${member.id}/edit`}>
+                  <Edit className="h-4 w-4 mr-2" />
+                  Edit Profile
+                </Link>
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>

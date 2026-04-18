@@ -41,6 +41,8 @@ import {
   getMemberSessionInterests
 } from '@/lib/data/events';
 import { AgendaTimeline } from '@/components/events/sessions/agenda-timeline';
+import { AttendeeTicket } from '@/components/events/attendee-ticket';
+import { EventSponsors } from '@/components/events/event-sponsors';
 import {
   RSVPForm,
   QuickRSVP,

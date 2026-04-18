@@ -2,8 +2,8 @@
 
 **Last updated:** 2026-04-18
 **Chapter:** Yi Erode (`1a475942-94cc-478d-ab78-89242a0c3a67`)
-**Password for all accounts:** `Demo123!`
-**Login:** email/password on `/login` OR magic link via "Email Link" tab
+**Password for all accounts:** `DemoMember2024!`
+**Login:** one-click buttons on `/login` (all 8 accounts listed) OR Google OAuth / Magic Link
 
 ## 8 Seeded Demo Accounts
 

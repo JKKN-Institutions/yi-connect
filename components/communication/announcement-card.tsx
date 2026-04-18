@@ -68,7 +68,7 @@ export function AnnouncementCard({
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1 min-w-0">
             <Link
-              href={`/communication/announcements/${announcement.id}`}
+              href={`/communications/announcements/${announcement.id}`}
               className="block group"
             >
               <h3 className="font-semibold text-lg group-hover:text-primary transition-colors truncate">

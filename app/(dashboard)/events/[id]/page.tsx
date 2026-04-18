@@ -232,6 +232,7 @@ async function EventDetailContent({ params }: PageProps) {
                 />
               )}
               <EventQRCode eventId={event.id} eventTitle={event.title} />
+              <PublicLinkButton publicSlug={(event as any).public_slug || null} />
               <ShareButton
                 eventId={event.id}
                 eventTitle={event.title}

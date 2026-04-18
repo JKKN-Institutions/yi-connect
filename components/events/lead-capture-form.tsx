@@ -193,7 +193,7 @@ export function LeadCaptureForm({
           <div>
             <p className='text-sm font-medium'>Prefill from ticket QR</p>
             <p className='text-xs text-muted-foreground'>
-              Scan attendee's ticket to auto-fill name, email, company.
+              Scan attendee&apos;s ticket to auto-fill name, email, company.
             </p>
           </div>
           <Button

@@ -29,6 +29,7 @@ import {
 } from '@/components/ui/select';
 import { createSponsorSchema } from '@/lib/validations/finance';
 import { createSponsor } from '@/app/actions/finance';
+import { SponsorLogoUpload } from '@/components/finance/sponsor-logo-upload';
 
 type SponsorFormValues = z.infer<typeof createSponsorSchema>;
 

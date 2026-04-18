@@ -327,6 +327,21 @@ async function EventDetailContent({ params }: PageProps) {
             </Card>
           )}
 
+          {/* Attendee Ticket QR — only shown for confirmed member RSVPs */}
+          {userRSVP && (userRSVP as any).status === 'confirmed' && (userRSVP as any).ticket_token && (
+            <AttendeeTicket
+              rsvpId={(userRSVP as any).id}
+              eventId={event.id}
+              ticketToken={(userRSVP as any).ticket_token}
+              eventTitle={event.title}
+              eventDate={event.start_date}
+              memberName={user.email ?? 'Member'}
+            />
+          )}
+
+          {/* Event sponsors (returns null if none attached) */}
+          <EventSponsors eventId={event.id} />
+
           {/* Tabs Section */}
           <Card className='overflow-hidden border-0 shadow-sm'>
             <Tabs defaultValue='agenda' className='w-full'>

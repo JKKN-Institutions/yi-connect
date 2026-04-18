@@ -692,6 +692,7 @@ export const getSponsorshipTiers = cache(async (
   let query = supabase
     .from('sponsorship_tiers')
     .select('*')
+    .order('sort_order', { ascending: true })
     .order('min_amount', { ascending: false })
 
   if (chapterId) {

@@ -208,6 +208,54 @@ export function SponsorForm({
           </div>
         </div>
 
+        {/* Branding (logo + display name) */}
+        {showLogoUpload && (
+          <div className='space-y-4'>
+            <div>
+              <h3 className='text-lg font-medium'>Branding</h3>
+              <p className='text-sm text-muted-foreground'>
+                Logo and short display name used on event sponsor sections.
+              </p>
+            </div>
+            <div className='grid gap-4 md:grid-cols-2'>
+              <FormField
+                control={form.control}
+                name='display_name'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Display Name</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder='Short name shown on events (optional)'
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name='logo_url'
+                render={({ field }) => (
+                  <FormItem className='md:col-span-2'>
+                    <FormLabel>Logo</FormLabel>
+                    <FormControl>
+                      <SponsorLogoUpload
+                        value={field.value || null}
+                        onChange={(url) => field.onChange(url ?? '')}
+                        disabled={isPending}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+          </div>
+        )}
+
         {/* Contact Person */}
         <div className='space-y-4'>
           <h3 className='text-lg font-medium'>Contact Person</h3>

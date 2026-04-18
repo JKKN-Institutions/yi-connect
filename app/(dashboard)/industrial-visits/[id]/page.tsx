@@ -53,7 +53,7 @@ export const metadata: Metadata = {
 
 async function IVDetailContent({ id }: { id: string }) {
   // All authenticated users can view IV details
-  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member', 'Member']);
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member', 'Member', 'Industry Coordinator']);
 
   const iv = await getIVById(id);
 

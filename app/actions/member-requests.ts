@@ -130,17 +130,23 @@ export async function submitMemberRequest(formData: FormData): Promise<FormState
       }
     }
 
+    // Strip undefined values so Postgres receives explicit NULLs / nothing
+    // instead of empty strings for typed columns (DATE, INT, UUID, enums).
+    const insertPayload = Object.fromEntries(
+      Object.entries({ ...validation.data, status: 'pending' }).filter(
+        ([, v]) => v !== undefined && v !== ''
+      )
+    )
+
     // Create member request
     const { data, error } = await supabase
       .from('member_requests')
-      .insert({
-        ...validation.data,
-        status: 'pending',
-      })
+      .insert(insertPayload)
       .select()
       .single()
 
     if (error) {
+      console.error('[submitMemberRequest] insert failed', error)
       throw error
     }
 

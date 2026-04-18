@@ -12,6 +12,8 @@ import { AvatarUpload } from '@/components/settings/avatar-upload'
 import { MyBugsPanelWrapper } from '@/components/settings/my-bugs-panel-wrapper'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { MemberQR } from '@/components/members/member-qr'
+import { getMyProfileQr } from '@/lib/data/connections'
 
 export const metadata = {
   title: 'Profile Settings - Yi Connect',

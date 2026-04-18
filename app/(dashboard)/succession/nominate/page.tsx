@@ -136,7 +136,7 @@ function NominateLoading() {
 }
 
 export default async function NominatePage() {
-  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member'])
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member', 'Member'])
 
   return (
     <div className="space-y-6">

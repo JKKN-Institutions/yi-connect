@@ -84,6 +84,18 @@ async function DealDetail({ dealId }: { dealId: string }) {
         </div>
       </div>
 
+      {/* Tabs: Overview | Leads */}
+      <Tabs defaultValue="overview" className="space-y-6">
+        <TabsList>
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="leads">
+            <Users className="h-4 w-4 mr-2" />
+            Leads
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview" className="space-y-6">
+
       {/* Deal Overview Stats */}
       <div className="grid gap-6 md:grid-cols-4">
         <Card>

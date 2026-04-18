@@ -29,6 +29,7 @@ import {
 } from '@/components/ui/select';
 import { createSponsorSchema } from '@/lib/validations/finance';
 import { createSponsor } from '@/app/actions/finance';
+import { SponsorLogoUpload } from '@/components/finance/sponsor-logo-upload';
 
 type SponsorFormValues = z.infer<typeof createSponsorSchema>;
 
@@ -65,9 +66,18 @@ const PRIORITIES = [
 interface SponsorFormProps {
   chapterId: string;
   onSuccess?: () => void;
+  /**
+   * When true, a logo upload + display name section is rendered.
+   * Defaults to true since Feature 3A adds branding fields to every new sponsor.
+   */
+  showLogoUpload?: boolean;
 }
 
-export function SponsorForm({ chapterId, onSuccess }: SponsorFormProps) {
+export function SponsorForm({
+  chapterId,
+  onSuccess,
+  showLogoUpload = true,
+}: SponsorFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -75,6 +85,8 @@ export function SponsorForm({ chapterId, onSuccess }: SponsorFormProps) {
     resolver: zodResolver(createSponsorSchema) as any,
     defaultValues: {
       organization_name: '',
+      display_name: '',
+      logo_url: '',
       industry: '',
       website: '',
       contact_person_name: '',
@@ -195,6 +207,54 @@ export function SponsorForm({ chapterId, onSuccess }: SponsorFormProps) {
             />
           </div>
         </div>
+
+        {/* Branding (logo + display name) */}
+        {showLogoUpload && (
+          <div className='space-y-4'>
+            <div>
+              <h3 className='text-lg font-medium'>Branding</h3>
+              <p className='text-sm text-muted-foreground'>
+                Logo and short display name used on event sponsor sections.
+              </p>
+            </div>
+            <div className='grid gap-4 md:grid-cols-2'>
+              <FormField
+                control={form.control}
+                name='display_name'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Display Name</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder='Short name shown on events (optional)'
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name='logo_url'
+                render={({ field }) => (
+                  <FormItem className='md:col-span-2'>
+                    <FormLabel>Logo</FormLabel>
+                    <FormControl>
+                      <SponsorLogoUpload
+                        value={field.value || null}
+                        onChange={(url) => field.onChange(url ?? '')}
+                        disabled={isPending}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+          </div>
+        )}
 
         {/* Contact Person */}
         <div className='space-y-4'>

@@ -930,6 +930,8 @@ export type Database = {
           id: string;
           chapter_id: string;
           organization_name: string;
+          display_name: string | null;
+          logo_url: string | null;
           industry: string | null;
           website: string | null;
           contact_person_name: string | null;
@@ -960,6 +962,8 @@ export type Database = {
           id?: string;
           chapter_id: string;
           organization_name: string;
+          display_name?: string | null;
+          logo_url?: string | null;
           industry?: string | null;
           website?: string | null;
           contact_person_name?: string | null;
@@ -990,6 +994,8 @@ export type Database = {
           id?: string;
           chapter_id?: string;
           organization_name?: string;
+          display_name?: string | null;
+          logo_url?: string | null;
           industry?: string | null;
           website?: string | null;
           contact_person_name?: string | null;
@@ -1026,7 +1032,7 @@ export type Database = {
           tier_level: string;
           min_amount: number;
           max_amount: number | null;
-          benefits: string[] | null;
+          benefits: { label: string; included: boolean }[] | null;
           description: string | null;
           color: string | null;
           icon: string | null;
@@ -1042,7 +1048,7 @@ export type Database = {
           tier_level: string;
           min_amount: number;
           max_amount?: number | null;
-          benefits?: string[] | null;
+          benefits?: { label: string; included: boolean }[] | null;
           description?: string | null;
           color?: string | null;
           icon?: string | null;
@@ -1058,7 +1064,7 @@ export type Database = {
           tier_level?: string;
           min_amount?: number;
           max_amount?: number | null;
-          benefits?: string[] | null;
+          benefits?: { label: string; included: boolean }[] | null;
           description?: string | null;
           color?: string | null;
           icon?: string | null;

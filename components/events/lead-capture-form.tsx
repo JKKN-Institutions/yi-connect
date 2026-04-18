@@ -37,11 +37,13 @@ import { captureSponsorsLead } from '@/app/actions/sponsor-leads'
 import {
   createSponsorLeadSchema,
   type CreateSponsorLeadSchema,
+  type CreateSponsorLeadInputShape,
 } from '@/lib/validations/sponsor-lead'
 import {
   INTEREST_AREA_OPTIONS,
   type InterestLevel,
 } from '@/types/sponsor-lead'
+import type { QRScanResult } from '@/types/mobile'
 
 interface LeadCaptureFormProps {
   eventId: string

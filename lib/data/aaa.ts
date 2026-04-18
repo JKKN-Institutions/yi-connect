@@ -252,25 +252,25 @@ export async function getPathfinderDashboard(
   if (!chapter) return null
 
   // Get all verticals for the chapter
-  // NOTE: vertical_chairs has TWO FKs to members (member_id + appointed_by) — disambiguate
+  // vertical_chairs has TWO FKs to members (member_id + appointed_by) — disambiguate
+  // full_name + avatar_url live in profiles, not members — nested join
   const { data: verticals } = await supabase
     .from('verticals')
     .select(`
       id, name, slug, color, icon,
       current_chair:vertical_chairs(
         id, member_id,
-        member:members!vertical_chairs_member_id_fkey(id, full_name, avatar_url)
+        member:members!vertical_chairs_member_id_fkey(
+          id,
+          profile:profiles(full_name, avatar_url)
+        )
       )
     `)
     .eq('chapter_id', chapterId)
     .eq('is_active', true)
     .order('display_order')
 
-  if (!verticals) {
-    console.error('[getPathfinderDashboard] verticals still null')
-    return null
-  }
-  console.log('[getPathfinderDashboard] OK', { chapterId, verticalCount: verticals.length })
+  if (!verticals) return null
 
   // Get all AAA plans for this year
   const { data: plans } = await supabase

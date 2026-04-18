@@ -11,8 +11,17 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function updateSession(request: NextRequest) {
+  // Propagate the current pathname via a request header so that server
+  // components (e.g. app/coordinator/layout.tsx) can detect which route is
+  // being rendered. This is needed to break the `/coordinator/login` redirect
+  // loop without relying on Next.js internal headers.
+  const requestHeaders = new Headers(request.headers)
+  requestHeaders.set('x-pathname', request.nextUrl.pathname)
+
   let supabaseResponse = NextResponse.next({
-    request,
+    request: {
+      headers: requestHeaders,
+    },
   })
 
   const supabase = createServerClient(

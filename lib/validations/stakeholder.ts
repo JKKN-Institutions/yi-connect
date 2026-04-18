@@ -666,3 +666,32 @@ export type CollegeFilter = z.infer<typeof collegeFilterSchema>
 export type IndustryFilter = z.infer<typeof industryFilterSchema>
 export type VendorFilter = z.infer<typeof vendorFilterSchema>
 export type InteractionFilter = z.infer<typeof interactionFilterSchema>
+
+// ============================================================================
+// SPEAKER FAQ VALIDATION SCHEMAS (Stutzee Feature 1B)
+// ============================================================================
+
+export const createSpeakerFAQSchema = z.object({
+  speaker_id: z.string().uuid('Invalid speaker ID'),
+  question: z.string().min(3, 'Question must be at least 3 characters').max(500, 'Question too long'),
+  answer: z.string().min(1, 'Answer is required').max(5000, 'Answer too long'),
+  sort_order: z.coerce.number().int().min(0).optional(),
+  is_public: z.boolean().optional().default(true),
+})
+
+export const updateSpeakerFAQSchema = z.object({
+  id: z.string().uuid('Invalid FAQ ID'),
+  question: z.string().min(3, 'Question must be at least 3 characters').max(500, 'Question too long').optional(),
+  answer: z.string().min(1, 'Answer is required').max(5000, 'Answer too long').optional(),
+  sort_order: z.coerce.number().int().min(0).optional(),
+  is_public: z.boolean().optional(),
+})
+
+export const reorderSpeakerFAQsSchema = z.object({
+  speaker_id: z.string().uuid('Invalid speaker ID'),
+  ordered_ids: z.array(z.string().uuid()).min(1, 'At least one FAQ ID required'),
+})
+
+export type CreateSpeakerFAQInput = z.infer<typeof createSpeakerFAQSchema>
+export type UpdateSpeakerFAQInput = z.infer<typeof updateSpeakerFAQSchema>
+export type ReorderSpeakerFAQsInput = z.infer<typeof reorderSpeakerFAQsSchema>

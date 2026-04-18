@@ -1426,3 +1426,106 @@ export const getExpiringMous = cache(async (chapterId: string | null, daysAhead:
 
   return (data || []) as StakeholderMou[]
 })
+
+// ============================================================================
+// SPEAKER FAQ DATA FUNCTIONS (Stutzee Feature 1B)
+// ============================================================================
+
+import type {
+  SpeakerFAQ,
+  SpeakerWithDetails,
+  SpeakerUpcomingSession,
+} from '@/types/stakeholder'
+
+/**
+ * Get all FAQs for a speaker, ordered by sort_order.
+ */
+export const getSpeakerFAQs = cache(
+  async (speakerId: string): Promise<SpeakerFAQ[]> => {
+    const supabase = await createServerSupabaseClient()
+
+    const { data, error } = await supabase
+      .from('speaker_faqs')
+      .select('*')
+      .eq('speaker_id', speakerId)
+      .order('sort_order', { ascending: true })
+      .order('created_at', { ascending: true })
+
+    if (error) {
+      console.error('Error fetching speaker FAQs:', error)
+      return []
+    }
+
+    return (data || []) as SpeakerFAQ[]
+  }
+)
+
+/**
+ * Get speaker with FAQs + upcoming sessions.
+ * Gracefully handles missing session_speakers / event_sessions tables (Agent A territory).
+ */
+export const getSpeakerWithDetails = cache(
+  async (speakerId: string): Promise<SpeakerWithDetails | null> => {
+    const speaker = await getSpeakerById(speakerId)
+    if (!speaker) return null
+
+    const faqs = await getSpeakerFAQs(speakerId)
+
+    // Try to fetch upcoming sessions — fail gracefully if junction table doesn't exist
+    let upcoming: SpeakerUpcomingSession[] = []
+    try {
+      const supabase = await createServerSupabaseClient()
+      const { data, error } = await supabase
+        .from('session_speakers')
+        .select(`
+          role,
+          session:event_sessions!inner(
+            id,
+            title,
+            start_time,
+            end_time,
+            room_or_track,
+            event_id,
+            event:events!inner(id, title)
+          )
+        `)
+        .eq('speaker_id', speakerId)
+
+      if (!error && data) {
+        upcoming = (data as unknown as Array<{
+          role?: string
+          session: {
+            id: string
+            title: string
+            start_time: string
+            end_time: string
+            room_or_track?: string
+            event_id: string
+            event: { id: string; title: string }
+          } | null
+        }>)
+          .filter((row) => row.session)
+          .map((row) => ({
+            session_id: row.session!.id,
+            event_id: row.session!.event_id,
+            event_title: row.session!.event?.title ?? 'Untitled Event',
+            session_title: row.session!.title,
+            start_time: row.session!.start_time,
+            end_time: row.session!.end_time,
+            room_or_track: row.session!.room_or_track,
+            role: row.role,
+          }))
+          .sort((a, b) => a.start_time.localeCompare(b.start_time))
+      }
+    } catch {
+      // Table doesn't exist yet — return empty
+      upcoming = []
+    }
+
+    return {
+      ...speaker,
+      faqs,
+      upcoming_sessions: upcoming,
+    }
+  }
+)

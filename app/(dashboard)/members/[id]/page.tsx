@@ -24,6 +24,8 @@ import {
   Users,
   ArrowLeft,
   Globe,
+  UserPlus,
+  UserCheck,
 } from 'lucide-react'
 import { notFound } from 'next/navigation'
 import { MemberDetailClient } from './member-detail-client'
@@ -32,6 +34,12 @@ import { getTrainerProfile } from '@/lib/data/trainers'
 import { getMemberAssessment, getAvailableMentors } from '@/lib/data/assessments'
 import { getVerticals } from '@/lib/data/vertical'
 import { getMemberAvailability } from '@/lib/data/availability'
+import { getCurrentUser } from '@/lib/data/auth'
+import {
+  getMutualConnectionCount,
+  hasConnectedTo,
+  getMyProfileQr,
+} from '@/lib/data/connections'
 
 interface PageProps {
   params: Promise<{ id: string }>

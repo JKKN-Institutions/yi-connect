@@ -751,6 +751,8 @@ export async function createSponsor(
 
     const validation = createSponsorSchema.safeParse({
       organization_name: formData.get('organization_name'),
+      display_name: formData.get('display_name') || undefined,
+      logo_url: formData.get('logo_url') || undefined,
       industry: formData.get('industry') || undefined,
       website: formData.get('website') || undefined,
       contact_person_name: formData.get('contact_person_name') || undefined,

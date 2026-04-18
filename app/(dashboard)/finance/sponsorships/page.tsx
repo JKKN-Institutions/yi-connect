@@ -1,13 +1,14 @@
 import { Suspense } from 'react'
 import { Metadata } from 'next'
 import Link from 'next/link'
-import { Plus, TrendingUp, DollarSign, Target, Award } from 'lucide-react'
+import { Plus, TrendingUp, DollarSign, Target, Award, Layers } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { SponsorshipsTable } from '@/components/finance/sponsorships-table'
-import { getSponsorshipDeals, getSponsorshipPipelineValue } from '@/lib/data/finance'
+import { TierRevenueCard } from '@/components/finance/tier-revenue-card'
+import { getSponsorshipDeals, getSponsorshipPipelineValue, getTierRevenue } from '@/lib/data/finance'
 import { getCurrentChapterId, requireRole } from '@/lib/auth'
 import { formatCurrency } from '@/types/finance'
 

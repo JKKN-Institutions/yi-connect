@@ -90,3 +90,11 @@ export const updateSponsorLeadSchema = z.object({
 
 export type CreateSponsorLeadSchema = z.infer<typeof createSponsorLeadSchema>
 export type UpdateSponsorLeadSchema = z.infer<typeof updateSponsorLeadSchema>
+
+/**
+ * Input shapes (pre-parse). Use these with react-hook-form's generic so that
+ * fields with defaults (e.g. interest_level, follow_up_requested) remain
+ * optional at the form layer.
+ */
+export type CreateSponsorLeadInputShape = z.input<typeof createSponsorLeadSchema>
+export type UpdateSponsorLeadInputShape = z.input<typeof updateSponsorLeadSchema>

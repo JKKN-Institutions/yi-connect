@@ -2210,8 +2210,11 @@ export async function toggleSessionInterest(
   } catch (error) {
     console.error('Error in toggleSessionInterest:', error);
     return { success: false, error: 'Invalid input data' };
-=======
-// Per-Attendee QR Ticket Check-in (Stutzee Feature 2A)
+  }
+}
+
+// ============================================================================
+// STUTZEE FEATURE 2A: Per-Attendee QR Ticket Check-in
 // ============================================================================
 
 export type TicketAttendeeProfile = {

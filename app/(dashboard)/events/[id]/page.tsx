@@ -288,6 +288,35 @@ async function EventDetailContent({ params }: PageProps) {
             </Card>
           )}
 
+          {/* Member RSVP CTA — shown prominently for all users on published, future events */}
+          {canRSVP && (
+            <Card className='overflow-hidden border-0 shadow-sm bg-gradient-to-r from-orange-50 to-amber-50/60 dark:from-orange-950/30 dark:to-amber-950/20 ring-1 ring-orange-200/60 dark:ring-orange-800/40'>
+              <CardContent className='p-4 sm:p-6'>
+                <div className='flex flex-col sm:flex-row sm:items-center gap-4'>
+                  <div className='flex-1'>
+                    <h3 className='font-semibold text-foreground text-base sm:text-lg'>
+                      {userRSVP ? 'Your RSVP' : 'Register for this event'}
+                    </h3>
+                    <p className='text-sm text-muted-foreground mt-0.5'>
+                      {userRSVP
+                        ? `You are ${(userRSVP as any).status} for this event`
+                        : event.max_capacity
+                        ? `${event.max_capacity - event.current_registrations} spot${event.max_capacity - event.current_registrations !== 1 ? 's' : ''} remaining — secure yours now`
+                        : 'Open registration — join this event'}
+                    </p>
+                  </div>
+                  <div className='flex-shrink-0 w-full sm:w-auto'>
+                    <RSVPForm
+                      event={event}
+                      currentRSVP={userRSVP}
+                      memberId={user.id}
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Tabs Section */}
           <Card className='overflow-hidden border-0 shadow-sm'>
             <Tabs defaultValue='rsvps' className='w-full'>

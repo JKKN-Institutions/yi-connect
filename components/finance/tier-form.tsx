@@ -47,7 +47,11 @@ const tierFormSchema = z.object({
   name: z.string().min(1, 'Tier name is required').max(100),
   tier_level: z.enum(['platinum', 'gold', 'silver', 'bronze', 'supporter']),
   min_amount: z.coerce.number().positive('Must be greater than 0'),
-  max_amount: z.coerce.number().positive('Must be greater than 0').optional().or(z.literal('')).transform(v => v === '' ? undefined : v),
+  // Empty string allowed (no cap); otherwise must be > 0
+  max_amount: z.union([
+    z.literal(''),
+    z.coerce.number().positive('Must be greater than 0'),
+  ]).optional(),
   description: z.string().max(1000).optional(),
   color: z
     .string()

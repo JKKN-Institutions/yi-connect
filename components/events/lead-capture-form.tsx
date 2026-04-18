@@ -143,8 +143,8 @@ export function LeadCaptureForm({
   }
 
   const onScan = useCallback(
-    (result: { success: boolean; data: string }) => {
-      if (!result.success) return
+    (result: QRScanResult) => {
+      if (!result.success || !result.data) return
       setValue('ticket_token', result.data.trim())
       toast.success('QR scanned — details will prefill on submit.')
       setMode('form')
@@ -152,9 +152,9 @@ export function LeadCaptureForm({
     [setValue]
   )
 
-  const onSubmit = (values: CreateSponsorLeadSchema) => {
+  const onSubmit = (values: CreateSponsorLeadInputShape) => {
     startTransition(async () => {
-      const result = await captureSponsorsLead(values)
+      const result = await captureSponsorsLead(values as CreateSponsorLeadSchema)
       if (!result.success) {
         toast.error(result.error || 'Failed to capture lead')
         return

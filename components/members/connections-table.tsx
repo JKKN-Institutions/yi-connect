@@ -292,7 +292,7 @@ export function ConnectionsTable({ connections }: Props) {
                   colSpan={columns.length}
                   className='py-10 text-center text-sm text-muted-foreground'
                 >
-                  No connections yet. Scan a member's QR at your next event.
+                  No connections yet. Scan a member&apos;s QR at your next event.
                 </TableCell>
               </TableRow>
             ) : (

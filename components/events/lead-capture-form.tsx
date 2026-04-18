@@ -99,7 +99,7 @@ export function LeadCaptureForm({
   const [isPending, startTransition] = useTransition()
   const [capturedCount, setCapturedCount] = useState(0)
 
-  const defaultValues: CreateSponsorLeadSchema = {
+  const defaultValues: CreateSponsorLeadInputShape = {
     event_id: eventId,
     sponsor_id: sponsorId,
     rsvp_id: null,
@@ -124,8 +124,8 @@ export function LeadCaptureForm({
     watch,
     reset,
     formState: { errors },
-  } = useForm<CreateSponsorLeadSchema>({
-    resolver: zodResolver(createSponsorLeadSchema),
+  } = useForm<CreateSponsorLeadInputShape>({
+    resolver: zodResolver(createSponsorLeadSchema) as any,
     defaultValues,
   })
 

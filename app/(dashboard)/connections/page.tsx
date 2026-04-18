@@ -134,7 +134,7 @@ export default function ConnectionsPage() {
         <div>
           <h1 className='text-3xl font-bold tracking-tight'>My Connections</h1>
           <p className='text-muted-foreground'>
-            Members you've added via QR scan at events.
+            Members you&apos;ve added via QR scan at events.
           </p>
         </div>
         <Button asChild variant='outline'>

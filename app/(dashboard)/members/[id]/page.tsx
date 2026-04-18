@@ -24,6 +24,8 @@ import {
   Users,
   ArrowLeft,
   Globe,
+  UserPlus,
+  UserCheck,
 } from 'lucide-react'
 import { notFound } from 'next/navigation'
 import { MemberDetailClient } from './member-detail-client'
@@ -32,6 +34,11 @@ import { getTrainerProfile } from '@/lib/data/trainers'
 import { getMemberAssessment, getAvailableMentors } from '@/lib/data/assessments'
 import { getVerticals } from '@/lib/data/vertical'
 import { getMemberAvailability } from '@/lib/data/availability'
+import { getCurrentUser } from '@/lib/data/auth'
+import {
+  getMutualConnectionCount,
+  hasConnectedTo,
+} from '@/lib/data/connections'
 
 interface PageProps {
   params: Promise<{ id: string }>
@@ -85,7 +92,7 @@ async function MemberDetailContent({ id }: { id: string }) {
   const startDate = today.toISOString().split('T')[0]
   const endDate = threeMonthsLater.toISOString().split('T')[0]
 
-  const [verticals, mentors, availabilities, skills, certifications, engagementScores, readinessScores, engagementBreakdown] = await Promise.all([
+  const [verticals, mentors, availabilities, skills, certifications, engagementScores, readinessScores, engagementBreakdown, currentUser] = await Promise.all([
     chapterId ? getVerticals({ chapter_id: chapterId }) : Promise.resolve([]),
     chapterId ? getAvailableMentors(chapterId) : Promise.resolve([]),
     getMemberAvailability(id, startDate, endDate),
@@ -94,11 +101,38 @@ async function MemberDetailContent({ id }: { id: string }) {
     calculateEngagementScores([id]),
     calculateReadinessScores([id]),
     getMemberEngagementBreakdown(id),
+    getCurrentUser(),
   ])
 
   // Get scores for this member (default to 0 if not calculated)
   const engagementScore = engagementScores.get(id) || 0
   const readinessScore = readinessScores.get(id) || 0
+
+  // Scan-to-connect (Feature 4A) — only meaningful when viewing someone else.
+  const viewerId = currentUser?.id ?? null
+  const isSelf = viewerId === id
+
+  // Fetch the target's profile_qr_token so the "Connect" button can drop
+  // the viewer directly into the same scan flow as an in-person QR scan.
+  // Uses admin client because profile_qr_token is not exposed via members RLS.
+  let targetQrToken: string | null = null
+  let targetAllowsNetworking = false
+  if (!isSelf && viewerId) {
+    const { createAdminSupabaseClient } = await import('@/lib/supabase/server')
+    const admin = createAdminSupabaseClient()
+    const { data: tgt } = await admin
+      .from('members')
+      .select('profile_qr_token, allow_networking_qr')
+      .eq('id', id)
+      .maybeSingle()
+    targetQrToken = (tgt as any)?.profile_qr_token ?? null
+    targetAllowsNetworking = Boolean((tgt as any)?.allow_networking_qr)
+  }
+
+  const [mutualCount, alreadyConnected] = await Promise.all([
+    !isSelf && viewerId ? getMutualConnectionCount(viewerId, id) : Promise.resolve(0),
+    !isSelf && viewerId ? hasConnectedTo(viewerId, id) : Promise.resolve(false),
+  ])
 
   return (
     <div className="space-y-6">
@@ -147,12 +181,46 @@ async function MemberDetailContent({ id }: { id: string }) {
               </div>
             </div>
 
-            <Button asChild>
-              <Link href={`/members/${member.id}/edit`}>
-                <Edit className="h-4 w-4 mr-2" />
-                Edit Profile
-              </Link>
-            </Button>
+            <div className="flex flex-col items-stretch gap-2 sm:items-end">
+              {!isSelf && (
+                <div className="flex items-center gap-2">
+                  {alreadyConnected ? (
+                    <Button asChild variant="secondary" size="sm">
+                      <Link href="/connections">
+                        <UserCheck className="h-4 w-4 mr-2" />
+                        Connected
+                      </Link>
+                    </Button>
+                  ) : targetQrToken && targetAllowsNetworking ? (
+                    <Button asChild size="sm">
+                      <Link
+                        href={`/connect?token=${encodeURIComponent(targetQrToken)}`}
+                      >
+                        <UserPlus className="h-4 w-4 mr-2" />
+                        Connect
+                      </Link>
+                    </Button>
+                  ) : (
+                    <Button size="sm" disabled variant="outline">
+                      <UserPlus className="h-4 w-4 mr-2" />
+                      Not accepting connections
+                    </Button>
+                  )}
+                  {mutualCount > 0 && (
+                    <Badge variant="outline" className="whitespace-nowrap">
+                      <Users className="h-3 w-3 mr-1" />
+                      {mutualCount} mutual
+                    </Badge>
+                  )}
+                </div>
+              )}
+              <Button asChild>
+                <Link href={`/members/${member.id}/edit`}>
+                  <Edit className="h-4 w-4 mr-2" />
+                  Edit Profile
+                </Link>
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>

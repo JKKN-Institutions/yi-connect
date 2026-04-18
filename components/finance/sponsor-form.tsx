@@ -66,9 +66,18 @@ const PRIORITIES = [
 interface SponsorFormProps {
   chapterId: string;
   onSuccess?: () => void;
+  /**
+   * When true, a logo upload + display name section is rendered.
+   * Defaults to true since Feature 3A adds branding fields to every new sponsor.
+   */
+  showLogoUpload?: boolean;
 }
 
-export function SponsorForm({ chapterId, onSuccess }: SponsorFormProps) {
+export function SponsorForm({
+  chapterId,
+  onSuccess,
+  showLogoUpload = true,
+}: SponsorFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -76,6 +85,8 @@ export function SponsorForm({ chapterId, onSuccess }: SponsorFormProps) {
     resolver: zodResolver(createSponsorSchema) as any,
     defaultValues: {
       organization_name: '',
+      display_name: '',
+      logo_url: '',
       industry: '',
       website: '',
       contact_person_name: '',

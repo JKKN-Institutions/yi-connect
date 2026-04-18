@@ -100,7 +100,7 @@ async function ReimbursementStats() {
 }
 
 export default async function ReimbursementsPage() {
-  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']);
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member', 'Member']);
 
   return (
     <div className="space-y-6">

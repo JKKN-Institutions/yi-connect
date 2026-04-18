@@ -26,7 +26,8 @@ import {
   Image as ImageIcon,
   MessageSquare,
   FileText,
-  ChevronRight
+  ChevronRight,
+  LayoutList
 } from 'lucide-react';
 import { getCurrentUser } from '@/lib/data/auth';
 import { createClient } from '@/lib/supabase/server';
@@ -35,8 +36,11 @@ import {
   getMemberRSVP,
   getEventFeedback,
   getEventDocuments,
-  getVolunteerRoles
+  getVolunteerRoles,
+  getSessions,
+  getMemberSessionInterests
 } from '@/lib/data/events';
+import { AgendaTimeline } from '@/components/events/sessions/agenda-timeline';
 import {
   RSVPForm,
   QuickRSVP,
@@ -118,6 +122,10 @@ async function EventDetailContent({ params }: PageProps) {
 
   const userRSVP = await getMemberRSVP(event.id, user.id);
   const volunteerRoles = await getVolunteerRoles();
+
+  // Load agenda (sessions + current member's interest set)
+  const sessions = await getSessions(event.id);
+  const interestedIds = await getMemberSessionInterests(event.id, user.id);
 
   const statusVariant = getEventStatusVariant(event.status);
   const capacityPercentage = event.max_capacity
@@ -319,10 +327,20 @@ async function EventDetailContent({ params }: PageProps) {
 
           {/* Tabs Section */}
           <Card className='overflow-hidden border-0 shadow-sm'>
-            <Tabs defaultValue='rsvps' className='w-full'>
+            <Tabs defaultValue='agenda' className='w-full'>
               {/* Scrollable tabs container for mobile */}
               <div className='border-b bg-muted/30 overflow-x-auto scrollbar-hide'>
                 <TabsList className='h-auto p-0 bg-transparent inline-flex min-w-full sm:w-full justify-start rounded-none'>
+                  <TabsTrigger
+                    value='agenda'
+                    className='relative flex-shrink-0 px-3 sm:px-5 py-3 sm:py-4 rounded-none border-b-2 border-transparent data-[state=active]:border-orange-500 data-[state=active]:bg-transparent data-[state=active]:shadow-none transition-all'
+                  >
+                    <LayoutList className='h-4 w-4 sm:mr-2' />
+                    <span className='hidden sm:inline font-medium'>Agenda</span>
+                    <span className='ml-1 sm:ml-2 text-xs bg-muted px-1.5 sm:px-2 py-0.5 rounded-full'>
+                      {sessions.length}
+                    </span>
+                  </TabsTrigger>
                   <TabsTrigger
                     value='rsvps'
                     className='relative flex-shrink-0 px-3 sm:px-5 py-3 sm:py-4 rounded-none border-b-2 border-transparent data-[state=active]:border-orange-500 data-[state=active]:bg-transparent data-[state=active]:shadow-none transition-all'
@@ -365,6 +383,35 @@ async function EventDetailContent({ params }: PageProps) {
                   </TabsTrigger>
                 </TabsList>
               </div>
+
+              <TabsContent value='agenda' className='mt-0 p-4 sm:p-6'>
+                <div className='flex items-center justify-between mb-6'>
+                  <div>
+                    <h3 className='text-lg font-semibold'>Event Agenda</h3>
+                    <p className='text-sm text-muted-foreground mt-1'>
+                      {sessions.length === 0
+                        ? 'No sessions added yet.'
+                        : `${sessions.filter((s) => s.is_active).length} session${
+                            sessions.filter((s) => s.is_active).length !== 1 ? 's' : ''
+                          } scheduled · times in IST`}
+                    </p>
+                  </div>
+                  {canEdit && (
+                    <Button size='sm' asChild className='shadow-sm'>
+                      <Link href={`/events/${event.id}/sessions`}>
+                        <LayoutList className='mr-2 h-4 w-4' />
+                        Manage sessions
+                      </Link>
+                    </Button>
+                  )}
+                </div>
+
+                <AgendaTimeline
+                  sessions={sessions}
+                  memberId={user.id}
+                  interestedIds={interestedIds}
+                />
+              </TabsContent>
 
               <TabsContent value='rsvps' className='mt-0 p-4 sm:p-6'>
                 <div className='flex items-center justify-between mb-6'>

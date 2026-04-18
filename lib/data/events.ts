@@ -1453,3 +1453,142 @@ export const getVolunteerMatches = cache(
     return matches;
   }
 );
+
+// ============================================================================
+// STUTZEE FEATURE 1A: Event Session Data Layer
+// ============================================================================
+
+import type {
+  EventSession,
+  EventSessionWithRelations,
+  SessionSpeakerWithProfile,
+} from '@/types/event';
+
+/**
+ * Get all sessions for an event (ordered by sort_order + start_time) with speakers.
+ */
+export const getSessions = cache(
+  async (eventId: string): Promise<EventSessionWithRelations[]> => {
+    const supabase = await createClient();
+
+    const { data, error } = await supabase
+      .from('event_sessions')
+      .select(
+        `
+        *,
+        speakers:session_speakers(
+          id,
+          session_id,
+          speaker_id,
+          role,
+          sort_order,
+          created_at,
+          speaker:speakers(
+            id,
+            speaker_name,
+            title,
+            current_organization,
+            designation,
+            photo_url,
+            expertise_areas
+          )
+        )
+      `
+      )
+      .eq('event_id', eventId)
+      .order('sort_order', { ascending: true })
+      .order('start_time', { ascending: true });
+
+    if (error) {
+      console.error('Error fetching sessions:', error);
+      return [];
+    }
+
+    if (!data) return [];
+
+    // Normalize: ensure speakers array has `speaker` singular object
+    return (data as unknown as EventSessionWithRelations[]).map((s) => ({
+      ...s,
+      speakers: (s.speakers || []).sort(
+        (a: SessionSpeakerWithProfile, b: SessionSpeakerWithProfile) =>
+          a.sort_order - b.sort_order
+      ),
+    }));
+  }
+);
+
+/**
+ * Get a single session by id (with speakers).
+ */
+export const getSessionById = cache(
+  async (sessionId: string): Promise<EventSessionWithRelations | null> => {
+    const supabase = await createClient();
+
+    const { data, error } = await supabase
+      .from('event_sessions')
+      .select(
+        `
+        *,
+        speakers:session_speakers(
+          id,
+          session_id,
+          speaker_id,
+          role,
+          sort_order,
+          created_at,
+          speaker:speakers(
+            id,
+            speaker_name,
+            title,
+            current_organization,
+            designation,
+            photo_url,
+            expertise_areas
+          )
+        )
+      `
+      )
+      .eq('id', sessionId)
+      .single();
+
+    if (error || !data) {
+      return null;
+    }
+
+    return data as unknown as EventSessionWithRelations;
+  }
+);
+
+/**
+ * Get event with sessions array attached.
+ */
+export const getEventWithSessions = cache(
+  async (eventId: string) => {
+    const event = await getEventById(eventId);
+    if (!event) return null;
+    const sessions = await getSessions(eventId);
+    return { ...event, sessions };
+  }
+);
+
+/**
+ * Get a member's current interest set for sessions in an event.
+ * Returns a Set of session_id strings.
+ */
+export const getMemberSessionInterests = cache(
+  async (eventId: string, memberId: string): Promise<Set<string>> => {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from('session_interests')
+      .select('session_id, event_sessions!inner(event_id)')
+      .eq('member_id', memberId)
+      .eq('event_sessions.event_id', eventId);
+
+    if (error) {
+      console.error('Error fetching member session interests:', error);
+      return new Set();
+    }
+
+    return new Set((data || []).map((row: any) => row.session_id as string));
+  }
+);

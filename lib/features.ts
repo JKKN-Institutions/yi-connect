@@ -21,6 +21,7 @@ import {
   Layers,
   GitBranch,
   Factory,
+  Zap,
 } from 'lucide-react'
 
 // Feature names must match the database enum
@@ -39,6 +40,7 @@ export type FeatureName =
   | 'verticals'
   | 'sub_chapters'
   | 'industrial_visits'
+  | 'event_autopilot'
 
 export interface FeatureDefinition {
   name: string
@@ -162,6 +164,15 @@ export const CHAPTER_FEATURES: Record<FeatureName, FeatureDefinition> = {
     dependencies: ['stakeholder_crm'],
     category: 'engagement',
   },
+  event_autopilot: {
+    name: 'Event Auto-Pilot',
+    description:
+      'Auto-send feedback reminders, update AAA health cards, award points, email Chair summary, and flag events for quarterly national reporting',
+    icon: Zap,
+    default: false,
+    dependencies: ['events'],
+    category: 'advanced',
+  },
 }
 
 // Get features by category
@@ -219,6 +230,7 @@ export const FEATURE_ROUTES: Record<FeatureName, string[]> = {
   verticals: ['/verticals'],
   sub_chapters: ['/sub-chapters'],
   industrial_visits: ['/industrial-visits'],
+  event_autopilot: ['/settings/event-autopilot', '/reports/quarterly', '/reports/history'],
 }
 
 // Get feature for a given route

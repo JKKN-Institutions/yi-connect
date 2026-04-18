@@ -505,6 +505,84 @@ export async function cancelEvent(
 }
 
 /**
+ * Mark an event as completed.
+ *
+ * If the chapter has the `event_autopilot` feature flag enabled, this will
+ * also invoke the 6-step Auto-Pilot pipeline (triggerEventAutoPilot) which
+ * sends feedback reminders, computes stats, drafts a health card entry,
+ * awards engagement points, emails the Chair a summary, and flags the event
+ * for the next quarterly report.
+ *
+ * Per the Yi-Native Event Auto-Pilot spec (2026-04-18).
+ */
+export async function completeEvent(
+  eventId: string
+): Promise<ActionResponse<{ autopilot_status?: string; autopilot_run_id?: string }>> {
+  try {
+    const supabase = await createClient();
+    const user = await getCurrentUser();
+
+    if (!user) {
+      return { success: false, error: 'Unauthorized' };
+    }
+
+    const { data: event } = await supabase
+      .from('events')
+      .select('organizer_id, status, chapter_id')
+      .eq('id', eventId)
+      .single();
+
+    if (!event) {
+      return { success: false, error: 'Event not found' };
+    }
+
+    const hierarchyLevel = await getUserHierarchyLevel(user.id);
+    const isOrganizer = event.organizer_id === user.id;
+    const isAdmin = hierarchyLevel >= 4;
+    if (!isOrganizer && !isAdmin) {
+      return { success: false, error: 'Permission denied' };
+    }
+
+    if (event.status !== 'completed') {
+      const { error } = await supabase
+        .from('events')
+        .update({ status: 'completed' })
+        .eq('id', eventId);
+      if (error) {
+        console.error('Error marking event completed:', error);
+        return { success: false, error: 'Failed to complete event' };
+      }
+    }
+
+    updateTag('events');
+    revalidatePath('/events');
+    revalidatePath(`/events/${eventId}`);
+
+    // Hook: trigger Event Auto-Pilot if chapter has feature enabled.
+    // The triggerEventAutoPilot() function itself checks the flag and
+    // no-ops gracefully if the feature is off, so this call is always safe.
+    try {
+      const { triggerEventAutoPilot } = await import('./autopilot');
+      const apResult = await triggerEventAutoPilot(eventId);
+      return {
+        success: true,
+        data: {
+          autopilot_status: apResult.status,
+          autopilot_run_id: apResult.run_id,
+        },
+      };
+    } catch (apErr) {
+      // Auto-pilot failure must not break event completion
+      console.error('Auto-pilot hook failed (event still completed):', apErr);
+      return { success: true };
+    }
+  } catch (error) {
+    console.error('Error in completeEvent:', error);
+    return { success: false, error: 'Failed to complete event' };
+  }
+}
+
+/**
  * Delete an event (soft delete or hard delete for drafts)
  */
 export async function deleteEvent(eventId: string): Promise<ActionResponse> {

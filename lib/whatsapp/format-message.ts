@@ -264,3 +264,34 @@ export function formatQuickRSVPMessage(
 
   return message;
 }
+
+/**
+ * Post-Event Feedback Reminder (Auto-Pilot Step 1)
+ *
+ * Sent 24h (configurable) after event end to each RSVP'd member.
+ * Part of the Yi Native Event Auto-Pilot pipeline.
+ */
+export function formatFeedbackReminder(
+  event: EventDetails,
+  memberName: string,
+  feedbackUrl: string,
+  chapterName: string = 'Yi Erode'
+): string {
+  return `*Your Feedback Matters* 🙏
+
+Hi ${memberName},
+
+Thanks for being part of *${event.title}* on ${event.date}!
+
+We'd love 60 seconds of your time to share:
+• How was the event for you?
+• What worked, what didn't?
+• Anything we should try next time?
+
+👉 *Share feedback:*
+${feedbackUrl}
+
+Your thoughts shape the next event. Thank you!
+
+_${chapterName} — Together We Can. We Will._`;
+}

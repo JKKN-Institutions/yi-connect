@@ -43,6 +43,7 @@ import {
 import { AgendaTimeline } from '@/components/events/sessions/agenda-timeline';
 import { AttendeeTicket } from '@/components/events/attendee-ticket';
 import { EventSponsors } from '@/components/events/event-sponsors';
+import { PublicLinkButton } from '@/components/events/public';
 import {
   RSVPForm,
   QuickRSVP,
@@ -231,6 +232,7 @@ async function EventDetailContent({ params }: PageProps) {
                 />
               )}
               <EventQRCode eventId={event.id} eventTitle={event.title} />
+              <PublicLinkButton publicSlug={(event as any).public_slug || null} />
               <ShareButton
                 eventId={event.id}
                 eventTitle={event.title}

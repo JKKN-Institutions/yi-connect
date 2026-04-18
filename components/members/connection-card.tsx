@@ -165,7 +165,7 @@ export function ConnectionCard({ connection }: Props) {
               </div>
             ) : currentNote ? (
               <p className='rounded bg-muted/40 p-2 text-xs italic text-muted-foreground'>
-                "{currentNote}"
+                &ldquo;{currentNote}&rdquo;
               </p>
             ) : null}
 

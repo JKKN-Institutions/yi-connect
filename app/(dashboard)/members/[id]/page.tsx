@@ -38,7 +38,6 @@ import { getCurrentUser } from '@/lib/data/auth'
 import {
   getMutualConnectionCount,
   hasConnectedTo,
-  getMyProfileQr,
 } from '@/lib/data/connections'
 
 interface PageProps {

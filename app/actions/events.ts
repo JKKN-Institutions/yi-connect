@@ -1878,3 +1878,337 @@ export async function exportEvents(
     return { success: false, error: 'Failed to export events' };
   }
 }
+
+// ============================================================================
+// STUTZEE FEATURE 1A: Event Session Actions
+// ============================================================================
+
+import {
+  createSessionSchema,
+  updateSessionSchema,
+  reorderSessionsSchema,
+  toggleSessionInterestSchema,
+  deleteSessionSchema,
+} from '@/lib/validations/event';
+import type {
+  CreateSessionInput,
+  UpdateSessionInput,
+  ReorderSessionsInput,
+  ToggleSessionInterestInput,
+} from '@/types/event';
+
+/**
+ * Authorize session management for the given event.
+ * Organizer OR hierarchy_level >= 4 (Co-Chair+).
+ */
+async function canManageEventSessions(eventId: string, userId: string): Promise<boolean> {
+  const supabase = await createClient();
+  const { data: event } = await supabase
+    .from('events')
+    .select('organizer_id')
+    .eq('id', eventId)
+    .single();
+
+  if (!event) return false;
+  if (event.organizer_id === userId) return true;
+
+  const level = await getUserHierarchyLevel(userId);
+  return level >= 4;
+}
+
+/**
+ * Create a new session for an event.
+ */
+export async function createSession(
+  input: CreateSessionInput
+): Promise<ActionResponse<{ id: string }>> {
+  try {
+    const user = await getCurrentUser();
+    if (!user) return { success: false, error: 'Unauthorized' };
+
+    const validated = createSessionSchema.parse(input);
+
+    const authorized = await canManageEventSessions(validated.event_id, user.id);
+    if (!authorized) return { success: false, error: 'Permission denied' };
+
+    const supabase = await createClient();
+
+    // Determine default sort_order if not provided
+    let sortOrder = validated.sort_order;
+    if (sortOrder === undefined) {
+      const { data: lastSession } = await supabase
+        .from('event_sessions')
+        .select('sort_order')
+        .eq('event_id', validated.event_id)
+        .order('sort_order', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      sortOrder = ((lastSession?.sort_order as number) ?? -1) + 1;
+    }
+
+    const { data: session, error } = await supabase
+      .from('event_sessions')
+      .insert({
+        event_id: validated.event_id,
+        title: validated.title,
+        description: validated.description || null,
+        session_type: validated.session_type,
+        start_time: validated.start_time,
+        end_time: validated.end_time,
+        room_or_track: validated.room_or_track || null,
+        capacity: validated.capacity ?? null,
+        sort_order: sortOrder,
+        is_active: validated.is_active ?? true,
+      })
+      .select('id')
+      .single();
+
+    if (error || !session) {
+      console.error('Error creating session:', error);
+      return { success: false, error: 'Failed to create session' };
+    }
+
+    // Attach speakers if provided
+    if (validated.speaker_ids && validated.speaker_ids.length > 0) {
+      const rows = validated.speaker_ids.map((sid, idx) => ({
+        session_id: session.id,
+        speaker_id: sid,
+        sort_order: idx,
+      }));
+      const { error: spkErr } = await supabase
+        .from('session_speakers')
+        .insert(rows);
+      if (spkErr) {
+        console.error('Error attaching speakers:', spkErr);
+      }
+    }
+
+    updateTag('events');
+    revalidatePath(`/events/${validated.event_id}`);
+    revalidatePath(`/events/${validated.event_id}/sessions`);
+
+    return { success: true, data: { id: session.id } };
+  } catch (error) {
+    console.error('Error in createSession:', error);
+    return { success: false, error: 'Invalid input data' };
+  }
+}
+
+/**
+ * Update an existing session.
+ */
+export async function updateSession(
+  sessionId: string,
+  input: UpdateSessionInput
+): Promise<ActionResponse> {
+  try {
+    const user = await getCurrentUser();
+    if (!user) return { success: false, error: 'Unauthorized' };
+
+    const validated = updateSessionSchema.parse(input);
+    const supabase = await createClient();
+
+    const { data: existing } = await supabase
+      .from('event_sessions')
+      .select('event_id')
+      .eq('id', sessionId)
+      .single();
+    if (!existing) return { success: false, error: 'Session not found' };
+
+    const authorized = await canManageEventSessions(existing.event_id as string, user.id);
+    if (!authorized) return { success: false, error: 'Permission denied' };
+
+    const updatePayload: Record<string, unknown> = {};
+    if (validated.title !== undefined) updatePayload.title = validated.title;
+    if (validated.description !== undefined)
+      updatePayload.description = validated.description || null;
+    if (validated.session_type !== undefined)
+      updatePayload.session_type = validated.session_type;
+    if (validated.start_time !== undefined) updatePayload.start_time = validated.start_time;
+    if (validated.end_time !== undefined) updatePayload.end_time = validated.end_time;
+    if (validated.room_or_track !== undefined)
+      updatePayload.room_or_track = validated.room_or_track || null;
+    if (validated.capacity !== undefined) updatePayload.capacity = validated.capacity ?? null;
+    if (validated.sort_order !== undefined) updatePayload.sort_order = validated.sort_order;
+    if (validated.is_active !== undefined) updatePayload.is_active = validated.is_active;
+
+    if (Object.keys(updatePayload).length > 0) {
+      const { error } = await supabase
+        .from('event_sessions')
+        .update(updatePayload)
+        .eq('id', sessionId);
+      if (error) {
+        console.error('Error updating session:', error);
+        return { success: false, error: 'Failed to update session' };
+      }
+    }
+
+    // Replace speakers if provided
+    if (validated.speaker_ids !== undefined) {
+      await supabase.from('session_speakers').delete().eq('session_id', sessionId);
+      if (validated.speaker_ids.length > 0) {
+        const rows = validated.speaker_ids.map((sid, idx) => ({
+          session_id: sessionId,
+          speaker_id: sid,
+          sort_order: idx,
+        }));
+        const { error: spkErr } = await supabase.from('session_speakers').insert(rows);
+        if (spkErr) console.error('Error replacing speakers:', spkErr);
+      }
+    }
+
+    updateTag('events');
+    revalidatePath(`/events/${existing.event_id}`);
+    revalidatePath(`/events/${existing.event_id}/sessions`);
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error in updateSession:', error);
+    return { success: false, error: 'Invalid input data' };
+  }
+}
+
+/**
+ * Delete a session.
+ */
+export async function deleteSession(
+  sessionId: string
+): Promise<ActionResponse> {
+  try {
+    const user = await getCurrentUser();
+    if (!user) return { success: false, error: 'Unauthorized' };
+
+    const validated = deleteSessionSchema.parse({ id: sessionId });
+    const supabase = await createClient();
+
+    const { data: existing } = await supabase
+      .from('event_sessions')
+      .select('event_id')
+      .eq('id', validated.id)
+      .single();
+    if (!existing) return { success: false, error: 'Session not found' };
+
+    const authorized = await canManageEventSessions(existing.event_id as string, user.id);
+    if (!authorized) return { success: false, error: 'Permission denied' };
+
+    const { error } = await supabase
+      .from('event_sessions')
+      .delete()
+      .eq('id', validated.id);
+    if (error) {
+      console.error('Error deleting session:', error);
+      return { success: false, error: 'Failed to delete session' };
+    }
+
+    updateTag('events');
+    revalidatePath(`/events/${existing.event_id}`);
+    revalidatePath(`/events/${existing.event_id}/sessions`);
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error in deleteSession:', error);
+    return { success: false, error: 'Invalid input data' };
+  }
+}
+
+/**
+ * Reorder sessions (full array — sort_order set from index).
+ */
+export async function reorderSessions(
+  input: ReorderSessionsInput
+): Promise<ActionResponse> {
+  try {
+    const user = await getCurrentUser();
+    if (!user) return { success: false, error: 'Unauthorized' };
+
+    const validated = reorderSessionsSchema.parse(input);
+
+    const authorized = await canManageEventSessions(validated.event_id, user.id);
+    if (!authorized) return { success: false, error: 'Permission denied' };
+
+    const supabase = await createClient();
+
+    // Update sort_order for each session sequentially
+    for (let i = 0; i < validated.session_ids.length; i++) {
+      const { error } = await supabase
+        .from('event_sessions')
+        .update({ sort_order: i })
+        .eq('id', validated.session_ids[i])
+        .eq('event_id', validated.event_id);
+      if (error) {
+        console.error('Error reordering session:', error);
+        return { success: false, error: 'Failed to reorder sessions' };
+      }
+    }
+
+    updateTag('events');
+    revalidatePath(`/events/${validated.event_id}`);
+    revalidatePath(`/events/${validated.event_id}/sessions`);
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error in reorderSessions:', error);
+    return { success: false, error: 'Invalid input data' };
+  }
+}
+
+/**
+ * Toggle a member's interest flag for a session.
+ */
+export async function toggleSessionInterest(
+  input: ToggleSessionInterestInput
+): Promise<ActionResponse<{ is_interested: boolean }>> {
+  try {
+    const user = await getCurrentUser();
+    if (!user) return { success: false, error: 'Unauthorized' };
+
+    const validated = toggleSessionInterestSchema.parse(input);
+    const supabase = await createClient();
+
+    // Fetch session to find event_id for revalidation
+    const { data: session } = await supabase
+      .from('event_sessions')
+      .select('id, event_id')
+      .eq('id', validated.session_id)
+      .single();
+    if (!session) return { success: false, error: 'Session not found' };
+
+    // Check existing interest
+    const { data: existing } = await supabase
+      .from('session_interests')
+      .select('id')
+      .eq('session_id', validated.session_id)
+      .eq('member_id', user.id)
+      .maybeSingle();
+
+    let isInterested: boolean;
+    if (existing) {
+      const { error } = await supabase
+        .from('session_interests')
+        .delete()
+        .eq('id', existing.id);
+      if (error) {
+        console.error('Error removing interest:', error);
+        return { success: false, error: 'Failed to update interest' };
+      }
+      isInterested = false;
+    } else {
+      const { error } = await supabase
+        .from('session_interests')
+        .insert({ session_id: validated.session_id, member_id: user.id });
+      if (error) {
+        console.error('Error adding interest:', error);
+        return { success: false, error: 'Failed to update interest' };
+      }
+      isInterested = true;
+    }
+
+    revalidatePath(`/events/${session.event_id}`);
+    revalidatePath(`/events/${session.event_id}/sessions`);
+
+    return { success: true, data: { is_interested: isInterested } };
+  } catch (error) {
+    console.error('Error in toggleSessionInterest:', error);
+    return { success: false, error: 'Invalid input data' };
+  }
+}

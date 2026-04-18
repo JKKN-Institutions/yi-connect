@@ -1088,3 +1088,130 @@ export function getMaterialApprovalStatusVariant(
   };
   return variants[status];
 }
+
+// ============================================================================
+// STUTZEE FEATURE 1A: Event Sessions (Multi-session agenda)
+// ============================================================================
+
+export type SessionType =
+  | 'keynote'
+  | 'workshop'
+  | 'panel'
+  | 'networking'
+  | 'break'
+  | 'presentation'
+  | 'qa'
+  | 'other';
+
+export interface EventSession {
+  id: string;
+  event_id: string;
+  title: string;
+  description: string | null;
+  session_type: SessionType;
+  start_time: string;
+  end_time: string;
+  room_or_track: string | null;
+  capacity: number | null;
+  current_interest: number;
+  sort_order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SessionSpeakerLink {
+  id: string;
+  session_id: string;
+  speaker_id: string;
+  role: string | null;
+  sort_order: number;
+  created_at: string;
+}
+
+export interface SessionSpeakerWithProfile extends SessionSpeakerLink {
+  speaker: {
+    id: string;
+    speaker_name: string;
+    title: string | null;
+    current_organization: string | null;
+    designation: string | null;
+    photo_url: string | null;
+    expertise_areas: string[] | null;
+  } | null;
+}
+
+export interface SessionInterest {
+  id: string;
+  session_id: string;
+  member_id: string;
+  created_at: string;
+}
+
+export interface EventSessionWithRelations extends EventSession {
+  speakers: SessionSpeakerWithProfile[];
+  is_interested?: boolean;
+}
+
+export interface CreateSessionInput {
+  event_id: string;
+  title: string;
+  description?: string;
+  session_type: SessionType;
+  start_time: string;
+  end_time: string;
+  room_or_track?: string;
+  capacity?: number;
+  sort_order?: number;
+  is_active?: boolean;
+  speaker_ids?: string[];
+}
+
+export interface UpdateSessionInput {
+  title?: string;
+  description?: string;
+  session_type?: SessionType;
+  start_time?: string;
+  end_time?: string;
+  room_or_track?: string;
+  capacity?: number | null;
+  sort_order?: number;
+  is_active?: boolean;
+  speaker_ids?: string[];
+}
+
+export interface ReorderSessionsInput {
+  event_id: string;
+  session_ids: string[];
+}
+
+export interface ToggleSessionInterestInput {
+  session_id: string;
+}
+
+export const SESSION_TYPES: Record<SessionType, string> = {
+  keynote: 'Keynote',
+  workshop: 'Workshop',
+  panel: 'Panel',
+  networking: 'Networking',
+  break: 'Break',
+  presentation: 'Presentation',
+  qa: 'Q&A',
+  other: 'Other'
+};
+
+export function getSessionTypeVariant(
+  type: SessionType
+): EventStatusBadgeVariant {
+  const variants: Record<SessionType, EventStatusBadgeVariant> = {
+    keynote: 'default',
+    workshop: 'success',
+    panel: 'secondary',
+    networking: 'warning',
+    break: 'default',
+    presentation: 'default',
+    qa: 'secondary',
+    other: 'default'
+  };
+  return variants[type];
+}

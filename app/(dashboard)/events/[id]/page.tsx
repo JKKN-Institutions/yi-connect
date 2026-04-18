@@ -123,6 +123,10 @@ async function EventDetailContent({ params }: PageProps) {
   const userRSVP = await getMemberRSVP(event.id, user.id);
   const volunteerRoles = await getVolunteerRoles();
 
+  // Load agenda (sessions + current member's interest set)
+  const sessions = await getSessions(event.id);
+  const interestedIds = await getMemberSessionInterests(event.id, user.id);
+
   const statusVariant = getEventStatusVariant(event.status);
   const capacityPercentage = event.max_capacity
     ? (event.current_registrations / event.max_capacity) * 100

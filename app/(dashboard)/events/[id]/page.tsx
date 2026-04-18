@@ -35,8 +35,11 @@ import {
   getMemberRSVP,
   getEventFeedback,
   getEventDocuments,
-  getVolunteerRoles
+  getVolunteerRoles,
+  getSessions,
+  getMemberSessionInterests
 } from '@/lib/data/events';
+import { AgendaTimeline } from '@/components/events/sessions/agenda-timeline';
 import {
   RSVPForm,
   QuickRSVP,

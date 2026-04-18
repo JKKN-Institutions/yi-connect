@@ -14,7 +14,7 @@
 # - demo-cochair@yi-demo.com  → Co-Chair (level 3)
 # - demo-ec@yi-demo.com       → EC Member (level 2)
 #
-# Password for all demo accounts: Demo123!
+# Password for all demo accounts: DemoMember2024!
 #
 # Run:  bash scripts/seed-demo-accounts.sh
 
@@ -34,7 +34,7 @@ fi
 URL="${NEXT_PUBLIC_SUPABASE_URL}"
 KEY="${SUPABASE_SERVICE_ROLE_KEY}"
 CHAPTER_ID="1a475942-94cc-478d-ab78-89242a0c3a67" # Yi Erode
-PASSWORD="Demo123!"
+PASSWORD="DemoMember2024!"
 
 # Accounts to seed: email|role_name|full_name
 accounts=(

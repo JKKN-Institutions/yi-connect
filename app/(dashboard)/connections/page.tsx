@@ -38,7 +38,7 @@ async function ConnectionsContent() {
           <UsersRound className='mx-auto h-10 w-10 text-muted-foreground/60' />
           <h2 className='mt-3 text-lg font-semibold'>No connections yet</h2>
           <p className='mt-1 text-sm text-muted-foreground'>
-            Scan another member's Yi Connect QR at an event to add them here.
+            Scan another member&apos;s Yi Connect QR at an event to add them here.
           </p>
           <div className='mt-5 flex justify-center gap-2'>
             <Button asChild variant='outline'>

@@ -161,13 +161,45 @@ export function memberInvitationEmail(data: {
 // EVENT TEMPLATES
 // ============================================================================
 
-export function eventRegistrationEmail(data: {
+export async function eventRegistrationEmail(data: {
   memberName: string
   eventTitle: string
   eventDate: string
   eventVenue: string
   eventLink: string
-}): { subject: string; html: string } {
+  // Stutzee 2A — per-attendee ticket QR
+  eventId?: string
+  ticketToken?: string
+}): Promise<{ subject: string; html: string }> {
+  // Render optional ticket QR (base64 data URL) if token provided.
+  // qrcode is only imported server-side — templates run in Server Actions.
+  let ticketBlock = ''
+  if (data.ticketToken && data.eventId) {
+    try {
+      const QRCode = (await import('qrcode')).default
+      const scanUrl = `${APP_URL}/events/${data.eventId}/checkin/scan?t=${data.ticketToken}`
+      const qrDataUrl = await QRCode.toDataURL(scanUrl, {
+        width: 320,
+        margin: 2,
+        color: { dark: '#0b1220', light: '#FFFFFF' },
+      })
+      ticketBlock = `
+      <div style="background-color: #ffffff; border: 2px solid #e2e8f0; border-radius: 12px; padding: 24px; margin: 20px 0; text-align: center;">
+        <div style="display: inline-block; background: #1e40af; color: #ffffff; padding: 4px 12px; border-radius: 999px; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 12px;">Your ticket</div>
+        <p style="color: #0f172a; font-size: 14px; margin: 0 0 16px; font-weight: 600;">
+          Show this at the door
+        </p>
+        <img src="${qrDataUrl}" alt="Your event ticket QR code" width="220" height="220" style="display: block; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px; background: #ffffff;" />
+        <p style="color: #64748b; font-size: 12px; margin: 12px 0 0;">
+          ${data.memberName}
+        </p>
+      </div>`
+    } catch (err) {
+      console.error('Failed to render ticket QR for email:', err)
+      // Fall through without QR — email still usable
+    }
+  }
+
   return {
     subject: `Registration Confirmed: ${data.eventTitle}`,
     html: baseTemplate(`
@@ -184,6 +216,7 @@ export function eventRegistrationEmail(data: {
           📍 <strong>Venue:</strong> ${data.eventVenue}
         </p>
       </div>
+      ${ticketBlock}
       ${button('View Event Details', data.eventLink)}
       <p style="color: #64748b; font-size: 14px; margin: 16px 0 0;">
         Add this event to your calendar and we'll see you there!

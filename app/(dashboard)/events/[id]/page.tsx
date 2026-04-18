@@ -26,7 +26,8 @@ import {
   Image as ImageIcon,
   MessageSquare,
   FileText,
-  ChevronRight
+  ChevronRight,
+  LayoutList
 } from 'lucide-react';
 import { getCurrentUser } from '@/lib/data/auth';
 import { createClient } from '@/lib/supabase/server';

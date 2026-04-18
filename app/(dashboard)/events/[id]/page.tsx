@@ -27,7 +27,8 @@ import {
   MessageSquare,
   FileText,
   ChevronRight,
-  LayoutList
+  LayoutList,
+  Radio
 } from 'lucide-react';
 import { getCurrentUser } from '@/lib/data/auth';
 import { createClient } from '@/lib/supabase/server';
@@ -232,6 +233,29 @@ async function EventDetailContent({ params }: PageProps) {
                 />
               )}
               <EventQRCode eventId={event.id} eventTitle={event.title} />
+              {/* Stutzee 2C: Live big-screen dashboard — Chair+ only */}
+              {userHierarchyLevel >= 3 &&
+                (event.status === 'ongoing' ||
+                  (event.status === 'published' &&
+                    startDate <= new Date() &&
+                    endDate >= new Date())) && (
+                  <Button
+                    variant='default'
+                    size='sm'
+                    asChild
+                    className='shadow-sm bg-orange-600 hover:bg-orange-700 text-white'
+                  >
+                    <Link
+                      href={`/events/${event.id}/live`}
+                      target='_blank'
+                      rel='noopener noreferrer'
+                      aria-label='Open live event dashboard in a new tab'
+                    >
+                      <Radio className='mr-2 h-4 w-4 animate-pulse' />
+                      Live Dashboard
+                    </Link>
+                  </Button>
+                )}
               <PublicLinkButton publicSlug={(event as any).public_slug || null} />
               <ShareButton
                 eventId={event.id}

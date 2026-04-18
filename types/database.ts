@@ -1032,7 +1032,7 @@ export type Database = {
           tier_level: string;
           min_amount: number;
           max_amount: number | null;
-          benefits: string[] | null;
+          benefits: { label: string; included: boolean }[] | null;
           description: string | null;
           color: string | null;
           icon: string | null;
@@ -1048,7 +1048,7 @@ export type Database = {
           tier_level: string;
           min_amount: number;
           max_amount?: number | null;
-          benefits?: string[] | null;
+          benefits?: { label: string; included: boolean }[] | null;
           description?: string | null;
           color?: string | null;
           icon?: string | null;
@@ -1064,7 +1064,7 @@ export type Database = {
           tier_level?: string;
           min_amount?: number;
           max_amount?: number | null;
-          benefits?: string[] | null;
+          benefits?: { label: string; included: boolean }[] | null;
           description?: string | null;
           color?: string | null;
           icon?: string | null;

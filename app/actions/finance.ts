@@ -1494,3 +1494,198 @@ export async function deleteReimbursementRequest(requestId: string): Promise<For
     return { message: 'An unexpected error occurred.' }
   }
 }
+
+// ================================================
+// SPONSORSHIP TIER ACTIONS (Feature 3A)
+// ================================================
+
+/**
+ * Parse benefits JSON from FormData safely.
+ */
+function parseBenefitsJson(raw: FormDataEntryValue | null):
+  | { label: string; included: boolean }[]
+  | undefined {
+  if (!raw) return undefined
+  try {
+    const parsed = JSON.parse(String(raw))
+    if (!Array.isArray(parsed)) return undefined
+    return parsed
+      .filter((b) => b && typeof b === 'object' && typeof b.label === 'string' && b.label.trim())
+      .map((b) => ({ label: String(b.label).trim(), included: Boolean(b.included) }))
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * Create a sponsorship tier
+ */
+export async function createSponsorshipTier(
+  prevState: FormState,
+  formData: FormData
+): Promise<FormState> {
+  try {
+    const user = await getCurrentUser()
+    if (!user) {
+      return { message: 'Unauthorized. Please log in.' }
+    }
+
+    const benefits = parseBenefitsJson(formData.get('benefits'))
+
+    const validation = createSponsorshipTierSchema.safeParse({
+      name: formData.get('name'),
+      tier_level: formData.get('tier_level'),
+      min_amount: formData.get('min_amount'),
+      max_amount: formData.get('max_amount') || undefined,
+      benefits,
+      description: formData.get('description') || undefined,
+      color: formData.get('color') || undefined,
+      icon: formData.get('icon') || undefined,
+      sort_order: formData.get('sort_order') || undefined,
+      chapter_id: formData.get('chapter_id'),
+    })
+
+    if (!validation.success) {
+      return {
+        errors: validation.error.flatten().fieldErrors,
+        message: 'Invalid fields. Please check the form.',
+      }
+    }
+
+    const supabase = await createServerSupabaseClient()
+
+    const { error } = await supabase
+      .from('sponsorship_tiers')
+      .insert([validation.data])
+      .select()
+      .single()
+
+    if (error) {
+      console.error('Error creating sponsorship tier:', error)
+      return { message: 'Database error: Failed to create tier.' }
+    }
+
+    updateTag('sponsorship-tiers')
+    updateTag(`chapter-${validation.data.chapter_id}-sponsorship-tiers`)
+
+    return { success: true, message: 'Sponsorship tier created successfully.' }
+  } catch (error) {
+    console.error('Error in createSponsorshipTier:', error)
+    return { message: 'An unexpected error occurred.' }
+  }
+}
+
+/**
+ * Update a sponsorship tier
+ */
+export async function updateSponsorshipTier(
+  prevState: FormState,
+  formData: FormData
+): Promise<FormState> {
+  try {
+    const user = await getCurrentUser()
+    if (!user) {
+      return { message: 'Unauthorized. Please log in.' }
+    }
+
+    const benefits = parseBenefitsJson(formData.get('benefits'))
+    const maxAmountRaw = formData.get('max_amount')
+
+    const validation = updateSponsorshipTierSchema.safeParse({
+      tier_id: formData.get('tier_id'),
+      name: formData.get('name') || undefined,
+      tier_level: formData.get('tier_level') || undefined,
+      min_amount: formData.get('min_amount') || undefined,
+      max_amount: maxAmountRaw === '' || maxAmountRaw === null ? null : maxAmountRaw,
+      benefits,
+      description: formData.get('description') || undefined,
+      color: formData.get('color') || undefined,
+      icon: formData.get('icon') || undefined,
+      sort_order: formData.get('sort_order') || undefined,
+      is_active:
+        formData.get('is_active') === 'true'
+          ? true
+          : formData.get('is_active') === 'false'
+            ? false
+            : undefined,
+    })
+
+    if (!validation.success) {
+      return {
+        errors: validation.error.flatten().fieldErrors,
+        message: 'Invalid fields. Please check the form.',
+      }
+    }
+
+    const { tier_id, ...updateData } = validation.data
+
+    const supabase = await createServerSupabaseClient()
+
+    const { error } = await supabase
+      .from('sponsorship_tiers')
+      .update(updateData)
+      .eq('id', tier_id)
+
+    if (error) {
+      console.error('Error updating sponsorship tier:', error)
+      return { message: 'Database error: Failed to update tier.' }
+    }
+
+    updateTag('sponsorship-tiers')
+    updateTag(`sponsorship-tier-${tier_id}`)
+
+    return { success: true, message: 'Sponsorship tier updated successfully.' }
+  } catch (error) {
+    console.error('Error in updateSponsorshipTier:', error)
+    return { message: 'An unexpected error occurred.' }
+  }
+}
+
+/**
+ * Delete a sponsorship tier
+ */
+export async function deleteSponsorshipTier(tierId: string): Promise<FormState> {
+  try {
+    const user = await getCurrentUser()
+    if (!user) {
+      return { message: 'Unauthorized. Please log in.' }
+    }
+
+    const supabase = await createServerSupabaseClient()
+
+    // Prevent delete if deals still reference this tier
+    const { count: dealsCount, error: countErr } = await supabase
+      .from('sponsorship_deals')
+      .select('id', { count: 'exact', head: true })
+      .eq('tier_id', tierId)
+
+    if (countErr) {
+      console.error('Error checking tier usage:', countErr)
+      return { message: 'Database error: Failed to check tier usage.' }
+    }
+
+    if ((dealsCount ?? 0) > 0) {
+      return {
+        message: `Cannot delete tier: ${dealsCount} deal(s) still reference it. Reassign those deals first.`,
+      }
+    }
+
+    const { error } = await supabase
+      .from('sponsorship_tiers')
+      .delete()
+      .eq('id', tierId)
+
+    if (error) {
+      console.error('Error deleting sponsorship tier:', error)
+      return { message: 'Database error: Failed to delete tier.' }
+    }
+
+    updateTag('sponsorship-tiers')
+    updateTag(`sponsorship-tier-${tierId}`)
+
+    return { success: true, message: 'Sponsorship tier deleted successfully.' }
+  } catch (error) {
+    console.error('Error in deleteSponsorshipTier:', error)
+    return { message: 'An unexpected error occurred.' }
+  }
+}

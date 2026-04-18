@@ -237,6 +237,8 @@ export const createSponsorSchema = z.object({
 
 export const updateSponsorSchema = z.object({
   organization_name: z.string().min(1).max(255).optional(),
+  display_name: z.string().max(255).optional(),
+  logo_url: z.string().url().optional().or(z.literal('')),
   industry: z.string().max(100).optional(),
   website: z.string().url().optional().or(z.literal('')),
   contact_person_name: z.string().max(255).optional(),

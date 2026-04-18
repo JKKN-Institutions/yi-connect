@@ -1215,3 +1215,68 @@ export function getSessionTypeVariant(
   };
   return variants[type];
 }
+
+// ============================================================================
+// STUTZEE FEATURE 1C: Custom Form Builder
+// ============================================================================
+
+export type CustomFieldType =
+  | 'text'
+  | 'textarea'
+  | 'select'
+  | 'multiselect'
+  | 'checkbox'
+  | 'date'
+  | 'number'
+  | 'phone';
+
+export interface CustomFormField {
+  id: string; // stable UUID (client-generated via crypto.randomUUID())
+  type: CustomFieldType;
+  label: string;
+  required: boolean;
+  placeholder?: string;
+  help_text?: string;
+  options?: string[]; // for select / multiselect
+  sort_order: number;
+}
+
+// Per-field value. Actual shape depends on field type.
+export type CustomFieldResponseValue =
+  | string
+  | string[]
+  | boolean
+  | number
+  | null;
+
+// Map of field id -> response value
+export type CustomFormFieldResponse = Record<string, CustomFieldResponseValue>;
+
+export interface UpdateEventFormFieldsInput {
+  event_id: string;
+  registration_form_fields: CustomFormField[];
+}
+
+export const CUSTOM_FIELD_TYPES: Record<CustomFieldType, string> = {
+  text: 'Short text',
+  textarea: 'Long text',
+  select: 'Dropdown',
+  multiselect: 'Multi-select',
+  checkbox: 'Yes / No',
+  date: 'Date',
+  number: 'Number',
+  phone: 'Phone'
+};
+
+export const MAX_CUSTOM_FIELDS = 20;
+
+export function customFieldNeedsOptions(type: CustomFieldType): boolean {
+  return type === 'select' || type === 'multiselect';
+}
+
+export function hasRequiredCustomFields(
+  fields: CustomFormField[] | null | undefined
+): boolean {
+  if (!fields || !Array.isArray(fields)) return false;
+  return fields.some((f) => f && f.required === true);
+}

@@ -704,10 +704,18 @@ export async function deleteVenue(venueId: string): Promise<ActionResponse> {
 // ============================================================================
 
 /**
- * Create or update RSVP for a member
+ * Create or update RSVP for a member.
+ *
+ * Accepts an optional `custom_field_responses` JSONB payload. The payload is
+ * validated against the event's stored `registration_form_fields`:
+ *  - Required fields must be present with a non-empty value
+ *  - Unknown field ids are dropped silently
+ *  - Values are coerced into the shape expected by each field type
  */
 export async function createOrUpdateRSVP(
-  input: CreateRSVPInput
+  input: CreateRSVPInput & {
+    custom_field_responses?: Record<string, unknown>;
+  }
 ): Promise<ActionResponse<{ id: string }>> {
   try {
     const supabase = await createClient();
@@ -723,13 +731,14 @@ export async function createOrUpdateRSVP(
       return { success: false, error: 'Permission denied' };
     }
 
-    const validated = createRSVPSchema.parse(input);
+    const { custom_field_responses: rawCustomResponses, ...rest } = input;
+    const validated = createRSVPSchema.parse(rest);
 
-    // Check if event allows guests
+    // Check if event allows guests + load custom field definitions
     const { data: event } = await supabase
       .from('events')
       .select(
-        'allow_guests, guest_limit, max_capacity, current_registrations, status'
+        'allow_guests, guest_limit, max_capacity, current_registrations, status, registration_form_fields'
       )
       .eq('id', validated.event_id)
       .single();
@@ -753,6 +762,15 @@ export async function createOrUpdateRSVP(
       };
     }
 
+    // Validate custom field responses against the event's field definitions
+    const customValidation = validateCustomFieldResponses(
+      (event as any).registration_form_fields,
+      rawCustomResponses
+    );
+    if (!customValidation.ok) {
+      return { success: false, error: customValidation.error };
+    }
+
     // Check capacity
     const totalAttendees = 1 + (validated.guests_count || 0);
     if (
@@ -770,8 +788,9 @@ export async function createOrUpdateRSVP(
         {
           ...validated,
           member_id: validated.member_id,
-          event_id: validated.event_id
-        },
+          event_id: validated.event_id,
+          custom_field_responses: customValidation.sanitized
+        } as any,
         {
           onConflict: 'event_id,member_id'
         }
@@ -900,9 +919,14 @@ export async function deleteRSVP(rsvpId: string): Promise<ActionResponse> {
 
 /**
  * Create guest RSVP
+ *
+ * Accepts an optional `custom_field_responses` payload, validated against the
+ * event's stored `registration_form_fields`.
  */
 export async function createGuestRSVP(
-  input: CreateGuestRSVPInput
+  input: CreateGuestRSVPInput & {
+    custom_field_responses?: Record<string, unknown>;
+  }
 ): Promise<ActionResponse<{ id: string }>> {
   try {
     const supabase = await createClient();
@@ -912,12 +936,13 @@ export async function createGuestRSVP(
       return { success: false, error: 'Unauthorized' };
     }
 
-    const validated = createGuestRSVPSchema.parse(input);
+    const { custom_field_responses: rawCustomResponses, ...rest } = input;
+    const validated = createGuestRSVPSchema.parse(rest);
 
-    // Check if event allows guests
+    // Check if event allows guests + load form fields
     const { data: event } = await supabase
       .from('events')
-      .select('allow_guests, status')
+      .select('allow_guests, status, registration_form_fields')
       .eq('id', validated.event_id)
       .single();
 
@@ -933,12 +958,21 @@ export async function createGuestRSVP(
       return { success: false, error: 'Cannot RSVP to unpublished events' };
     }
 
+    const customValidation = validateCustomFieldResponses(
+      (event as any).registration_form_fields,
+      rawCustomResponses
+    );
+    if (!customValidation.ok) {
+      return { success: false, error: customValidation.error };
+    }
+
     const { data, error } = await supabase
       .from('guest_rsvps')
       .insert({
         ...validated,
-        invited_by_member_id: validated.invited_by_member_id || user.id
-      })
+        invited_by_member_id: validated.invited_by_member_id || user.id,
+        custom_field_responses: customValidation.sanitized
+      } as any)
       .select('id')
       .single();
 
@@ -2460,5 +2494,175 @@ export async function checkInByTicketToken(
   } catch (error) {
     console.error('Error in checkInByTicketToken:', error);
     return { success: false, error: 'Check-in failed' };
+  }
+}
+
+// ============================================================================
+// STUTZEE FEATURE 1C: Custom Form Builder
+// ============================================================================
+
+import {
+  updateEventFormFieldsSchema,
+  type CustomFieldZ,
+  type UpdateEventFormFieldsInputZ
+} from '@/lib/validations/event';
+import type { CustomFormField } from '@/types/event';
+
+/**
+ * Validate + sanitize a raw `custom_field_responses` payload against an
+ * event's stored field definitions.
+ *
+ * Returns `{ ok: true, sanitized }` or `{ ok: false, error }`.
+ */
+function validateCustomFieldResponses(
+  rawFields: unknown,
+  rawResponses: Record<string, unknown> | undefined
+): { ok: true; sanitized: Record<string, unknown> } | { ok: false; error: string } {
+  const fields: CustomFormField[] = Array.isArray(rawFields)
+    ? (rawFields as CustomFormField[])
+    : [];
+
+  const responses = rawResponses ?? {};
+  const sanitized: Record<string, unknown> = {};
+
+  for (const field of fields) {
+    if (!field || typeof field !== 'object' || !field.id) continue;
+    const raw = responses[field.id];
+
+    // Coerce per type
+    let value: unknown = raw;
+    switch (field.type) {
+      case 'text':
+      case 'textarea':
+      case 'date':
+      case 'phone':
+        value = typeof raw === 'string' ? raw.trim() : raw == null ? '' : String(raw);
+        break;
+      case 'number':
+        if (raw === '' || raw == null) value = null;
+        else if (typeof raw === 'number') value = raw;
+        else {
+          const n = Number(raw);
+          value = Number.isFinite(n) ? n : null;
+        }
+        break;
+      case 'checkbox':
+        value = raw === true || raw === 'true' || raw === 'on';
+        break;
+      case 'select':
+        value = typeof raw === 'string' ? raw : raw == null ? '' : String(raw);
+        break;
+      case 'multiselect':
+        value = Array.isArray(raw)
+          ? raw.filter((v) => typeof v === 'string')
+          : typeof raw === 'string' && raw.length > 0
+          ? [raw]
+          : [];
+        break;
+      default:
+        value = raw ?? null;
+    }
+
+    // Required validation
+    if (field.required) {
+      const isEmpty =
+        value === '' ||
+        value === null ||
+        value === undefined ||
+        (Array.isArray(value) && value.length === 0) ||
+        (field.type === 'checkbox' && value === false);
+      if (isEmpty) {
+        return {
+          ok: false,
+          error: `Field "${field.label}" is required`
+        };
+      }
+    }
+
+    // Select / multiselect must match allowed options
+    if (
+      (field.type === 'select' || field.type === 'multiselect') &&
+      Array.isArray(field.options) &&
+      field.options.length > 0
+    ) {
+      const allowed = new Set(field.options);
+      if (field.type === 'select' && typeof value === 'string' && value) {
+        if (!allowed.has(value)) {
+          return { ok: false, error: `Invalid value for "${field.label}"` };
+        }
+      }
+      if (field.type === 'multiselect' && Array.isArray(value)) {
+        value = (value as string[]).filter((v) => allowed.has(v));
+      }
+    }
+
+    sanitized[field.id] = value;
+  }
+
+  return { ok: true, sanitized };
+}
+
+/**
+ * Update an event's registration form field definitions.
+ *
+ * Auth: organizer of the event OR hierarchy level <= 3 (Co-Chair+).
+ */
+export async function updateEventFormFields(
+  input: UpdateEventFormFieldsInputZ
+): Promise<ActionResponse> {
+  try {
+    const supabase = await createClient();
+    const user = await getCurrentUser();
+
+    if (!user) {
+      return { success: false, error: 'Unauthorized' };
+    }
+
+    // Validate + enforce max field count via Zod
+    const validated = updateEventFormFieldsSchema.parse(input);
+
+    // Load event to check permission
+    const { data: event, error: eventError } = await supabase
+      .from('events')
+      .select('organizer_id')
+      .eq('id', validated.event_id)
+      .single();
+
+    if (eventError || !event) {
+      return { success: false, error: 'Event not found' };
+    }
+
+    const hierarchyLevel = await getUserHierarchyLevel(user.id);
+    const isOrganizer = event.organizer_id === user.id;
+    const isCoChairOrAbove = hierarchyLevel > 0 && hierarchyLevel <= 3;
+    if (!isOrganizer && !isCoChairOrAbove) {
+      return { success: false, error: 'Permission denied' };
+    }
+
+    // Normalize: ensure sort_order is contiguous 0..n-1 based on array order
+    const normalized: CustomFieldZ[] = validated.registration_form_fields.map(
+      (f, idx) => ({ ...f, sort_order: idx })
+    );
+
+    const { error: updateError } = await supabase
+      .from('events')
+      .update({
+        registration_form_fields: normalized as unknown as any
+      } as any)
+      .eq('id', validated.event_id);
+
+    if (updateError) {
+      console.error('Error updating registration_form_fields:', updateError);
+      return { success: false, error: 'Failed to update form fields' };
+    }
+
+    updateTag('events');
+    revalidatePath(`/events/${validated.event_id}`);
+    revalidatePath(`/events/${validated.event_id}/edit`);
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error in updateEventFormFields:', error);
+    return { success: false, error: 'Invalid form field data' };
   }
 }

@@ -72,6 +72,8 @@ import {
 import { cn } from '@/lib/utils';
 import { LocationPicker } from '@/components/ui/location-picker';
 import toast from 'react-hot-toast';
+import { CustomFieldsEditor } from './custom-fields-editor';
+import type { CustomFormField } from '@/types/event';
 
 interface EventFormProps {
   event?: EventWithDetails;
@@ -98,7 +100,18 @@ export function EventForm(props: EventFormProps) {
 
   const isEditing = !!event;
   const [currentTab, setCurrentTab] = useState('basic');
-  const tabs = ['basic', 'schedule', 'venue', 'settings'];
+  const tabs = ['basic', 'schedule', 'venue', 'settings', 'registration'];
+
+  // Custom registration form fields — autosaved for existing events,
+  // buffered locally for new events (saved after create by the editor once
+  // the event has an id).
+  const initialCustomFields: CustomFormField[] = Array.isArray(
+    (event as any)?.registration_form_fields
+  )
+    ? ((event as any).registration_form_fields as CustomFormField[])
+    : [];
+  const [customFields, setCustomFields] =
+    useState<CustomFormField[]>(initialCustomFields);
 
   const form = useForm<CreateEventInput>({
     resolver: zodResolver(createEventSchema) as Resolver<CreateEventInput>,
@@ -160,6 +173,24 @@ export function EventForm(props: EventFormProps) {
         } else {
           const result = await createEvent(data);
           if (result.success && result.data) {
+            // If the user configured custom fields while creating, persist
+            // them now that we have an event id.
+            if (customFields.length > 0) {
+              try {
+                const { updateEventFormFields } = await import(
+                  '@/app/actions/events'
+                );
+                await updateEventFormFields({
+                  event_id: result.data.id,
+                  registration_form_fields: customFields.map((f, i) => ({
+                    ...f,
+                    sort_order: i
+                  }))
+                });
+              } catch (e) {
+                console.error('Failed to save custom fields after create', e);
+              }
+            }
             toast.success('Event created successfully');
             router.push(`/events/${result.data.id}`);
           } else {
@@ -195,6 +226,7 @@ export function EventForm(props: EventFormProps) {
           'venue_longitude',
           'virtual_meeting_link'
         ],
+        registration: [],
         settings: [
           'max_capacity',
           'waitlist_enabled',
@@ -220,7 +252,8 @@ export function EventForm(props: EventFormProps) {
           basic: 'Please complete all required fields in Basic Info',
           schedule: 'Please provide valid dates for the event',
           venue: 'Please provide venue details or mark as virtual event',
-          settings: 'Please check event settings'
+          settings: 'Please check event settings',
+          registration: 'Please review registration form fields'
         };
 
         toast.error(
@@ -253,7 +286,7 @@ export function EventForm(props: EventFormProps) {
           onValueChange={setCurrentTab}
           className='w-full'
         >
-          <TabsList className='grid w-full grid-cols-4'>
+          <TabsList className='grid w-full grid-cols-5'>
             <TabsTrigger value='basic' className='relative'>
               Basic Info
               {form.formState.errors.title ||
@@ -277,6 +310,7 @@ export function EventForm(props: EventFormProps) {
               ) : null}
             </TabsTrigger>
             <TabsTrigger value='settings'>Settings</TabsTrigger>
+            <TabsTrigger value='registration'>Registration Form</TabsTrigger>
           </TabsList>
 
           {/* Basic Info Tab */}
@@ -999,6 +1033,16 @@ export function EventForm(props: EventFormProps) {
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* Registration Form tab */}
+          <TabsContent value='registration' className='space-y-6'>
+            <CustomFieldsEditor
+              eventId={event?.id}
+              initialFields={initialCustomFields}
+              autoSave={isEditing}
+              onChange={setCustomFields}
+            />
           </TabsContent>
         </Tabs>
 

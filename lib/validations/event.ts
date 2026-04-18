@@ -932,3 +932,84 @@ export type UpdateSessionInputZ = z.infer<typeof updateSessionSchema>
 export type ReorderSessionsInputZ = z.infer<typeof reorderSessionsSchema>
 export type ToggleSessionInterestInputZ = z.infer<typeof toggleSessionInterestSchema>
 export type DeleteSessionInputZ = z.infer<typeof deleteSessionSchema>
+
+// ============================================================================
+// STUTZEE FEATURE 1C: Custom Form Builder
+// ============================================================================
+
+const customFieldTypes = [
+  'text',
+  'textarea',
+  'select',
+  'multiselect',
+  'checkbox',
+  'date',
+  'number',
+  'phone',
+] as const
+
+export const MAX_CUSTOM_FIELDS_ZOD = 20
+
+/**
+ * Schema for a single custom form field definition.
+ * Enforces that select / multiselect have at least one option.
+ */
+export const customFieldSchema = z.object({
+  id: z.string().uuid('Invalid field id'),
+  type: z.enum(customFieldTypes, { message: 'Invalid field type' }),
+  label: z.string().min(1, 'Field label is required').max(200, 'Label too long'),
+  required: z.boolean(),
+  placeholder: z.string().max(200).optional(),
+  help_text: z.string().max(500).optional(),
+  options: z.array(z.string().min(1).max(120)).max(50).optional(),
+  sort_order: z.coerce.number().int().min(0),
+}).refine(
+  (field) => {
+    if (field.type === 'select' || field.type === 'multiselect') {
+      return Array.isArray(field.options) && field.options.length >= 1
+    }
+    return true
+  },
+  {
+    message: 'Select / multiselect fields need at least one option',
+    path: ['options'],
+  }
+)
+
+export const updateEventFormFieldsSchema = z.object({
+  event_id: z.string().uuid('Invalid event id'),
+  registration_form_fields: z
+    .array(customFieldSchema)
+    .max(MAX_CUSTOM_FIELDS_ZOD, `Maximum ${MAX_CUSTOM_FIELDS_ZOD} custom fields allowed`),
+})
+
+/**
+ * Response value schema — deliberately permissive because the field type
+ * is resolved server-side from the stored field definition.
+ */
+export const customFieldResponseValueSchema = z.union([
+  z.string(),
+  z.array(z.string()),
+  z.boolean(),
+  z.number(),
+  z.null(),
+])
+
+export const customFieldResponsesSchema = z
+  .record(z.string(), customFieldResponseValueSchema)
+  .optional()
+
+// Extend the RSVP schema to carry optional custom field responses.
+export const createRSVPWithCustomFieldsSchema = createRSVPSchema.extend({
+  custom_field_responses: customFieldResponsesSchema,
+})
+
+export const createGuestRSVPWithCustomFieldsSchema = createGuestRSVPSchema.extend({
+  custom_field_responses: customFieldResponsesSchema,
+})
+
+export type CustomFieldZ = z.infer<typeof customFieldSchema>
+export type UpdateEventFormFieldsInputZ = z.infer<typeof updateEventFormFieldsSchema>
+export type CustomFieldResponsesZ = z.infer<typeof customFieldResponsesSchema>
+export type CreateRSVPWithCustomFieldsInput = z.infer<typeof createRSVPWithCustomFieldsSchema>
+export type CreateGuestRSVPWithCustomFieldsInput = z.infer<typeof createGuestRSVPWithCustomFieldsSchema>

@@ -12,3 +12,4 @@ export { PublicEventVirtual } from './public-event-virtual';
 export { PublicEventAgenda } from './public-event-agenda';
 export { PublicEventSpeakers } from './public-event-speakers';
 export { PublicRegisterCTA } from './public-register-cta';
+export { PublicLinkButton } from './public-link-button';

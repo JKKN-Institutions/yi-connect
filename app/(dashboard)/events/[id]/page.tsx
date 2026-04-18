@@ -39,6 +39,7 @@ import {
 } from '@/lib/data/events';
 import {
   RSVPForm,
+  QuickRSVP,
   EventFeedbackForm,
   VolunteerAssignmentForm,
   ShareButton,
@@ -187,6 +188,13 @@ async function EventDetailContent({ params }: PageProps) {
             </div>
 
             <div className='flex items-center gap-2'>
+              {canRSVP && (
+                <QuickRSVP
+                  event={event}
+                  currentRSVP={userRSVP}
+                  memberId={user.id}
+                />
+              )}
               {canEdit && event.status === 'draft' && (
                 <EventPublishButton
                   eventId={event.id}

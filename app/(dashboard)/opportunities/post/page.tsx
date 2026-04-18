@@ -25,7 +25,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent } from '@/components/ui/card';
 
 export default async function PostOpportunityPage() {
-  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair']);
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Industry Coordinator']);
 
   return (
     <Suspense fallback={<PostOpportunityPageSkeleton />}>

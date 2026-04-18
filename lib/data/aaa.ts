@@ -243,16 +243,19 @@ export async function getPathfinderDashboard(
   const supabase = await createClient()
 
   // Get chapter info
-  const { data: chapter } = await supabase
+  const { data: chapter, error: chErr } = await supabase
     .from('chapters')
     .select('id, name')
     .eq('id', chapterId)
     .single()
 
-  if (!chapter) return null
+  if (!chapter) {
+    console.error('[getPathfinderDashboard] chapter missing', { chapterId, chErr })
+    return null
+  }
 
   // Get all verticals for the chapter
-  const { data: verticals } = await supabase
+  const { data: verticals, error: vErr } = await supabase
     .from('verticals')
     .select(`
       id, name, slug, color, icon,
@@ -265,7 +268,10 @@ export async function getPathfinderDashboard(
     .eq('is_active', true)
     .order('display_order')
 
-  if (!verticals) return null
+  if (!verticals) {
+    console.error('[getPathfinderDashboard] verticals null', { chapterId, vErr })
+    return null
+  }
 
   // Get all AAA plans for this year
   const { data: plans } = await supabase

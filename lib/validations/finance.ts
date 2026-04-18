@@ -268,15 +268,21 @@ export const deleteSponsorSchema = z.object({
 // SPONSORSHIP TIER VALIDATION SCHEMAS
 // ================================================
 
+const benefitItemSchema = z.object({
+  label: z.string().min(1, 'Benefit label is required').max(200),
+  included: z.boolean().default(true),
+})
+
 export const createSponsorshipTierSchema = z.object({
   name: z.string().min(1, 'Tier name is required').max(100),
   tier_level: z.enum(['platinum', 'gold', 'silver', 'bronze', 'supporter']),
   min_amount: positiveDecimal,
   max_amount: positiveDecimal.optional(),
-  benefits: z.array(z.string()).optional(),
+  benefits: z.array(benefitItemSchema).optional(),
   description: z.string().max(1000).optional(),
   color: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
   icon: z.string().max(50).optional(),
+  sort_order: z.coerce.number().int().min(0).optional(),
   chapter_id: z.string().uuid('Invalid chapter ID'),
 })
   .refine(
@@ -288,13 +294,16 @@ export const createSponsorshipTierSchema = z.object({
   )
 
 export const updateSponsorshipTierSchema = z.object({
+  tier_id: z.string().uuid('Invalid tier ID'),
   name: z.string().min(1).max(100).optional(),
+  tier_level: z.enum(['platinum', 'gold', 'silver', 'bronze', 'supporter']).optional(),
   min_amount: positiveDecimal.optional(),
   max_amount: positiveDecimal.optional().nullable(),
-  benefits: z.array(z.string()).optional(),
+  benefits: z.array(benefitItemSchema).optional(),
   description: z.string().max(1000).optional(),
   color: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
   icon: z.string().max(50).optional(),
+  sort_order: z.coerce.number().int().min(0).optional(),
   is_active: z.boolean().optional(),
 })
 

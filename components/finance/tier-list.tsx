@@ -222,7 +222,7 @@ export function TierList({ tiers, chapterId, canEdit }: TierListProps) {
             <AlertDialogDescription>
               {deletingTier ? (
                 <>
-                  You're about to delete <b>{deletingTier.name}</b>. This action
+                  You&apos;re about to delete <b>{deletingTier.name}</b>. This action
                   cannot be undone. Tiers linked to existing deals cannot be
                   deleted.
                 </>

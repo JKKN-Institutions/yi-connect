@@ -384,6 +384,35 @@ async function EventDetailContent({ params }: PageProps) {
                 </TabsList>
               </div>
 
+              <TabsContent value='agenda' className='mt-0 p-4 sm:p-6'>
+                <div className='flex items-center justify-between mb-6'>
+                  <div>
+                    <h3 className='text-lg font-semibold'>Event Agenda</h3>
+                    <p className='text-sm text-muted-foreground mt-1'>
+                      {sessions.length === 0
+                        ? 'No sessions added yet.'
+                        : `${sessions.filter((s) => s.is_active).length} session${
+                            sessions.filter((s) => s.is_active).length !== 1 ? 's' : ''
+                          } scheduled · times in IST`}
+                    </p>
+                  </div>
+                  {canEdit && (
+                    <Button size='sm' asChild className='shadow-sm'>
+                      <Link href={`/events/${event.id}/sessions`}>
+                        <LayoutList className='mr-2 h-4 w-4' />
+                        Manage sessions
+                      </Link>
+                    </Button>
+                  )}
+                </div>
+
+                <AgendaTimeline
+                  sessions={sessions}
+                  memberId={user.id}
+                  interestedIds={interestedIds}
+                />
+              </TabsContent>
+
               <TabsContent value='rsvps' className='mt-0 p-4 sm:p-6'>
                 <div className='flex items-center justify-between mb-6'>
                   <div>

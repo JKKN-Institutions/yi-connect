@@ -65,7 +65,7 @@ async function TemplatesGrid() {
             Create reusable message templates with dynamic placeholders like {"{firstName}"} and {"{eventName}"} to save time.
           </p>
           <Button asChild>
-            <Link href="/communication/templates/new">
+            <Link href="/communications/templates/new">
               <Plus className="mr-2 h-4 w-4" />
               Create Your First Template
             </Link>

@@ -17,6 +17,7 @@ interface AddGuestRSVPInput {
   token: string;
   full_name: string;
   phone?: string;
+  custom_field_responses?: Record<string, unknown>;
 }
 
 interface ActionResponse<T = void> {
@@ -184,10 +185,10 @@ export async function addGuestRSVP(
 
     const supabase = createAdminSupabaseClient();
 
-    // Validate token and check capacity
+    // Validate token and check capacity + load custom field definitions
     const { data: event } = await supabase
       .from('events')
-      .select('id, status, max_capacity, current_registrations')
+      .select('id, status, max_capacity, current_registrations, registration_form_fields')
       .eq('id', input.event_id)
       .eq('rsvp_token', input.token)
       .in('status', ['published', 'ongoing'])
@@ -202,6 +203,15 @@ export async function addGuestRSVP(
       return { success: false, error: 'Event is full' };
     }
 
+    // Validate + sanitize custom field responses against the event's fields
+    const sanitizedCustom = sanitizeGuestCustomResponses(
+      (event as unknown as { registration_form_fields: unknown }).registration_form_fields,
+      input.custom_field_responses
+    );
+    if (!sanitizedCustom.ok) {
+      return { success: false, error: sanitizedCustom.error };
+    }
+
     const { data, error } = await supabase
       .from('guest_rsvps')
       .insert({
@@ -210,7 +220,8 @@ export async function addGuestRSVP(
         email: `guest-${crypto.randomUUID()}@quickrsvp.local`, // Unique placeholder per guest
         phone: input.phone?.trim() || null,
         status: 'confirmed',
-      })
+        custom_field_responses: sanitizedCustom.value,
+      } as never)
       .select('id')
       .single();
 
@@ -224,4 +235,99 @@ export async function addGuestRSVP(
   } catch {
     return { success: false, error: 'Something went wrong' };
   }
+}
+
+// ---------------------------------------------------------------------------
+// Custom field response sanitizer for anonymous guest RSVPs
+// ---------------------------------------------------------------------------
+type GuestField = {
+  id: string;
+  type: string;
+  label: string;
+  required?: boolean;
+  options?: string[];
+};
+
+function sanitizeGuestCustomResponses(
+  rawFields: unknown,
+  rawResponses: Record<string, unknown> | undefined
+):
+  | { ok: true; value: Record<string, unknown> }
+  | { ok: false; error: string } {
+  const fields: GuestField[] = Array.isArray(rawFields)
+    ? (rawFields as GuestField[])
+    : [];
+  if (fields.length === 0) return { ok: true, value: {} };
+
+  const responses = rawResponses ?? {};
+  const out: Record<string, unknown> = {};
+
+  for (const field of fields) {
+    if (!field || !field.id) continue;
+    const raw = responses[field.id];
+    let value: unknown = raw;
+
+    switch (field.type) {
+      case 'text':
+      case 'textarea':
+      case 'date':
+      case 'phone':
+        value = typeof raw === 'string' ? raw.trim() : raw == null ? '' : String(raw);
+        break;
+      case 'number':
+        if (raw === '' || raw == null) value = null;
+        else if (typeof raw === 'number') value = raw;
+        else {
+          const n = Number(raw);
+          value = Number.isFinite(n) ? n : null;
+        }
+        break;
+      case 'checkbox':
+        value = raw === true || raw === 'true' || raw === 'on';
+        break;
+      case 'select':
+        value = typeof raw === 'string' ? raw : raw == null ? '' : String(raw);
+        if (
+          Array.isArray(field.options) &&
+          field.options.length > 0 &&
+          typeof value === 'string' &&
+          value &&
+          !field.options.includes(value)
+        ) {
+          return { ok: false, error: `Invalid value for "${field.label}"` };
+        }
+        break;
+      case 'multiselect': {
+        const arr = Array.isArray(raw)
+          ? raw.filter((v): v is string => typeof v === 'string')
+          : typeof raw === 'string' && raw.length > 0
+          ? [raw]
+          : [];
+        const allowed =
+          Array.isArray(field.options) && field.options.length > 0
+            ? new Set(field.options)
+            : null;
+        value = allowed ? arr.filter((v) => allowed.has(v)) : arr;
+        break;
+      }
+      default:
+        value = raw ?? null;
+    }
+
+    if (field.required) {
+      const isEmpty =
+        value === '' ||
+        value === null ||
+        value === undefined ||
+        (Array.isArray(value) && value.length === 0) ||
+        (field.type === 'checkbox' && value === false);
+      if (isEmpty) {
+        return { ok: false, error: `Field "${field.label}" is required` };
+      }
+    }
+
+    out[field.id] = value;
+  }
+
+  return { ok: true, value: out };
 }

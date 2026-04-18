@@ -7,7 +7,7 @@
  * Allows members to RSVP to events with guest information.
  */
 
-import { useState, useTransition } from 'react';
+import { useMemo, useState, useTransition } from 'react';
 import { useForm, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Loader2, UserPlus } from 'lucide-react';
@@ -16,7 +16,16 @@ import {
   createRSVPSchema,
   type CreateRSVPInput
 } from '@/lib/validations/event';
-import type { EventWithDetails, EventRSVP } from '@/types/event';
+import type {
+  CustomFieldResponseValue,
+  CustomFormField,
+  EventWithDetails,
+  EventRSVP
+} from '@/types/event';
+import {
+  CustomFieldRenderer,
+  validateCustomFieldResponsesClient
+} from './custom-field-renderer';
 
 // Form values type - ensures required fields are non-optional
 type RSVPFormValues = {
@@ -87,6 +96,34 @@ export function RSVPForm({
     ? event.max_capacity - event.current_registrations
     : null;
 
+  // ---- Custom fields ---------------------------------------------------
+  const customFields: CustomFormField[] = useMemo(() => {
+    const raw = (event as any)?.registration_form_fields;
+    if (!Array.isArray(raw)) return [];
+    return [...raw].sort(
+      (a: CustomFormField, b: CustomFormField) =>
+        (a.sort_order ?? 0) - (b.sort_order ?? 0)
+    );
+  }, [event]);
+
+  const initialCustomResponses: Record<string, CustomFieldResponseValue> =
+    useMemo(() => {
+      const existing = (currentRSVP as any)?.custom_field_responses;
+      const out: Record<string, CustomFieldResponseValue> = {};
+      for (const f of customFields) {
+        const v = existing && typeof existing === 'object' ? existing[f.id] : undefined;
+        if (v !== undefined) out[f.id] = v as CustomFieldResponseValue;
+        else if (f.type === 'multiselect') out[f.id] = [];
+        else if (f.type === 'checkbox') out[f.id] = false;
+        else out[f.id] = '';
+      }
+      return out;
+    }, [customFields, currentRSVP]);
+
+  const [customResponses, setCustomResponses] =
+    useState<Record<string, CustomFieldResponseValue>>(initialCustomResponses);
+  const [customErrors, setCustomErrors] = useState<Record<string, string>>({});
+
   const form = useForm<RSVPFormValues>({
     resolver: zodResolver(createRSVPSchema) as Resolver<RSVPFormValues>,
     defaultValues: {
@@ -106,9 +143,24 @@ export function RSVPForm({
   const guestsCount = form.watch('guests_count');
 
   const onSubmit = (data: RSVPFormValues) => {
+    // Validate custom fields client-side
+    const { ok, errors } = validateCustomFieldResponsesClient(
+      customFields,
+      customResponses
+    );
+    setCustomErrors(errors);
+    if (!ok) {
+      toast.error('Please complete the required registration questions');
+      return;
+    }
+
     startTransition(async () => {
       try {
-        const result = await createOrUpdateRSVP(data as CreateRSVPInput);
+        const payload = {
+          ...(data as CreateRSVPInput),
+          custom_field_responses: customResponses
+        };
+        const result = await createOrUpdateRSVP(payload);
         if (result.success) {
           toast.success(
             currentRSVP
@@ -333,6 +385,37 @@ export function RSVPForm({
               )}
             />
 
+            {/* Custom registration form fields */}
+            {customFields.length > 0 && (
+              <div className='space-y-4 rounded-md border bg-muted/20 p-4'>
+                <div className='text-sm font-semibold'>
+                  Registration questions
+                </div>
+                {customFields.map((field) => (
+                  <CustomFieldRenderer
+                    key={field.id}
+                    field={field}
+                    value={customResponses[field.id]}
+                    onChange={(value) => {
+                      setCustomResponses((prev) => ({
+                        ...prev,
+                        [field.id]: value
+                      }));
+                      if (customErrors[field.id]) {
+                        setCustomErrors((prev) => {
+                          const next = { ...prev };
+                          delete next[field.id];
+                          return next;
+                        });
+                      }
+                    }}
+                    error={customErrors[field.id]}
+                    disabled={isPending}
+                  />
+                ))}
+              </div>
+            )}
+
             <div className='flex gap-3 pt-4'>
               <Button
                 type='button'
@@ -372,6 +455,26 @@ export function QuickRSVP({
   onSuccess
 }: QuickRSVPProps) {
   const [isPending, startTransition] = useTransition();
+
+  // If the event has ANY required custom fields, 1-click RSVP cannot capture
+  // them — fall back to the full dialog-based RSVPForm instead.
+  const customFields: CustomFormField[] = Array.isArray(
+    (event as any)?.registration_form_fields
+  )
+    ? ((event as any).registration_form_fields as CustomFormField[])
+    : [];
+  const hasRequiredCustom = customFields.some((f) => f?.required === true);
+
+  if (hasRequiredCustom && !currentRSVP) {
+    return (
+      <RSVPForm
+        event={event}
+        currentRSVP={currentRSVP}
+        memberId={memberId}
+        onSuccess={onSuccess}
+      />
+    );
+  }
 
   const handleRSVP = (status: 'confirmed' | 'declined') => {
     startTransition(async () => {

@@ -36,11 +36,37 @@ async function getCoordinatorSession() {
   }
 }
 
+async function getCurrentPath(): Promise<string> {
+  // Use x-url / x-pathname headers if present, otherwise fall back to referrer.
+  // Next.js exposes the current pathname via a dedicated header set by the
+  // runtime (`next-url`).
+  const h = await headers()
+  return (
+    h.get('x-pathname') ||
+    h.get('x-invoke-path') ||
+    h.get('next-url') ||
+    ''
+  )
+}
+
 export default async function CoordinatorLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  const pathname = await getCurrentPath()
+
+  // The login + logout routes must render WITHOUT the authenticated shell,
+  // otherwise hitting /coordinator/login while unauthenticated triggers an
+  // infinite redirect loop (login page lives under this layout).
+  const isPublicCoordinatorRoute =
+    pathname.includes('/coordinator/login') ||
+    pathname.includes('/coordinator/logout')
+
+  if (isPublicCoordinatorRoute) {
+    return <>{children}</>
+  }
+
   const session = await getCoordinatorSession()
 
   if (!session) {

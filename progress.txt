@@ -1,5 +1,42 @@
 # Yi Connect - Progress Tracker
 
+## Session: 2026-04-18 → 2026-04-20 (End) — 11 Stutzee features shipped, Chair-day score 10/10, Yi Trichy invite pending domain verify
+
+### Accomplished
+- **Prod 500 storm fixed** — 2 stacked bugs in middleware (Frozen Headers) + `export type` in 'use server' file. Reverted to known-good state.
+- **Chair-day score 1/10 → 10/10** across 3 retest rounds (CD-002..008 + WT-001..011 + AAA triple-bug)
+- **11 of 14 Stutzee features shipped** in 4 parallel worktree waves (~10h calendar vs 115h estimated). Descoped: Razorpay, pricing, gamification per user interview.
+  - Wave 1: Event sessions agenda + speaker FAQs + attendee tickets
+  - Wave 2: Public event pages `/e/[slug]`, custom form builder, sponsor lead capture
+  - Wave 3: Member scan-to-connect networking, live big-screen event dashboard
+  - Wave 4: Event Auto-Pilot (Yi-native), quarterly chapter report to National
+- **22+ Supabase migrations applied** this session for sessions, tokens, slugs, forms, sponsor leads, connections, auto-pilot, live dashboard RLS
+- **Demo accounts seeded** — 8 roles ready in `docs/DEMO_ACCOUNTS.md`
+- **Resend wired** — API key + FROM_EMAIL added locally + in Vercel prod. Test email delivered to director@jkkn.ac.in
+- **Yi Trichy Chair (Sashank) invitation token generated** — `d64d1af29a0bef61a4ec733db20b6b02` at `https://yi-connect-app.vercel.app/accept-invite?token=d64d1af29a0bef61a4ec733db20b6b02`
+
+### Current Status
+- **Feature**: 11/14 Stutzee features live in prod
+- **Build**: passing (git @ origin/master f37188b)
+- **Branch**: master (clean)
+- **Chair-day score**: 10/10
+- **Blocker**: jkkn.ac.in domain NOT yet verified in Resend → cannot send to external recipients (status `not_started`). Sashank's invitation email not yet sent.
+
+### Lessons Learned
+- **Silent 200 pattern is Yi Connect's top recurring bug shape** — Server Action returns success but data is null/missing. 3 causes in one day: empty-string dates, missing migrations (schema drift), FK ambiguity in PostgREST nested joins. Saved as permanent memory.
+- **Schema drift = first diagnostic** — TS types declared columns that didn't exist in prod DB. Always diff live schema via Supabase Management API BEFORE investigating code. Saved as permanent memory.
+- **Malformed Tailwind v4 arbitrary values silently break globals.css** and crash unrelated pages (CD-006 member-requests crash traced to toggle-group.tsx `gap-[--spacing(var(--gap))]`).
+- **User-stated preference**: "prioritize by real user frequency" — test Chair daily flows, not exhaustive National Admin catalog. Saved as memory.
+
+### Next Session — Tasks
+1. [P0] Poll Resend domains API; if jkkn.ac.in status=`verified`, swap FROM_EMAIL to `noreply@jkkn.ac.in` in `.env.local` AND Vercel prod, then send Sashank's invitation to `sashank@sriyah.in` with token `d64d1af29a0bef61a4ec733db20b6b02` (small)
+2. [P0] If domain NOT yet verified, show user the 3 DNS records (DKIM TXT, SPF MX, SPF TXT) they need to add at their registrar (small)
+3. [P1] Draft + send WhatsApp message to Yi chairs group with 8 demo account credentials and feedback request (small)
+4. [P2] Collect feedback from chairs on 11 shipped Stutzee features; triage any reported bugs (ongoing)
+5. [P2] Descoped 3 Stutzee features (Razorpay, pricing, gamification) — revisit only if chairs request (large, deferred)
+
+---
+
 ## Session: 2026-01-25 - Activity Planner Bug Fixes & Workflow Test
 
 ### Accomplished

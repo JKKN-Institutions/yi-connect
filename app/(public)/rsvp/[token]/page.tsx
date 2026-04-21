@@ -7,6 +7,7 @@ import {
   getEventRSVPsByToken,
   getGuestRSVPs,
 } from '@/lib/data/public-events';
+import { generateMemberHMACs } from '@/lib/crypto/hmac';
 import { QuickRSVPHero } from '@/components/events/quick-rsvp-hero';
 import { MemberRSVPList } from '@/components/events/member-rsvp-list';
 import { GuestRSVPForm } from '@/components/events/guest-rsvp-form';
@@ -72,6 +73,9 @@ export default async function QuickRSVPPage({ params }: PageProps) {
   attending.sort((a, b) => a.full_name.localeCompare(b.full_name));
   notYet.sort((a, b) => a.full_name.localeCompare(b.full_name));
 
+  // Generate HMACs for all members to prevent IDOR attacks
+  const memberHMACs = generateMemberHMACs(members.map(m => m.id), token);
+
   return (
     <div className="max-w-lg mx-auto pb-12">
       <QuickRSVPHero
@@ -86,6 +90,7 @@ export default async function QuickRSVPPage({ params }: PageProps) {
         attending={attending}
         notYet={notYet}
         rsvpMap={Object.fromEntries(rsvps.map(r => [r.member_id, { id: r.id, guests_count: r.guests_count }]))}
+        memberHMACs={memberHMACs}
         eventId={event.id}
         token={token}
         isEventOver={isEventOver}

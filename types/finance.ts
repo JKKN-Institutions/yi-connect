@@ -79,14 +79,17 @@ export type ReimbursementApprovalInsert =
 export type ReimbursementApprovalUpdate =
   Database['public']['Tables']['reimbursement_approvals']['Update'];
 
-// NOTE: payment_methods and financial_audit_logs tables not yet implemented
-// Uncomment when tables are added to the database
-// export type PaymentMethod = Database['public']['Tables']['payment_methods']['Row']
-// export type PaymentMethodInsert = Database['public']['Tables']['payment_methods']['Insert']
-// export type PaymentMethodUpdate = Database['public']['Tables']['payment_methods']['Update']
+export type PaymentMethod =
+  Database['public']['Tables']['payment_methods']['Row'];
+export type PaymentMethodInsert =
+  Database['public']['Tables']['payment_methods']['Insert'];
+export type PaymentMethodUpdate =
+  Database['public']['Tables']['payment_methods']['Update'];
 
-// export type FinancialAuditLog = Database['public']['Tables']['financial_audit_logs']['Row']
-// export type FinancialAuditLogInsert = Database['public']['Tables']['financial_audit_logs']['Insert']
+export type FinancialAuditLog =
+  Database['public']['Tables']['financial_audit_logs']['Row'];
+export type FinancialAuditLogInsert =
+  Database['public']['Tables']['financial_audit_logs']['Insert'];
 
 // ================================================
 // ENUM TYPES

@@ -1,13 +1,14 @@
 import { Suspense } from 'react'
 import { Metadata } from 'next'
 import Link from 'next/link'
-import { Plus, TrendingUp, DollarSign, Target, Award } from 'lucide-react'
+import { Plus, TrendingUp, DollarSign, Target, Award, Layers } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { SponsorshipsTable } from '@/components/finance/sponsorships-table'
-import { getSponsorshipDeals, getSponsorshipPipelineValue } from '@/lib/data/finance'
+import { TierRevenueCard } from '@/components/finance/tier-revenue-card'
+import { getSponsorshipDeals, getSponsorshipPipelineValue, getTierRevenue } from '@/lib/data/finance'
 import { getCurrentChapterId, requireRole } from '@/lib/auth'
 import { formatCurrency } from '@/types/finance'
 
@@ -106,6 +107,12 @@ export default async function SponsorshipsPage() {
           </p>
         </div>
         <div className="flex gap-2">
+          <Link href="/finance/sponsorships/tiers">
+            <Button variant="outline">
+              <Layers className="mr-2 h-4 w-4" />
+              Manage Tiers
+            </Button>
+          </Link>
           <Link href="/finance/sponsorships/sponsors/new">
             <Button variant="outline">
               <Plus className="mr-2 h-4 w-4" />
@@ -131,9 +138,19 @@ export default async function SponsorshipsPage() {
         <PipelineStats />
       </Suspense>
 
+      <Suspense fallback={<Skeleton className="h-[320px]" />}>
+        <TierRevenueWrapper />
+      </Suspense>
+
       <Suspense fallback={<Skeleton className="h-[600px]" />}>
         <SponsorshipsTableWrapper />
       </Suspense>
     </div>
   )
+}
+
+async function TierRevenueWrapper() {
+  const chapterId = await getCurrentChapterId()
+  const data = await getTierRevenue(chapterId)
+  return <TierRevenueCard data={data} />
 }

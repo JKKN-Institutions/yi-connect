@@ -25,36 +25,40 @@ import { memberApprovalEmail, memberRejectionEmail } from '@/lib/email/templates
 // VALIDATION SCHEMAS
 // ============================================================================
 
+// Coerce empty strings from HTML forms to `undefined` so optional fields
+// don't reach Postgres as "" (which breaks typed columns like DATE).
+const emptyToUndefined = z.literal('').transform(() => undefined)
+
 const memberRequestSchema = z.object({
   // Basic Information
   full_name: z.string().min(2, 'Full name must be at least 2 characters'),
   email: z.string().email('Invalid email address'),
   phone: z.string().min(10, 'Phone number must be at least 10 characters'),
-  date_of_birth: z.string().optional(),
-  gender: z.enum(['male', 'female', 'other', 'prefer_not_to_say']).optional(),
+  date_of_birth: z.string().optional().or(emptyToUndefined),
+  gender: z.enum(['male', 'female', 'other', 'prefer_not_to_say']).optional().or(emptyToUndefined),
 
   // Professional Information
-  company: z.string().optional(),
-  designation: z.string().optional(),
-  industry: z.string().optional(),
-  years_of_experience: z.coerce.number().int().min(0).optional(),
-  linkedin_url: z.string().url().optional().or(z.literal('')),
+  company: z.string().optional().or(emptyToUndefined),
+  designation: z.string().optional().or(emptyToUndefined),
+  industry: z.string().optional().or(emptyToUndefined),
+  years_of_experience: z.coerce.number().int().min(0).optional().or(emptyToUndefined),
+  linkedin_url: z.string().url().optional().or(emptyToUndefined),
 
   // Personal Information
-  address: z.string().optional(),
+  address: z.string().optional().or(emptyToUndefined),
   city: z.string().min(2, 'City is required'),
   state: z.string().min(2, 'State is required'),
   country: z.string().default('India'),
-  pincode: z.string().optional(),
+  pincode: z.string().optional().or(emptyToUndefined),
 
   // Emergency Contact
-  emergency_contact_name: z.string().optional(),
-  emergency_contact_phone: z.string().optional(),
-  emergency_contact_relationship: z.string().optional(),
+  emergency_contact_name: z.string().optional().or(emptyToUndefined),
+  emergency_contact_phone: z.string().optional().or(emptyToUndefined),
+  emergency_contact_relationship: z.string().optional().or(emptyToUndefined),
 
   // Why join Yi
   motivation: z.string().min(20, 'Please tell us why you want to join Yi (minimum 20 characters)'),
-  how_did_you_hear: z.string().optional(),
+  how_did_you_hear: z.string().optional().or(emptyToUndefined),
 
   // Chapter
   preferred_chapter_id: z.string().uuid('Please select a chapter'),
@@ -126,17 +130,23 @@ export async function submitMemberRequest(formData: FormData): Promise<FormState
       }
     }
 
+    // Strip undefined values so Postgres receives explicit NULLs / nothing
+    // instead of empty strings for typed columns (DATE, INT, UUID, enums).
+    const insertPayload = Object.fromEntries(
+      Object.entries({ ...validation.data, status: 'pending' }).filter(
+        ([, v]) => v !== undefined && v !== ''
+      )
+    )
+
     // Create member request
     const { data, error } = await supabase
       .from('member_requests')
-      .insert({
-        ...validation.data,
-        status: 'pending',
-      })
+      .insert(insertPayload)
       .select()
       .single()
 
     if (error) {
+      console.error('[submitMemberRequest] insert failed', error)
       throw error
     }
 

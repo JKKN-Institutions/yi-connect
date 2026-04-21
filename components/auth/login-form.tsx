@@ -25,9 +25,14 @@ import { Badge } from '@/components/ui/badge'
 
 // Demo accounts with their roles for display
 const DEMO_ACCOUNTS = [
+  { email: 'demo-super@yi-demo.com', role: 'Super Admin', variant: 'default' as const },
+  { email: 'demo-national@yi-demo.com', role: 'National Admin', variant: 'default' as const },
+  { email: 'demo-exec@yi-demo.com', role: 'Executive Member', variant: 'default' as const },
   { email: 'demo-chair@yi-demo.com', role: 'Chair', variant: 'default' as const },
   { email: 'demo-cochair@yi-demo.com', role: 'Co-Chair', variant: 'secondary' as const },
   { email: 'demo-ec@yi-demo.com', role: 'EC Member', variant: 'outline' as const },
+  { email: 'demo-industry@yi-demo.com', role: 'Industry Coordinator', variant: 'outline' as const },
+  { email: 'demo-member@yi-demo.com', role: 'Member', variant: 'outline' as const },
 ]
 
 export function LoginForm() {

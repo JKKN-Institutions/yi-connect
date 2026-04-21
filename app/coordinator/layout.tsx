@@ -4,7 +4,6 @@
  * Separate layout for stakeholder coordinators with their own auth.
  */
 
-import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import {
   Calendar,
@@ -41,10 +40,15 @@ export default async function CoordinatorLayout({
 }: {
   children: React.ReactNode
 }) {
+  // Auth is enforced per-page (coordinator/page.tsx, bookings, sessions, etc.)
+  // so that /coordinator/login + /coordinator/logout can render without an
+  // infinite redirect loop. If no session cookie is present, the layout just
+  // renders the public shell with no authed chrome.
   const session = await getCoordinatorSession()
 
+  // Unauthenticated: render children only (login/logout pages render clean).
   if (!session) {
-    redirect('/coordinator/login')
+    return <>{children}</>
   }
 
   return (

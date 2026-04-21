@@ -150,3 +150,196 @@ export const getGuestRSVPs = cache(async (eventId: string): Promise<PublicGuestR
 
   return data;
 });
+
+// =============================================================================
+// Stutzee Feature 2B — Public event landing page by slug
+// =============================================================================
+
+/**
+ * Public speaker info attached to sessions on the public landing page.
+ */
+export interface PublicSessionSpeaker {
+  id: string;
+  role: string | null;
+  sort_order: number;
+  speaker: {
+    id: string;
+    speaker_name: string;
+    title: string | null;
+    current_organization: string | null;
+    designation: string | null;
+    photo_url: string | null;
+  } | null;
+}
+
+/**
+ * Public session (subset of event_sessions for anonymous landing page).
+ */
+export interface PublicSession {
+  id: string;
+  title: string;
+  description: string | null;
+  session_type: string;
+  start_time: string;
+  end_time: string;
+  room_or_track: string | null;
+  sort_order: number;
+  is_active: boolean;
+  speakers: PublicSessionSpeaker[];
+}
+
+/**
+ * Extended public event used by `/e/[slug]`.
+ */
+export interface PublicEventBySlug {
+  id: string;
+  title: string;
+  description: string | null;
+  category: string;
+  start_date: string;
+  end_date: string;
+  venue_address: string | null;
+  banner_image_url: string | null;
+  max_capacity: number | null;
+  current_registrations: number;
+  status: string;
+  chapter_id: string | null;
+  allow_guests: boolean;
+  guest_limit: number | null;
+  is_virtual: boolean;
+  virtual_meeting_link: string | null;
+  tags: string[] | null;
+  rsvp_token: string | null;
+  public_slug: string;
+  chapter?: {
+    id: string;
+    name: string;
+    location: string | null;
+  } | null;
+  sessions: PublicSession[];
+}
+
+/**
+ * Fetch a public event by its slug. Uses the anonymous Supabase client;
+ * RLS policy `anon_view_events_by_slug` enforces that only published /
+ * ongoing / completed events with a slug are visible.
+ *
+ * Returns `null` if not found or not in a publicly visible status.
+ */
+export const getPublicEventBySlug = cache(
+  async (slug: string): Promise<PublicEventBySlug | null> => {
+    if (!slug) return null;
+
+    const supabase = await createServerSupabaseClient();
+
+    const { data, error } = await supabase
+      .from('events')
+      .select(
+        `
+        id,
+        title,
+        description,
+        category,
+        start_date,
+        end_date,
+        venue_address,
+        banner_image_url,
+        max_capacity,
+        current_registrations,
+        status,
+        chapter_id,
+        allow_guests,
+        guest_limit,
+        is_virtual,
+        virtual_meeting_link,
+        tags,
+        rsvp_token,
+        public_slug,
+        chapter:chapters(id, name, location)
+      `
+      )
+      .eq('public_slug', slug)
+      .in('status', ['published', 'ongoing', 'completed'])
+      .maybeSingle();
+
+    if (error || !data) return null;
+
+    // Fetch sessions separately — anon policy on event_sessions may differ,
+    // but we tolerate empty results gracefully.
+    let sessions: PublicSession[] = [];
+    const { data: sessionRows } = await supabase
+      .from('event_sessions')
+      .select(
+        `
+        id,
+        title,
+        description,
+        session_type,
+        start_time,
+        end_time,
+        room_or_track,
+        sort_order,
+        is_active,
+        speakers:session_speakers(
+          id,
+          role,
+          sort_order,
+          speaker:speakers(
+            id,
+            speaker_name,
+            title,
+            current_organization,
+            designation,
+            photo_url
+          )
+        )
+      `
+      )
+      .eq('event_id', data.id)
+      .eq('is_active', true)
+      .order('sort_order', { ascending: true })
+      .order('start_time', { ascending: true });
+
+    if (sessionRows) {
+      sessions = sessionRows.map((s: any) => ({
+        id: s.id,
+        title: s.title,
+        description: s.description ?? null,
+        session_type: s.session_type,
+        start_time: s.start_time,
+        end_time: s.end_time,
+        room_or_track: s.room_or_track ?? null,
+        sort_order: s.sort_order,
+        is_active: s.is_active,
+        speakers: (s.speakers || [])
+          .map((sp: any) => ({
+            id: sp.id,
+            role: sp.role ?? null,
+            sort_order: sp.sort_order ?? 0,
+            speaker: sp.speaker
+              ? {
+                  id: sp.speaker.id,
+                  speaker_name: sp.speaker.speaker_name,
+                  title: sp.speaker.title ?? null,
+                  current_organization: sp.speaker.current_organization ?? null,
+                  designation: sp.speaker.designation ?? null,
+                  photo_url: sp.speaker.photo_url ?? null,
+                }
+              : null,
+          }))
+          .sort(
+            (a: PublicSessionSpeaker, b: PublicSessionSpeaker) =>
+              a.sort_order - b.sort_order
+          ),
+      }));
+    }
+
+    return {
+      ...(data as any),
+      chapter: Array.isArray((data as any).chapter)
+        ? (data as any).chapter[0] ?? null
+        : (data as any).chapter ?? null,
+      sessions,
+    } as PublicEventBySlug;
+  }
+);

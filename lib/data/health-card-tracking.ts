@@ -251,6 +251,91 @@ export const getPendingSubmissionSummary = cache(
 // ============================================================================
 
 /**
+ * Calculate trend by comparing current period rate with a prior period of equal length.
+ * Returns 'improving' if current is notably higher, 'declining' if notably lower, 'stable' otherwise.
+ */
+async function calculateVerticalTrend(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  verticalId: string,
+  currentDateFrom: string | undefined,
+  currentDateTo: string | undefined
+): Promise<'improving' | 'declining' | 'stable'> {
+  // Determine the current period boundaries
+  const endDate = currentDateTo ? new Date(currentDateTo) : new Date()
+  const startDate = currentDateFrom ? new Date(currentDateFrom) : new Date(endDate.getFullYear(), 0, 1)
+  const periodMs = endDate.getTime() - startDate.getTime()
+
+  // If the period is too short (< 7 days), we cannot determine a meaningful trend
+  if (periodMs < 7 * 24 * 60 * 60 * 1000) {
+    return 'stable'
+  }
+
+  // Calculate previous period of equal length
+  const prevEnd = new Date(startDate.getTime() - 1) // day before current start
+  const prevStart = new Date(prevEnd.getTime() - periodMs)
+
+  const prevStartStr = prevStart.toISOString().slice(0, 10)
+  const prevEndStr = prevEnd.toISOString().slice(0, 10)
+
+  // Count activities and entries for the previous period
+  const [prevActivities, prevEntries] = await Promise.all([
+    supabase
+      .from('vertical_activities')
+      .select('id', { count: 'exact', head: true })
+      .eq('vertical_id', verticalId)
+      .gte('activity_date', prevStartStr)
+      .lte('activity_date', prevEndStr),
+    supabase
+      .from('health_card_entries')
+      .select('id', { count: 'exact', head: true })
+      .eq('vertical_id', verticalId)
+      .gte('activity_date', prevStartStr)
+      .lte('activity_date', prevEndStr),
+  ])
+
+  const prevTotal = prevActivities.count || 0
+  const prevSubmitted = prevEntries.count || 0
+
+  // If there were no events in the prior period, we cannot determine a trend
+  if (prevTotal === 0) {
+    return 'stable'
+  }
+
+  const prevRate = (prevSubmitted / prevTotal) * 100
+
+  // Count current period
+  const [curActivities, curEntries] = await Promise.all([
+    supabase
+      .from('vertical_activities')
+      .select('id', { count: 'exact', head: true })
+      .eq('vertical_id', verticalId)
+      .gte('activity_date', startDate.toISOString().slice(0, 10))
+      .lte('activity_date', endDate.toISOString().slice(0, 10)),
+    supabase
+      .from('health_card_entries')
+      .select('id', { count: 'exact', head: true })
+      .eq('vertical_id', verticalId)
+      .gte('activity_date', startDate.toISOString().slice(0, 10))
+      .lte('activity_date', endDate.toISOString().slice(0, 10)),
+  ])
+
+  const curTotal = curActivities.count || 0
+  const curSubmitted = curEntries.count || 0
+
+  if (curTotal === 0) {
+    return 'stable'
+  }
+
+  const curRate = (curSubmitted / curTotal) * 100
+
+  // Use a 5-percentage-point threshold to avoid noise
+  const diff = curRate - prevRate
+  if (diff > 5) return 'improving'
+  if (diff < -5) return 'declining'
+  return 'stable'
+}
+
+/**
  * Get submission rates by vertical
  */
 export const getVerticalSubmissionRates = cache(
@@ -313,6 +398,14 @@ export const getVerticalSubmissionRates = cache(
         ? entries.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]?.created_at
         : null
 
+      // Calculate trend by comparing with the previous equivalent period
+      const trend = await calculateVerticalTrend(
+        supabase,
+        vertical.id,
+        filters?.date_from,
+        filters?.date_to
+      )
+
       rates.push({
         vertical_id: vertical.id,
         vertical_name: vertical.name,
@@ -320,7 +413,7 @@ export const getVerticalSubmissionRates = cache(
         submitted_count: submitted,
         pending_count: pending,
         submission_rate: Math.round(rate * 10) / 10,
-        trend: 'stable', // TODO: Calculate trend from historical data
+        trend,
         last_submission_date: lastSubmission,
       })
     }
@@ -355,7 +448,7 @@ export const getChapterSubmissionRate = cache(
     const { data: member } = await supabase
       .from('members')
       .select('chapter:chapters(id, name)')
-      .eq('user_id', user.id)
+      .eq('id', user.id)
       .single()
 
     const chapterData = member?.chapter as { id: string; name: string }[] | { id: string; name: string } | null
@@ -656,7 +749,7 @@ export const getChapterQualitySummary = cache(
     const { data: member } = await supabase
       .from('members')
       .select('chapter:chapters(id)')
-      .eq('user_id', user.id)
+      .eq('id', user.id)
       .single()
 
     return {
@@ -761,7 +854,7 @@ export const getHealthCardTrackingDashboard = cache(
     const { data: member } = await supabase
       .from('members')
       .select('chapter:chapters(id, name)')
-      .eq('user_id', user.id)
+      .eq('id', user.id)
       .single()
 
     const chapterData = member?.chapter as { id: string; name: string }[] | { id: string; name: string } | null

@@ -61,35 +61,31 @@ async function NewEventFormWrapper() {
     redirect('/login');
   }
 
-  // Get user's hierarchy level and profile
-  const supabase = await createClient();
-  const { data: hierarchyLevel } = await supabase.rpc(
-    'get_user_hierarchy_level',
-    {
-      user_id: user.id
-    }
-  );
-  const userHierarchyLevel = hierarchyLevel || 0;
+  // Note: Role-based authorization is already enforced by requireRole() in the
+  // parent NewEventPage above. We do NOT re-check hierarchy level here because
+  // the RPC can return null/0 for edge cases (impersonation, RLS) and silently
+  // bounce authorized users back to /events.
 
   // Get user's profile for chapter_id
+  const supabase = await createClient();
   const { data: profile } = await supabase
     .from('profiles')
     .select('chapter_id')
     .eq('id', user.id)
     .single();
 
-  // Only allow EC Members and above to create events (hierarchy level >= 2)
-  // Lower numbers = lower hierarchy, higher numbers = higher hierarchy
-  // Super Admins (7), National Admins (6), and Executive Members (5) should have full access
-  if (userHierarchyLevel < 2) {
-    redirect('/events');
+  // Fetch venues and templates (wrapped to never bubble up as a redirect)
+  let venues: Awaited<ReturnType<typeof getVenues>> = [];
+  let templates: Awaited<ReturnType<typeof getEventTemplates>> = [];
+  try {
+    [venues, templates] = await Promise.all([
+      getVenues({ is_active: true }),
+      getEventTemplates()
+    ]);
+  } catch (err) {
+    console.error('Error loading venues/templates for new event form:', err);
+    // Fall through with empty arrays so the form still renders
   }
-
-  // Fetch venues and templates
-  const [venues, templates] = await Promise.all([
-    getVenues({ is_active: true }),
-    getEventTemplates()
-  ]);
 
   return (
     <Card>

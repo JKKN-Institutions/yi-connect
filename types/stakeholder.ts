@@ -20,6 +20,9 @@ import type {
   InteractionFormInput as InteractionFormInputValidation,
   MouFormInput as MouFormInputValidation,
   DocumentFormInput as DocumentFormInputValidation,
+  CreateSpeakerFAQInput as CreateSpeakerFAQInputValidation,
+  UpdateSpeakerFAQInput as UpdateSpeakerFAQInputValidation,
+  ReorderSpeakerFAQsInput as ReorderSpeakerFAQsInputValidation,
 } from '@/lib/validations/stakeholder'
 
 // ============================================================================
@@ -1087,4 +1090,45 @@ export interface PaginatedSpeakers {
   page: number
   pageSize: number
   totalPages: number
+}
+
+// ============================================================================
+// SPEAKER FAQ TYPES (Stutzee Feature 1B)
+// ============================================================================
+
+export interface SpeakerFAQ {
+  id: string
+  speaker_id: string
+  question: string
+  answer: string
+  sort_order: number
+  is_public: boolean
+  created_at: string
+  updated_at: string
+}
+
+// Re-export Zod-inferred form input types
+export type CreateSpeakerFAQ = CreateSpeakerFAQInputValidation
+export type UpdateSpeakerFAQ = UpdateSpeakerFAQInputValidation
+export type ReorderSpeakerFAQs = ReorderSpeakerFAQsInputValidation
+
+// ============================================================================
+// SPEAKER WITH DETAILS (Stutzee Feature 1B)
+// Extends existing SpeakerDetail with FAQs + upcoming sessions
+// ============================================================================
+
+export interface SpeakerUpcomingSession {
+  session_id: string
+  event_id: string
+  event_title: string
+  session_title: string
+  start_time: string
+  end_time: string
+  room_or_track?: string
+  role?: string
+}
+
+export interface SpeakerWithDetails extends SpeakerDetail {
+  faqs: SpeakerFAQ[]
+  upcoming_sessions: SpeakerUpcomingSession[]
 }

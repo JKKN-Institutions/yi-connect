@@ -359,7 +359,7 @@ async function RequestDetail({ requestId }: { requestId: string }) {
 }
 
 export default async function RequestDetailPage({ params }: PageProps) {
-  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']);
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member', 'Member']);
 
   const { id } = await params;
 

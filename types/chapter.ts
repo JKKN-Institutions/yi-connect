@@ -169,6 +169,7 @@ export type FeatureNameType =
   | 'verticals'
   | 'sub_chapters'
   | 'industrial_visits'
+  | 'event_autopilot'
 
 export interface ChapterFeatureToggle {
   id: string

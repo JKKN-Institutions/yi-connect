@@ -9,7 +9,6 @@
 
 import * as crypto from 'crypto'
 import { updateTag } from 'next/cache'
-import { redirect } from 'next/navigation'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import {
   createYiCreativeConnection,
@@ -36,62 +35,87 @@ const YI_CONNECT_BASE_URL =
 const YI_CREATIVE_CLIENT_ID = process.env.YI_CREATIVE_CLIENT_ID || 'yi-connect'
 
 // ============================================================================
-// OAuth State Management (using encrypted cookies or DB)
+// OAuth State Management (using Supabase DB for serverless compatibility)
 // ============================================================================
 
-// In-memory store for OAuth state (in production, use Redis or DB)
-const oauthStateStore = new Map<string, YiCreativeOAuthState>()
-
 /**
- * Generate and store OAuth state
+ * Generate and store OAuth state in the database.
+ * Uses DB instead of in-memory Map so it works across Vercel serverless isolates.
  */
-function generateOAuthState(chapterId: string, userId: string): string {
+async function generateOAuthState(chapterId: string, userId: string): Promise<string> {
   const nonce = crypto.randomBytes(32).toString('hex')
+  const redirectUri = `${YI_CONNECT_BASE_URL}/api/yi-creative/callback`
+
+  const supabase = await createServerSupabaseClient()
+
+  // Clean up any expired states first
+  await supabase.rpc('cleanup_expired_oauth_states')
+
+  // Store state in DB (auto-expires via expires_at column)
+  const { error } = await supabase
+    .from('oauth_states')
+    .insert({
+      nonce,
+      chapter_id: chapterId,
+      user_id: userId,
+      redirect_uri: redirectUri,
+    })
+
+  if (error) {
+    console.error('[Yi Creative OAuth] Failed to store state:', error)
+    throw new Error('Failed to initiate OAuth flow')
+  }
+
+  // Encode state as base64 JSON for the URL
   const state: YiCreativeOAuthState = {
     chapter_id: chapterId,
     user_id: userId,
     nonce,
-    redirect_uri: `${YI_CONNECT_BASE_URL}/api/yi-creative/callback`,
+    redirect_uri: redirectUri,
     created_at: Date.now(),
   }
 
-  // Encode state as base64 JSON
-  const stateString = Buffer.from(JSON.stringify(state)).toString('base64url')
-
-  // Store for verification (expires in 10 minutes)
-  oauthStateStore.set(nonce, state)
-  setTimeout(() => oauthStateStore.delete(nonce), 10 * 60 * 1000)
-
-  return stateString
+  return Buffer.from(JSON.stringify(state)).toString('base64url')
 }
 
 /**
- * Verify and decode OAuth state
- * Note: This is a private helper function, not a server action
+ * Verify and decode OAuth state from the database.
+ * Deletes the state after verification (single-use).
  */
-function verifyOAuthState(stateString: string): YiCreativeOAuthState | null {
+async function verifyOAuthState(stateString: string): Promise<YiCreativeOAuthState | null> {
   try {
     const state = JSON.parse(
       Buffer.from(stateString, 'base64url').toString('utf-8')
     ) as YiCreativeOAuthState
 
-    // Verify state exists and hasn't expired (10 minutes)
-    const storedState = oauthStateStore.get(state.nonce)
-    if (!storedState) {
+    const supabase = await createServerSupabaseClient()
+
+    // Look up state in DB and verify it hasn't expired
+    const { data: storedState, error } = await supabase
+      .from('oauth_states')
+      .select('*')
+      .eq('nonce', state.nonce)
+      .gt('expires_at', new Date().toISOString())
+      .single()
+
+    if (error || !storedState) {
       console.error('[Yi Creative OAuth] State not found or expired')
       return null
     }
 
-    if (Date.now() - storedState.created_at > 10 * 60 * 1000) {
-      console.error('[Yi Creative OAuth] State expired')
-      oauthStateStore.delete(state.nonce)
-      return null
+    // Delete used state (single-use)
+    await supabase
+      .from('oauth_states')
+      .delete()
+      .eq('nonce', state.nonce)
+
+    return {
+      chapter_id: storedState.chapter_id,
+      user_id: storedState.user_id,
+      nonce: storedState.nonce,
+      redirect_uri: storedState.redirect_uri,
+      created_at: new Date(storedState.created_at).getTime(),
     }
-
-    // Clean up used state
-    oauthStateStore.delete(state.nonce)
-
-    return state
   } catch (error) {
     console.error('[Yi Creative OAuth] Invalid state:', error)
     return null
@@ -187,8 +211,8 @@ export async function initiateYiCreativeConnect(chapterId?: string): Promise<Ini
       return { success: false, error: 'Chapter is already connected to Yi Creative Studio' }
     }
 
-    // Generate OAuth state
-    const state = generateOAuthState(targetChapterId, user.id)
+    // Generate OAuth state (stored in DB for serverless compatibility)
+    const state = await generateOAuthState(targetChapterId, user.id)
 
     // Build OAuth authorization URL
     const authUrl = new URL(`${YI_CREATIVE_BASE_URL}/oauth/authorize`)
@@ -328,8 +352,8 @@ export async function handleYiCreativeOAuthCallback(
   stateString: string
 ): Promise<OAuthCallbackResult> {
   try {
-    // Verify state
-    const state = verifyOAuthState(stateString)
+    // Verify state (from DB)
+    const state = await verifyOAuthState(stateString)
     if (!state) {
       return { success: false, error: 'Invalid or expired OAuth state' }
     }

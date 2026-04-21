@@ -43,7 +43,8 @@ _${chapterName} - Together We Can. We Will._`;
 export function formatRsvpConfirmation(
   member: MemberDetails,
   event: EventDetails,
-  rsvpStatus: 'attending' | 'not_attending' | 'maybe'
+  rsvpStatus: 'attending' | 'not_attending' | 'maybe',
+  chapterName: string = 'Yi Erode'
 ): string {
   const statusEmoji = {
     attending: '✅',
@@ -70,13 +71,13 @@ ${event.eventUrl ? `\n🔗 Event Details: ${event.eventUrl}` : ''}
 
 Thank you for your response!
 
-_Yi Erode - Together We Can. We Will._`;
+_${chapterName} - Together We Can. We Will._`;
 }
 
 /**
  * Event Reminder (3 days before)
  */
-export function formatEventReminder3Days(event: EventDetails, memberName: string): string {
+export function formatEventReminder3Days(event: EventDetails, memberName: string, chapterName: string = 'Yi Erode'): string {
   return `*Event Reminder* 🔔
 
 Hi ${memberName},
@@ -90,13 +91,13 @@ ${event.eventUrl ? `\n🔗 Details: ${event.eventUrl}` : ''}
 
 Looking forward to seeing you there!
 
-_Yi Erode - Together We Can. We Will._`;
+_${chapterName} - Together We Can. We Will._`;
 }
 
 /**
  * Event Reminder (1 day before)
  */
-export function formatEventReminder1Day(event: EventDetails, memberName: string): string {
+export function formatEventReminder1Day(event: EventDetails, memberName: string, chapterName: string = 'Yi Erode'): string {
   return `*Tomorrow's Event!* 🌟
 
 Hi ${memberName},
@@ -110,13 +111,13 @@ ${event.eventUrl ? `\n🔗 Details: ${event.eventUrl}` : ''}
 
 See you there!
 
-_Yi Erode - Together We Can. We Will._`;
+_${chapterName} - Together We Can. We Will._`;
 }
 
 /**
  * Event Reminder (Day of event)
  */
-export function formatEventReminderToday(event: EventDetails, memberName: string): string {
+export function formatEventReminderToday(event: EventDetails, memberName: string, chapterName: string = 'Yi Erode'): string {
   return `*Today's Event!* 🎉
 
 Hi ${memberName},
@@ -129,13 +130,13 @@ ${event.eventUrl ? `\n🔗 Details: ${event.eventUrl}` : ''}
 
 See you soon!
 
-_Yi Erode - Together We Can. We Will._`;
+_${chapterName} - Together We Can. We Will._`;
 }
 
 /**
  * Event Cancellation
  */
-export function formatEventCancellation(event: EventDetails, reason?: string): string {
+export function formatEventCancellation(event: EventDetails, reason?: string, chapterName: string = 'Yi Erode'): string {
   return `*Event Cancelled* ❌
 
 We regret to inform you that the following event has been cancelled:
@@ -146,7 +147,7 @@ ${reason ? `\n📝 Reason: ${reason}` : ''}
 
 We apologize for any inconvenience caused.
 
-_Yi Erode - Together We Can. We Will._`;
+_${chapterName} - Together We Can. We Will._`;
 }
 
 /**
@@ -154,11 +155,12 @@ _Yi Erode - Together We Can. We Will._`;
  */
 export function formatEventUpdate(
   event: EventDetails,
-  changes: { field: string; oldValue: string; newValue: string }[]
+  changes: { field: string; oldValue: string; newValue: string }[],
+  chapterName: string = 'Yi Erode'
 ): string {
-  const changesList = changes
-    .map(c => `• *${c.field}:* ${c.oldValue} → ${c.newValue}`)
-    .join('\n');
+  const changesList = changes.length > 0
+    ? changes.map(c => `• *${c.field}:* ${c.oldValue} → ${c.newValue}`).join('\n')
+    : '• Details updated';
 
   return `*Event Update* 📝
 
@@ -175,13 +177,13 @@ ${changesList}
 📍 ${event.venue}
 ${event.eventUrl ? `\n🔗 Details: ${event.eventUrl}` : ''}
 
-_Yi Erode - Together We Can. We Will._`;
+_${chapterName} - Together We Can. We Will._`;
 }
 
 /**
  * Post-Event Thank You
  */
-export function formatPostEventThankYou(event: EventDetails, memberName: string): string {
+export function formatPostEventThankYou(event: EventDetails, memberName: string, chapterName: string = 'Yi Erode'): string {
   return `*Thank You!* 🙏
 
 Hi ${memberName},
@@ -192,7 +194,7 @@ Your participation made the event a success. We hope you found it valuable.
 
 We'd love your feedback! Please take a moment to share your thoughts.
 
-_Yi Erode - Together We Can. We Will._`;
+_${chapterName} - Together We Can. We Will._`;
 }
 
 /**
@@ -201,7 +203,8 @@ _Yi Erode - Together We Can. We Will._`;
 export function formatVolunteerAssignment(
   event: EventDetails,
   memberName: string,
-  role: string
+  role: string,
+  chapterName: string = 'Yi Erode'
 ): string {
   return `*Volunteer Assignment* 🤝
 
@@ -217,7 +220,7 @@ You have been assigned as *${role}* for:
 Thank you for volunteering! Please confirm your availability.
 ${event.eventUrl ? `\n🔗 Event Details: ${event.eventUrl}` : ''}
 
-_Yi Erode - Together We Can. We Will._`;
+_${chapterName} - Together We Can. We Will._`;
 }
 
 /**
@@ -260,4 +263,35 @@ export function formatQuickRSVPMessage(
   message += `\n_${chapterName} — Together We Can. We Will._`;
 
   return message;
+}
+
+/**
+ * Post-Event Feedback Reminder (Auto-Pilot Step 1)
+ *
+ * Sent 24h (configurable) after event end to each RSVP'd member.
+ * Part of the Yi Native Event Auto-Pilot pipeline.
+ */
+export function formatFeedbackReminder(
+  event: EventDetails,
+  memberName: string,
+  feedbackUrl: string,
+  chapterName: string = 'Yi Erode'
+): string {
+  return `*Your Feedback Matters* 🙏
+
+Hi ${memberName},
+
+Thanks for being part of *${event.title}* on ${event.date}!
+
+We'd love 60 seconds of your time to share:
+• How was the event for you?
+• What worked, what didn't?
+• Anything we should try next time?
+
+👉 *Share feedback:*
+${feedbackUrl}
+
+Your thoughts shape the next event. Thank you!
+
+_${chapterName} — Together We Can. We Will._`;
 }

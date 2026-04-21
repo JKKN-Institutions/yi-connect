@@ -37,6 +37,14 @@ import { Check, X, Eye, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { WhatsAppIconButton } from '@/components/whatsapp';
 
+// BUG-CD-006: Safe date formatter — never throw on null / invalid input.
+function safeFormatDate(value?: string | null, fallback = '—'): string {
+  if (!value) return fallback;
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return fallback;
+  return format(d, 'MMM dd, yyyy');
+}
+
 interface MemberRequest {
   id: string;
   full_name: string;
@@ -201,7 +209,7 @@ export function MemberRequestsTable({
                 </TableCell>
                 <TableCell>{request.chapter?.name || 'N/A'}</TableCell>
                 <TableCell>
-                  {format(new Date(request.created_at), 'MMM dd, yyyy')}
+                  {safeFormatDate(request.created_at)}
                 </TableCell>
                 <TableCell>{getStatusBadge(request.status)}</TableCell>
                 <TableCell className='text-right'>
@@ -377,10 +385,7 @@ export function MemberRequestsTable({
                         Reviewed At:
                       </span>
                       <p className='font-medium'>
-                        {format(
-                          new Date(selectedRequest.reviewed_at),
-                          'MMM dd, yyyy'
-                        )}
+                        {safeFormatDate(selectedRequest.reviewed_at)}
                       </p>
                     </div>
                   </div>

@@ -182,22 +182,33 @@ export async function getNotificationSettings(industryId: string) {
 }
 
 /**
- * Get active sessions for the current user
+ * Get active sessions for the current user.
+ * Uses Supabase Auth session data to return the current session.
  */
 export async function getActiveSessions() {
   try {
     const user = await getCurrentUser();
     if (!user) return [];
 
-    // In a real implementation, you would track sessions in a database
-    // For now, return a mock current session
+    const supabase = await createClient();
+    const { data: { session }, error } = await supabase.auth.getSession();
+
+    if (error || !session) {
+      return [];
+    }
+
+    // Extract user agent info from session metadata when available
+    const userMetadata = session.user?.user_metadata || {};
+    const appMetadata = session.user?.app_metadata || {};
+
+    // Build session entry from real auth data
     return [
       {
         id: 'current',
-        device: 'Current Device',
-        browser: 'Web Browser',
-        location: 'Current Location',
-        last_active: new Date().toISOString(),
+        device: userMetadata.device || appMetadata.provider || 'Web',
+        browser: userMetadata.browser || 'Web Browser',
+        location: userMetadata.location || user.email?.split('@')[1] || 'Unknown',
+        last_active: session.user?.last_sign_in_at || new Date().toISOString(),
         is_current: true,
       },
     ];
@@ -657,6 +668,19 @@ export async function changePassword(
     }
 
     const supabase = await createClient();
+
+    // Verify current password before allowing change
+    const { error: verifyError } = await supabase.auth.signInWithPassword({
+      email: user.email!,
+      password: validation.data.current_password,
+    });
+
+    if (verifyError) {
+      return {
+        success: false,
+        message: 'Current password is incorrect',
+      };
+    }
 
     // Update password using Supabase Auth
     const { error } = await supabase.auth.updateUser({

@@ -14,16 +14,14 @@ import {
   ArrowLeft,
   CheckCircle2,
   ExternalLink,
-  Building,
-  User,
-  Mail,
-  Phone
+  User
 } from 'lucide-react';
 import Link from 'next/link';
 import { format } from 'date-fns';
 import { getNationalEventById } from '@/lib/data/national-integration';
 import { EventRegistrationForm } from '@/components/national/event-registration-form';
 import { requireRole } from '@/lib/auth';
+import type { NationalEvent } from '@/types/national-integration';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -46,53 +44,13 @@ async function EventDetailContent({ eventId, showRegister }: { eventId: string; 
   const event = await getNationalEventById(eventId);
 
   if (!event) {
-    // Mock event for demonstration
-    const mockEvent = {
-      id: eventId,
-      national_event_id: `nat-${eventId}`,
-      title: 'Yi National Summit 2025',
-      description: `Join us for the Yi National Summit 2025, the premier gathering of Yi members from across the country. This three-day event will feature:
-
-• Keynote speeches from industry leaders
-• Interactive workshops on leadership development
-• Networking sessions with fellow Yi members
-• Panel discussions on emerging trends
-• Awards ceremony recognizing outstanding chapters
-
-Don't miss this opportunity to connect, learn, and grow with the Yi community!`,
-      event_type: 'summit' as const,
-      start_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-      end_date: new Date(Date.now() + 32 * 24 * 60 * 60 * 1000).toISOString(),
-      venue: 'Taj Palace Hotel',
-      city: 'Mumbai',
-      state: 'Maharashtra',
-      address: '2, Sardar Patel Marg, Diplomatic Enclave',
-      is_virtual: false,
-      virtual_link: null,
-      status: 'registration_open' as const,
-      registration_deadline: new Date(Date.now() + 20 * 24 * 60 * 60 * 1000).toISOString(),
-      registration_fee: 5000,
-      early_bird_fee: 4000,
-      early_bird_deadline: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString(),
-      max_participants: 500,
-      current_registrations: 342,
-      is_featured: true,
-      contact_name: 'Yi National Office',
-      contact_email: 'events@yinational.org',
-      contact_phone: '+91 98765 43210',
-      agenda_url: 'https://example.com/agenda.pdf',
-      brochure_url: 'https://example.com/brochure.pdf',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
-
-    return <EventDetail event={mockEvent} showRegister={showRegister} />;
+    notFound();
   }
 
   return <EventDetail event={event} showRegister={showRegister} />;
 }
 
-function EventDetail({ event, showRegister }: { event: any; showRegister: boolean }) {
+function EventDetail({ event, showRegister }: { event: NationalEvent; showRegister: boolean }) {
   const spotsLeft = event.max_participants ? event.max_participants - event.current_registrations : null;
   const isEarlyBird = event.early_bird_deadline && new Date(event.early_bird_deadline) > new Date();
   const currentFee = isEarlyBird ? event.early_bird_fee : event.registration_fee;
@@ -184,12 +142,14 @@ function EventDetail({ event, showRegister }: { event: any; showRegister: boolea
                   <>
                     <MapPin className="h-5 w-5 text-muted-foreground mt-0.5" />
                     <div>
-                      <p className="font-medium">{event.venue}</p>
+                      <p className="font-medium">{event.venue_name || 'Venue TBA'}</p>
+                      {event.venue_address && (
+                        <p className="text-sm text-muted-foreground">
+                          {event.venue_address}
+                        </p>
+                      )}
                       <p className="text-sm text-muted-foreground">
-                        {event.address}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {event.city}, {event.state}
+                        {[event.city, event.state].filter(Boolean).join(', ') || 'Location TBA'}
                       </p>
                     </div>
                   </>
@@ -201,7 +161,7 @@ function EventDetail({ event, showRegister }: { event: any; showRegister: boolea
                 <div>
                   <p className="font-medium">Capacity</p>
                   <p className="text-sm text-muted-foreground">
-                    {event.current_registrations} / {event.max_participants} registered
+                    {event.current_registrations} / {event.max_participants || 'Unlimited'} registered
                   </p>
                   {spotsLeft !== null && spotsLeft < 50 && (
                     <Badge variant="destructive" className="mt-1">
@@ -211,71 +171,59 @@ function EventDetail({ event, showRegister }: { event: any; showRegister: boolea
                 </div>
               </div>
 
-              <div className="flex items-start gap-3">
-                <Clock className="h-5 w-5 text-muted-foreground mt-0.5" />
-                <div>
-                  <p className="font-medium">Registration Deadline</p>
-                  <p className="text-sm text-muted-foreground">
-                    {format(new Date(event.registration_deadline), 'MMMM d, yyyy')}
-                  </p>
+              {event.registration_deadline && (
+                <div className="flex items-start gap-3">
+                  <Clock className="h-5 w-5 text-muted-foreground mt-0.5" />
+                  <div>
+                    <p className="font-medium">Registration Deadline</p>
+                    <p className="text-sm text-muted-foreground">
+                      {format(new Date(event.registration_deadline), 'MMMM d, yyyy')}
+                    </p>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
 
-            <Separator />
-
-            {/* Contact Information */}
-            <div>
-              <h4 className="font-medium mb-3">Contact Information</h4>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {event.contact_name && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <User className="h-4 w-4 text-muted-foreground" />
-                    <span>{event.contact_name}</span>
+            {/* Speakers */}
+            {event.speakers && event.speakers.length > 0 && (
+              <>
+                <Separator />
+                <div>
+                  <h4 className="font-medium mb-3">Speakers</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {event.speakers.map((speaker, idx) => (
+                      <div key={idx} className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
+                          <User className="h-5 w-5 text-muted-foreground" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-sm">{speaker.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {speaker.designation}, {speaker.organization}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                )}
-                {event.contact_email && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <Mail className="h-4 w-4 text-muted-foreground" />
-                    <a href={`mailto:${event.contact_email}`} className="text-primary hover:underline">
-                      {event.contact_email}
-                    </a>
-                  </div>
-                )}
-                {event.contact_phone && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <Phone className="h-4 w-4 text-muted-foreground" />
-                    <a href={`tel:${event.contact_phone}`} className="text-primary hover:underline">
-                      {event.contact_phone}
-                    </a>
-                  </div>
-                )}
-              </div>
-            </div>
+                </div>
+              </>
+            )}
 
             {/* Resources */}
-            {(event.agenda_url || event.brochure_url) && (
+            {event.resources && event.resources.length > 0 && (
               <>
                 <Separator />
                 <div>
                   <h4 className="font-medium mb-3">Resources</h4>
                   <div className="flex flex-wrap gap-2">
-                    {event.agenda_url && (
-                      <Button variant="outline" size="sm" asChild>
-                        <a href={event.agenda_url} target="_blank" rel="noopener noreferrer">
-                          View Agenda
+                    {event.resources.map((resource, idx) => (
+                      <Button key={idx} variant="outline" size="sm" asChild>
+                        <a href={resource.url} target="_blank" rel="noopener noreferrer">
+                          {resource.title}
                           <ExternalLink className="h-4 w-4 ml-2" />
                         </a>
                       </Button>
-                    )}
-                    {event.brochure_url && (
-                      <Button variant="outline" size="sm" asChild>
-                        <a href={event.brochure_url} target="_blank" rel="noopener noreferrer">
-                          Download Brochure
-                          <ExternalLink className="h-4 w-4 ml-2" />
-                        </a>
-                      </Button>
-                    )}
+                    ))}
                   </div>
                 </div>
               </>

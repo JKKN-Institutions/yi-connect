@@ -252,13 +252,18 @@ export async function getPathfinderDashboard(
   if (!chapter) return null
 
   // Get all verticals for the chapter
+  // vertical_chairs has TWO FKs to members (member_id + appointed_by) — disambiguate
+  // full_name + avatar_url live in profiles, not members — nested join
   const { data: verticals } = await supabase
     .from('verticals')
     .select(`
       id, name, slug, color, icon,
       current_chair:vertical_chairs(
         id, member_id,
-        member:members(id, full_name, avatar_url)
+        member:members!vertical_chairs_member_id_fkey(
+          id,
+          profile:profiles(full_name, avatar_url)
+        )
       )
     `)
     .eq('chapter_id', chapterId)
@@ -300,9 +305,14 @@ export async function getPathfinderDashboard(
       ? v.current_chair[0]
       : null
     // member is also returned as array from Supabase nested query
-    const memberData = currentChairEntry?.member && Array.isArray(currentChairEntry.member) && currentChairEntry.member.length > 0
+    const memberRaw = currentChairEntry?.member && Array.isArray(currentChairEntry.member) && currentChairEntry.member.length > 0
       ? currentChairEntry.member[0]
       : (currentChairEntry?.member && !Array.isArray(currentChairEntry.member) ? currentChairEntry.member : null)
+    // profile is nested inside member (name + avatar live on profiles, not members)
+    const profileData = memberRaw?.profile && Array.isArray(memberRaw.profile) && memberRaw.profile.length > 0
+      ? memberRaw.profile[0]
+      : (memberRaw?.profile && !Array.isArray(memberRaw.profile) ? memberRaw.profile : null)
+    const memberData = profileData ? { full_name: profileData.full_name, avatar_url: profileData.avatar_url } : null
     const chairMemberId = currentChairEntry?.member_id
     const commitment = commitments?.find((c) => c.member_id === chairMemberId)
     const mentor = mentors?.find((m) => m.ec_chair_id === chairMemberId)

@@ -15,6 +15,7 @@ import { uploadImage } from './upload';
 import { sendEmail, sendBatchEmails } from '@/lib/email';
 import { eventCancellationEmail, volunteerAssignmentEmail } from '@/lib/email/templates';
 import { syncEventByIdToYiStudio, syncEventToYiStudio } from '@/lib/webhooks/yi-studio-sync';
+import { generateEventSlug, rotateSlugSuffix } from '@/lib/utils/slug';
 import {
   createEventSchema,
   updateEventSchema,
@@ -122,7 +123,7 @@ function sanitizeEventData<T extends Record<string, any>>(data: T): T {
 async function getUserHierarchyLevel(userId: string): Promise<number> {
   const supabase = await createClient();
   const { data } = await supabase.rpc('get_user_hierarchy_level', {
-    user_id: userId
+    p_user_id: userId
   });
   return data || 0;
 }
@@ -308,7 +309,7 @@ export async function publishEvent(
     // Check permission
     const { data: event } = await supabase
       .from('events')
-      .select('organizer_id, status')
+      .select('organizer_id, status, title, public_slug')
       .eq('id', validated.id)
       .single();
 
@@ -352,6 +353,35 @@ export async function publishEvent(
         .from('events')
         .update({ rsvp_token: token })
         .eq('id', validated.id);
+    }
+
+    // Generate public_slug for the public landing page (if not already set).
+    // Retry up to 3 times on UNIQUE violation by rotating the suffix.
+    if (!(event as { public_slug?: string | null }).public_slug) {
+      let slug = generateEventSlug(event.title || 'event');
+      let attempts = 0;
+      const MAX_ATTEMPTS = 3;
+
+      while (attempts < MAX_ATTEMPTS) {
+        const { error: slugError } = await supabase
+          .from('events')
+          .update({ public_slug: slug })
+          .eq('id', validated.id);
+
+        if (!slugError) break;
+
+        // Postgres unique-violation code is 23505
+        const code = (slugError as { code?: string }).code;
+        if (code === '23505') {
+          slug = rotateSlugSuffix(slug);
+          attempts++;
+          continue;
+        }
+
+        // Non-unique error — log but don't fail the publish action
+        console.error('Error setting public_slug:', slugError);
+        break;
+      }
     }
 
     // Sync to Yi Creative Studio (non-blocking) - publish triggers update sync
@@ -471,6 +501,84 @@ export async function cancelEvent(
   } catch (error) {
     console.error('Error in cancelEvent:', error);
     return { success: false, error: 'Invalid input data' };
+  }
+}
+
+/**
+ * Mark an event as completed.
+ *
+ * If the chapter has the `event_autopilot` feature flag enabled, this will
+ * also invoke the 6-step Auto-Pilot pipeline (triggerEventAutoPilot) which
+ * sends feedback reminders, computes stats, drafts a health card entry,
+ * awards engagement points, emails the Chair a summary, and flags the event
+ * for the next quarterly report.
+ *
+ * Per the Yi-Native Event Auto-Pilot spec (2026-04-18).
+ */
+export async function completeEvent(
+  eventId: string
+): Promise<ActionResponse<{ autopilot_status?: string; autopilot_run_id?: string }>> {
+  try {
+    const supabase = await createClient();
+    const user = await getCurrentUser();
+
+    if (!user) {
+      return { success: false, error: 'Unauthorized' };
+    }
+
+    const { data: event } = await supabase
+      .from('events')
+      .select('organizer_id, status, chapter_id')
+      .eq('id', eventId)
+      .single();
+
+    if (!event) {
+      return { success: false, error: 'Event not found' };
+    }
+
+    const hierarchyLevel = await getUserHierarchyLevel(user.id);
+    const isOrganizer = event.organizer_id === user.id;
+    const isAdmin = hierarchyLevel >= 4;
+    if (!isOrganizer && !isAdmin) {
+      return { success: false, error: 'Permission denied' };
+    }
+
+    if (event.status !== 'completed') {
+      const { error } = await supabase
+        .from('events')
+        .update({ status: 'completed' })
+        .eq('id', eventId);
+      if (error) {
+        console.error('Error marking event completed:', error);
+        return { success: false, error: 'Failed to complete event' };
+      }
+    }
+
+    updateTag('events');
+    revalidatePath('/events');
+    revalidatePath(`/events/${eventId}`);
+
+    // Hook: trigger Event Auto-Pilot if chapter has feature enabled.
+    // The triggerEventAutoPilot() function itself checks the flag and
+    // no-ops gracefully if the feature is off, so this call is always safe.
+    try {
+      const { triggerEventAutoPilot } = await import('./autopilot');
+      const apResult = await triggerEventAutoPilot(eventId);
+      return {
+        success: true,
+        data: {
+          autopilot_status: apResult.status,
+          autopilot_run_id: apResult.run_id,
+        },
+      };
+    } catch (apErr) {
+      // Auto-pilot failure must not break event completion
+      console.error('Auto-pilot hook failed (event still completed):', apErr);
+      return { success: true };
+    }
+  } catch (error) {
+    console.error('Error in completeEvent:', error);
+    return { success: false, error: 'Failed to complete event' };
   }
 }
 
@@ -674,10 +782,18 @@ export async function deleteVenue(venueId: string): Promise<ActionResponse> {
 // ============================================================================
 
 /**
- * Create or update RSVP for a member
+ * Create or update RSVP for a member.
+ *
+ * Accepts an optional `custom_field_responses` JSONB payload. The payload is
+ * validated against the event's stored `registration_form_fields`:
+ *  - Required fields must be present with a non-empty value
+ *  - Unknown field ids are dropped silently
+ *  - Values are coerced into the shape expected by each field type
  */
 export async function createOrUpdateRSVP(
-  input: CreateRSVPInput
+  input: CreateRSVPInput & {
+    custom_field_responses?: Record<string, unknown>;
+  }
 ): Promise<ActionResponse<{ id: string }>> {
   try {
     const supabase = await createClient();
@@ -693,13 +809,14 @@ export async function createOrUpdateRSVP(
       return { success: false, error: 'Permission denied' };
     }
 
-    const validated = createRSVPSchema.parse(input);
+    const { custom_field_responses: rawCustomResponses, ...rest } = input;
+    const validated = createRSVPSchema.parse(rest);
 
-    // Check if event allows guests
+    // Check if event allows guests + load custom field definitions
     const { data: event } = await supabase
       .from('events')
       .select(
-        'allow_guests, guest_limit, max_capacity, current_registrations, status'
+        'allow_guests, guest_limit, max_capacity, current_registrations, status, registration_form_fields'
       )
       .eq('id', validated.event_id)
       .single();
@@ -723,6 +840,15 @@ export async function createOrUpdateRSVP(
       };
     }
 
+    // Validate custom field responses against the event's field definitions
+    const customValidation = validateCustomFieldResponses(
+      (event as any).registration_form_fields,
+      rawCustomResponses
+    );
+    if (!customValidation.ok) {
+      return { success: false, error: customValidation.error };
+    }
+
     // Check capacity
     const totalAttendees = 1 + (validated.guests_count || 0);
     if (
@@ -740,8 +866,9 @@ export async function createOrUpdateRSVP(
         {
           ...validated,
           member_id: validated.member_id,
-          event_id: validated.event_id
-        },
+          event_id: validated.event_id,
+          custom_field_responses: customValidation.sanitized
+        } as any,
         {
           onConflict: 'event_id,member_id'
         }
@@ -870,9 +997,14 @@ export async function deleteRSVP(rsvpId: string): Promise<ActionResponse> {
 
 /**
  * Create guest RSVP
+ *
+ * Accepts an optional `custom_field_responses` payload, validated against the
+ * event's stored `registration_form_fields`.
  */
 export async function createGuestRSVP(
-  input: CreateGuestRSVPInput
+  input: CreateGuestRSVPInput & {
+    custom_field_responses?: Record<string, unknown>;
+  }
 ): Promise<ActionResponse<{ id: string }>> {
   try {
     const supabase = await createClient();
@@ -882,12 +1014,13 @@ export async function createGuestRSVP(
       return { success: false, error: 'Unauthorized' };
     }
 
-    const validated = createGuestRSVPSchema.parse(input);
+    const { custom_field_responses: rawCustomResponses, ...rest } = input;
+    const validated = createGuestRSVPSchema.parse(rest);
 
-    // Check if event allows guests
+    // Check if event allows guests + load form fields
     const { data: event } = await supabase
       .from('events')
-      .select('allow_guests, status')
+      .select('allow_guests, status, registration_form_fields')
       .eq('id', validated.event_id)
       .single();
 
@@ -903,12 +1036,21 @@ export async function createGuestRSVP(
       return { success: false, error: 'Cannot RSVP to unpublished events' };
     }
 
+    const customValidation = validateCustomFieldResponses(
+      (event as any).registration_form_fields,
+      rawCustomResponses
+    );
+    if (!customValidation.ok) {
+      return { success: false, error: customValidation.error };
+    }
+
     const { data, error } = await supabase
       .from('guest_rsvps')
       .insert({
         ...validated,
-        invited_by_member_id: validated.invited_by_member_id || user.id
-      })
+        invited_by_member_id: validated.invited_by_member_id || user.id,
+        custom_field_responses: customValidation.sanitized
+      } as any)
       .select('id')
       .single();
 
@@ -1876,5 +2018,729 @@ export async function exportEvents(
   } catch (error) {
     console.error('Error in exportEvents:', error);
     return { success: false, error: 'Failed to export events' };
+  }
+}
+
+// ============================================================================
+// STUTZEE FEATURE 1A: Event Session Actions
+// ============================================================================
+
+import {
+  createSessionSchema,
+  updateSessionSchema,
+  reorderSessionsSchema,
+  toggleSessionInterestSchema,
+  deleteSessionSchema,
+} from '@/lib/validations/event';
+import type {
+  CreateSessionInput,
+  UpdateSessionInput,
+  ReorderSessionsInput,
+  ToggleSessionInterestInput,
+} from '@/types/event';
+
+/**
+ * Authorize session management for the given event.
+ * Organizer OR hierarchy_level >= 4 (Co-Chair+).
+ */
+async function canManageEventSessions(eventId: string, userId: string): Promise<boolean> {
+  const supabase = await createClient();
+  const { data: event } = await supabase
+    .from('events')
+    .select('organizer_id')
+    .eq('id', eventId)
+    .single();
+
+  if (!event) return false;
+  if (event.organizer_id === userId) return true;
+
+  const level = await getUserHierarchyLevel(userId);
+  return level >= 4;
+}
+
+/**
+ * Create a new session for an event.
+ */
+export async function createSession(
+  input: CreateSessionInput
+): Promise<ActionResponse<{ id: string }>> {
+  try {
+    const user = await getCurrentUser();
+    if (!user) return { success: false, error: 'Unauthorized' };
+
+    const validated = createSessionSchema.parse(input);
+
+    const authorized = await canManageEventSessions(validated.event_id, user.id);
+    if (!authorized) return { success: false, error: 'Permission denied' };
+
+    const supabase = await createClient();
+
+    // Determine default sort_order if not provided
+    let sortOrder = validated.sort_order;
+    if (sortOrder === undefined) {
+      const { data: lastSession } = await supabase
+        .from('event_sessions')
+        .select('sort_order')
+        .eq('event_id', validated.event_id)
+        .order('sort_order', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      sortOrder = ((lastSession?.sort_order as number) ?? -1) + 1;
+    }
+
+    const { data: session, error } = await supabase
+      .from('event_sessions')
+      .insert({
+        event_id: validated.event_id,
+        title: validated.title,
+        description: validated.description || null,
+        session_type: validated.session_type,
+        start_time: validated.start_time,
+        end_time: validated.end_time,
+        room_or_track: validated.room_or_track || null,
+        capacity: validated.capacity ?? null,
+        sort_order: sortOrder,
+        is_active: validated.is_active ?? true,
+      })
+      .select('id')
+      .single();
+
+    if (error || !session) {
+      console.error('Error creating session:', error);
+      return { success: false, error: 'Failed to create session' };
+    }
+
+    // Attach speakers if provided
+    if (validated.speaker_ids && validated.speaker_ids.length > 0) {
+      const rows = validated.speaker_ids.map((sid, idx) => ({
+        session_id: session.id,
+        speaker_id: sid,
+        sort_order: idx,
+      }));
+      const { error: spkErr } = await supabase
+        .from('session_speakers')
+        .insert(rows);
+      if (spkErr) {
+        console.error('Error attaching speakers:', spkErr);
+      }
+    }
+
+    updateTag('events');
+    revalidatePath(`/events/${validated.event_id}`);
+    revalidatePath(`/events/${validated.event_id}/sessions`);
+
+    return { success: true, data: { id: session.id } };
+  } catch (error) {
+    console.error('Error in createSession:', error);
+    return { success: false, error: 'Invalid input data' };
+  }
+}
+
+/**
+ * Update an existing session.
+ */
+export async function updateSession(
+  sessionId: string,
+  input: UpdateSessionInput
+): Promise<ActionResponse> {
+  try {
+    const user = await getCurrentUser();
+    if (!user) return { success: false, error: 'Unauthorized' };
+
+    const validated = updateSessionSchema.parse(input);
+    const supabase = await createClient();
+
+    const { data: existing } = await supabase
+      .from('event_sessions')
+      .select('event_id')
+      .eq('id', sessionId)
+      .single();
+    if (!existing) return { success: false, error: 'Session not found' };
+
+    const authorized = await canManageEventSessions(existing.event_id as string, user.id);
+    if (!authorized) return { success: false, error: 'Permission denied' };
+
+    const updatePayload: Record<string, unknown> = {};
+    if (validated.title !== undefined) updatePayload.title = validated.title;
+    if (validated.description !== undefined)
+      updatePayload.description = validated.description || null;
+    if (validated.session_type !== undefined)
+      updatePayload.session_type = validated.session_type;
+    if (validated.start_time !== undefined) updatePayload.start_time = validated.start_time;
+    if (validated.end_time !== undefined) updatePayload.end_time = validated.end_time;
+    if (validated.room_or_track !== undefined)
+      updatePayload.room_or_track = validated.room_or_track || null;
+    if (validated.capacity !== undefined) updatePayload.capacity = validated.capacity ?? null;
+    if (validated.sort_order !== undefined) updatePayload.sort_order = validated.sort_order;
+    if (validated.is_active !== undefined) updatePayload.is_active = validated.is_active;
+
+    if (Object.keys(updatePayload).length > 0) {
+      const { error } = await supabase
+        .from('event_sessions')
+        .update(updatePayload)
+        .eq('id', sessionId);
+      if (error) {
+        console.error('Error updating session:', error);
+        return { success: false, error: 'Failed to update session' };
+      }
+    }
+
+    // Replace speakers if provided
+    if (validated.speaker_ids !== undefined) {
+      await supabase.from('session_speakers').delete().eq('session_id', sessionId);
+      if (validated.speaker_ids.length > 0) {
+        const rows = validated.speaker_ids.map((sid, idx) => ({
+          session_id: sessionId,
+          speaker_id: sid,
+          sort_order: idx,
+        }));
+        const { error: spkErr } = await supabase.from('session_speakers').insert(rows);
+        if (spkErr) console.error('Error replacing speakers:', spkErr);
+      }
+    }
+
+    updateTag('events');
+    revalidatePath(`/events/${existing.event_id}`);
+    revalidatePath(`/events/${existing.event_id}/sessions`);
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error in updateSession:', error);
+    return { success: false, error: 'Invalid input data' };
+  }
+}
+
+/**
+ * Delete a session.
+ */
+export async function deleteSession(
+  sessionId: string
+): Promise<ActionResponse> {
+  try {
+    const user = await getCurrentUser();
+    if (!user) return { success: false, error: 'Unauthorized' };
+
+    const validated = deleteSessionSchema.parse({ id: sessionId });
+    const supabase = await createClient();
+
+    const { data: existing } = await supabase
+      .from('event_sessions')
+      .select('event_id')
+      .eq('id', validated.id)
+      .single();
+    if (!existing) return { success: false, error: 'Session not found' };
+
+    const authorized = await canManageEventSessions(existing.event_id as string, user.id);
+    if (!authorized) return { success: false, error: 'Permission denied' };
+
+    const { error } = await supabase
+      .from('event_sessions')
+      .delete()
+      .eq('id', validated.id);
+    if (error) {
+      console.error('Error deleting session:', error);
+      return { success: false, error: 'Failed to delete session' };
+    }
+
+    updateTag('events');
+    revalidatePath(`/events/${existing.event_id}`);
+    revalidatePath(`/events/${existing.event_id}/sessions`);
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error in deleteSession:', error);
+    return { success: false, error: 'Invalid input data' };
+  }
+}
+
+/**
+ * Reorder sessions (full array — sort_order set from index).
+ */
+export async function reorderSessions(
+  input: ReorderSessionsInput
+): Promise<ActionResponse> {
+  try {
+    const user = await getCurrentUser();
+    if (!user) return { success: false, error: 'Unauthorized' };
+
+    const validated = reorderSessionsSchema.parse(input);
+
+    const authorized = await canManageEventSessions(validated.event_id, user.id);
+    if (!authorized) return { success: false, error: 'Permission denied' };
+
+    const supabase = await createClient();
+
+    // Update sort_order for each session sequentially
+    for (let i = 0; i < validated.session_ids.length; i++) {
+      const { error } = await supabase
+        .from('event_sessions')
+        .update({ sort_order: i })
+        .eq('id', validated.session_ids[i])
+        .eq('event_id', validated.event_id);
+      if (error) {
+        console.error('Error reordering session:', error);
+        return { success: false, error: 'Failed to reorder sessions' };
+      }
+    }
+
+    updateTag('events');
+    revalidatePath(`/events/${validated.event_id}`);
+    revalidatePath(`/events/${validated.event_id}/sessions`);
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error in reorderSessions:', error);
+    return { success: false, error: 'Invalid input data' };
+  }
+}
+
+/**
+ * Toggle a member's interest flag for a session.
+ */
+export async function toggleSessionInterest(
+  input: ToggleSessionInterestInput
+): Promise<ActionResponse<{ is_interested: boolean }>> {
+  try {
+    const user = await getCurrentUser();
+    if (!user) return { success: false, error: 'Unauthorized' };
+
+    const validated = toggleSessionInterestSchema.parse(input);
+    const supabase = await createClient();
+
+    // Fetch session to find event_id for revalidation
+    const { data: session } = await supabase
+      .from('event_sessions')
+      .select('id, event_id')
+      .eq('id', validated.session_id)
+      .single();
+    if (!session) return { success: false, error: 'Session not found' };
+
+    // Check existing interest
+    const { data: existing } = await supabase
+      .from('session_interests')
+      .select('id')
+      .eq('session_id', validated.session_id)
+      .eq('member_id', user.id)
+      .maybeSingle();
+
+    let isInterested: boolean;
+    if (existing) {
+      const { error } = await supabase
+        .from('session_interests')
+        .delete()
+        .eq('id', existing.id);
+      if (error) {
+        console.error('Error removing interest:', error);
+        return { success: false, error: 'Failed to update interest' };
+      }
+      isInterested = false;
+    } else {
+      const { error } = await supabase
+        .from('session_interests')
+        .insert({ session_id: validated.session_id, member_id: user.id });
+      if (error) {
+        console.error('Error adding interest:', error);
+        return { success: false, error: 'Failed to update interest' };
+      }
+      isInterested = true;
+    }
+
+    revalidatePath(`/events/${session.event_id}`);
+    revalidatePath(`/events/${session.event_id}/sessions`);
+
+    return { success: true, data: { is_interested: isInterested } };
+  } catch (error) {
+    console.error('Error in toggleSessionInterest:', error);
+    return { success: false, error: 'Invalid input data' };
+  }
+}
+
+// ============================================================================
+// STUTZEE FEATURE 2A: Per-Attendee QR Ticket Check-in
+// ============================================================================
+
+export type TicketAttendeeProfile = {
+  attendeeType: 'member' | 'guest';
+  attendeeId: string;
+  eventId: string;
+  eventTitle: string;
+  fullName: string;
+  email: string | null;
+  avatarUrl: string | null;
+  company: string | null;
+  designation: string | null;
+  rsvpStatus: string;
+  alreadyCheckedIn: boolean;
+  checkedInAt: string;
+};
+
+/**
+ * Check in an attendee by scanning their personal ticket QR token.
+ *
+ * Looks up ticket_token across event_rsvps and guest_rsvps, verifies the
+ * event is accepting check-ins, idempotently records the check-in, and
+ * returns the attendee's display profile for the scanner UI.
+ *
+ * Idempotent: scanning the same ticket twice returns success with
+ * `alreadyCheckedIn: true` rather than an error.
+ */
+export async function checkInByTicketToken(
+  ticketToken: string
+): Promise<ActionResponse<TicketAttendeeProfile>> {
+  try {
+    if (!ticketToken || typeof ticketToken !== 'string' || ticketToken.length < 16) {
+      return { success: false, error: 'Invalid ticket' };
+    }
+
+    const supabase = await createClient();
+    const user = await getCurrentUser();
+
+    if (!user) {
+      return { success: false, error: 'Unauthorized' };
+    }
+
+    // ------------------------------------------------------------------
+    // 1. Try member RSVP first
+    // ------------------------------------------------------------------
+    let attendeeType: 'member' | 'guest' | null = null;
+    let attendeeId: string | null = null;
+    let eventId: string | null = null;
+    let rsvpStatus = 'pending';
+    let displayName = '';
+    let displayEmail: string | null = null;
+    let displayAvatar: string | null = null;
+    let displayCompany: string | null = null;
+    let displayDesignation: string | null = null;
+
+    const { data: memberRsvp } = await supabase
+      .from('event_rsvps')
+      .select(`
+        id,
+        event_id,
+        member_id,
+        status,
+        members:member_id (
+          id,
+          company,
+          designation,
+          profiles:id ( full_name, email, avatar_url )
+        )
+      `)
+      .eq('ticket_token', ticketToken)
+      .maybeSingle();
+
+    if (memberRsvp) {
+      attendeeType = 'member';
+      attendeeId = memberRsvp.member_id;
+      eventId = memberRsvp.event_id;
+      rsvpStatus = memberRsvp.status;
+      const memberRow = memberRsvp.members as unknown as {
+        company: string | null;
+        designation: string | null;
+        profiles: { full_name: string; email: string; avatar_url: string | null } | null;
+      } | null;
+      displayCompany = memberRow?.company ?? null;
+      displayDesignation = memberRow?.designation ?? null;
+      displayName = memberRow?.profiles?.full_name ?? 'Member';
+      displayEmail = memberRow?.profiles?.email ?? null;
+      displayAvatar = memberRow?.profiles?.avatar_url ?? null;
+    } else {
+      // ----------------------------------------------------------------
+      // 2. Fall back to guest RSVP
+      // ----------------------------------------------------------------
+      const { data: guestRsvp } = await supabase
+        .from('guest_rsvps')
+        .select('id, event_id, status, full_name, email, company, designation')
+        .eq('ticket_token', ticketToken)
+        .maybeSingle();
+
+      if (!guestRsvp) {
+        return { success: false, error: 'Ticket not found' };
+      }
+
+      attendeeType = 'guest';
+      attendeeId = guestRsvp.id;
+      eventId = guestRsvp.event_id;
+      rsvpStatus = guestRsvp.status;
+      displayName = guestRsvp.full_name;
+      displayEmail = guestRsvp.email;
+      displayCompany = guestRsvp.company;
+      displayDesignation = guestRsvp.designation;
+    }
+
+    if (!eventId || !attendeeType || !attendeeId) {
+      return { success: false, error: 'Ticket not found' };
+    }
+
+    // ------------------------------------------------------------------
+    // 3. Verify event is accepting check-ins
+    // ------------------------------------------------------------------
+    const { data: event } = await supabase
+      .from('events')
+      .select('id, title, status')
+      .eq('id', eventId)
+      .single();
+
+    if (!event) {
+      return { success: false, error: 'Event not found' };
+    }
+
+    if (event.status !== 'published' && event.status !== 'ongoing') {
+      return {
+        success: false,
+        error: `Event is ${event.status} — check-in is closed`
+      };
+    }
+
+    // ------------------------------------------------------------------
+    // 4. Idempotent insert — rely on uq_event_checkins_attendee
+    // ------------------------------------------------------------------
+    const nowIso = new Date().toISOString();
+    const { data: existingCheckin } = await supabase
+      .from('event_checkins')
+      .select('id, checked_in_at')
+      .eq('event_id', eventId)
+      .eq('attendee_type', attendeeType)
+      .eq('attendee_id', attendeeId)
+      .maybeSingle();
+
+    let alreadyCheckedIn = false;
+    let checkedInAt = nowIso;
+
+    if (existingCheckin) {
+      alreadyCheckedIn = true;
+      checkedInAt = existingCheckin.checked_in_at ?? nowIso;
+    } else {
+      const { error: insertError } = await supabase
+        .from('event_checkins')
+        .insert({
+          event_id: eventId,
+          attendee_type: attendeeType,
+          attendee_id: attendeeId,
+          checked_in_by: user.id,
+          checked_in_at: nowIso,
+          check_in_method: 'qr_code'
+        });
+
+      if (insertError) {
+        // Unique-violation race → treat as already checked in
+        if ((insertError as { code?: string }).code === '23505') {
+          alreadyCheckedIn = true;
+        } else {
+          console.error('Error inserting event_checkin:', insertError);
+          return { success: false, error: 'Failed to record check-in' };
+        }
+      }
+
+      // Flip RSVP status → attended
+      if (attendeeType === 'member') {
+        await supabase
+          .from('event_rsvps')
+          .update({ status: 'attended', checked_in_at: nowIso, checked_in_by: user.id })
+          .eq('event_id', eventId)
+          .eq('member_id', attendeeId);
+      } else {
+        await supabase
+          .from('guest_rsvps')
+          .update({ status: 'attended', checked_in_at: nowIso, checked_in_by: user.id })
+          .eq('id', attendeeId);
+      }
+      rsvpStatus = 'attended';
+    }
+
+    updateTag('events');
+    updateTag('checkins');
+    revalidatePath(`/events/${eventId}`);
+
+    return {
+      success: true,
+      data: {
+        attendeeType,
+        attendeeId,
+        eventId,
+        eventTitle: event.title,
+        fullName: displayName,
+        email: displayEmail,
+        avatarUrl: displayAvatar,
+        company: displayCompany,
+        designation: displayDesignation,
+        rsvpStatus,
+        alreadyCheckedIn,
+        checkedInAt
+      }
+    };
+  } catch (error) {
+    console.error('Error in checkInByTicketToken:', error);
+    return { success: false, error: 'Check-in failed' };
+  }
+}
+
+// ============================================================================
+// STUTZEE FEATURE 1C: Custom Form Builder
+// ============================================================================
+
+import {
+  updateEventFormFieldsSchema,
+  type CustomFieldZ,
+  type UpdateEventFormFieldsInputZ
+} from '@/lib/validations/event';
+import type { CustomFormField } from '@/types/event';
+
+/**
+ * Validate + sanitize a raw `custom_field_responses` payload against an
+ * event's stored field definitions.
+ *
+ * Returns `{ ok: true, sanitized }` or `{ ok: false, error }`.
+ */
+function validateCustomFieldResponses(
+  rawFields: unknown,
+  rawResponses: Record<string, unknown> | undefined
+): { ok: true; sanitized: Record<string, unknown> } | { ok: false; error: string } {
+  const fields: CustomFormField[] = Array.isArray(rawFields)
+    ? (rawFields as CustomFormField[])
+    : [];
+
+  const responses = rawResponses ?? {};
+  const sanitized: Record<string, unknown> = {};
+
+  for (const field of fields) {
+    if (!field || typeof field !== 'object' || !field.id) continue;
+    const raw = responses[field.id];
+
+    // Coerce per type
+    let value: unknown = raw;
+    switch (field.type) {
+      case 'text':
+      case 'textarea':
+      case 'date':
+      case 'phone':
+        value = typeof raw === 'string' ? raw.trim() : raw == null ? '' : String(raw);
+        break;
+      case 'number':
+        if (raw === '' || raw == null) value = null;
+        else if (typeof raw === 'number') value = raw;
+        else {
+          const n = Number(raw);
+          value = Number.isFinite(n) ? n : null;
+        }
+        break;
+      case 'checkbox':
+        value = raw === true || raw === 'true' || raw === 'on';
+        break;
+      case 'select':
+        value = typeof raw === 'string' ? raw : raw == null ? '' : String(raw);
+        break;
+      case 'multiselect':
+        value = Array.isArray(raw)
+          ? raw.filter((v) => typeof v === 'string')
+          : typeof raw === 'string' && raw.length > 0
+          ? [raw]
+          : [];
+        break;
+      default:
+        value = raw ?? null;
+    }
+
+    // Required validation
+    if (field.required) {
+      const isEmpty =
+        value === '' ||
+        value === null ||
+        value === undefined ||
+        (Array.isArray(value) && value.length === 0) ||
+        (field.type === 'checkbox' && value === false);
+      if (isEmpty) {
+        return {
+          ok: false,
+          error: `Field "${field.label}" is required`
+        };
+      }
+    }
+
+    // Select / multiselect must match allowed options
+    if (
+      (field.type === 'select' || field.type === 'multiselect') &&
+      Array.isArray(field.options) &&
+      field.options.length > 0
+    ) {
+      const allowed = new Set(field.options);
+      if (field.type === 'select' && typeof value === 'string' && value) {
+        if (!allowed.has(value)) {
+          return { ok: false, error: `Invalid value for "${field.label}"` };
+        }
+      }
+      if (field.type === 'multiselect' && Array.isArray(value)) {
+        value = (value as string[]).filter((v) => allowed.has(v));
+      }
+    }
+
+    sanitized[field.id] = value;
+  }
+
+  return { ok: true, sanitized };
+}
+
+/**
+ * Update an event's registration form field definitions.
+ *
+ * Auth: organizer of the event OR hierarchy level <= 3 (Co-Chair+).
+ */
+export async function updateEventFormFields(
+  input: UpdateEventFormFieldsInputZ
+): Promise<ActionResponse> {
+  try {
+    const supabase = await createClient();
+    const user = await getCurrentUser();
+
+    if (!user) {
+      return { success: false, error: 'Unauthorized' };
+    }
+
+    // Validate + enforce max field count via Zod
+    const validated = updateEventFormFieldsSchema.parse(input);
+
+    // Load event to check permission
+    const { data: event, error: eventError } = await supabase
+      .from('events')
+      .select('organizer_id')
+      .eq('id', validated.event_id)
+      .single();
+
+    if (eventError || !event) {
+      return { success: false, error: 'Event not found' };
+    }
+
+    const hierarchyLevel = await getUserHierarchyLevel(user.id);
+    const isOrganizer = event.organizer_id === user.id;
+    const isCoChairOrAbove = hierarchyLevel > 0 && hierarchyLevel <= 3;
+    if (!isOrganizer && !isCoChairOrAbove) {
+      return { success: false, error: 'Permission denied' };
+    }
+
+    // Normalize: ensure sort_order is contiguous 0..n-1 based on array order
+    const normalized: CustomFieldZ[] = validated.registration_form_fields.map(
+      (f, idx) => ({ ...f, sort_order: idx })
+    );
+
+    const { error: updateError } = await supabase
+      .from('events')
+      .update({
+        registration_form_fields: normalized as unknown as any
+      } as any)
+      .eq('id', validated.event_id);
+
+    if (updateError) {
+      console.error('Error updating registration_form_fields:', updateError);
+      return { success: false, error: 'Failed to update form fields' };
+    }
+
+    updateTag('events');
+    revalidatePath(`/events/${validated.event_id}`);
+    revalidatePath(`/events/${validated.event_id}/edit`);
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error in updateEventFormFields:', error);
+    return { success: false, error: 'Invalid form field data' };
   }
 }

@@ -341,7 +341,14 @@ export async function bulkAssignRole(
     const { user } = await requireRole(['Super Admin', 'National Admin'])
 
     const userIdsRaw = formData.get('user_ids')
-    const userIds = userIdsRaw ? JSON.parse(userIdsRaw as string) : []
+    let userIds: string[] = []
+    try {
+      const parsed = userIdsRaw ? JSON.parse(userIdsRaw as string) : []
+      if (!Array.isArray(parsed)) throw new Error('Expected array')
+      userIds = parsed
+    } catch {
+      return { message: 'Invalid user IDs format.' }
+    }
 
     const validation = bulkAssignRoleSchema.safeParse({
       user_ids: userIds,
@@ -398,7 +405,8 @@ export async function bulkAssignRole(
           .single()
 
         if (existing) {
-          // Skip if already assigned
+          // Already assigned - count as success
+          result.success_count++
           continue
         }
 
@@ -449,7 +457,14 @@ export async function bulkRemoveRole(
     const { user } = await requireRole(['Super Admin', 'National Admin'])
 
     const userIdsRaw = formData.get('user_ids')
-    const userIds = userIdsRaw ? JSON.parse(userIdsRaw as string) : []
+    let userIds: string[] = []
+    try {
+      const parsed = userIdsRaw ? JSON.parse(userIdsRaw as string) : []
+      if (!Array.isArray(parsed)) throw new Error('Expected array')
+      userIds = parsed
+    } catch {
+      return { message: 'Invalid user IDs format.' }
+    }
 
     const validation = bulkRemoveRoleSchema.safeParse({
       user_ids: userIds,
@@ -631,7 +646,14 @@ export async function bulkDeactivateUsers(
     const { user } = await requireRole(['Super Admin', 'National Admin'])
 
     const userIdsRaw = formData.get('user_ids')
-    const userIds = userIdsRaw ? JSON.parse(userIdsRaw as string) : []
+    let userIds: string[] = []
+    try {
+      const parsed = userIdsRaw ? JSON.parse(userIdsRaw as string) : []
+      if (!Array.isArray(parsed)) throw new Error('Expected array')
+      userIds = parsed
+    } catch {
+      return { message: 'Invalid user IDs format.' }
+    }
 
     const validation = bulkDeactivateUsersSchema.safeParse({
       user_ids: userIds,
@@ -765,7 +787,14 @@ export async function bulkAssignChapter(
     await requireRole(['Super Admin', 'National Admin'])
 
     const userIdsRaw = formData.get('user_ids')
-    const userIds = userIdsRaw ? JSON.parse(userIdsRaw as string) : []
+    let userIds: string[] = []
+    try {
+      const parsed = userIdsRaw ? JSON.parse(userIdsRaw as string) : []
+      if (!Array.isArray(parsed)) throw new Error('Expected array')
+      userIds = parsed
+    } catch {
+      return { message: 'Invalid user IDs format.' }
+    }
 
     const validation = bulkAssignChapterSchema.safeParse({
       user_ids: userIds,
@@ -874,13 +903,18 @@ export async function deleteUser(userId: string): Promise<FormState> {
     // Invalidate caches
     revalidatePath('/admin/users')
     revalidatePath(`/admin/users/${userId}`)
-
-    redirect('/admin/users')
   } catch (error: unknown) {
+    // Re-throw Next.js redirect errors (they use throw internally)
+    if (error && typeof error === 'object' && 'digest' in error) {
+      throw error
+    }
     return {
       message: error instanceof Error ? error.message : 'An unexpected error occurred.'
     }
   }
+
+  // redirect throws internally, so this acts as the final action
+  return redirect('/admin/users')
 }
 
 // ============================================================================
@@ -1344,7 +1378,12 @@ export async function exportUsers(
 
     // Apply filters
     if (filters?.search) {
-      query = query.or(`full_name.ilike.%${filters.search}%,email.ilike.%${filters.search}%`)
+      // Sanitize search to prevent PostgREST filter injection and SQL wildcard abuse
+      const sanitizedSearch = filters.search
+        .replace(/[.,()]/g, '')
+        .replace(/%/g, '\\%')
+        .replace(/_/g, '\\_')
+      query = query.or(`full_name.ilike.%${sanitizedSearch}%,email.ilike.%${sanitizedSearch}%`)
     }
 
     if (filters?.is_active !== undefined) {
@@ -1427,7 +1466,7 @@ export async function exportUsers(
           headers.map(h => {
             const value = row[h as keyof typeof row]
             // Escape quotes and wrap in quotes if contains comma
-            if (typeof value === 'string' && (value.includes(',') || value.includes('"'))) {
+            if (typeof value === 'string' && (value.includes(',') || value.includes('"') || value.includes('\n') || value.includes('\r'))) {
               return `"${value.replace(/"/g, '""')}"`
             }
             return value

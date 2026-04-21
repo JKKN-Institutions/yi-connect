@@ -12,6 +12,7 @@ interface MemberRSVPListProps {
   attending: PublicMember[];
   notYet: PublicMember[];
   rsvpMap: Record<string, { id: string; guests_count: number }>;
+  memberHMACs: Record<string, string>; // HMAC per member for IDOR prevention
   eventId: string;
   token: string;
   isEventOver: boolean;
@@ -24,6 +25,7 @@ interface MemberRowProps {
   guestsCount: number;
   eventId: string;
   token: string;
+  memberHMAC: string;
   disabled: boolean;
   onToggle: (memberId: string, newStatus: 'confirmed' | 'declined') => void;
   onGuestChange: (memberId: string, count: number) => void;
@@ -41,14 +43,15 @@ function MemberAvatar({ name, avatarUrl }: { name: string; avatarUrl: string | n
   }
 
   // Generate a consistent color from the name
+  const safeName = name || '?';
   const colors = [
     'bg-red-500', 'bg-orange-500', 'bg-amber-500', 'bg-yellow-500',
     'bg-lime-500', 'bg-green-500', 'bg-emerald-500', 'bg-teal-500',
     'bg-cyan-500', 'bg-sky-500', 'bg-blue-500', 'bg-indigo-500',
     'bg-violet-500', 'bg-purple-500', 'bg-fuchsia-500', 'bg-pink-500',
   ];
-  const colorIndex = name.charCodeAt(0) % colors.length;
-  const initial = name.charAt(0).toUpperCase();
+  const colorIndex = safeName.charCodeAt(0) % colors.length;
+  const initial = safeName.charAt(0).toUpperCase();
 
   return (
     <div className={`h-10 w-10 rounded-full ${colors[colorIndex]} flex items-center justify-center text-white font-semibold text-sm`}>
@@ -57,7 +60,7 @@ function MemberAvatar({ name, avatarUrl }: { name: string; avatarUrl: string | n
   );
 }
 
-function MemberRow({ member, isAttending, guestsCount, eventId, token, disabled, onToggle, onGuestChange }: MemberRowProps) {
+function MemberRow({ member, isAttending, guestsCount, eventId, token, memberHMAC, disabled, onToggle, onGuestChange }: MemberRowProps) {
   const [isPending, startTransition] = useTransition();
 
   const handleToggle = () => {
@@ -73,6 +76,7 @@ function MemberRow({ member, isAttending, guestsCount, eventId, token, disabled,
         event_id: eventId,
         token,
         member_id: member.id,
+        member_hmac: memberHMAC,
         guests_count: isAttending ? 0 : guestsCount,
       });
 
@@ -86,21 +90,31 @@ function MemberRow({ member, isAttending, guestsCount, eventId, token, disabled,
 
   const handleGuestIncrement = () => {
     if (guestsCount >= 5) return;
+    const oldCount = guestsCount;
     const newCount = guestsCount + 1;
     onGuestChange(member.id, newCount);
 
     startTransition(async () => {
-      await updateGuestCount({ event_id: eventId, token, member_id: member.id, guests_count: newCount });
+      const result = await updateGuestCount({ event_id: eventId, token, member_id: member.id, member_hmac: memberHMAC, guests_count: newCount });
+      if (!result.success) {
+        onGuestChange(member.id, oldCount);
+        toast.error(result.error || 'Failed to update guest count');
+      }
     });
   };
 
   const handleGuestDecrement = () => {
     if (guestsCount <= 0) return;
+    const oldCount = guestsCount;
     const newCount = guestsCount - 1;
     onGuestChange(member.id, newCount);
 
     startTransition(async () => {
-      await updateGuestCount({ event_id: eventId, token, member_id: member.id, guests_count: newCount });
+      const result = await updateGuestCount({ event_id: eventId, token, member_id: member.id, member_hmac: memberHMAC, guests_count: newCount });
+      if (!result.success) {
+        onGuestChange(member.id, oldCount);
+        toast.error(result.error || 'Failed to update guest count');
+      }
     });
   };
 
@@ -123,6 +137,7 @@ function MemberRow({ member, isAttending, guestsCount, eventId, token, disabled,
               onClick={handleGuestDecrement}
               disabled={disabled || isPending || guestsCount <= 0}
               className="h-6 w-6 rounded-full border flex items-center justify-center text-muted-foreground hover:bg-muted disabled:opacity-30"
+              aria-label="Remove one guest"
             >
               <Minus className="h-3 w-3" />
             </button>
@@ -131,6 +146,7 @@ function MemberRow({ member, isAttending, guestsCount, eventId, token, disabled,
               onClick={handleGuestIncrement}
               disabled={disabled || isPending || guestsCount >= 5}
               className="h-6 w-6 rounded-full border flex items-center justify-center text-muted-foreground hover:bg-muted disabled:opacity-30"
+              aria-label={guestsCount >= 5 ? 'Maximum 5 guests reached' : 'Add one guest'}
             >
               <Plus className="h-3 w-3" />
             </button>
@@ -140,9 +156,10 @@ function MemberRow({ member, isAttending, guestsCount, eventId, token, disabled,
           <Button
             size="sm"
             variant="ghost"
-            className="h-8 px-2 text-green-600 hover:text-red-600 hover:bg-red-50"
+            className="h-8 px-2 text-green-600 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20"
             onClick={handleToggle}
             disabled={disabled || isPending}
+            aria-label="Remove RSVP"
           >
             <Check className="h-4 w-4" />
           </Button>
@@ -162,7 +179,7 @@ function MemberRow({ member, isAttending, guestsCount, eventId, token, disabled,
   );
 }
 
-export function MemberRSVPList({ attending: initialAttending, notYet: initialNotYet, rsvpMap: initialRsvpMap, eventId, token, isEventOver, isEventFull }: MemberRSVPListProps) {
+export function MemberRSVPList({ attending: initialAttending, notYet: initialNotYet, rsvpMap: initialRsvpMap, memberHMACs, eventId, token, isEventOver, isEventFull }: MemberRSVPListProps) {
   const [searchQuery, setSearchQuery] = useState('');
 
   // Local state for optimistic updates
@@ -257,6 +274,7 @@ export function MemberRSVPList({ attending: initialAttending, notYet: initialNot
                 guestsCount={localGuests[member.id] ?? 0}
                 eventId={eventId}
                 token={token}
+                memberHMAC={memberHMACs[member.id] || ''}
                 disabled={disabled}
                 onToggle={handleToggle}
                 onGuestChange={handleGuestChange}
@@ -270,8 +288,15 @@ export function MemberRSVPList({ attending: initialAttending, notYet: initialNot
         </div>
       </div>
 
-      {/* Divider */}
-      <div className="border-t" />
+      {/* Divider - only show when there are items below */}
+      {(notYet.length > 0 || isEventFull) && <div className="border-t" />}
+
+      {/* Event Full Banner */}
+      {isEventFull && !isEventOver && (
+        <div className="rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
+          This event is at capacity. New RSVPs are currently disabled.
+        </div>
+      )}
 
       {/* Not Yet Section */}
       {notYet.length > 0 && (
@@ -280,7 +305,9 @@ export function MemberRSVPList({ attending: initialAttending, notYet: initialNot
             Not Yet Responded ({notYet.length})
           </h2>
           <div className="space-y-1">
-            {filteredNotYet.map((member) => (
+            {filteredNotYet.length === 0 && searchQuery ? (
+              <p className="text-sm text-muted-foreground py-3 text-center">No matching members</p>
+            ) : filteredNotYet.map((member) => (
               <MemberRow
                 key={member.id}
                 member={member}
@@ -288,6 +315,7 @@ export function MemberRSVPList({ attending: initialAttending, notYet: initialNot
                 guestsCount={localGuests[member.id] ?? 0}
                 eventId={eventId}
                 token={token}
+                memberHMAC={memberHMACs[member.id] || ''}
                 disabled={disabled || isEventFull}
                 onToggle={handleToggle}
                 onGuestChange={handleGuestChange}

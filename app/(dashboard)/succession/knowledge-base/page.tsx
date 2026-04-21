@@ -588,6 +588,8 @@ export default async function KnowledgeBasePage() {
     'Chair',
     'Co-Chair',
     'Executive Member',
+    'EC Member',
+    'Member',
   ])
 
   return (

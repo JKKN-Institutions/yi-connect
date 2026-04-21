@@ -15,7 +15,7 @@ interface QuickRSVPHeroProps {
 export function QuickRSVPHero({ event, attendeeCount, totalMembers, isEventOver, isEventFull }: QuickRSVPHeroProps) {
   const startDate = new Date(event.start_date);
   const endDate = new Date(event.end_date);
-  const capacityMax = event.max_capacity || totalMembers;
+  const capacityMax = event.max_capacity || totalMembers || 1;
   const progressPercent = Math.min(100, Math.round((attendeeCount / capacityMax) * 100));
 
   return (

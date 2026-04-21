@@ -47,7 +47,7 @@ async function MyBookingsContent() {
   noStore();
 
   // All authenticated users can view their bookings
-  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member', 'Member']);
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member', 'Member', 'Industry Coordinator']);
 
   const [bookings, waitlistEntries] = await Promise.all([
     getMyIVBookings(),

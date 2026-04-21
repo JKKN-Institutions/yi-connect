@@ -1573,4 +1573,8 @@ export async function getAudiencePreviewCount(
 // EXPORT ALL ACTIONS
 // ============================================================================
 
-export type { ActionResponse };
+// NOTE: Types must NOT be exported from `'use server'` modules — the Next.js
+// Server Actions bundler compiles every export into a callable, and type-only
+// re-exports become runtime `ReferenceError`s in production. If consumers need
+// this type, duplicate it in a plain `lib/` file or inline it at the call site.
+// export type { ActionResponse };

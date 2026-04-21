@@ -65,10 +65,11 @@ export async function createHealthCardEntry(
     const supabase = await createClient()
 
     // Get member ID for tracking who submitted
+    // Note: members.id = profiles.id = auth user id (NOT user_id)
     const { data: member } = await supabase
       .from('members')
       .select('id')
-      .eq('user_id', user.id)
+      .eq('id', user.id)
       .single()
 
     const { data, error } = await supabase
@@ -160,10 +161,11 @@ export async function deleteHealthCardEntry(entryId: string): Promise<ActionResp
     const supabase = await createClient()
 
     // Check if user is a chair (hierarchy_level >= 4)
+    // Note: members.id = profiles.id = auth user id (NOT user_id)
     const { data: member } = await supabase
       .from('members')
       .select('id, hierarchy_level')
-      .eq('user_id', user.id)
+      .eq('id', user.id)
       .single()
 
     if (!member || member.hierarchy_level < 4) {

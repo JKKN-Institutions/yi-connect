@@ -7,6 +7,7 @@
 
 import { cache } from 'react'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { encryptSecret, decryptSecret } from '@/lib/crypto/encryption'
 import type {
   YiCreativeConnection,
   YiCreativeConnectionWithDetails,
@@ -14,6 +15,37 @@ import type {
   UpdateConnectionData,
   YiCreativeConnectionUIStatus,
 } from '@/types/yi-creative'
+
+// Fields that should be encrypted at rest
+const ENCRYPTED_FIELDS = ['access_token', 'refresh_token', 'webhook_secret', 'sso_private_key'] as const
+
+/**
+ * Decrypt sensitive fields in a connection record
+ */
+function decryptConnection<T extends Partial<YiCreativeConnection>>(connection: T): T {
+  const result = { ...connection }
+  for (const field of ENCRYPTED_FIELDS) {
+    if (field in result && (result as Record<string, unknown>)[field]) {
+      (result as Record<string, unknown>)[field] = decryptSecret(
+        (result as Record<string, unknown>)[field] as string
+      )
+    }
+  }
+  return result
+}
+
+/**
+ * Encrypt sensitive fields before storing
+ */
+function encryptConnectionFields(data: Record<string, unknown>): Record<string, unknown> {
+  const result = { ...data }
+  for (const field of ENCRYPTED_FIELDS) {
+    if (field in result && result[field] && typeof result[field] === 'string') {
+      result[field] = encryptSecret(result[field] as string)
+    }
+  }
+  return result
+}
 
 // ============================================================================
 // Read Operations
@@ -41,7 +73,7 @@ export const getChapterYiCreativeConnection = cache(
       return null
     }
 
-    return data as YiCreativeConnection
+    return decryptConnection(data as YiCreativeConnection)
   }
 )
 
@@ -87,11 +119,11 @@ export async function getChapterYiCreativeConnectionWithDetails(
     ? data.connected_by_profile[0]
     : data.connected_by_profile
 
-  return {
+  return decryptConnection({
     ...data,
     chapter,
     connected_by_profile: connectedByProfile,
-  } as YiCreativeConnectionWithDetails
+  } as YiCreativeConnectionWithDetails)
 }
 
 /**
@@ -161,21 +193,24 @@ export async function createYiCreativeConnection(
 ): Promise<YiCreativeConnection | null> {
   const supabase = await createServerSupabaseClient()
 
+  // Encrypt sensitive fields before storage
+  const insertData = encryptConnectionFields({
+    chapter_id: data.chapter_id,
+    organization_id: data.organization_id,
+    organization_name: data.organization_name,
+    connected_by: data.connected_by,
+    status: 'active',
+    access_token: data.access_token,
+    refresh_token: data.refresh_token,
+    token_expires_at: data.token_expires_at,
+    webhook_secret: data.webhook_secret,
+    sso_private_key: data.sso_private_key,
+    sso_public_key: data.sso_public_key,
+  })
+
   const { data: connection, error } = await supabase
     .from('yi_creative_connections')
-    .insert({
-      chapter_id: data.chapter_id,
-      organization_id: data.organization_id,
-      organization_name: data.organization_name,
-      connected_by: data.connected_by,
-      status: 'active',
-      access_token: data.access_token,
-      refresh_token: data.refresh_token,
-      token_expires_at: data.token_expires_at,
-      webhook_secret: data.webhook_secret,
-      sso_private_key: data.sso_private_key,
-      sso_public_key: data.sso_public_key,
-    })
+    .insert(insertData)
     .select()
     .single()
 
@@ -184,7 +219,7 @@ export async function createYiCreativeConnection(
     return null
   }
 
-  return connection as YiCreativeConnection
+  return decryptConnection(connection as YiCreativeConnection)
 }
 
 /**
@@ -196,12 +231,15 @@ export async function updateYiCreativeConnection(
 ): Promise<YiCreativeConnection | null> {
   const supabase = await createServerSupabaseClient()
 
+  // Encrypt sensitive fields before storage
+  const updateData = encryptConnectionFields({
+    ...data,
+    updated_at: new Date().toISOString(),
+  })
+
   const { data: connection, error } = await supabase
     .from('yi_creative_connections')
-    .update({
-      ...data,
-      updated_at: new Date().toISOString(),
-    })
+    .update(updateData)
     .eq('chapter_id', chapterId)
     .select()
     .single()
@@ -211,7 +249,7 @@ export async function updateYiCreativeConnection(
     return null
   }
 
-  return connection as YiCreativeConnection
+  return decryptConnection(connection as YiCreativeConnection)
 }
 
 /**

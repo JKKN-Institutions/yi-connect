@@ -63,9 +63,14 @@ export async function signOut() {
  * Demo account emails (allowed for one-click login)
  */
 const DEMO_ACCOUNTS = [
+  'demo-super@yi-demo.com',
+  'demo-national@yi-demo.com',
+  'demo-exec@yi-demo.com',
   'demo-chair@yi-demo.com',
   'demo-cochair@yi-demo.com',
   'demo-ec@yi-demo.com',
+  'demo-industry@yi-demo.com',
+  'demo-member@yi-demo.com',
 ] as const
 
 /**

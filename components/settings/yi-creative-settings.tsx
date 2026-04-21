@@ -363,7 +363,7 @@ export function YiCreativeSettings({
               {showPublicKey && publicKey && (
                 <div className="relative rounded-lg border bg-muted p-3">
                   <pre className="overflow-x-auto text-xs">
-                    {Buffer.from(publicKey, 'base64').toString('utf-8')}
+                    {typeof window !== 'undefined' ? atob(publicKey) : publicKey}
                   </pre>
                   <Button
                     variant="ghost"

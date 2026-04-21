@@ -18,6 +18,7 @@ import {
   Clock,
   Edit,
   Download,
+  Upload,
   DollarSign,
   Award,
   UserPlus,
@@ -25,7 +26,9 @@ import {
   Image as ImageIcon,
   MessageSquare,
   FileText,
-  ChevronRight
+  ChevronRight,
+  LayoutList,
+  Radio
 } from 'lucide-react';
 import { getCurrentUser } from '@/lib/data/auth';
 import { createClient } from '@/lib/supabase/server';
@@ -34,10 +37,22 @@ import {
   getMemberRSVP,
   getEventFeedback,
   getEventDocuments,
-  getVolunteerRoles
+  getVolunteerRoles,
+  getSessions,
+  getMemberSessionInterests
 } from '@/lib/data/events';
 import {
+  isAutopilotEnabled,
+  getLatestAutopilotRun
+} from '@/lib/data/autopilot';
+import { AutoPilotPanel } from '@/components/autopilot/autopilot-panel';
+import { AgendaTimeline } from '@/components/events/sessions/agenda-timeline';
+import { AttendeeTicket } from '@/components/events/attendee-ticket';
+import { EventSponsors } from '@/components/events/event-sponsors';
+import { PublicLinkButton } from '@/components/events/public';
+import {
   RSVPForm,
+  QuickRSVP,
   EventFeedbackForm,
   VolunteerAssignmentForm,
   ShareButton,
@@ -100,7 +115,7 @@ async function EventDetailContent({ params }: PageProps) {
   const supabase = await createClient();
   const { data: hierarchyLevel } = await supabase.rpc(
     'get_user_hierarchy_level',
-    { user_id: user.id }
+    { p_user_id: user.id }
   );
   const userHierarchyLevel = hierarchyLevel || 0;
 
@@ -116,6 +131,17 @@ async function EventDetailContent({ params }: PageProps) {
 
   const userRSVP = await getMemberRSVP(event.id, user.id);
   const volunteerRoles = await getVolunteerRoles();
+
+  // Auto-pilot feature flag + latest run (Chair+ only)
+  const chapterIdForAutopilot = event.chapter?.id;
+  const autopilotEnabled = chapterIdForAutopilot
+    ? await isAutopilotEnabled(chapterIdForAutopilot)
+    : false;
+  const autopilotLatestRun = await getLatestAutopilotRun(event.id);
+
+  // Load agenda (sessions + current member's interest set)
+  const sessions = await getSessions(event.id);
+  const interestedIds = await getMemberSessionInterests(event.id, user.id);
 
   const statusVariant = getEventStatusVariant(event.status);
   const capacityPercentage = event.max_capacity
@@ -186,6 +212,13 @@ async function EventDetailContent({ params }: PageProps) {
             </div>
 
             <div className='flex items-center gap-2'>
+              {canRSVP && (
+                <QuickRSVP
+                  event={event}
+                  currentRSVP={userRSVP}
+                  memberId={user.id}
+                />
+              )}
               {canEdit && event.status === 'draft' && (
                 <EventPublishButton
                   eventId={event.id}
@@ -212,6 +245,30 @@ async function EventDetailContent({ params }: PageProps) {
                 />
               )}
               <EventQRCode eventId={event.id} eventTitle={event.title} />
+              {/* Stutzee 2C: Live big-screen dashboard — Chair+ only */}
+              {userHierarchyLevel >= 3 &&
+                (event.status === 'ongoing' ||
+                  (event.status === 'published' &&
+                    startDate <= new Date() &&
+                    endDate >= new Date())) && (
+                  <Button
+                    variant='default'
+                    size='sm'
+                    asChild
+                    className='shadow-sm bg-orange-600 hover:bg-orange-700 text-white'
+                  >
+                    <Link
+                      href={`/events/${event.id}/live`}
+                      target='_blank'
+                      rel='noopener noreferrer'
+                      aria-label='Open live event dashboard in a new tab'
+                    >
+                      <Radio className='mr-2 h-4 w-4 animate-pulse' />
+                      Live Dashboard
+                    </Link>
+                  </Button>
+                )}
+              <PublicLinkButton publicSlug={(event as any).public_slug || null} />
               <ShareButton
                 eventId={event.id}
                 eventTitle={event.title}
@@ -279,12 +336,66 @@ async function EventDetailContent({ params }: PageProps) {
             </Card>
           )}
 
+          {/* Member RSVP CTA — shown prominently for all users on published, future events */}
+          {canRSVP && (
+            <Card className='overflow-hidden border-0 shadow-sm bg-gradient-to-r from-orange-50 to-amber-50/60 dark:from-orange-950/30 dark:to-amber-950/20 ring-1 ring-orange-200/60 dark:ring-orange-800/40'>
+              <CardContent className='p-4 sm:p-6'>
+                <div className='flex flex-col sm:flex-row sm:items-center gap-4'>
+                  <div className='flex-1'>
+                    <h3 className='font-semibold text-foreground text-base sm:text-lg'>
+                      {userRSVP ? 'Your RSVP' : 'Register for this event'}
+                    </h3>
+                    <p className='text-sm text-muted-foreground mt-0.5'>
+                      {userRSVP
+                        ? `You are ${(userRSVP as any).status} for this event`
+                        : event.max_capacity
+                        ? `${event.max_capacity - event.current_registrations} spot${event.max_capacity - event.current_registrations !== 1 ? 's' : ''} remaining — secure yours now`
+                        : 'Open registration — join this event'}
+                    </p>
+                  </div>
+                  <div className='flex-shrink-0 w-full sm:w-auto'>
+                    <RSVPForm
+                      event={event}
+                      currentRSVP={userRSVP}
+                      memberId={user.id}
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Attendee Ticket QR — only shown for confirmed member RSVPs */}
+          {userRSVP && (userRSVP as any).status === 'confirmed' && (userRSVP as any).ticket_token && (
+            <AttendeeTicket
+              rsvpId={(userRSVP as any).id}
+              eventId={event.id}
+              ticketToken={(userRSVP as any).ticket_token}
+              eventTitle={event.title}
+              eventDate={event.start_date}
+              memberName={user.email ?? 'Member'}
+            />
+          )}
+
+          {/* Event sponsors (returns null if none attached) */}
+          <EventSponsors eventId={event.id} />
+
           {/* Tabs Section */}
           <Card className='overflow-hidden border-0 shadow-sm'>
-            <Tabs defaultValue='rsvps' className='w-full'>
+            <Tabs defaultValue='agenda' className='w-full'>
               {/* Scrollable tabs container for mobile */}
               <div className='border-b bg-muted/30 overflow-x-auto scrollbar-hide'>
                 <TabsList className='h-auto p-0 bg-transparent inline-flex min-w-full sm:w-full justify-start rounded-none'>
+                  <TabsTrigger
+                    value='agenda'
+                    className='relative flex-shrink-0 px-3 sm:px-5 py-3 sm:py-4 rounded-none border-b-2 border-transparent data-[state=active]:border-orange-500 data-[state=active]:bg-transparent data-[state=active]:shadow-none transition-all'
+                  >
+                    <LayoutList className='h-4 w-4 sm:mr-2' />
+                    <span className='hidden sm:inline font-medium'>Agenda</span>
+                    <span className='ml-1 sm:ml-2 text-xs bg-muted px-1.5 sm:px-2 py-0.5 rounded-full'>
+                      {sessions.length}
+                    </span>
+                  </TabsTrigger>
                   <TabsTrigger
                     value='rsvps'
                     className='relative flex-shrink-0 px-3 sm:px-5 py-3 sm:py-4 rounded-none border-b-2 border-transparent data-[state=active]:border-orange-500 data-[state=active]:bg-transparent data-[state=active]:shadow-none transition-all'
@@ -327,6 +438,35 @@ async function EventDetailContent({ params }: PageProps) {
                   </TabsTrigger>
                 </TabsList>
               </div>
+
+              <TabsContent value='agenda' className='mt-0 p-4 sm:p-6'>
+                <div className='flex items-center justify-between mb-6'>
+                  <div>
+                    <h3 className='text-lg font-semibold'>Event Agenda</h3>
+                    <p className='text-sm text-muted-foreground mt-1'>
+                      {sessions.length === 0
+                        ? 'No sessions added yet.'
+                        : `${sessions.filter((s) => s.is_active).length} session${
+                            sessions.filter((s) => s.is_active).length !== 1 ? 's' : ''
+                          } scheduled · times in IST`}
+                    </p>
+                  </div>
+                  {canEdit && (
+                    <Button size='sm' asChild className='shadow-sm'>
+                      <Link href={`/events/${event.id}/sessions`}>
+                        <LayoutList className='mr-2 h-4 w-4' />
+                        Manage sessions
+                      </Link>
+                    </Button>
+                  )}
+                </div>
+
+                <AgendaTimeline
+                  sessions={sessions}
+                  memberId={user.id}
+                  interestedIds={interestedIds}
+                />
+              </TabsContent>
 
               <TabsContent value='rsvps' className='mt-0 p-4 sm:p-6'>
                 <div className='flex items-center justify-between mb-6'>
@@ -491,7 +631,7 @@ async function EventDetailContent({ params }: PageProps) {
                   </div>
                   {canEdit && (
                     <Button size='sm' className='shadow-sm'>
-                      <Download className='mr-2 h-4 w-4' />
+                      <Upload className='mr-2 h-4 w-4' />
                       Upload
                     </Button>
                   )}
@@ -742,6 +882,17 @@ async function EventDetailContent({ params }: PageProps) {
               </CardContent>
             </Card>
           )}
+
+          {/* Event Auto-Pilot Panel — Chair+ only */}
+          {canEdit && (
+            <AutoPilotPanel
+              eventId={event.id}
+              eventStatus={event.status}
+              featureEnabled={autopilotEnabled}
+              latestRun={autopilotLatestRun}
+              canManage={canEdit}
+            />
+          )}
         </div>
       </div>
     </div>
@@ -807,7 +958,9 @@ async function DocumentsList({ eventId }: { eventId: string }) {
               </Badge>
               {doc.file_size_kb && (
                 <span className='text-xs text-muted-foreground'>
-                  {(doc.file_size_kb / 1024).toFixed(1)} MB
+                  {doc.file_size_kb < 1024
+                    ? `${doc.file_size_kb} KB`
+                    : `${(doc.file_size_kb / 1024).toFixed(1)} MB`}
                 </span>
               )}
             </div>

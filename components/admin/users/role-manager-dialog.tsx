@@ -68,11 +68,13 @@ export function RoleManagerDialog({
   // Track optimistically added/removed roles
   const [optimisticRoles, setOptimisticRoles] = useState<RoleInfo[]>([])
 
-  // Reset optimistic roles when dialog opens
+  // Reset optimistic roles and add form state when dialog opens
   useEffect(() => {
     if (open) {
       setOptimisticRoles([])
+      setIsAdding(availableRoles.length > 0)
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
   if (!user) return null

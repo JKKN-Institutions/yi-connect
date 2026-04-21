@@ -7,7 +7,7 @@
 import { Suspense } from 'react'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ArrowLeft, Edit, TrendingUp, DollarSign, Target, Award, Calendar, Building2, User, FileText } from 'lucide-react'
+import { ArrowLeft, Edit, TrendingUp, DollarSign, Target, Award, Calendar, Building2, User, FileText, Users } from 'lucide-react'
 import { requireRole } from '@/lib/auth'
 
 import { Button } from '@/components/ui/button'
@@ -16,9 +16,12 @@ import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { DealStageBadge } from '@/components/finance/status-badges'
 import { getSponsorshipDealById } from '@/lib/data/finance'
 import { formatCurrency } from '@/types/finance'
+import { getSponsorLeadsForSponsor } from '@/lib/data/sponsor-leads'
+import { SponsorLeadsTable } from '@/components/events/sponsor-leads-table'
 
 interface PageProps {
   params: Promise<{ id: string }>
@@ -80,6 +83,18 @@ async function DealDetail({ dealId }: { dealId: string }) {
           </Link>
         </div>
       </div>
+
+      {/* Tabs: Overview | Leads */}
+      <Tabs defaultValue="overview" className="space-y-6">
+        <TabsList>
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="leads">
+            <Users className="h-4 w-4 mr-2" />
+            Leads
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview" className="space-y-6">
 
       {/* Deal Overview Stats */}
       <div className="grid gap-6 md:grid-cols-4">
@@ -385,7 +400,50 @@ async function DealDetail({ dealId }: { dealId: string }) {
           </CardContent>
         </Card>
       )}
+        </TabsContent>
+
+        <TabsContent value="leads" className="space-y-6">
+          <Suspense fallback={<Skeleton className="h-[400px] w-full" />}>
+            <SponsorLeadsTab sponsorId={deal.sponsor.id} />
+          </Suspense>
+        </TabsContent>
+      </Tabs>
     </div>
+  )
+}
+
+async function SponsorLeadsTab({ sponsorId }: { sponsorId: string }) {
+  const leads = await getSponsorLeadsForSponsor(sponsorId)
+
+  if (leads.length === 0) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>No leads captured yet</CardTitle>
+          <CardDescription>
+            When EC members use the sponsor portal at events, captured leads
+            for this sponsor will appear here.
+          </CardDescription>
+        </CardHeader>
+      </Card>
+    )
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>
+          <Users className="h-5 w-5 inline mr-2" />
+          Leads ({leads.length})
+        </CardTitle>
+        <CardDescription>
+          Leads captured for this sponsor across all events.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <SponsorLeadsTable leads={leads} showEventColumn />
+      </CardContent>
+    </Card>
   )
 }
 

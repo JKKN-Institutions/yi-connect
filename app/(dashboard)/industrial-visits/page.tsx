@@ -83,6 +83,7 @@ async function IVHubContent() {
     'Executive Member',
     'EC Member',
     'Member',
+    'Industry Coordinator',
   ]);
 
   const chapterId = await getCurrentChapterId();

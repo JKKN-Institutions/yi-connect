@@ -791,7 +791,8 @@ export const getSponsorshipDeals = cache(async (
   }
 
   if (filters?.calendar_year) {
-    query = query.eq('calendar_year', filters.calendar_year)
+    // DB column is `fiscal_year`
+    query = query.eq('fiscal_year', filters.calendar_year)
   }
 
   if (filters?.event_id) {

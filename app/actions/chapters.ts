@@ -27,6 +27,29 @@ export interface ActionResponse {
 }
 
 /**
+ * Split "City, State" string into city/state columns.
+ *
+ * Phase B compat: yi_connect.chapters VIEW exposes a computed `location` column
+ * formed as "City, State". The underlying yi.chapters table stores them
+ * separately. When writing through .schema('yi').from('chapters') we must
+ * split. Falls back to putting the entire string into `city` if no comma.
+ */
+function splitLocation(location: string | undefined | null): {
+  city: string | null
+  state: string | null
+} {
+  if (!location) return { city: null, state: null }
+  const idx = location.indexOf(',')
+  if (idx === -1) {
+    return { city: location.trim(), state: null }
+  }
+  return {
+    city: location.slice(0, idx).trim() || null,
+    state: location.slice(idx + 1).trim() || null,
+  }
+}
+
+/**
  * Check if user has National Admin role
  */
 async function requireNationalAdmin() {
@@ -85,17 +108,22 @@ export async function createChapter(
     }
 
     // Create chapter
+    // Phase B: yi_connect.chapters is a read-only VIEW over yi.chapters with a
+    // computed `location` column ("City, State"). Writes must explicitly target
+    // yi.chapters via .schema('yi') and split `location` into city + state.
     const supabase = await createServerSupabaseClient()
+    const { city, state } = splitLocation(validation.data.location)
     const { data: chapter, error } = await supabase
+      .schema('yi')
       .from('chapters')
       .insert([
         {
           name: validation.data.name,
-          location: validation.data.location,
+          city,
+          state,
           region: validation.data.region || null,
           established_date: validation.data.established_date || null,
-          member_count: 0,
-        },
+        } as any,
       ])
       .select()
       .single()
@@ -165,16 +193,29 @@ export async function updateChapter(
     }
 
     // Update chapter
+    // Phase B: yi_connect.chapters is a read-only VIEW. Writes target yi.chapters
+    // directly; `location` is computed from city + state and must be split.
     const supabase = await createServerSupabaseClient()
+    const updatePayload: Record<string, unknown> = {
+      updated_at: new Date().toISOString(),
+    }
+    if (validation.data.name !== undefined) updatePayload.name = validation.data.name
+    if (validation.data.location !== undefined) {
+      const { city, state } = splitLocation(validation.data.location)
+      updatePayload.city = city
+      updatePayload.state = state
+    }
+    if (validation.data.region !== undefined) {
+      updatePayload.region = validation.data.region || null
+    }
+    if (validation.data.established_date !== undefined) {
+      updatePayload.established_date = validation.data.established_date || null
+    }
+
     const { error } = await supabase
+      .schema('yi')
       .from('chapters')
-      .update({
-        name: validation.data.name,
-        location: validation.data.location,
-        region: validation.data.region || null,
-        established_date: validation.data.established_date || null,
-        updated_at: new Date().toISOString(),
-      })
+      .update(updatePayload as any)
       .eq('id', id)
 
     if (error) {
@@ -218,17 +259,22 @@ export async function createChapterWithInvitation(
     const supabase = await createServerSupabaseClient()
 
     // 1. Create the chapter with pending_chair status
+    // Phase B: write directly to yi.chapters; split location → city/state.
+    // Fields like member_count/settings are dropped here if yi.chapters does
+    // not carry them; they remain available via the yi_connect.chapters view
+    // for reads where computed/joined. See docs/PHASE_B_FOLLOWUP.md.
+    const { city, state } = splitLocation(input.location)
     const { data: chapter, error: chapterError } = await supabase
+      .schema('yi')
       .from('chapters')
       .insert({
         name: input.name,
-        location: input.location,
+        city,
+        state,
         region: input.region,
         established_date: input.established_date || null,
-        member_count: 0,
         status: 'pending_chair',
-        settings: {},
-      })
+      } as any)
       .select()
       .single()
 
@@ -344,7 +390,12 @@ export async function deleteChapter(id: string): Promise<ActionResponse> {
     }
 
     // Delete chapter
-    const { error } = await supabase.from('chapters').delete().eq('id', id)
+    // Phase B: delete must target yi.chapters; yi_connect.chapters is a VIEW.
+    const { error } = await supabase
+      .schema('yi')
+      .from('chapters')
+      .delete()
+      .eq('id', id)
 
     if (error) {
       console.error('Error deleting chapter:', error)

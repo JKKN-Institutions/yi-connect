@@ -10,7 +10,10 @@
 
 import 'server-only';
 import { cache } from 'react';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
+import {
+  createServerSupabaseClient,
+  createAdminSupabaseClient,
+} from '@/lib/supabase/server';
 import type {
   ConnectionEventGroup,
   ConnectionWithMember,
@@ -129,64 +132,116 @@ export async function getMyConnections(
   memberId: string
 ): Promise<ConnectionEventGroup[]> {
   if (!memberId) return [];
-  const supabase = await createServerSupabaseClient();
 
-  // Rows where I am `from` (what I scanned)
+  // RLS-aware client (member_connections RLS scoped to from/to_member_id = auth.uid()).
+  const supabase = await createServerSupabaseClient();
+  // Admin client for the member/profile/chapter expansion. The `yi_connect.members`
+  // RLS currently has a recursive policy (42P17) that breaks any embed through
+  // `members`, so we fetch member metadata via service-role after the RLS-checked
+  // member_connections read. We scope every admin lookup by `to_member_id` already
+  // owned by the requester (memberId), so no cross-chapter data is leaked.
+  const admin = createAdminSupabaseClient();
+
+  // 1. Rows where I am `from` (what I scanned). RLS enforces from_member_id = auth.uid().
   const { data: mine, error: mineErr } = await supabase
     .from('member_connections')
-    .select(
-      `
-      id,
-      from_member_id,
-      to_member_id,
-      event_id,
-      note,
-      created_at,
-      to_member:members!member_connections_to_member_id_fkey(
-        id,
-        company,
-        designation,
-        linkedin_url,
-        profile:profiles(
-          full_name,
-          avatar_url
-        ),
-        chapter:chapters(
-          name
-        )
-      ),
-      event:events(
-        id,
-        title,
-        start_date
-      )
-    `
-    )
+    .select('id, from_member_id, to_member_id, event_id, note, created_at')
     .eq('from_member_id', memberId)
     .order('created_at', { ascending: false });
 
   if (mineErr) {
-    console.error('[getMyConnections] mine error:', mineErr);
+    console.error('[getMyConnections] mine error:', {
+      message: mineErr.message,
+      code: (mineErr as any).code,
+      details: (mineErr as any).details,
+      hint: (mineErr as any).hint,
+    });
     return [];
   }
   const rows = mine ?? [];
 
-  // Fetch reverse rows in one pass to compute mutual flags
-  const otherIds = rows.map((r: any) => r.to_member_id);
+  if (rows.length === 0) return [];
+
+  const otherIds = Array.from(
+    new Set(rows.map((r: any) => r.to_member_id).filter(Boolean))
+  );
+  const eventIds = Array.from(
+    new Set(rows.map((r: any) => r.event_id).filter(Boolean))
+  );
+
+  // 2. Fetch member metadata + profile + chapter via service-role to dodge the
+  //    recursive RLS on members. Restricted to the to_member_ids the user owns.
+  const [
+    { data: membersData },
+    { data: profilesData },
+    { data: eventsData },
+  ] = await Promise.all([
+    otherIds.length > 0
+      ? admin
+          .from('members')
+          .select('id, company, designation, linkedin_url, chapter_id')
+          .in('id', otherIds as string[])
+      : Promise.resolve({ data: [] as any[] }),
+    otherIds.length > 0
+      ? admin
+          .from('profiles')
+          .select('id, full_name, avatar_url')
+          .in('id', otherIds as string[])
+      : Promise.resolve({ data: [] as any[] }),
+    eventIds.length > 0
+      ? admin
+          .from('events')
+          .select('id, title, start_date')
+          .in('id', eventIds as string[])
+      : Promise.resolve({ data: [] as any[] }),
+  ]);
+
+  const chapterIds = Array.from(
+    new Set(
+      (membersData ?? [])
+        .map((m: any) => m.chapter_id)
+        .filter(Boolean)
+    )
+  );
+  const { data: chaptersData } =
+    chapterIds.length > 0
+      ? await admin
+          .from('chapters')
+          .select('id, name')
+          .in('id', chapterIds as string[])
+      : { data: [] as any[] };
+
+  const memberById = new Map(
+    (membersData ?? []).map((m: any) => [m.id, m])
+  );
+  const profileById = new Map(
+    (profilesData ?? []).map((p: any) => [p.id, p])
+  );
+  const eventById = new Map(
+    (eventsData ?? []).map((e: any) => [e.id, e])
+  );
+  const chapterById = new Map(
+    (chaptersData ?? []).map((c: any) => [c.id, c])
+  );
+
+  // 3. Compute mutual flags from reverse rows (RLS lets `to` see incoming).
   let reverseSet = new Set<string>();
   if (otherIds.length > 0) {
     const { data: reverse } = await supabase
       .from('member_connections')
       .select('from_member_id, to_member_id')
       .eq('to_member_id', memberId)
-      .in('from_member_id', otherIds);
-    reverseSet = new Set((reverse ?? []).map((r: any) => r.from_member_id));
+      .in('from_member_id', otherIds as string[]);
+    reverseSet = new Set(
+      (reverse ?? []).map((r: any) => r.from_member_id)
+    );
   }
 
   const enriched: ConnectionWithMember[] = rows.map((r: any) => {
-    const tm = r.to_member ?? {};
-    const tmProfile = tm.profile ?? {};
-    const tmChapter = tm.chapter ?? null;
+    const tm = memberById.get(r.to_member_id) ?? {};
+    const tmProfile = profileById.get(r.to_member_id) ?? {};
+    const tmChapter = tm.chapter_id ? chapterById.get(tm.chapter_id) : null;
+    const ev = r.event_id ? eventById.get(r.event_id) : null;
     return {
       id: r.id,
       from_member_id: r.from_member_id,
@@ -203,11 +258,11 @@ export async function getMyConnections(
         linkedin_url: tm.linkedin_url ?? null,
         chapter_name: tmChapter?.name ?? null,
       },
-      event: r.event
+      event: ev
         ? {
-            id: r.event.id,
-            title: r.event.title,
-            start_date: r.event.start_date,
+            id: ev.id,
+            title: ev.title,
+            start_date: ev.start_date,
           }
         : null,
       is_mutual: reverseSet.has(r.to_member_id),

@@ -52,7 +52,12 @@ export const getNotifications = cache(
     const { data, error } = await query;
 
     if (error) {
-      console.error('Error fetching notifications:', error);
+      console.error('[getNotifications] error:', {
+        message: error.message,
+        code: (error as any).code,
+        details: (error as any).details,
+        hint: (error as any).hint,
+      });
       return [];
     }
 
@@ -80,7 +85,12 @@ export const getUnreadCount = cache(async (): Promise<number> => {
     .eq('read', false);
 
   if (error) {
-    console.error('Error fetching unread count:', error);
+    console.error('[getUnreadCount] error:', {
+      message: error.message,
+      code: (error as any).code,
+      details: (error as any).details,
+      hint: (error as any).hint,
+    });
     return 0;
   }
 

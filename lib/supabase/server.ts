@@ -67,6 +67,8 @@ export function createAdminSupabaseClient() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     {
+      // Phase B rewire 2026-05-22: route to yi_connect schema by default.
+      db: { schema: 'yi_connect' },
       auth: {
         autoRefreshToken: false,
         persistSession: false,

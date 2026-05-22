@@ -134,20 +134,83 @@ export async function requireRole(allowedRoles: string[]) {
 
   const supabase = await createServerSupabaseClient()
 
-  // Use the secure database function to avoid permission errors with auth.users
-  const { data: userRoles, error } = await supabase.rpc('get_user_roles_detailed', {
-    p_user_id: user.id
-  })
+  // Try the secure database function first (avoids permission errors with auth.users)
+  let userRoles: Array<{
+    role_id: string
+    role_name: string
+    hierarchy_level: number
+    permissions: string[] | null
+  }> | null = null
 
-  if (error) {
-    redirect('/unauthorized')
+  const { data: rpcRoles, error: rpcError } = await supabase.rpc(
+    'get_user_roles_detailed',
+    { p_user_id: user.id }
+  )
+
+  if (rpcError) {
+    // Surface the failure so it's debuggable instead of silently redirecting
+    // — historically (BUG-004, Phase E rollout) this was the silent root cause
+    // of Super Admin users being bounced to /unauthorized.
+    console.error('[requireRole] RPC get_user_roles_detailed failed', {
+      userId: user.id,
+      code: rpcError.code,
+      message: rpcError.message,
+      details: rpcError.details,
+    })
+  } else {
+    userRoles = rpcRoles
   }
 
-  const userRoleNames = userRoles?.map((ur: { role_name: string }) => ur.role_name) || []
+  // Defensive fallback: if the RPC errored OR returned empty, do a direct
+  // join against user_roles → roles in the active schema (yi_connect).
+  // This protects against transient PostgREST schema-cache drift that would
+  // otherwise lock-out a correctly-seeded Super Admin.
+  if (!userRoles || userRoles.length === 0) {
+    const { data: fallbackRows, error: fallbackError } = await supabase
+      .from('user_roles')
+      .select('role:roles!inner(id, name, hierarchy_level, permissions)')
+      .eq('user_id', user.id)
 
-  const hasRequiredRole = allowedRoles.some((role: string) => userRoleNames.includes(role))
+    if (fallbackError) {
+      console.error('[requireRole] Fallback user_roles join failed', {
+        userId: user.id,
+        code: fallbackError.code,
+        message: fallbackError.message,
+      })
+      redirect('/unauthorized')
+    }
+
+    userRoles =
+      (
+        fallbackRows as Array<{
+          role: {
+            id: string
+            name: string
+            hierarchy_level: number
+            permissions: string[] | null
+          }
+        }> | null
+      )?.map((row) => ({
+        role_id: row.role.id,
+        role_name: row.role.name,
+        hierarchy_level: row.role.hierarchy_level,
+        permissions: row.role.permissions,
+      })) ?? []
+  }
+
+  const userRoleNames = userRoles.map((ur) => ur.role_name)
+
+  const hasRequiredRole = allowedRoles.some((role: string) =>
+    userRoleNames.includes(role)
+  )
 
   if (!hasRequiredRole) {
+    console.warn('[requireRole] Access denied', {
+      userId: user.id,
+      email: user.email,
+      allowedRoles,
+      userRoleNames,
+    })
     redirect('/unauthorized')
   }
 

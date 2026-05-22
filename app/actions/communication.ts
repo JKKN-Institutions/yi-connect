@@ -69,7 +69,7 @@ type ActionResponse<T = any> = {
  * Get member IDs that match the given audience filter
  */
 async function getFilteredMemberIds(
-  supabase: SupabaseClient,
+  supabase: SupabaseClient<any, "yi_connect">,
   chapterId: string,
   audienceFilter?: AudienceFilter | null,
   segmentId?: string | null

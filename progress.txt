@@ -1,3 +1,5 @@
+### Session 2026-05-22 (pane 7e93ed5a) — Phase D port blockers ALL CLEARED. tsc clean (0 user errors, down from 254). Dev server smoke test passes on /, /login, /apply, /yip, /yi-future. Memory + actions ports complete. → .claude/sessions/7e93ed5a.md
+### Session 2026-05-22 (pane 686673a5) — Yi platform unification: Phase A→B→C→D ports landed (472 files), blockers identified, ready for fix+smoke → .claude/sessions/686673a5.md
 # Yi Connect - Progress Tracker
 
 ## Session: 2026-04-18 → 2026-04-20 (End) — 11 Stutzee features shipped, Chair-day score 10/10, Yi Trichy invite pending domain verify

@@ -1,0 +1,296 @@
+"use server";
+
+import { cookies } from "next/headers";
+import {
+  createClient,
+  createServiceClient,
+} from "@/lib/yip/supabase/server";
+import { DEMO_ORG_EMAIL, DEMO_ORG_PASSWORD } from "@/lib/yip/demo-credentials";
+
+type ActionResult<T = null> =
+  | { success: true; data: T }
+  | { success: false; error: string };
+
+// ─── Directory of test accounts derived from mock data ───────────
+
+export type TestAccount = {
+  kind: "student" | "jury" | "organizer";
+  id: string; // participant_id / jury_assignment_id / 'organizer'
+  label: string;
+  sublabel: string;
+  event_name: string | null;
+  event_level: string | null;
+  access_code: string | null;
+  badges: string[];
+  highlight?: "journey" | "leader" | "default";
+};
+
+export async function listTestAccounts(): Promise<{
+  students: TestAccount[];
+  jury: TestAccount[];
+  organizer: TestAccount;
+  hasMockData: boolean;
+}> {
+  const supabase = await createServiceClient();
+
+  // Find mock events for context
+  const { data: events } = await supabase
+    .from("events")
+    .select("id, name, level, status")
+    .eq("is_mock", true);
+
+  const eventMap = new Map(
+    (events ?? []).map((e) => [e.id, e as { id: string; name: string; level: string }])
+  );
+
+  // Mock participants — pull a diverse selection
+  const { data: participants } = await supabase
+    .from("participants")
+    .select(
+      "id, full_name, school_name, parliament_role, party_side, access_code, event_id, person_id, serial_no"
+    )
+    .eq("is_mock", true)
+    .not("access_code", "is", null)
+    .order("serial_no", { nullsFirst: false })
+    .limit(200);
+
+  const pList = participants ?? [];
+
+  // Group participants by person_id — the ones appearing in >1 event are "journey" threaded
+  const byPerson = new Map<string, typeof pList>();
+  for (const p of pList) {
+    if (!p.person_id) continue;
+    const arr = byPerson.get(p.person_id) ?? [];
+    arr.push(p);
+    byPerson.set(p.person_id, arr);
+  }
+
+  // Pick 1 journey-threaded participant (first event instance — chapter)
+  let journeyPick: (typeof pList)[number] | null = null;
+  for (const [, arr] of byPerson.entries()) {
+    if (arr.length > 1) {
+      // Pick the chapter-level instance
+      const chapterInstance = arr.find((p) => {
+        const ev = eventMap.get(p.event_id);
+        return ev?.level === "chapter";
+      }) ?? arr[0];
+      journeyPick = chapterInstance;
+      break;
+    }
+  }
+
+  // Pick leader participants — speaker, pm, leader_of_opposition
+  const leaderRoles = new Set([
+    "speaker",
+    "prime_minister",
+    "leader_of_opposition",
+  ]);
+  const leaderPicks = pList
+    .filter(
+      (p) => p.parliament_role && leaderRoles.has(p.parliament_role)
+    )
+    .slice(0, 3);
+
+  // A default MP
+  const mpPick = pList.find(
+    (p) =>
+      p.parliament_role === "mp" &&
+      p.id !== journeyPick?.id &&
+      !leaderPicks.some((l) => l.id === p.id)
+  );
+
+  const studentPicks: typeof pList = [];
+  if (journeyPick) studentPicks.push(journeyPick);
+  for (const l of leaderPicks) studentPicks.push(l);
+  if (mpPick) studentPicks.push(mpPick);
+
+  const students: TestAccount[] = studentPicks.map((p) => {
+    const ev = eventMap.get(p.event_id);
+    const isJourney = p.id === journeyPick?.id;
+    const isLeader =
+      p.parliament_role !== null && leaderRoles.has(p.parliament_role);
+    const badges: string[] = [];
+    if (isJourney) badges.push("Journey: Chapter → Regional → National");
+    if (p.parliament_role) badges.push(p.parliament_role.replace(/_/g, " "));
+    if (p.party_side) badges.push(p.party_side);
+
+    return {
+      kind: "student",
+      id: p.id,
+      label: p.full_name.replace(/^\[MOCK\]\s*/i, ""),
+      sublabel: p.school_name ?? "",
+      event_name: ev?.name ?? null,
+      event_level: ev?.level ?? null,
+      access_code: p.access_code,
+      badges,
+      highlight: isJourney ? "journey" : isLeader ? "leader" : "default",
+    };
+  });
+
+  // Mock jury members
+  const { data: juries } = await supabase
+    .from("jury_assignments")
+    .select("id, jury_name, access_code, event_id, is_active")
+    .eq("is_mock", true)
+    .eq("is_active", true)
+    .limit(4);
+
+  const jury: TestAccount[] = (juries ?? []).map((j) => {
+    const ev = eventMap.get(j.event_id);
+    return {
+      kind: "jury",
+      id: j.id,
+      label: j.jury_name.replace(/^\[MOCK\]\s*/i, ""),
+      sublabel: "Jury member",
+      event_name: ev?.name ?? null,
+      event_level: ev?.level ?? null,
+      access_code: j.access_code,
+      badges: ["Scoring console"],
+    };
+  });
+
+  const organizer: TestAccount = {
+    kind: "organizer",
+    id: "organizer",
+    label: "Demo Organizer",
+    sublabel: DEMO_ORG_EMAIL,
+    event_name: null,
+    event_level: null,
+    access_code: null,
+    badges: ["Full dashboard", "Admin + pipeline", "All events"],
+  };
+
+  return {
+    students,
+    jury,
+    organizer,
+    hasMockData: (events?.length ?? 0) > 0,
+  };
+}
+
+// ─── One-click login ─────────────────────────────────────────────
+
+export async function loginAsStudent(
+  participantId: string
+): Promise<ActionResult<{ redirect: string }>> {
+  const supabase = await createServiceClient();
+  const { data: p } = await supabase
+    .from("participants")
+    .select("id, full_name, event_id, is_mock")
+    .eq("id", participantId)
+    .single();
+
+  if (!p) return { success: false, error: "Participant not found" };
+
+  const cookieStore = await cookies();
+  cookieStore.set(
+    "yip_session",
+    JSON.stringify({
+      type: "participant",
+      id: p.id,
+      name: p.full_name,
+      eventId: p.event_id,
+    }),
+    {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 60 * 60 * 24,
+      path: "/",
+    }
+  );
+
+  return { success: true, data: { redirect: "/me" } };
+}
+
+export async function loginAsJury(
+  juryAssignmentId: string
+): Promise<ActionResult<{ redirect: string }>> {
+  const supabase = await createServiceClient();
+  const { data: j } = await supabase
+    .from("jury_assignments")
+    .select("id, jury_name, event_id, is_active")
+    .eq("id", juryAssignmentId)
+    .single();
+
+  if (!j) return { success: false, error: "Jury not found" };
+  if (!j.is_active) return { success: false, error: "Jury deactivated" };
+
+  const cookieStore = await cookies();
+  cookieStore.set(
+    "yip_session",
+    JSON.stringify({
+      type: "jury",
+      id: j.id,
+      name: j.jury_name,
+      eventId: j.event_id,
+    }),
+    {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 60 * 60 * 24,
+      path: "/",
+    }
+  );
+
+  return { success: true, data: { redirect: "/jury" } };
+}
+
+export async function loginAsOrganizer(): Promise<
+  ActionResult<{ redirect: string }>
+> {
+  // Ensure the demo user exists (idempotent)
+  const admin = await createServiceClient();
+
+  // admin.listUsers is the way to check — but the API is paginated. Simpler:
+  // try create. If it errors "User already registered" that's fine.
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const anyAdmin = admin as any;
+    const { error: createErr } = await anyAdmin.auth.admin.createUser({
+      email: DEMO_ORG_EMAIL,
+      password: DEMO_ORG_PASSWORD,
+      email_confirm: true,
+      user_metadata: { is_mock: true, demo: true },
+    });
+    // Ignore "already exists" style errors silently
+    if (
+      createErr &&
+      !/already|exist|registered|duplicate/i.test(createErr.message ?? "")
+    ) {
+      return {
+        success: false,
+        error: "Could not provision demo user: " + createErr.message,
+      };
+    }
+  } catch {
+    // fall through — might already be in auth
+  }
+
+  // Now sign in via the normal (cookie-setting) client
+  const client = await createClient();
+  const { error } = await client.auth.signInWithPassword({
+    email: DEMO_ORG_EMAIL,
+    password: DEMO_ORG_PASSWORD,
+  });
+
+  if (error) {
+    return {
+      success: false,
+      error:
+        "Sign-in failed: " +
+        error.message +
+        ". Try running the mock seeder first at /dashboard/admin/mock-data.",
+    };
+  }
+
+  return { success: true, data: { redirect: "/dashboard" } };
+}
+
+// Allow the existing logout action to clear the yip_session cookie too.
+// Exported here so client can import a single symbol.
+export async function clearTestSession(): Promise<void> {
+  const cookieStore = await cookies();
+  cookieStore.delete("yip_session");
+}

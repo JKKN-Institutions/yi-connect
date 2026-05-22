@@ -78,9 +78,9 @@ export const metadata: Metadata = {
       { url: '/icons/icon.svg', type: 'image/svg+xml' }
     ],
     apple: [{ url: '/icons/apple-touch-icon.svg', type: 'image/svg+xml' }]
-  },
-  // Manifest
-  manifest: '/manifest.webmanifest'
+  }
+  // Manifest is automatically handled by Next.js 16 via app/manifest.ts
+  // No need to explicitly declare it here
 };
 
 export default function RootLayout({

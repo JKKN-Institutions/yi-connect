@@ -1,0 +1,70 @@
+{
+  "id": "/",
+  "name": "YiFuture — Future 6.0",
+  "short_name": "YiFuture",
+  "description": "A 90-day mentored youth policy & solutions journey. Yi YUVA's flagship program for college students.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FEFCF6",
+  "theme_color": "#1a1a3e",
+  "scope": "/",
+  "lang": "en-IN",
+  "dir": "ltr",
+  "categories": ["education", "productivity"],
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Chapter dashboard",
+      "short_name": "Chapter",
+      "description": "Open your chapter's dashboard",
+      "url": "/chapter",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "National dashboard",
+      "short_name": "National",
+      "description": "Open the national admin dashboard",
+      "url": "/national/admin",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Register a delegate",
+      "short_name": "Register",
+      "description": "Register a new delegate via access code",
+      "url": "/join",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    }
+  ]
+}

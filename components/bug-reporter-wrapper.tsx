@@ -19,8 +19,8 @@
  * conflict with bottom navbar (80px from bottom on mobile, 16px on desktop).
  */
 
-import { BugReporterProvider } from '@boobalan_jkkn/bug-reporter-sdk'
-import { useEffect } from 'react'
+import { BugReporterProvider, MyBugsPanel } from '@boobalan_jkkn/bug-reporter-sdk'
+import { useEffect, useState } from 'react'
 
 interface UserProfile {
   id: string
@@ -83,6 +83,43 @@ export function BugReporterWrapper({ children, userProfile }: BugReporterWrapper
       }}
     >
       {children}
+      <MyBugsDrawer />
     </BugReporterProvider>
+  )
+}
+
+function MyBugsDrawer() {
+  const [open, setOpen] = useState(false)
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-label="View my submitted bugs"
+        className="fixed bottom-20 right-6 z-[60] flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-lg hover:bg-blue-700 transition-colors"
+      >
+        My Bugs
+      </button>
+      {open && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="My submitted bugs"
+          className="fixed inset-0 z-[70] flex justify-end bg-black/50 backdrop-blur-sm"
+          onClick={() => setOpen(false)}
+        >
+          <div
+            className="h-full w-full max-w-2xl overflow-y-auto bg-white p-6 shadow-2xl dark:bg-gray-900"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold">My Submitted Bugs</h2>
+              <button type="button" onClick={() => setOpen(false)} aria-label="Close" className="rounded-md p-1 hover:bg-gray-100 dark:hover:bg-gray-800">×</button>
+            </div>
+            <MyBugsPanel />
+          </div>
+        </div>
+      )}
+    </>
   )
 }

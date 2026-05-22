@@ -1,0 +1,491 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { createEvent } from "@/app/actions/yip/events";
+import { COMMITTEES } from "@/lib/yip/constants";
+import { Button } from "@/components/yip/ui/button";
+import { Input } from "@/components/yip/ui/input";
+import { Label } from "@/components/yip/ui/label";
+import { Textarea } from "@/components/yip/ui/textarea";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/yip/ui/card";
+import {
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
+  CalendarDays,
+  MapPin,
+  FileText,
+} from "lucide-react";
+
+type WizardStep = 1 | 2 | 3;
+
+interface EventFormData {
+  name: string;
+  level: "chapter" | "regional" | "national";
+  chapter_name: string;
+  city: string;
+  state: string;
+  day1_date: string;
+  day2_date: string;
+  venue_name: string;
+  venue_address: string;
+  central_agenda: string;
+  committee_topics: Record<string, string>;
+}
+
+const STEPS = [
+  { num: 1, label: "Basic Info", icon: CalendarDays },
+  { num: 2, label: "Agenda & Topics", icon: FileText },
+  { num: 3, label: "Review & Create", icon: Check },
+] as const;
+
+const LEVEL_OPTIONS = [
+  { value: "chapter", label: "Chapter Level" },
+  { value: "regional", label: "Regional Level" },
+  { value: "national", label: "National Level" },
+] as const;
+
+export default function NewEventPage() {
+  const router = useRouter();
+  const [step, setStep] = useState<WizardStep>(1);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  // Initialize committee topics with committee names as keys
+  const initialTopics: Record<string, string> = {};
+  COMMITTEES.forEach((c) => {
+    initialTopics[c] = "";
+  });
+
+  const [form, setForm] = useState<EventFormData>({
+    name: "",
+    level: "chapter",
+    chapter_name: "",
+    city: "",
+    state: "",
+    day1_date: "",
+    day2_date: "",
+    venue_name: "",
+    venue_address: "",
+    central_agenda: "",
+    committee_topics: initialTopics,
+  });
+
+  function updateField<K extends keyof EventFormData>(
+    key: K,
+    value: EventFormData[K]
+  ) {
+    setForm((prev) => ({ ...prev, [key]: value }));
+    setError("");
+  }
+
+  function updateTopic(committee: string, value: string) {
+    setForm((prev) => ({
+      ...prev,
+      committee_topics: {
+        ...prev.committee_topics,
+        [committee]: value,
+      },
+    }));
+  }
+
+  function validateStep1(): boolean {
+    if (!form.name.trim()) {
+      setError("Event name is required");
+      return false;
+    }
+    if (!form.day1_date) {
+      setError("Day 1 date is required");
+      return false;
+    }
+    if (!form.day2_date) {
+      setError("Day 2 date is required");
+      return false;
+    }
+    if (form.day2_date < form.day1_date) {
+      setError("Day 2 must be on or after Day 1");
+      return false;
+    }
+    return true;
+  }
+
+  function handleNext() {
+    if (step === 1 && !validateStep1()) return;
+    if (step < 3) setStep((step + 1) as WizardStep);
+  }
+
+  function handleBack() {
+    if (step > 1) setStep((step - 1) as WizardStep);
+  }
+
+  async function handleCreate() {
+    setLoading(true);
+    setError("");
+
+    const result = await createEvent(form);
+
+    if (result.success) {
+      router.push(`/dashboard/events/${result.data.id}`);
+    } else {
+      setError(result.error);
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="mx-auto max-w-2xl">
+      {/* Header */}
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-900">Create New Event</h1>
+        <p className="text-sm text-gray-500">
+          Set up your Young Indians Parliament event
+        </p>
+      </div>
+
+      {/* Progress Indicator */}
+      <div className="mb-8">
+        <div className="flex items-center justify-between">
+          {STEPS.map((s, i) => (
+            <div key={s.num} className="flex items-center flex-1">
+              <div className="flex flex-col items-center flex-1">
+                <div
+                  className={`flex h-10 w-10 items-center justify-center rounded-full border-2 transition-colors ${
+                    step >= s.num
+                      ? "border-[#FF9933] bg-[#FF9933] text-white"
+                      : "border-gray-300 bg-white text-gray-400"
+                  }`}
+                >
+                  {step > s.num ? (
+                    <Check className="size-5" />
+                  ) : (
+                    <s.icon className="size-5" />
+                  )}
+                </div>
+                <span
+                  className={`mt-2 text-xs font-medium ${
+                    step >= s.num ? "text-[#FF9933]" : "text-gray-400"
+                  }`}
+                >
+                  {s.label}
+                </span>
+              </div>
+              {i < STEPS.length - 1 && (
+                <div
+                  className={`h-0.5 w-full -mt-6 ${
+                    step > s.num ? "bg-[#FF9933]" : "bg-gray-200"
+                  }`}
+                />
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Error */}
+      {error && (
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+
+      {/* Step 1: Basic Info */}
+      {step === 1 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Basic Information</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <Label htmlFor="name">Event Name *</Label>
+              <Input
+                id="name"
+                placeholder="e.g., YIP Coimbatore Chapter 2026"
+                value={form.name}
+                onChange={(e) => updateField("name", e.target.value)}
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="level">Level *</Label>
+              <select
+                id="level"
+                value={form.level}
+                onChange={(e) =>
+                  updateField(
+                    "level",
+                    e.target.value as "chapter" | "regional" | "national"
+                  )
+                }
+                className="flex h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              >
+                {LEVEL_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="chapter_name">Chapter Name</Label>
+                <Input
+                  id="chapter_name"
+                  placeholder="e.g., Coimbatore"
+                  value={form.chapter_name}
+                  onChange={(e) => updateField("chapter_name", e.target.value)}
+                />
+              </div>
+              <div>
+                <Label htmlFor="city">City</Label>
+                <Input
+                  id="city"
+                  placeholder="e.g., Coimbatore"
+                  value={form.city}
+                  onChange={(e) => updateField("city", e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="state">State</Label>
+              <Input
+                id="state"
+                placeholder="e.g., Tamil Nadu"
+                value={form.state}
+                onChange={(e) => updateField("state", e.target.value)}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="day1_date">Day 1 Date *</Label>
+                <Input
+                  id="day1_date"
+                  type="date"
+                  value={form.day1_date}
+                  onChange={(e) => updateField("day1_date", e.target.value)}
+                />
+              </div>
+              <div>
+                <Label htmlFor="day2_date">Day 2 Date *</Label>
+                <Input
+                  id="day2_date"
+                  type="date"
+                  value={form.day2_date}
+                  onChange={(e) => updateField("day2_date", e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="venue_name">Venue Name</Label>
+              <Input
+                id="venue_name"
+                placeholder="e.g., JKKN Convention Center"
+                value={form.venue_name}
+                onChange={(e) => updateField("venue_name", e.target.value)}
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="venue_address">Venue Address</Label>
+              <Textarea
+                id="venue_address"
+                placeholder="Full address..."
+                value={form.venue_address}
+                onChange={(e) => updateField("venue_address", e.target.value)}
+                rows={2}
+              />
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Step 2: Agenda & Topics */}
+      {step === 2 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Agenda & Committee Topics</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div>
+              <Label htmlFor="central_agenda">Central Agenda / Theme</Label>
+              <Textarea
+                id="central_agenda"
+                placeholder="The central theme or agenda for this session of parliament..."
+                value={form.central_agenda}
+                onChange={(e) => updateField("central_agenda", e.target.value)}
+                rows={3}
+              />
+            </div>
+
+            <div>
+              <Label className="mb-3">Committee Discussion Topics</Label>
+              <p className="mb-4 text-xs text-gray-500">
+                Provide a specific topic for each committee to discuss
+              </p>
+              <div className="space-y-3">
+                {COMMITTEES.map((committee) => (
+                  <div key={committee}>
+                    <Label
+                      htmlFor={`topic-${committee}`}
+                      className="text-xs text-gray-600"
+                    >
+                      {committee}
+                    </Label>
+                    <Input
+                      id={`topic-${committee}`}
+                      placeholder={`Discussion topic for ${committee}...`}
+                      value={form.committee_topics[committee] || ""}
+                      onChange={(e) => updateTopic(committee, e.target.value)}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Step 3: Review & Create */}
+      {step === 3 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Review & Create</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Basic Info Summary */}
+            <div>
+              <h3 className="mb-2 text-sm font-semibold text-gray-700 flex items-center gap-2">
+                <CalendarDays className="size-4" /> Basic Info
+              </h3>
+              <div className="rounded-lg bg-gray-50 p-4 space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Name</span>
+                  <span className="font-medium">{form.name || "Not set"}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Level</span>
+                  <span className="font-medium capitalize">{form.level}</span>
+                </div>
+                {form.chapter_name && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Chapter</span>
+                    <span className="font-medium">{form.chapter_name}</span>
+                  </div>
+                )}
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Location</span>
+                  <span className="font-medium">
+                    {[form.city, form.state].filter(Boolean).join(", ") ||
+                      "Not set"}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Dates</span>
+                  <span className="font-medium">
+                    {form.day1_date && form.day2_date
+                      ? `${form.day1_date} to ${form.day2_date}`
+                      : "Not set"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Venue Summary */}
+            {(form.venue_name || form.venue_address) && (
+              <div>
+                <h3 className="mb-2 text-sm font-semibold text-gray-700 flex items-center gap-2">
+                  <MapPin className="size-4" /> Venue
+                </h3>
+                <div className="rounded-lg bg-gray-50 p-4 text-sm">
+                  {form.venue_name && (
+                    <p className="font-medium">{form.venue_name}</p>
+                  )}
+                  {form.venue_address && (
+                    <p className="text-gray-500">{form.venue_address}</p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Agenda Summary */}
+            <div>
+              <h3 className="mb-2 text-sm font-semibold text-gray-700 flex items-center gap-2">
+                <FileText className="size-4" /> Agenda & Topics
+              </h3>
+              <div className="rounded-lg bg-gray-50 p-4 space-y-3 text-sm">
+                {form.central_agenda && (
+                  <div>
+                    <span className="text-gray-500">Central Agenda:</span>
+                    <p className="mt-1 font-medium">{form.central_agenda}</p>
+                  </div>
+                )}
+                <div>
+                  <span className="text-gray-500">Committee Topics:</span>
+                  <div className="mt-1 space-y-1">
+                    {COMMITTEES.map((c) => (
+                      <div key={c} className="flex gap-2">
+                        <span className="text-gray-400 shrink-0">{c}:</span>
+                        <span className="font-medium">
+                          {form.committee_topics[c] || "Not set"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-700">
+              A default 2-day agenda with 30 items will be automatically created
+              based on the YIP format. You can customize it later.
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Navigation Buttons */}
+      <div className="mt-6 flex items-center justify-between">
+        <Button
+          variant="outline"
+          onClick={step === 1 ? () => router.push("/yip/dashboard") : handleBack}
+        >
+          <ChevronLeft className="size-4" />
+          {step === 1 ? "Cancel" : "Back"}
+        </Button>
+
+        {step < 3 ? (
+          <Button
+            className="bg-[#FF9933] text-white hover:bg-[#E68A2E]"
+            onClick={handleNext}
+          >
+            Next
+            <ChevronRight className="size-4" />
+          </Button>
+        ) : (
+          <Button
+            className="bg-[#FF9933] text-white hover:bg-[#E68A2E]"
+            onClick={handleCreate}
+            disabled={loading}
+          >
+            {loading ? (
+              <>
+                <Loader2 className="size-4 animate-spin" />
+                Creating...
+              </>
+            ) : (
+              <>
+                <Check className="size-4" />
+                Create Event
+              </>
+            )}
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}

@@ -462,10 +462,17 @@ export const getCurrentUserMember = cache(async () => {
  */
 export const getMembers = cache(
   async (params: MemberQueryParams = {}): Promise<PaginatedMembers> => {
-    const supabase = await createServerSupabaseClient();
+    // Phase E fix 2026-05-22 (Agent F): use admin client to bypass
+    // RLS infinite-recursion on yi_connect.members (mirrors Agent B's
+    // getMemberAnalytics pattern). Members list is leadership-scoped at
+    // the page level (requireRole), so admin-read is safe here.
+    // Also dropped `skill_will_category` from the SELECT — that column was
+    // never ported to yi_connect.members during Phase D, which caused
+    // `column members.skill_will_category does not exist` and crashed the
+    // /members/table server component.
+    const supabase = createAdminSupabaseClient();
     const { page = 1, pageSize = 10, filters = {}, sort } = params;
 
-    // Extended query to include skill_will_category
     let query = supabase.from('members').select(
       `
       id,
@@ -476,7 +483,6 @@ export const getMembers = cache(
       membership_status,
       member_since,
       chapter_id,
-      skill_will_category,
       profiles!inner(
         email,
         full_name,
@@ -510,10 +516,9 @@ export const getMembers = cache(
       query = query.eq('is_active', filters.is_active);
     }
 
-    // Apply skill_will_category filter
-    if (filters.skill_will_category && filters.skill_will_category.length > 0) {
-      query = query.in('skill_will_category', filters.skill_will_category);
-    }
+    // skill_will_category filter removed — column does not exist in
+    // yi_connect.members (Phase E 2026-05-22, Agent F). If/when the column
+    // is re-introduced, restore the .in() filter here.
 
     // Apply sorting
     if (sort) {
@@ -648,7 +653,7 @@ export const getMembers = cache(
         skills_count: skillInfo.count,
         top_skills: skillInfo.topSkills,
         roles: rolesMap.get(member.id) || [],
-        skill_will_category: member.skill_will_category || null,
+        skill_will_category: null, // column dropped in Phase D port — Agent F 2026-05-22
         is_trainer: trainersSet.has(member.id),
         verticals: verticalsMap.get(member.id) || []
       };

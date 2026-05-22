@@ -79,6 +79,64 @@ const nextConfig: NextConfig = {
     ];
   },
 
+  // Rewrites configuration
+  // Phase E (Agent M, 2026-05-22): Legacy path support for YiFuture API routes.
+  // YiFuture standalone used to expose these at /api/*. After the Phase D port
+  // they live at /yi-future/api/*. External integrations (cron schedulers,
+  // OAuth callbacks, OG image consumers) that hard-coded the old bare paths
+  // will silently 404 on the new domain. These rewrites preserve compatibility
+  // by mapping the legacy bare paths to the new namespaced paths.
+  //
+  // Externally addressable (the ones that actually matter):
+  //   /api/cron/drain-emails              → vercel.json cron schedule
+  //   /api/whitepapers/[id]/pdf           → public whitepaper download links
+  //   /api/join/card/[id]/og              → OG image for shared join cards
+  //   /api/consent/pdf, /consent/blank-pdf → email links sent to delegates
+  //   /api/compendium/[editionSlug]/pdf   → public compendium download links
+  //   /api/finalists/[eventId]/csv|pdf    → host-shared roster links
+  //   /api/csv/[scope]                    → admin export links bookmarked by users
+  //   /api/auth/signout                   → form action target
+  //
+  // None of these paths conflict with yi-connect's own /api namespaces
+  // (yi-connect uses /api/admin, /api/events, /api/whatsapp, /api/yi-creative,
+  // /api/verticals, /api/expand-url, /api/bug-reporter, /api/activity-templates).
+  async rewrites() {
+    return [
+      {
+        source: '/api/cron/:path*',
+        destination: '/yi-future/api/cron/:path*',
+      },
+      {
+        source: '/api/whitepapers/:path*',
+        destination: '/yi-future/api/whitepapers/:path*',
+      },
+      {
+        source: '/api/join/card/:path*',
+        destination: '/yi-future/api/join/card/:path*',
+      },
+      {
+        source: '/api/consent/:path*',
+        destination: '/yi-future/api/consent/:path*',
+      },
+      {
+        source: '/api/compendium/:path*',
+        destination: '/yi-future/api/compendium/:path*',
+      },
+      {
+        source: '/api/finalists/:path*',
+        destination: '/yi-future/api/finalists/:path*',
+      },
+      {
+        source: '/api/csv/:path*',
+        destination: '/yi-future/api/csv/:path*',
+      },
+      {
+        source: '/api/auth/signout',
+        destination: '/yi-future/api/auth/signout',
+      },
+    ];
+  },
+
   // Security headers for PWA
   async headers() {
     return [

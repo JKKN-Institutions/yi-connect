@@ -844,7 +844,7 @@ export const getSponsorshipDeals = cache(async (
     weighted_value: Number(deal.weighted_value || 0),
     expected_closure_date: deal.expected_closure_date,
     assigned_to: deal.assigned_to ? { id: deal.assigned_to, full_name: 'User' } : undefined,
-    calendar_year: deal.calendar_year,
+    calendar_year: deal.fiscal_year ?? deal.calendar_year,
   }))
 
   return {

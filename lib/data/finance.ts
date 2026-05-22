@@ -183,8 +183,10 @@ export const getBudgetById = cache(async (budgetId: string): Promise<BudgetWithA
     console.error('Error fetching budget allocations:', allocationsError)
   }
 
+  // Alias DB `fiscal_year` to `calendar_year` for UI compatibility.
   return {
     ...budget,
+    calendar_year: (budget as any).fiscal_year ?? (budget as any).calendar_year,
     allocations: allocations || [],
   }
 })

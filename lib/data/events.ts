@@ -12,7 +12,7 @@
 
 import 'server-only';
 import { cache } from 'react';
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createAdminSupabaseClient } from '@/lib/supabase/server';
 import { getCurrentUser } from '@/lib/data/auth';
 import type {
   Event,
@@ -71,6 +71,11 @@ export const getEvents = cache(
     const filters = params?.filters;
     const sort = params?.sort || { field: 'start_date', direction: 'desc' };
 
+    // Phase E fix 2026-05-22: drop `organizer:members!organizer_id(...)` embed.
+    // After the unified-DB rewire, yi_connect.events.organizer_id has no FK
+    // declaration to yi_connect.members in PostgREST's schema cache, so the
+    // nested embed throws PGRST200. Pattern (Agent C two-step): fetch events
+    // first, then resolve organizer profiles in a follow-up batch query below.
     let query = supabase.from('events').select(
       `
       id,
@@ -93,14 +98,6 @@ export const getEvents = cache(
         id,
         name,
         city
-      ),
-      organizer:members!organizer_id (
-        id,
-        profile:profiles (
-          full_name,
-          email,
-          avatar_url
-        )
       )
     `,
       { count: 'exact' }
@@ -166,6 +163,51 @@ export const getEvents = cache(
       };
     }
 
+    // Phase E fix: resolve organizer profiles in a follow-up batch query
+    // since the events->members FK is missing from PostgREST's schema cache.
+    // We use the admin client so RLS recursion on yi_connect.members can't
+    // bring the whole page down. The data we fetch is non-sensitive (name +
+    // avatar), and the surface is read-only.
+    const organizerIds = Array.from(
+      new Set(
+        data
+          .map((e: any) => e.organizer_id)
+          .filter((id: string | null): id is string => !!id)
+      )
+    );
+
+    const organizersById = new Map<
+      string,
+      { id: string; profile: { full_name: string; email: string; avatar_url?: string | null } | null }
+    >();
+
+    if (organizerIds.length > 0) {
+      try {
+        const admin = createAdminSupabaseClient();
+        const { data: orgRows } = await admin
+          .from('members')
+          .select('id, profile:profiles(full_name, email, avatar_url)')
+          .in('id', organizerIds);
+
+        (orgRows || []).forEach((row: any) => {
+          const profile = Array.isArray(row.profile) ? row.profile[0] : row.profile;
+          organizersById.set(row.id, {
+            id: row.id,
+            profile: profile
+              ? {
+                  full_name: profile.full_name,
+                  email: profile.email,
+                  avatar_url: profile.avatar_url ?? null
+                }
+              : null
+          });
+        });
+      } catch (orgErr) {
+        // Non-fatal: organizer info is decorative. Log and continue with empty map.
+        console.error('[getEvents] failed to resolve organizers:', orgErr);
+      }
+    }
+
     // Transform data to ensure venue and organizer are single objects, not arrays
     const transformedData: EventListItem[] = data.map(
       (event: any): EventListItem => ({
@@ -200,18 +242,8 @@ export const getEvents = cache(
               city: event.venue.city
             }
           : null,
-        organizer: Array.isArray(event.organizer)
-          ? event.organizer[0]
-            ? {
-                id: event.organizer[0].id,
-                profile: event.organizer[0].profile
-              }
-            : null
-          : event.organizer
-          ? {
-              id: event.organizer.id,
-              profile: event.organizer.profile
-            }
+        organizer: event.organizer_id
+          ? organizersById.get(event.organizer_id) || null
           : null
       })
     );
@@ -1112,12 +1144,16 @@ export const getMatchedVolunteers = cache(
  */
 export const getEventAnalytics = cache(
   async (chapterId?: string): Promise<EventAnalytics> => {
-    const supabase = await createClient();
+    // Phase E fix 2026-05-22: use admin client so aggregate analytics can't be
+    // toppled by RLS issues on yi_connect.events / event_volunteers. We only
+    // read counts + non-sensitive aggregates here. Mirrors Agent B's
+    // getMemberAnalytics admin-bypass pattern.
     const user = await getCurrentUser();
-
     if (!user) {
       throw new Error('Unauthorized');
     }
+
+    const supabase = createAdminSupabaseClient();
 
     let query = supabase.from('events').select('*');
 

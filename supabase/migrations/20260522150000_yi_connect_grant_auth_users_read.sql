@@ -1,0 +1,22 @@
+-- =========================================================================
+-- Phase E hotfix 4: GRANT SELECT on auth.users to authenticated
+-- =========================================================================
+-- 24 yi_connect RLS policies (verticals, vertical_*, awards, jury_*,
+-- nominations, etc.) read auth.users via subqueries. Without grant, every
+-- query that walks into these policies fails with PG 42501
+-- "permission denied for table users".
+--
+-- The "proper" fix is to rewrite each policy to use auth.uid() and
+-- auth.jwt() instead of joining auth.users. We'll do that incrementally.
+-- For now this grant unblocks production. Data exposure: any authenticated
+-- user can SELECT auth.users. Mitigations:
+--   - Encrypted passwords are bcrypt-hashed (slow to crack)
+--   - Emails are already public via yi_connect.profiles (RLS USING true)
+--   - This is a closed JKKN/Yi user base (whitelist-only signups via
+--     yi_connect.approved_emails)
+--
+-- TODO(yi-connect-cleanup): rewrite the 24 policies to drop the auth.users
+-- join, then REVOKE this grant.
+-- =========================================================================
+
+GRANT SELECT ON auth.users TO authenticated;

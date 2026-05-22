@@ -1004,18 +1004,9 @@ CREATE POLICY "Chapter Chair+ award points"
 -- =========================================================================
 -- 11. Quick RSVP — anonymous token-based public RSVP
 --     Source: 20260129000001_quick_rsvp.sql
+--     (ALTER/INDEX/backfill hoisted to Section 0 above for ordering;
+--      remaining anon RLS policies below.)
 -- =========================================================================
-
-ALTER TABLE events
-ADD COLUMN IF NOT EXISTS rsvp_token TEXT UNIQUE DEFAULT encode(extensions.gen_random_bytes(16), 'hex');
-
-CREATE INDEX IF NOT EXISTS idx_events_rsvp_token
-ON events(rsvp_token)
-WHERE status IN ('published', 'ongoing');
-
-UPDATE events
-SET rsvp_token = encode(extensions.gen_random_bytes(16), 'hex')
-WHERE rsvp_token IS NULL;
 
 -- Anon RLS policies (idempotent via DROP IF EXISTS + CREATE)
 DROP POLICY IF EXISTS "anon_view_events_by_token" ON events;

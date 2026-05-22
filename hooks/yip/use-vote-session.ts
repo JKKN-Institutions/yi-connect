@@ -1,0 +1,182 @@
+"use client";
+
+import { useEffect, useState, useCallback, useRef } from "react";
+import { createClient } from "@/lib/yip/supabase/client";
+import type { Tables } from "@/types/yip/database";
+
+type VoteSession = Tables<"vote_sessions">;
+
+interface VoteTally {
+  vote_value: string;
+  count: number;
+}
+
+interface VoteSessionState {
+  session: VoteSession | null;
+  isOpen: boolean;
+  isClosed: boolean;
+  isRevealed: boolean;
+  tallies: VoteTally[];
+  totalVotes: number;
+  loading: boolean;
+}
+
+/**
+ * useVoteSession - Subscribes to vote_sessions for a given event.
+ * Returns real-time session state, status flags, and live tallies (for organizer view).
+ */
+export function useVoteSession(
+  eventId: string,
+  options?: { trackVotes?: boolean }
+): VoteSessionState {
+  const supabase = createClient();
+  const [session, setSession] = useState<VoteSession | null>(null);
+  const [tallies, setTallies] = useState<VoteTally[]>([]);
+  const [totalVotes, setTotalVotes] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const votesChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+
+  // Fetch the active vote session
+  const fetchSession = useCallback(async () => {
+    const { data } = await supabase
+      .from("vote_sessions")
+      .select("*")
+      .eq("event_id", eventId)
+      .in("status", ["open", "closed", "revealed"])
+      .order("opened_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    setSession(data ?? null);
+    setLoading(false);
+
+    // If tracking votes and session exists, fetch tallies
+    if (options?.trackVotes && data) {
+      fetchTallies(data.agenda_item_id, data.vote_type);
+    }
+  }, [eventId, supabase, options?.trackVotes]);
+
+  // Fetch vote tallies
+  const fetchTallies = useCallback(
+    async (agendaItemId: string, voteType: string) => {
+      const { data: votes } = await supabase
+        .from("votes")
+        .select("vote_value")
+        .eq("agenda_item_id", agendaItemId)
+        .eq("vote_type", voteType);
+
+      const tallyMap: Record<string, number> = {};
+      (votes ?? []).forEach((v) => {
+        tallyMap[v.vote_value] = (tallyMap[v.vote_value] || 0) + 1;
+      });
+
+      const newTallies: VoteTally[] = Object.entries(tallyMap)
+        .map(([vote_value, count]) => ({ vote_value, count }))
+        .sort((a, b) => b.count - a.count);
+
+      setTallies(newTallies);
+      setTotalVotes((votes ?? []).length);
+    },
+    [supabase]
+  );
+
+  // Initial fetch
+  useEffect(() => {
+    fetchSession();
+  }, [fetchSession]);
+
+  // Subscribe to vote_sessions changes
+  useEffect(() => {
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current);
+    }
+
+    const channel = supabase
+      .channel(`vote-session-${eventId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "vote_sessions",
+          filter: `event_id=eq.${eventId}`,
+        },
+        (payload) => {
+          if (payload.eventType === "INSERT" || payload.eventType === "UPDATE") {
+            const updated = payload.new as VoteSession;
+            setSession(updated);
+
+            // Fetch tallies when session changes
+            if (options?.trackVotes) {
+              fetchTallies(updated.agenda_item_id, updated.vote_type);
+            }
+          }
+          if (payload.eventType === "DELETE") {
+            setSession(null);
+            setTallies([]);
+            setTotalVotes(0);
+          }
+        }
+      )
+      .subscribe();
+
+    channelRef.current = channel;
+
+    return () => {
+      supabase.removeChannel(channel);
+      channelRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eventId]);
+
+  // Subscribe to votes table for live counting (organizer only)
+  useEffect(() => {
+    if (!options?.trackVotes || !session) {
+      if (votesChannelRef.current) {
+        supabase.removeChannel(votesChannelRef.current);
+        votesChannelRef.current = null;
+      }
+      return;
+    }
+
+    if (votesChannelRef.current) {
+      supabase.removeChannel(votesChannelRef.current);
+    }
+
+    const channel = supabase
+      .channel(`votes-live-${session.agenda_item_id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "votes",
+          filter: `agenda_item_id=eq.${session.agenda_item_id}`,
+        },
+        () => {
+          // Re-fetch tallies on new vote
+          fetchTallies(session.agenda_item_id, session.vote_type);
+        }
+      )
+      .subscribe();
+
+    votesChannelRef.current = channel;
+
+    return () => {
+      supabase.removeChannel(channel);
+      votesChannelRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.id, options?.trackVotes]);
+
+  return {
+    session,
+    isOpen: session?.status === "open",
+    isClosed: session?.status === "closed",
+    isRevealed: session?.status === "revealed",
+    tallies,
+    totalVotes,
+    loading,
+  };
+}

@@ -1,0 +1,284 @@
+"use server";
+
+import { createClient } from "@/lib/yip/supabase/server";
+import { revalidatePath } from "next/cache";
+
+type ActionResult<T = null> =
+  | { success: true; data: T }
+  | { success: false; error: string };
+
+// ─── Advance Agenda ───────────────────────────────────────────────
+// Marks the current item completed, sets the next item to in_progress,
+// and updates events.current_agenda_item_id
+
+export async function advanceAgenda(
+  eventId: string
+): Promise<ActionResult<{ nextItemId: string | null }>> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { success: false, error: "Not authenticated" };
+
+  // Get current event
+  const { data: event, error: eventErr } = await supabase
+    .from("events")
+    .select("id, current_agenda_item_id, status")
+    .eq("id", eventId)
+    .eq("created_by", user.id)
+    .single();
+
+  if (eventErr || !event) {
+    return { success: false, error: "Event not found" };
+  }
+
+  // Get all agenda items ordered by day + sequence
+  const { data: items, error: itemsErr } = await supabase
+    .from("agenda_items")
+    .select("*")
+    .eq("event_id", eventId)
+    .order("day")
+    .order("sequence_order");
+
+  if (itemsErr || !items || items.length === 0) {
+    return { success: false, error: "No agenda items found" };
+  }
+
+  // Determine the current day from event status
+  const currentDay = event.status === "day2_live" ? 2 : 1;
+  const dayItems = items.filter((i) => i.day === currentDay);
+
+  // Find current item index
+  let currentIdx = -1;
+  if (event.current_agenda_item_id) {
+    currentIdx = dayItems.findIndex(
+      (i) => i.id === event.current_agenda_item_id
+    );
+  }
+
+  // Mark current item as completed
+  if (currentIdx >= 0) {
+    await supabase
+      .from("agenda_items")
+      .update({
+        status: "completed",
+        actual_end: new Date().toISOString(),
+      })
+      .eq("id", dayItems[currentIdx].id);
+  }
+
+  // Find next non-skipped, non-completed item
+  let nextItem = null;
+  for (let i = currentIdx + 1; i < dayItems.length; i++) {
+    if (
+      dayItems[i].status !== "completed" &&
+      dayItems[i].status !== "skipped"
+    ) {
+      nextItem = dayItems[i];
+      break;
+    }
+  }
+
+  if (nextItem) {
+    // Mark next item as in_progress
+    await supabase
+      .from("agenda_items")
+      .update({
+        status: "in_progress",
+        actual_start: new Date().toISOString(),
+      })
+      .eq("id", nextItem.id);
+
+    // Update event current_agenda_item_id
+    await supabase
+      .from("events")
+      .update({ current_agenda_item_id: nextItem.id })
+      .eq("id", eventId);
+  } else {
+    // No more items — clear current
+    await supabase
+      .from("events")
+      .update({ current_agenda_item_id: null })
+      .eq("id", eventId);
+  }
+
+  revalidatePath(`/dashboard/events/${eventId}/control`);
+  return { success: true, data: { nextItemId: nextItem?.id ?? null } };
+}
+
+// ─── Start Specific Agenda Item ───────────────────────────────────
+
+export async function startAgendaItem(
+  eventId: string,
+  agendaItemId: string
+): Promise<ActionResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { success: false, error: "Not authenticated" };
+
+  // Verify ownership
+  const { data: event } = await supabase
+    .from("events")
+    .select("id, current_agenda_item_id")
+    .eq("id", eventId)
+    .eq("created_by", user.id)
+    .single();
+
+  if (!event) return { success: false, error: "Event not found" };
+
+  // If there's a current item, mark it completed first
+  if (event.current_agenda_item_id && event.current_agenda_item_id !== agendaItemId) {
+    await supabase
+      .from("agenda_items")
+      .update({
+        status: "completed",
+        actual_end: new Date().toISOString(),
+      })
+      .eq("id", event.current_agenda_item_id);
+  }
+
+  // Set the specified item to in_progress
+  await supabase
+    .from("agenda_items")
+    .update({
+      status: "in_progress",
+      actual_start: new Date().toISOString(),
+    })
+    .eq("id", agendaItemId);
+
+  // Update event
+  await supabase
+    .from("events")
+    .update({ current_agenda_item_id: agendaItemId })
+    .eq("id", eventId);
+
+  revalidatePath(`/dashboard/events/${eventId}/control`);
+  return { success: true, data: null };
+}
+
+// ─── Skip Agenda Item ─────────────────────────────────────────────
+
+export async function skipAgendaItem(
+  eventId: string,
+  agendaItemId: string
+): Promise<ActionResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { success: false, error: "Not authenticated" };
+
+  // Mark as skipped
+  await supabase
+    .from("agenda_items")
+    .update({ status: "skipped" })
+    .eq("id", agendaItemId);
+
+  // If this was the current item, advance to next
+  const { data: event } = await supabase
+    .from("events")
+    .select("current_agenda_item_id")
+    .eq("id", eventId)
+    .eq("created_by", user.id)
+    .single();
+
+  if (event?.current_agenda_item_id === agendaItemId) {
+    // Advance automatically
+    return advanceAgenda(eventId) as unknown as Promise<ActionResult>;
+  }
+
+  revalidatePath(`/dashboard/events/${eventId}/control`);
+  return { success: true, data: null };
+}
+
+// ─── Update Event Status ──────────────────────────────────────────
+
+export async function updateEventStatus(
+  eventId: string,
+  newStatus: string
+): Promise<ActionResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { success: false, error: "Not authenticated" };
+
+  // Validate transition
+  const validTransitions: Record<string, string[]> = {
+    draft: ["day1_live"],
+    registration_open: ["registration_closed", "day1_live"],
+    registration_closed: ["day1_live"],
+    day1_live: ["day1_complete"],
+    day1_complete: ["day2_live"],
+    day2_live: ["completed"],
+    completed: ["results_published"],
+  };
+
+  const { data: event } = await supabase
+    .from("events")
+    .select("status")
+    .eq("id", eventId)
+    .eq("created_by", user.id)
+    .single();
+
+  if (!event) return { success: false, error: "Event not found" };
+
+  const allowed = validTransitions[event.status] ?? [];
+  if (!allowed.includes(newStatus)) {
+    return {
+      success: false,
+      error: `Cannot transition from ${event.status} to ${newStatus}`,
+    };
+  }
+
+  // If going to day1_live, set the first Day 1 agenda item as current
+  const updatePayload: Record<string, unknown> = { status: newStatus };
+
+  if (newStatus === "day1_live" || newStatus === "day2_live") {
+    const targetDay = newStatus === "day1_live" ? 1 : 2;
+    const { data: firstItem } = await supabase
+      .from("agenda_items")
+      .select("id")
+      .eq("event_id", eventId)
+      .eq("day", targetDay)
+      .order("sequence_order")
+      .limit(1)
+      .single();
+
+    if (firstItem) {
+      updatePayload.current_agenda_item_id = firstItem.id;
+      // Mark that item as in_progress
+      await supabase
+        .from("agenda_items")
+        .update({
+          status: "in_progress",
+          actual_start: new Date().toISOString(),
+        })
+        .eq("id", firstItem.id);
+    }
+  }
+
+  if (newStatus === "day1_complete") {
+    // Clear current agenda item and timer
+    updatePayload.current_agenda_item_id = null;
+    updatePayload.live_timer_end = null;
+    updatePayload.live_timer_running = false;
+  }
+
+  const { error } = await supabase
+    .from("events")
+    .update(updatePayload)
+    .eq("id", eventId);
+
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/dashboard/events/${eventId}`);
+  revalidatePath(`/dashboard/events/${eventId}/control`);
+  return { success: true, data: null };
+}

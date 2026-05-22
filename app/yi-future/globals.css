@@ -1,0 +1,111 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+
+  /* Yi YUVA Future 6.0 palette (placeholder — Q5 pending Yi brand confirm) */
+  --color-navy: #1a1a3e;
+  --color-navy-dark: #0f0f28;
+  --color-navy-light: #2d2d5c;
+  --color-yi-gold: #F5A623;
+  --color-yi-gold-light: #FCD89D;
+  --color-yi-saffron: #FF9933;
+  --color-yi-saffron-light: #FFE8D1;
+  --color-yi-green: #138808;
+  --color-ivory: #FEFCF6;
+}
+
+:root {
+  --background: #FEFCF6;
+  --foreground: #1a1a3e;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Focus rings — accessible keyboard nav */
+*:focus-visible {
+  outline: 2px solid var(--color-yi-gold);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Skip link — first thing in tab order */
+.skip-link {
+  position: absolute;
+  top: -48px;
+  left: 8px;
+  padding: 0.5rem 1rem;
+  background: var(--color-navy);
+  color: var(--color-ivory);
+  font-size: 0.875rem;
+  font-weight: 600;
+  z-index: 1000;
+  transition: top 120ms ease-out;
+}
+.skip-link:focus {
+  top: 8px;
+}
+
+/* Prevent layout shift on small inputs */
+input,
+textarea,
+select,
+button {
+  font-family: inherit;
+}
+
+/* Subtle scroll-behavior for anchor jumps */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+/* Respect reduced motion — pause animations */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Safe-area insets for notched / dynamic-island devices (iOS PWA in standalone mode) */
+@supports (padding: env(safe-area-inset-top)) {
+  .safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .safe-left {
+    padding-left: env(safe-area-inset-left);
+  }
+  .safe-right {
+    padding-right: env(safe-area-inset-right);
+  }
+}
+
+/* Better print styles for whitepapers / consent letters */
+@media print {
+  body {
+    background: white;
+  }
+  nav,
+  aside,
+  footer,
+  .no-print {
+    display: none !important;
+  }
+}

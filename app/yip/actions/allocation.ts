@@ -1,0 +1,298 @@
+"use server";
+
+import { createClient } from "@/lib/yip/supabase/server";
+import { revalidatePath } from "next/cache";
+import {
+  runAllocation,
+  type AllocationResult,
+  type AllocationParticipant,
+} from "@/lib/yip/allocation-engine";
+
+// ─── Types ─────────────────────────────────────────────────────────
+
+type ActionResult<T = unknown> =
+  | { success: true; data: T }
+  | { success: false; error: string };
+
+// ─── Run Allocation ────────────────────────────────────────────────
+
+export async function runAllocationAction(
+  eventId: string
+): Promise<ActionResult<AllocationResult>> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { success: false, error: "Not authenticated" };
+  }
+
+  // Fetch event — verify ownership, check lock
+  const { data: event } = await supabase
+    .from("events")
+    .select("id, created_by, allocation_locked, committee_topics")
+    .eq("id", eventId)
+    .single();
+
+  if (!event || event.created_by !== user.id) {
+    return { success: false, error: "Event not found or not authorized" };
+  }
+
+  if (event.allocation_locked) {
+    return { success: false, error: "Allocation is locked. Unlock first to re-run." };
+  }
+
+  // Fetch all participants
+  const { data: participants, error: fetchError } = await supabase
+    .from("participants")
+    .select("id, full_name, school_name, class, home_state")
+    .eq("event_id", eventId)
+    .order("full_name");
+
+  if (fetchError) {
+    return { success: false, error: fetchError.message };
+  }
+
+  if (!participants || participants.length === 0) {
+    return { success: false, error: "No participants registered for this event" };
+  }
+
+  // Map to AllocationParticipant
+  const allocationInput: AllocationParticipant[] = participants.map((p) => ({
+    id: p.id,
+    full_name: p.full_name,
+    school_name: p.school_name,
+    class: p.class,
+    home_state: p.home_state,
+  }));
+
+  // Parse custom committees from event if present
+  let customCommittees: string[] | undefined;
+  if (event.committee_topics) {
+    try {
+      const topics = event.committee_topics as unknown;
+      if (Array.isArray(topics) && topics.length > 0) {
+        customCommittees = topics.map(String);
+      }
+    } catch {
+      // Ignore — fall back to defaults
+    }
+  }
+
+  // Run pure allocation
+  const result = runAllocation({
+    participants: allocationInput,
+    committees: customCommittees,
+  });
+
+  // Write results back to database — batch update each participant
+  const errors: string[] = [];
+  for (const assignment of result.assignments) {
+    const { error: updateError } = await supabase
+      .from("participants")
+      .update({
+        party_side: assignment.party_side as "ruling" | "opposition",
+        parliament_role: assignment.parliament_role as
+          | "speaker"
+          | "deputy_speaker"
+          | "prime_minister"
+          | "leader_of_opposition"
+          | "cabinet_minister"
+          | "shadow_minister"
+          | "bill_committee"
+          | "mp",
+        ministry: assignment.ministry as
+          | "home"
+          | "finance"
+          | "education"
+          | "health"
+          | "women_child"
+          | "disaster_management"
+          | "youth_sports"
+          | "it_digital"
+          | null,
+        constituency_name: assignment.constituency_name,
+        constituency_state: assignment.constituency_state,
+        committee_name: assignment.committee_name,
+      })
+      .eq("id", assignment.participantId)
+      .eq("event_id", eventId);
+
+    if (updateError) {
+      errors.push(`Failed to update ${assignment.participantId}: ${updateError.message}`);
+    }
+  }
+
+  if (errors.length > 0) {
+    return {
+      success: false,
+      error: `Allocation computed but ${errors.length} updates failed: ${errors[0]}`,
+    };
+  }
+
+  revalidatePath(`/dashboard/events/${eventId}/allocation`);
+  revalidatePath(`/dashboard/events/${eventId}/participants`);
+  return { success: true, data: result };
+}
+
+// ─── Lock Allocation ───────────────────────────────────────────────
+
+export async function lockAllocation(
+  eventId: string
+): Promise<ActionResult<null>> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { success: false, error: "Not authenticated" };
+  }
+
+  const { data: event } = await supabase
+    .from("events")
+    .select("id, created_by")
+    .eq("id", eventId)
+    .single();
+
+  if (!event || event.created_by !== user.id) {
+    return { success: false, error: "Event not found or not authorized" };
+  }
+
+  const { error } = await supabase
+    .from("events")
+    .update({ allocation_locked: true })
+    .eq("id", eventId);
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  revalidatePath(`/dashboard/events/${eventId}/allocation`);
+  revalidatePath(`/dashboard/events/${eventId}/participants`);
+  return { success: true, data: null };
+}
+
+// ─── Unlock Allocation ─────────────────────────────────────────────
+
+export async function unlockAllocation(
+  eventId: string
+): Promise<ActionResult<null>> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { success: false, error: "Not authenticated" };
+  }
+
+  const { data: event } = await supabase
+    .from("events")
+    .select("id, created_by")
+    .eq("id", eventId)
+    .single();
+
+  if (!event || event.created_by !== user.id) {
+    return { success: false, error: "Event not found or not authorized" };
+  }
+
+  const { error } = await supabase
+    .from("events")
+    .update({ allocation_locked: false })
+    .eq("id", eventId);
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  revalidatePath(`/dashboard/events/${eventId}/allocation`);
+  revalidatePath(`/dashboard/events/${eventId}/participants`);
+  return { success: true, data: null };
+}
+
+// ─── Update Single Participant Assignment (Manual Override) ────────
+
+export async function updateParticipantAssignment(
+  participantId: string,
+  eventId: string,
+  field:
+    | "party_side"
+    | "parliament_role"
+    | "ministry"
+    | "committee_name"
+    | "serial_no"
+    | "party_number"
+    | "committee_number"
+    | "constituency_name",
+  value: string | null
+): Promise<ActionResult<null>> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { success: false, error: "Not authenticated" };
+  }
+
+  // Verify event ownership and that allocation is NOT locked
+  const { data: event } = await supabase
+    .from("events")
+    .select("id, created_by, allocation_locked")
+    .eq("id", eventId)
+    .single();
+
+  if (!event || event.created_by !== user.id) {
+    return { success: false, error: "Event not found or not authorized" };
+  }
+
+  if (event.allocation_locked) {
+    return { success: false, error: "Allocation is locked. Unlock to make changes." };
+  }
+
+  // Build the update object with only the targeted field.
+  // Numeric fields are parsed; null allowed to clear.
+  const updateData: Record<string, string | number | null> = {};
+  if (
+    field === "serial_no" ||
+    field === "party_number" ||
+    field === "committee_number"
+  ) {
+    if (value === null || value === "") {
+      updateData[field] = null;
+    } else {
+      const n = parseInt(value, 10);
+      if (!Number.isFinite(n) || n < 1) {
+        return { success: false, error: `${field} must be a positive integer` };
+      }
+      updateData[field] = n;
+    }
+  } else {
+    updateData[field] = value;
+  }
+
+  // If changing role away from minister roles, clear ministry
+  if (
+    field === "parliament_role" &&
+    value !== "cabinet_minister" &&
+    value !== "shadow_minister"
+  ) {
+    updateData.ministry = null;
+  }
+
+  const { error } = await supabase
+    .from("participants")
+    .update(updateData)
+    .eq("id", participantId)
+    .eq("event_id", eventId);
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  revalidatePath(`/dashboard/events/${eventId}/allocation`);
+  revalidatePath(`/dashboard/events/${eventId}/participants`);
+  return { success: true, data: null };
+}

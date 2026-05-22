@@ -220,7 +220,8 @@ export const getBudgetAnalytics = cache(async (chapterId: string, calendarYear?:
     .eq('chapter_id', chapterId)
 
   if (calendarYear) {
-    query = query.eq('calendar_year', calendarYear)
+    // DB column is `fiscal_year`
+    query = query.eq('fiscal_year', calendarYear)
   }
 
   const { data: budgets, error } = await query

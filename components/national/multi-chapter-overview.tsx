@@ -75,7 +75,7 @@ export function ChaptersStatusGrid() {
         const supabase = createBrowserSupabaseClient()
 
         const { data, error } = await supabase
-          .from('chapters')
+          .schema('yi').from('chapters')
           .select(
             `
             id,

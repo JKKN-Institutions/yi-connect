@@ -87,7 +87,7 @@ export async function createChapter(
     // Create chapter
     const supabase = await createServerSupabaseClient()
     const { data: chapter, error } = await supabase
-      .from('chapters')
+      .schema('yi').from('chapters')
       .insert([
         {
           name: validation.data.name,
@@ -167,7 +167,7 @@ export async function updateChapter(
     // Update chapter
     const supabase = await createServerSupabaseClient()
     const { error } = await supabase
-      .from('chapters')
+      .schema('yi').from('chapters')
       .update({
         name: validation.data.name,
         location: validation.data.location,
@@ -219,7 +219,7 @@ export async function createChapterWithInvitation(
 
     // 1. Create the chapter with pending_chair status
     const { data: chapter, error: chapterError } = await supabase
-      .from('chapters')
+      .schema('yi').from('chapters')
       .insert({
         name: input.name,
         location: input.location,
@@ -344,7 +344,7 @@ export async function deleteChapter(id: string): Promise<ActionResponse> {
     }
 
     // Delete chapter
-    const { error } = await supabase.from('chapters').delete().eq('id', id)
+    const { error } = await supabase.schema('yi').from('chapters').delete().eq('id', id)
 
     if (error) {
       console.error('Error deleting chapter:', error)

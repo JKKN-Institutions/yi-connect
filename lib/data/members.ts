@@ -1174,7 +1174,7 @@ export const getCurrentUserChapter = cache(async () => {
 
   // Get the chapter details
   const { data: chapter, error: chapterError } = await supabase
-    .from('chapters')
+    .schema('yi').from('chapters')
     .select('id, name, location, region')
     .eq('id', member.chapter_id)
     .single();

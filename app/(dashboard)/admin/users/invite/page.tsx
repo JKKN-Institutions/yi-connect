@@ -35,7 +35,7 @@ async function InviteFormData() {
       .select('*')
       .order('hierarchy_level', { ascending: false }),
     supabase
-      .from('chapters')
+      .schema('yi').from('chapters')
       .select('id, name, location')
       .order('name', { ascending: true })
   ]);

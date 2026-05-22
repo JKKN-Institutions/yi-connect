@@ -176,7 +176,9 @@ export async function seedDemoMembers(): Promise<{
   }
 
   // Create admin client with service role
+  // Phase B: route to yi_connect schema by default
   const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
+    db: { schema: 'yi_connect' },
     auth: {
       autoRefreshToken: false,
       persistSession: false,
@@ -286,7 +288,7 @@ export async function seedDemoMembers(): Promise<{
 
   // Update chapter member count
   await supabaseAdmin
-    .from('chapters')
+    .schema('yi').from('chapters')
     .update({ member_count: created + 3 }) // +3 for chair, co-chair, ec
     .eq('id', DEMO_CHAPTER_ID)
 

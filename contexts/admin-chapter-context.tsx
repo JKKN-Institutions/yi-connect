@@ -81,7 +81,7 @@ export function AdminChapterProvider({ children }: AdminChapterProviderProps) {
         if (isAdmin) {
           // Fetch all chapters
           const { data: chaptersData } = await supabase
-            .from('chapters')
+            .schema('yi').from('chapters')
             .select('id, name, location, status')
             .order('name')
 

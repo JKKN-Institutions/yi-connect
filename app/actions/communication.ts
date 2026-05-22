@@ -437,7 +437,7 @@ export async function sendAnnouncement(id: string): Promise<ActionResponse> {
 
           // Get chapter name
           const { data: chapter } = await supabase
-            .from('chapters')
+            .schema('yi').from('chapters')
             .select('name')
             .eq('id', announcement.chapter_id)
             .single();

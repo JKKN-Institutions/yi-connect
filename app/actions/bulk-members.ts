@@ -49,7 +49,7 @@ export async function processBulkMemberUpload(
 
   // Get all chapters for lookup by name
   const { data: allChapters } = await adminClient
-    .from('chapters')
+    .schema('yi').from('chapters')
     .select('id, name')
 
   // Create a map of chapter name (lowercase) to chapter ID
@@ -468,7 +468,7 @@ export async function getChaptersForBulkUpload(): Promise<
   const supabase = await createServerSupabaseClient()
 
   const { data, error } = await supabase
-    .from('chapters')
+    .schema('yi').from('chapters')
     .select('id, name, location')
     .order('name')
 

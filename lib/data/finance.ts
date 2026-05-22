@@ -78,8 +78,10 @@ export const getBudgets = cache(async (
   }
 
   // Apply filters
+  // NOTE: DB column is `fiscal_year`; we expose it to the UI as `calendar_year`
+  // for backward compatibility with the existing TypeScript types.
   if (filters?.calendar_year) {
-    query = query.eq('calendar_year', filters.calendar_year)
+    query = query.eq('fiscal_year', filters.calendar_year)
   }
 
   if (filters?.period) {
@@ -104,7 +106,7 @@ export const getBudgets = cache(async (
   query = query.range(from, to)
 
   // Sorting
-  query = query.order('calendar_year', { ascending: false })
+  query = query.order('fiscal_year', { ascending: false })
     .order('start_date', { ascending: false })
 
   const { data, error, count } = await query
@@ -115,10 +117,11 @@ export const getBudgets = cache(async (
   }
 
   // Transform to list items with calculated fields
-  const listItems: BudgetListItem[] = (data || []).map((budget) => ({
+  // NOTE: DB column is `fiscal_year`; aliased to `calendar_year` for the UI.
+  const listItems: BudgetListItem[] = (data || []).map((budget: any) => ({
     id: budget.id,
     name: budget.name,
-    calendar_year: budget.calendar_year,
+    calendar_year: budget.fiscal_year ?? budget.calendar_year,
     period: budget.period as any,
     quarter: budget.quarter || undefined,
     total_amount: Number(budget.total_amount),
@@ -180,8 +183,10 @@ export const getBudgetById = cache(async (budgetId: string): Promise<BudgetWithA
     console.error('Error fetching budget allocations:', allocationsError)
   }
 
+  // Alias DB `fiscal_year` to `calendar_year` for UI compatibility.
   return {
     ...budget,
+    calendar_year: (budget as any).fiscal_year ?? (budget as any).calendar_year,
     allocations: allocations || [],
   }
 })
@@ -215,7 +220,8 @@ export const getBudgetAnalytics = cache(async (chapterId: string, calendarYear?:
     .eq('chapter_id', chapterId)
 
   if (calendarYear) {
-    query = query.eq('calendar_year', calendarYear)
+    // DB column is `fiscal_year`
+    query = query.eq('fiscal_year', calendarYear)
   }
 
   const { data: budgets, error } = await query
@@ -785,7 +791,8 @@ export const getSponsorshipDeals = cache(async (
   }
 
   if (filters?.calendar_year) {
-    query = query.eq('calendar_year', filters.calendar_year)
+    // DB column is `fiscal_year`
+    query = query.eq('fiscal_year', filters.calendar_year)
   }
 
   if (filters?.event_id) {
@@ -837,7 +844,7 @@ export const getSponsorshipDeals = cache(async (
     weighted_value: Number(deal.weighted_value || 0),
     expected_closure_date: deal.expected_closure_date,
     assigned_to: deal.assigned_to ? { id: deal.assigned_to, full_name: 'User' } : undefined,
-    calendar_year: deal.calendar_year,
+    calendar_year: deal.fiscal_year ?? deal.calendar_year,
   }))
 
   return {

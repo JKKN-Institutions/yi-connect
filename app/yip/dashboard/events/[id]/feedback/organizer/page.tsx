@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { OrganizerFeedbackFormClient } from "./organizer-feedback-form-client";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/yip/ui/card";
 import { Clock } from "lucide-react";
 
 // This is intentionally a PUBLIC route — organizers / volunteers / jury

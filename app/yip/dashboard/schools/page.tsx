@@ -1,4 +1,4 @@
-import { listSchools, getSchoolParticipationStats } from "@/app/actions/schools";
+import { listSchools, getSchoolParticipationStats } from "@/app/actions/yip/schools";
 import { SchoolsClient } from "./schools-client";
 
 export default async function SchoolsPage() {

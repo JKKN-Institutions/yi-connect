@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/yip/ui/badge";
+import { Button } from "@/components/yip/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/yip/ui/card";
+import { Input } from "@/components/yip/ui/input";
 import {
   Table,
   TableBody,
@@ -12,7 +12,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@/components/yip/ui/table";
 import {
   Plus,
   Pencil,
@@ -28,7 +28,7 @@ import {
   updateSchool,
   deleteSchool,
   type School as SchoolRow,
-} from "@/app/actions/schools";
+} from "@/app/actions/yip/schools";
 
 type EnrichedSchool = SchoolRow & {
   total_participations: number;

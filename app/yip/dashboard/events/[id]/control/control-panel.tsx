@@ -2,10 +2,10 @@
 
 import { useState, useTransition, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/yip/ui/card";
+import { Button } from "@/components/yip/ui/button";
+import { Badge } from "@/components/yip/ui/badge";
+import { Input } from "@/components/yip/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -14,7 +14,7 @@ import {
   DialogDescription,
   DialogFooter,
   DialogTrigger,
-} from "@/components/ui/dialog";
+} from "@/components/yip/ui/dialog";
 import {
   Play,
   Pause,
@@ -33,15 +33,15 @@ import {
   ListOrdered,
   Lock,
 } from "lucide-react";
-import { Switch } from "@/components/ui/switch";
+import { Switch } from "@/components/yip/ui/switch";
 import { cn } from "@/lib/yip/utils";
 import { ROLE_LABELS, ROLE_COLORS, PARTY_COLORS } from "@/lib/yip/constants";
 import { useRealtimeEvent } from "@/hooks/yip/use-realtime-event";
 import { useTimer } from "@/hooks/yip/use-timer";
-import { advanceAgenda, startAgendaItem, skipAgendaItem, updateEventStatus } from "@/app/actions/agenda";
-import { setAllocationLocked, setScoresLocked, setRegistrationsFrozen } from "@/app/actions/events";
-import { startTimer, stopTimer, resetTimer } from "@/app/actions/timer";
-import { advanceSpeaker, skipSpeaker, generateSpeakerQueue, getSpeakerQueue } from "@/app/actions/speakers";
+import { advanceAgenda, startAgendaItem, skipAgendaItem, updateEventStatus } from "@/app/actions/yip/agenda";
+import { setAllocationLocked, setScoresLocked, setRegistrationsFrozen } from "@/app/actions/yip/events";
+import { startTimer, stopTimer, resetTimer } from "@/app/actions/yip/timer";
+import { advanceSpeaker, skipSpeaker, generateSpeakerQueue, getSpeakerQueue } from "@/app/actions/yip/speakers";
 import { QuestionHourPanel } from "./question-hour";
 import { VoteManager } from "./vote-manager";
 import { BillSession } from "./bill-session";

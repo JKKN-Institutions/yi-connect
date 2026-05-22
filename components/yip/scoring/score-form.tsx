@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from "react";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/yip/ui/button";
+import { Textarea } from "@/components/yip/ui/textarea";
 import { ROLE_LABELS, ROLE_COLORS, PARTY_COLORS } from "@/lib/yip/constants";
 import { saveToBuffer, getFromBuffer, removeFromBuffer } from "@/lib/yip/score-buffer";
 import { Save, Send, Loader2, CheckCircle2, MessageSquare } from "lucide-react";

@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { createServiceClient } from "@/lib/yip/supabase/server";
-import { listVolunteers } from "@/app/actions/volunteers";
+import { listVolunteers } from "@/app/actions/yip/volunteers";
 import { VolunteersClient } from "./volunteers-client";
 
 export default async function VolunteersPage({

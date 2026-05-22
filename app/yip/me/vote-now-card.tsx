@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Vote, CheckCircle2, ChevronRight } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/yip/ui/card";
 import { useVoteSession } from "@/hooks/yip/use-vote-session";
 import { createClient } from "@/lib/yip/supabase/client";
 

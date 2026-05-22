@@ -5,11 +5,11 @@ import Link from "next/link";
 import {
   getSeasonPipeline,
   promoteToEvent,
-} from "@/app/actions/pipeline";
-import type { Season, SeasonPipelineData, SeasonEvent } from "@/app/actions/pipeline";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+} from "@/app/actions/yip/pipeline";
+import type { Season, SeasonPipelineData, SeasonEvent } from "@/app/actions/yip/pipeline";
+import { Badge } from "@/components/yip/ui/badge";
+import { Button } from "@/components/yip/ui/button";
+import { Card, CardContent } from "@/components/yip/ui/card";
 import {
   GitBranch,
   Users,

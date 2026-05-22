@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { createServiceClient } from "@/lib/yip/supabase/server";
-import { listMedia, getMediaStats } from "@/app/actions/media";
+import { listMedia, getMediaStats } from "@/app/actions/yip/media";
 import { MediaClient } from "./media-client";
 
 export default async function MediaPage({

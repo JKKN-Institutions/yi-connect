@@ -1,11 +1,11 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/yip/ui/badge";
+import { Button } from "@/components/yip/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/yip/ui/card";
+import { Input } from "@/components/yip/ui/input";
+import { Textarea } from "@/components/yip/ui/textarea";
 import {
   Award,
   BadgeCheck,
@@ -44,7 +44,7 @@ import {
   type ComplianceScore,
   type ComplianceStatus,
   type InvitationRow,
-} from "@/app/actions/branding";
+} from "@/app/actions/yip/branding";
 
 // ─────────────────────────────────────────────────────────────────────────
 // Display helpers

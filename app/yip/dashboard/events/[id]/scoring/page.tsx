@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/yip/supabase/server";
-import { getScoringProgress } from "@/app/actions/results";
+import { getScoringProgress } from "@/app/actions/yip/results";
 import { ScoringProgress } from "./scoring-progress";
 
 export default async function ScoringPage({

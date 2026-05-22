@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/yip/ui/card";
+import { Badge } from "@/components/yip/ui/badge";
 import {
   ArrowLeft,
   BookOpen,

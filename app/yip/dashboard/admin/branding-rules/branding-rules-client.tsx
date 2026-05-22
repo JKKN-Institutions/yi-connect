@@ -22,12 +22,12 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/yip/ui/badge";
+import { Button } from "@/components/yip/ui/button";
+import { Card, CardContent } from "@/components/yip/ui/card";
+import { Input } from "@/components/yip/ui/input";
+import { Label } from "@/components/yip/ui/label";
+import { Textarea } from "@/components/yip/ui/textarea";
 import {
   adminCreateBrandingRule,
   adminDeactivateBrandingRule,
@@ -38,7 +38,7 @@ import {
   type AdminBrandingRule,
   type AdminBrandingSeverity,
   type BrandingRuleInput,
-} from "@/app/actions/admin-branding-rules";
+} from "@/app/actions/yip/admin-branding-rules";
 
 // ─── Display meta ─────────────────────────────────────────────────
 

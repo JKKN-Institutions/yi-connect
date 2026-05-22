@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/yip/supabase/server";
-import { getAllSeasons } from "@/app/actions/pipeline";
+import { getAllSeasons } from "@/app/actions/yip/pipeline";
 import { AdminDashboardClient } from "./admin-client";
 
 export default async function AdminPage() {

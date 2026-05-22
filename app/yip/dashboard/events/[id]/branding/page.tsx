@@ -4,7 +4,7 @@ import {
   listComplianceChecks,
   listInvitations,
   getComplianceScore,
-} from "@/app/actions/branding";
+} from "@/app/actions/yip/branding";
 import { BrandingClient } from "./branding-client";
 
 export default async function BrandingPage({

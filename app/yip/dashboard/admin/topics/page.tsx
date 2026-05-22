@@ -1,4 +1,4 @@
-import { adminListTopics } from "@/app/actions/admin-topics";
+import { adminListTopics } from "@/app/actions/yip/admin-topics";
 import { TopicsAdminClient } from "./topics-admin-client";
 
 export default async function AdminTopicsPage() {

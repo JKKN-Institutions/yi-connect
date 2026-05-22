@@ -3,7 +3,7 @@
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { validateAccessCode } from "@/app/actions/auth";
+import { validateAccessCode } from "@/app/actions/yip/auth";
 
 export default function JoinPage() {
   const router = useRouter();

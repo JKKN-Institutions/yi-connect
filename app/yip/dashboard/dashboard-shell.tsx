@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { logoutOrganizer } from "@/app/actions/auth";
+import { logoutOrganizer } from "@/app/actions/yip/auth";
 import {
   CalendarDays,
   LogOut,

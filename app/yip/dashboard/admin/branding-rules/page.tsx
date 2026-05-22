@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/yip/supabase/server";
-import { adminListBrandingRules } from "@/app/actions/admin-branding-rules";
+import { adminListBrandingRules } from "@/app/actions/yip/admin-branding-rules";
 import { BrandingRulesClient } from "./branding-rules-client";
 
 export default async function AdminBrandingRulesPage() {

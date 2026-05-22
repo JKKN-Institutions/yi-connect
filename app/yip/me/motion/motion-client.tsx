@@ -2,12 +2,12 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Label } from "@/components/ui/label";
+import { Card, CardContent } from "@/components/yip/ui/card";
+import { Button } from "@/components/yip/ui/button";
+import { Textarea } from "@/components/yip/ui/textarea";
+import { Input } from "@/components/yip/ui/input";
+import { Badge } from "@/components/yip/ui/badge";
+import { Label } from "@/components/yip/ui/label";
 import {
   Megaphone,
   Send,
@@ -25,8 +25,8 @@ import {
   motionMeta,
   type MotionType,
 } from "@/lib/yip/motions";
-import type { Motion } from "@/app/actions/motions";
-import { raiseMotion } from "@/app/actions/motions";
+import type { Motion } from "@/app/actions/yip/motions";
+import { raiseMotion } from "@/app/actions/yip/motions";
 import type { Database } from "@/types/yip/database";
 
 type MinistryType = Database["public"]["Enums"]["ministry_type"];

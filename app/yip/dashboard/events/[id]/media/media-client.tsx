@@ -2,11 +2,11 @@
 
 import { useCallback, useMemo, useRef, useState, useTransition } from "react";
 import { createClient } from "@/lib/yip/supabase/client";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/yip/ui/badge";
+import { Button } from "@/components/yip/ui/button";
+import { Card, CardContent } from "@/components/yip/ui/card";
+import { Input } from "@/components/yip/ui/input";
+import { Textarea } from "@/components/yip/ui/textarea";
 import {
   Images,
   Upload,
@@ -52,7 +52,7 @@ import {
   bulkSetVisibility,
   deleteMedia,
   bulkDeleteMedia,
-} from "@/app/actions/media";
+} from "@/app/actions/yip/media";
 
 type Stats = {
   total: number;

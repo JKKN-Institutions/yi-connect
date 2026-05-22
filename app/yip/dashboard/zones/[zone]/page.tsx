@@ -1,10 +1,10 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { createServiceClient } from "@/lib/yip/supabase/server";
-import { listOrganizerProfiles } from "@/app/actions/hierarchy";
+import { listOrganizerProfiles } from "@/app/actions/yip/hierarchy";
 import { YI_ZONES, type YiZone } from "@/lib/yip/hierarchy";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/yip/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/yip/ui/card";
 import {
   Table,
   TableBody,
@@ -12,7 +12,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@/components/yip/ui/table";
 import { MapPin, Users, Trophy, CheckCircle2, ArrowLeft } from "lucide-react";
 
 export default async function ZoneDashboardPage({

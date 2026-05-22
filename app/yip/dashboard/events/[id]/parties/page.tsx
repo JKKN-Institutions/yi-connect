@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { createServiceClient } from "@/lib/yip/supabase/server";
-import { listParties } from "@/app/actions/parties";
+import { listParties } from "@/app/actions/yip/parties";
 import { PartiesClient } from "./parties-client";
 
 export default async function PartiesPage({

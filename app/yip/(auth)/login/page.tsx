@@ -3,17 +3,17 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { loginOrganizer } from "@/app/actions/auth";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { loginOrganizer } from "@/app/actions/yip/auth";
+import { Button } from "@/components/yip/ui/button";
+import { Input } from "@/components/yip/ui/input";
+import { Label } from "@/components/yip/ui/label";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
+} from "@/components/yip/ui/card";
 import { LogIn, Loader2 } from "lucide-react";
 
 export default function LoginPage() {

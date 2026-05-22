@@ -10,7 +10,7 @@ import {
   getScoreableParticipants,
   submitScore,
   type CurrentSpeakerInfo,
-} from "@/app/actions/scoring";
+} from "@/app/actions/yip/scoring";
 import { ROLE_LABELS, ROLE_COLORS, PARTY_COLORS } from "@/lib/yip/constants";
 import { Loader2, Mic, Users, ChevronDown, ChevronUp, Lock } from "lucide-react";
 import { useOfflineSync } from "@/hooks/yip/use-offline-sync";

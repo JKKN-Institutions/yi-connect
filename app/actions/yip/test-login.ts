@@ -200,7 +200,7 @@ export async function loginAsStudent(
     }
   );
 
-  return { success: true, data: { redirect: "/yip/me" } };
+  return { success: true, data: { redirect: "/me" } };
 }
 
 export async function loginAsJury(
@@ -234,7 +234,7 @@ export async function loginAsJury(
     }
   );
 
-  return { success: true, data: { redirect: "/yip/jury" } };
+  return { success: true, data: { redirect: "/jury" } };
 }
 
 export async function loginAsOrganizer(): Promise<
@@ -285,7 +285,7 @@ export async function loginAsOrganizer(): Promise<
     };
   }
 
-  return { success: true, data: { redirect: "/yip/dashboard" } };
+  return { success: true, data: { redirect: "/dashboard" } };
 }
 
 // Allow the existing logout action to clear the yip_session cookie too.

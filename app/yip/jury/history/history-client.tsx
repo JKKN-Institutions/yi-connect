@@ -9,9 +9,9 @@ import {
   getScoreForParticipant,
   submitScore,
   type ScoreWithParticipant,
-} from "@/app/actions/scoring";
+} from "@/app/actions/yip/scoring";
 import { Loader2, ArrowLeft, ClipboardList } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/components/yip/ui/button";
 
 interface Criterion {
   key: string;

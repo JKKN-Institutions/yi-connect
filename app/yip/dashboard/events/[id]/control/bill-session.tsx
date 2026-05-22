@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect, useTransition } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/yip/ui/card";
+import { Button } from "@/components/yip/ui/button";
+import { Badge } from "@/components/yip/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -11,7 +11,7 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-} from "@/components/ui/dialog";
+} from "@/components/yip/ui/dialog";
 import {
   FileText,
   Presentation,
@@ -27,8 +27,8 @@ import {
   getBills,
   setBillPresented,
   type BillWithMembers,
-} from "@/app/actions/bills";
-import { openVote } from "@/app/actions/voting";
+} from "@/app/actions/yip/bills";
+import { openVote } from "@/app/actions/yip/voting";
 
 // ─── Types ──────────────────────────────────────────────────────
 

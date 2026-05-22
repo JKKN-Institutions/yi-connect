@@ -1,12 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/yip/ui/badge";
+import { Card, CardContent } from "@/components/yip/ui/card";
+import { Input } from "@/components/yip/ui/input";
 import { Search, BookOpen, Globe, MapPin, ExternalLink } from "lucide-react";
 import { YI_ZONES } from "@/lib/yip/hierarchy";
-import type { Topic } from "@/app/actions/topics";
+import type { Topic } from "@/app/actions/yip/topics";
 
 type Filter = "all" | "central" | "ER" | "WR" | "NR" | "NER" | "SRTN" | "SRTKKA";
 

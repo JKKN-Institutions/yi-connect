@@ -8,12 +8,12 @@ import {
   checkInParticipant,
   checkOutParticipant,
   bulkCheckIn,
-} from "@/app/actions/participants";
+} from "@/app/actions/yip/participants";
 import { ROLE_LABELS, PARTY_COLORS } from "@/lib/yip/constants";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/yip/ui/button";
+import { Input } from "@/components/yip/ui/input";
+import { Label } from "@/components/yip/ui/label";
+import { Badge } from "@/components/yip/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -23,7 +23,7 @@ import {
   DialogDescription,
   DialogFooter,
   DialogClose,
-} from "@/components/ui/dialog";
+} from "@/components/yip/ui/dialog";
 import {
   Table,
   TableBody,
@@ -31,7 +31,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@/components/yip/ui/table";
 import {
   UserPlus,
   Users,

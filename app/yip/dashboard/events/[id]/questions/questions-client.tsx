@@ -2,10 +2,10 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/yip/ui/card";
+import { Button } from "@/components/yip/ui/button";
+import { Badge } from "@/components/yip/ui/badge";
+import { Input } from "@/components/yip/ui/input";
 import {
   Table,
   TableHeader,
@@ -13,7 +13,7 @@ import {
   TableHead,
   TableRow,
   TableCell,
-} from "@/components/ui/table";
+} from "@/components/yip/ui/table";
 import {
   MessageSquare,
   CheckCircle2,
@@ -33,8 +33,8 @@ import {
   setQueueOrder,
   bulkApprove,
   bulkReject,
-} from "@/app/actions/questions";
-import type { QuestionWithSubmitter } from "@/app/actions/questions";
+} from "@/app/actions/yip/questions";
+import type { QuestionWithSubmitter } from "@/app/actions/yip/questions";
 import { toast } from "sonner";
 
 // ─── Types & Helpers ────────────────────────────────────────────

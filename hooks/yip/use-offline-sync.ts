@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
-import { submitScore } from "@/app/actions/scoring";
+import { submitScore } from "@/app/actions/yip/scoring";
 import { removeFromBuffer, type BufferedScore } from "@/lib/yip/score-buffer";
 
 export type SyncState = {

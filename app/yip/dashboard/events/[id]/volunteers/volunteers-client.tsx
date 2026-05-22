@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/yip/ui/badge";
+import { Button } from "@/components/yip/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/yip/ui/card";
+import { Input } from "@/components/yip/ui/input";
 import {
   Plus,
   Loader2,
@@ -20,7 +20,7 @@ import {
   markVolunteerArrived,
   deleteVolunteer,
   type Volunteer,
-} from "@/app/actions/volunteers";
+} from "@/app/actions/yip/volunteers";
 
 const STATION_LABEL: Record<string, string> = Object.fromEntries(
   VOLUNTEER_STATIONS.map((s) => [s.code, s.label])

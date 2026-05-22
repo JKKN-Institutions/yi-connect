@@ -1,9 +1,9 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/yip/ui/card";
+import { Button } from "@/components/yip/ui/button";
+import { Badge } from "@/components/yip/ui/badge";
 import {
   Table,
   TableBody,
@@ -11,7 +11,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@/components/yip/ui/table";
 import {
   Download,
   Star,
@@ -27,7 +27,7 @@ import { toast } from "sonner";
 import {
   exportFeedbackCSV,
   type FeedbackStats,
-} from "@/app/actions/feedback";
+} from "@/app/actions/yip/feedback";
 import {
   RESPONDENT_LABELS,
   RESPONDENT_COLORS,

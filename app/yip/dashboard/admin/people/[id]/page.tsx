@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getPerson, getPersonJourney } from "@/app/actions/people";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
+import { getPerson, getPersonJourney } from "@/app/actions/yip/people";
+import { Badge } from "@/components/yip/ui/badge";
+import { Card, CardContent } from "@/components/yip/ui/card";
 import { ArrowLeft, Trophy, Sparkles, ChevronUp } from "lucide-react";
 import { ROLE_LABELS } from "@/lib/yip/constants";
 

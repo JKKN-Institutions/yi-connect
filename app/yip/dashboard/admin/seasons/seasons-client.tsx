@@ -18,11 +18,11 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/yip/ui/badge";
+import { Button } from "@/components/yip/ui/button";
+import { Card, CardContent } from "@/components/yip/ui/card";
+import { Input } from "@/components/yip/ui/input";
+import { Label } from "@/components/yip/ui/label";
 import {
   adminArchiveSeason,
   adminCloneSeason,
@@ -33,7 +33,7 @@ import {
   type AdminSeason,
   type SeasonInput,
   type SeasonStats,
-} from "@/app/actions/admin-seasons";
+} from "@/app/actions/yip/admin-seasons";
 
 type StatsMap = Record<string, SeasonStats>;
 

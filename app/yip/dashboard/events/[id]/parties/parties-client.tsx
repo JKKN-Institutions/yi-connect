@@ -2,11 +2,11 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/yip/ui/badge";
+import { Button } from "@/components/yip/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/yip/ui/card";
+import { Input } from "@/components/yip/ui/input";
+import { Textarea } from "@/components/yip/ui/textarea";
 import {
   Plus,
   Pencil,
@@ -25,7 +25,7 @@ import {
   assignParticipantsToParty,
   electPartyLeader,
   type Party,
-} from "@/app/actions/parties";
+} from "@/app/actions/yip/parties";
 
 type Participant = {
   id: string;

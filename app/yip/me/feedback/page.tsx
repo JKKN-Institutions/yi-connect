@@ -1,9 +1,9 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createServiceClient } from "@/lib/yip/supabase/server";
-import { getMyFeedback } from "@/app/actions/feedback";
+import { getMyFeedback } from "@/app/actions/yip/feedback";
 import { FeedbackFormClient } from "./feedback-form-client";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/yip/ui/card";
 import { CheckCircle2, Sparkles, Star } from "lucide-react";
 
 // ─── Session parsing (server-side, matches /me/page.tsx) ──────────────

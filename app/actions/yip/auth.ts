@@ -160,5 +160,5 @@ export async function loginOrganizer(
 export async function logoutOrganizer(): Promise<void> {
   const supabase = await createClient();
   await supabase.auth.signOut();
-  redirect("/yip/login");
+  redirect("/login");
 }

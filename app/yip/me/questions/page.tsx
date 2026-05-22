@@ -2,12 +2,12 @@
 
 import { useState, useEffect, useTransition } from "react";
 import { MINISTRIES } from "@/lib/yip/constants";
-import { submitQuestion, getMyQuestions } from "@/app/actions/questions";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
-import { Label } from "@/components/ui/label";
+import { submitQuestion, getMyQuestions } from "@/app/actions/yip/questions";
+import { Card, CardContent } from "@/components/yip/ui/card";
+import { Button } from "@/components/yip/ui/button";
+import { Textarea } from "@/components/yip/ui/textarea";
+import { Badge } from "@/components/yip/ui/badge";
+import { Label } from "@/components/yip/ui/label";
 import {
   MessageSquare,
   Send,

@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/yip/supabase/server";
-import { getMockDataStats } from "@/app/actions/mock-data";
+import { getMockDataStats } from "@/app/actions/yip/mock-data";
 import { MockDataClient } from "./mock-data-client";
 
 export default async function AdminMockDataPage() {

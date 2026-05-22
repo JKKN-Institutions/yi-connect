@@ -2,12 +2,12 @@
 
 import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { getEvent, updateEvent } from "@/app/actions/events";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { getEvent, updateEvent } from "@/app/actions/yip/events";
+import { Button } from "@/components/yip/ui/button";
+import { Input } from "@/components/yip/ui/input";
+import { Label } from "@/components/yip/ui/label";
+import { Textarea } from "@/components/yip/ui/textarea";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/yip/ui/card";
 import { Loader2, Save, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";

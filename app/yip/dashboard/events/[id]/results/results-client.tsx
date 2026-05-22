@@ -2,17 +2,17 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { publishResults, unpublishResults } from "@/app/actions/results";
-import type { ResultWithParticipant } from "@/app/actions/results";
+import { publishResults, unpublishResults } from "@/app/actions/yip/results";
+import type { ResultWithParticipant } from "@/app/actions/yip/results";
 import {
   markQualified,
   unmarkQualified,
   getEventQualificationData,
-} from "@/app/actions/pipeline";
+} from "@/app/actions/yip/pipeline";
 import { ROLE_LABELS, PARTY_COLORS, MINISTRIES } from "@/lib/yip/constants";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/yip/ui/badge";
+import { Button } from "@/components/yip/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/yip/ui/card";
 import {
   Table,
   TableBody,
@@ -20,7 +20,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@/components/yip/ui/table";
 import {
   Trophy,
   Eye,
@@ -497,7 +497,7 @@ export function ResultsClient({
             variant="outline"
             size="sm"
             onClick={async () => {
-              const mod = await import("@/app/actions/post-session-report");
+              const mod = await import("@/app/actions/yip/post-session-report");
               const res = await mod.generatePostSessionReport(eventId);
               if (!res.success) {
                 alert(res.error);

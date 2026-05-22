@@ -1,12 +1,12 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useTransition } from "react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/yip/ui/card";
+import { Button } from "@/components/yip/ui/button";
+import { Input } from "@/components/yip/ui/input";
+import { Textarea } from "@/components/yip/ui/textarea";
+import { Label } from "@/components/yip/ui/label";
+import { Badge } from "@/components/yip/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -14,7 +14,7 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-} from "@/components/ui/dialog";
+} from "@/components/yip/ui/dialog";
 import {
   FileText,
   Save,
@@ -35,7 +35,7 @@ import {
   getBillForParty,
   getBillCommitteeMembers,
   type BillCommitteeMember,
-} from "@/app/actions/bills";
+} from "@/app/actions/yip/bills";
 import type { Tables } from "@/types/yip/database";
 
 type Bill = Tables<"bills">;
@@ -162,7 +162,7 @@ export default function BillDraftingPage() {
   async function loadParticipantAndBill(s: ParticipantSession) {
     try {
       // Fetch participant details via a simple fetch (we need parliament_role and party_side)
-      const { createClient } = await import("@/lib/supabase/client");
+      const { createClient } = await import("@/lib/yip/supabase/client");
       const supabase = createClient();
 
       const { data: p } = await supabase

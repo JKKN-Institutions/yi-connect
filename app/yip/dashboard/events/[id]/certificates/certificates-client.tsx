@@ -5,15 +5,15 @@ import type {
   CertificateData,
   CertificateParticipant,
   CertificateEventData,
-} from "@/app/actions/certificates";
+} from "@/app/actions/yip/certificates";
 import { ROLE_LABELS } from "@/lib/yip/constants";
 import { ParticipationCert } from "@/components/yip/certificates/participation-cert";
 import { AwardCert } from "@/components/yip/certificates/award-cert";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/yip/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/yip/ui/card";
+import { Input } from "@/components/yip/ui/input";
+import { Label } from "@/components/yip/ui/label";
+import { Badge } from "@/components/yip/ui/badge";
 import {
   Award,
   Printer,

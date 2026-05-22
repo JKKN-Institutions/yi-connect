@@ -2,13 +2,13 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createEvent } from "@/app/actions/events";
+import { createEvent } from "@/app/actions/yip/events";
 import { COMMITTEES } from "@/lib/yip/constants";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/yip/ui/button";
+import { Input } from "@/components/yip/ui/input";
+import { Label } from "@/components/yip/ui/label";
+import { Textarea } from "@/components/yip/ui/textarea";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/yip/ui/card";
 import {
   Check,
   ChevronLeft,

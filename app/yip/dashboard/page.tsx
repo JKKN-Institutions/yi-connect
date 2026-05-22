@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/yip/supabase/server";
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@/components/yip/ui/badge";
 import { Plus, CalendarDays, Users, MapPin } from "lucide-react";
 
 // Status badge color mapping with premium styling

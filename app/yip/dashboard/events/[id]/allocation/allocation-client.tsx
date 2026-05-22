@@ -7,7 +7,7 @@ import {
   lockAllocation,
   unlockAllocation,
   updateParticipantAssignment,
-} from "@/app/actions/allocation";
+} from "@/app/actions/yip/allocation";
 import {
   MINISTRIES,
   COMMITTEES,
@@ -15,9 +15,9 @@ import {
   PARTY_COLORS,
   PARLIAMENT_ROLES,
 } from "@/lib/yip/constants";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/yip/ui/button";
+import { Badge } from "@/components/yip/ui/badge";
+import { Card, CardContent } from "@/components/yip/ui/card";
 import {
   Table,
   TableBody,
@@ -25,7 +25,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@/components/yip/ui/table";
 import {
   Dialog,
   DialogContent,
@@ -34,7 +34,7 @@ import {
   DialogDescription,
   DialogFooter,
   DialogClose,
-} from "@/components/ui/dialog";
+} from "@/components/yip/ui/dialog";
 import {
   Shuffle,
   Lock,

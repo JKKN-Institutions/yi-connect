@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { getZoneSummary, listOrganizerProfiles } from "@/app/actions/hierarchy";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { getZoneSummary, listOrganizerProfiles } from "@/app/actions/yip/hierarchy";
+import { Badge } from "@/components/yip/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/yip/ui/card";
 import { MapPin, Users, Trophy, ArrowUpRight, Globe, Crown } from "lucide-react";
 
 export default async function ZonesNationalPage() {

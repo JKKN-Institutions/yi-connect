@@ -8,8 +8,8 @@ import {
   MINISTRIES,
   DEFAULT_AGENDA_TEMPLATE,
 } from "@/lib/yip/constants";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/yip/ui/card";
+import { Badge } from "@/components/yip/ui/badge";
 import Link from "next/link";
 import {
   Trophy,

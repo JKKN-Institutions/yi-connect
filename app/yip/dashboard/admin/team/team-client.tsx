@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/yip/ui/badge";
+import { Button } from "@/components/yip/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/yip/ui/card";
+import { Input } from "@/components/yip/ui/input";
 import {
   Users,
   Plus,
@@ -25,7 +25,7 @@ import {
   adminLinkUser,
   adminUnlinkUser,
   type TeamMember,
-} from "@/app/actions/admin-team";
+} from "@/app/actions/yip/admin-team";
 
 type FormState = {
   full_name: string;

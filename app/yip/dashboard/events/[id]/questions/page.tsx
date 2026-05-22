@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/yip/supabase/server";
-import { getQuestions } from "@/app/actions/questions";
+import { getQuestions } from "@/app/actions/yip/questions";
 import { QuestionsClient } from "./questions-client";
 
 export default async function QuestionsPage({

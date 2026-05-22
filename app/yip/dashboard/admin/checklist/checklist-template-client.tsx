@@ -1,11 +1,11 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/yip/ui/badge";
+import { Button } from "@/components/yip/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/yip/ui/card";
+import { Input } from "@/components/yip/ui/input";
+import { Textarea } from "@/components/yip/ui/textarea";
 import {
   ListChecks,
   Plus,
@@ -22,7 +22,7 @@ import {
   adminReactivateChecklistItem,
   adminReseedFromHandbook,
   type AdminChecklistItem,
-} from "@/app/actions/admin-checklist";
+} from "@/app/actions/yip/admin-checklist";
 
 const CATEGORY_ORDER = [
   "Pre-Session Preparation",

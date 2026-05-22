@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { importParticipants } from "@/app/actions/participants";
-import { Button } from "@/components/ui/button";
+import { importParticipants } from "@/app/actions/yip/participants";
+import { Button } from "@/components/yip/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -12,7 +12,7 @@ import {
   DialogDescription,
   DialogFooter,
   DialogClose,
-} from "@/components/ui/dialog";
+} from "@/components/yip/ui/dialog";
 import {
   Table,
   TableBody,
@@ -20,7 +20,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@/components/yip/ui/table";
 import { Upload, FileText, Loader2, AlertCircle, Check } from "lucide-react";
 
 interface CsvRow {

@@ -1,6 +1,6 @@
 "use client";
 
-import type { CertificateParticipant, CertificateEventData } from "@/app/actions/certificates";
+import type { CertificateParticipant, CertificateEventData } from "@/app/actions/yip/certificates";
 import { ROLE_LABELS } from "@/lib/yip/constants";
 
 function formatDate(dateStr: string): string {

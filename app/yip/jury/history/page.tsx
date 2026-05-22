@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { getScoresForJury } from "@/app/actions/scoring";
+import { getScoresForJury } from "@/app/actions/yip/scoring";
 import { HistoryClient } from "./history-client";
 
 interface JurySession {

@@ -1,8 +1,8 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/yip/ui/badge";
+import { Card, CardContent } from "@/components/yip/ui/card";
 import {
   ArrowLeft,
   Trophy,
@@ -16,7 +16,7 @@ import {
   getPersonIdForParticipant,
   getPerson,
   getPersonJourney,
-} from "@/app/actions/people";
+} from "@/app/actions/yip/people";
 import { ROLE_LABELS } from "@/lib/yip/constants";
 
 interface ParticipantSession {

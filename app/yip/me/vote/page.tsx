@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect, useTransition } from "react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/yip/ui/card";
+import { Button } from "@/components/yip/ui/button";
+import { Badge } from "@/components/yip/ui/badge";
 import {
   Vote,
   CheckCircle2,
@@ -20,7 +20,7 @@ import {
   castVote,
   getSpeakerCandidates,
   type VoteCandidate,
-} from "@/app/actions/voting";
+} from "@/app/actions/yip/voting";
 import { createClient } from "@/lib/yip/supabase/client";
 
 // ─── Session parsing (client-side) ──────────────────────────────

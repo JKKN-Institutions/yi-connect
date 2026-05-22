@@ -3,9 +3,9 @@
 import { useTransition, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/yip/ui/badge";
+import { Button } from "@/components/yip/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/yip/ui/card";
 import {
   GraduationCap,
   Scale,
@@ -23,7 +23,7 @@ import {
   loginAsJury,
   loginAsOrganizer,
   type TestAccount,
-} from "@/app/actions/test-login";
+} from "@/app/actions/yip/test-login";
 
 export function TestLoginClient({
   students,

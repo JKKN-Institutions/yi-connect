@@ -1,13 +1,13 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
+import { Card, CardContent } from "@/components/yip/ui/card";
+import { Button } from "@/components/yip/ui/button";
+import { Textarea } from "@/components/yip/ui/textarea";
+import { Label } from "@/components/yip/ui/label";
 import { Star, Send, MessageCircleHeart, PartyPopper, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { submitParticipantFeedback } from "@/app/actions/feedback";
+import { submitParticipantFeedback } from "@/app/actions/yip/feedback";
 import { PARTICIPANT_QUESTIONS, type FeedbackPayload } from "@/lib/yip/feedback";
 
 type Props = {

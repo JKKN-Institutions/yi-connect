@@ -2,9 +2,9 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/yip/ui/card";
+import { Button } from "@/components/yip/ui/button";
+import { Badge } from "@/components/yip/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -12,7 +12,7 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-} from "@/components/ui/dialog";
+} from "@/components/yip/ui/dialog";
 import {
   FileText,
   CheckCircle2,
@@ -30,7 +30,7 @@ import {
   approveBill,
   rejectBill,
   type BillWithMembers,
-} from "@/app/actions/bills";
+} from "@/app/actions/yip/bills";
 
 // ─── Status Config ──────────────────────────────────────────────
 

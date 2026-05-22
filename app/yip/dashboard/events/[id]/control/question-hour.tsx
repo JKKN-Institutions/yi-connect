@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useEffect, useTransition, useCallback } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/yip/ui/card";
+import { Button } from "@/components/yip/ui/button";
+import { Badge } from "@/components/yip/ui/badge";
+import { Input } from "@/components/yip/ui/input";
 import {
   MessageSquare,
   SkipForward,
@@ -23,11 +23,11 @@ import {
   getCurrentQuestion,
   getQueuedQuestions,
   getCompletedQuestions,
-} from "@/app/actions/questions";
+} from "@/app/actions/yip/questions";
 import type {
   CurrentQuestionInfo,
   QuestionWithSubmitter,
-} from "@/app/actions/questions";
+} from "@/app/actions/yip/questions";
 import { toast } from "sonner";
 
 function getMinistryLabel(key: string): string {

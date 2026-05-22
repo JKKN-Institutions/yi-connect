@@ -1,15 +1,15 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/yip/ui/badge";
+import { Button } from "@/components/yip/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/yip/ui/card";
 import { CheckCircle2, Circle, Loader2, ListChecks, Printer } from "lucide-react";
 import {
   toggleChecklistItem,
   seedChecklistForEvent,
   type ChecklistItem,
-} from "@/app/actions/checklist";
+} from "@/app/actions/yip/checklist";
 
 const CATEGORY_ORDER = [
   "Pre-Session Preparation",

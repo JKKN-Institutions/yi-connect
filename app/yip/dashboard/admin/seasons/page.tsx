@@ -4,7 +4,7 @@ import {
   adminGetSeasonStats,
   adminListSeasons,
   type SeasonStats,
-} from "@/app/actions/admin-seasons";
+} from "@/app/actions/yip/admin-seasons";
 import { SeasonsClient } from "./seasons-client";
 
 export default async function AdminSeasonsPage() {

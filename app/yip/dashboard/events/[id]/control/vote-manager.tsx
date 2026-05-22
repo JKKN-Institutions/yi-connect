@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect, useTransition, useCallback } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/yip/ui/card";
+import { Button } from "@/components/yip/ui/button";
+import { Badge } from "@/components/yip/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -11,7 +11,7 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-} from "@/components/ui/dialog";
+} from "@/components/yip/ui/dialog";
 import {
   Vote,
   CheckCircle2,
@@ -33,7 +33,7 @@ import {
   getSpeakerCandidates,
   getEventBills,
   type VoteCandidate,
-} from "@/app/actions/voting";
+} from "@/app/actions/yip/voting";
 import type { Tables } from "@/types/yip/database";
 
 // ─── Types ──────────────────────────────────────────────────────

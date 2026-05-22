@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/yip/supabase/server";
-import { getCertificateData } from "@/app/actions/certificates";
+import { getCertificateData } from "@/app/actions/yip/certificates";
 import { CertificatesClient } from "./certificates-client";
 
 export default async function CertificatesPage({

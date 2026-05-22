@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { createServiceClient } from "@/lib/yip/supabase/server";
-import { listFees, getFeeStats } from "@/app/actions/fees";
+import { listFees, getFeeStats } from "@/app/actions/yip/fees";
 import { FeesClient } from "./fees-client";
 
 export default async function FeesPage({

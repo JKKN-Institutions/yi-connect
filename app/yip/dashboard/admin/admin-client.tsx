@@ -6,11 +6,11 @@ import {
   getSeasonPipeline,
   createRegionalEvent,
   createNationalEvent,
-} from "@/app/actions/pipeline";
-import type { Season, SeasonPipelineData, SeasonEvent } from "@/app/actions/pipeline";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+} from "@/app/actions/yip/pipeline";
+import type { Season, SeasonPipelineData, SeasonEvent } from "@/app/actions/yip/pipeline";
+import { Badge } from "@/components/yip/ui/badge";
+import { Button } from "@/components/yip/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/yip/ui/card";
 import {
   Table,
   TableBody,
@@ -18,7 +18,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@/components/yip/ui/table";
 import {
   LayoutDashboard,
   Users,

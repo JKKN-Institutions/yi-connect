@@ -6,12 +6,12 @@ import {
   lockScores,
   unlockScores,
   computeResults,
-} from "@/app/actions/results";
-import type { ScoringProgressData } from "@/app/actions/results";
+} from "@/app/actions/yip/results";
+import type { ScoringProgressData } from "@/app/actions/yip/results";
 import { ROLE_LABELS, PARTY_COLORS } from "@/lib/yip/constants";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/yip/ui/badge";
+import { Button } from "@/components/yip/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/yip/ui/card";
 import {
   Table,
   TableBody,
@@ -19,7 +19,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@/components/yip/ui/table";
 import {
   Lock,
   Unlock,

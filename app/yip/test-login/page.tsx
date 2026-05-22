@@ -1,4 +1,4 @@
-import { listTestAccounts } from "@/app/actions/test-login";
+import { listTestAccounts } from "@/app/actions/yip/test-login";
 import { TestLoginClient } from "./test-login-client";
 
 export default async function TestLoginPage() {

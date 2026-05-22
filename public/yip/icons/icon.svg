@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="108" fill="#FF9933"/>
+  <text x="256" y="290" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="200" font-weight="800" fill="white">YIP</text>
+  <rect x="116" y="340" width="280" height="6" rx="3" fill="white" opacity="0.6"/>
+  <rect x="116" y="340" width="93" height="6" rx="3" fill="#FF9933" opacity="0.3"/>
+  <rect x="209" y="340" width="94" height="6" rx="3" fill="white" opacity="0.9"/>
+  <rect x="303" y="340" width="93" height="6" rx="3" fill="#138808" opacity="0.6"/>
+</svg>

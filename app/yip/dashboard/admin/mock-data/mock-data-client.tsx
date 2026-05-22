@@ -13,10 +13,10 @@ import {
   ShieldAlert,
   RotateCw,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
+import { Button } from "@/components/yip/ui/button";
+import { Card, CardContent } from "@/components/yip/ui/card";
+import { Badge } from "@/components/yip/ui/badge";
+import { Input } from "@/components/yip/ui/input";
 import {
   getMockDataStats,
   seedMockData,
@@ -24,7 +24,7 @@ import {
   wipeMockEvent,
   type MockDataStats,
   type MockEventSummary,
-} from "@/app/actions/mock-data";
+} from "@/app/actions/yip/mock-data";
 import { MOCK_MARKER } from "@/lib/yip/mock-data";
 
 const TABLE_LABELS: Record<string, string> = {

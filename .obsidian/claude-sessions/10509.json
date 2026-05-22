@@ -2,16 +2,16 @@
   "shell_pid": "10509",
   "session_id": "53a42f65-ff32-4ae5-b787-c9326052db94",
   "started_at": "2026-05-22T05:10:37Z",
-  "updated_at": "2026-05-22T05:14:23Z",
+  "updated_at": "2026-05-22T05:14:45Z",
   "cwd": "/Users/omm/PROJECTS/yi-connect",
   "tab_name": "",
   "active_obsidian_file": "",
   "active_file_title": "",
-  "rot_score": 5.65,
-  "tools_total": 565,
+  "rot_score": 5.66,
+  "tools_total": 566,
   "probe_forgotten": 0,
   "probe_drifted": 0,
   "stuck_commands": 1,
   "last_tool": "Write",
-  "last_tool_summary": "/Users/omm/PROJECTS/yi-connect/docs/AUTH_E2E_TEST_PLAN.md"
+  "last_tool_summary": "/Users/omm/PROJECTS/yi-connect/scripts/backup-supabase.sh"
 }

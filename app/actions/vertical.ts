@@ -312,16 +312,16 @@ export async function createVerticalPlan(input: CreateVerticalPlanInput): Promis
 
     const supabase = await createClient()
 
-    // Check if plan already exists for this vertical and fiscal year
+    // Check if plan already exists for this vertical and calendar year
     const { data: existing } = await supabase
       .from('vertical_plans')
       .select('id')
       .eq('vertical_id', planData.vertical_id)
-      .eq('fiscal_year', planData.fiscal_year)
+      .eq('calendar_year', planData.calendar_year)
       .maybeSingle()
 
     if (existing) {
-      return { success: false, error: 'A plan already exists for this fiscal year' }
+      return { success: false, error: 'A plan already exists for this calendar year' }
     }
 
     // Create plan
@@ -437,7 +437,7 @@ export async function activateVerticalPlan(planId: string): Promise<ActionRespon
     // Get plan details
     const { data: plan, error: planError } = await supabase
       .from('vertical_plans')
-      .select('vertical_id, fiscal_year, status')
+      .select('vertical_id, calendar_year, status')
       .eq('id', planId)
       .single()
 
@@ -451,12 +451,12 @@ export async function activateVerticalPlan(planId: string): Promise<ActionRespon
       return { success: false, error: 'Only approved plans can be activated' }
     }
 
-    // Deactivate any existing active plan for this vertical and fiscal year
+    // Deactivate any existing active plan for this vertical and calendar year
     await supabase
       .from('vertical_plans')
       .update({ status: 'completed', updated_at: new Date().toISOString() })
       .eq('vertical_id', plan.vertical_id)
-      .eq('fiscal_year', plan.fiscal_year)
+      .eq('calendar_year', plan.calendar_year)
       .eq('status', 'active')
 
     // Activate this plan
@@ -923,12 +923,12 @@ export async function createPerformanceReview(
 
     const supabase = await createClient()
 
-    // Check if review already exists for this vertical, fiscal year, and quarter
+    // Check if review already exists for this vertical, calendar year, and quarter
     const { data: existing } = await supabase
       .from('vertical_performance_reviews')
       .select('id')
       .eq('vertical_id', sanitized.vertical_id)
-      .eq('fiscal_year', sanitized.fiscal_year)
+      .eq('calendar_year', sanitized.calendar_year)
       .eq('quarter', sanitized.quarter)
       .maybeSingle()
 
@@ -937,7 +937,7 @@ export async function createPerformanceReview(
     }
 
     // Create review
-    const reviewPeriod = `FY${sanitized.fiscal_year}-Q${sanitized.quarter}`
+    const reviewPeriod = `CY${sanitized.calendar_year}-Q${sanitized.quarter}`
     const { data, error } = await supabase
       .from('vertical_performance_reviews')
       .insert({

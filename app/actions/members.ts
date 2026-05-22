@@ -54,7 +54,6 @@ export async function createMember(
   // If no userId provided, create a new auth user (admin creating member)
   if (!userId && email && fullName) {
     isNewUser = true;
-    console.log('Admin creating new member - creating auth user first');
 
     // Get the chapter_id from form data to add to approved_emails
     const chapterId = formData.get('chapter_id') as string;
@@ -97,7 +96,6 @@ export async function createMember(
     }
 
     userId = newUser.user.id;
-    console.log('Created new auth user with ID:', userId);
 
     // Note: Profile is automatically created by handle_new_user() trigger
 
@@ -197,7 +195,7 @@ export async function createMember(
 
   if (error) {
     return {
-      message: error.message || 'Failed to create member. Please try again.'
+      message: error instanceof Error ? error.message : 'Failed to create member. Please try again.'
     };
   }
 
@@ -274,7 +272,7 @@ export async function updateMember(
   const supabase = await createServerSupabaseClient();
 
   // Build update object (only include defined fields)
-  const updateData: any = {};
+  const updateData: Record<string, unknown> = {};
   Object.entries(validation.data).forEach(([key, value]) => {
     if (key !== 'id' && value !== undefined) {
       updateData[key] = value;
@@ -288,7 +286,7 @@ export async function updateMember(
 
   if (error) {
     return {
-      message: error.message || 'Failed to update member. Please try again.'
+      message: error instanceof Error ? error.message : 'Failed to update member. Please try again.'
     };
   }
 
@@ -321,7 +319,7 @@ export async function deleteMember(memberId: string): Promise<FormState> {
 
   if (error) {
     return {
-      message: error.message || 'Failed to delete member. Please try again.'
+      message: error instanceof Error ? error.message : 'Failed to delete member. Please try again.'
     };
   }
 
@@ -589,10 +587,10 @@ export async function deleteMemberPermanently(
       success: true,
       message: `${memberName} has been permanently deleted.`
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || 'Failed to delete member permanently.'
+      message: error instanceof Error ? error.message : 'Failed to delete member permanently.'
     };
   }
 }
@@ -693,9 +691,9 @@ export async function bulkDeleteMembers(
       await adminClient.auth.admin.deleteUser(member.id);
 
       deletedCount++;
-    } catch (error: any) {
+    } catch (error: unknown) {
       failedCount++;
-      errors.push(`Failed to delete ${(member?.profiles as any)?.full_name || member.id}: ${error.message}`);
+      errors.push(`Failed to delete ${(member?.profiles as any)?.full_name || member.id}: ${error instanceof Error ? error.message : 'Unknown error'}`);
       console.error(`Failed to delete member ${member.id}:`, error);
     }
   }
@@ -806,7 +804,7 @@ export async function bulkDeactivateMembers(
       }
 
       deactivatedCount++;
-    } catch (error: any) {
+    } catch (error: unknown) {
       failedCount++;
       console.error(`Failed to deactivate member ${member.id}:`, error);
     }
@@ -875,7 +873,7 @@ export async function addMemberSkill(
 
   if (error) {
     return {
-      message: error.message || 'Failed to add skill. Please try again.'
+      message: error instanceof Error ? error.message : 'Failed to add skill. Please try again.'
     };
   }
 
@@ -926,7 +924,7 @@ export async function updateMemberSkill(
     .single();
 
   // Build update object
-  const updateData: any = {};
+  const updateData: Record<string, unknown> = {};
   Object.entries(validation.data).forEach(([key, value]) => {
     if (key !== 'id' && value !== undefined) {
       updateData[key] = value;
@@ -940,7 +938,7 @@ export async function updateMemberSkill(
 
   if (error) {
     return {
-      message: error.message || 'Failed to update skill. Please try again.'
+      message: error instanceof Error ? error.message : 'Failed to update skill. Please try again.'
     };
   }
 
@@ -973,7 +971,7 @@ export async function deleteMemberSkill(id: string): Promise<FormState> {
 
   if (error) {
     return {
-      message: error.message || 'Failed to delete skill. Please try again.'
+      message: error instanceof Error ? error.message : 'Failed to delete skill. Please try again.'
     };
   }
 
@@ -1031,7 +1029,7 @@ export async function addMemberCertification(
 
   if (error) {
     return {
-      message: error.message || 'Failed to add certification. Please try again.'
+      message: error instanceof Error ? error.message : 'Failed to add certification. Please try again.'
     };
   }
 
@@ -1077,7 +1075,7 @@ export async function updateMemberCertification(
     .single();
 
   // Build update object
-  const updateData: any = {};
+  const updateData: Record<string, unknown> = {};
   Object.entries(validation.data).forEach(([key, value]) => {
     if (key !== 'id' && value !== undefined) {
       updateData[key] = value;
@@ -1191,7 +1189,7 @@ export async function setAvailability(
 
   if (error) {
     return {
-      message: error.message || 'Failed to set availability. Please try again.'
+      message: error instanceof Error ? error.message : 'Failed to set availability. Please try again.'
     };
   }
 
@@ -1322,7 +1320,7 @@ export async function createSkill(
 
   if (error) {
     return {
-      message: error.message || 'Failed to create skill. Please try again.'
+      message: error instanceof Error ? error.message : 'Failed to create skill. Please try again.'
     };
   }
 
@@ -1364,7 +1362,7 @@ export async function updateSkill(
   const supabase = await createServerSupabaseClient();
 
   // Build update object
-  const updateData: any = {};
+  const updateData: Record<string, unknown> = {};
   Object.entries(validation.data).forEach(([key, value]) => {
     if (key !== 'id' && value !== undefined) {
       updateData[key] = value;
@@ -1378,7 +1376,7 @@ export async function updateSkill(
 
   if (error) {
     return {
-      message: error.message || 'Failed to update skill. Please try again.'
+      message: error instanceof Error ? error.message : 'Failed to update skill. Please try again.'
     };
   }
 
@@ -1402,7 +1400,7 @@ export async function deleteSkill(id: string): Promise<FormState> {
 
   if (error) {
     return {
-      message: error.message || 'Failed to delete skill. Please try again.'
+      message: error instanceof Error ? error.message : 'Failed to delete skill. Please try again.'
     };
   }
 
@@ -1501,7 +1499,7 @@ export async function updateCertification(
   const supabase = await createServerSupabaseClient();
 
   // Build update object
-  const updateData: any = {};
+  const updateData: Record<string, unknown> = {};
   Object.entries(validation.data).forEach(([key, value]) => {
     if (key !== 'id' && value !== undefined) {
       updateData[key] = value;

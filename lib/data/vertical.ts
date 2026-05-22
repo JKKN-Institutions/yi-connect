@@ -234,18 +234,18 @@ export const getVerticalPlans = cache(async (verticalId: string): Promise<Vertic
     `
     )
     .eq('vertical_id', verticalId)
-    .order('fiscal_year', { ascending: false })
+    .order('calendar_year', { ascending: false })
 
   if (error) throw error
-  return (data as VerticalPlanWithKPIs[]) || []
+  return (data || []) as VerticalPlanWithKPIs[]
 })
 
 /**
- * Get current plan for a vertical (any status, for the given fiscal year)
+ * Get current plan for a vertical (any status, for the given calendar year)
  * This returns the plan regardless of status (draft, submitted, approved, active, completed)
  */
 export const getActiveVerticalPlan = cache(
-  async (verticalId: string, fiscalYear?: number): Promise<VerticalPlanWithKPIs | null> => {
+  async (verticalId: string, calendarYear?: number): Promise<VerticalPlanWithKPIs | null> => {
     const supabase = await createClient()
 
     let query = supabase
@@ -267,8 +267,8 @@ export const getActiveVerticalPlan = cache(
       )
       .eq('vertical_id', verticalId)
 
-    if (fiscalYear) {
-      query = query.eq('fiscal_year', fiscalYear)
+    if (calendarYear) {
+      query = query.eq('calendar_year', calendarYear)
     }
 
     const { data, error } = await query.maybeSingle()
@@ -451,17 +451,17 @@ export const getVerticalActivities = cache(
 
     // Apply filters
     if (filters) {
-      if (filters.fiscal_year) {
-        const fiscalYearStart = `${filters.fiscal_year}-04-01`
-        const fiscalYearEnd = `${filters.fiscal_year + 1}-03-31`
-        query = query.gte('activity_date', fiscalYearStart).lte('activity_date', fiscalYearEnd)
+      if (filters.calendar_year) {
+        const calendarYearStart = `${filters.calendar_year}-01-01`
+        const calendarYearEnd = `${filters.calendar_year}-12-31`
+        query = query.gte('activity_date', calendarYearStart).lte('activity_date', calendarYearEnd)
       }
       if (filters.quarter) {
-        // Calculate quarter date range
-        const quarterStartMonth = (filters.quarter - 1) * 3 + 4 // Q1=Apr(4), Q2=Jul(7), Q3=Oct(10), Q4=Jan(1)
-        const fiscalYear = filters.fiscal_year || new Date().getFullYear()
-        const year = quarterStartMonth >= 4 ? fiscalYear : fiscalYear + 1
-        const month = quarterStartMonth >= 4 ? quarterStartMonth : quarterStartMonth
+        // Calculate quarter date range (calendar year quarters: Q1=Jan-Mar, Q2=Apr-Jun, Q3=Jul-Sep, Q4=Oct-Dec)
+        const quarterStartMonth = (filters.quarter - 1) * 3 + 1 // Q1=Jan(1), Q2=Apr(4), Q3=Jul(7), Q4=Oct(10)
+        const calendarYear = filters.calendar_year || new Date().getFullYear()
+        const year = calendarYear
+        const month = quarterStartMonth
         const quarterStart = `${year}-${String(month).padStart(2, '0')}-01`
         const endMonth = month + 2
         const endYear = endMonth > 12 ? year + 1 : year
@@ -565,8 +565,8 @@ export const getVerticalReviews = cache(
 
     // Apply filters
     if (filters) {
-      if (filters.fiscal_year) {
-        query = query.eq('fiscal_year', filters.fiscal_year)
+      if (filters.calendar_year) {
+        query = query.eq('calendar_year', filters.calendar_year)
       }
       if (filters.quarter) {
         query = query.eq('quarter', filters.quarter)
@@ -582,7 +582,7 @@ export const getVerticalReviews = cache(
       }
     }
 
-    query = query.order('fiscal_year', { ascending: false }).order('quarter', { ascending: false })
+    query = query.order('calendar_year', { ascending: false }).order('quarter', { ascending: false })
 
     const { data, error } = await query
 
@@ -692,7 +692,7 @@ export const getVerticalAchievements = cache(async (verticalId: string): Promise
 /**
  * Get complete dashboard summary for a vertical
  */
-export const getVerticalDashboard = cache(async (verticalId: string, fiscalYear: number): Promise<VerticalDashboardSummary> => {
+export const getVerticalDashboard = cache(async (verticalId: string, calendarYear: number): Promise<VerticalDashboardSummary> => {
   const supabase = await createClient()
 
   // Get vertical with chair
@@ -700,14 +700,14 @@ export const getVerticalDashboard = cache(async (verticalId: string, fiscalYear:
   if (!vertical) throw new Error('Vertical not found')
 
   // Get active plan
-  const currentPlan = await getActiveVerticalPlan(verticalId, fiscalYear)
+  const currentPlan = await getActiveVerticalPlan(verticalId, calendarYear)
 
   // Get KPI summary from view
   const { data: kpiProgressData } = await supabase
     .from('vertical_kpi_progress')
     .select('*')
     .eq('vertical_id', verticalId)
-    .eq('fiscal_year', fiscalYear)
+    .eq('calendar_year', calendarYear)
     .single()
 
   const kpiSummary = {
@@ -725,7 +725,7 @@ export const getVerticalDashboard = cache(async (verticalId: string, fiscalYear:
     .from('vertical_impact_metrics')
     .select('*')
     .eq('vertical_id', verticalId)
-    .eq('fiscal_year', fiscalYear)
+    .eq('calendar_year', calendarYear)
     .single()
 
   const impactMetrics = {
@@ -754,7 +754,7 @@ export const getVerticalDashboard = cache(async (verticalId: string, fiscalYear:
 
   // Get recent activities (last 5)
   const recentActivities = await getVerticalActivities(verticalId, {
-    fiscal_year: fiscalYear,
+    calendar_year: calendarYear,
   })
 
   // Get recent achievements (last 5)
@@ -781,11 +781,11 @@ export const getVerticalDashboard = cache(async (verticalId: string, fiscalYear:
 /**
  * Get vertical rankings using database function
  */
-export const getVerticalRankings = cache(async (fiscalYear: number): Promise<VerticalRanking[]> => {
+export const getVerticalRankings = cache(async (calendarYear: number): Promise<VerticalRanking[]> => {
   const supabase = await createClient()
 
   const { data, error } = await supabase.rpc('calculate_vertical_ranking', {
-    p_fiscal_year: fiscalYear,
+    p_calendar_year: calendarYear,
   })
 
   // If function doesn't exist, return empty array
@@ -824,7 +824,7 @@ export const getKPIAlerts = cache(async (verticalId: string, quarter: number): P
 /**
  * Get comparative analytics across all verticals for a chapter
  */
-export const getVerticalComparison = cache(async (fiscalYear: number, quarter?: number): Promise<VerticalComparison> => {
+export const getVerticalComparison = cache(async (calendarYear: number, quarter?: number): Promise<VerticalComparison> => {
   const supabase = await createClient()
   const user = await getCurrentUser()
 
@@ -838,7 +838,7 @@ export const getVerticalComparison = cache(async (fiscalYear: number, quarter?: 
   // For each vertical, get its metrics
   const verticalMetrics = await Promise.all(
     verticals.map(async (vertical) => {
-      const dashboard = await getVerticalDashboard(vertical.id, fiscalYear)
+      const dashboard = await getVerticalDashboard(vertical.id, calendarYear)
 
       return {
         vertical_id: vertical.id,
@@ -859,7 +859,7 @@ export const getVerticalComparison = cache(async (fiscalYear: number, quarter?: 
   )
 
   return {
-    fiscal_year: fiscalYear,
+    calendar_year: calendarYear,
     quarter,
     verticals: verticalMetrics,
   }
@@ -870,31 +870,22 @@ export const getVerticalComparison = cache(async (fiscalYear: number, quarter?: 
 // ============================================================================
 
 /**
- * Get current fiscal year
+ * Get current calendar year
  */
-export function getCurrentFiscalYear(): number {
-  const now = new Date()
-  const month = now.getMonth() + 1 // JavaScript months are 0-indexed
-  const year = now.getFullYear()
-
-  // Fiscal year starts in April (month 4)
-  if (month >= 4) {
-    return year
-  } else {
-    return year - 1
-  }
+export function getCurrentCalendarYear(): number {
+  return new Date().getFullYear()
 }
 
 /**
- * Get current quarter (1-4)
+ * Get current quarter (1-4) based on calendar year
  */
 export function getCurrentQuarter(): number {
   const now = new Date()
   const month = now.getMonth() + 1 // JavaScript months are 0-indexed
 
-  // Q1: Apr-Jun (4-6), Q2: Jul-Sep (7-9), Q3: Oct-Dec (10-12), Q4: Jan-Mar (1-3)
-  if (month >= 4 && month <= 6) return 1
-  if (month >= 7 && month <= 9) return 2
-  if (month >= 10 && month <= 12) return 3
-  return 4 // Jan-Mar
+  // Calendar year quarters: Q1=Jan-Mar, Q2=Apr-Jun, Q3=Jul-Sep, Q4=Oct-Dec
+  if (month >= 1 && month <= 3) return 1
+  if (month >= 4 && month <= 6) return 2
+  if (month >= 7 && month <= 9) return 3
+  return 4 // Oct-Dec
 }

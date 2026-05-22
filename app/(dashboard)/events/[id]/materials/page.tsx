@@ -11,8 +11,9 @@ import Link from 'next/link'
 import { requireRole } from '@/lib/auth'
 import { ArrowLeft, FileText, Upload, CheckCircle, Clock } from 'lucide-react'
 import { getCurrentUser } from '@/lib/data/auth'
+import { createClient } from '@/lib/supabase/server'
 import { getServiceEventById } from '@/lib/data/service-events'
-import { getMaterials, getPendingApprovalMaterials } from '@/lib/data/event-materials'
+import { getMaterials } from '@/lib/data/event-materials'
 import { MaterialsPageContent } from './materials-page-content'
 import { Button } from '@/components/ui/button'
 import {
@@ -58,26 +59,50 @@ async function MaterialsPageServerContent({ params }: PageProps) {
     redirect('/login')
   }
 
-  // Fetch event details
-  const event = await getServiceEventById(id)
+  // Fetch event details — wrap in try/catch so an event that isn't a service
+  // event (or any Supabase failure) doesn't blow up the whole page.
+  let event: Awaited<ReturnType<typeof getServiceEventById>> | null = null
+  try {
+    event = await getServiceEventById(id)
+  } catch (err) {
+    console.error('Error fetching service event:', err)
+    event = null
+  }
 
   if (!event) {
     notFound()
   }
 
-  // Fetch materials
-  const materialsResult = await getMaterials({ filters: { event_id: id } })
-  const materials = materialsResult.data
+  // Fetch materials — defensive fallback to empty list if anything goes wrong
+  // (RLS denies, table missing, network hiccup, etc.)
+  let materials: Awaited<ReturnType<typeof getMaterials>>['data'] = []
+  try {
+    const materialsResult = await getMaterials({ filters: { event_id: id } })
+    materials = materialsResult.data || []
+  } catch (err) {
+    console.error('Error fetching materials:', err)
+    materials = []
+  }
 
-  // Check if user can review materials (Chair or Vertical Chair)
-  const canReview = ['Super Admin', 'National Admin', 'Chair', 'Co-Chair'].includes(
-    user.role || ''
+  // Check if user can review materials (Chair or Vertical Chair). The Supabase
+  // `user` object does NOT have a `.role` field — role lookup must go through
+  // the get_user_roles RPC.
+  let userRoleNames: string[] = []
+  try {
+    const supabase = await createClient()
+    const { data: userRoles } = await supabase.rpc('get_user_roles', {
+      p_user_id: user.id,
+    })
+    userRoleNames = (userRoles || []).map(
+      (ur: { role_name: string }) => ur.role_name
+    )
+  } catch (err) {
+    console.error('Error fetching user roles for materials review check:', err)
+  }
+
+  const canReview = ['Super Admin', 'National Admin', 'Chair', 'Co-Chair'].some(
+    (r) => userRoleNames.includes(r)
   )
-
-  // Get pending materials count for review tab
-  const pendingMaterials = canReview
-    ? materials.filter((m) => m.status === 'pending_review')
-    : []
 
   // Check if user can upload (trainer assigned to this event or admin)
   const canUpload = true // Simplified - in production, check trainer assignments
@@ -118,7 +143,7 @@ async function MaterialsPageServerContent({ params }: PageProps) {
           </h1>
           <p className="text-muted-foreground mt-1">
             {event.title}
-            {event.service_type && ` - ${event.service_type.toUpperCase()}`}
+            {event.service_type && ` - ${String(event.service_type).toUpperCase()}`}
           </p>
         </div>
         <Button asChild variant="outline">

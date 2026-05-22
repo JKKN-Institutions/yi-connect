@@ -349,7 +349,7 @@ export async function submitApplication(
           industry: member.industry,
           business_type: member.business_type,
           years_of_experience: member.years_of_experience,
-          skills: (member.skills as any[])?.map((s: any) => ({
+          skills: (member.skills as { skill_name?: string; proficiency_level?: string }[] | undefined)?.map((s) => ({
             name: s.skill_name,
             proficiency: s.proficiency_level,
           })) || [],

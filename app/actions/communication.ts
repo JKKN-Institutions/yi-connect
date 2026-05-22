@@ -11,6 +11,7 @@
 
 import { revalidateTag } from 'next/cache';
 import { redirect } from 'next/navigation';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentUser, getCurrentChapterId } from '@/lib/auth';
 import { sendAnnouncementPush } from '@/lib/push-notification';
@@ -68,7 +69,7 @@ type ActionResponse<T = any> = {
  * Get member IDs that match the given audience filter
  */
 async function getFilteredMemberIds(
-  supabase: any,
+  supabase: SupabaseClient,
   chapterId: string,
   audienceFilter?: AudienceFilter | null,
   segmentId?: string | null
@@ -107,7 +108,7 @@ async function getFilteredMemberIds(
   if (!filter) {
     query = query.eq('is_active', true);
     const { data: members } = await query;
-    return members?.map((m: any) => m.id) || [];
+    return members?.map((m: { id: string }) => m.id) || [];
   }
 
   // Apply member status filter
@@ -169,7 +170,6 @@ async function getFilteredMemberIds(
   const { data: members, error } = await query;
 
   if (error || !members) {
-    console.error('Error fetching filtered members:', error);
     return [];
   }
 
@@ -178,30 +178,33 @@ async function getFilteredMemberIds(
 
   // Filter by roles
   if (filter.roles && filter.roles.length > 0) {
-    filteredMembers = filteredMembers.filter((m: any) => {
-      const memberRoles = m.roles?.map((r: any) => r.role?.name) || [];
+    filteredMembers = filteredMembers.filter((m) => {
+      const roles = m.roles as { role: { name: string }[] }[] | undefined;
+      const memberRoles = roles?.flatMap((r) => r.role?.map((role) => role.name) || []) || [];
       return filter.roles!.some(role => memberRoles.includes(role));
     });
   }
 
   // Filter by skills
   if (filter.has_skills && filter.has_skills.length > 0) {
-    filteredMembers = filteredMembers.filter((m: any) => {
-      const memberSkills = m.skills?.map((s: any) => s.skill_id) || [];
+    filteredMembers = filteredMembers.filter((m) => {
+      const skills = m.skills as { skill_id?: string }[] | undefined;
+      const memberSkills = skills?.map((s) => s.skill_id) || [];
       return filter.has_skills!.some(skillId => memberSkills.includes(skillId));
     });
   }
 
   // Filter by vertical interests
   if (filter.vertical_interests && filter.vertical_interests.length > 0) {
-    filteredMembers = filteredMembers.filter((m: any) => {
-      const memberVerticals = m.verticals?.map((v: any) => v.vertical_id) || [];
+    filteredMembers = filteredMembers.filter((m) => {
+      const verticals = m.verticals as { vertical_id?: string }[] | undefined;
+      const memberVerticals = verticals?.map((v) => v.vertical_id) || [];
       return filter.vertical_interests!.some(vid => memberVerticals.includes(vid));
     });
   }
 
   // Apply explicit includes/excludes
-  let memberIds = filteredMembers.map((m: any) => m.id);
+  let memberIds = filteredMembers.map((m) => m.id);
 
   if (filter.include_members && filter.include_members.length > 0) {
     // Add included members that aren't already in the list
@@ -271,7 +274,6 @@ export async function createAnnouncement(
       .single();
 
     if (error) {
-      console.error('Error creating announcement:', error);
       return { success: false, message: 'Failed to create announcement', error: error.message };
     }
 
@@ -285,7 +287,6 @@ export async function createAnnouncement(
       data: { id: announcement.id },
     };
   } catch (error) {
-    console.error('Create announcement error:', error);
     return { success: false, message: 'An unexpected error occurred', error: String(error) };
   }
 }
@@ -344,7 +345,6 @@ export async function updateAnnouncement(
 
     return { success: true, message: 'Announcement updated successfully' };
   } catch (error) {
-    console.error('Update announcement error:', error);
     return { success: false, message: 'An unexpected error occurred', error: String(error) };
   }
 }
@@ -398,8 +398,6 @@ export async function sendAnnouncement(id: string): Promise<ActionResponse> {
       announcement.segment_id
     );
 
-    console.log(`[Communication] Sending to ${memberIds.length} filtered members`);
-
     // Create announcement_recipients records
     if (memberIds.length > 0) {
       const recipients = memberIds.flatMap(memberId =>
@@ -447,10 +445,14 @@ export async function sendAnnouncement(id: string): Promise<ActionResponse> {
 
           if (members && members.length > 0) {
             const emailMessages = members
-              .filter((m: any) => m.profile?.email)
-              .map((member: any) => {
+              .filter((m) => {
+                const profile = m.profile as { email?: string }[] | undefined;
+                return profile?.[0]?.email;
+              })
+              .map((member) => {
+                const profile = member.profile as { email: string; full_name?: string }[];
                 const template = announcementEmail({
-                  memberName: member.profile.full_name || 'Member',
+                  memberName: profile[0]?.full_name || 'Member',
                   title: announcement.title,
                   content: announcement.content,
                   priority: announcement.priority || 'normal',
@@ -458,14 +460,13 @@ export async function sendAnnouncement(id: string): Promise<ActionResponse> {
                   viewLink: `${APP_URL}/communications/announcements/${announcement.id}`,
                 });
                 return {
-                  to: member.profile.email,
+                  to: profile[0].email,
                   subject: template.subject,
                   html: template.html,
                 };
               });
 
             const emailResult = await sendBatchEmails(emailMessages);
-            console.log(`[Communication] Emails sent: ${emailResult.sent} success, ${emailResult.failed} failed`);
 
             // Update recipient statuses for email channel
             await supabase
@@ -475,7 +476,6 @@ export async function sendAnnouncement(id: string): Promise<ActionResponse> {
               .eq('channel', 'email');
           }
         } catch (emailError) {
-          console.error('Email notification error:', emailError);
           // Don't fail the entire operation if email fails
         }
       }
@@ -483,7 +483,7 @@ export async function sendAnnouncement(id: string): Promise<ActionResponse> {
       // Send push notifications (if configured)
       if (announcement.channels.includes('push') || announcement.channels.includes('in_app')) {
         try {
-          const pushResult = await sendAnnouncementPush(
+          await sendAnnouncementPush(
             announcement.chapter_id,
             {
               id: announcement.id,
@@ -491,10 +491,8 @@ export async function sendAnnouncement(id: string): Promise<ActionResponse> {
               content: announcement.content
             }
           );
-          console.log(`Push notifications sent: ${pushResult.sent} success, ${pushResult.failed} failed`);
         } catch (pushError) {
-          // Log but don't fail the entire operation if push fails
-          console.error('Push notification error:', pushError);
+          // Don't fail the entire operation if push fails
         }
       }
     }
@@ -515,7 +513,6 @@ export async function sendAnnouncement(id: string): Promise<ActionResponse> {
       message: `Announcement sent successfully to ${memberIds.length} members`,
     };
   } catch (error) {
-    console.error('Send announcement error:', error);
     return { success: false, message: 'An unexpected error occurred', error: String(error) };
   }
 }
@@ -558,7 +555,6 @@ export async function scheduleAnnouncement(
 
     return { success: true, message: 'Announcement scheduled successfully' };
   } catch (error) {
-    console.error('Schedule announcement error:', error);
     return { success: false, message: 'An unexpected error occurred', error: String(error) };
   }
 }
@@ -593,7 +589,6 @@ export async function cancelAnnouncement(id: string, reason?: string): Promise<A
 
     return { success: true, message: 'Announcement cancelled successfully' };
   } catch (error) {
-    console.error('Cancel announcement error:', error);
     return { success: false, message: 'An unexpected error occurred', error: String(error) };
   }
 }
@@ -636,7 +631,6 @@ export async function deleteAnnouncement(id: string): Promise<ActionResponse> {
 
     return { success: true, message: 'Announcement deleted successfully' };
   } catch (error) {
-    console.error('Delete announcement error:', error);
     return { success: false, message: 'An unexpected error occurred', error: String(error) };
   }
 }
@@ -698,7 +692,6 @@ export async function duplicateAnnouncement(
       data: { id: duplicate.id },
     };
   } catch (error) {
-    console.error('Duplicate announcement error:', error);
     return { success: false, message: 'An unexpected error occurred', error: String(error) };
   }
 }
@@ -758,7 +751,6 @@ export async function createTemplate(formData: unknown): Promise<ActionResponse<
       data: { id: template.id },
     };
   } catch (error) {
-    console.error('Create template error:', error);
     return { success: false, message: 'An unexpected error occurred', error: String(error) };
   }
 }
@@ -807,7 +799,6 @@ export async function updateTemplate(id: string, formData: unknown): Promise<Act
 
     return { success: true, message: 'Template updated successfully' };
   } catch (error) {
-    console.error('Update template error:', error);
     return { success: false, message: 'An unexpected error occurred', error: String(error) };
   }
 }
@@ -835,7 +826,6 @@ export async function deleteTemplate(id: string): Promise<ActionResponse> {
 
     return { success: true, message: 'Template deleted successfully' };
   } catch (error) {
-    console.error('Delete template error:', error);
     return { success: false, message: 'An unexpected error occurred', error: String(error) };
   }
 }
@@ -892,7 +882,6 @@ export async function duplicateTemplate(
       data: { id: duplicate.id },
     };
   } catch (error) {
-    console.error('Duplicate template error:', error);
     return { success: false, message: 'An unexpected error occurred', error: String(error) };
   }
 }
@@ -950,7 +939,6 @@ export async function createNotification(formData: unknown): Promise<ActionRespo
       data: { id: notification.id },
     };
   } catch (error) {
-    console.error('Create notification error:', error);
     return { success: false, message: 'An unexpected error occurred', error: String(error) };
   }
 }
@@ -982,7 +970,6 @@ export async function markNotificationAsRead(id: string): Promise<ActionResponse
 
     return { success: true, message: 'Notification marked as read' };
   } catch (error) {
-    console.error('Mark notification as read error:', error);
     return { success: false, message: 'An unexpected error occurred', error: String(error) };
   }
 }
@@ -1024,7 +1011,6 @@ export async function markAllNotificationsAsRead(
 
     return { success: true, message: 'All notifications marked as read' };
   } catch (error) {
-    console.error('Mark all notifications as read error:', error);
     return { success: false, message: 'An unexpected error occurred', error: String(error) };
   }
 }
@@ -1056,7 +1042,6 @@ export async function deleteNotification(id: string): Promise<ActionResponse> {
 
     return { success: true, message: 'Notification deleted successfully' };
   } catch (error) {
-    console.error('Delete notification error:', error);
     return { success: false, message: 'An unexpected error occurred', error: String(error) };
   }
 }
@@ -1122,7 +1107,6 @@ export async function createNewsletter(formData: unknown): Promise<ActionRespons
       data: { id: newsletter.id },
     };
   } catch (error) {
-    console.error('Create newsletter error:', error);
     return { success: false, message: 'An unexpected error occurred', error: String(error) };
   }
 }
@@ -1170,7 +1154,6 @@ export async function updateNewsletter(id: string, formData: unknown): Promise<A
 
     return { success: true, message: 'Newsletter updated successfully' };
   } catch (error) {
-    console.error('Update newsletter error:', error);
     return { success: false, message: 'An unexpected error occurred', error: String(error) };
   }
 }
@@ -1205,7 +1188,6 @@ export async function publishNewsletter(id: string): Promise<ActionResponse> {
 
     return { success: true, message: 'Newsletter published successfully' };
   } catch (error) {
-    console.error('Publish newsletter error:', error);
     return { success: false, message: 'An unexpected error occurred', error: String(error) };
   }
 }
@@ -1248,7 +1230,6 @@ export async function deleteNewsletter(id: string): Promise<ActionResponse> {
 
     return { success: true, message: 'Newsletter deleted successfully' };
   } catch (error) {
-    console.error('Delete newsletter error:', error);
     return { success: false, message: 'An unexpected error occurred', error: String(error) };
   }
 }
@@ -1312,7 +1293,6 @@ export async function createSegment(formData: unknown): Promise<ActionResponse<{
       data: { id: segment.id },
     };
   } catch (error) {
-    console.error('Create segment error:', error);
     return { success: false, message: 'An unexpected error occurred', error: String(error) };
   }
 }
@@ -1364,7 +1344,6 @@ export async function updateSegment(id: string, formData: unknown): Promise<Acti
 
     return { success: true, message: 'Segment updated successfully' };
   } catch (error) {
-    console.error('Update segment error:', error);
     return { success: false, message: 'An unexpected error occurred', error: String(error) };
   }
 }
@@ -1392,7 +1371,6 @@ export async function deleteSegment(id: string): Promise<ActionResponse> {
 
     return { success: true, message: 'Segment deleted successfully' };
   } catch (error) {
-    console.error('Delete segment error:', error);
     return { success: false, message: 'An unexpected error occurred', error: String(error) };
   }
 }
@@ -1456,7 +1434,6 @@ export async function createAutomationRule(formData: unknown): Promise<ActionRes
       data: { id: rule.id },
     };
   } catch (error) {
-    console.error('Create automation rule error:', error);
     return { success: false, message: 'An unexpected error occurred', error: String(error) };
   }
 }
@@ -1505,7 +1482,6 @@ export async function updateAutomationRule(id: string, formData: unknown): Promi
 
     return { success: true, message: 'Automation rule updated successfully' };
   } catch (error) {
-    console.error('Update automation rule error:', error);
     return { success: false, message: 'An unexpected error occurred', error: String(error) };
   }
 }
@@ -1540,7 +1516,6 @@ export async function toggleAutomationRule(id: string, enabled: boolean): Promis
       message: `Automation rule ${enabled ? 'enabled' : 'disabled'} successfully`,
     };
   } catch (error) {
-    console.error('Toggle automation rule error:', error);
     return { success: false, message: 'An unexpected error occurred', error: String(error) };
   }
 }
@@ -1568,7 +1543,6 @@ export async function deleteAutomationRule(id: string): Promise<ActionResponse> 
 
     return { success: true, message: 'Automation rule deleted successfully' };
   } catch (error) {
-    console.error('Delete automation rule error:', error);
     return { success: false, message: 'An unexpected error occurred', error: String(error) };
   }
 }
@@ -1591,7 +1565,6 @@ export async function getAudiencePreviewCount(
     const count = await getSegmentPreviewCountData(segmentId, audienceFilter);
     return { success: true, count };
   } catch (error) {
-    console.error('Get audience preview count error:', error);
     return { success: false, message: 'Failed to get audience preview count' };
   }
 }
@@ -1600,4 +1573,8 @@ export async function getAudiencePreviewCount(
 // EXPORT ALL ACTIONS
 // ============================================================================
 
-export type { ActionResponse };
+// NOTE: Types must NOT be exported from `'use server'` modules — the Next.js
+// Server Actions bundler compiles every export into a callable, and type-only
+// re-exports become runtime `ReferenceError`s in production. If consumers need
+// this type, duplicate it in a plain `lib/` file or inline it at the call site.
+// export type { ActionResponse };

@@ -52,8 +52,6 @@ export async function createSchool(prevState: FormState, formData: FormData): Pr
     return { success: false, message: 'Unauthorized - No chapter found for user' }
   }
 
-  console.log('Creating school with chapter_id:', chapterId)
-
   // Parse and validate form data
   const rawData = Object.fromEntries(formData)
 
@@ -79,18 +77,6 @@ export async function createSchool(prevState: FormState, formData: FormData): Pr
   }
 
   const supabase = await createClient()
-
-  // Verify user has member record before insert
-  const { data: { user } } = await supabase.auth.getUser()
-  console.log('Current user ID:', user?.id)
-
-  const { data: memberCheck } = await supabase
-    .from('members')
-    .select('id, chapter_id')
-    .eq('id', user?.id)
-    .single()
-
-  console.log('Member record:', memberCheck)
 
   const { data, error } = await supabase
     .from('schools')

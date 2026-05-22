@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, startOfWeek, endOfWeek, isToday } from 'date-fns';
+import { useState, useMemo, useEffect } from 'react';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, startOfWeek, endOfWeek } from 'date-fns';
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import type { EventListItem } from '@/types/event';
 
@@ -14,8 +15,96 @@ interface EventCalendarProps {
   events: EventListItem[];
 }
 
+/**
+ * Skeleton component for EventCalendar
+ * Shown during initial render to avoid hydration mismatch
+ */
+function EventCalendarSkeleton() {
+  return (
+    <div className='space-y-4'>
+      {/* Calendar Header Skeleton */}
+      <div className='flex items-center justify-between'>
+        <Skeleton className='h-8 w-48' />
+        <div className='flex gap-2'>
+          <Skeleton className='h-9 w-16' />
+          <Skeleton className='h-9 w-9' />
+          <Skeleton className='h-9 w-9' />
+        </div>
+      </div>
+
+      {/* Calendar Grid Skeleton */}
+      <Card>
+        <CardContent className='p-4'>
+          {/* Day Headers */}
+          <div className='grid grid-cols-7 gap-2 mb-2'>
+            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+              <div
+                key={day}
+                className='text-center text-sm font-medium text-muted-foreground p-2'
+              >
+                {day}
+              </div>
+            ))}
+          </div>
+
+          {/* Calendar Days Skeleton */}
+          <div className='grid grid-cols-7 gap-2'>
+            {Array.from({ length: 35 }).map((_, index) => (
+              <div
+                key={index}
+                className='min-h-24 p-2 border rounded-lg'
+              >
+                <Skeleton className='h-4 w-4 mb-2' />
+                <Skeleton className='h-3 w-full' />
+              </div>
+            ))}
+          </div>
+
+          {/* Legend */}
+          <div className='flex items-center gap-4 mt-4 pt-4 border-t'>
+            <span className='text-sm font-medium'>Status:</span>
+            <div className='flex items-center gap-2'>
+              <div className='flex items-center gap-1'>
+                <div className='w-3 h-3 rounded bg-green-500' />
+                <span className='text-xs'>Published</span>
+              </div>
+              <div className='flex items-center gap-1'>
+                <div className='w-3 h-3 rounded bg-gray-400' />
+                <span className='text-xs'>Draft</span>
+              </div>
+              <div className='flex items-center gap-1'>
+                <div className='w-3 h-3 rounded bg-blue-500' />
+                <span className='text-xs'>Completed</span>
+              </div>
+              <div className='flex items-center gap-1'>
+                <div className='w-3 h-3 rounded bg-red-500' />
+                <span className='text-xs'>Cancelled</span>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 export function EventCalendar({ events }: EventCalendarProps) {
-  const [currentDate, setCurrentDate] = useState(new Date());
+  // Initialize as null to avoid hydration mismatch
+  // The actual date is set only on the client via useEffect
+  const [currentDate, setCurrentDate] = useState<Date | null>(null);
+  const [todayDate, setTodayDate] = useState<Date | null>(null);
+
+  // Set dates only on client to avoid hydration mismatch
+  useEffect(() => {
+    const now = new Date();
+    setCurrentDate(now);
+    setTodayDate(now);
+  }, []);
+
+  // Show skeleton while waiting for client-side date initialization
+  if (!currentDate || !todayDate) {
+    return <EventCalendarSkeleton />;
+  }
 
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
@@ -51,7 +140,7 @@ export function EventCalendar({ events }: EventCalendarProps) {
   };
 
   const handleToday = () => {
-    setCurrentDate(new Date());
+    setCurrentDate(todayDate);
   };
 
   const getEventsForDay = (day: Date) => {
@@ -114,7 +203,7 @@ export function EventCalendar({ events }: EventCalendarProps) {
             {daysInCalendar.map((day, index) => {
               const dayEvents = getEventsForDay(day);
               const isCurrentMonth = isSameMonth(day, currentDate);
-              const isCurrentDay = isToday(day);
+              const isCurrentDay = isSameDay(day, todayDate);
 
               return (
                 <div

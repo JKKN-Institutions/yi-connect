@@ -409,7 +409,7 @@ export async function getUserType(): Promise<{
 
   // Check user roles for internal users
   const supabase = await createServerSupabaseClient()
-  const { data: userRoles } = await supabase.rpc('get_user_roles', {
+  const { data: userRoles } = await supabase.rpc('get_user_roles_detailed', {
     p_user_id: user.id,
   })
 

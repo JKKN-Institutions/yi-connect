@@ -161,13 +161,45 @@ export function memberInvitationEmail(data: {
 // EVENT TEMPLATES
 // ============================================================================
 
-export function eventRegistrationEmail(data: {
+export async function eventRegistrationEmail(data: {
   memberName: string
   eventTitle: string
   eventDate: string
   eventVenue: string
   eventLink: string
-}): { subject: string; html: string } {
+  // Stutzee 2A — per-attendee ticket QR
+  eventId?: string
+  ticketToken?: string
+}): Promise<{ subject: string; html: string }> {
+  // Render optional ticket QR (base64 data URL) if token provided.
+  // qrcode is only imported server-side — templates run in Server Actions.
+  let ticketBlock = ''
+  if (data.ticketToken && data.eventId) {
+    try {
+      const QRCode = (await import('qrcode')).default
+      const scanUrl = `${APP_URL}/events/${data.eventId}/checkin/scan?t=${data.ticketToken}`
+      const qrDataUrl = await QRCode.toDataURL(scanUrl, {
+        width: 320,
+        margin: 2,
+        color: { dark: '#0b1220', light: '#FFFFFF' },
+      })
+      ticketBlock = `
+      <div style="background-color: #ffffff; border: 2px solid #e2e8f0; border-radius: 12px; padding: 24px; margin: 20px 0; text-align: center;">
+        <div style="display: inline-block; background: #1e40af; color: #ffffff; padding: 4px 12px; border-radius: 999px; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 12px;">Your ticket</div>
+        <p style="color: #0f172a; font-size: 14px; margin: 0 0 16px; font-weight: 600;">
+          Show this at the door
+        </p>
+        <img src="${qrDataUrl}" alt="Your event ticket QR code" width="220" height="220" style="display: block; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px; background: #ffffff;" />
+        <p style="color: #64748b; font-size: 12px; margin: 12px 0 0;">
+          ${data.memberName}
+        </p>
+      </div>`
+    } catch (err) {
+      console.error('Failed to render ticket QR for email:', err)
+      // Fall through without QR — email still usable
+    }
+  }
+
   return {
     subject: `Registration Confirmed: ${data.eventTitle}`,
     html: baseTemplate(`
@@ -184,6 +216,7 @@ export function eventRegistrationEmail(data: {
           📍 <strong>Venue:</strong> ${data.eventVenue}
         </p>
       </div>
+      ${ticketBlock}
       ${button('View Event Details', data.eventLink)}
       <p style="color: #64748b; font-size: 14px; margin: 16px 0 0;">
         Add this event to your calendar and we'll see you there!
@@ -911,6 +944,123 @@ export function announcementEmail(data: {
       ${data.viewLink ? button('View in Yi Connect', data.viewLink) : ''}
       <p style="color: #94a3b8; font-size: 12px; margin: 24px 0 0; text-align: center;">
         You received this because you are a member of ${data.chapterName}
+      </p>
+    `),
+  }
+}
+
+// ============================================================================
+// EVENT AUTO-PILOT TEMPLATES
+// ============================================================================
+
+export function eventSummaryEmail(data: {
+  event: {
+    id: string
+    title: string
+    start_date: string
+    end_date: string
+    venue?: string | null
+  }
+  stats: {
+    total_rsvps: number
+    attending_count: number
+    attended_count: number
+    check_in_rate: number
+    feedback_count: number
+    feedback_average: number | null
+  }
+  chairName: string
+  chapterName?: string
+}): { subject: string; html: string } {
+  const eventDate = new Date(data.event.start_date).toLocaleDateString('en-IN', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  })
+  const chapter = data.chapterName || 'Yi Chapter'
+  const eventLink = `${APP_URL}/events/${data.event.id}`
+  const ratingDisplay =
+    data.stats.feedback_average !== null
+      ? `${data.stats.feedback_average.toFixed(1)} / 5 (${data.stats.feedback_count} response${data.stats.feedback_count !== 1 ? 's' : ''})`
+      : 'No feedback yet'
+
+  return {
+    subject: `Event Summary: ${data.event.title}`,
+    html: baseTemplate(`
+      <h2 style="color: #1e293b; margin: 0 0 16px; font-size: 22px;">Event Auto-Pilot Summary</h2>
+      <p style="color: #475569; line-height: 1.6; margin: 0 0 16px;">
+        Hi ${data.chairName},
+      </p>
+      <p style="color: #475569; line-height: 1.6; margin: 0 0 16px;">
+        Your event <strong>${data.event.title}</strong> on ${eventDate} is done — here's the one-page summary.
+        Feedback reminders have been sent. The AAA health card draft (if applicable) is in Pathfinder.
+        Attendees have been awarded engagement points.
+      </p>
+      <div style="background-color: #f8fafc; border-radius: 8px; padding: 20px; margin: 24px 0;">
+        <h3 style="color: #1e40af; margin: 0 0 16px; font-size: 16px;">Stats at a glance</h3>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+          <tr>
+            <td style="padding: 6px 0; color: #64748b; font-size: 14px;">Total RSVPs</td>
+            <td style="padding: 6px 0; text-align: right; color: #1e293b; font-weight: 600; font-size: 14px;">${data.stats.total_rsvps}</td>
+          </tr>
+          <tr>
+            <td style="padding: 6px 0; color: #64748b; font-size: 14px;">Attending</td>
+            <td style="padding: 6px 0; text-align: right; color: #1e293b; font-weight: 600; font-size: 14px;">${data.stats.attending_count}</td>
+          </tr>
+          <tr>
+            <td style="padding: 6px 0; color: #64748b; font-size: 14px;">Checked in</td>
+            <td style="padding: 6px 0; text-align: right; color: #1e293b; font-weight: 600; font-size: 14px;">${data.stats.attended_count} (${Math.round(data.stats.check_in_rate)}%)</td>
+          </tr>
+          <tr>
+            <td style="padding: 6px 0; color: #64748b; font-size: 14px;">Feedback rating</td>
+            <td style="padding: 6px 0; text-align: right; color: #1e293b; font-weight: 600; font-size: 14px;">${ratingDisplay}</td>
+          </tr>
+        </table>
+      </div>
+      <p style="color: #475569; line-height: 1.6; margin: 0 0 16px;">
+        This event has been flagged as eligible for the next quarterly report.
+        Nothing else for you to do. Go enjoy your evening.
+      </p>
+      ${button('View Event in Yi Connect', eventLink)}
+      <p style="color: #64748b; font-size: 12px; margin: 24px 0 0;">
+        Sent by Yi Connect Auto-Pilot · ${chapter}
+      </p>
+    `),
+  }
+}
+
+export function quarterlyReportEmail(data: {
+  chapterName: string
+  recipientName: string
+  quarter: string // e.g. "Q1 FY2026"
+  periodLabel: string // e.g. "Jan-Mar 2026"
+  pdfUrl: string
+  eventsCount: number
+  totalAttendance: number
+}): { subject: string; html: string } {
+  return {
+    subject: `[${data.chapterName}] ${data.quarter} Chapter Report`,
+    html: baseTemplate(`
+      <h2 style="color: #1e293b; margin: 0 0 16px; font-size: 22px;">${data.quarter} Chapter Report</h2>
+      <p style="color: #475569; line-height: 1.6; margin: 0 0 16px;">
+        Hi ${data.recipientName},
+      </p>
+      <p style="color: #475569; line-height: 1.6; margin: 0 0 16px;">
+        The quarterly report for <strong>${data.chapterName}</strong> covering ${data.periodLabel}
+        is ready. It includes the events run this quarter, AAA verticals status, top engaged members,
+        a financial snapshot, and suggested Take Pride nominees.
+      </p>
+      <div style="background-color: #f8fafc; border-radius: 8px; padding: 20px; margin: 24px 0;">
+        <h3 style="color: #1e40af; margin: 0 0 12px; font-size: 16px;">This quarter in numbers</h3>
+        <p style="margin: 4px 0; color: #1e293b; font-size: 14px;">
+          <strong>${data.eventsCount}</strong> event${data.eventsCount !== 1 ? 's' : ''} run ·
+          <strong>${data.totalAttendance}</strong> total attendees
+        </p>
+      </div>
+      ${button('Download Report PDF', data.pdfUrl)}
+      <p style="color: #64748b; font-size: 12px; margin: 24px 0 0;">
+        Generated by Yi Connect · ${data.chapterName}
       </p>
     `),
   }

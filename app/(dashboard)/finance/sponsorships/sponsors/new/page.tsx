@@ -58,7 +58,7 @@ async function NewSponsorFormWrapper() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <SponsorForm chapterId={chapterId} />
+        <SponsorForm chapterId={chapterId} showLogoUpload />
       </CardContent>
     </Card>
   );

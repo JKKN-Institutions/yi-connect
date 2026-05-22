@@ -47,3 +47,11 @@ next-env.d.ts
 # supabase temp files
 supabase/.temp/
 .env*.local
+.obsidian/
+
+# MCP configuration (contains secrets)
+.mcp.json
+
+# Next.js stale build artifacts from auto-saves
+.next.stale.*/
+

@@ -13,7 +13,7 @@ import { getCurrentUser, requireRole } from '@/lib/auth';
 import {
   getVerticalById,
   getVerticalPlans,
-  getCurrentFiscalYear
+  getCurrentCalendarYear
 } from '@/lib/data/vertical';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -82,11 +82,11 @@ async function EditPlanFormWrapper({ params, searchParams }: PageProps) {
   const vertical = await getVerticalById(id);
   if (!vertical) notFound();
 
-  const fiscalYear = year ? parseInt(year) : getCurrentFiscalYear();
+  const calendarYear = year ? parseInt(year) : getCurrentCalendarYear();
   const plans = await getVerticalPlans(id);
 
-  // Find the plan for the specified fiscal year
-  const plan = plans.find((p) => p.fiscal_year === fiscalYear);
+  // Find the plan for the specified calendar year
+  const plan = plans.find((p) => p.calendar_year === calendarYear);
 
   if (!plan) {
     // Redirect to create new plan if no plan exists
@@ -98,7 +98,7 @@ async function EditPlanFormWrapper({ params, searchParams }: PageProps) {
       verticalId={id}
       verticalName={vertical.name}
       plan={plan}
-      fiscalYear={fiscalYear}
+      calendarYear={calendarYear}
     />
   );
 }

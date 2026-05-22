@@ -2,7 +2,7 @@
  * Invite User Page
  *
  * Page for inviting new users to the system.
- * Restricted to Super Admin and National Admin only.
+ * Restricted to Super Admin, National Admin, and Chair.
  */
 
 import { Suspense } from 'react';
@@ -23,8 +23,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { InviteUserForm } from '@/components/admin/users/invite-user-form';
 
 async function InviteFormData() {
-  // Require Super Admin or National Admin
-  await requireRole(['Super Admin', 'National Admin']);
+  // Require Super Admin, National Admin, or Chair
+  await requireRole(['Super Admin', 'National Admin', 'Chair']);
 
   // Fetch roles and chapters for the form
   const supabase = await createServerSupabaseClient();

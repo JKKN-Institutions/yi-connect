@@ -20,6 +20,7 @@ import {
   bulkRemoveRoleSchema,
   changeUserStatusSchema,
   bulkAssignChapterSchema,
+  bulkDeactivateUsersSchema,
   inviteUserSchema
 } from '@/lib/validations/user'
 import type { FormState } from '@/types'
@@ -71,7 +72,7 @@ export async function updateUserProfile(
 
     if (error) {
       return {
-        message: error.message || 'Failed to update user profile. Please try again.'
+        message: error instanceof Error ? error.message : 'Failed to update user profile. Please try again.'
       }
     }
 
@@ -83,9 +84,9 @@ export async function updateUserProfile(
       success: true,
       message: 'User profile updated successfully!'
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
-      message: error.message || 'An unexpected error occurred.'
+      message: error instanceof Error ? error.message : 'An unexpected error occurred.'
     }
   }
 }
@@ -111,6 +112,7 @@ export async function assignRole(
     })
 
     if (!validation.success) {
+      console.error('[assignRole] Validation failed:', validation.error.flatten())
       return {
         errors: validation.error.flatten().fieldErrors,
         message: 'Invalid input. Please check the form.'
@@ -120,56 +122,117 @@ export async function assignRole(
     const supabase = await createServerSupabaseClient()
 
     // Check if user can manage this role
-    const { data: canManage } = await supabase.rpc('can_manage_role', {
+    console.log('[assignRole] Checking permissions for:', {
       manager_id: user.id,
       target_role_id: validation.data.role_id
     })
 
+    const { data: canManage, error: rpcError } = await supabase.rpc('can_manage_role', {
+      manager_id: user.id,
+      target_role_id: validation.data.role_id
+    })
+
+    if (rpcError) {
+      console.error('[assignRole] RPC error:', rpcError)
+      return {
+        message: `Permission check failed: ${rpcError.message}`
+      }
+    }
+
     if (!canManage) {
+      console.warn('[assignRole] Permission denied:', {
+        manager_id: user.id,
+        target_role_id: validation.data.role_id
+      })
       return {
         message: 'You do not have permission to assign this role.'
       }
     }
 
-    // Check if role is already assigned
-    const { data: existing } = await supabase
-      .from('user_roles')
-      .select('id')
-      .eq('user_id', validation.data.user_id)
-      .eq('role_id', validation.data.role_id)
-      .single()
+    // Use admin client to bypass RLS (permission already validated above)
+    console.log('[assignRole] Creating admin client')
+    const adminClient = createAdminSupabaseClient()
 
-    if (existing) {
+    if (!adminClient) {
+      console.error('[assignRole] Admin client creation failed')
       return {
-        message: 'This role is already assigned to the user.'
+        message: 'Failed to create admin client. Please check server configuration.'
       }
     }
 
-    // Assign the role
-    const { error } = await supabase.from('user_roles').insert({
+    // Assign the role (UNIQUE constraint will prevent duplicates)
+    console.log('[assignRole] Inserting role:', {
       user_id: validation.data.user_id,
       role_id: validation.data.role_id
     })
 
-    if (error) {
+    const { error: insertError, data: insertData } = await adminClient
+      .from('user_roles')
+      .insert({
+        user_id: validation.data.user_id,
+        role_id: validation.data.role_id
+      })
+      .select()
+
+    console.log('[assignRole] Insert result:', {
+      success: !insertError,
+      data: insertData,
+      error: insertError
+    })
+
+    if (insertError) {
+      // Handle duplicate role assignment (caught by UNIQUE constraint)
+      if (insertError.code === '23505') {
+        return {
+          message: 'This role is already assigned to the user.'
+        }
+      }
+
+      console.error('[assignRole] Insert failed:', {
+        code: insertError.code,
+        message: insertError.message,
+        details: insertError.details,
+        hint: insertError.hint
+      })
+
       return {
-        message: error.message || 'Failed to assign role. Please try again.'
+        message: `Failed to assign role: ${insertError.message}`
       }
     }
 
-    // The trigger will automatically log the change to user_role_changes
+    // ✅ Explicitly log to audit trail (admin client may bypass triggers)
+    const { error: auditError } = await adminClient.from('user_role_changes').insert({
+      user_id: validation.data.user_id,
+      role_id: validation.data.role_id,
+      action: 'assigned',
+      changed_by: user.id,
+      notes: validation.data.notes || null
+    })
+
+    if (auditError) {
+      console.error('[assignRole] Failed to log audit trail:', {
+        user_id: validation.data.user_id,
+        role_id: validation.data.role_id,
+        changed_by: user.id,
+        error: auditError.message
+      })
+      // Don't fail the operation if audit logging fails, just log the error
+    }
 
     // Invalidate caches
     revalidatePath('/admin/users')
     revalidatePath(`/admin/users/${validation.data.user_id}`)
 
+    console.log('[assignRole] Success!')
     return {
       success: true,
       message: 'Role assigned successfully!'
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
+    // CRITICAL: Catch all unexpected errors
+    console.error('[assignRole] Unexpected error:', error)
     return {
-      message: error.message || 'An unexpected error occurred.'
+      message: error instanceof Error ? error.message : 'An unexpected error occurred.'
     }
   }
 }
@@ -246,7 +309,7 @@ export async function removeRole(
 
     if (error) {
       return {
-        message: error.message || 'Failed to remove role. Please try again.'
+        message: error instanceof Error ? error.message : 'Failed to remove role. Please try again.'
       }
     }
 
@@ -260,9 +323,9 @@ export async function removeRole(
       success: true,
       message: 'Role removed successfully!'
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
-      message: error.message || 'An unexpected error occurred.'
+      message: error instanceof Error ? error.message : 'An unexpected error occurred.'
     }
   }
 }
@@ -278,7 +341,14 @@ export async function bulkAssignRole(
     const { user } = await requireRole(['Super Admin', 'National Admin'])
 
     const userIdsRaw = formData.get('user_ids')
-    const userIds = userIdsRaw ? JSON.parse(userIdsRaw as string) : []
+    let userIds: string[] = []
+    try {
+      const parsed = userIdsRaw ? JSON.parse(userIdsRaw as string) : []
+      if (!Array.isArray(parsed)) throw new Error('Expected array')
+      userIds = parsed
+    } catch {
+      return { message: 'Invalid user IDs format.' }
+    }
 
     const validation = bulkAssignRoleSchema.safeParse({
       user_ids: userIds,
@@ -307,6 +377,16 @@ export async function bulkAssignRole(
       }
     }
 
+    // ✅ Pre-fetch user names for better error reporting
+    const { data: users } = await supabase
+      .from('profiles')
+      .select('id, full_name, email')
+      .in('id', validation.data.user_ids)
+
+    const userMap = new Map(
+      users?.map(u => [u.id, u.full_name || u.email]) || []
+    )
+
     const result: BulkOperationResult = {
       success_count: 0,
       failure_count: 0,
@@ -325,7 +405,8 @@ export async function bulkAssignRole(
           .single()
 
         if (existing) {
-          // Skip if already assigned
+          // Already assigned - count as success
+          result.success_count++
           continue
         }
 
@@ -340,12 +421,12 @@ export async function bulkAssignRole(
         }
 
         result.success_count++
-      } catch (error: any) {
+      } catch (error: unknown) {
         result.failure_count++
         result.failures.push({
           user_id: userId,
-          user_name: 'Unknown',
-          error: error.message
+          user_name: userMap.get(userId) || 'Unknown',  // ✅ Use actual name
+          error: error instanceof Error ? error.message : 'Unknown error'
         })
       }
     }
@@ -358,9 +439,9 @@ export async function bulkAssignRole(
       message: `Role assigned to ${result.success_count} user(s). ${result.failure_count} failed.`,
       data: result
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
-      message: error.message || 'An unexpected error occurred.'
+      message: error instanceof Error ? error.message : 'An unexpected error occurred.'
     }
   }
 }
@@ -376,7 +457,14 @@ export async function bulkRemoveRole(
     const { user } = await requireRole(['Super Admin', 'National Admin'])
 
     const userIdsRaw = formData.get('user_ids')
-    const userIds = userIdsRaw ? JSON.parse(userIdsRaw as string) : []
+    let userIds: string[] = []
+    try {
+      const parsed = userIdsRaw ? JSON.parse(userIdsRaw as string) : []
+      if (!Array.isArray(parsed)) throw new Error('Expected array')
+      userIds = parsed
+    } catch {
+      return { message: 'Invalid user IDs format.' }
+    }
 
     const validation = bulkRemoveRoleSchema.safeParse({
       user_ids: userIds,
@@ -404,6 +492,16 @@ export async function bulkRemoveRole(
         message: 'You do not have permission to remove this role.'
       }
     }
+
+    // ✅ Pre-fetch user names for better error reporting
+    const { data: users } = await supabase
+      .from('profiles')
+      .select('id, full_name, email')
+      .in('id', validation.data.user_ids)
+
+    const userMap = new Map(
+      users?.map(u => [u.id, u.full_name || u.email]) || []
+    )
 
     const result: BulkOperationResult = {
       success_count: 0,
@@ -439,12 +537,12 @@ export async function bulkRemoveRole(
         }
 
         result.success_count++
-      } catch (error: any) {
+      } catch (error: unknown) {
         result.failure_count++
         result.failures.push({
           user_id: userId,
-          user_name: 'Unknown',
-          error: error.message
+          user_name: userMap.get(userId) || 'Unknown',  // ✅ Use actual name
+          error: error instanceof Error ? error.message : 'Unknown error'
         })
       }
     }
@@ -457,9 +555,9 @@ export async function bulkRemoveRole(
       message: `Role removed from ${result.success_count} user(s). ${result.failure_count} failed.`,
       data: result
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
-      message: error.message || 'An unexpected error occurred.'
+      message: error instanceof Error ? error.message : 'An unexpected error occurred.'
     }
   }
 }
@@ -516,7 +614,7 @@ export async function changeUserStatus(
 
     if (error) {
       return {
-        message: error.message || 'Failed to update user status. Please try again.'
+        message: error instanceof Error ? error.message : 'Failed to update user status. Please try again.'
       }
     }
 
@@ -528,9 +626,148 @@ export async function changeUserStatus(
       success: true,
       message: `User ${validation.data.is_active ? 'activated' : 'deactivated'} successfully!`
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
-      message: error.message || 'An unexpected error occurred.'
+      message: error instanceof Error ? error.message : 'An unexpected error occurred.'
+    }
+  }
+}
+
+/**
+ * Bulk deactivate multiple users
+ * Updates is_active in profiles, members, and approved_emails tables
+ * Only Super Admin and National Admin can perform this action
+ */
+export async function bulkDeactivateUsers(
+  prevState: FormState,
+  formData: FormData
+): Promise<FormState> {
+  try {
+    const { user } = await requireRole(['Super Admin', 'National Admin'])
+
+    const userIdsRaw = formData.get('user_ids')
+    let userIds: string[] = []
+    try {
+      const parsed = userIdsRaw ? JSON.parse(userIdsRaw as string) : []
+      if (!Array.isArray(parsed)) throw new Error('Expected array')
+      userIds = parsed
+    } catch {
+      return { message: 'Invalid user IDs format.' }
+    }
+
+    const validation = bulkDeactivateUsersSchema.safeParse({
+      user_ids: userIds,
+      notes: formData.get('notes')
+    })
+
+    if (!validation.success) {
+      return {
+        errors: validation.error.flatten().fieldErrors,
+        message: 'Invalid input. Please check the form.'
+      }
+    }
+
+    const adminClient = createAdminSupabaseClient()
+
+    const result: BulkOperationResult = {
+      success_count: 0,
+      failure_count: 0,
+      failures: []
+    }
+
+    // Process each user
+    for (const userId of validation.data.user_ids) {
+      try {
+        // Prevent self-deactivation
+        if (userId === user.id) {
+          result.failure_count++
+          result.failures.push({
+            user_id: userId,
+            user_name: 'Current User',
+            error: 'Cannot deactivate your own account'
+          })
+          continue
+        }
+
+        // Get user info
+        const { data: profile } = await adminClient
+          .from('profiles')
+          .select('id, full_name, email')
+          .eq('id', userId)
+          .single()
+
+        if (!profile) {
+          result.failure_count++
+          result.failures.push({
+            user_id: userId,
+            user_name: 'Unknown',
+            error: 'User not found'
+          })
+          continue
+        }
+
+        // ✅ Track errors from all database operations
+        const errors: string[] = []
+
+        // 1. Deactivate in profiles table
+        const { error: profileError } = await adminClient
+          .from('profiles')
+          .update({ is_active: false })
+          .eq('id', userId)
+
+        if (profileError) errors.push(`Profile: ${profileError.message}`)
+
+        // 2. Deactivate in members table (if exists)
+        const { error: memberError } = await adminClient
+          .from('members')
+          .update({ is_active: false, membership_status: 'inactive' })
+          .eq('id', userId)
+
+        if (memberError) errors.push(`Member: ${memberError.message}`)
+
+        // 3. Deactivate in approved_emails table
+        if (profile.email) {
+          const { error: emailError } = await adminClient
+            .from('approved_emails')
+            .update({ is_active: false })
+            .eq('email', profile.email)
+
+          if (emailError) errors.push(`Approved Email: ${emailError.message}`)
+        }
+
+        // Check if any operations failed
+        if (errors.length > 0) {
+          result.failure_count++
+          result.failures.push({
+            user_id: userId,
+            user_name: profile.full_name || profile.email,
+            error: `Partial failure: ${errors.join('; ')}`
+          })
+        } else {
+          result.success_count++
+        }
+      } catch (error: unknown) {
+        result.failure_count++
+        result.failures.push({
+          user_id: userId,
+          user_name: 'Unknown',
+          error: error instanceof Error ? error.message : 'Unknown error'
+        })
+      }
+    }
+
+    // Invalidate caches
+    revalidatePath('/admin/users')
+    revalidateTag('members-list', 'max')
+
+    return {
+      success: true,
+      message: `Deactivated ${result.success_count} user(s). ${result.failure_count} failed.`,
+      data: result
+    }
+  } catch (error: unknown) {
+    return {
+      message: error instanceof Error ? error.message : 'An unexpected error occurred.'
     }
   }
 }
@@ -550,7 +787,14 @@ export async function bulkAssignChapter(
     await requireRole(['Super Admin', 'National Admin'])
 
     const userIdsRaw = formData.get('user_ids')
-    const userIds = userIdsRaw ? JSON.parse(userIdsRaw as string) : []
+    let userIds: string[] = []
+    try {
+      const parsed = userIdsRaw ? JSON.parse(userIdsRaw as string) : []
+      if (!Array.isArray(parsed)) throw new Error('Expected array')
+      userIds = parsed
+    } catch {
+      return { message: 'Invalid user IDs format.' }
+    }
 
     const validation = bulkAssignChapterSchema.safeParse({
       user_ids: userIds,
@@ -588,12 +832,12 @@ export async function bulkAssignChapter(
         }
 
         result.success_count++
-      } catch (error: any) {
+      } catch (error: unknown) {
         result.failure_count++
         result.failures.push({
           user_id: userId,
           user_name: 'Unknown',
-          error: error.message
+          error: error instanceof Error ? error.message : 'Unknown error'
         })
       }
     }
@@ -606,9 +850,9 @@ export async function bulkAssignChapter(
       message: `Chapter assigned to ${result.success_count} user(s). ${result.failure_count} failed.`,
       data: result
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
-      message: error.message || 'An unexpected error occurred.'
+      message: error instanceof Error ? error.message : 'An unexpected error occurred.'
     }
   }
 }
@@ -652,20 +896,25 @@ export async function deleteUser(userId: string): Promise<FormState> {
 
     if (error) {
       return {
-        message: error.message || 'Failed to delete user. Please try again.'
+        message: error instanceof Error ? error.message : 'Failed to delete user. Please try again.'
       }
     }
 
     // Invalidate caches
     revalidatePath('/admin/users')
     revalidatePath(`/admin/users/${userId}`)
-
-    redirect('/admin/users')
-  } catch (error: any) {
+  } catch (error: unknown) {
+    // Re-throw Next.js redirect errors (they use throw internally)
+    if (error && typeof error === 'object' && 'digest' in error) {
+      throw error
+    }
     return {
-      message: error.message || 'An unexpected error occurred.'
+      message: error instanceof Error ? error.message : 'An unexpected error occurred.'
     }
   }
+
+  // redirect throws internally, so this acts as the final action
+  return redirect('/admin/users')
 }
 
 // ============================================================================
@@ -717,7 +966,7 @@ export async function inviteUser(
     }
 
     // Prepare metadata for future use (when user signs up)
-    const metadata: any = {}
+    const metadata: Record<string, unknown> = {}
     if (validation.data.full_name) metadata.full_name = validation.data.full_name
     if (validation.data.chapter_id) metadata.chapter_id = validation.data.chapter_id
     if (validation.data.role_ids && validation.data.role_ids.length > 0) {
@@ -739,7 +988,7 @@ export async function inviteUser(
 
     if (error) {
       return {
-        message: error.message || 'Failed to invite user. Please try again.'
+        message: error instanceof Error ? error.message : 'Failed to invite user. Please try again.'
       }
     }
 
@@ -790,9 +1039,9 @@ export async function inviteUser(
         ? `Invitation sent to ${validation.data.email}. They can now sign up using this email.`
         : `${validation.data.email} added to approved list. They can now sign up using this email.`
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
-      message: error.message || 'An unexpected error occurred.'
+      message: error instanceof Error ? error.message : 'An unexpected error occurred.'
     }
   }
 }
@@ -871,10 +1120,10 @@ export async function deactivateUserFromTable(
       success: true,
       message: `${userName} has been deactivated successfully.`
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || 'Failed to deactivate user.'
+      message: error instanceof Error ? error.message : 'Failed to deactivate user.'
     };
   }
 }
@@ -941,10 +1190,10 @@ export async function reactivateUserFromTable(
       success: true,
       message: `${userName} has been reactivated successfully.`
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || 'Failed to reactivate user.'
+      message: error instanceof Error ? error.message : 'Failed to reactivate user.'
     };
   }
 }
@@ -988,10 +1237,13 @@ export async function deleteUserPermanently(
     const userName = profile.full_name || 'User';
     const userEmail = profile.email;
 
-    // 1. Delete from user_role_changes (has FK to profiles.id via user_id)
+    // 1. ✅ Anonymize audit trail records (preserve for compliance, don't delete)
     await adminClient
       .from('user_role_changes')
-      .delete()
+      .update({
+        user_id: '00000000-0000-0000-0000-000000000000',  // Placeholder UUID
+        notes: `Original user deleted: ${userId} (${profile.full_name || profile.email})`
+      })
       .eq('user_id', userId);
 
     // 2. Update user_role_changes where this user was the changed_by (set to null)
@@ -1064,10 +1316,10 @@ export async function deleteUserPermanently(
       success: true,
       message: `${userName} has been permanently deleted.`
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || 'Failed to delete user permanently.'
+      message: error instanceof Error ? error.message : 'Failed to delete user permanently.'
     };
   }
 }
@@ -1126,7 +1378,12 @@ export async function exportUsers(
 
     // Apply filters
     if (filters?.search) {
-      query = query.or(`full_name.ilike.%${filters.search}%,email.ilike.%${filters.search}%`)
+      // Sanitize search to prevent PostgREST filter injection and SQL wildcard abuse
+      const sanitizedSearch = filters.search
+        .replace(/[.,()]/g, '')
+        .replace(/%/g, '\\%')
+        .replace(/_/g, '\\_')
+      query = query.or(`full_name.ilike.%${sanitizedSearch}%,email.ilike.%${sanitizedSearch}%`)
     }
 
     if (filters?.is_active !== undefined) {
@@ -1153,37 +1410,45 @@ export async function exportUsers(
     let filteredUsers = users
 
     if (filters?.chapter_id) {
-      filteredUsers = filteredUsers.filter((u: any) =>
-        u.member?.chapter?.id === filters.chapter_id
-      )
+      filteredUsers = filteredUsers.filter((u) => {
+        const member = u.member as { chapter?: { id?: string }[] }[] | null;
+        return member?.[0]?.chapter?.[0]?.id === filters.chapter_id;
+      })
     }
 
     if (filters?.role_id) {
-      filteredUsers = filteredUsers.filter((u: any) =>
-        u.roles?.some((r: any) => r.role?.id === filters.role_id)
-      )
+      filteredUsers = filteredUsers.filter((u) => {
+        const roles = u.roles as { role?: { id?: string }[] }[] | null;
+        return roles?.some((r) => r.role?.[0]?.id === filters.role_id);
+      })
     }
 
     // Transform data for export
-    const exportData = filteredUsers.map((user: any) => ({
-      id: user.id,
-      full_name: user.full_name || '',
-      email: user.email || '',
-      phone: user.phone || '',
-      is_active: user.is_active ? 'Yes' : 'No',
-      company: user.member?.company || '',
-      designation: user.member?.designation || '',
-      industry: user.member?.industry || '',
-      years_of_experience: user.member?.years_of_experience || '',
-      chapter: user.member?.chapter?.name || '',
-      chapter_location: user.member?.chapter?.location || '',
-      membership_status: user.member?.membership_status || '',
-      membership_type: user.member?.membership_type || '',
-      engagement_score: user.member?.engagement_score || 0,
-      roles: user.roles?.map((r: any) => r.role?.name).filter(Boolean).join(', ') || '',
-      created_at: user.created_at ? new Date(user.created_at).toISOString().split('T')[0] : '',
-      updated_at: user.updated_at ? new Date(user.updated_at).toISOString().split('T')[0] : '',
-    }))
+    type MemberData = { company?: string; designation?: string; industry?: string; years_of_experience?: number; membership_status?: string; membership_type?: string; engagement_score?: number; chapter?: { name?: string; location?: string }[] }[];
+    type RolesData = { role?: { name?: string }[] }[];
+    const exportData = filteredUsers.map((user) => {
+      const member = user.member as MemberData | null;
+      const roles = user.roles as RolesData | null;
+      return {
+        id: user.id,
+        full_name: user.full_name || '',
+        email: user.email || '',
+        phone: user.phone || '',
+        is_active: user.is_active ? 'Yes' : 'No',
+        company: member?.[0]?.company || '',
+        designation: member?.[0]?.designation || '',
+        industry: member?.[0]?.industry || '',
+        years_of_experience: member?.[0]?.years_of_experience || '',
+        chapter: member?.[0]?.chapter?.[0]?.name || '',
+        chapter_location: member?.[0]?.chapter?.[0]?.location || '',
+        membership_status: member?.[0]?.membership_status || '',
+        membership_type: member?.[0]?.membership_type || '',
+        engagement_score: member?.[0]?.engagement_score || 0,
+        roles: roles?.map((r) => r.role?.[0]?.name).filter(Boolean).join(', ') || '',
+        created_at: user.created_at ? new Date(user.created_at).toISOString().split('T')[0] : '',
+        updated_at: user.updated_at ? new Date(user.updated_at).toISOString().split('T')[0] : '',
+      };
+    })
 
     const timestamp = new Date().toISOString().split('T')[0]
     let filename = `yi-users-${timestamp}`
@@ -1197,11 +1462,11 @@ export async function exportUsers(
       const headers = Object.keys(exportData[0])
       const csvRows = [
         headers.join(','),
-        ...exportData.map((row: any) =>
+        ...exportData.map((row) =>
           headers.map(h => {
-            const value = row[h]
+            const value = row[h as keyof typeof row]
             // Escape quotes and wrap in quotes if contains comma
-            if (typeof value === 'string' && (value.includes(',') || value.includes('"'))) {
+            if (typeof value === 'string' && (value.includes(',') || value.includes('"') || value.includes('\n') || value.includes('\r'))) {
               return `"${value.replace(/"/g, '""')}"`
             }
             return value
@@ -1223,11 +1488,11 @@ export async function exportUsers(
       filename,
       message: `Exported ${exportData.length} users`
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Export error:', error)
     return {
       success: false,
-      message: error.message || 'Failed to export users'
+      message: error instanceof Error ? error.message : 'Failed to export users'
     }
   }
 }

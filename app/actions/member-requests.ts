@@ -25,36 +25,40 @@ import { memberApprovalEmail, memberRejectionEmail } from '@/lib/email/templates
 // VALIDATION SCHEMAS
 // ============================================================================
 
+// Coerce empty strings from HTML forms to `undefined` so optional fields
+// don't reach Postgres as "" (which breaks typed columns like DATE).
+const emptyToUndefined = z.literal('').transform(() => undefined)
+
 const memberRequestSchema = z.object({
   // Basic Information
   full_name: z.string().min(2, 'Full name must be at least 2 characters'),
   email: z.string().email('Invalid email address'),
   phone: z.string().min(10, 'Phone number must be at least 10 characters'),
-  date_of_birth: z.string().optional(),
-  gender: z.enum(['male', 'female', 'other', 'prefer_not_to_say']).optional(),
+  date_of_birth: z.string().optional().or(emptyToUndefined),
+  gender: z.enum(['male', 'female', 'other', 'prefer_not_to_say']).optional().or(emptyToUndefined),
 
   // Professional Information
-  company: z.string().optional(),
-  designation: z.string().optional(),
-  industry: z.string().optional(),
-  years_of_experience: z.coerce.number().int().min(0).optional(),
-  linkedin_url: z.string().url().optional().or(z.literal('')),
+  company: z.string().optional().or(emptyToUndefined),
+  designation: z.string().optional().or(emptyToUndefined),
+  industry: z.string().optional().or(emptyToUndefined),
+  years_of_experience: z.coerce.number().int().min(0).optional().or(emptyToUndefined),
+  linkedin_url: z.string().url().optional().or(emptyToUndefined),
 
   // Personal Information
-  address: z.string().optional(),
+  address: z.string().optional().or(emptyToUndefined),
   city: z.string().min(2, 'City is required'),
   state: z.string().min(2, 'State is required'),
   country: z.string().default('India'),
-  pincode: z.string().optional(),
+  pincode: z.string().optional().or(emptyToUndefined),
 
   // Emergency Contact
-  emergency_contact_name: z.string().optional(),
-  emergency_contact_phone: z.string().optional(),
-  emergency_contact_relationship: z.string().optional(),
+  emergency_contact_name: z.string().optional().or(emptyToUndefined),
+  emergency_contact_phone: z.string().optional().or(emptyToUndefined),
+  emergency_contact_relationship: z.string().optional().or(emptyToUndefined),
 
   // Why join Yi
   motivation: z.string().min(20, 'Please tell us why you want to join Yi (minimum 20 characters)'),
-  how_did_you_hear: z.string().optional(),
+  how_did_you_hear: z.string().optional().or(emptyToUndefined),
 
   // Chapter
   preferred_chapter_id: z.string().uuid('Please select a chapter'),
@@ -97,19 +101,15 @@ export async function submitMemberRequest(formData: FormData): Promise<FormState
     preferred_chapter_id: formData.get('preferred_chapter_id') as string,
   }
 
-  console.log('🔍 Validating member request data...')
   const validation = memberRequestSchema.safeParse(rawData)
 
   if (!validation.success) {
-    console.error('❌ Validation failed:', validation.error.flatten().fieldErrors)
     return {
       success: false,
       message: 'Please check your form for errors',
       errors: validation.error.flatten().fieldErrors as Record<string, string[]>,
     }
   }
-
-  console.log('✅ Validation passed. Checking for existing requests...')
 
   try {
     // Check if email already has a pending or approved request
@@ -121,7 +121,6 @@ export async function submitMemberRequest(formData: FormData): Promise<FormState
       .single()
 
     if (existingRequest) {
-      console.log('⚠️ Existing request found:', existingRequest)
       return {
         success: false,
         message: existingRequest.status === 'pending'
@@ -131,23 +130,25 @@ export async function submitMemberRequest(formData: FormData): Promise<FormState
       }
     }
 
-    console.log('📝 Creating member request...')
+    // Strip undefined values so Postgres receives explicit NULLs / nothing
+    // instead of empty strings for typed columns (DATE, INT, UUID, enums).
+    const insertPayload = Object.fromEntries(
+      Object.entries({ ...validation.data, status: 'pending' }).filter(
+        ([, v]) => v !== undefined && v !== ''
+      )
+    )
+
     // Create member request
     const { data, error } = await supabase
       .from('member_requests')
-      .insert({
-        ...validation.data,
-        status: 'pending',
-      })
+      .insert(insertPayload)
       .select()
       .single()
 
     if (error) {
-      console.error('❌ Error creating member request:', error)
+      console.error('[submitMemberRequest] insert failed', error)
       throw error
     }
-
-    console.log('✅ Member request created successfully:', data?.id)
 
     // Invalidate cache
     revalidateTag('member-requests', 'max')
@@ -157,12 +158,11 @@ export async function submitMemberRequest(formData: FormData): Promise<FormState
       message: 'Application submitted successfully! We will review your application and contact you soon.',
       data,
     }
-  } catch (error: any) {
-    console.error('Error submitting member request:', error)
+  } catch (error: unknown) {
     return {
       success: false,
       message: 'Failed to submit application. Please try again.',
-      errors: { _form: [error.message] },
+      errors: { _form: [error instanceof Error ? error.message : 'Unknown error'] },
     }
   }
 }
@@ -180,8 +180,8 @@ export async function getMemberRequests(params?: {
   limit?: number
   offset?: number
 }) {
-  // Require Executive Member or above
-  await requireRole(['Super Admin', 'National Admin', 'Executive Member'])
+  // Require leadership roles (Chair, Co-Chair, EC Member) or above
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member'])
 
   // Use admin client to avoid FK validation issues with auth.users
   // This is safe because requireRole() ensures only admins can access this
@@ -223,7 +223,7 @@ export async function getMemberRequests(params?: {
  * Get single member request by ID (ADMIN ONLY)
  */
 export async function getMemberRequestById(id: string) {
-  await requireRole(['Super Admin', 'National Admin', 'Executive Member'])
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member'])
 
   // Use admin client to avoid FK validation issues with auth.users
   const supabase = createAdminSupabaseClient()
@@ -247,8 +247,8 @@ export async function getMemberRequestById(id: string) {
  */
 export async function approveMemberRequest(requestId: string, notes?: string): Promise<FormState> {
   try {
-    // Require Executive Member or above
-    const { user } = await requireRole(['Super Admin', 'National Admin', 'Executive Member'])
+    // Require leadership roles (Chair, Co-Chair, EC Member) or above
+    const { user } = await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member'])
 
     // Use admin client to avoid FK validation issues with auth.users
     const supabase = createAdminSupabaseClient()
@@ -339,12 +339,11 @@ export async function approveMemberRequest(requestId: string, notes?: string): P
       message: `${request.full_name} has been approved! They can now login with Google.`,
       data: approvedEmail,
     }
-  } catch (error: any) {
-    console.error('Error approving member request:', error)
+  } catch (error: unknown) {
     return {
       success: false,
       message: 'Failed to approve request',
-      errors: { _form: [error.message] },
+      errors: { _form: [error instanceof Error ? error.message : 'Unknown error'] },
     }
   }
 }
@@ -354,8 +353,8 @@ export async function approveMemberRequest(requestId: string, notes?: string): P
  */
 export async function rejectMemberRequest(requestId: string, notes: string): Promise<FormState> {
   try {
-    // Require Executive Member or above
-    const { user } = await requireRole(['Super Admin', 'National Admin', 'Executive Member'])
+    // Require leadership roles (Chair, Co-Chair, EC Member) or above
+    const { user } = await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member'])
 
     // Use admin client to avoid FK validation issues with auth.users
     const supabase = createAdminSupabaseClient()
@@ -415,12 +414,11 @@ export async function rejectMemberRequest(requestId: string, notes: string): Pro
       success: true,
       message: `Application from ${request.full_name} has been rejected.`,
     }
-  } catch (error: any) {
-    console.error('Error rejecting member request:', error)
+  } catch (error: unknown) {
     return {
       success: false,
       message: 'Failed to reject request',
-      errors: { _form: [error.message] },
+      errors: { _form: [error instanceof Error ? error.message : 'Unknown error'] },
     }
   }
 }
@@ -464,7 +462,10 @@ export async function withdrawMemberRequest(requestId: string): Promise<FormStat
         .select('role:roles(hierarchy_level)')
         .eq('user_id', user.id)
 
-      const isAdmin = roles?.some((r: any) => r.role?.hierarchy_level >= 5)
+      const isAdmin = roles?.some((r) => {
+        const role = r.role as { hierarchy_level?: number }[] | undefined;
+        return (role?.[0]?.hierarchy_level ?? 0) >= 5;
+      })
 
       if (!isAdmin) {
         return { success: false, message: 'Not authorized' }
@@ -486,12 +487,11 @@ export async function withdrawMemberRequest(requestId: string): Promise<FormStat
       success: true,
       message: 'Application withdrawn successfully',
     }
-  } catch (error: any) {
-    console.error('Error withdrawing member request:', error)
+  } catch (error: unknown) {
     return {
       success: false,
       message: 'Failed to withdraw request',
-      errors: { _form: [error.message] },
+      errors: { _form: [error instanceof Error ? error.message : 'Unknown error'] },
     }
   }
 }

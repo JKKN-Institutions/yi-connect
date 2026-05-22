@@ -53,8 +53,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { DataTablePagination } from '@/components/data-table/data-table-pagination'
 import { DataTableViewOptions } from '@/components/data-table/data-table-view-options'
-import { usersTableColumns } from './users-table-columns'
-import { RoleManagerDialog } from './role-manager-dialog'
+import { getUsersTableColumns } from './users-table-columns'
 import { BulkActionsBar } from './bulk-actions-bar'
 import { exportUsers } from '@/app/actions/users'
 import type { UserListItem } from '@/types/user'
@@ -75,10 +74,6 @@ export function UsersTable({ data, pageCount, roles, chapters }: UsersTableProps
   const [rowSelection, setRowSelection] = useState({})
   const [isRefreshing, startRefresh] = useTransition()
 
-  // Role manager dialog state
-  const [roleDialogOpen, setRoleDialogOpen] = useState(false)
-  const [selectedUserForRole, setSelectedUserForRole] = useState<UserListItem | null>(null)
-
   // Handle refresh
   const handleRefresh = () => {
     startRefresh(() => {
@@ -88,7 +83,7 @@ export function UsersTable({ data, pageCount, roles, chapters }: UsersTableProps
 
   const table = useReactTable({
     data,
-    columns: usersTableColumns,
+    columns: getUsersTableColumns(roles),
     pageCount,
     state: {
       sorting,
@@ -363,7 +358,7 @@ export function UsersTable({ data, pageCount, roles, chapters }: UsersTableProps
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={usersTableColumns.length} className='h-24 text-center'>
+                <TableCell colSpan={table.getAllColumns().length} className='h-24 text-center'>
                   No users found.
                 </TableCell>
               </TableRow>
@@ -374,19 +369,6 @@ export function UsersTable({ data, pageCount, roles, chapters }: UsersTableProps
 
       {/* Pagination */}
       <DataTablePagination table={table} />
-
-      {/* Role Manager Dialog */}
-      <RoleManagerDialog
-        open={roleDialogOpen}
-        onOpenChange={setRoleDialogOpen}
-        user={selectedUserForRole}
-        roles={roles}
-        onSuccess={() => {
-          setRoleDialogOpen(false)
-          setSelectedUserForRole(null)
-          router.refresh()
-        }}
-      />
     </div>
   )
 }

@@ -11,7 +11,7 @@ export const metadata = {
 };
 
 export default async function NewBestPracticePage() {
-  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']);
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member', 'Member']);
 
   return (
     <div className="space-y-6">

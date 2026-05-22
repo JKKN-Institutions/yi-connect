@@ -53,10 +53,10 @@ export function CycleCard({ cycle, showActions = true }: CycleCardProps) {
   const elapsed = start ? now.getTime() - start.getTime() : 0
   const progress = total > 0 ? Math.min(Math.max((elapsed / total) * 100, 0), 100) : 0
 
-  // Check deadlines
-  const nominationDeadline = new Date(cycle.nomination_deadline)
+  // Check deadlines - handle null/undefined dates safely
+  const nominationDeadline = cycle.nomination_deadline ? new Date(cycle.nomination_deadline) : null
   const juryDeadline = cycle.jury_deadline ? new Date(cycle.jury_deadline) : null
-  const isNominationOpen = now <= nominationDeadline && (cycle.status === 'nomination_open' || cycle.status === 'open')
+  const isNominationOpen = nominationDeadline && now <= nominationDeadline && (cycle.status === 'nomination_open' || cycle.status === 'open')
   const isJudgingOpen = juryDeadline && now <= juryDeadline && cycle.status && ['nomination_closed', 'nominations_closed', 'voting_open', 'judging'].includes(cycle.status)
 
   return (
@@ -121,7 +121,7 @@ export function CycleCard({ cycle, showActions = true }: CycleCardProps) {
 
         {/* Deadlines */}
         <div className="space-y-2">
-          {isNominationOpen && (
+          {isNominationOpen && nominationDeadline && (
             <div className="flex items-center gap-2 text-sm">
               <Clock className="h-4 w-4 text-orange-500" />
               <span className="text-muted-foreground">

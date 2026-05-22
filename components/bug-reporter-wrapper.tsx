@@ -37,24 +37,10 @@ export function BugReporterWrapper({ children, userProfile }: BugReporterWrapper
   const apiKey = process.env.NEXT_PUBLIC_BUG_REPORTER_API_KEY
   const apiUrl = process.env.NEXT_PUBLIC_BUG_REPORTER_API_URL
 
-  console.log('[BugReporter] Config check:', {
-    hasApiKey: !!apiKey,
-    hasApiUrl: !!apiUrl,
-    apiKey: apiKey,
-    hasUserProfile: !!userProfile,
-    userProfile: userProfile
-  })
-
   // If not configured or no user, just render children (no bug reporter)
   if (!apiKey || !apiUrl || apiKey === 'app_your_api_key_here' || !userProfile) {
-    console.log('[BugReporter] Not rendering - missing config or user profile')
     return <>{children}</>
   }
-
-  console.log('[BugReporter] Rendering with user:', {
-    userId: userProfile.id,
-    name: userProfile.full_name || userProfile.email?.split('@')[0] || 'Unknown User'
-  })
 
   // Adjust bug reporter button position on mobile to avoid bottom navbar conflict
   useEffect(() => {

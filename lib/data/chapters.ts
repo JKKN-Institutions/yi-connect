@@ -68,7 +68,6 @@ export async function getChapters(
   const { data, error, count } = await query
 
   if (error) {
-    console.error('Error fetching chapters:', error)
     throw new Error('Failed to fetch chapters')
   }
 
@@ -95,7 +94,6 @@ export async function getUniqueRegions(): Promise<string[]> {
     .order('region')
 
   if (error) {
-    console.error('Error fetching regions:', error)
     return []
   }
 
@@ -110,35 +108,17 @@ export async function getUniqueRegions(): Promise<string[]> {
  * @returns Array of chapter options
  */
 export async function getAllChapters(): Promise<ChapterOption[]> {
-  console.log('🔍 getAllChapters: Starting to fetch chapters...')
-
   const supabase = await createServerSupabaseClient()
-  console.log('✅ getAllChapters: Supabase client created')
 
   const { data, error } = await supabase
     .from('chapters')
     .select('id, name, location')
     .order('name')
 
-  console.log('📊 getAllChapters: Query result:', {
-    hasData: !!data,
-    dataLength: data?.length || 0,
-    hasError: !!error,
-    error: error
-  })
-
   if (error) {
-    console.error('❌ Error fetching all chapters:', error)
-    console.error('Error details:', {
-      message: error.message,
-      code: error.code,
-      details: error.details,
-      hint: error.hint
-    })
     throw new Error('Failed to fetch chapters')
   }
 
-  console.log('✅ getAllChapters: Returning chapters:', data)
   return (data || []) as ChapterOption[]
 }
 
@@ -158,7 +138,6 @@ export async function getChapterById(id: string) {
     .single()
 
   if (error) {
-    console.error('Error fetching chapter:', error)
     return null
   }
 

@@ -53,7 +53,7 @@ async function BudgetDetail({ budgetId }: { budgetId: string }) {
           <div>
             <h1 className="text-3xl font-bold tracking-tight">{budget.name}</h1>
             <p className="text-muted-foreground">
-              FY {budget.fiscal_year} • {startDate.toLocaleDateString()} - {endDate.toLocaleDateString()}
+              {budget.calendar_year} • {startDate.toLocaleDateString()} - {endDate.toLocaleDateString()}
             </p>
           </div>
         </div>
@@ -85,7 +85,7 @@ async function BudgetDetail({ budgetId }: { budgetId: string }) {
           <CardContent>
             <div className="text-2xl font-bold">{formatCurrency(budget.total_amount)}</div>
             <p className="text-xs text-muted-foreground mt-1">
-              Allocated for FY {budget.fiscal_year}
+              Allocated for {budget.calendar_year}
             </p>
           </CardContent>
         </Card>
@@ -155,8 +155,8 @@ async function BudgetDetail({ budgetId }: { budgetId: string }) {
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <p className="text-sm font-medium">Fiscal Year</p>
-              <p className="text-sm text-muted-foreground">{budget.fiscal_year}</p>
+              <p className="text-sm font-medium">Calendar Year</p>
+              <p className="text-sm text-muted-foreground">{budget.calendar_year}</p>
             </div>
             <div>
               <p className="text-sm font-medium">Period</p>

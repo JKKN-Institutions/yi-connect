@@ -2,7 +2,7 @@
  * Admin User Detail Page
  *
  * Detailed view of a single user with full profile, roles, and activity history.
- * Restricted to Super Admin and National Admin only.
+ * Restricted to Super Admin, National Admin, and Chair.
  */
 
 import { Suspense } from 'react'
@@ -15,15 +15,14 @@ import {
   Shield,
   Mail,
   Phone,
-  MapPin,
   Calendar,
-  User,
   Building2,
-  Activity
+  Activity,
 } from 'lucide-react'
 
-import { requireRole } from '@/lib/auth'
+import { requireRole, getUserHierarchyLevel } from '@/lib/auth'
 import { getUserById } from '@/lib/data/users'
+import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -36,6 +35,8 @@ import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
+import { ImpersonateButtonWrapper } from '@/components/admin/impersonate-button-server'
+import { RoleManagerDialogTrigger } from '@/components/admin/users/role-manager-dialog'
 
 interface PageProps {
   params: Promise<{
@@ -56,8 +57,11 @@ async function UserDetailContent({ paramsPromise }: { paramsPromise: Promise<{ i
   // Await params inside Suspense boundary
   const params = await paramsPromise
 
-  // Require Super Admin or National Admin
-  await requireRole(['Super Admin', 'National Admin'])
+  // Require Super Admin, National Admin, or Chair
+  await requireRole(['Super Admin', 'National Admin', 'Chair'])
+
+  // Get admin's hierarchy level for impersonation check
+  const adminHierarchyLevel = await getUserHierarchyLevel()
 
   const user = await getUserById(params.id)
 
@@ -65,11 +69,27 @@ async function UserDetailContent({ paramsPromise }: { paramsPromise: Promise<{ i
     notFound()
   }
 
-  const initials = user.full_name
+  // Fetch roles for role management
+  const supabase = await createServerSupabaseClient()
+  const { data: roles } = await supabase
+    .from('roles')
+    .select('*')
+    .order('hierarchy_level', { ascending: false })
+
+  const initials = (user.full_name || 'U')
     .split(' ')
-    .map((n) => n[0])
+    .map((n) => n?.[0] || '')
+    .filter(Boolean)
     .join('')
-    .toUpperCase()
+    .toUpperCase() || 'U'
+
+  // Check if admin can impersonate this user
+  // Conditions: Admin level >= 6 and higher than user's level
+  const canImpersonate =
+    adminHierarchyLevel >= 6 && user.hierarchy_level < adminHierarchyLevel
+
+  // Get primary role name for impersonation
+  const primaryRole = user.roles[0]?.role_name || 'No Role'
 
   return (
     <div className='flex flex-1 flex-col gap-6 p-6'>
@@ -285,16 +305,29 @@ async function UserDetailContent({ paramsPromise }: { paramsPromise: Promise<{ i
               <CardTitle>Quick Actions</CardTitle>
             </CardHeader>
             <CardContent className='space-y-2'>
+              {canImpersonate && (
+                <ImpersonateButtonWrapper
+                  userId={user.id}
+                  userName={user.full_name}
+                  userRole={primaryRole}
+                  userChapter={user.chapter?.name}
+                  userEmail={user.email}
+                  userAvatar={user.avatar_url}
+                  variant='outline'
+                  className='w-full justify-start'
+                />
+              )}
               <Button variant='outline' className='w-full justify-start' asChild>
                 <Link href={`/admin/users/${user.id}/edit`}>
                   <Pencil className='mr-2 h-4 w-4' />
                   Edit Profile
                 </Link>
               </Button>
-              <Button variant='outline' className='w-full justify-start'>
-                <Shield className='mr-2 h-4 w-4' />
-                Manage Roles
-              </Button>
+              <RoleManagerDialogTrigger
+                user={user}
+                roles={roles || []}
+                trigger='button'
+              />
               <Button
                 variant='outline'
                 className='w-full justify-start'

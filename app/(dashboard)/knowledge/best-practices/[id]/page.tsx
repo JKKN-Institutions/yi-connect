@@ -72,7 +72,7 @@ async function BestPracticeContent({ practiceId }: { practiceId: string }) {
     // Get highest hierarchy level from user's roles
     // EC Member (level 2) and above can review best practices
     const highestLevel = userRoles?.reduce((max, ur) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       const roles = ur.roles as any;
       const level = roles?.hierarchy_level ?? 0;
       return Math.max(max, level);

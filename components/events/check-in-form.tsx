@@ -118,7 +118,7 @@ export function CheckInForm({ eventId, userId }: CheckInFormProps) {
                 <SelectContent>
                   <SelectItem value='qr_code'>QR Code Scan</SelectItem>
                   <SelectItem value='manual'>Manual Entry</SelectItem>
-                  <SelectItem value='self'>Self Check-in</SelectItem>
+                  <SelectItem value='self_checkin'>Self Check-in</SelectItem>
                 </SelectContent>
               </Select>
               <FormDescription>

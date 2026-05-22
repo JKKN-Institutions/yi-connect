@@ -7,9 +7,9 @@
 import { Suspense } from 'react'
 import Link from 'next/link'
 import { redirect, notFound } from 'next/navigation'
-import { Plus, FileSignature, Target } from 'lucide-react'
+import { Plus, FileSignature, Target, ClipboardList } from 'lucide-react'
 import { requireRole, getCurrentUser, getCurrentChapterId } from '@/lib/auth'
-import { getPathfinderDashboard, getCurrentFiscalYear } from '@/lib/data/aaa'
+import { getPathfinderDashboard, getCurrentCalendarYear } from '@/lib/data/aaa'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { AAADashboard } from '@/components/pathfinder/aaa-dashboard'
@@ -20,7 +20,7 @@ export const metadata = {
 }
 
 export default async function PathfinderPage() {
-  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair'])
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'EC Member'])
 
   return (
     <div className="flex flex-col gap-6 max-w-7xl mx-auto">
@@ -29,10 +29,16 @@ export default async function PathfinderPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Pathfinder Dashboard</h1>
           <p className="text-muted-foreground mt-1">
-            AAA Framework tracking for FY{getCurrentFiscalYear()}
+            AAA Framework tracking for {getCurrentCalendarYear()}
           </p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" asChild>
+            <Link href="/pathfinder/health-card">
+              <ClipboardList className="h-4 w-4 mr-2" />
+              Health Card
+            </Link>
+          </Button>
           <Button variant="outline" asChild>
             <Link href="/pathfinder/commitment">
               <FileSignature className="h-4 w-4 mr-2" />
@@ -75,8 +81,8 @@ async function DashboardContent() {
     )
   }
 
-  const fiscalYear = getCurrentFiscalYear()
-  const dashboard = await getPathfinderDashboard(chapterId, fiscalYear)
+  const calendarYear = getCurrentCalendarYear()
+  const dashboard = await getPathfinderDashboard(chapterId, calendarYear)
 
   if (!dashboard) {
     return (
@@ -84,7 +90,7 @@ async function DashboardContent() {
         <Target className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
         <h2 className="text-xl font-semibold mb-2">No Data Available</h2>
         <p className="text-muted-foreground">
-          No Pathfinder data found for this chapter and fiscal year.
+          No Pathfinder data found for this chapter and calendar year.
         </p>
       </div>
     )

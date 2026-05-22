@@ -39,11 +39,11 @@ export const createBudgetSchema = z.object({
     .min(1, 'Budget name is required')
     .max(255, 'Budget name is too long'),
   description: z.string().max(1000, 'Description is too long').optional(),
-  fiscal_year: z.coerce
+  calendar_year: z.coerce
     .number()
-    .int('Fiscal year must be a whole number')
-    .min(2020, 'Fiscal year must be 2020 or later')
-    .max(2100, 'Fiscal year must be before 2100'),
+    .int('Calendar year must be a whole number')
+    .min(2020, 'Calendar year must be 2020 or later')
+    .max(2100, 'Calendar year must be before 2100'),
   period: z.enum(['quarterly', 'annual', 'custom']),
   quarter: z.coerce
     .number()
@@ -206,6 +206,8 @@ export const createSponsorSchema = z.object({
   organization_name: z.string()
     .min(1, 'Organization name is required')
     .max(255, 'Organization name is too long'),
+  display_name: z.string().max(255).optional(),
+  logo_url: z.string().url('Invalid logo URL').optional().or(z.literal('')),
   industry: z.string().max(100).optional(),
   website: z.string().url('Invalid website URL').optional().or(z.literal('')),
   contact_person_name: z.string().max(255).optional(),
@@ -235,6 +237,8 @@ export const createSponsorSchema = z.object({
 
 export const updateSponsorSchema = z.object({
   organization_name: z.string().min(1).max(255).optional(),
+  display_name: z.string().max(255).optional(),
+  logo_url: z.string().url().optional().or(z.literal('')),
   industry: z.string().max(100).optional(),
   website: z.string().url().optional().or(z.literal('')),
   contact_person_name: z.string().max(255).optional(),
@@ -264,15 +268,21 @@ export const deleteSponsorSchema = z.object({
 // SPONSORSHIP TIER VALIDATION SCHEMAS
 // ================================================
 
+const benefitItemSchema = z.object({
+  label: z.string().min(1, 'Benefit label is required').max(200),
+  included: z.boolean().default(true),
+})
+
 export const createSponsorshipTierSchema = z.object({
   name: z.string().min(1, 'Tier name is required').max(100),
   tier_level: z.enum(['platinum', 'gold', 'silver', 'bronze', 'supporter']),
   min_amount: positiveDecimal,
   max_amount: positiveDecimal.optional(),
-  benefits: z.array(z.string()).optional(),
+  benefits: z.array(benefitItemSchema).optional(),
   description: z.string().max(1000).optional(),
   color: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
   icon: z.string().max(50).optional(),
+  sort_order: z.coerce.number().int().min(0).optional(),
   chapter_id: z.string().uuid('Invalid chapter ID'),
 })
   .refine(
@@ -284,13 +294,16 @@ export const createSponsorshipTierSchema = z.object({
   )
 
 export const updateSponsorshipTierSchema = z.object({
+  tier_id: z.string().uuid('Invalid tier ID'),
   name: z.string().min(1).max(100).optional(),
+  tier_level: z.enum(['platinum', 'gold', 'silver', 'bronze', 'supporter']).optional(),
   min_amount: positiveDecimal.optional(),
   max_amount: positiveDecimal.optional().nullable(),
-  benefits: z.array(z.string()).optional(),
+  benefits: z.array(benefitItemSchema).optional(),
   description: z.string().max(1000).optional(),
   color: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
   icon: z.string().max(50).optional(),
+  sort_order: z.coerce.number().int().min(0).optional(),
   is_active: z.boolean().optional(),
 })
 
@@ -322,7 +335,7 @@ export const createSponsorshipDealSchema = z.object({
   proposal_date: z.string().optional(),
   expected_closure_date: z.string().optional(),
   event_id: z.string().uuid('Invalid event ID').optional(),
-  fiscal_year: z.coerce.number().int().min(2020).max(2100).optional(),
+  calendar_year: z.coerce.number().int().min(2020).max(2100).optional(),
   probability_percentage: percentageNumber.default(50),
   point_of_contact: z.string().uuid('Invalid user ID').optional(),
   assigned_to: z.string().uuid('Invalid user ID').optional(),
@@ -506,7 +519,7 @@ export const deletePaymentMethodSchema = z.object({
 // ================================================
 
 export const budgetFiltersSchema = z.object({
-  fiscal_year: z.coerce.number().int().optional(),
+  calendar_year: z.coerce.number().int().optional(),
   period: z.enum(['quarterly', 'annual', 'custom']).optional(),
   status: z.union([
     z.enum(['draft', 'approved', 'active', 'closed']),
@@ -553,7 +566,7 @@ export const sponsorshipDealFiltersSchema = z.object({
     z.enum(['prospect', 'contacted', 'proposal_sent', 'negotiation', 'committed', 'contract_signed', 'payment_received', 'lost']),
     z.array(z.enum(['prospect', 'contacted', 'proposal_sent', 'negotiation', 'committed', 'contract_signed', 'payment_received', 'lost'])),
   ]).optional(),
-  fiscal_year: z.coerce.number().int().optional(),
+  calendar_year: z.coerce.number().int().optional(),
   event_id: z.string().uuid().optional(),
   assigned_to: z.string().uuid().optional(),
   expected_closure_from: z.string().optional(),

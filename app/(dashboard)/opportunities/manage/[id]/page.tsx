@@ -59,7 +59,7 @@ interface PageProps {
 }
 
 export default async function OpportunityManageDetailPage({ params }: PageProps) {
-  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair'])
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Industry Coordinator'])
 
   return (
     <Suspense fallback={<ManageDetailSkeleton />}>

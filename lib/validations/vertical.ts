@@ -27,13 +27,13 @@ import {
 const uuidSchema = z.string().uuid('Invalid UUID format')
 
 /**
- * Fiscal year validator (2020-2099)
+ * Calendar year validator (2020-2099)
  */
-const fiscalYearSchema = z
+const calendarYearSchema = z
   .number()
-  .int('Fiscal year must be an integer')
-  .min(2020, 'Fiscal year must be 2020 or later')
-  .max(2099, 'Fiscal year must be 2099 or earlier')
+  .int('Calendar year must be an integer')
+  .min(2020, 'Calendar year must be 2020 or later')
+  .max(2099, 'Calendar year must be 2099 or earlier')
 
 /**
  * Quarter validator (1-4)
@@ -252,7 +252,7 @@ const kpiItemSchema = z.object({
 export const createVerticalPlanSchema = z
   .object({
     vertical_id: uuidSchema,
-    fiscal_year: fiscalYearSchema,
+    calendar_year: calendarYearSchema,
     plan_name: z
       .string()
       .min(3, 'Plan name must be at least 3 characters')
@@ -542,7 +542,7 @@ export const updateActivitySchema = z.object({
 export const createPerformanceReviewSchema = z.object({
   vertical_id: uuidSchema,
   chair_id: uuidSchema,
-  fiscal_year: fiscalYearSchema,
+  calendar_year: calendarYearSchema,
   quarter: quarterSchema,
   overall_rating: ratingSchema,
   kpi_achievement_rate: percentageSchema.optional(),
@@ -656,7 +656,7 @@ export const verticalFiltersSchema = z.object({
 export const kpiFiltersSchema = z.object({
   plan_id: uuidSchema.optional(),
   vertical_id: uuidSchema.optional(),
-  fiscal_year: fiscalYearSchema.optional(),
+  calendar_year: calendarYearSchema.optional(),
   metric_type: z
     .enum([
       METRIC_TYPES.COUNT,
@@ -675,7 +675,7 @@ export const kpiFiltersSchema = z.object({
  */
 export const activityFiltersSchema = z.object({
   vertical_id: uuidSchema.optional(),
-  fiscal_year: fiscalYearSchema.optional(),
+  calendar_year: calendarYearSchema.optional(),
   quarter: quarterSchema.optional(),
   activity_type: z
     .enum([
@@ -699,7 +699,7 @@ export const activityFiltersSchema = z.object({
  */
 export const reviewFiltersSchema = z.object({
   vertical_id: uuidSchema.optional(),
-  fiscal_year: fiscalYearSchema.optional(),
+  calendar_year: calendarYearSchema.optional(),
   quarter: quarterSchema.optional(),
   status: z.enum([REVIEW_STATUSES.PENDING, REVIEW_STATUSES.COMPLETED, REVIEW_STATUSES.PUBLISHED]).optional(),
   reviewed_by: uuidSchema.optional(),

@@ -28,7 +28,8 @@
       "Task(*)",
       "Skill(*)",
       "SlashCommand(*)",
-      "mcp__*"
+      "mcp__*",
+      "WebFetch(domain:yi-connect-app.vercel.app)"
     ],
     "deny": [
       "Bash(rm -rf:*)",

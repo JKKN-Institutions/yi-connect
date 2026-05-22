@@ -9,7 +9,8 @@ import Link from 'next/link'
 import { redirect, notFound } from 'next/navigation'
 import { ArrowLeft } from 'lucide-react'
 import { requireRole, getCurrentUser } from '@/lib/auth'
-import { getCurrentFiscalYear } from '@/lib/data/aaa'
+import { getCurrentCalendarYear } from '@/lib/data/aaa'
+import { getAAADefaults } from '@/lib/data/aaa-defaults'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -79,19 +80,21 @@ async function NewPlanContent({
 
   const supabase = await createClient()
 
-  // Get user's roles from user_roles table (same pattern as dashboard layout)
+  // Get user roles (same pattern as dashboard-sidebar and requireRole)
   const { data: userRoles } = await supabase.rpc('get_user_roles', {
     p_user_id: user.id
   })
   const roles = userRoles?.map((ur: { role_name: string }) => ur.role_name) || []
 
+  // Admin check - Super Admin or National Admin can create for any chapter
   const isAdmin = roles.includes('Super Admin') || roles.includes('National Admin')
 
   // Get user's chapter from member record
-  const { data: member } = await supabase
+  // Note: members.id = profiles.id = auth user id (NOT user_id)
+  const { data: member, error: memberError } = await supabase
     .from('members')
     .select('id, chapter_id')
-    .eq('user_id', user.id)
+    .eq('id', user.id)
     .single()
 
   // Determine which chapter to use
@@ -113,9 +116,9 @@ async function NewPlanContent({
 
   // If still no chapter and user is admin, show chapter selector
   if (!chapterId && isAdmin) {
-    const { data: chapters } = await supabase
+    const { data: chapters, error: chaptersError } = await supabase
       .from('chapters')
-      .select('id, name, city')
+      .select('id, name, location')
       .eq('status', 'active')
       .order('name')
 
@@ -141,7 +144,7 @@ async function NewPlanContent({
                   </div>
                   <div>
                     <p className="font-medium">{c.name}</p>
-                    <p className="text-sm text-muted-foreground">{c.city}</p>
+                    <p className="text-sm text-muted-foreground">{c.location}</p>
                   </div>
                 </Link>
               ))}
@@ -227,24 +230,28 @@ async function NewPlanContent({
   }
 
   // Check if plan already exists for this vertical and year
-  const fiscalYear = getCurrentFiscalYear()
+  const calendarYear = getCurrentCalendarYear()
   const { data: existingPlan } = await supabase
     .from('aaa_plans')
     .select('id')
     .eq('vertical_id', verticalId)
-    .eq('fiscal_year', fiscalYear)
+    .eq('calendar_year', calendarYear)
     .single()
 
   if (existingPlan) {
     redirect(`/pathfinder/plans/${existingPlan.id}`)
   }
 
+  // Get AAA defaults for this vertical (suggestions from Pathfinder 2026)
+  const defaults = getAAADefaults(selectedVertical.slug, selectedVertical.name)
+
   return (
     <AAAPlanForm
       verticalId={verticalId}
       verticalName={selectedVertical.name}
       chapterId={chapterId}
-      fiscalYear={fiscalYear}
+      calendarYear={calendarYear}
+      defaults={defaults}
     />
   )
 }

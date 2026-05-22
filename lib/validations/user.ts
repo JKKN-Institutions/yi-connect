@@ -101,6 +101,19 @@ export const changeUserStatusSchema = z.object({
 
 export type ChangeUserStatusInput = z.infer<typeof changeUserStatusSchema>
 
+/**
+ * Bulk deactivate users schema
+ */
+export const bulkDeactivateUsersSchema = z.object({
+  user_ids: z
+    .array(z.string().uuid('Invalid user ID'))
+    .min(1, 'Select at least one user')
+    .max(100, 'Cannot deactivate more than 100 users at once'),
+  notes: z.string().max(500, 'Notes must be less than 500 characters').optional()
+})
+
+export type BulkDeactivateUsersInput = z.infer<typeof bulkDeactivateUsersSchema>
+
 // ============================================================================
 // Bulk Chapter Assignment Validation
 // ============================================================================

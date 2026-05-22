@@ -514,7 +514,7 @@ async function getVerticalRecommendations(
   }
 
   // Score each vertical based on energy focus and age group match
-  const scoredVerticals: AlternativeVertical[] = verticals.map((v: any) => {
+  const scoredVerticals: AlternativeVertical[] = verticals.map((v: { id: string; name: string }) => {
     let matchScore = 50 // Base score
 
     // Match energy focus to vertical type

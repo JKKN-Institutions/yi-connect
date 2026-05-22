@@ -100,14 +100,15 @@ export const getUserProfile = cache(async () => {
   // Fetch profile and chapter separately to avoid auth.users permission issues
   const { data: profile } = await supabase
     .from('profiles')
-    .select('*, chapter:chapters(*)')
+    .select('*, chapter:chapters!profiles_chapter_id_fkey(*)')
     .eq('id', user.id)
     .single()
 
   if (!profile) return null
 
   // Use the secure database function to get roles
-  const { data: userRoles } = await supabase.rpc('get_user_roles', {
+  // Note: get_user_roles_detailed returns role_id, role_name, hierarchy_level, permissions
+  const { data: userRoles } = await supabase.rpc('get_user_roles_detailed', {
     p_user_id: user.id
   })
 
@@ -130,19 +131,20 @@ export const getUserProfile = cache(async () => {
  */
 export async function requireRole(allowedRoles: string[]) {
   const user = await requireAuth()
+
   const supabase = await createServerSupabaseClient()
 
   // Use the secure database function to avoid permission errors with auth.users
-  const { data: userRoles, error } = await supabase.rpc('get_user_roles', {
+  const { data: userRoles, error } = await supabase.rpc('get_user_roles_detailed', {
     p_user_id: user.id
   })
 
   if (error) {
-    console.error('Error fetching user roles:', error)
     redirect('/unauthorized')
   }
 
   const userRoleNames = userRoles?.map((ur: { role_name: string }) => ur.role_name) || []
+
   const hasRequiredRole = allowedRoles.some((role: string) => userRoleNames.includes(role))
 
   if (!hasRequiredRole) {
@@ -188,11 +190,23 @@ export async function hasPermission(
   const supabase = await createServerSupabaseClient()
 
   // Get user roles with permissions
-  const { data: userRoles, error } = await supabase.rpc('get_user_roles', {
+  const { data: userRoles, error } = await supabase.rpc('get_user_roles_detailed', {
     p_user_id: user.id
   })
 
-  if (error || !userRoles || userRoles.length === 0) return false
+  // ✅ Log RPC errors for debugging
+  if (error) {
+    console.error('[hasPermission] RPC failed:', {
+      user_id: user.id,
+      permission,
+      error: error.message,
+      code: error.code,
+      context
+    })
+    return false
+  }
+
+  if (!userRoles || userRoles.length === 0) return false
 
   // Get highest hierarchy level
   const maxHierarchy = Math.max(
@@ -327,7 +341,7 @@ export const getUserHierarchyLevel = cache(async (): Promise<number> => {
 
   const supabase = await createServerSupabaseClient()
 
-  const { data: userRoles } = await supabase.rpc('get_user_roles', {
+  const { data: userRoles } = await supabase.rpc('get_user_roles_detailed', {
     p_user_id: user.id
   })
 
@@ -375,3 +389,86 @@ export const getCurrentMemberId = cache(async (): Promise<string | null> => {
   if (!user) return null
   return user.id
 })
+
+/**
+ * Get the effective user ID (handles impersonation)
+ *
+ * Returns the impersonated user's ID if currently impersonating,
+ * otherwise returns the actual authenticated user's ID.
+ *
+ * Use this in data fetching where you want to respect impersonation context.
+ *
+ * Usage:
+ * ```typescript
+ * const effectiveUserId = await getEffectiveUserId()
+ * // Use this for data queries that should show impersonated user's data
+ * ```
+ */
+export const getEffectiveUserId = cache(async (): Promise<string | null> => {
+  const user = await getCurrentUser()
+  if (!user) return null
+
+  // Check for impersonation session
+  try {
+    const { cookies } = await import('next/headers')
+    const cookieStore = await cookies()
+    const impersonationCookie = cookieStore.get('yi-impersonation-session')
+
+    if (impersonationCookie?.value) {
+      const sessionData = JSON.parse(impersonationCookie.value)
+
+      // Verify the session belongs to current user and hasn't expired
+      if (
+        sessionData.admin_id === user.id &&
+        new Date(sessionData.expires_at) > new Date()
+      ) {
+        return sessionData.target_user_id
+      }
+    }
+  } catch {
+    // If cookie parsing fails, return actual user
+  }
+
+  return user.id
+})
+
+/**
+ * Check if the current session is impersonating
+ *
+ * Returns details about the impersonation if active.
+ */
+export async function getImpersonationInfo(): Promise<{
+  isImpersonating: boolean
+  adminId: string | null
+  targetUserId: string | null
+}> {
+  const user = await getCurrentUser()
+  if (!user) {
+    return { isImpersonating: false, adminId: null, targetUserId: null }
+  }
+
+  try {
+    const { cookies } = await import('next/headers')
+    const cookieStore = await cookies()
+    const impersonationCookie = cookieStore.get('yi-impersonation-session')
+
+    if (impersonationCookie?.value) {
+      const sessionData = JSON.parse(impersonationCookie.value)
+
+      if (
+        sessionData.admin_id === user.id &&
+        new Date(sessionData.expires_at) > new Date()
+      ) {
+        return {
+          isImpersonating: true,
+          adminId: sessionData.admin_id,
+          targetUserId: sessionData.target_user_id,
+        }
+      }
+    }
+  } catch {
+    // Cookie parsing failed
+  }
+
+  return { isImpersonating: false, adminId: null, targetUserId: null }
+}

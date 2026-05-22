@@ -104,7 +104,9 @@ export const eligibilityCriteriaSchema = z.object({
 // OPPORTUNITY SCHEMAS
 // ============================================================================
 
-export const createOpportunitySchema = z.object({
+// Base schema without refinements - used for .partial() operations
+// Zod 4 does not allow .partial() on schemas containing refinements
+const opportunityBaseSchema = z.object({
   industry_id: uuidSchema,
   chapter_id: uuidSchema.optional(),
   title: z.string().min(1, 'Title is required').max(255, 'Title is too long'),
@@ -148,7 +150,10 @@ export const createOpportunitySchema = z.object({
   tags: z.array(z.string()).optional(),
   banner_image_url: z.string().regex(urlRegex, 'Invalid URL').optional().or(z.literal('')),
   visibility: visibilitySchema.optional(),
-}).refine(
+})
+
+// Create schema with refinements for validation
+export const createOpportunitySchema = opportunityBaseSchema.refine(
   (data) => {
     if (data.start_date && data.end_date) {
       return new Date(data.end_date) >= new Date(data.start_date)
@@ -183,7 +188,8 @@ export const createOpportunitySchema = z.object({
   }
 )
 
-export const updateOpportunitySchema = createOpportunitySchema.partial().extend({
+// Update schema uses base schema (without refinements) for .partial()
+export const updateOpportunitySchema = opportunityBaseSchema.partial().extend({
   status: opportunityStatusSchema.optional(),
   banner_image_url: z.string().regex(urlRegex, 'Invalid URL').optional().or(z.literal('')),
   attachment_urls: z.array(z.string().regex(urlRegex)).optional(),

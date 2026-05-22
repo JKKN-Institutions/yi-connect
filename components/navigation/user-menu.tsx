@@ -35,7 +35,7 @@ interface UserMenuProps {
 }
 
 export function UserMenu({ profile }: UserMenuProps) {
-  // Mounted state to prevent hydration mismatch
+  // Mounted state to prevent hydration mismatch with Radix UI
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
@@ -44,20 +44,34 @@ export function UserMenu({ profile }: UserMenuProps) {
 
   if (!profile) return null
 
-  const initials = profile.full_name
+  const initials = ((profile.full_name || 'U')
     .split(' ')
-    .map((n) => n[0])
+    .map((n) => n?.[0] || '')
+    .filter(Boolean)
     .join('')
-    .toUpperCase()
+    .toUpperCase() || 'U')
     .slice(0, 2)
 
   // Sort roles by hierarchy level (highest first)
-  const sortedRoles = profile.roles?.sort((a, b) =>
+  const sortedRoles = [...(profile.roles || [])].sort((a, b) =>
     (b.hierarchy_level || 0) - (a.hierarchy_level || 0)
-  ) || []
+  )
 
-  // Get the primary role (highest hierarchy level) - only after mount
-  const primaryRole = mounted ? sortedRoles[0] : null
+  // Get the primary role (highest hierarchy level)
+  const primaryRole = sortedRoles[0] || null
+
+  // Render placeholder until mounted to prevent Radix hydration mismatch
+  if (!mounted) {
+    return (
+      <Button variant="ghost" className="relative h-10 w-10 rounded-full">
+        <Avatar className="h-10 w-10">
+          <AvatarFallback className="bg-primary text-primary-foreground">
+            {initials}
+          </AvatarFallback>
+        </Avatar>
+      </Button>
+    )
+  }
 
   return (
     <DropdownMenu>

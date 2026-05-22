@@ -18,9 +18,9 @@ export const entryMethodSchema = z.enum(['manual', 'self_service']);
 // ==================== INDUSTRIAL VISIT SCHEMAS ====================
 
 /**
- * Create Industrial Visit
+ * Base schema for Industrial Visit without refinements
  */
-export const createIVSchema = z.object({
+const ivBaseSchema = z.object({
   // Basic Event Info
   title: z.string().min(3, 'Title must be at least 3 characters').max(255, 'Title must be less than 255 characters'),
   description: z.string().nullable().optional(),
@@ -54,7 +54,12 @@ export const createIVSchema = z.object({
   // Optional
   banner_image_url: z.string().url('Invalid URL format').nullable().optional(),
   tags: z.array(z.string()).nullable().optional(),
-}).refine(
+});
+
+/**
+ * Create Industrial Visit
+ */
+export const createIVSchema = ivBaseSchema.refine(
   (data) => new Date(data.end_date) > new Date(data.start_date),
   {
     message: 'End date must be after start date',
@@ -65,7 +70,7 @@ export const createIVSchema = z.object({
 /**
  * Update Industrial Visit
  */
-export const updateIVSchema = createIVSchema.partial().extend({
+export const updateIVSchema = ivBaseSchema.partial().extend({
   id: z.string().uuid('Invalid IV ID'),
 });
 
@@ -96,9 +101,9 @@ export const rateHostSchema = z.object({
 // ==================== IV BOOKING SCHEMAS ====================
 
 /**
- * Create IV Booking (RSVP)
+ * Base schema for IV Booking without refinements
  */
-export const createIVBookingSchema = z.object({
+const ivBookingBaseSchema = z.object({
   event_id: z.string().uuid('Invalid event ID'),
   member_id: z.string().uuid('Invalid member ID'),
 
@@ -116,7 +121,12 @@ export const createIVBookingSchema = z.object({
   dietary_restrictions: z.string().max(500).nullable().optional(),
   special_requirements: z.string().max(500).nullable().optional(),
   notes: z.string().max(1000).nullable().optional(),
-}).refine(
+});
+
+/**
+ * Create IV Booking (RSVP)
+ */
+export const createIVBookingSchema = ivBookingBaseSchema.refine(
   (data) => {
     // If offering ride, seats_available must be provided
     if (data.carpool_status === 'offering_ride') {
@@ -145,7 +155,7 @@ export const createIVBookingSchema = z.object({
 /**
  * Update IV Booking
  */
-export const updateIVBookingSchema = createIVBookingSchema.partial().extend({
+export const updateIVBookingSchema = ivBookingBaseSchema.partial().extend({
   id: z.string().uuid('Invalid booking ID'),
 });
 

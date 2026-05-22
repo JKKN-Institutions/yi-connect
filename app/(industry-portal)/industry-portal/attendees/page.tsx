@@ -12,6 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Skeleton } from '@/components/ui/skeleton';
 import { IndustryAttendeesTable } from '@/components/industrial-visits/industry-portal/industry-attendees-table';
 import { getAllIndustryAttendees, getMyIndustrySlots } from '@/lib/data/industrial-visits';
+import { getCurrentIndustryId } from '@/lib/auth/industry-portal';
 
 export const metadata: Metadata = {
   title: 'Attendees | Industry Portal',
@@ -20,11 +21,6 @@ export const metadata: Metadata = {
 
 // Force dynamic rendering since this page uses cookies for authentication
 export const dynamic = 'force-dynamic';
-
-// Temporary helper to get industry ID from auth
-async function getCurrentIndustryId(): Promise<string | null> {
-  return 'placeholder-industry-id';
-}
 
 async function AttendeesContent({
   searchParams,

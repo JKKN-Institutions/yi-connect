@@ -521,7 +521,7 @@ export interface KnowledgeNotification {
     document_id?: string;
     wiki_page_id?: string;
     best_practice_id?: string;
-    [key: string]: any;
+    [key: string]: string | undefined;
   };
 }
 

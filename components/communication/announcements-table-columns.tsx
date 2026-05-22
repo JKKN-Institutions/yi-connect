@@ -67,7 +67,7 @@ export const announcementsTableColumns: ColumnDef<AnnouncementListItem>[] = [
       return (
         <div className="flex flex-col gap-1 max-w-md">
           <Link
-            href={`/communication/announcements/${announcement.id}`}
+            href={`/communications/announcements/${announcement.id}`}
             className="font-medium hover:text-primary transition-colors truncate"
           >
             {announcement.title}
@@ -246,7 +246,7 @@ export const announcementsTableColumns: ColumnDef<AnnouncementListItem>[] = [
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem asChild>
-              <Link href={`/communication/announcements/${announcement.id}`}>
+              <Link href={`/communications/announcements/${announcement.id}`}>
                 <Eye className="mr-2 h-4 w-4" />
                 View Details
               </Link>
@@ -254,7 +254,7 @@ export const announcementsTableColumns: ColumnDef<AnnouncementListItem>[] = [
 
             {announcement.status === "draft" && (
               <DropdownMenuItem asChild>
-                <Link href={`/communication/announcements/${announcement.id}/edit`}>
+                <Link href={`/communications/announcements/${announcement.id}/edit`}>
                   <Edit className="mr-2 h-4 w-4" />
                   Edit
                 </Link>

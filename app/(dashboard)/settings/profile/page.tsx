@@ -12,6 +12,8 @@ import { AvatarUpload } from '@/components/settings/avatar-upload'
 import { MyBugsPanelWrapper } from '@/components/settings/my-bugs-panel-wrapper'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { MemberQR } from '@/components/members/member-qr'
+import { getMyProfileQr } from '@/lib/data/connections'
 
 export const metadata = {
   title: 'Profile Settings - Yi Connect',
@@ -33,6 +35,9 @@ async function ProfileContent() {
     )
   }
 
+  // Networking QR (Stutzee Feature 4A)
+  const myQr = await getMyProfileQr()
+
   return (
     <div className="grid gap-6 lg:grid-cols-2">
       {/* Left Column - Profile Overview and Avatar Upload */}
@@ -42,9 +47,16 @@ async function ProfileContent() {
         <MyBugsPanelWrapper />
       </div>
 
-      {/* Right Column - Edit Form */}
+      {/* Right Column - Edit Form + Networking QR */}
       <div className="space-y-6">
         <ProfileForm profile={profile} />
+        {myQr && (
+          <MemberQR
+            initialToken={myQr.profile_qr_token}
+            initialAllow={myQr.allow_networking_qr}
+            memberName={profile.full_name || 'Yi Member'}
+          />
+        )}
       </div>
     </div>
   )

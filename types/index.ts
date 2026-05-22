@@ -32,7 +32,7 @@ export interface FormState {
   success?: boolean
   message?: string
   errors?: Record<string, string[] | undefined>
-  data?: any
+  data?: unknown
   redirectTo?: string
 }
 

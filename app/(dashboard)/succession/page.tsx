@@ -651,6 +651,7 @@ export default async function SuccessionPage() {
     'Co-Chair',
     'Executive Member',
     'EC Member',
+    'Member',
   ])
 
   return (

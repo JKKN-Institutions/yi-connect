@@ -7,7 +7,6 @@
 'use client'
 
 import { useActionState } from 'react'
-import { useFormStatus } from 'react-dom'
 import { updateProfile } from '@/app/actions/profile'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -21,19 +20,9 @@ interface ProfileFormProps {
   profile: ProfileWithRole
 }
 
-function SubmitButton() {
-  const { pending } = useFormStatus()
-
-  return (
-    <Button type="submit" disabled={pending}>
-      {pending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-      {pending ? 'Saving...' : 'Save Changes'}
-    </Button>
-  )
-}
-
 export function ProfileForm({ profile }: ProfileFormProps) {
-  const [state, formAction] = useActionState(updateProfile, { success: false })
+  // Use isPending from useActionState instead of useFormStatus to avoid React Error #419
+  const [state, formAction, isPending] = useActionState(updateProfile, { success: false })
 
   return (
     <Card>
@@ -109,7 +98,10 @@ export function ProfileForm({ profile }: ProfileFormProps) {
           </div>
 
           <div className="flex justify-end">
-            <SubmitButton />
+            <Button type="submit" disabled={isPending}>
+              {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {isPending ? 'Saving...' : 'Save Changes'}
+            </Button>
           </div>
         </form>
       </CardContent>

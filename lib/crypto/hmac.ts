@@ -1,0 +1,53 @@
+/**
+ * HMAC utilities for verifying member identity in public RSVP flows.
+ * Prevents IDOR by ensuring member_id cannot be spoofed.
+ */
+
+import * as crypto from 'crypto'
+
+function getHmacSecret(): string {
+  const secret = process.env.RSVP_HMAC_SECRET || process.env.NEXTAUTH_SECRET
+  if (!secret) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('RSVP_HMAC_SECRET or NEXTAUTH_SECRET must be set in production')
+    }
+    // Development fallback only
+    return 'yi-connect-rsvp-hmac-fallback-key'
+  }
+  return secret
+}
+
+/**
+ * Generate an HMAC for a member_id scoped to a specific event token.
+ * Used to verify that the member_id was served by the server, not guessed by the client.
+ */
+export function generateMemberHMAC(memberId: string, eventToken: string): string {
+  return crypto
+    .createHmac('sha256', getHmacSecret())
+    .update(`${eventToken}:${memberId}`)
+    .digest('hex')
+    .substring(0, 32) // 128 bits - sufficient for IDOR prevention
+}
+
+/**
+ * Verify a member HMAC.
+ * Returns true if the HMAC matches, false otherwise.
+ */
+export function verifyMemberHMAC(memberId: string, eventToken: string, hmac: string): boolean {
+  const expected = generateMemberHMAC(memberId, eventToken)
+  // Timing-safe comparison to prevent timing attacks
+  if (hmac.length !== expected.length) return false
+  return crypto.timingSafeEqual(Buffer.from(hmac), Buffer.from(expected))
+}
+
+/**
+ * Generate HMACs for a list of member IDs.
+ * Returns a map of member_id -> hmac.
+ */
+export function generateMemberHMACs(memberIds: string[], eventToken: string): Record<string, string> {
+  const result: Record<string, string> = {}
+  for (const id of memberIds) {
+    result[id] = generateMemberHMAC(id, eventToken)
+  }
+  return result
+}

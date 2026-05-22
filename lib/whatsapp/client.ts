@@ -16,7 +16,7 @@ import * as QRCode from 'qrcode';
 import path from 'path';
 
 // Singleton state
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 let client: any = null;
 let qrCodeDataUrl: string | null = null;
 
@@ -41,7 +41,7 @@ const statusListeners: Set<StatusListener> = new Set();
 /**
  * Get or create the WhatsApp client instance
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 export function getWhatsAppClient(): any {
   if (!client) {
     client = new Client({
@@ -73,10 +73,9 @@ export function getWhatsAppClient(): any {
 /**
  * Set up all WhatsApp client event handlers
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 function setupEventHandlers(whatsappClient: any) {
   whatsappClient.on('qr', async (qr: string) => {
-    console.log('[WhatsApp] QR Code received');
     connectionStatus = 'qr_ready';
 
     try {
@@ -97,7 +96,6 @@ function setupEventHandlers(whatsappClient: any) {
   });
 
   whatsappClient.on('authenticated', () => {
-    console.log('[WhatsApp] Authenticated');
     connectionStatus = 'authenticated';
     qrCodeDataUrl = null;
     notifyListeners('authenticated');
@@ -113,14 +111,12 @@ function setupEventHandlers(whatsappClient: any) {
   });
 
   whatsappClient.on('ready', () => {
-    console.log('[WhatsApp] Client is ready!');
     connectionStatus = 'ready';
     lastError = null;
     notifyListeners('ready');
   });
 
   whatsappClient.on('disconnected', async (reason: string) => {
-    console.log('[WhatsApp] Disconnected:', reason);
     connectionStatus = 'disconnected';
     lastError = `Disconnected: ${reason}`;
     // Clean up the client
@@ -129,8 +125,7 @@ function setupEventHandlers(whatsappClient: any) {
   });
 
   whatsappClient.on('message', (msg: Message) => {
-    // Log incoming messages for debugging
-    console.log('[WhatsApp] Message received:', msg.from, msg.body.substring(0, 50));
+    // Message received - can be used for auto-replies or logging
   });
 }
 
@@ -153,9 +148,7 @@ function notifyListeners(status: typeof connectionStatus, qr?: string) {
 async function cleanupClient(): Promise<void> {
   if (client) {
     try {
-      console.log('[WhatsApp] Destroying client...');
       await client.destroy();
-      console.log('[WhatsApp] Client destroyed');
     } catch (err) {
       console.error('[WhatsApp] Error destroying client:', err);
     }
@@ -168,17 +161,13 @@ async function cleanupClient(): Promise<void> {
  * Initialize and connect the WhatsApp client
  */
 export async function initializeWhatsApp(): Promise<InitResult> {
-  console.log('[WhatsApp] initializeWhatsApp called, current status:', connectionStatus);
-
   // If already ready, return immediately
   if (connectionStatus === 'ready' && client) {
-    console.log('[WhatsApp] Already ready, returning');
     return { success: true, status: 'ready' };
   }
 
   // If initialization is in progress, wait for it
   if (initializationPromise) {
-    console.log('[WhatsApp] Initialization in progress, waiting...');
     return initializationPromise;
   }
 
@@ -187,12 +176,8 @@ export async function initializeWhatsApp(): Promise<InitResult> {
     try {
       connectionStatus = 'connecting';
       lastError = null;
-      console.log('[WhatsApp] Status set to connecting, getting client...');
 
       const whatsapp = getWhatsAppClient();
-      console.log('[WhatsApp] Client obtained, calling initialize()...');
-
-      const startTime = Date.now();
 
       // Race between initialization and timeout
       await Promise.race([
@@ -201,8 +186,6 @@ export async function initializeWhatsApp(): Promise<InitResult> {
           setTimeout(() => reject(new Error('Initialization timed out after 20 seconds')), INIT_TIMEOUT_MS)
         )
       ]);
-
-      console.log(`[WhatsApp] initialize() completed in ${Date.now() - startTime}ms`);
 
       // Return current status - may be 'connecting', 'qr_ready', 'authenticated', or 'ready' depending on events
       return { success: true, status: connectionStatus };
@@ -282,7 +265,7 @@ export function isReady(): boolean {
  * Get the raw client for advanced operations
  * Only use if isReady() returns true
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 export function getRawClient(): any {
   return client;
 }

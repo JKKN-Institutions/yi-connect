@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { getCurrentChapterId, requireRole } from '@/lib/auth';
 import { BenchmarkChart } from '@/components/national/benchmark-chart';
+import { getBenchmarks, getBenchmarkSummary } from '@/lib/data/national-integration';
 import type { NationalBenchmark, BenchmarkSummary } from '@/types/national-integration';
 
 export const metadata = {
@@ -40,72 +41,38 @@ async function BenchmarkDashboardContent() {
     );
   }
 
-  // Mock data for demonstration
-  const mockBenchmarks: NationalBenchmark[] = [
-    {
-      id: '1',
-      chapter_id: chapterId,
-      metric_type: 'event_count',
-      metric_name: 'Events Organized',
-      metric_description: 'Number of events organized this period',
-      period_type: 'quarterly',
-      period_start: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString(),
-      period_end: new Date().toISOString(),
-      fiscal_year: 2024,
-      quarter: 4,
-      chapter_value: 24,
-      regional_avg: 18,
-      national_avg: 15,
-      regional_rank: 3,
-      regional_total: 15,
-      national_rank: 25,
-      national_total: 120,
-      percentile_rank: 78,
-      trend: 'improving',
-      change_percentage: 12.5,
-      previous_value: 21,
-      performance_tier: 'above_average',
-      synced_from_national_at: null,
-      national_benchmark_id: null,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    },
-    {
-      id: '2',
-      chapter_id: chapterId,
-      metric_type: 'member_engagement',
-      metric_name: 'Member Engagement',
-      metric_description: 'Member engagement score',
-      period_type: 'quarterly',
-      period_start: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString(),
-      period_end: new Date().toISOString(),
-      fiscal_year: 2024,
-      quarter: 4,
-      chapter_value: 72,
-      regional_avg: 65,
-      national_avg: 60,
-      regional_rank: 2,
-      regional_total: 15,
-      national_rank: 12,
-      national_total: 120,
-      percentile_rank: 85,
-      trend: 'improving',
-      change_percentage: 8.2,
-      previous_value: 66,
-      performance_tier: 'top_10',
-      synced_from_national_at: null,
-      national_benchmark_id: null,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    }
-  ];
+  // Fetch real benchmarks and summary from the database
+  const [benchmarks, benchmarkSummary] = await Promise.all([
+    getBenchmarks(undefined, chapterId),
+    getBenchmarkSummary('quarterly', chapterId)
+  ]);
 
-  const mockSummary: BenchmarkSummary = {
-    benchmarks: mockBenchmarks,
-    average_percentile: 76.7,
-    overall_tier: 'above_average',
-    top_performing_metrics: ['member_engagement', 'volunteer_hours'],
-    improvement_areas: ['membership_growth']
+  // Handle empty state
+  if (benchmarks.length === 0) {
+    return (
+      <Card>
+        <CardContent className="flex flex-col items-center justify-center py-10">
+          <BarChart3 className="h-12 w-12 text-muted-foreground mb-4" />
+          <h3 className="text-lg font-semibold mb-2">No benchmark data yet</h3>
+          <p className="text-muted-foreground text-center max-w-md">
+            Benchmark comparisons will appear here once data is synced from Yi National.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Use the summary from the database, or build a fallback from the benchmarks
+  const summary: BenchmarkSummary = benchmarkSummary ?? {
+    benchmarks,
+    average_percentile: benchmarks.reduce((sum, b) => sum + (b.percentile_rank ?? 0), 0) / benchmarks.length,
+    top_performing_metrics: benchmarks
+      .filter((b) => b.performance_tier === 'top_10' || b.performance_tier === 'above_average')
+      .map((b) => b.metric_type),
+    improvement_areas: benchmarks
+      .filter((b) => b.performance_tier === 'below_average' || b.performance_tier === 'bottom_10')
+      .map((b) => b.metric_type),
+    overall_tier: 'average'
   };
 
   const getTrendIcon = (trend: string | null) => {
@@ -147,10 +114,10 @@ async function BenchmarkDashboardContent() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {mockSummary.average_percentile.toFixed(0)}%
+              {summary.average_percentile.toFixed(0)}%
             </div>
-            <Badge className={tierColors[mockSummary.overall_tier]}>
-              {mockSummary.overall_tier.replace('_', ' ')}
+            <Badge className={tierColors[summary.overall_tier]}>
+              {summary.overall_tier.replace('_', ' ')}
             </Badge>
           </CardContent>
         </Card>
@@ -161,7 +128,7 @@ async function BenchmarkDashboardContent() {
             <Target className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{mockBenchmarks.length}</div>
+            <div className="text-2xl font-bold">{benchmarks.length}</div>
             <p className="text-xs text-muted-foreground">Active benchmarks</p>
           </CardContent>
         </Card>
@@ -173,7 +140,7 @@ async function BenchmarkDashboardContent() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {mockBenchmarks.filter((b) => b.performance_tier === 'top_10').length}
+              {benchmarks.filter((b) => b.performance_tier === 'top_10').length}
             </div>
             <p className="text-xs text-muted-foreground">Metrics in top 10%</p>
           </CardContent>
@@ -186,7 +153,7 @@ async function BenchmarkDashboardContent() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {mockBenchmarks.filter((b) => b.trend === 'improving').length}
+              {benchmarks.filter((b) => b.trend === 'improving').length}
             </div>
             <p className="text-xs text-muted-foreground">Metrics trending up</p>
           </CardContent>
@@ -194,11 +161,11 @@ async function BenchmarkDashboardContent() {
       </div>
 
       {/* Benchmark Charts */}
-      <BenchmarkChart benchmarks={mockBenchmarks} summary={mockSummary} />
+      <BenchmarkChart benchmarks={benchmarks} summary={summary} />
 
       {/* Individual Metric Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {mockBenchmarks.map((benchmark) => (
+        {benchmarks.map((benchmark) => (
           <Card key={benchmark.id}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
@@ -298,12 +265,12 @@ export default function BenchmarksPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">National Benchmarks</h1>
           <p className="text-muted-foreground">
-            Compare your chapter's performance against regional and national averages
+            Compare your chapter&apos;s performance against regional and national averages
           </p>
         </div>
         <Badge variant="outline" className="text-blue-600">
           <BarChart3 className="h-4 w-4 mr-1" />
-          Q4 2024
+          {`Q${Math.ceil((new Date().getMonth() + 1) / 3)} ${new Date().getFullYear()}`}
         </Badge>
       </div>
 

@@ -53,15 +53,7 @@ export default function ApplyPage() {
 }
 
 async function ApplicationForm() {
-  console.log('📝 ApplicationForm: Fetching chapters for apply form...');
-
   const chapters = await getAllChapters();
-
-  console.log('📝 ApplicationForm: Chapters fetched:', {
-    count: chapters.length,
-    chapters: chapters.map(c => ({ id: c.id, name: c.name }))
-  });
-
   return <MemberForm chapters={chapters} mode='apply' />;
 }
 

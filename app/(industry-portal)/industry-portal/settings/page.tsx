@@ -3,19 +3,75 @@
  * Manage industry profile and portal settings
  */
 
+import { Suspense } from 'react';
 import { Metadata } from 'next';
 import { Building2, User, Bell, Shield } from 'lucide-react';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Skeleton } from '@/components/ui/skeleton';
+
+import { getCurrentIndustryId } from '@/lib/auth/industry-portal';
+import {
+  getIndustryProfile,
+  getIndustryCoordinators,
+  getNotificationSettings,
+  getActiveSessions,
+} from '@/app/actions/industry-portal';
+
+import { CompanyProfileForm } from './components/company-profile-form';
+import { UsersManagement } from './components/users-management';
+import { NotificationsSettings } from './components/notifications-settings';
+import { SecuritySettings } from './components/security-settings';
 
 export const metadata: Metadata = {
   title: 'Settings | Industry Portal',
   description: 'Manage your industry portal settings',
 };
 
-export default function SettingsPage() {
+// Force dynamic rendering
+export const dynamic = 'force-dynamic';
+
+function SettingsLoadingSkeleton() {
+  return (
+    <div className="space-y-6">
+      <div>
+        <Skeleton className="h-9 w-48" />
+        <Skeleton className="h-4 w-96 mt-2" />
+      </div>
+      <Separator />
+      <div className="flex gap-2">
+        {[...Array(4)].map((_, i) => (
+          <Skeleton key={i} className="h-10 w-32" />
+        ))}
+      </div>
+      <Skeleton className="h-96 w-full rounded-lg" />
+    </div>
+  );
+}
+
+async function SettingsContent() {
+  const industryId = await getCurrentIndustryId();
+
+  if (!industryId) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12">
+        <p className="text-muted-foreground">
+          You need to be authenticated as an industry user to access settings.
+        </p>
+      </div>
+    );
+  }
+
+  // Fetch all data in parallel
+  const [profile, coordinators, notificationSettings, sessions] = await Promise.all([
+    getIndustryProfile(industryId),
+    getIndustryCoordinators(industryId),
+    getNotificationSettings(industryId),
+    getActiveSessions(),
+  ]);
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -58,9 +114,7 @@ export default function SettingsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="text-sm text-muted-foreground">
-                Company profile settings coming soon...
-              </div>
+              <CompanyProfileForm initialData={profile} />
             </CardContent>
           </Card>
         </TabsContent>
@@ -75,9 +129,7 @@ export default function SettingsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="text-sm text-muted-foreground">
-                User management coming soon...
-              </div>
+              <UsersManagement coordinators={coordinators} />
             </CardContent>
           </Card>
         </TabsContent>
@@ -92,30 +144,24 @@ export default function SettingsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="text-sm text-muted-foreground">
-                Notification settings coming soon...
-              </div>
+              <NotificationsSettings initialSettings={notificationSettings} />
             </CardContent>
           </Card>
         </TabsContent>
 
         {/* Security */}
         <TabsContent value="security" className="mt-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Security Settings</CardTitle>
-              <CardDescription>
-                Manage your password and security preferences
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="text-sm text-muted-foreground">
-                Security settings coming soon...
-              </div>
-            </CardContent>
-          </Card>
+          <SecuritySettings sessions={sessions} twoFactorEnabled={false} />
         </TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+export default function SettingsPage() {
+  return (
+    <Suspense fallback={<SettingsLoadingSkeleton />}>
+      <SettingsContent />
+    </Suspense>
   );
 }

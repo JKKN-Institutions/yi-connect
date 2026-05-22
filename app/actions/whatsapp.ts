@@ -116,7 +116,6 @@ export async function connectWhatsApp(): Promise<{
 }> {
   try {
     if (useApiClient()) {
-      console.log('[WhatsApp] Using Railway API service');
       const result = await connectWhatsAppAPI();
       return result;
     } else if (isServerless()) {
@@ -127,7 +126,6 @@ export async function connectWhatsApp(): Promise<{
         error: 'WhatsApp service not configured. Please set up the Railway WhatsApp service.'
       };
     } else {
-      console.log('[WhatsApp] Using local client');
       const { initializeWhatsApp } = await getLocalClient();
       const result = await initializeWhatsApp();
       return result;
@@ -199,7 +197,21 @@ export async function sendBulkWhatsAppMessages(
   delayMs: number = 1000
 ): Promise<BulkSendResult> {
   if (useApiClient()) {
-    return sendBulkMessagesAPI(recipients, delayMs);
+    // Transform to API format (phone instead of phoneNumber)
+    const apiRecipients = recipients.map(r => ({ phone: r.phoneNumber, message: r.message }));
+    const result = await sendBulkMessagesAPI(apiRecipients, delayMs);
+    // Transform back to app format (phoneNumber instead of phone)
+    return {
+      total: result.total,
+      sent: result.sent,
+      failed: result.failed,
+      results: result.results.map(r => ({
+        phoneNumber: r.phone,
+        success: r.success,
+        messageId: r.messageId,
+        error: r.error
+      }))
+    };
   } else if (isServerless()) {
     return { total: recipients.length, sent: 0, failed: recipients.length, results: [] };
   }

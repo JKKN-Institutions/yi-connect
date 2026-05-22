@@ -1,20 +1,16 @@
 import { Suspense } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Bell,
   Megaphone,
-  FileText,
-  AlertTriangle,
-  Info,
   CheckCircle2,
   Clock
 } from 'lucide-react';
 import { getCurrentMemberId, requireRole } from '@/lib/auth';
 import { BroadcastCenter } from '@/components/national/broadcast-center';
-import type { BroadcastWithReceipt, NationalBroadcast } from '@/types/national-integration';
+import { getBroadcasts } from '@/lib/data/national-integration';
 
 export const metadata = {
   title: 'National Broadcasts | Yi Connect',
@@ -38,113 +34,31 @@ async function BroadcastsContent() {
     );
   }
 
-  // Mock data for demonstration
-  const now = new Date();
-  const mockBroadcasts: BroadcastWithReceipt[] = [
-    {
-      id: '1',
-      national_broadcast_id: 'nat-1',
-      title: 'Yi National Summit 2025 - Early Bird Registration Open',
-      content: 'We are excited to announce that early bird registration for the Yi National Summit 2025 is now open!',
-      content_html: null,
-      summary: 'Early bird registration for Yi National Summit 2025 is now open.',
-      broadcast_type: 'announcement',
-      priority: 'high',
-      target_audience: { type: 'all_chapters' },
-      target_roles: [],
-      target_regions: [],
-      published_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-      expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-      attachments: [{ name: 'Summit_Brochure.pdf', url: '#', type: 'application/pdf' }],
-      requires_acknowledgment: true,
-      acknowledgment_deadline: null,
-      allows_comments: false,
-      original_language: 'en',
-      translations: {},
-      received_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-      created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-      updated_at: now.toISOString()
-    },
-    {
-      id: '2',
-      national_broadcast_id: 'nat-2',
-      title: 'Updated Guidelines for Chapter Financial Reporting',
-      content: 'Please note the following updates to our financial reporting guidelines effective January 1, 2025.',
-      content_html: null,
-      summary: 'Important updates to chapter financial reporting guidelines effective January 2025.',
-      broadcast_type: 'directive',
-      priority: 'urgent',
-      target_audience: { type: 'all_chapters' },
-      target_roles: [],
-      target_regions: [],
-      published_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-      expires_at: null,
-      attachments: [],
-      requires_acknowledgment: true,
-      acknowledgment_deadline: null,
-      allows_comments: true,
-      original_language: 'en',
-      translations: {},
-      received_at: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(),
-      created_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-      updated_at: now.toISOString(),
-      receipt: {
-        id: 'r1',
-        chapter_id: 'ch1',
-        broadcast_id: '2',
-        member_id: memberId,
-        received_at: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(),
-        read_at: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(),
-        acknowledged_at: null,
-        response_text: null,
-        created_at: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString()
-      }
-    },
-    {
-      id: '3',
-      national_broadcast_id: 'nat-3',
-      title: 'Monthly Newsletter - December 2024',
-      content: 'Yi Connect Monthly Newsletter - December 2024. In this issue: Year in Review.',
-      content_html: null,
-      summary: 'December 2024 edition of the Yi Connect monthly newsletter.',
-      broadcast_type: 'newsletter',
-      priority: 'normal',
-      target_audience: { type: 'all_chapters' },
-      target_roles: [],
-      target_regions: [],
-      published_at: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
-      expires_at: null,
-      attachments: [],
-      requires_acknowledgment: false,
-      acknowledgment_deadline: null,
-      allows_comments: false,
-      original_language: 'en',
-      translations: {},
-      received_at: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString(),
-      created_at: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
-      updated_at: now.toISOString(),
-      receipt: {
-        id: 'r2',
-        chapter_id: 'ch1',
-        broadcast_id: '3',
-        member_id: memberId,
-        received_at: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString(),
-        read_at: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString(),
-        acknowledged_at: null,
-        response_text: null,
-        created_at: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString()
-      }
-    }
-  ];
+  // Fetch real broadcasts from the database
+  const allBroadcasts = await getBroadcasts(undefined, memberId);
 
-  const unreadCount = mockBroadcasts.filter((b) => !b.receipt?.read_at).length;
-  const pendingAckCount = mockBroadcasts.filter(
+  // Handle empty state
+  if (allBroadcasts.length === 0) {
+    return (
+      <Card>
+        <CardContent className="flex flex-col items-center justify-center py-10">
+          <Bell className="h-12 w-12 text-muted-foreground mb-4" />
+          <h3 className="text-lg font-semibold mb-2">No broadcasts yet</h3>
+          <p className="text-muted-foreground text-center max-w-md">
+            National broadcasts and announcements will appear here once they are published.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const unreadCount = allBroadcasts.filter((b) => !b.receipt?.read_at).length;
+  const pendingAckCount = allBroadcasts.filter(
     (b) => b.requires_acknowledgment && !b.receipt?.acknowledged_at
   ).length;
 
-  const allBroadcasts = mockBroadcasts;
-  const unreadBroadcasts = mockBroadcasts.filter((b) => !b.receipt?.read_at);
-  const pendingAckBroadcasts = mockBroadcasts.filter(
+  const unreadBroadcasts = allBroadcasts.filter((b) => !b.receipt?.read_at);
+  const pendingAckBroadcasts = allBroadcasts.filter(
     (b) => b.requires_acknowledgment && !b.receipt?.acknowledged_at
   );
 
@@ -158,7 +72,7 @@ async function BroadcastsContent() {
             <Bell className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{mockBroadcasts.length}</div>
+            <div className="text-2xl font-bold">{allBroadcasts.length}</div>
             <p className="text-xs text-muted-foreground">Active broadcasts</p>
           </CardContent>
         </Card>
@@ -192,7 +106,7 @@ async function BroadcastsContent() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {mockBroadcasts.filter((b) => b.receipt?.acknowledged_at).length}
+              {allBroadcasts.filter((b) => b.receipt?.acknowledged_at).length}
             </div>
             <p className="text-xs text-muted-foreground">Completed</p>
           </CardContent>

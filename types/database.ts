@@ -24,8 +24,8 @@ export type Database = {
           color: string | null;
           display_order: number;
           frequency: string;
-          criteria_template: any;
-          scoring_weights: any;
+          criteria_template: Json | null;
+          scoring_weights: Json | null;
           is_active: boolean;
           created_at: string;
           updated_at: string;
@@ -39,8 +39,8 @@ export type Database = {
           color?: string | null;
           display_order?: number;
           frequency: string;
-          criteria_template?: any;
-          scoring_weights?: any;
+          criteria_template?: Json | null;
+          scoring_weights?: Json | null;
           is_active?: boolean;
           created_at?: string;
           updated_at?: string;
@@ -54,8 +54,8 @@ export type Database = {
           color?: string | null;
           display_order?: number;
           frequency?: string;
-          criteria_template?: any;
-          scoring_weights?: any;
+          criteria_template?: Json | null;
+          scoring_weights?: Json | null;
           is_active?: boolean;
           created_at?: string;
           updated_at?: string;
@@ -181,7 +181,7 @@ export type Database = {
           id: string;
           nomination_id: string;
           jury_member_id: string;
-          scores: any;
+          scores: Json;
           total_score: number;
           created_at: string;
           updated_at: string;
@@ -190,7 +190,7 @@ export type Database = {
           id?: string;
           nomination_id: string;
           jury_member_id: string;
-          scores: any;
+          scores: Json;
           total_score: number;
           created_at?: string;
           updated_at?: string;
@@ -199,7 +199,7 @@ export type Database = {
           id?: string;
           nomination_id?: string;
           jury_member_id?: string;
-          scores?: any;
+          scores?: Json;
           total_score?: number;
           created_at?: string;
           updated_at?: string;
@@ -698,7 +698,7 @@ export type Database = {
           chapter_id: string;
           name: string;
           description: string | null;
-          fiscal_year: number;
+          calendar_year: number;
           period: string;
           quarter: number | null;
           start_date: string;
@@ -718,7 +718,7 @@ export type Database = {
           chapter_id: string;
           name: string;
           description?: string | null;
-          fiscal_year: number;
+          calendar_year: number;
           period: string;
           quarter?: number | null;
           start_date: string;
@@ -738,7 +738,7 @@ export type Database = {
           chapter_id?: string;
           name?: string;
           description?: string | null;
-          fiscal_year?: number;
+          calendar_year?: number;
           period?: string;
           quarter?: number | null;
           start_date?: string;
@@ -930,6 +930,8 @@ export type Database = {
           id: string;
           chapter_id: string;
           organization_name: string;
+          display_name: string | null;
+          logo_url: string | null;
           industry: string | null;
           website: string | null;
           contact_person_name: string | null;
@@ -960,6 +962,8 @@ export type Database = {
           id?: string;
           chapter_id: string;
           organization_name: string;
+          display_name?: string | null;
+          logo_url?: string | null;
           industry?: string | null;
           website?: string | null;
           contact_person_name?: string | null;
@@ -990,6 +994,8 @@ export type Database = {
           id?: string;
           chapter_id?: string;
           organization_name?: string;
+          display_name?: string | null;
+          logo_url?: string | null;
           industry?: string | null;
           website?: string | null;
           contact_person_name?: string | null;
@@ -1026,7 +1032,7 @@ export type Database = {
           tier_level: string;
           min_amount: number;
           max_amount: number | null;
-          benefits: string[] | null;
+          benefits: { label: string; included: boolean }[] | null;
           description: string | null;
           color: string | null;
           icon: string | null;
@@ -1042,7 +1048,7 @@ export type Database = {
           tier_level: string;
           min_amount: number;
           max_amount?: number | null;
-          benefits?: string[] | null;
+          benefits?: { label: string; included: boolean }[] | null;
           description?: string | null;
           color?: string | null;
           icon?: string | null;
@@ -1058,7 +1064,7 @@ export type Database = {
           tier_level?: string;
           min_amount?: number;
           max_amount?: number | null;
-          benefits?: string[] | null;
+          benefits?: { label: string; included: boolean }[] | null;
           description?: string | null;
           color?: string | null;
           icon?: string | null;
@@ -1085,7 +1091,7 @@ export type Database = {
           commitment_date: string | null;
           contract_signed_date: string | null;
           event_id: string | null;
-          fiscal_year: number | null;
+          calendar_year: number | null;
           contract_number: string | null;
           contract_terms: string | null;
           deliverables: string[] | null;
@@ -1114,7 +1120,7 @@ export type Database = {
           commitment_date?: string | null;
           contract_signed_date?: string | null;
           event_id?: string | null;
-          fiscal_year?: number | null;
+          calendar_year?: number | null;
           contract_number?: string | null;
           contract_terms?: string | null;
           deliverables?: string[] | null;
@@ -1142,7 +1148,7 @@ export type Database = {
           commitment_date?: string | null;
           contract_signed_date?: string | null;
           event_id?: string | null;
-          fiscal_year?: number | null;
+          calendar_year?: number | null;
           contract_number?: string | null;
           contract_terms?: string | null;
           deliverables?: string[] | null;
@@ -1337,6 +1343,108 @@ export type Database = {
         };
         Relationships: [];
       };
+      payment_methods: {
+        Row: {
+          id: string;
+          chapter_id: string;
+          name: string;
+          type: string;
+          account_number: string | null;
+          bank_name: string | null;
+          ifsc_code: string | null;
+          upi_id: string | null;
+          account_details: Json | null;
+          is_active: boolean;
+          is_default: boolean;
+          notes: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          chapter_id: string;
+          name: string;
+          type: string;
+          account_number?: string | null;
+          bank_name?: string | null;
+          ifsc_code?: string | null;
+          upi_id?: string | null;
+          account_details?: Json | null;
+          is_active?: boolean;
+          is_default?: boolean;
+          notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          chapter_id?: string;
+          name?: string;
+          type?: string;
+          account_number?: string | null;
+          bank_name?: string | null;
+          ifsc_code?: string | null;
+          upi_id?: string | null;
+          account_details?: Json | null;
+          is_active?: boolean;
+          is_default?: boolean;
+          notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      financial_audit_logs: {
+        Row: {
+          id: string;
+          chapter_id: string;
+          entity_type: string;
+          entity_id: string;
+          action: string;
+          old_values: Json | null;
+          new_values: Json | null;
+          changed_fields: string[] | null;
+          amount_changed: number | null;
+          performed_by: string;
+          ip_address: string | null;
+          user_agent: string | null;
+          description: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          chapter_id: string;
+          entity_type: string;
+          entity_id: string;
+          action: string;
+          old_values?: Json | null;
+          new_values?: Json | null;
+          changed_fields?: string[] | null;
+          amount_changed?: number | null;
+          performed_by: string;
+          ip_address?: string | null;
+          user_agent?: string | null;
+          description?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          chapter_id?: string;
+          entity_type?: string;
+          entity_id?: string;
+          action?: string;
+          old_values?: Json | null;
+          new_values?: Json | null;
+          changed_fields?: string[] | null;
+          amount_changed?: number | null;
+          performed_by?: string;
+          ip_address?: string | null;
+          user_agent?: string | null;
+          description?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       events: {
         Row: {
           id: string;
@@ -1366,8 +1474,8 @@ export type Database = {
           banner_url: string | null;
           banner_image_url: string | null;
           estimated_budget: number | null;
-          attachments: any;
-          custom_fields: any;
+          attachments: Json | null;
+          custom_fields: Json | null;
           created_at: string;
           updated_at: string;
         };
@@ -1399,8 +1507,8 @@ export type Database = {
           banner_url?: string | null;
           banner_image_url?: string | null;
           estimated_budget?: number | null;
-          attachments?: any;
-          custom_fields?: any;
+          attachments?: Json | null;
+          custom_fields?: Json | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -1432,8 +1540,8 @@ export type Database = {
           banner_url?: string | null;
           banner_image_url?: string | null;
           estimated_budget?: number | null;
-          attachments?: any;
-          custom_fields?: any;
+          attachments?: Json | null;
+          custom_fields?: Json | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -1446,7 +1554,7 @@ export type Database = {
           description: string | null;
           category: string;
           default_duration_hours: number;
-          template_data: any;
+          template_data: Json | null;
           created_at: string;
           updated_at: string;
         };
@@ -1456,7 +1564,7 @@ export type Database = {
           description?: string | null;
           category: string;
           default_duration_hours: number;
-          template_data?: any;
+          template_data?: Json | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -1466,7 +1574,7 @@ export type Database = {
           description?: string | null;
           category?: string;
           default_duration_hours?: number;
-          template_data?: any;
+          template_data?: Json | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -2078,7 +2186,7 @@ export type Database = {
         Row: {
           id: string;
           vertical_id: string;
-          fiscal_year: number;
+          calendar_year: number;
           plan_title: string;
           plan_description: string | null;
           vision_statement: string | null;
@@ -2094,7 +2202,7 @@ export type Database = {
         Insert: {
           id?: string;
           vertical_id: string;
-          fiscal_year: number;
+          calendar_year: number;
           plan_title: string;
           plan_description?: string | null;
           vision_statement?: string | null;
@@ -2110,7 +2218,7 @@ export type Database = {
         Update: {
           id?: string;
           vertical_id?: string;
-          fiscal_year?: number;
+          calendar_year?: number;
           plan_title?: string;
           plan_description?: string | null;
           vision_statement?: string | null;
@@ -2389,7 +2497,7 @@ export type Database = {
           vertical_id: string;
           chair_id: string;
           review_period: string;
-          fiscal_year: number;
+          calendar_year: number;
           quarter: number;
           overall_rating: number;
           kpi_achievement_rate: number;
@@ -2409,7 +2517,7 @@ export type Database = {
           vertical_id: string;
           chair_id: string;
           review_period: string;
-          fiscal_year: number;
+          calendar_year: number;
           quarter: number;
           overall_rating: number;
           kpi_achievement_rate?: number;
@@ -2429,7 +2537,7 @@ export type Database = {
           vertical_id?: string;
           chair_id?: string;
           review_period?: string;
-          fiscal_year?: number;
+          calendar_year?: number;
           quarter?: number;
           overall_rating?: number;
           kpi_achievement_rate?: number;
@@ -2536,7 +2644,7 @@ export type Database = {
         Row: {
           plan_id: string | null;
           vertical_id: string | null;
-          fiscal_year: number | null;
+          calendar_year: number | null;
           total_kpis: number | null;
           completed_kpis: number | null;
           in_progress_kpis: number | null;
@@ -2548,7 +2656,7 @@ export type Database = {
       vertical_impact_metrics: {
         Row: {
           vertical_id: string | null;
-          fiscal_year: number | null;
+          calendar_year: number | null;
           total_activities: number | null;
           total_events: number | null;
           total_beneficiaries: number | null;
@@ -2562,7 +2670,7 @@ export type Database = {
     Functions: {
       calculate_vertical_ranking: {
         Args: {
-          p_fiscal_year: number;
+          p_calendar_year: number;
         };
         Returns: {
           vertical_id: string;

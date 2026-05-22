@@ -2,6 +2,7 @@
  * Dashboard Header
  *
  * Top header with user menu and notifications.
+ * Includes impersonation banner when admin is impersonating a user.
  */
 
 import { Suspense } from 'react'
@@ -9,6 +10,7 @@ import { getUserProfile, getCurrentMemberId } from '@/lib/auth'
 import { UserMenu } from '@/components/navigation/user-menu'
 import { NotificationBell } from '@/components/communication/notification-bell'
 import { ChapterSwitcher } from '@/components/admin/chapter-switcher'
+import { ImpersonationBannerWrapper } from '@/components/admin/impersonation-banner-server'
 import { Bell } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -48,8 +50,12 @@ async function NotificationBellWrapper() {
 
 export function DashboardHeader() {
   return (
-    <header className="sticky top-0 z-30 bg-background border-b">
-      <div className="flex items-center justify-between px-4 lg:px-6 py-3 lg:py-4">
+    <>
+      {/* Impersonation Banner (shown when admin is impersonating) */}
+      <ImpersonationBannerWrapper />
+
+      <header className="sticky top-0 z-30 bg-background border-b">
+        <div className="flex items-center justify-between px-4 lg:px-6 py-3 lg:py-4">
         {/* Left side - Brand on mobile, Chapter Switcher on desktop */}
         <div className="flex items-center gap-2">
           {/* Mobile Brand */}
@@ -84,5 +90,6 @@ export function DashboardHeader() {
         </div>
       </div>
     </header>
+    </>
   )
 }

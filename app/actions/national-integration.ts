@@ -141,12 +141,78 @@ export async function testConnection(
       return { success: false, error: validated.error.issues[0]?.message };
     }
 
-    // Simulate API connection test (replace with actual API call)
-    const startTime = Date.now();
+    const { api_endpoint, auth_token } = validated.data;
 
-    // Mock connection test - in production, make actual API call
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    const connected = true; // Mock result
+    // Validate URL format
+    let endpointUrl: URL;
+    try {
+      endpointUrl = new URL(api_endpoint);
+    } catch {
+      return {
+        success: false,
+        error: 'Invalid API endpoint URL format'
+      };
+    }
+
+    // Test actual API connection with timeout
+    const startTime = Date.now();
+    let connected = false;
+    let errorMessage = '';
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
+    try {
+      // Try to reach the health endpoint first, fallback to base URL
+      const healthUrl = new URL('/health', endpointUrl).toString();
+
+      const response = await fetch(healthUrl, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          ...(auth_token && { 'Authorization': `Bearer ${auth_token}` })
+        },
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      // Consider connection successful if we get any response (even 401/403)
+      // This means the server is reachable
+      if (response.ok) {
+        connected = true;
+      } else if (response.status === 401 || response.status === 403) {
+        // Server is reachable but auth failed
+        connected = true;
+        errorMessage = 'Server reachable but authentication failed';
+      } else if (response.status === 404) {
+        // Health endpoint doesn't exist, try HEAD on base URL
+        const baseResponse = await fetch(api_endpoint, {
+          method: 'HEAD',
+          headers: {
+            ...(auth_token && { 'Authorization': `Bearer ${auth_token}` })
+          },
+          signal: controller.signal
+        });
+        connected = baseResponse.ok || baseResponse.status < 500;
+      } else {
+        errorMessage = `Server returned status ${response.status}`;
+      }
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+
+      if (fetchError instanceof Error) {
+        if (fetchError.name === 'AbortError') {
+          errorMessage = 'Connection timeout - server did not respond within 10 seconds';
+        } else if (fetchError.message.includes('fetch')) {
+          errorMessage = 'Network error - unable to reach server';
+        } else {
+          errorMessage = fetchError.message;
+        }
+      } else {
+        errorMessage = 'Unknown connection error';
+      }
+    }
 
     const latency = Date.now() - startTime;
 
@@ -167,7 +233,9 @@ export async function testConnection(
     return {
       success: true,
       data: { connected, latency_ms: latency },
-      message: connected ? 'Connection successful' : 'Connection failed'
+      message: connected
+        ? (errorMessage || 'Connection successful')
+        : (errorMessage || 'Connection failed - server unreachable')
     };
   } catch (error) {
     console.error('Error testing connection:', error);

@@ -56,6 +56,8 @@ async function NewMemberForm() {
     (role: string) =>
       role === 'Super Admin' ||
       role === 'National Admin' ||
+      role === 'Chair' ||
+      role === 'Co-Chair' ||
       role === 'Executive Member'
   );
 

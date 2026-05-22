@@ -12,9 +12,9 @@ const withSerwist = withSerwistInit({
 });
 
 const nextConfig: NextConfig = {
-  // Temporarily disabled due to auth route pre-rendering issues
-  // Re-enable after implementing proper 'use cache' directives
-  // Module 7 (Communication Hub) uses 'use cache' directive at file level
+  // Cache components disabled - project uses React cache() instead
+  // Many routes use 'force-dynamic' which conflicts with cacheComponents
+  // Auth depends on cookies which is inherently dynamic
   cacheComponents: false,
 
   // Empty turbopack config to silence the warning about webpack config

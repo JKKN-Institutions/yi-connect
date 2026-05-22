@@ -8,7 +8,7 @@
 import { Suspense } from 'react'
 import Link from 'next/link'
 import { Plus, TrendingUp, Award, Users, Activity } from 'lucide-react'
-import { getVerticals, getCurrentFiscalYear, getVerticalRankings } from '@/lib/data/vertical'
+import { getVerticals, getCurrentCalendarYear, getVerticalRankings } from '@/lib/data/vertical'
 import { getCurrentUser } from '@/lib/auth'
 import { requireRole } from '@/lib/auth'
 import { Button } from '@/components/ui/button'
@@ -51,14 +51,14 @@ export default async function VerticalsPage({ searchParams }: PageProps) {
 // Header Component
 async function VerticalsHeader() {
   const user = await getCurrentUser()
-  const fiscalYear = getCurrentFiscalYear()
+  const calendarYear = getCurrentCalendarYear()
 
   return (
     <div className="flex items-center justify-between">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Vertical Performance</h1>
         <p className="text-muted-foreground mt-1">
-          Track and manage vertical performance for FY{fiscalYear}
+          Track and manage vertical performance for {calendarYear}
         </p>
       </div>
       <div className="flex gap-2">
@@ -83,9 +83,9 @@ async function VerticalsHeader() {
 
 // Stats Component
 async function VerticalStats() {
-  const fiscalYear = getCurrentFiscalYear()
+  const calendarYear = getCurrentCalendarYear()
   const verticals = await getVerticals({ is_active: true })
-  const rankings = await getVerticalRankings(fiscalYear)
+  const rankings = await getVerticalRankings(calendarYear)
 
   const activeVerticals = verticals.filter((v) => v.is_active).length
   const totalChairs = verticals.filter((v) => v.current_chair).length
@@ -197,7 +197,7 @@ async function VerticalsContent({
 
 // Vertical Card Component
 function VerticalCard({ vertical }: { vertical: any }) {
-  const fiscalYear = getCurrentFiscalYear()
+  const calendarYear = getCurrentCalendarYear()
 
   return (
     <Card className="hover:shadow-lg transition-shadow">

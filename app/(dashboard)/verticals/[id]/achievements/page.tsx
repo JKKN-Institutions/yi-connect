@@ -10,7 +10,7 @@ import Link from 'next/link'
 import { redirect, notFound } from 'next/navigation'
 import { ArrowLeft, Plus, Trophy, Award, Star, Target, Lightbulb } from 'lucide-react'
 import { getCurrentUser, requireRole } from '@/lib/auth'
-import { getVerticalById, getVerticalAchievements, getCurrentFiscalYear } from '@/lib/data/vertical'
+import { getVerticalById, getVerticalAchievements, getCurrentCalendarYear } from '@/lib/data/vertical'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -94,7 +94,7 @@ async function AchievementsContent({ params }: PageProps) {
   const vertical = await getVerticalById(id)
   if (!vertical) notFound()
 
-  const fiscalYear = getCurrentFiscalYear()
+  const calendarYear = getCurrentCalendarYear()
   const achievements = await getVerticalAchievements(id)
 
   if (achievements.length === 0) {
@@ -151,7 +151,7 @@ async function AchievementsContent({ params }: PageProps) {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Trophy className="h-5 w-5 text-yellow-500" />
-            FY{fiscalYear} Achievements
+            {calendarYear} Achievements
           </CardTitle>
           <CardDescription>
             {achievements.length} achievements recorded

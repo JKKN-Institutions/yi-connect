@@ -27,7 +27,7 @@ All automated setup tasks have been completed successfully!
   - Offline data handling
   - Play Store data safety summary
 
-**URL:** `https://yi-connect.vercel.app/privacy-policy` (after deployment)
+**URL:** `https://yi-connect-app.vercel.app/privacy-policy` (after deployment)
 
 ### Digital Asset Links Template ✅
 - ✅ **assetlinks.json template** created at `public/.well-known/assetlinks.json`
@@ -160,7 +160,7 @@ cd yi-connect-twa
 
 **Run Bubblewrap init:**
 ```bash
-bubblewrap init --manifest https://yi-connect.vercel.app/manifest.json
+bubblewrap init --manifest https://yi-connect-app.vercel.app/manifest.json
 ```
 
 **Prompts and Answers:**
@@ -170,7 +170,7 @@ bubblewrap init --manifest https://yi-connect.vercel.app/manifest.json
 | Application name | `Yi Connect` | Full app name |
 | Short name | `Yi Connect` | Short app name |
 | Package ID | `com.jkkninstitutions.yiconnect` | Must be unique, cannot change later |
-| Host | `yi-connect.vercel.app` | Your Vercel domain |
+| Host | `yi-connect-app.vercel.app` | Your Vercel domain |
 | Start URL | `/m` | Mobile entry point |
 | Display mode | `standalone` | Auto-detected from manifest |
 | Theme color | `#3b82f6` | Auto-detected from manifest |
@@ -297,11 +297,11 @@ git push
 
 **Option A: Using curl:**
 ```bash
-curl https://yi-connect.vercel.app/.well-known/assetlinks.json
+curl https://yi-connect-app.vercel.app/.well-known/assetlinks.json
 ```
 
 **Option B: In browser:**
-Open: https://yi-connect.vercel.app/.well-known/assetlinks.json
+Open: https://yi-connect-app.vercel.app/.well-known/assetlinks.json
 
 **Expected response:**
 ```json

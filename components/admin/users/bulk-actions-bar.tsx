@@ -32,7 +32,8 @@ import { Textarea } from '@/components/ui/textarea';
 import {
   bulkAssignRole,
   bulkRemoveRole,
-  bulkAssignChapter
+  bulkAssignChapter,
+  bulkDeactivateUsers
 } from '@/app/actions/users';
 import type { UserListItem } from '@/types/user';
 import type { Role } from '@/types/user';
@@ -152,10 +153,20 @@ export function BulkActionsBar({
 
   // Handle bulk deactivate
   const handleDeactivate = async () => {
-    // For now, we'll implement this as a simple confirmation
-    // In the future, this could call a bulkChangeUserStatus action
-    toast.info('Bulk deactivation feature coming soon');
-    setDeactivateOpen(false);
+    startTransition(async () => {
+      const formData = new FormData();
+      formData.append('user_ids', JSON.stringify(selectedUserIds));
+
+      const result = await bulkDeactivateUsers({ message: '' }, formData);
+
+      if (result.success) {
+        toast.success(result.message);
+        setDeactivateOpen(false);
+        onSuccess();
+      } else {
+        toast.error(result.message);
+      }
+    });
   };
 
   return (

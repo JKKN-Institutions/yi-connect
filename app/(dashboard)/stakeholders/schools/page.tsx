@@ -27,14 +27,14 @@ async function SchoolsStats() {
   // Super admins without chapter_id will see aggregated stats from all chapters
   const schools = await getSchools(chapterId)
 
+  const schoolsWithHealthScore = schools.filter((s) => s.health_score !== undefined && s.health_score !== null)
+
   const stats = {
     total: schools.length,
     active: schools.filter((s) => s.status === 'active').length,
     withMou: schools.filter((s) => s.mou_status === 'signed').length,
-    avgHealth: schools.length > 0
-      ? schools
-          .filter((s) => s.health_score !== undefined)
-          .reduce((acc, s) => acc + (s.health_score || 0), 0) / schools.filter((s) => s.health_score).length
+    avgHealth: schoolsWithHealthScore.length > 0
+      ? schoolsWithHealthScore.reduce((acc, s) => acc + (s.health_score || 0), 0) / schoolsWithHealthScore.length
       : 0,
   }
 

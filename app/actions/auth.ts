@@ -58,3 +58,144 @@ export async function signOut() {
   await supabase.auth.signOut()
   redirect('/login')
 }
+
+/**
+ * Demo account emails (allowed for one-click login)
+ */
+const DEMO_ACCOUNTS = [
+  'demo-super@yi-demo.com',
+  'demo-national@yi-demo.com',
+  'demo-exec@yi-demo.com',
+  'demo-chair@yi-demo.com',
+  'demo-cochair@yi-demo.com',
+  'demo-ec@yi-demo.com',
+  'demo-industry@yi-demo.com',
+  'demo-member@yi-demo.com',
+] as const
+
+/**
+ * Demo login action - allows one-click login for demo accounts
+ *
+ * This action is restricted to demo accounts only for security.
+ * It uses the service role to sign in the user directly.
+ */
+export async function loginAsDemoUser(email: string): Promise<{
+  success: boolean
+  error?: string
+}> {
+  // Validate this is a demo account
+  if (!DEMO_ACCOUNTS.includes(email as typeof DEMO_ACCOUNTS[number])) {
+    return {
+      success: false,
+      error: 'Only demo accounts can use one-click login',
+    }
+  }
+
+  const supabase = await createServerSupabaseClient()
+
+  // Sign in with the demo account password
+  const { error } = await supabase.auth.signInWithPassword({
+    email,
+    password: 'DemoMember2024!',
+  })
+
+  if (error) {
+    console.error('Demo login error:', error)
+
+    // If user doesn't exist, try to create them first
+    if (error.message === 'Invalid login credentials') {
+      const created = await ensureDemoUserExists(email)
+      if (created) {
+        // Retry login after creating user
+        const { error: retryError } = await supabase.auth.signInWithPassword({
+          email,
+          password: 'DemoMember2024!',
+        })
+        if (!retryError) {
+          return { success: true }
+        }
+        return {
+          success: false,
+          error: retryError.message,
+        }
+      }
+    }
+
+    return {
+      success: false,
+      error: error.message,
+    }
+  }
+
+  return { success: true }
+}
+
+/**
+ * Ensure demo user exists in Supabase Auth
+ * Creates the user if they don't exist using admin API
+ */
+async function ensureDemoUserExists(email: string): Promise<boolean> {
+
+  const { createAdminSupabaseClient } = await import('@/lib/supabase/server')
+  const adminClient = createAdminSupabaseClient()
+
+
+  try {
+    // Try to create the demo user - will fail if already exists
+    const { data, error } = await adminClient.auth.admin.createUser({
+      email,
+      password: 'DemoMember2024!',
+      email_confirm: true, // Auto-confirm email
+      user_metadata: {
+        full_name: getDemoUserName(email),
+        is_demo: true,
+      },
+    })
+
+
+    if (error) {
+      // User might already exist - need to update their password
+      if (error.message.includes('already been registered') || error.message.includes('already exists')) {
+
+        // Find the user and update their password
+        const { data: listData } = await adminClient.auth.admin.listUsers()
+        const existingUser = listData?.users?.find(u => u.email === email)
+
+        if (existingUser) {
+          const { error: updateError } = await adminClient.auth.admin.updateUserById(existingUser.id, {
+            password: 'DemoMember2024!',
+            email_confirm: true,
+          })
+
+          if (updateError) {
+            console.error('[ensureDemoUserExists] Failed to update password:', updateError.message)
+            return false
+          }
+          return true
+        }
+
+        console.error('[ensureDemoUserExists] User exists but could not find them')
+        return false
+      }
+      console.error('[ensureDemoUserExists] Failed to create demo user:', error.message)
+      return false
+    }
+
+    return true
+  } catch (err) {
+    console.error('[ensureDemoUserExists] Caught exception:', err)
+    return false
+  }
+}
+
+/**
+ * Get display name for demo user based on email
+ */
+function getDemoUserName(email: string): string {
+  const names: Record<string, string> = {
+    'demo-chair@yi-demo.com': 'Demo Chair',
+    'demo-cochair@yi-demo.com': 'Demo Co-Chair',
+    'demo-ec@yi-demo.com': 'Demo EC Member',
+  }
+  return names[email] || 'Demo User'
+}

@@ -61,7 +61,7 @@ export const budgetsColumns: ColumnDef<BudgetListItem>[] = [
           </Link>
           <div className="flex items-center gap-2 mt-1">
             <BudgetPeriodBadge period={budget.period} quarter={budget.quarter} />
-            <span className="text-xs text-muted-foreground">FY {budget.fiscal_year}</span>
+            <span className="text-xs text-muted-foreground">{budget.calendar_year}</span>
           </div>
         </div>
       )

@@ -48,7 +48,7 @@ import {
 import { format, isPast } from 'date-fns'
 
 export default async function ManageOpportunitiesPage() {
-  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair'])
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Industry Coordinator'])
 
   return (
     <Suspense fallback={<ManageOpportunitiesPageSkeleton />}>

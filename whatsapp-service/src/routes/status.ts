@@ -1,19 +1,24 @@
-/**
- * Status Route - Get WhatsApp connection status
- */
+import { Router } from 'express';
+import { getState, getQRCode, getClientInfo, getConnectionStatus } from '../whatsapp';
 
-import { Router, Request, Response } from 'express';
-import { getStatus } from '../whatsapp';
+export const statusRoute = Router();
 
-const router = Router();
+statusRoute.get('/', async (req, res) => {
+  try {
+    const status = await getConnectionStatus();
 
-/**
- * GET /status
- * Get current WhatsApp connection status
- */
-router.get('/', (_req: Request, res: Response) => {
-  const status = getStatus();
-  res.json(status);
+    res.json({
+      success: true,
+      state: status.state,
+      isLoggedIn: status.isLoggedIn,
+      qrCode: getQRCode(),
+      clientInfo: status.info
+    });
+  } catch (error) {
+    const err = error as Error;
+    res.status(500).json({
+      success: false,
+      error: err.message
+    });
+  }
 });
-
-export { router as statusRouter };

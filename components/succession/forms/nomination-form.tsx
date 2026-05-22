@@ -26,11 +26,11 @@ import {
 import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
 import { submitNomination } from '@/app/actions/succession'
-import { CreateNominationSchema } from '@/lib/validations/succession'
+import { NominationFormSchema } from '@/lib/validations/succession'
 import type { SuccessionPosition } from '@/lib/types/succession'
 import { toast } from 'react-hot-toast'
 
-type FormData = Omit<z.infer<typeof CreateNominationSchema>, 'nominated_by_id'>
+type FormData = z.infer<typeof NominationFormSchema>
 
 interface NominationFormProps {
   cycleId: string
@@ -53,9 +53,7 @@ export function NominationForm({ cycleId, positions, members }: NominationFormPr
   })
 
   const form = useForm<FormData>({
-    resolver: zodResolver(
-      CreateNominationSchema.omit({ nominated_by_id: true })
-    ),
+    resolver: zodResolver(NominationFormSchema),
     defaultValues: {
       cycle_id: cycleId,
       position_id: '',

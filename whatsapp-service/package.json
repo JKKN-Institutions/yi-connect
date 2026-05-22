@@ -1,22 +1,25 @@
 {
-  "name": "yi-whatsapp-service",
-  "version": "1.0.0",
-  "description": "Persistent WhatsApp service for Yi Connect",
+  "name": "yi-whatsapp-service-full",
+  "version": "2.0.0",
+  "description": "Yi WhatsApp Service with Full MCP Parity - 54 Endpoints",
   "main": "dist/index.js",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
     "build": "tsc",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "clean": "rm -rf dist"
   },
   "dependencies": {
     "cors": "^2.8.5",
     "express": "^4.21.1",
+    "mime-types": "^2.1.35",
     "qrcode": "^1.5.4",
     "whatsapp-web.js": "^1.26.0"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.0",
+    "@types/mime-types": "^2.1.4",
     "@types/node": "^22.10.2",
     "@types/qrcode": "^1.5.5",
     "tsx": "^4.19.2",

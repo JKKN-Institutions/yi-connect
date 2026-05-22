@@ -79,40 +79,50 @@ export function CategoryCard({
         </div>
 
         {/* Scoring Weights Preview */}
-        {category.scoring_weights && (
+        {category.scoring_weights && typeof category.scoring_weights === 'object' && (
           <div className="mt-4 space-y-2">
             <p className="text-xs font-medium text-muted-foreground">Scoring Criteria:</p>
             <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="flex justify-between">
-                <span>Impact:</span>
-                <span className="font-medium">
-                  {((category.scoring_weights as any).impact * 100).toFixed(0)}%
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span>Innovation:</span>
-                <span className="font-medium">
-                  {((category.scoring_weights as any).innovation * 100).toFixed(0)}%
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span>Participation:</span>
-                <span className="font-medium">
-                  {((category.scoring_weights as any).participation * 100).toFixed(0)}%
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span>Consistency:</span>
-                <span className="font-medium">
-                  {((category.scoring_weights as any).consistency * 100).toFixed(0)}%
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span>Leadership:</span>
-                <span className="font-medium">
-                  {((category.scoring_weights as any).leadership * 100).toFixed(0)}%
-                </span>
-              </div>
+              {(category.scoring_weights as Record<string, number>).impact !== undefined && (
+                <div className="flex justify-between">
+                  <span>Impact:</span>
+                  <span className="font-medium">
+                    {(((category.scoring_weights as Record<string, number>).impact || 0) * 100).toFixed(0)}%
+                  </span>
+                </div>
+              )}
+              {(category.scoring_weights as Record<string, number>).innovation !== undefined && (
+                <div className="flex justify-between">
+                  <span>Innovation:</span>
+                  <span className="font-medium">
+                    {(((category.scoring_weights as Record<string, number>).innovation || 0) * 100).toFixed(0)}%
+                  </span>
+                </div>
+              )}
+              {(category.scoring_weights as Record<string, number>).participation !== undefined && (
+                <div className="flex justify-between">
+                  <span>Participation:</span>
+                  <span className="font-medium">
+                    {(((category.scoring_weights as Record<string, number>).participation || 0) * 100).toFixed(0)}%
+                  </span>
+                </div>
+              )}
+              {(category.scoring_weights as Record<string, number>).consistency !== undefined && (
+                <div className="flex justify-between">
+                  <span>Consistency:</span>
+                  <span className="font-medium">
+                    {(((category.scoring_weights as Record<string, number>).consistency || 0) * 100).toFixed(0)}%
+                  </span>
+                </div>
+              )}
+              {(category.scoring_weights as Record<string, number>).leadership !== undefined && (
+                <div className="flex justify-between">
+                  <span>Leadership:</span>
+                  <span className="font-medium">
+                    {(((category.scoring_weights as Record<string, number>).leadership || 0) * 100).toFixed(0)}%
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         )}

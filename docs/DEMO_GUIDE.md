@@ -12,7 +12,7 @@ This guide helps chapter leaders experience the Yi Connect platform from differe
 
 ## How to Login
 
-1. Go to **https://yi-connect.vercel.app/login**
+1. Go to **https://yi-connect-app.vercel.app/login**
 2. Enter the demo email address
 3. Click "Continue with Email"
 4. Check inbox for magic link (check spam if needed)

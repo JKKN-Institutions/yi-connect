@@ -1,6 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
 import {
   CreateSuccessionCycleSchema,
@@ -11,7 +12,7 @@ import {
 } from '@/lib/validations/succession'
 import { z } from 'zod'
 
-type ActionResult<T = any> = {
+type ActionResult<T = unknown> = {
   success: boolean
   data?: T
   error?: string
@@ -38,7 +39,7 @@ const STATUS_TO_STEP_MAP: Record<string, number> = {
  * Called automatically when cycle status changes
  */
 async function syncTimelineStepsWithCycleStatus(
-  supabase: any,
+  supabase: SupabaseClient,
   cycleId: string,
   cycleStatus: string
 ): Promise<void> {
@@ -195,8 +196,6 @@ export async function updateSuccessionCycle(
         cleanedData[key] = null
       }
     }
-
-    console.log('Updating succession cycle with data:', cleanedData)
 
     // Get current version for optimistic locking
     const { data: current, error: fetchError } = await supabase
@@ -694,8 +693,8 @@ export async function submitNomination(
     revalidatePath('/succession/nominations')
     revalidatePath('/succession/admin/nominations')
     return { success: true, data: nomination }
-  } catch (error: any) {
-    if (error.name === 'ZodError') {
+  } catch (error: unknown) {
+    if (error instanceof z.ZodError) {
       return { success: false, error: error.issues[0].message }
     }
     console.error('Error submitting nomination:', error)
@@ -765,8 +764,8 @@ export async function updateNomination(
     revalidatePath('/succession/nominations')
     revalidatePath(`/succession/nominations/${id}`)
     return { success: true, data: nomination }
-  } catch (error: any) {
-    if (error.name === 'ZodError') {
+  } catch (error: unknown) {
+    if (error instanceof z.ZodError) {
       return { success: false, error: error.issues[0].message }
     }
     console.error('Error updating nomination:', error)
@@ -890,8 +889,8 @@ export async function reviewNomination(
     revalidatePath('/succession/admin/nominations')
     revalidatePath(`/succession/nominations/${id}`)
     return { success: true, data: nomination }
-  } catch (error: any) {
-    if (error.name === 'ZodError') {
+  } catch (error: unknown) {
+    if (error instanceof z.ZodError) {
       return { success: false, error: error.issues[0].message }
     }
     console.error('Error reviewing nomination:', error)
@@ -959,8 +958,8 @@ export async function submitApplication(
     revalidatePath('/succession/applications')
     revalidatePath('/succession/admin/applications')
     return { success: true, data: application }
-  } catch (error: any) {
-    if (error.name === 'ZodError') {
+  } catch (error: unknown) {
+    if (error instanceof z.ZodError) {
       return { success: false, error: error.issues[0].message }
     }
     console.error('Error submitting application:', error)
@@ -1013,8 +1012,8 @@ export async function updateApplication(
     revalidatePath('/succession/applications')
     revalidatePath(`/succession/applications/${id}`)
     return { success: true, data: application }
-  } catch (error: any) {
-    if (error.name === 'ZodError') {
+  } catch (error: unknown) {
+    if (error instanceof z.ZodError) {
       return { success: false, error: error.issues[0].message }
     }
     console.error('Error updating application:', error)
@@ -1058,7 +1057,7 @@ export async function withdrawApplication(
     revalidatePath('/succession/applications')
     revalidatePath(`/succession/applications/${id}`)
     return { success: true, data: application }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error withdrawing application:', error)
     return { success: false, error: 'Failed to withdraw application' }
   }
@@ -1111,7 +1110,7 @@ export async function reviewApplication(
     revalidatePath('/succession/admin/applications')
     revalidatePath(`/succession/applications/${id}`)
     return { success: true, data: application }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error reviewing application:', error)
     return { success: false, error: 'Failed to review application' }
   }
@@ -1154,8 +1153,8 @@ export async function createEvaluationCriteria(
     revalidatePath('/succession/admin/positions')
     revalidatePath(`/succession/admin/positions/${validated.position_id}`)
     return { success: true, data: criteria }
-  } catch (error: any) {
-    if (error.name === 'ZodError') {
+  } catch (error: unknown) {
+    if (error instanceof z.ZodError) {
       return { success: false, error: error.issues[0].message }
     }
     console.error('Error creating evaluation criteria:', error)
@@ -1197,8 +1196,8 @@ export async function updateEvaluationCriteria(
 
     revalidatePath('/succession/admin/positions')
     return { success: true, data: criteria }
-  } catch (error: any) {
-    if (error.name === 'ZodError') {
+  } catch (error: unknown) {
+    if (error instanceof z.ZodError) {
       return { success: false, error: error.issues[0].message }
     }
     console.error('Error updating evaluation criteria:', error)
@@ -1232,7 +1231,7 @@ export async function deleteEvaluationCriteria(
 
     revalidatePath('/succession/admin/positions')
     return { success: true }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error deleting evaluation criteria:', error)
     return { success: false, error: 'Failed to delete evaluation criteria' }
   }
@@ -1282,7 +1281,7 @@ export async function assignEvaluator(
 
     revalidatePath('/succession/admin/evaluators')
     return { success: true, data: evaluator }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error assigning evaluator:', error)
     return { success: false, error: 'Failed to assign evaluator' }
   }
@@ -1312,7 +1311,7 @@ export async function removeEvaluator(id: string): Promise<ActionResult> {
 
     revalidatePath('/succession/admin/evaluators')
     return { success: true }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error removing evaluator:', error)
     return { success: false, error: 'Failed to remove evaluator' }
   }
@@ -1373,7 +1372,7 @@ export async function submitEvaluationScores(
     }
 
     // Insert scores
-    const scoresToInsert = validated.scores.map((score: any) => ({
+    const scoresToInsert = validated.scores.map((score: { criterion_id: string; score: number; comments?: string }) => ({
       cycle_id: nomination.cycle_id,
       nomination_id: validated.nomination_id,
       evaluator_id: evaluator.id,
@@ -1397,8 +1396,8 @@ export async function submitEvaluationScores(
     revalidatePath('/succession/evaluations')
     revalidatePath(`/succession/nominations/${validated.nomination_id}`)
     return { success: true }
-  } catch (error: any) {
-    if (error.name === 'ZodError') {
+  } catch (error: unknown) {
+    if (error instanceof z.ZodError) {
       return { success: false, error: error.issues[0].message }
     }
     console.error('Error submitting evaluation scores:', error)
@@ -1450,8 +1449,8 @@ export async function createTimelineStep(
     revalidatePath('/succession/admin/timeline')
     revalidatePath(`/succession/admin/cycles/${validated.cycle_id}`)
     return { success: true, data: timelineStep }
-  } catch (error: any) {
-    if (error.name === 'ZodError') {
+  } catch (error: unknown) {
+    if (error instanceof z.ZodError) {
       return { success: false, error: error.issues[0].message }
     }
     console.error('Error creating timeline step:', error)
@@ -1503,8 +1502,8 @@ export async function updateTimelineStep(
 
     revalidatePath('/succession/admin/timeline')
     return { success: true, data: timelineStep }
-  } catch (error: any) {
-    if (error.name === 'ZodError') {
+  } catch (error: unknown) {
+    if (error instanceof z.ZodError) {
       return { success: false, error: error.issues[0].message }
     }
     console.error('Error updating timeline step:', error)
@@ -1545,7 +1544,7 @@ export async function updateTimelineStepStatus(
 
     revalidatePath('/succession/admin/timeline')
     return { success: true, data: timelineStep }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error updating timeline step status:', error)
     return { success: false, error: 'Failed to update timeline step status' }
   }
@@ -1576,7 +1575,7 @@ export async function deleteTimelineStep(id: string): Promise<ActionResult> {
 
     revalidatePath('/succession/admin/timeline')
     return { success: true }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error deleting timeline step:', error)
     return { success: false, error: 'Failed to delete timeline step' }
   }
@@ -1632,8 +1631,8 @@ export async function createApproach(
     revalidatePath('/succession/admin/approaches')
     revalidatePath(`/succession/admin/cycles/${validated.cycle_id}`)
     return { success: true, data: approach }
-  } catch (error: any) {
-    if (error.name === 'ZodError') {
+  } catch (error: unknown) {
+    if (error instanceof z.ZodError) {
       return { success: false, error: error.issues[0].message }
     }
     console.error('Error creating approach:', error)
@@ -1686,8 +1685,8 @@ export async function updateApproach(
     revalidatePath('/succession/admin/approaches')
     revalidatePath(`/succession/admin/approaches/${id}`)
     return { success: true, data: approach }
-  } catch (error: any) {
-    if (error.name === 'ZodError') {
+  } catch (error: unknown) {
+    if (error instanceof z.ZodError) {
       return { success: false, error: error.issues[0].message }
     }
     console.error('Error updating approach:', error)
@@ -1737,7 +1736,7 @@ export async function updateApproachResponse(
     revalidatePath('/succession/admin/approaches')
     revalidatePath(`/succession/admin/approaches/${id}`)
     return { success: true, data: approach }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error updating approach response:', error)
     return { success: false, error: 'Failed to update approach response' }
   }
@@ -1768,7 +1767,7 @@ export async function deleteApproach(id: string): Promise<ActionResult> {
 
     revalidatePath('/succession/admin/approaches')
     return { success: true }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error deleting approach:', error)
     return { success: false, error: 'Failed to delete approach record' }
   }
@@ -1819,8 +1818,8 @@ export async function createMeeting(
     revalidatePath('/succession/admin/meetings')
     revalidatePath(`/succession/admin/cycles/${validated.cycle_id}`)
     return { success: true, data: meeting }
-  } catch (error: any) {
-    if (error.name === 'ZodError') {
+  } catch (error: unknown) {
+    if (error instanceof z.ZodError) {
       return { success: false, error: error.issues[0].message }
     }
     console.error('Error creating meeting:', error)
@@ -1871,8 +1870,8 @@ export async function updateMeeting(
     revalidatePath('/succession/admin/meetings')
     revalidatePath(`/succession/admin/meetings/${id}`)
     return { success: true, data: meeting }
-  } catch (error: any) {
-    if (error.name === 'ZodError') {
+  } catch (error: unknown) {
+    if (error instanceof z.ZodError) {
       return { success: false, error: error.issues[0].message }
     }
     console.error('Error updating meeting:', error)
@@ -1914,7 +1913,7 @@ export async function updateMeetingStatus(
     revalidatePath('/succession/admin/meetings')
     revalidatePath(`/succession/admin/meetings/${id}`)
     return { success: true, data: meeting }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error updating meeting status:', error)
     return { success: false, error: 'Failed to update meeting status' }
   }
@@ -1976,7 +1975,7 @@ export async function deleteMeeting(id: string): Promise<ActionResult> {
 
     revalidatePath('/succession/admin/meetings')
     return { success: true }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error deleting meeting:', error)
     return { success: false, error: 'Failed to delete meeting' }
   }
@@ -2037,8 +2036,8 @@ export async function submitVote(
     revalidatePath('/succession/admin/meetings')
     revalidatePath(`/succession/admin/meetings/${validated.meeting_id}`)
     return { success: true, data: vote }
-  } catch (error: any) {
-    if (error.name === 'ZodError') {
+  } catch (error: unknown) {
+    if (error instanceof z.ZodError) {
       return { success: false, error: error.issues[0].message }
     }
     console.error('Error submitting vote:', error)
@@ -2101,7 +2100,7 @@ export async function updateVote(
 
     revalidatePath('/succession/admin/meetings')
     return { success: true, data: updatedVote }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error updating vote:', error)
     return { success: false, error: 'Failed to update vote' }
   }
@@ -2157,7 +2156,7 @@ export async function deleteVote(id: string): Promise<ActionResult> {
 
     revalidatePath('/succession/admin/meetings')
     return { success: true }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error deleting vote:', error)
     return { success: false, error: 'Failed to delete vote' }
   }
@@ -2241,7 +2240,7 @@ export async function seedTimelineSteps(
     ]
 
     // Calculate dates for each step
-    let currentDate = new Date(startDate)
+    const currentDate = new Date(startDate)
     const stepsToInsert = timelineSteps.map((step) => {
       const stepStartDate = new Date(currentDate)
       const stepEndDate = new Date(currentDate)
@@ -2274,7 +2273,7 @@ export async function seedTimelineSteps(
     revalidatePath(`/succession/admin/cycles/${cycleId}`)
     revalidatePath('/succession/admin/timeline')
     return { success: true, data: { count: insertedSteps?.length || 0 } }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error seeding timeline steps:', error)
     return { success: false, error: 'Failed to seed timeline steps' }
   }
@@ -2342,7 +2341,7 @@ export async function autoCreateSuccessionCycle(
         timelineStepsCreated: timelineResult.data?.count || 0,
       },
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error auto-creating succession cycle:', error)
     return { success: false, error: 'Failed to auto-create succession cycle' }
   }

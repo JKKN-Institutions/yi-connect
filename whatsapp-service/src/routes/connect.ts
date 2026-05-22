@@ -1,46 +1,36 @@
-/**
- * Connect Route - Initialize WhatsApp and get QR code
- */
+import { Router } from 'express';
+import { initializeClient, getState, getQRCode } from '../whatsapp';
 
-import { Router, Request, Response } from 'express';
-import { initializeClient, getStatus } from '../whatsapp';
+export const connectRoute = Router();
 
-const router = Router();
-
-/**
- * POST /connect
- * Initialize WhatsApp client and return QR code if needed
- */
-router.post('/', async (_req: Request, res: Response) => {
+connectRoute.post('/', async (req, res) => {
   try {
-    console.log('[Connect] Received connect request');
+    const currentState = getState();
 
-    const result = await initializeClient();
+    if (currentState === 'ready') {
+      return res.json({
+        success: true,
+        state: 'ready',
+        message: 'Already connected'
+      });
+    }
 
-    console.log('[Connect] Result:', result.status);
+    // Start initialization (non-blocking)
+    initializeClient().catch(err => {
+      console.error('[Connect] Init error:', err.message);
+    });
 
-    res.json(result);
+    // Return current state
+    res.json({
+      success: true,
+      state: getState(),
+      message: 'Connection initiated. Poll /status for QR code.'
+    });
   } catch (error) {
-    const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-    console.error('[Connect] Error:', errorMsg);
+    const err = error as Error;
     res.status(500).json({
       success: false,
-      status: 'disconnected',
-      error: errorMsg
+      error: err.message
     });
   }
 });
-
-/**
- * GET /connect
- * Get current connection status (alias for /status)
- */
-router.get('/', (_req: Request, res: Response) => {
-  const status = getStatus();
-  res.json({
-    success: status.isReady,
-    ...status
-  });
-});
-
-export { router as connectRouter };

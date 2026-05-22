@@ -2,7 +2,7 @@
  * Admin Edit User Page
  *
  * Form for editing user profile information.
- * Restricted to Super Admin and National Admin only.
+ * Restricted to Super Admin, National Admin, and Chair.
  */
 
 import { Suspense } from 'react';
@@ -34,8 +34,8 @@ async function EditFormData({ paramsPromise }: { paramsPromise: Promise<{ id: st
   // Await params inside Suspense boundary
   const params = await paramsPromise;
 
-  // Require Super Admin or National Admin
-  await requireRole(['Super Admin', 'National Admin']);
+  // Require Super Admin, National Admin, or Chair
+  await requireRole(['Super Admin', 'National Admin', 'Chair']);
 
   const user = await getUserById(params.id);
 

@@ -78,8 +78,8 @@ export const getBudgets = cache(async (
   }
 
   // Apply filters
-  if (filters?.fiscal_year) {
-    query = query.eq('fiscal_year', filters.fiscal_year)
+  if (filters?.calendar_year) {
+    query = query.eq('calendar_year', filters.calendar_year)
   }
 
   if (filters?.period) {
@@ -104,7 +104,7 @@ export const getBudgets = cache(async (
   query = query.range(from, to)
 
   // Sorting
-  query = query.order('fiscal_year', { ascending: false })
+  query = query.order('calendar_year', { ascending: false })
     .order('start_date', { ascending: false })
 
   const { data, error, count } = await query
@@ -118,7 +118,7 @@ export const getBudgets = cache(async (
   const listItems: BudgetListItem[] = (data || []).map((budget) => ({
     id: budget.id,
     name: budget.name,
-    fiscal_year: budget.fiscal_year,
+    calendar_year: budget.calendar_year,
     period: budget.period as any,
     quarter: budget.quarter || undefined,
     total_amount: Number(budget.total_amount),
@@ -206,7 +206,7 @@ export const getBudgetUtilization = cache(async (budgetId: string): Promise<Budg
 /**
  * Get budget analytics for chapter
  */
-export const getBudgetAnalytics = cache(async (chapterId: string, fiscalYear?: number): Promise<BudgetAnalytics> => {
+export const getBudgetAnalytics = cache(async (chapterId: string, calendarYear?: number): Promise<BudgetAnalytics> => {
   const supabase = await createServerSupabaseClient()
 
   let query = supabase
@@ -214,8 +214,8 @@ export const getBudgetAnalytics = cache(async (chapterId: string, fiscalYear?: n
     .select('*')
     .eq('chapter_id', chapterId)
 
-  if (fiscalYear) {
-    query = query.eq('fiscal_year', fiscalYear)
+  if (calendarYear) {
+    query = query.eq('calendar_year', calendarYear)
   }
 
   const { data: budgets, error } = await query
@@ -692,6 +692,7 @@ export const getSponsorshipTiers = cache(async (
   let query = supabase
     .from('sponsorship_tiers')
     .select('*')
+    .order('sort_order', { ascending: true })
     .order('min_amount', { ascending: false })
 
   if (chapterId) {
@@ -783,8 +784,8 @@ export const getSponsorshipDeals = cache(async (
     }
   }
 
-  if (filters?.fiscal_year) {
-    query = query.eq('fiscal_year', filters.fiscal_year)
+  if (filters?.calendar_year) {
+    query = query.eq('calendar_year', filters.calendar_year)
   }
 
   if (filters?.event_id) {
@@ -836,7 +837,7 @@ export const getSponsorshipDeals = cache(async (
     weighted_value: Number(deal.weighted_value || 0),
     expected_closure_date: deal.expected_closure_date,
     assigned_to: deal.assigned_to ? { id: deal.assigned_to, full_name: 'User' } : undefined,
-    fiscal_year: deal.fiscal_year,
+    calendar_year: deal.calendar_year,
   }))
 
   return {
@@ -870,7 +871,9 @@ export const getSponsorshipDealById = cache(async (dealId: string): Promise<Spon
     return null
   }
 
-  return data as any
+  return {
+    ...data,
+  } as any
 })
 
 /**
@@ -1180,9 +1183,9 @@ export const getReimbursementAnalytics = cache(async (chapterId: string | null):
 /**
  * Get comprehensive financial dashboard summary
  */
-export const getFinancialDashboard = cache(async (chapterId: string, fiscalYear?: number): Promise<FinancialDashboardSummary> => {
+export const getFinancialDashboard = cache(async (chapterId: string, calendarYear?: number): Promise<FinancialDashboardSummary> => {
   const [budget, expenses, sponsorships, reimbursements] = await Promise.all([
-    getBudgetAnalytics(chapterId, fiscalYear),
+    getBudgetAnalytics(chapterId, calendarYear),
     getExpenseAnalytics(chapterId),
     getSponsorshipPipelineValue(chapterId),
     getReimbursementAnalytics(chapterId),
@@ -1214,4 +1217,183 @@ export const getFinancialDashboard = cache(async (chapterId: string, fiscalYear?
       net_cash_flow: sponsorships.total_received - expenses.total_amount,
     },
   }
+})
+
+// ================================================
+// SPONSORSHIP TIER UI (Feature 3A)
+// ================================================
+
+export type TierBenefit = { label: string; included: boolean }
+
+export interface EventSponsorGroup {
+  tier_level: 'platinum' | 'gold' | 'silver' | 'bronze' | 'supporter'
+  tier_name: string | null
+  tier_color: string | null
+  sponsors: Array<{
+    id: string
+    display_name: string
+    organization_name: string
+    logo_url: string | null
+    website: string | null
+  }>
+}
+
+export interface TierRevenueRow {
+  tier_level: 'platinum' | 'gold' | 'silver' | 'bronze' | 'supporter'
+  tier_label: string
+  revenue: number
+  deal_count: number
+}
+
+/**
+ * Get sponsors grouped by tier for a specific event.
+ * Only shows deals where the deal is committed or beyond (deal_stage in committed,
+ * contract_signed, payment_received). Returns groups ordered by tier priority.
+ */
+export const getSponsorsByEvent = cache(async (
+  eventId: string
+): Promise<EventSponsorGroup[]> => {
+  const supabase = await createServerSupabaseClient()
+
+  const { data, error } = await supabase
+    .from('sponsorship_deals')
+    .select(`
+      id,
+      deal_stage,
+      sponsor:sponsors(
+        id,
+        organization_name,
+        display_name,
+        logo_url,
+        website,
+        is_active
+      ),
+      tier:sponsorship_tiers(
+        id,
+        name,
+        tier_level,
+        color,
+        sort_order
+      )
+    `)
+    .eq('event_id', eventId)
+    .in('deal_stage', ['committed', 'contract_signed', 'payment_received'])
+
+  if (error) {
+    console.error('Error fetching event sponsors:', error)
+    return []
+  }
+
+  const tierOrder: Record<string, number> = {
+    platinum: 0,
+    gold: 1,
+    silver: 2,
+    bronze: 3,
+    supporter: 4,
+  }
+
+  // Group by tier_level (fallback to 'supporter' when deal has no tier)
+  const groupsMap = new Map<string, EventSponsorGroup>()
+
+  for (const row of (data ?? []) as any[]) {
+    const sponsor = row.sponsor
+    if (!sponsor || sponsor.is_active === false) continue
+
+    const tier = row.tier
+    const tierLevel = (tier?.tier_level as EventSponsorGroup['tier_level']) ?? 'supporter'
+
+    if (!groupsMap.has(tierLevel)) {
+      groupsMap.set(tierLevel, {
+        tier_level: tierLevel,
+        tier_name: tier?.name ?? null,
+        tier_color: tier?.color ?? null,
+        sponsors: [],
+      })
+    }
+
+    const group = groupsMap.get(tierLevel)!
+    // Dedup sponsors within the same tier (a sponsor may have multiple deals)
+    if (!group.sponsors.find(s => s.id === sponsor.id)) {
+      group.sponsors.push({
+        id: sponsor.id,
+        display_name: sponsor.display_name || sponsor.organization_name,
+        organization_name: sponsor.organization_name,
+        logo_url: sponsor.logo_url,
+        website: sponsor.website,
+      })
+    }
+  }
+
+  return Array.from(groupsMap.values()).sort(
+    (a, b) => (tierOrder[a.tier_level] ?? 99) - (tierOrder[b.tier_level] ?? 99)
+  )
+})
+
+/**
+ * Sum of received sponsorship revenue per tier level, for the tier revenue card.
+ * Only includes deals with payment_received stage.
+ */
+export const getTierRevenue = cache(async (
+  chapterId: string | null
+): Promise<TierRevenueRow[]> => {
+  const supabase = await createServerSupabaseClient()
+
+  let query = supabase
+    .from('sponsorship_deals')
+    .select(`
+      received_amount,
+      committed_amount,
+      proposed_amount,
+      deal_stage,
+      tier:sponsorship_tiers(tier_level)
+    `)
+    .eq('deal_stage', 'payment_received')
+
+  if (chapterId) {
+    query = query.eq('chapter_id', chapterId)
+  }
+
+  const { data, error } = await query
+
+  if (error) {
+    console.error('Error fetching tier revenue:', error)
+    return []
+  }
+
+  const tierLabels: Record<string, string> = {
+    platinum: 'Platinum',
+    gold: 'Gold',
+    silver: 'Silver',
+    bronze: 'Bronze',
+    supporter: 'Supporter',
+  }
+
+  const buckets: Record<string, { revenue: number; deal_count: number }> = {
+    platinum: { revenue: 0, deal_count: 0 },
+    gold: { revenue: 0, deal_count: 0 },
+    silver: { revenue: 0, deal_count: 0 },
+    bronze: { revenue: 0, deal_count: 0 },
+    supporter: { revenue: 0, deal_count: 0 },
+  }
+
+  for (const row of (data ?? []) as any[]) {
+    const tierLevel = row.tier?.tier_level ?? 'supporter'
+    if (!buckets[tierLevel]) continue
+    const amount =
+      Number(row.received_amount) ||
+      Number(row.committed_amount) ||
+      Number(row.proposed_amount) ||
+      0
+    buckets[tierLevel].revenue += amount
+    buckets[tierLevel].deal_count += 1
+  }
+
+  return (['platinum', 'gold', 'silver', 'bronze', 'supporter'] as const).map(
+    (lvl) => ({
+      tier_level: lvl,
+      tier_label: tierLabels[lvl],
+      revenue: buckets[lvl].revenue,
+      deal_count: buckets[lvl].deal_count,
+    })
+  )
 })

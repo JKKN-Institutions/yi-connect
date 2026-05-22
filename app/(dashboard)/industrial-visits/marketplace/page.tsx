@@ -24,7 +24,7 @@ export const metadata: Metadata = {
 
 async function IVMarketplaceContent() {
   // All authenticated users can view the marketplace
-  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member', 'Member']);
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member', 'Member', 'Industry Coordinator']);
 
   // Get current user's chapter
   const chapter = await getCurrentUserChapter();

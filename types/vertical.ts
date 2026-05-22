@@ -308,7 +308,7 @@ export interface KPIAlert {
  * Comparative analytics across verticals
  */
 export interface VerticalComparison {
-  fiscal_year: number
+  calendar_year: number
   quarter?: number
   verticals: {
     vertical_id: string
@@ -329,7 +329,7 @@ export interface VerticalComparison {
 export interface VerticalQuarterlyTrend {
   vertical_id: string
   vertical_name: string
-  fiscal_year: number
+  calendar_year: number
   quarters: {
     quarter: number
     kpi_achievement: number
@@ -346,7 +346,7 @@ export interface VerticalQuarterlyTrend {
  */
 export interface ImpactMetricsTrend {
   period: string // e.g., '2024-Q1', '2024-Q2'
-  fiscal_year: number
+  calendar_year: number
   quarter: number
   total_beneficiaries: number
   total_volunteer_hours: number
@@ -386,7 +386,7 @@ export interface VerticalSortOptions {
 export interface KPIFilters {
   plan_id?: string
   vertical_id?: string
-  fiscal_year?: number
+  calendar_year?: number
   metric_type?: MetricType
   is_active?: boolean
   status?: 'not_started' | 'in_progress' | 'completed' | 'at_risk'
@@ -405,7 +405,7 @@ export interface KPISortOptions {
  */
 export interface ActivityFilters {
   vertical_id?: string
-  fiscal_year?: number
+  calendar_year?: number
   quarter?: number
   activity_type?: ActivityType
   date_from?: string
@@ -428,7 +428,7 @@ export interface ActivitySortOptions {
  */
 export interface ReviewFilters {
   vertical_id?: string
-  fiscal_year?: number
+  calendar_year?: number
   quarter?: number
   status?: ReviewStatus
   reviewed_by?: string
@@ -439,7 +439,7 @@ export interface ReviewFilters {
  * Sort options for reviews
  */
 export interface ReviewSortOptions {
-  field: 'reviewed_at' | 'overall_rating' | 'kpi_achievement_rate' | 'fiscal_year'
+  field: 'reviewed_at' | 'overall_rating' | 'kpi_achievement_rate' | 'calendar_year'
   direction: 'asc' | 'desc'
 }
 
@@ -494,7 +494,7 @@ export interface VerticalFormData {
  */
 export interface VerticalPlanFormData {
   vertical_id: string
-  fiscal_year: number
+  calendar_year: number
   plan_name: string
   mission?: string | null
   vision?: string | null
@@ -548,7 +548,7 @@ export interface VerticalActivityFormData {
 export interface PerformanceReviewFormData {
   vertical_id: string
   chair_id: string
-  fiscal_year: number
+  calendar_year: number
   quarter: number
   overall_rating: number
   kpi_achievement_rate?: number
@@ -751,12 +751,12 @@ export const DEFAULT_VERTICAL_ICONS = [
 // ============================================================================
 
 /**
- * Get the fiscal year from a date
+ * Get the calendar year from a date
  */
-export type FiscalYear = number
+export type CalendarYear = number
 
 /**
- * Review period format: "FY2024-Q1"
+ * Review period format: "2024-Q1"
  */
 export type ReviewPeriod = string
 

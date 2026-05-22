@@ -67,7 +67,7 @@ interface PerformanceReviewFormProps {
   verticalName: string
   chairId: string
   reviewerId: string
-  fiscalYear: number
+  calendarYear: number
   review?: VerticalPerformanceReview
   kpiAchievementRate?: number
   budgetUtilizationRate?: number
@@ -80,7 +80,7 @@ export function PerformanceReviewForm({
   verticalName,
   chairId,
   reviewerId,
-  fiscalYear,
+  calendarYear,
   review,
   kpiAchievementRate,
   budgetUtilizationRate,
@@ -91,12 +91,12 @@ export function PerformanceReviewForm({
   const [isPending, startTransition] = useTransition()
   const isEditing = !!review
 
-  // Determine current quarter
+  // Determine current quarter (calendar year: Q1=Jan-Mar, Q2=Apr-Jun, Q3=Jul-Sep, Q4=Oct-Dec)
   const currentQuarter = (() => {
     const month = new Date().getMonth() + 1
-    if (month >= 4 && month <= 6) return 1
-    if (month >= 7 && month <= 9) return 2
-    if (month >= 10 && month <= 12) return 3
+    if (month >= 1 && month <= 3) return 1
+    if (month >= 4 && month <= 6) return 2
+    if (month >= 7 && month <= 9) return 3
     return 4
   })()
 
@@ -106,7 +106,7 @@ export function PerformanceReviewForm({
     defaultValues: {
       vertical_id: verticalId,
       chair_id: chairId,
-      fiscal_year: fiscalYear,
+      calendar_year: calendarYear,
       quarter: review?.quarter || currentQuarter,
       overall_rating: review?.overall_rating || 3,
       kpi_achievement_rate: review?.kpi_achievement_rate ?? kpiAchievementRate ?? 0,
@@ -179,7 +179,7 @@ export function PerformanceReviewForm({
               Performance Review
             </CardTitle>
             <CardDescription>
-              Quarterly review for {verticalName} - FY{fiscalYear}
+              Quarterly review for {verticalName} - {calendarYear}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -495,7 +495,7 @@ export function PerformanceReviewForm({
         {/* Hidden fields */}
         <input type="hidden" {...form.register('vertical_id')} />
         <input type="hidden" {...form.register('chair_id')} />
-        <input type="hidden" {...form.register('fiscal_year')} />
+        <input type="hidden" {...form.register('calendar_year')} />
         <input type="hidden" {...form.register('reviewed_by')} />
 
         {/* Form Actions */}

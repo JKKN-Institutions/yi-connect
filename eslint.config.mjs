@@ -11,7 +11,17 @@ const eslintConfig = defineConfig([
     '.next/**',
     'out/**',
     'build/**',
-    'next-env.d.ts'
+    'next-env.d.ts',
+    // Compiled outputs
+    'dist/**',
+    // Separate services
+    'whatsapp-service/**',
+    // Claude skill assets (not part of main app)
+    '.claude/**',
+    // Scripts (CommonJS)
+    'scripts/**',
+    // SW compiled output
+    'public/sw.js'
   ]),
   {
     rules: {

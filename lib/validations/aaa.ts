@@ -20,7 +20,7 @@ export const mentorAssignmentStatusSchema = z.enum(['active', 'completed', 'canc
 
 export const createAAAPlanSchema = z.object({
   vertical_id: z.string().uuid('Invalid vertical ID'),
-  fiscal_year: z.number().int().min(2020).max(2100),
+  calendar_year: z.number().int().min(2020).max(2100),
   chapter_id: z.string().uuid('Invalid chapter ID'),
 
   // Awareness (3)
@@ -28,27 +28,42 @@ export const createAAAPlanSchema = z.object({
   awareness_1_description: z.string().optional(),
   awareness_1_audience: z.string().max(255).optional(),
   awareness_1_target_date: z.string().optional(),
+  awareness_1_target_attendance: z.number().int().min(0).optional(),
+  awareness_1_engagement_goal: z.string().optional(),
+  awareness_1_impact_measures: z.string().optional(),
 
   awareness_2_title: z.string().max(255).optional(),
   awareness_2_description: z.string().optional(),
   awareness_2_audience: z.string().max(255).optional(),
   awareness_2_target_date: z.string().optional(),
+  awareness_2_target_attendance: z.number().int().min(0).optional(),
+  awareness_2_engagement_goal: z.string().optional(),
+  awareness_2_impact_measures: z.string().optional(),
 
   awareness_3_title: z.string().max(255).optional(),
   awareness_3_description: z.string().optional(),
   awareness_3_audience: z.string().max(255).optional(),
   awareness_3_target_date: z.string().optional(),
+  awareness_3_target_attendance: z.number().int().min(0).optional(),
+  awareness_3_engagement_goal: z.string().optional(),
+  awareness_3_impact_measures: z.string().optional(),
 
   // Action (2)
   action_1_title: z.string().max(255).optional(),
   action_1_description: z.string().optional(),
   action_1_target: z.string().max(255).optional(),
   action_1_target_date: z.string().optional(),
+  action_1_target_attendance: z.number().int().min(0).optional(),
+  action_1_engagement_goal: z.string().optional(),
+  action_1_impact_measures: z.string().optional(),
 
   action_2_title: z.string().max(255).optional(),
   action_2_description: z.string().optional(),
   action_2_target: z.string().max(255).optional(),
   action_2_target_date: z.string().optional(),
+  action_2_target_attendance: z.number().int().min(0).optional(),
+  action_2_engagement_goal: z.string().optional(),
+  action_2_impact_measures: z.string().optional(),
 
   first_event_date: z.string().optional(),
 
@@ -61,6 +76,34 @@ export const createAAAPlanSchema = z.object({
   milestone_jan_target: z.string().optional(),
   milestone_feb_target: z.string().optional(),
   milestone_mar_target: z.string().optional(),
+
+  // Stretch Goals (Optional)
+  has_stretch_awareness: z.boolean().optional(),
+  has_stretch_action: z.boolean().optional(),
+  has_stretch_advocacy: z.boolean().optional(),
+
+  // Awareness 4 (Stretch)
+  awareness_4_title: z.string().max(255).optional(),
+  awareness_4_description: z.string().optional(),
+  awareness_4_audience: z.string().max(255).optional(),
+  awareness_4_target_date: z.string().optional(),
+  awareness_4_target_attendance: z.number().int().min(0).optional(),
+  awareness_4_engagement_goal: z.string().optional(),
+  awareness_4_impact_measures: z.string().optional(),
+
+  // Action 3 (Stretch)
+  action_3_title: z.string().max(255).optional(),
+  action_3_description: z.string().optional(),
+  action_3_target: z.string().max(255).optional(),
+  action_3_target_date: z.string().optional(),
+  action_3_target_attendance: z.number().int().min(0).optional(),
+  action_3_engagement_goal: z.string().optional(),
+  action_3_impact_measures: z.string().optional(),
+
+  // Advocacy 2 (Stretch)
+  advocacy_2_goal: z.string().optional(),
+  advocacy_2_target_contact: z.string().max(255).optional(),
+  advocacy_2_approach: z.string().optional(),
 })
 
 export const updateAAAPlanSchema = z.object({
@@ -68,7 +111,7 @@ export const updateAAAPlanSchema = z.object({
 
   // All create fields optional
   vertical_id: z.string().uuid().optional(),
-  fiscal_year: z.number().int().min(2020).max(2100).optional(),
+  calendar_year: z.number().int().min(2020).max(2100).optional(),
 
   // Awareness
   awareness_1_title: z.string().max(255).optional(),
@@ -76,18 +119,27 @@ export const updateAAAPlanSchema = z.object({
   awareness_1_audience: z.string().max(255).optional(),
   awareness_1_target_date: z.string().optional(),
   awareness_1_status: aaaItemStatusSchema.optional(),
+  awareness_1_target_attendance: z.number().int().min(0).optional(),
+  awareness_1_engagement_goal: z.string().optional(),
+  awareness_1_impact_measures: z.string().optional(),
 
   awareness_2_title: z.string().max(255).optional(),
   awareness_2_description: z.string().optional(),
   awareness_2_audience: z.string().max(255).optional(),
   awareness_2_target_date: z.string().optional(),
   awareness_2_status: aaaItemStatusSchema.optional(),
+  awareness_2_target_attendance: z.number().int().min(0).optional(),
+  awareness_2_engagement_goal: z.string().optional(),
+  awareness_2_impact_measures: z.string().optional(),
 
   awareness_3_title: z.string().max(255).optional(),
   awareness_3_description: z.string().optional(),
   awareness_3_audience: z.string().max(255).optional(),
   awareness_3_target_date: z.string().optional(),
   awareness_3_status: aaaItemStatusSchema.optional(),
+  awareness_3_target_attendance: z.number().int().min(0).optional(),
+  awareness_3_engagement_goal: z.string().optional(),
+  awareness_3_impact_measures: z.string().optional(),
 
   // Action
   action_1_title: z.string().max(255).optional(),
@@ -95,12 +147,18 @@ export const updateAAAPlanSchema = z.object({
   action_1_target: z.string().max(255).optional(),
   action_1_target_date: z.string().optional(),
   action_1_status: aaaItemStatusSchema.optional(),
+  action_1_target_attendance: z.number().int().min(0).optional(),
+  action_1_engagement_goal: z.string().optional(),
+  action_1_impact_measures: z.string().optional(),
 
   action_2_title: z.string().max(255).optional(),
   action_2_description: z.string().optional(),
   action_2_target: z.string().max(255).optional(),
   action_2_target_date: z.string().optional(),
   action_2_status: aaaItemStatusSchema.optional(),
+  action_2_target_attendance: z.number().int().min(0).optional(),
+  action_2_engagement_goal: z.string().optional(),
+  action_2_impact_measures: z.string().optional(),
 
   first_event_date: z.string().optional(),
   first_event_locked: z.boolean().optional(),
@@ -127,6 +185,38 @@ export const updateAAAPlanSchema = z.object({
 
   // Status
   status: aaaPlanStatusSchema.optional(),
+
+  // Stretch Goals
+  has_stretch_awareness: z.boolean().optional(),
+  has_stretch_action: z.boolean().optional(),
+  has_stretch_advocacy: z.boolean().optional(),
+
+  // Awareness 4 (Stretch)
+  awareness_4_title: z.string().max(255).optional(),
+  awareness_4_description: z.string().optional(),
+  awareness_4_audience: z.string().max(255).optional(),
+  awareness_4_target_date: z.string().optional(),
+  awareness_4_status: aaaItemStatusSchema.optional(),
+  awareness_4_target_attendance: z.number().int().min(0).optional(),
+  awareness_4_engagement_goal: z.string().optional(),
+  awareness_4_impact_measures: z.string().optional(),
+
+  // Action 3 (Stretch)
+  action_3_title: z.string().max(255).optional(),
+  action_3_description: z.string().optional(),
+  action_3_target: z.string().max(255).optional(),
+  action_3_target_date: z.string().optional(),
+  action_3_status: aaaItemStatusSchema.optional(),
+  action_3_target_attendance: z.number().int().min(0).optional(),
+  action_3_engagement_goal: z.string().optional(),
+  action_3_impact_measures: z.string().optional(),
+
+  // Advocacy 2 (Stretch)
+  advocacy_2_goal: z.string().optional(),
+  advocacy_2_target_contact: z.string().max(255).optional(),
+  advocacy_2_approach: z.string().optional(),
+  advocacy_2_status: aaaItemStatusSchema.optional(),
+  advocacy_2_outcome: z.string().optional(),
 })
 
 export const lockFirstEventSchema = z.object({
@@ -193,7 +283,7 @@ export const updateMentorAssignmentSchema = z.object({
 
 export const aaaPlanFiltersSchema = z.object({
   vertical_id: z.string().uuid().optional(),
-  fiscal_year: z.number().int().optional(),
+  calendar_year: z.number().int().optional(),
   status: aaaPlanStatusSchema.optional(),
   has_first_event: z.boolean().optional(),
   chapter_id: z.string().uuid().optional(),

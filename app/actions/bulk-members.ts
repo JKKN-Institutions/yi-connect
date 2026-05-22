@@ -30,11 +30,14 @@ export async function processBulkMemberUpload(
   members: Array<{ rowNumber: number; data: Record<string, any> }>,
   options: BulkUploadOptions
 ): Promise<BulkUploadResult> {
-  // Require admin role
+  // Require leadership roles (Chair, Co-Chair, EC Member) or above
   const { user: currentUser } = await requireRole([
     'Super Admin',
     'National Admin',
-    'Executive Member'
+    'Chair',
+    'Co-Chair',
+    'Executive Member',
+    'EC Member'
   ])
 
   const adminClient = createAdminSupabaseClient()
@@ -159,13 +162,13 @@ export async function processBulkMemberUpload(
       } else {
         errorCount++
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       results.push({
         rowNumber,
         email: data.email || 'Unknown',
         fullName: data.full_name || 'Unknown',
         status: 'error',
-        message: `Unexpected error: ${error.message}`
+        message: `Unexpected error: ${error instanceof Error ? error.message : 'Unknown error'}`
       })
       errorCount++
     }
@@ -315,11 +318,11 @@ async function createNewMember(
         : 'Created successfully.',
       memberId: userId
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error creating member:', error)
     return {
       success: false,
-      message: error.message || 'Failed to create member'
+      message: error instanceof Error ? error.message : 'Failed to create member'
     }
   }
 }
@@ -413,10 +416,10 @@ async function updateExistingMember(
       message: existingMember ? 'Updated successfully' : 'Member record created and updated',
       memberId: profile.id
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || 'Failed to update member'
+      message: error instanceof Error ? error.message : 'Failed to update member'
     }
   }
 }
@@ -430,7 +433,7 @@ export async function checkDuplicateEmails(
   existing: string[]
   duplicatesInFile: string[]
 }> {
-  await requireRole(['Super Admin', 'National Admin', 'Executive Member'])
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member'])
 
   const adminClient = createAdminSupabaseClient()
 
@@ -463,7 +466,7 @@ export async function checkDuplicateEmails(
 export async function getChaptersForBulkUpload(): Promise<
   Array<{ id: string; name: string; location: string }>
 > {
-  await requireRole(['Super Admin', 'National Admin', 'Executive Member'])
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member'])
 
   const supabase = await createServerSupabaseClient()
 

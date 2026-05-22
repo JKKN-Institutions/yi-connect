@@ -46,7 +46,7 @@ export function BudgetForm({ chapterId, onSuccess }: BudgetFormProps) {
     defaultValues: {
       name: '',
       description: '',
-      fiscal_year: currentYear,
+      calendar_year: currentYear,
       period: 'annual',
       total_amount: 0,
       start_date: '',
@@ -129,7 +129,7 @@ export function BudgetForm({ chapterId, onSuccess }: BudgetFormProps) {
             <FormItem>
               <FormLabel>Budget Name</FormLabel>
               <FormControl>
-                <Input placeholder="FY 2025 Annual Budget" {...field} />
+                <Input placeholder="2025 Annual Budget" {...field} />
               </FormControl>
               <FormDescription>
                 A descriptive name for this budget
@@ -159,17 +159,17 @@ export function BudgetForm({ chapterId, onSuccess }: BudgetFormProps) {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <FormField
             control={form.control}
-            name="fiscal_year"
+            name="calendar_year"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Fiscal Year</FormLabel>
+                <FormLabel>Calendar Year</FormLabel>
                 <Select
                   onValueChange={(value) => field.onChange(parseInt(value))}
                   defaultValue={field.value?.toString()}
                 >
                   <FormControl>
                     <SelectTrigger>
-                      <SelectValue placeholder="Select fiscal year" />
+                      <SelectValue placeholder="Select year" />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>

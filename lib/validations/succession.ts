@@ -152,14 +152,17 @@ export const EndorsementSchema = z.object({
 // SUCCESSION CYCLE SCHEMAS
 // ============================================================================
 
-export const CreateSuccessionCycleSchema = z.object({
+// Base schema for succession cycle without refinements
+const SuccessionCycleBaseSchema = z.object({
   year: z.number().int().min(2020, 'Year must be 2020 or later').max(2100, 'Invalid year'),
   cycle_name: z.string().min(1, 'Cycle name is required').max(100, 'Cycle name too long'),
   description: z.string().max(500, 'Description too long').optional(),
   start_date: z.string().optional(),
   end_date: z.string().optional(),
   phase_configs: PhaseConfigsSchema.optional(),
-}).refine(
+})
+
+export const CreateSuccessionCycleSchema = SuccessionCycleBaseSchema.refine(
   (data) => {
     if (data.start_date && data.end_date) {
       return new Date(data.end_date) > new Date(data.start_date)
@@ -169,7 +172,7 @@ export const CreateSuccessionCycleSchema = z.object({
   { message: 'End date must be after start date', path: ['end_date'] }
 )
 
-export const UpdateSuccessionCycleSchema = CreateSuccessionCycleSchema.partial().extend({
+export const UpdateSuccessionCycleSchema = SuccessionCycleBaseSchema.partial().extend({
   id: uuidSchema,
   status: SuccessionCycleStatusSchema.optional(),
   selection_committee_ids: z.array(uuidSchema).optional(),
@@ -203,7 +206,8 @@ export const UpdateSuccessionPositionSchema = CreateSuccessionPositionSchema.par
 // NOMINATION SCHEMAS
 // ============================================================================
 
-export const CreateNominationSchema = z.object({
+// Base schema for nomination without refinements (exported for form use)
+export const SuccessionNominationBaseSchema = z.object({
   cycle_id: uuidSchema,
   position_id: uuidSchema,
   nominee_id: uuidSchema,
@@ -213,12 +217,26 @@ export const CreateNominationSchema = z.object({
     .max(2000, 'Justification too long'),
   supporting_evidence: z.array(SupportingEvidenceSchema).optional(),
   status: SuccessionApplicationStatusSchema.optional(),
-}).refine(
+})
+
+// Form schema without nominated_by_id (added server-side)
+// Zod v4 doesn't allow .omit() on schemas, so we define this separately
+export const NominationFormSchema = z.object({
+  cycle_id: uuidSchema,
+  position_id: uuidSchema,
+  nominee_id: uuidSchema,
+  justification: z.string()
+    .min(100, 'Justification must be at least 100 characters')
+    .max(2000, 'Justification too long'),
+  supporting_evidence: z.array(SupportingEvidenceSchema).optional(),
+})
+
+export const CreateNominationSchema = SuccessionNominationBaseSchema.refine(
   (data) => data.nominee_id !== data.nominated_by_id,
   { message: 'You cannot nominate yourself', path: ['nominee_id'] }
 )
 
-export const UpdateNominationSchema = CreateNominationSchema.partial().extend({
+export const UpdateNominationSchema = SuccessionNominationBaseSchema.partial().extend({
   id: uuidSchema,
 })
 
@@ -457,7 +475,8 @@ export const TimelineStepStatusSchema = z.enum([
   'overdue',
 ])
 
-export const CreateTimelineStepSchema = z.object({
+// Base schema for timeline step without refinements
+const TimelineStepBaseSchema = z.object({
   cycle_id: uuidSchema,
   step_number: z.number().int().min(1, 'Step number must be 1-7').max(7, 'Step number must be 1-7'),
   step_name: z.string().min(1, 'Step name is required').max(200, 'Step name too long'),
@@ -466,12 +485,14 @@ export const CreateTimelineStepSchema = z.object({
   end_date: z.string(),
   status: TimelineStepStatusSchema.optional(),
   auto_trigger_action: z.string().max(200).optional(),
-}).refine(
+})
+
+export const CreateTimelineStepSchema = TimelineStepBaseSchema.refine(
   (data) => new Date(data.end_date) > new Date(data.start_date),
   { message: 'End date must be after start date', path: ['end_date'] }
 )
 
-export const UpdateTimelineStepSchema = CreateTimelineStepSchema.partial().extend({
+export const UpdateTimelineStepSchema = TimelineStepBaseSchema.partial().extend({
   id: uuidSchema,
 })
 
@@ -518,7 +539,8 @@ export const MeetingStatusSchema = z.enum([
   'cancelled',
 ])
 
-export const CreateMeetingSchema = z.object({
+// Base schema for meeting without refinements
+const MeetingBaseSchema = z.object({
   cycle_id: uuidSchema,
   meeting_date: z.string(),
   meeting_type: MeetingTypeSchema,
@@ -528,12 +550,14 @@ export const CreateMeetingSchema = z.object({
   notes: z.string().max(5000).optional(),
   status: MeetingStatusSchema.optional(),
   created_by: uuidSchema,
-}).refine(
+})
+
+export const CreateMeetingSchema = MeetingBaseSchema.refine(
   (data) => data.location || data.meeting_link,
   { message: 'Either location or meeting link must be provided', path: ['location'] }
 )
 
-export const UpdateMeetingSchema = CreateMeetingSchema.partial().extend({
+export const UpdateMeetingSchema = MeetingBaseSchema.partial().extend({
   id: uuidSchema,
 })
 
@@ -566,6 +590,7 @@ export type CreateSuccessionCycleInput = z.infer<typeof CreateSuccessionCycleSch
 export type UpdateSuccessionCycleInput = z.infer<typeof UpdateSuccessionCycleSchema>
 export type CreateSuccessionPositionInput = z.infer<typeof CreateSuccessionPositionSchema>
 export type CreateNominationInput = z.infer<typeof CreateNominationSchema>
+export type NominationFormInput = z.infer<typeof NominationFormSchema>
 export type CreateApplicationInput = z.infer<typeof CreateApplicationSchema>
 export type SubmitEvaluationScoresInput = z.infer<typeof SubmitEvaluationScoresSchema>
 export type ScheduleInterviewInput = z.infer<typeof ScheduleInterviewSchema>

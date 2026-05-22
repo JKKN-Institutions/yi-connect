@@ -2,6 +2,7 @@
  * Member Requests Dashboard (Admin Only)
  *
  * Executive Members and National Admins can review and approve membership applications
+ * BUG-004 FIX: requireRole moved to page level (not inside Suspense boundary)
  */
 
 import { requireRole } from '@/lib/auth';
@@ -26,7 +27,10 @@ interface PageProps {
   }>;
 }
 
-export default function MemberRequestsPage({ searchParams }: PageProps) {
+export default async function MemberRequestsPage({ searchParams }: PageProps) {
+  // Require leadership roles to access member requests - must be at page level, not inside Suspense
+  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member']);
+
   return (
     <div className='space-y-6'>
       {/* Header */}
@@ -48,9 +52,6 @@ export default function MemberRequestsPage({ searchParams }: PageProps) {
 }
 
 async function MemberRequestsContent({ searchParams }: PageProps) {
-  // Require leadership roles to access member requests
-  await requireRole(['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Executive Member', 'EC Member']);
-
   const params = await searchParams;
   const status = params.status || 'pending';
   const page = parseInt(params.page || '1');

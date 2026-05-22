@@ -28,13 +28,15 @@ import {
 } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { schoolFormSchema } from '@/lib/validations/stakeholder';
-import { createSchool } from '@/app/actions/stakeholder';
+import { createSchool, updateSchool } from '@/app/actions/stakeholder';
 import toast from 'react-hot-toast';
 
 type SchoolFormValues = z.infer<typeof schoolFormSchema>;
 
 interface SchoolFormProps {
   chapterId: string | null; // Allow null for super admins
+  initialData?: Partial<SchoolFormValues> & { id?: string };
+  mode?: 'create' | 'edit';
 }
 
 const schoolTypes = [
@@ -94,45 +96,50 @@ const suitableProgramOptions = [
   'Sports'
 ];
 
-export function SchoolForm({ chapterId }: SchoolFormProps) {
+export function SchoolForm({ chapterId, initialData, mode = 'create' }: SchoolFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [selectedMedium, setSelectedMedium] = useState<string[]>([]);
-  const [selectedPrograms, setSelectedPrograms] = useState<string[]>([]);
+  const [selectedMedium, setSelectedMedium] = useState<string[]>(
+    initialData?.medium || []
+  );
+  const [selectedPrograms, setSelectedPrograms] = useState<string[]>(
+    initialData?.suitable_programs || []
+  );
   const router = useRouter();
+  const isEditing = mode === 'edit';
 
   const form = useForm<SchoolFormValues>({
     resolver: zodResolver(schoolFormSchema) as any,
     defaultValues: {
-      school_name: '',
-      school_type: 'cbse',
-      status: 'prospective',
-      address_line1: '',
-      address_line2: '',
-      city: '',
-      state: '',
-      pincode: '',
-      phone: '',
-      email: '',
-      website: '',
-      connection_type: undefined,
-      connected_through_member_id: '',
-      connection_notes: '',
-      total_students: undefined,
-      grade_range: '',
-      medium: [],
-      school_category: '',
-      management_type: '',
-      suitable_programs: [],
-      has_auditorium: false,
-      has_smart_class: false,
-      has_ground: false,
-      has_parking: false,
-      has_library: false,
-      facility_notes: '',
-      best_time_to_approach: '',
-      decision_maker: '',
-      lead_time_required: '',
-      notes: ''
+      school_name: initialData?.school_name || '',
+      school_type: initialData?.school_type || 'cbse',
+      status: initialData?.status || 'prospective',
+      address_line1: initialData?.address_line1 || '',
+      address_line2: initialData?.address_line2 || '',
+      city: initialData?.city || '',
+      state: initialData?.state || '',
+      pincode: initialData?.pincode || '',
+      phone: initialData?.phone || '',
+      email: initialData?.email || '',
+      website: initialData?.website || '',
+      connection_type: initialData?.connection_type || undefined,
+      connected_through_member_id: initialData?.connected_through_member_id || '',
+      connection_notes: initialData?.connection_notes || '',
+      total_students: initialData?.total_students || undefined,
+      grade_range: initialData?.grade_range || '',
+      medium: initialData?.medium || [],
+      school_category: initialData?.school_category || '',
+      management_type: initialData?.management_type || '',
+      suitable_programs: initialData?.suitable_programs || [],
+      has_auditorium: initialData?.has_auditorium || false,
+      has_smart_class: initialData?.has_smart_class || false,
+      has_ground: initialData?.has_ground || false,
+      has_parking: initialData?.has_parking || false,
+      has_library: initialData?.has_library || false,
+      facility_notes: initialData?.facility_notes || '',
+      best_time_to_approach: initialData?.best_time_to_approach || '',
+      decision_maker: initialData?.decision_maker || '',
+      lead_time_required: initialData?.lead_time_required || '',
+      notes: initialData?.notes || ''
     }
   });
 
@@ -175,16 +182,25 @@ export function SchoolForm({ chapterId }: SchoolFormProps) {
       formData.append('has_parking', values.has_parking ? 'true' : 'false');
       formData.append('has_library', values.has_library ? 'true' : 'false');
 
-      const result = await createSchool(
-        { message: '', success: false },
-        formData
-      );
+      let result;
+      if (isEditing && initialData?.id) {
+        result = await updateSchool(
+          initialData.id,
+          { message: '', success: false },
+          formData
+        );
+      } else {
+        result = await createSchool(
+          { message: '', success: false },
+          formData
+        );
+      }
 
       if (result.success) {
-        toast.success('School created successfully');
+        toast.success(isEditing ? 'School updated successfully' : 'School created successfully');
         // Redirect will be handled by the server action
       } else {
-        toast.error(result.message || 'Failed to create school');
+        toast.error(result.message || `Failed to ${isEditing ? 'update' : 'create'} school`);
 
         // Show field errors if any
         if (result.errors) {
@@ -880,10 +896,10 @@ export function SchoolForm({ chapterId }: SchoolFormProps) {
             {isSubmitting ? (
               <>
                 <Loader2 className='mr-2 h-4 w-4 animate-spin' />
-                Creating School...
+                {isEditing ? 'Updating School...' : 'Creating School...'}
               </>
             ) : (
-              'Create School'
+              isEditing ? 'Update School' : 'Create School'
             )}
           </Button>
         </div>

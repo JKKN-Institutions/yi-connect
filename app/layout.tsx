@@ -78,9 +78,9 @@ export const metadata: Metadata = {
       { url: '/icons/icon.svg', type: 'image/svg+xml' }
     ],
     apple: [{ url: '/icons/apple-touch-icon.svg', type: 'image/svg+xml' }]
-  },
-  // Manifest
-  manifest: '/manifest.webmanifest'
+  }
+  // Manifest is automatically handled by Next.js 16 via app/manifest.ts
+  // No need to explicitly declare it here
 };
 
 export default function RootLayout({
@@ -89,7 +89,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang='en'>
+    <html lang='en' suppressHydrationWarning>
       <head>
         {/* PWA Meta Tags */}
         <meta name='mobile-web-app-capable' content='yes' />
@@ -114,6 +114,7 @@ export default function RootLayout({
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        suppressHydrationWarning
       >
         {children}
         <Toaster position='top-right' />

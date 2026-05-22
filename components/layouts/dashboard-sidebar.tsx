@@ -62,7 +62,12 @@ import {
   Upload,
   Search,
   ClipboardList,
-  HelpCircle
+  HelpCircle,
+  Compass,
+  HeartPulse,
+  Rocket,
+  BookTemplate,
+  Palette,
 } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
@@ -527,6 +532,61 @@ const navigation: NavItem[] = [
     ]
   },
   {
+    name: 'Pathfinder',
+    icon: Compass,
+    requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Vertical Head', 'Executive Member', 'EC Member'],
+    items: [
+      {
+        name: 'Overview',
+        href: '/pathfinder',
+        icon: LayoutDashboard,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Vertical Head', 'Executive Member', 'EC Member']
+      },
+      {
+        name: 'Health Card',
+        href: '/pathfinder/health-card',
+        icon: HeartPulse,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Vertical Head', 'Executive Member', 'EC Member']
+      },
+      {
+        name: 'Tracking',
+        href: '/pathfinder/health-card-tracking',
+        icon: BarChart3,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Vertical Head']
+      },
+      {
+        name: 'CMP Targets',
+        href: '/pathfinder/cmp-targets',
+        icon: Target,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Vertical Head', 'Executive Member', 'EC Member']
+      },
+      {
+        name: 'Stretch Goals',
+        href: '/pathfinder/stretch-goals',
+        icon: Rocket,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Vertical Head', 'Executive Member', 'EC Member']
+      },
+      {
+        name: 'Templates',
+        href: '/pathfinder/templates',
+        icon: BookTemplate,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Vertical Head', 'Executive Member', 'EC Member']
+      },
+      {
+        name: 'Commitment',
+        href: '/pathfinder/commitment',
+        icon: ClipboardList,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Vertical Head', 'Executive Member', 'EC Member']
+      },
+      {
+        name: 'Log Activity',
+        href: '/pathfinder/health-card/new',
+        icon: Plus,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair', 'Vertical Head', 'Executive Member', 'EC Member']
+      }
+    ]
+  },
+  {
     name: 'Succession',
     icon: Activity,
     items: [
@@ -634,8 +694,14 @@ const navigation: NavItem[] = [
       },
       {
         name: 'General',
-        href: '/settings',
+        href: '/settings/general',
         icon: Settings
+      },
+      {
+        name: 'Integrations',
+        href: '/settings/integrations',
+        icon: Palette,
+        requiredRoles: ['Super Admin', 'National Admin', 'Chair', 'Co-Chair']
       }
     ]
   }
@@ -646,7 +712,7 @@ const adminNavigation: NavItem[] = [
     name: 'Member Requests',
     href: '/member-requests',
     icon: UserCheck,
-    requiredRoles: ['Executive Member', 'Chair', 'Co-Chair', 'EC Member']
+    requiredRoles: ['Executive Member', 'Chair', 'Co-Chair']
   },
   {
     name: 'Chapters',
@@ -728,6 +794,25 @@ function NavItemComponent({
     setIsManuallyToggled(true);
     setManualOpenState(open);
   };
+
+  // During SSR, render a non-interactive version to prevent hydration mismatch
+  // Radix UI generates different IDs on server vs client
+  if (!mounted) {
+    return (
+      <li>
+        <button
+          className={cn(
+            'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
+            'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+          )}
+        >
+          <item.icon className='h-5 w-5 shrink-0' />
+          <span className='flex-1 text-left'>{item.name}</span>
+          <ChevronRight className='h-4 w-4 shrink-0' />
+        </button>
+      </li>
+    );
+  }
 
   return (
     <li>

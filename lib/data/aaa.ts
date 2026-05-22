@@ -243,7 +243,7 @@ export async function getPathfinderDashboard(
 
   // Get chapter info
   const { data: chapter } = await supabase
-    .schema('yi').from('chapters')
+    .from('chapters')
     .select('id, name')
     .eq('id', chapterId)
     .single()

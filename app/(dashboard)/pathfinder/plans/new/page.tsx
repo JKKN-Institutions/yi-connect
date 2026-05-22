@@ -101,7 +101,7 @@ async function NewPlanContent({
   if (isAdmin && chapterIdParam) {
     // Admin with chapter param - verify chapter exists
     const { data: chapter } = await supabase
-      .schema('yi').from('chapters')
+      .from('chapters')
       .select('id')
       .eq('id', chapterIdParam)
       .single()
@@ -114,7 +114,7 @@ async function NewPlanContent({
   // If still no chapter and user is admin, show chapter selector
   if (!chapterId && isAdmin) {
     const { data: chapters } = await supabase
-      .schema('yi').from('chapters')
+      .from('chapters')
       .select('id, name, city')
       .eq('status', 'active')
       .order('name')

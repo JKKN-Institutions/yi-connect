@@ -36,7 +36,7 @@ export async function getChapters(
 
   // Start building the query
   let query = supabase
-    .schema('yi').from('chapters')
+    .from('chapters')
     .select('*', { count: 'exact' })
 
   // Apply search filter (searches in name and location)
@@ -89,7 +89,7 @@ export async function getUniqueRegions(): Promise<string[]> {
   const supabase = await createServerSupabaseClient()
 
   const { data, error } = await supabase
-    .schema('yi').from('chapters')
+    .from('chapters')
     .select('region')
     .not('region', 'is', null)
     .order('region')
@@ -116,7 +116,7 @@ export async function getAllChapters(): Promise<ChapterOption[]> {
   console.log('✅ getAllChapters: Supabase client created')
 
   const { data, error } = await supabase
-    .schema('yi').from('chapters')
+    .from('chapters')
     .select('id, name, location')
     .order('name')
 
@@ -152,7 +152,7 @@ export async function getChapterById(id: string) {
   const supabase = await createServerSupabaseClient()
 
   const { data, error } = await supabase
-    .schema('yi').from('chapters')
+    .from('chapters')
     .select('*')
     .eq('id', id)
     .single()
@@ -174,7 +174,7 @@ export async function getChapterStats() {
   const supabase = await createServerSupabaseClient()
 
   const { count: totalChapters } = await supabase
-    .schema('yi').from('chapters')
+    .from('chapters')
     .select('*', { count: 'exact', head: true })
 
   const { count: totalMembers } = await supabase

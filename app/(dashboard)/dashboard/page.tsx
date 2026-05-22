@@ -48,7 +48,7 @@ async function WelcomeSection() {
 
   if (profile?.chapter_id) {
     const { data: chapter } = await supabase
-      .schema('yi').from('chapters')
+      .from('chapters')
       .select('name')
       .eq('id', profile.chapter_id)
       .single();

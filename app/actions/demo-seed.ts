@@ -288,7 +288,7 @@ export async function seedDemoMembers(): Promise<{
 
   // Update chapter member count
   await supabaseAdmin
-    .schema('yi').from('chapters')
+    .from('chapters')
     .update({ member_count: created + 3 }) // +3 for chair, co-chair, ec
     .eq('id', DEMO_CHAPTER_ID)
 

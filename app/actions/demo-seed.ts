@@ -325,7 +325,9 @@ export async function cleanupDemoMembers(): Promise<{
     }
   }
 
+  // Phase B: route to yi_connect schema by default
   const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
+    db: { schema: 'yi_connect' },
     auth: {
       autoRefreshToken: false,
       persistSession: false,

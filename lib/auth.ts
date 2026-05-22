@@ -181,21 +181,23 @@ export async function requireRole(allowedRoles: string[]) {
     }
 
     userRoles =
-      (
-        fallbackRows as Array<{
-          role: {
-            id: string
-            name: string
-            hierarchy_level: number
-            permissions: string[] | null
-          }
-        }> | null
-      )?.map((row) => ({
-        role_id: row.role.id,
-        role_name: row.role.name,
-        hierarchy_level: row.role.hierarchy_level,
-        permissions: row.role.permissions,
-      })) ?? []
+      (fallbackRows as unknown as Array<{
+        role: {
+          id: string
+          name: string
+          hierarchy_level: number
+          permissions: string[] | null
+        } | null
+      }> | null)?.flatMap((row) =>
+        row.role
+          ? [{
+              role_id: row.role.id,
+              role_name: row.role.name,
+              hierarchy_level: row.role.hierarchy_level,
+              permissions: row.role.permissions,
+            }]
+          : []
+      ) ?? []
   }
 
   const userRoleNames = userRoles.map((ur) => ur.role_name)

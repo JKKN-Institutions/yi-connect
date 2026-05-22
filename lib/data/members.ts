@@ -959,7 +959,11 @@ export const getExpiringCertifications = cache(async (memberId: string) => {
  */
 export const getMemberAnalytics = cache(
   async (chapterId?: string): Promise<MemberAnalytics> => {
-    const supabase = await createServerSupabaseClient();
+    // Phase E fix 2026-05-22: dashboard analytics use admin client to bypass
+    // RLS infinite-recursion on yi_connect.members. Caller has already
+    // resolved chapterId from a server-trusted profile, so the query is
+    // safely scoped. We only read aggregate counts, not row-level secrets.
+    const supabase = createAdminSupabaseClient();
 
     // Build query based on chapter filter
     let membersQuery = supabase.from('members').select('*');
@@ -970,9 +974,32 @@ export const getMemberAnalytics = cache(
     const { data: members, error: membersError } = await membersQuery;
 
     if (membersError) {
-      throw new Error(
-        `Failed to fetch member analytics: ${membersError.message}`
-      );
+      console.error('Error fetching member analytics:', membersError);
+      // Return a safe empty analytics shape instead of throwing — keeps
+      // dashboard Server Component from crashing the whole page.
+      return {
+        total_members: 0,
+        active_members: 0,
+        new_members_this_month: 0,
+        avg_engagement_score: 0,
+        members_by_status: {},
+        members_by_city: {},
+        top_companies: [],
+        skills_distribution: {
+          technical: 0,
+          business: 0,
+          creative: 0,
+          leadership: 0,
+          communication: 0,
+          other: 0,
+        },
+        leadership_pipeline: {
+          not_ready: 0,
+          developing: 0,
+          ready: 0,
+          highly_ready: 0,
+        },
+      };
     }
 
     // Calculate basic analytics

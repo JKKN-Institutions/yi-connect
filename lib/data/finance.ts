@@ -117,10 +117,11 @@ export const getBudgets = cache(async (
   }
 
   // Transform to list items with calculated fields
-  const listItems: BudgetListItem[] = (data || []).map((budget) => ({
+  // NOTE: DB column is `fiscal_year`; aliased to `calendar_year` for the UI.
+  const listItems: BudgetListItem[] = (data || []).map((budget: any) => ({
     id: budget.id,
     name: budget.name,
-    calendar_year: budget.calendar_year,
+    calendar_year: budget.fiscal_year ?? budget.calendar_year,
     period: budget.period as any,
     quarter: budget.quarter || undefined,
     total_amount: Number(budget.total_amount),

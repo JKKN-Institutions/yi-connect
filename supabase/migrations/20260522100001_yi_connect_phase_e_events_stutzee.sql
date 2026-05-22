@@ -33,6 +33,25 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions;
 
 
 -- =========================================================================
+-- 0. Preflight: add columns referenced by RLS policies later in this file
+--    (Phase E ordering fix — RLS policies in sections 1-2 reference
+--     events.rsvp_token, which the source migration #11 adds. We hoist
+--     the ALTER+INDEX+backfill here so policies can compile.)
+-- =========================================================================
+
+ALTER TABLE events
+ADD COLUMN IF NOT EXISTS rsvp_token TEXT UNIQUE DEFAULT encode(extensions.gen_random_bytes(16), 'hex');
+
+CREATE INDEX IF NOT EXISTS idx_events_rsvp_token
+ON events(rsvp_token)
+WHERE status IN ('published', 'ongoing');
+
+UPDATE events
+SET rsvp_token = encode(extensions.gen_random_bytes(16), 'hex')
+WHERE rsvp_token IS NULL;
+
+
+-- =========================================================================
 -- 1. Event Sessions (Stutzee 1A)
 --    Source: 20260418050001_event_sessions.sql
 -- =========================================================================

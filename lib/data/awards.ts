@@ -159,7 +159,7 @@ export const getActiveCycles = cache(async () => {
       category:award_categories(*)
     `)
     .eq('status', 'open')
-    .order('nomination_deadline', { ascending: true })
+    .order('nomination_close_at', { ascending: true })
 
   if (error) throw error
 

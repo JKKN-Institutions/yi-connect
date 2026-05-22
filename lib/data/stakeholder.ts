@@ -1293,7 +1293,7 @@ export const getStakeholderOverview = cache(async (chapterId: string | null): Pr
     applyChapterFilter(supabase.from('speakers').select('id, status', { count: 'exact' })),
     applyChapterFilter(supabase.from('relationship_health_scores').select('health_tier')),
     applyChapterFilter(supabase.from('stakeholder_mous').select('id', { count: 'exact' }).eq('mou_status', 'signed')),
-    applyChapterFilter(supabase.from('stakeholder_mous').select('id, valid_to').eq('mou_status', 'signed')),
+    applyChapterFilter(supabase.from('stakeholder_mous').select('id, expiry_date').eq('mou_status', 'signed')),
     applyChapterFilter(supabase.from('stakeholder_interactions').select('id', { count: 'exact' }).gte('interaction_date', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())),
     applyChapterFilter(supabase.from('stakeholder_interactions').select('id', { count: 'exact' }).eq('requires_follow_up', true)),
   ])
@@ -1326,8 +1326,8 @@ export const getStakeholderOverview = cache(async (chapterId: string | null): Pr
   // Count expiring MoUs (within 30 days)
   const now = new Date()
   const expiringCount = (expiringMous.data || []).filter((mou: any) => {
-    if (!mou.valid_to) return false
-    const expiryDate = new Date(mou.valid_to)
+    if (!mou.expiry_date) return false
+    const expiryDate = new Date(mou.expiry_date)
     const daysUntilExpiry = Math.floor((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
     return daysUntilExpiry > 0 && daysUntilExpiry <= 30
   }).length
@@ -1409,15 +1409,15 @@ export const getExpiringMous = cache(async (chapterId: string | null, daysAhead:
     .from('stakeholder_mous')
     .select('*')
     .eq('mou_status', 'signed')
-    .gte('valid_to', now.toISOString())
-    .lte('valid_to', futureDate.toISOString())
+    .gte('expiry_date', now.toISOString())
+    .lte('expiry_date', futureDate.toISOString())
 
   // Filter by chapter only if chapterId is provided
   if (chapterId) {
     query = query.eq('chapter_id', chapterId)
   }
 
-  const { data, error } = await query.order('valid_to')
+  const { data, error } = await query.order('expiry_date')
 
   if (error) {
     console.error('Error fetching expiring MoUs:', error)

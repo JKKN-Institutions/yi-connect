@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import withSerwistInit from "@serwist/next";
+import { withSentryConfig } from "@sentry/nextjs";
 
 // Initialize Serwist for PWA support
 const withSerwist = withSerwistInit({
@@ -154,4 +155,18 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default withSerwist(nextConfig);
+// Wrap with Serwist (PWA) first, then Sentry (source map upload + tunnel).
+// Sentry options here are deliberately minimal — the SDK auto-instruments
+// based on the instrumentation.ts / instrumentation-client.ts files.
+// NOTE: source-map upload is disabled in this commit; enable via SENTRY_AUTH_TOKEN
+// and a real org/project when production observability is wired up.
+const sentryOptions = {
+  // Suppress build-time warnings when DSN/auth token are not configured.
+  silent: true,
+  // Don't upload source maps until org/project/auth are set by the director.
+  disableLogger: true,
+  widenClientFileUpload: false,
+  tunnelRoute: undefined,
+};
+
+export default withSentryConfig(withSerwist(nextConfig), sentryOptions);

@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 import { Toaster } from 'react-hot-toast';
+import { Analytics } from '@vercel/analytics/next';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -118,6 +119,15 @@ export default function RootLayout({
       >
         {children}
         <Toaster position='top-right' />
+        {/*
+          Vercel Analytics — routes pageviews to Vercel's free tier (Web Analytics).
+          No config needed; auto-detects deployment. Module tagging (/yip,
+          /yi-future) is achieved naturally via the URL path in each event,
+          which Vercel Analytics groups by route segment.
+          TODO: if richer module tagging is needed, add a small "use client"
+          wrapper component and pass a `beforeSend` callback to annotate events.
+        */}
+        <Analytics />
       </body>
     </html>
   );

@@ -1,0 +1,63 @@
+# Daily Supabase backup workflow.
+#
+# Backs up the shared Yi platform Supabase project to S3 every day.
+# Runs at 02:00 IST (20:30 UTC previous day).
+#
+# Required GitHub Secrets:
+#   SUPABASE_DB_URL          — full Postgres connection string
+#                                  postgresql://postgres.bkmpbcoxbjyafieabxao:<password>@<host>:6543/postgres
+#   AWS_ACCESS_KEY_ID        — IAM user with s3:PutObject on the bucket
+#   AWS_SECRET_ACCESS_KEY
+#   AWS_REGION               — e.g. ap-south-1
+#   S3_BUCKET_NAME           — e.g. yi-supabase-backups
+#
+# Optional secrets:
+#   SLACK_WEBHOOK_URL        — if set, posts failure notification to Slack
+
+name: Daily Supabase Backup
+
+on:
+  schedule:
+    # 20:30 UTC = 02:00 IST (next day)
+    - cron: "30 20 * * *"
+  workflow_dispatch: # manual trigger from the Actions tab
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install postgresql-client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends postgresql-client
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Run backup script
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
+        run: |
+          chmod +x scripts/backup-supabase.sh
+          ./scripts/backup-supabase.sh
+
+      - name: Notify on failure (Slack)
+        if: failure() && env.SLACK_WEBHOOK_URL != ''
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          curl -X POST -H 'Content-type: application/json' \
+            --data "{\"text\": \":rotating_light: Yi Supabase backup failed on $(date -u). Check GitHub Actions logs.\"}" \
+            "$SLACK_WEBHOOK_URL"

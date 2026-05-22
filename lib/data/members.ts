@@ -5,7 +5,10 @@
  * Uses React cache() for request-level deduplication.
  */
 
-import { createServerSupabaseClient } from '@/lib/supabase/server';
+import {
+  createServerSupabaseClient,
+  createAdminSupabaseClient,
+} from '@/lib/supabase/server';
 import { getCurrentUser } from '@/lib/data/auth';
 import { cache } from 'react';
 import type {

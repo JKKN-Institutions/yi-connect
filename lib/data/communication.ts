@@ -503,7 +503,7 @@ export const getNotifications = cache(
     const supabase = await createClient();
 
     let query = supabase
-      .from('in_app_notifications')
+      .from('notifications')
       .select('*', { count: 'exact' })
       .eq('member_id', memberId);
 
@@ -534,7 +534,7 @@ export const getNotifications = cache(
 
     // Get unread count
     const { count: unreadCount } = await supabase
-      .from('in_app_notifications')
+      .from('notifications')
       .select('*', { count: 'exact', head: true })
       .eq('member_id', memberId)
       .eq('read', false);
@@ -580,7 +580,7 @@ export const getRecentNotifications = cache(
     }
 
     const { data, error } = await supabase
-      .from('in_app_notifications')
+      .from('notifications')
       .select(`
         *,
         members!inner (chapter_id)
@@ -606,7 +606,7 @@ export const getUnreadNotificationsCount = cache(
     const supabase = await createClient();
 
     const { count, error } = await supabase
-      .from('in_app_notifications')
+      .from('notifications')
       .select('*', { count: 'exact', head: true })
       .eq('member_id', memberId)
       .eq('read', false);
@@ -631,7 +631,7 @@ export const getNotificationSummary = cache(
 
     // Get recent notifications
     const { data: recent } = await supabase
-      .from('in_app_notifications')
+      .from('notifications')
       .select('*')
       .eq('member_id', memberId)
       .order('created_at', { ascending: false })
@@ -639,7 +639,7 @@ export const getNotificationSummary = cache(
 
     // Get counts by category
     const { data: allNotifications } = await supabase
-      .from('in_app_notifications')
+      .from('notifications')
       .select('category')
       .eq('member_id', memberId);
 

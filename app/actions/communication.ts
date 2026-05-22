@@ -421,7 +421,7 @@ export async function sendAnnouncement(id: string): Promise<ActionResponse> {
           announcement_id: id,
         }));
 
-        await supabase.from('in_app_notifications').insert(notifications);
+        await supabase.from('notifications').insert(notifications);
       }
 
       // Send email notifications
@@ -913,7 +913,7 @@ export async function createNotification(formData: unknown): Promise<ActionRespo
     const supabase = await createClient();
 
     const { data: notification, error } = await supabase
-      .from('in_app_notifications')
+      .from('notifications')
       .insert({
         member_id: data.member_id,
         title: data.title,
@@ -956,7 +956,7 @@ export async function markNotificationAsRead(id: string): Promise<ActionResponse
     const supabase = await createClient();
 
     const { error } = await supabase
-      .from('in_app_notifications')
+      .from('notifications')
       .update({ read: true, read_at: new Date().toISOString() })
       .eq('id', id)
       .eq('member_id', user.id); // Ensure user can only mark their own notifications
@@ -991,7 +991,7 @@ export async function markAllNotificationsAsRead(
     const supabase = await createClient();
 
     let query = supabase
-      .from('in_app_notifications')
+      .from('notifications')
       .update({ read: true, read_at: new Date().toISOString() })
       .eq('member_id', targetMemberId)
       .eq('read', false);
@@ -1028,7 +1028,7 @@ export async function deleteNotification(id: string): Promise<ActionResponse> {
     const supabase = await createClient();
 
     const { error } = await supabase
-      .from('in_app_notifications')
+      .from('notifications')
       .delete()
       .eq('id', id)
       .eq('member_id', user.id); // Ensure user can only delete their own notifications

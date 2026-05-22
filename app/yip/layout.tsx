@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Playfair_Display, DM_Sans, JetBrains_Mono } from "next/font/google";
 import { PWARegister } from "@/components/yip/pwa-register";
-import "./globals.css";
 
 const playfair = Playfair_Display({
   variable: "--font-heading",
@@ -25,7 +24,7 @@ export const metadata: Metadata = {
   title: "YIP Platform — Young Indians Parliament",
   description:
     "Empowering youth through democratic engagement. A mock parliament platform for school students by Young Indians (Yi), CII.",
-  manifest: "/manifest.json",
+  manifest: "/yip/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
@@ -40,20 +39,24 @@ export const viewport: Viewport = {
   themeColor: "#FF9933",
 };
 
-export default function RootLayout({
+/**
+ * YIP nested layout (Phase D port).
+ *
+ * Root <html>/<body> live in app/layout.tsx (yi-connect's root). This is a
+ * route-segment layout — only wraps children and applies YIP-scoped font
+ * CSS variables + the PWA registration script.
+ */
+export default function YipLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="en"
-      className={`${playfair.variable} ${dmSans.variable} ${jetbrainsMono.variable} h-full antialiased`}
+    <div
+      className={`${playfair.variable} ${dmSans.variable} ${jetbrainsMono.variable} min-h-full flex flex-col`}
     >
-      <body className="min-h-full flex flex-col">
-        {children}
-        <PWARegister />
-      </body>
-    </html>
+      {children}
+      <PWARegister />
+    </div>
   );
 }

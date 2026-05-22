@@ -74,17 +74,17 @@ BEGIN
     RAISE EXCEPTION 'Erode chapter not found in yi.chapters; seed it first.';
   END IF;
 
-  -- demo accounts + their target roles
-  INSERT INTO yi_connect.approved_emails (email, assigned_chapter_id, assigned_role_name, is_active, approved_at)
+  -- demo accounts + their target roles. approved_by = director's user id.
+  INSERT INTO yi_connect.approved_emails (email, assigned_chapter_id, assigned_role_name, is_active, approved_at, approved_by)
   VALUES
-    ('demo-super@yi-demo.com',    v_erode, 'Super Admin',         true, now()),
-    ('demo-national@yi-demo.com', v_erode, 'National Admin',      true, now()),
-    ('demo-exec@yi-demo.com',     v_erode, 'Executive Member',    true, now()),
-    ('demo-chair@yi-demo.com',    v_erode, 'Chair',               true, now()),
-    ('demo-cochair@yi-demo.com',  v_erode, 'Co-Chair',            true, now()),
-    ('demo-ec@yi-demo.com',       v_erode, 'EC Member',           true, now()),
-    ('demo-industry@yi-demo.com', v_erode, 'Industry Coordinator',true, now()),
-    ('demo-member@yi-demo.com',   v_erode, 'Member',              true, now())
+    ('demo-super@yi-demo.com',    v_erode, 'Super Admin',          true, now(), '6722f821-1c1b-48cd-9f22-2934888ca687'),
+    ('demo-national@yi-demo.com', v_erode, 'National Admin',       true, now(), '6722f821-1c1b-48cd-9f22-2934888ca687'),
+    ('demo-exec@yi-demo.com',     v_erode, 'Executive Member',     true, now(), '6722f821-1c1b-48cd-9f22-2934888ca687'),
+    ('demo-chair@yi-demo.com',    v_erode, 'Chair',                true, now(), '6722f821-1c1b-48cd-9f22-2934888ca687'),
+    ('demo-cochair@yi-demo.com',  v_erode, 'Co-Chair',             true, now(), '6722f821-1c1b-48cd-9f22-2934888ca687'),
+    ('demo-ec@yi-demo.com',       v_erode, 'EC Member',            true, now(), '6722f821-1c1b-48cd-9f22-2934888ca687'),
+    ('demo-industry@yi-demo.com', v_erode, 'Industry Coordinator', true, now(), '6722f821-1c1b-48cd-9f22-2934888ca687'),
+    ('demo-member@yi-demo.com',   v_erode, 'Member',               true, now(), '6722f821-1c1b-48cd-9f22-2934888ca687')
   ON CONFLICT (email) DO UPDATE SET
     assigned_chapter_id = EXCLUDED.assigned_chapter_id,
     assigned_role_name  = EXCLUDED.assigned_role_name,

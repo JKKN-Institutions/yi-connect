@@ -39,7 +39,7 @@ const STATUS_TO_STEP_MAP: Record<string, number> = {
  * Called automatically when cycle status changes
  */
 async function syncTimelineStepsWithCycleStatus(
-  supabase: SupabaseClient,
+  supabase: SupabaseClient<any, "yi_connect">,
   cycleId: string,
   cycleStatus: string
 ): Promise<void> {

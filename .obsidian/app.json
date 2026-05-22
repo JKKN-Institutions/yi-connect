@@ -1,0 +1,19 @@
+{
+  "userIgnoreFilters": [
+    "node_modules/",
+    ".next/",
+    ".git/",
+    "dist/",
+    "build/",
+    ".turbo/",
+    ".vercel/",
+    "coverage/",
+    ".cache/",
+    ".output/",
+    "__pycache__/",
+    "venv/",
+    ".venv/",
+    "target/",
+    "*.pyc"
+  ]
+}

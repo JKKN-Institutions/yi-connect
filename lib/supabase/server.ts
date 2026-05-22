@@ -27,6 +27,9 @@ export async function createServerSupabaseClient() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
+      // Phase B rewire 2026-05-22: route to yi_connect schema by default.
+      // See lib/supabase/client.ts for rationale.
+      db: { schema: 'yi_connect' },
       cookies: {
         getAll() {
           return cookieStore.getAll()

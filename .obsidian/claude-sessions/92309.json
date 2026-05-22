@@ -2,16 +2,16 @@
   "shell_pid": "92309",
   "session_id": "53a42f65-ff32-4ae5-b787-c9326052db94",
   "started_at": "2026-05-22T00:33:38Z",
-  "updated_at": "2026-05-22T03:40:31Z",
+  "updated_at": "2026-05-22T03:40:37Z",
   "cwd": "/Users/omm/PROJECTS/yi-connect",
   "tab_name": "",
   "active_obsidian_file": "",
   "active_file_title": "",
-  "rot_score": 3.79,
-  "tools_total": 427,
+  "rot_score": 3.80,
+  "tools_total": 428,
   "probe_forgotten": 0,
   "probe_drifted": 0,
   "stuck_commands": 0,
   "last_tool": "Edit",
-  "last_tool_summary": "/Users/omm/PROJECTS/yi-connect/lib/supabase/client.ts"
+  "last_tool_summary": "/Users/omm/PROJECTS/yi-connect/lib/supabase/server.ts"
 }

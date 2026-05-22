@@ -78,8 +78,10 @@ export const getBudgets = cache(async (
   }
 
   // Apply filters
+  // NOTE: DB column is `fiscal_year`; we expose it to the UI as `calendar_year`
+  // for backward compatibility with the existing TypeScript types.
   if (filters?.calendar_year) {
-    query = query.eq('calendar_year', filters.calendar_year)
+    query = query.eq('fiscal_year', filters.calendar_year)
   }
 
   if (filters?.period) {
@@ -104,7 +106,7 @@ export const getBudgets = cache(async (
   query = query.range(from, to)
 
   // Sorting
-  query = query.order('calendar_year', { ascending: false })
+  query = query.order('fiscal_year', { ascending: false })
     .order('start_date', { ascending: false })
 
   const { data, error, count } = await query

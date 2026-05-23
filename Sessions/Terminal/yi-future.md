@@ -23,5 +23,8 @@ _No decisions recorded yet._
 ## Captured Notes
 - **[19:18] Session ended** — Auto-created on first exit
 
+- **[20:00] Session ended**
+- **[20:15] Session ended**
+- **[20:18] Session ended**
 ## Related Sessions
 _No related session notes yet. Sessions working in this directory will auto-link here._

@@ -13,6 +13,7 @@ const NAV: NavItem[] = [
   { label: "Chapters", href: "/national/admin/chapters" },
   { label: "Chairs", href: "/national/admin/chairs" },
   { label: "Teams", href: "/national/admin/teams" },
+  { label: "Unteamed Delegates", href: "/national/admin/delegates/unteamed" },
   { label: "Metrics", href: "/national/admin/metrics" },
   { label: "Whitepapers", href: "/national/admin/whitepapers" },
   { label: "Government", href: "/national/admin/government" },

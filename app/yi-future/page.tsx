@@ -170,7 +170,7 @@ export default async function Home() {
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
           <Link href="/" aria-label="Future 6.0 home">
             <Image
-              src="/future-6-logo.png"
+              src="/yi-future/future-6-logo.png"
               alt="Future 6.0 by Yi YUVA"
               width={200}
               height={60}

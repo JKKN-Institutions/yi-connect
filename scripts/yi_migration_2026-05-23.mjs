@@ -48,6 +48,17 @@ const CHAPTER_SKIP = new Set([
   "3494f9ec-08c3-44b4-89f2-412ddcb69b3e", // Yi DemoChapter
   "de000001-0000-4000-a000-000000000001", // Yi DemoChapter 2
 ]);
+// Role ID remap (OLD UUID → NEW UUID, matched by role name)
+const ROLE_REMAP = {
+  "b2a555b8-c2d3-4118-a4ef-6d5fd160ad08": "00000000-0000-0000-0000-000000000000", // Member
+  "b63d2e8a-53ba-4c5e-b9ac-ddeb2b50bf74": "00000000-0000-0000-0000-000000000020", // EC Member
+  "7acbf1a7-c105-4b5f-ae3e-1bf4e53689ca": "00000000-0000-0000-0000-000000000030", // Co-Chair
+  "59d37a91-2930-4828-b6d6-02e74eab8c94": "00000000-0000-0000-0000-000000000040", // Chair
+  "f22e4656-d8b8-4e68-816b-d5c58a3a92f6": "00000000-0000-0000-0000-000000000050", // Executive Member
+  "3d57609e-9224-4c92-8bad-3c64bf9ba2f8": "00000000-0000-0000-0000-000000000060", // National Admin
+  "4755f06c-b7f2-462f-8728-2a0d2005de3e": "4f48b45b-0e5f-4cc5-aa79-9f52c46cbff8", // Super Admin
+  "232114ab-4424-4670-83ef-24312a93b57d": "be69c6d3-1998-4dc1-87ce-9453a1d1018e", // Industry Coordinator
+};
 
 // Per-table NEW column whitelist (only fields that exist in NEW; OLD-extras dropped)
 const COLUMN_DROP = {
@@ -62,9 +73,12 @@ const COLUMN_DROP = {
     "logistics_parking", "requirements", "venue_latitude", "venue_longitude",
   ],
 };
-// Null these fields when migrating (FK targets that may not exist in NEW)
+// Null these fields when migrating (FK targets that may not exist in NEW, or to break circular FK chain)
 const COLUMN_NULL = {
   events: ["organizer_id"], // organizer may point to a member that wasn't migrated
+  profiles: ["approved_email_id", "approved_by"], // break circular FK: profiles → approved_emails → members → profiles
+  approved_emails: ["created_member_id", "member_request_id"], // approved_by is NOT NULL, keep OLD value
+  members: [], // members.id IS profiles.id so depends on profiles being inserted first
 };
 
 // ─── HELPERS ────────────────────────────────────────────────────────
@@ -148,6 +162,14 @@ function remapChapter(rows, field = "chapter_id") {
 }
 function filterSkippedChapters(rows, field = "chapter_id") {
   return rows.filter((r) => !r[field] || !CHAPTER_SKIP.has(r[field]));
+}
+function remapRoles(rows, field = "role_id") {
+  return rows.map((row) => {
+    if (row[field] && ROLE_REMAP[row[field]]) {
+      return { ...row, [field]: ROLE_REMAP[row[field]] };
+    }
+    return row;
+  });
 }
 
 function isTestTitle(title) {
@@ -250,6 +272,8 @@ async function genericPhase(name, table, opts = {}) {
   toMigrate = dropColumns(toMigrate, COLUMN_DROP[table]);
   // Null FK columns whose targets may not exist
   toMigrate = nullColumns(toMigrate, COLUMN_NULL[table]);
+  // Role ID remap (for user_roles)
+  if (opts.remapRole) toMigrate = remapRoles(toMigrate, "role_id");
   // Chapter ID remap
   if (opts.chapterField !== false) toMigrate = remapChapter(toMigrate, chapterField);
   // Pre-dedup by email (if table has email column and NEW already has same email)
@@ -304,6 +328,8 @@ async function phase6_eventsSmart() {
   log(`  After title+date dedup: ${toMigrate.length}`);
   // Step 5: drop OLD-only columns
   toMigrate = dropColumns(toMigrate, COLUMN_DROP.events);
+  // Step 6: null FK columns whose targets may not exist (organizer_id)
+  toMigrate = nullColumns(toMigrate, COLUMN_NULL.events);
 
   log(`  Would insert: ${toMigrate.length}`);
   if (!LIVE) {
@@ -329,7 +355,7 @@ async function main() {
   const phases = [
     { n: 1, name: "auth.users",         fn: phase1_authUsers },
     { n: 2, name: "profiles",           fn: () => genericPhase("profiles", "profiles", { emailDedup: true }) },
-    { n: 3, name: "user_roles",         fn: () => genericPhase("user_roles", "user_roles", { chapterField: false }) },
+    { n: 3, name: "user_roles",         fn: () => genericPhase("user_roles", "user_roles", { chapterField: false, remapRole: true }) },
     { n: 4, name: "approved_emails",    fn: () => genericPhase("approved_emails", "approved_emails", { chapterField: "assigned_chapter_id", emailDedup: true }) },
     { n: 5, name: "members",            fn: () => genericPhase("members", "members") },
     { n: 6, name: "events (title+date dedup)", fn: phase6_eventsSmart },

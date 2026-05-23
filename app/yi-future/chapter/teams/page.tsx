@@ -143,7 +143,7 @@ export default async function TeamsPage({
       {teams.length === 0 ? (
         <div className="bg-white border border-navy/10 rounded-lg p-8 text-center text-navy/50">
           {trackFilter === "all"
-            ? "No teams yet. Create the first one when you have at least 3 delegates registered."
+            ? "No teams yet. You can form a team as soon as 1 delegate has registered."
             : "No teams yet on this track. Pick a different track or create a team."}
         </div>
       ) : (

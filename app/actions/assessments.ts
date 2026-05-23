@@ -228,15 +228,10 @@ export async function completeAssessment(
       throw new Error(`Failed to complete assessment: ${updateError.message}`)
     }
 
-    // Update member's skill_will_category
-    const { error: memberUpdateError } = await supabase
-      .from('members')
-      .update({ skill_will_category: category })
-      .eq('id', assessment.member_id)
-
-    if (memberUpdateError) {
-      console.error('Failed to update member category:', memberUpdateError)
-    }
+    // NOTE: skill_will_category lives on skill_will_assessments (updated above)
+    // and is denormalized into the member_activity_data view. The members
+    // table does not store this column (Phase D drift cleanup, Agent K +
+    // follow-up). Do not re-add a members UPDATE here.
 
     revalidatePath('/members')
     revalidatePath(`/members/${assessment.member_id}`)

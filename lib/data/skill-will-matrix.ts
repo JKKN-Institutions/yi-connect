@@ -215,6 +215,8 @@ export const getSkillWillMatrixData = cache(async (
   const supabase = await createServerSupabaseClient()
 
   // Fetch members with all related data for calculations
+  // NOTE: skill_will_category is computed on-the-fly via assignCategory()
+  // below, not stored on the members table (Phase D drift cleanup).
   let query = supabase
     .from('members')
     .select(`
@@ -222,7 +224,6 @@ export const getSkillWillMatrixData = cache(async (
       years_of_experience,
       membership_status,
       is_active,
-      skill_will_category,
       profile:profiles!inner(
         email,
         full_name,
@@ -393,48 +394,28 @@ export const getSkillWillMatrixData = cache(async (
 })
 
 /**
- * Update a member's skill_will_category in the database
+ * @deprecated Phase D drift cleanup — yi_connect.members has no
+ * skill_will_category column. Category is computed on-the-fly via
+ * assignCategory() in getSkillWillMatrixData. No callers in the
+ * codebase as of this commit; retained as a no-op to keep the
+ * export surface stable.
  */
 export async function updateMemberCategory(
-  memberId: string,
-  category: SkillWillCategory
+  _memberId: string,
+  _category: SkillWillCategory
 ): Promise<boolean> {
-  const supabase = await createServerSupabaseClient()
-
-  const { error } = await supabase
-    .from('members')
-    .update({ skill_will_category: category })
-    .eq('id', memberId)
-
-  if (error) {
-    console.error('Error updating member category:', error)
-    return false
-  }
-
   return true
 }
 
 /**
- * Batch update all members' categories for a chapter
+ * @deprecated Phase D drift cleanup — see updateMemberCategory.
+ * Categories are recalculated on every read from getSkillWillMatrixData,
+ * so a batch persistence step is no longer required. No callers in the
+ * codebase as of this commit.
  */
 export async function recalculateChapterCategories(chapterId: string): Promise<number> {
   const matrixData = await getSkillWillMatrixData(chapterId)
-  const supabase = await createServerSupabaseClient()
-
-  let updatedCount = 0
-
-  for (const member of matrixData.members) {
-    const { error } = await supabase
-      .from('members')
-      .update({ skill_will_category: member.category })
-      .eq('id', member.id)
-
-    if (!error) {
-      updatedCount++
-    }
-  }
-
-  return updatedCount
+  return matrixData.members.length
 }
 
 // ============================================================================

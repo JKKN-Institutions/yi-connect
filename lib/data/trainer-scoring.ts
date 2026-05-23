@@ -445,6 +445,11 @@ export const getTrainerPendingInvitations = cache(
       return []
     }
 
+    // Note: dropped `stakeholder:stakeholders(...)` embed — table does not
+    // exist; events use polymorphic stakeholder_type/stakeholder_id columns
+    // (kept in events.* via select on parent table if needed). No downstream
+    // consumer reads `event.stakeholder` from this query.
+    // (Fixed 2026-05-23 — Agent G.)
     const { data, error } = await supabase
       .from('event_trainer_assignments')
       .select(`
@@ -457,11 +462,8 @@ export const getTrainerPendingInvitations = cache(
           service_type,
           expected_students,
           venue_address,
-          stakeholder:stakeholders(
-            id,
-            name:school_name,
-            city
-          )
+          stakeholder_type,
+          stakeholder_id
         )
       `)
       .eq('trainer_profile_id', trainerProfile.id)
@@ -501,6 +503,9 @@ export const getTrainerUpcomingSessions = cache(
       return []
     }
 
+    // Note: dropped `stakeholder:stakeholders(...)` embed — see comment in
+    // getTrainerPendingInvitations above. Polymorphic FK can't be embedded.
+    // (Fixed 2026-05-23 — Agent G.)
     const { data, error } = await supabase
       .from('event_trainer_assignments')
       .select(`
@@ -514,11 +519,8 @@ export const getTrainerUpcomingSessions = cache(
           expected_students,
           venue_address,
           status,
-          stakeholder:stakeholders(
-            id,
-            name:school_name,
-            city
-          )
+          stakeholder_type,
+          stakeholder_id
         )
       `)
       .eq('trainer_profile_id', trainerProfile.id)

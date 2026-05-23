@@ -109,11 +109,6 @@ export const getServiceEvents = cache(
         expected_students,
         trainers_needed,
         created_at,
-        stakeholder:stakeholders(
-          id,
-          name:school_name,
-          city
-        ),
         trainer_assignments:event_trainer_assignments(
           id,
           status
@@ -167,11 +162,51 @@ export const getServiceEvents = cache(
       throw new Error(`Failed to fetch service events: ${error.message}`)
     }
 
+    // Polymorphic stakeholder resolution.
+    // events.stakeholder_type + events.stakeholder_id reference one of:
+    // schools (school_name), colleges (college_name), industries (company_name),
+    // government_stakeholders, ngos, vendors. There is NO single `stakeholders`
+    // table, so PostgREST embed via FK is impossible. Resolve in 1 query per
+    // type instead. (Fixed 2026-05-23 — Agent G.)
+    const stakeholderMap = new Map<string, { name: string | null; city: string | null }>()
+    const idsByType: Record<string, string[]> = {}
+    for (const event of data || []) {
+      if (!event.stakeholder_type || !event.stakeholder_id) continue
+      idsByType[event.stakeholder_type] ??= []
+      idsByType[event.stakeholder_type].push(event.stakeholder_id)
+    }
+    const typeNameColumn: Record<string, string> = {
+      school: 'school_name',
+      college: 'college_name',
+      industry: 'company_name',
+    }
+    const typeTable: Record<string, string> = {
+      school: 'schools',
+      college: 'colleges',
+      industry: 'industries',
+      government: 'government_stakeholders',
+      ngo: 'ngos',
+      vendor: 'vendors',
+    }
+    for (const [type, ids] of Object.entries(idsByType)) {
+      const table = typeTable[type]
+      if (!table) continue
+      const nameCol = typeNameColumn[type] ?? 'name'
+      const { data: rows } = await supabase
+        .from(table)
+        .select(`id, ${nameCol}, city`)
+        .in('id', ids)
+      for (const row of (rows as any[]) || []) {
+        stakeholderMap.set(row.id, { name: row[nameCol] ?? null, city: row.city ?? null })
+      }
+    }
+
     // Transform data
     const transformedData: ServiceEventListItem[] = (data || []).map((event: any) => {
       const assignments = event.trainer_assignments || []
       const materials = event.materials || []
       const reports = event.session_reports || []
+      const stakeholder = event.stakeholder_id ? stakeholderMap.get(event.stakeholder_id) : null
 
       return {
         id: event.id,
@@ -184,8 +219,8 @@ export const getServiceEvents = cache(
         service_type: event.service_type,
         stakeholder_type: event.stakeholder_type,
         stakeholder_id: event.stakeholder_id,
-        stakeholder_name: event.stakeholder?.name || null,
-        stakeholder_city: event.stakeholder?.city || null,
+        stakeholder_name: stakeholder?.name || null,
+        stakeholder_city: stakeholder?.city || null,
         expected_students: event.expected_students,
         trainers_needed: event.trainers_needed || 0,
         trainers_assigned: assignments.length,
@@ -250,13 +285,6 @@ export const getServiceEventById = cache(
           id,
           name,
           location
-        ),
-        stakeholder:stakeholders(
-          id,
-          school_name,
-          stakeholder_type,
-          city,
-          address_line1
         )
       `
       )
@@ -272,6 +300,44 @@ export const getServiceEventById = cache(
       throw new Error(`Failed to fetch service event: ${error.message}`)
     }
 
+    // Polymorphic stakeholder resolution.
+    // There is NO `stakeholders` table — resolve via stakeholder_type
+    // to the correct concrete table (schools/colleges/industries/etc).
+    // (Fixed 2026-05-23 — Agent G.)
+    let stakeholder: { id: string; name: string | null; type: string; city: string | null } | null = null
+    if (data.stakeholder_id && data.stakeholder_type) {
+      const typeNameColumn: Record<string, string> = {
+        school: 'school_name',
+        college: 'college_name',
+        industry: 'company_name',
+      }
+      const typeTable: Record<string, string> = {
+        school: 'schools',
+        college: 'colleges',
+        industry: 'industries',
+        government: 'government_stakeholders',
+        ngo: 'ngos',
+        vendor: 'vendors',
+      }
+      const table = typeTable[data.stakeholder_type]
+      if (table) {
+        const nameCol = typeNameColumn[data.stakeholder_type] ?? 'name'
+        const { data: sRow } = await supabase
+          .from(table)
+          .select(`id, ${nameCol}, city`)
+          .eq('id', data.stakeholder_id)
+          .single()
+        if (sRow) {
+          stakeholder = {
+            id: (sRow as any).id,
+            name: (sRow as any)[nameCol] ?? null,
+            type: data.stakeholder_type,
+            city: (sRow as any).city ?? null,
+          }
+        }
+      }
+    }
+
     return {
       ...data,
       service_details: {
@@ -285,14 +351,7 @@ export const getServiceEventById = cache(
         expected_students: data.expected_students,
         trainers_needed: data.trainers_needed,
       },
-      stakeholder: data.stakeholder
-        ? {
-            id: data.stakeholder.id,
-            name: data.stakeholder.school_name,
-            type: data.stakeholder.stakeholder_type,
-            city: data.stakeholder.city,
-          }
-        : null,
+      stakeholder,
     } as EventWithServiceDetails
   }
 )

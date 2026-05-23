@@ -92,6 +92,10 @@ export const getBookingById = cache(
   async (id: string): Promise<SessionBookingFull | null> => {
     const supabase = await createServerSupabaseClient()
 
+    // Note: session_types table does not exist in yi_connect schema.
+    // session_bookings.session_type is a denormalized text column already
+    // included via select('*'). The previous embed `session_type:session_types(...)`
+    // caused PGRST200. (Fixed 2026-05-23 — Agent G.)
     const { data, error } = await supabase
       .from('session_bookings')
       .select(`
@@ -105,17 +109,10 @@ export const getBookingById = cache(
           stakeholder_type,
           stakeholder_id
         ),
-        session_type:session_types(
-          id,
-          name,
-          display_name,
-          description,
-          typical_duration_minutes
-        ),
         assigned_trainer:trainer_profiles(
           id,
           member_id,
-          member:members(
+          member:members!trainer_profiles_member_id_fkey(
             id,
             profile:profiles(
               full_name,

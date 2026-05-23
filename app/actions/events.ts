@@ -1941,6 +1941,11 @@ export async function exportEvents(
     // and returns PGRST200. Drop the embed and hydrate organizer names via a
     // separate members → profiles lookup keyed by organizer_id (same pattern
     // as lib/data/events.ts resolveOrganizer helper).
+    // Phase E fix 2026-05-23: column-name drift — events has
+    // `venue_address`, `max_capacity`, `registration_end_date`,
+    // `virtual_meeting_link` (not venue, max_attendees,
+    // registration_deadline, meeting_link). Aliasing back to the export
+    // column names below.
     let query = supabase
       .from('events')
       .select(`
@@ -1951,11 +1956,11 @@ export async function exportEvents(
         status,
         start_date,
         end_date,
-        venue,
-        max_attendees,
-        registration_deadline,
+        venue:venue_address,
+        max_attendees:max_capacity,
+        registration_deadline:registration_end_date,
         is_virtual,
-        meeting_link,
+        meeting_link:virtual_meeting_link,
         created_at,
         organizer_id,
         vertical:verticals(name),

@@ -187,11 +187,15 @@ export async function getMemberRequests(params?: {
   // This is safe because requireRole() ensures only admins can access this
   const supabase = createAdminSupabaseClient()
 
+  // Phase E fix 2026-05-23: `chapter:preferred_chapter_id(...)` is invalid
+  // PostgREST syntax (column-as-FK shorthand). Use the explicit FK hint
+  // pointing at the yi_connect.chapters view (which surfaces yi.chapters
+  // via member_requests_preferred_chapter_id_fkey).
   let query = supabase
     .from('member_requests')
     .select(`
       *,
-      chapter:preferred_chapter_id(id, name, location)
+      chapter:chapters!member_requests_preferred_chapter_id_fkey(id, name, location)
     `, { count: 'exact' })
     .order('created_at', { ascending: false })
 
@@ -228,11 +232,13 @@ export async function getMemberRequestById(id: string) {
   // Use admin client to avoid FK validation issues with auth.users
   const supabase = createAdminSupabaseClient()
 
+  // Phase E fix 2026-05-23: `chapter:preferred_chapter_id(...)` is invalid
+  // PostgREST syntax. Use the explicit FK hint.
   const { data, error } = await supabase
     .from('member_requests')
     .select(`
       *,
-      chapter:preferred_chapter_id(id, name, location)
+      chapter:chapters!member_requests_preferred_chapter_id_fkey(id, name, location)
     `)
     .eq('id', id)
     .single()

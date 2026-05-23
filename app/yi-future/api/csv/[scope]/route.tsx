@@ -344,7 +344,11 @@ export async function GET(
         .schema("future")
         .from("teams")
         .select(
-          "id, team_name, is_frozen, frozen_at, status, leader:delegates!teams_leader_id_fkey(full_name), captain:delegates!teams_captain_id_fkey(full_name), problem_statements(title), team_members(delegate_id)"
+          // Phase E fix 2026-05-23: the FK constraint is named
+          // `teams_leader_delegate_id_fkey` (column is leader_delegate_id),
+          // not `teams_leader_id_fkey`. Using the wrong constraint name
+          // makes PostgREST drop the leader column silently.
+          "id, team_name, is_frozen, frozen_at, status, leader:delegates!teams_leader_delegate_id_fkey(full_name), captain:delegates!teams_captain_id_fkey(full_name), problem_statements(title), team_members(delegate_id)"
         )
         .eq("chapter_id", legacyChapterId)
         .order("team_name", { ascending: true });

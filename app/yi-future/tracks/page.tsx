@@ -20,7 +20,10 @@ async function getTracks(): Promise<Track[]> {
     .schema("future")
     .from("tracks")
     .select(
-      "id, slug, name, description, color_hex, icon, display_order, editions!inner(slug, name, is_active), problem_statements(id)"
+      // Phase E fix 2026-05-23: future.tracks has two embedding paths to editions:
+      // (1) direct FK tracks_edition_id_fkey, (2) many-to-many via chapter_track_assignments.
+      // PostgREST returns PGRST201 without an explicit hint. Use the direct FK.
+      "id, slug, name, description, color_hex, icon, display_order, editions!tracks_edition_id_fkey!inner(slug, name, is_active), problem_statements(id)"
     )
     .eq("editions.is_active", true)
     .order("display_order", { ascending: true });

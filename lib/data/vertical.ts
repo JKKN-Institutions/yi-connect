@@ -540,19 +540,28 @@ export const getVerticalReviews = cache(
   async (verticalId: string, filters?: ReviewFilters): Promise<VerticalPerformanceReviewWithDetails[]> => {
     const supabase = await createClient()
 
+    // Phase E fix 2026-05-23: vertical_performance_reviews has NO direct FK
+    // to vertical_chairs, so `chair:vertical_chairs(...)` returns PGRST200.
+    // Route the chairs join through verticals.vertical_chairs (vertical_chairs
+    // has vertical_id → verticals.id which the embed already traverses).
     let query = supabase
       .from('vertical_performance_reviews')
       .select(
         `
         *,
-        vertical:verticals(id, name, slug, color),
-        chair:vertical_chairs(
+        vertical:verticals(
           id,
-          role,
-          member:members!vertical_chairs_member_id_fkey(
+          name,
+          slug,
+          color,
+          chairs:vertical_chairs(
             id,
-            avatar_url,
-            profile:profiles(full_name, email)
+            role,
+            member:members!vertical_chairs_member_id_fkey(
+              id,
+              avatar_url,
+              profile:profiles(full_name, email)
+            )
           )
         ),
         reviewed_by_member:members!vertical_performance_reviews_reviewed_by_fkey(
@@ -597,19 +606,27 @@ export const getVerticalReviews = cache(
 export const getReviewById = cache(async (id: string): Promise<VerticalPerformanceReviewWithDetails | null> => {
   const supabase = await createClient()
 
+  // Phase E fix 2026-05-23: vertical_performance_reviews has NO direct FK to
+  // vertical_chairs, so `chair:vertical_chairs(...)` returns PGRST200.
+  // Route the chairs join through verticals.
   const { data, error } = await supabase
     .from('vertical_performance_reviews')
     .select(
       `
       *,
-      vertical:verticals(id, name, slug, color),
-      chair:vertical_chairs(
+      vertical:verticals(
         id,
-        role,
-        member:members!vertical_chairs_member_id_fkey(
+        name,
+        slug,
+        color,
+        chairs:vertical_chairs(
           id,
-          avatar_url,
-          profile:profiles(full_name, email)
+          role,
+          member:members!vertical_chairs_member_id_fkey(
+            id,
+            avatar_url,
+            profile:profiles(full_name, email)
+          )
         )
       ),
       reviewed_by_member:members!vertical_performance_reviews_reviewed_by_fkey(

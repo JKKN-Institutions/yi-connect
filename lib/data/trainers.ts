@@ -25,12 +25,15 @@ export const getTrainerProfile = cache(
   async (memberId: string): Promise<TrainerProfileFull | null> => {
     const supabase = await createServerSupabaseClient()
 
+    // Phase E fix 2026-05-23: trainer_profiles has two FKs to members
+    // (member_id and approved_by), so PostgREST returns PGRST201 ambiguous
+    // embed without an explicit FK hint.
     const { data, error } = await supabase
       .from('trainer_profiles')
       .select(
         `
         *,
-        member:members(
+        member:members!trainer_profiles_member_id_fkey(
           id,
           company,
           designation,
@@ -91,12 +94,15 @@ export const getTrainerProfileById = cache(
   async (id: string): Promise<TrainerProfileFull | null> => {
     const supabase = await createServerSupabaseClient()
 
+    // Phase E fix 2026-05-23: trainer_profiles has two FKs to members
+    // (member_id and approved_by), so PostgREST returns PGRST201 ambiguous
+    // embed without an explicit FK hint.
     const { data, error } = await supabase
       .from('trainer_profiles')
       .select(
         `
         *,
-        member:members(
+        member:members!trainer_profiles_member_id_fkey(
           id,
           company,
           designation,
@@ -156,12 +162,15 @@ export const getChapterTrainers = cache(
   async (chapterId: string): Promise<TrainerProfileSummary[]> => {
     const supabase = await createServerSupabaseClient()
 
+    // Phase E fix 2026-05-23: trainer_profiles has two FKs to members
+    // (member_id and approved_by), so the bare `members!inner` embed is
+    // ambiguous (PGRST201) without an explicit FK hint.
     const { data, error } = await supabase
       .from('trainer_profiles')
       .select(
         `
         *,
-        member:members!inner(
+        member:members!trainer_profiles_member_id_fkey!inner(
           id,
           profile:profiles(
             full_name,

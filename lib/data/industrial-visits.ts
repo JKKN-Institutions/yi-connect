@@ -607,129 +607,19 @@ export const getIVAnalytics = cache(async (
  * Get all industries performance for a chapter
  */
 export const getChapterIndustriesPerformance = cache(async (
-  chapterId: string,
-  dateFrom?: string,
-  dateTo?: string
+  _chapterId: string,
+  _dateFrom?: string,
+  _dateTo?: string
 ): Promise<IndustryPerformance[]> => {
   'use server';
 
-  try {
-    const supabase = await createClient();
-
-    // Get all industries that have hosted IVs in this chapter
-    let eventsQuery = supabase
-      .from('events')
-      .select(`
-        id,
-        industry_id,
-        host_willingness_rating,
-        start_date,
-        current_registrations,
-        industry:industries!inner(id, company_name, industry_sector)
-      `)
-      .eq('chapter_id', chapterId)
-      .eq('category', 'industrial_visit')
-      .not('industry_id', 'is', null);
-
-    if (dateFrom) {
-      eventsQuery = eventsQuery.gte('start_date', dateFrom);
-    }
-
-    if (dateTo) {
-      eventsQuery = eventsQuery.lte('start_date', dateTo);
-    }
-
-    const { data: events, error } = await eventsQuery.order('start_date', { ascending: false });
-
-    if (error) {
-      console.error('Error fetching chapter industries performance:', error);
-      throw new Error(`Failed to fetch industries performance: ${error.message}`);
-    }
-
-    if (!events || events.length === 0) {
-      return [];
-    }
-
-    // Group by industry
-    const industryMap = new Map<string, {
-      industry_id: string;
-      company_name: string;
-      industry_sector: string | null;
-      events: typeof events;
-      ratings: number[];
-    }>();
-
-    events.forEach((event: any) => {
-      const industryId = event.industry_id;
-      if (!industryId) return;
-
-      if (!industryMap.has(industryId)) {
-        industryMap.set(industryId, {
-          industry_id: industryId,
-          company_name: event.industry?.company_name || 'Unknown',
-          industry_sector: event.industry?.industry_sector || null,
-          events: [],
-          ratings: [],
-        });
-      }
-
-      const industryData = industryMap.get(industryId)!;
-      industryData.events.push(event);
-      if (event.host_willingness_rating) {
-        industryData.ratings.push(event.host_willingness_rating);
-      }
-    });
-
-    // Get participant counts per event
-    const eventIds = events.map(e => e.id);
-    const { data: rsvps } = await supabase
-      .from('event_rsvps')
-      .select('event_id')
-      .in('event_id', eventIds)
-      .eq('status', 'confirmed');
-
-    // Count RSVPs per event
-    const rsvpCounts = new Map<string, number>();
-    (rsvps || []).forEach((rsvp: any) => {
-      const count = rsvpCounts.get(rsvp.event_id) || 0;
-      rsvpCounts.set(rsvp.event_id, count + 1);
-    });
-
-    // Build performance data
-    const performanceData: IndustryPerformance[] = [];
-
-    industryMap.forEach((data, industryId) => {
-      const totalParticipants = data.events.reduce((sum, event: any) => {
-        return sum + (rsvpCounts.get(event.id) || event.current_registrations || 0);
-      }, 0);
-
-      const avgRating = data.ratings.length > 0
-        ? data.ratings.reduce((sum, r) => sum + r, 0) / data.ratings.length
-        : null;
-
-      const lastIVDate = data.events.length > 0
-        ? data.events[0].start_date
-        : null;
-
-      performanceData.push({
-        industry_id: industryId,
-        company_name: data.company_name,
-        total_ivs_hosted: data.events.length,
-        total_participants: totalParticipants,
-        avg_rating: avgRating ? Math.round(avgRating * 10) / 10 : null,
-        last_iv_date: lastIVDate,
-        willingness_to_host_again: avgRating,
-      });
-    });
-
-    // Sort by total IVs hosted (descending)
-    performanceData.sort((a, b) => b.total_ivs_hosted - a.total_ivs_hosted);
-
-    return performanceData;
-  } catch (error) {
-    console.error('Error in getChapterIndustriesPerformance:', error);
-    throw error;
-  }
+  // Phase E fix 2026-05-23: gated on events columns that don't exist in
+  // the current yi_connect schema (industry_id, host_willingness_rating)
+  // and an FK to industries that was never declared. Returning [] until
+  // the IV ↔ industry linkage is re-modelled (likely via
+  // events.stakeholder_id where stakeholder_type = 'industry'). Caller
+  // already tolerates empty.
+  return [];
 });
 
 /**
@@ -740,48 +630,11 @@ export const getIndustryCategoriesDistribution = cache(async (
 ): Promise<Array<{ sector: string; count: number; participants: number }>> => {
   'use server';
 
-  try {
-    const supabase = await createClient();
-
-    const { data: events, error } = await supabase
-      .from('events')
-      .select(`
-        id,
-        current_registrations,
-        industry:industries!inner(industry_sector)
-      `)
-      .eq('chapter_id', chapterId)
-      .eq('category', 'industrial_visit')
-      .not('industry_id', 'is', null);
-
-    if (error) {
-      console.error('Error fetching industry categories:', error);
-      return [];
-    }
-
-    // Group by sector
-    const sectorMap = new Map<string, { count: number; participants: number }>();
-
-    (events || []).forEach((event: any) => {
-      const sector = event.industry?.industry_sector || 'Other';
-      const current = sectorMap.get(sector) || { count: 0, participants: 0 };
-      sectorMap.set(sector, {
-        count: current.count + 1,
-        participants: current.participants + (event.current_registrations || 0),
-      });
-    });
-
-    return Array.from(sectorMap.entries())
-      .map(([sector, data]) => ({
-        sector,
-        count: data.count,
-        participants: data.participants,
-      }))
-      .sort((a, b) => b.count - a.count);
-  } catch (error) {
-    console.error('Error in getIndustryCategoriesDistribution:', error);
-    return [];
-  }
+  // Phase E fix 2026-05-23: events has no FK to industries and no
+  // industry_id column. The sector distribution returns empty until the
+  // IV ↔ industry linkage is re-modelled.
+  void chapterId;
+  return [];
 });
 
 /**
@@ -946,53 +799,14 @@ export const getIndustryPortalUserByEmail = cache(async (_email: string) => {
 /**
  * Get industry's IVs
  */
-export const getIndustryIVs = cache(async (industryId: string): Promise<IVListItem[]> => {
+export const getIndustryIVs = cache(async (_industryId: string): Promise<IVListItem[]> => {
   'use server';
 
-  try {
-    const supabase = await createClient();
-
-    const { data, error } = await supabase
-      .from('events')
-      .select(`
-        *,
-        industry:industries(id, company_name, industry_sector)
-      `)
-      .eq('industry_id', industryId)
-      .eq('category', 'industrial_visit')
-      .order('start_date', { ascending: false });
-
-    if (error) {
-      console.error('Error fetching industry IVs:', error);
-      throw new Error(`Failed to fetch industry IVs: ${error.message}`);
-    }
-
-    return (data || []).map((event: any) => ({
-      id: event.id,
-      title: event.title,
-      start_date: event.start_date,
-      end_date: event.end_date,
-      industry_id: event.industry_id,
-      industry_name: event.industry?.company_name || null,
-      industry_sector: event.industry?.industry_sector || null,
-      max_capacity: event.max_capacity,
-      current_registrations: event.current_registrations,
-      capacity_percentage: event.max_capacity
-        ? Math.round((event.current_registrations / event.max_capacity) * 100)
-        : 0,
-      status: event.status,
-      entry_method: event.entry_method,
-      requirements: event.requirements,
-      learning_outcomes: event.learning_outcomes,
-      waitlist_count: 0,
-      has_capacity: event.max_capacity
-        ? event.current_registrations < event.max_capacity
-        : true,
-    }));
-  } catch (error) {
-    console.error('Error in getIndustryIVs:', error);
-    throw error;
-  }
+  // Phase E fix 2026-05-23: events has no industry_id column and no FK to
+  // industries; both the embed and filter would fail. Returns [] until
+  // the events ↔ industries linkage is re-modelled. Callers (industry
+  // portal landing) already tolerate empty.
+  return [];
 });
 
 // ==================== INDUSTRY PORTAL DATA FUNCTIONS ====================
@@ -1160,71 +974,34 @@ export const getMyIndustrySlots = cache(
  * @param eventId - ID of the event
  * @param industryId - ID of the industry (for verification)
  */
+type IndustryAttendeeRow = {
+  id: string;
+  member_name: string;
+  member_email: string;
+  member_phone: string | null;
+  event_title?: string;
+  event_date?: string;
+  family_count: number;
+  family_names: string[] | null;
+  carpool_status: 'offering_ride' | 'need_ride' | 'not_needed';
+  seats_available: number | null;
+  dietary_restrictions: string | null;
+  special_requirements: string | null;
+  status: string;
+  created_at: string;
+};
+
 export const getIndustrySlotAttendees = cache(
-  async (eventId: string, industryId: string) => {
+  async (eventId: string, industryId: string): Promise<IndustryAttendeeRow[]> => {
     'use server';
 
-    try {
-      const supabase = await createClient();
-
-      // Verify the event belongs to this industry
-      const { data: event, error: eventError } = await supabase
-        .from('events')
-        .select('industry_id')
-        .eq('id', eventId)
-        .single();
-
-      if (eventError || !event || event.industry_id !== industryId) {
-        throw new Error('Unauthorized access to event attendees');
-      }
-
-      // Get attendees
-      const { data, error } = await supabase
-        .from('event_rsvps')
-        .select(
-          `
-          id,
-          status,
-          family_count,
-          family_names,
-          carpool_status,
-          seats_available,
-          dietary_restrictions,
-          special_requirements,
-          created_at,
-          member:profiles!event_rsvps_member_id_fkey(
-            id,
-            full_name,
-            email,
-            phone
-          )
-        `
-        )
-        .eq('event_id', eventId)
-        .order('created_at', { ascending: true });
-
-      if (error) {
-        throw new Error(`Failed to fetch attendees: ${error.message}`);
-      }
-
-      return (data || []).map((rsvp: any) => ({
-        id: rsvp.id,
-        member_name: rsvp.member?.full_name || 'Unknown',
-        member_email: rsvp.member?.email || '',
-        member_phone: rsvp.member?.phone || null,
-        family_count: rsvp.family_count,
-        family_names: rsvp.family_names,
-        carpool_status: rsvp.carpool_status,
-        seats_available: rsvp.seats_available,
-        dietary_restrictions: rsvp.dietary_restrictions,
-        special_requirements: rsvp.special_requirements,
-        status: rsvp.status,
-        created_at: rsvp.created_at,
-      }));
-    } catch (error) {
-      console.error('Error in getIndustrySlotAttendees:', error);
-      throw error;
-    }
+    // Phase E fix 2026-05-23: events has no industry_id column. The
+    // ownership check + attendee lookup are scoped to "this industry's
+    // event", so without the linkage we cannot safely return attendees.
+    // Returning [] until the events ↔ industries linkage is re-modelled
+    // (likely via events.stakeholder_id + stakeholder_type='industry').
+    void industryId; void eventId;
+    return [];
   }
 );
 
@@ -1232,80 +1009,15 @@ export const getIndustrySlotAttendees = cache(
  * Get All Attendees for Industry (across all slots)
  * @param industryId - ID of the industry
  */
-export const getAllIndustryAttendees = cache(async (industryId: string) => {
-  'use server';
+export const getAllIndustryAttendees = cache(
+  async (industryId: string): Promise<IndustryAttendeeRow[]> => {
+    'use server';
 
-  try {
-    const supabase = await createClient();
-
-    // Get all event IDs for this industry
-    const { data: events, error: eventsError } = await supabase
-      .from('events')
-      .select('id, title, start_date')
-      .eq('industry_id', industryId)
-      .eq('category', 'industrial_visit');
-
-    if (eventsError) {
-      throw new Error(`Failed to fetch events: ${eventsError.message}`);
-    }
-
-    if (!events || events.length === 0) {
-      return [];
-    }
-
-    const eventIds = events.map((e) => e.id);
-
-    // Get all attendees for these events
-    const { data, error } = await supabase
-      .from('event_rsvps')
-      .select(
-        `
-        id,
-        event_id,
-        status,
-        family_count,
-        family_names,
-        carpool_status,
-        seats_available,
-        dietary_restrictions,
-        special_requirements,
-        created_at,
-        member:profiles!event_rsvps_member_id_fkey(
-          id,
-          full_name,
-          email,
-          phone
-        )
-      `
-      )
-      .in('event_id', eventIds)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      throw new Error(`Failed to fetch attendees: ${error.message}`);
-    }
-
-    return (data || []).map((rsvp: any) => {
-      const event = events.find((e) => e.id === rsvp.event_id);
-      return {
-        id: rsvp.id,
-        member_name: rsvp.member?.full_name || 'Unknown',
-        member_email: rsvp.member?.email || '',
-        member_phone: rsvp.member?.phone || null,
-        event_title: event?.title || 'Unknown Event',
-        event_date: event?.start_date || '',
-        family_count: rsvp.family_count,
-        family_names: rsvp.family_names,
-        carpool_status: rsvp.carpool_status,
-        seats_available: rsvp.seats_available,
-        dietary_restrictions: rsvp.dietary_restrictions,
-        special_requirements: rsvp.special_requirements,
-        status: rsvp.status,
-        created_at: rsvp.created_at,
-      };
-    });
-  } catch (error) {
-    console.error('Error in getAllIndustryAttendees:', error);
-    throw error;
+    // Phase E fix 2026-05-23: events has no industry_id column and no FK
+    // to industries — the "all my industry's events" filter cannot be
+    // expressed against the current schema. Returns [] until the linkage
+    // is re-modelled.
+    void industryId;
+    return [];
   }
-});
+);

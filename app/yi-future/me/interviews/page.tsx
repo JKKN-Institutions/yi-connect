@@ -83,7 +83,7 @@ export default async function MyInterviewsPage() {
             href="/yi-future/me/resume"
             className="text-yi-gold font-semibold hover:underline"
           >
-            /me/resume
+            /yi-future/me/resume
           </Link>{" "}
           so partners can find you.
         </div>

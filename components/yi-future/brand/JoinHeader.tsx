@@ -28,7 +28,7 @@ export function JoinHeader(): React.JSX.Element {
           priority
         />
         <Image
-          src="/bharat-2026-logo.svg"
+          src="/yi-future/bharat-2026-logo.svg"
           alt="One Bharat One Spirit — Yi 2026 Theme"
           width={120}
           height={82}

@@ -18,7 +18,7 @@ export default async function NewTeamPage() {
   return (
     <FormLayout
       title="New team"
-      subtitle={`Teams are 3-5 delegates. Pick a captain and problem statement later.`}
+      subtitle={`Teams can be up to 5 delegates. Pick a captain and problem statement later.`}
       backHref="/chapter/teams"
     >
       <form action={action} className="space-y-5">

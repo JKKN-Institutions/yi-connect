@@ -158,15 +158,25 @@ export async function sendTrainerInvitations(
     }
 
     // Get assignments with trainer details
+    // Phase E fix 2026-05-23 (Agent Q): event_trainer_assignments.trainer_profile_id
+    // is a FK to yi_connect.trainer_profiles(id), NOT yi_connect.profiles(id).
+    // PostgREST cannot resolve `trainer:profiles!event_trainer_assignments_trainer_profile_id_fkey(...)`.
+    // Chain the embed through trainer_profiles → members → profiles.
     let query = supabase
       .from('event_trainer_assignments')
       .select(`
         id,
         trainer_profile_id,
         session_topic,
-        trainer:profiles!event_trainer_assignments_trainer_profile_id_fkey(
-          full_name,
-          email
+        trainer:trainer_profiles!event_trainer_assignments_trainer_profile_id_fkey(
+          id,
+          member:members!trainer_profiles_member_id_fkey(
+            id,
+            profile:profiles(
+              full_name,
+              email
+            )
+          )
         )
       `)
       .eq('event_id', eventId)
@@ -211,17 +221,32 @@ export async function sendTrainerInvitations(
     }
 
     // Send invitation emails to trainers
+    // After the embed chain rewrite, trainer shape is:
+    //   { id, member: { id, profile: { full_name, email } } }
+    // (or arrays of those — PostgREST may return either depending on the
+    // relationship cardinality). Normalize before reading.
     if (event) {
       const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://yi-connect-app.vercel.app'
+      const getTrainerProfile = (a: any): { full_name?: string; email?: string } | null => {
+        const trainerRaw = a.trainer
+        const trainer = Array.isArray(trainerRaw) ? trainerRaw[0] : trainerRaw
+        if (!trainer) return null
+        const memberRaw = trainer.member
+        const member = Array.isArray(memberRaw) ? memberRaw[0] : memberRaw
+        if (!member) return null
+        const profileRaw = member.profile
+        const profile = Array.isArray(profileRaw) ? profileRaw[0] : profileRaw
+        return profile || null
+      }
       const trainerEmails = assignments
         .filter((a) => {
-          const trainer = a.trainer as { email?: string; full_name?: string }[] | null;
-          return trainer?.[0]?.email;
+          const profile = getTrainerProfile(a)
+          return Boolean(profile?.email)
         })
         .map((assignment) => {
-          const trainer = assignment.trainer as { email: string; full_name?: string }[];
+          const profile = getTrainerProfile(assignment)!
           const emailTemplate = trainerAssignmentEmail({
-            trainerName: trainer[0]?.full_name || 'Trainer',
+            trainerName: profile.full_name || 'Trainer',
             eventTitle: event.title,
             sessionTopic: assignment.session_topic || 'Training Session',
             eventDate: new Date(event.start_date).toLocaleDateString('en-IN', {
@@ -234,7 +259,7 @@ export async function sendTrainerInvitations(
             eventLink: `${APP_URL}/events/${eventId}`,
           })
           return {
-            to: trainer[0].email,
+            to: profile.email!,
             subject: emailTemplate.subject,
             html: emailTemplate.html,
           }

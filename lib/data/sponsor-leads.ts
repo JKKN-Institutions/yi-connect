@@ -6,7 +6,7 @@
  */
 
 import { cache } from 'react'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createServerSupabaseClient, createAdminSupabaseClient } from '@/lib/supabase/server'
 import type {
   SponsorLead,
   SponsorLeadWithRelations,
@@ -144,14 +144,18 @@ export const getSponsorLeadsForEvent = cache(
   ): Promise<SponsorLeadWithRelations[]> => {
     const supabase = await createServerSupabaseClient()
 
+    // Phase E fix 2026-05-23 (Agent Q): sponsor_leads.captured_by_user_id FKs to
+    // auth.users(id), not yi_connect.profiles(id), so PostgREST cannot resolve
+    // `captured_by:profiles!sponsor_leads_captured_by_user_id_fkey(...)`. Drop
+    // the embed and hydrate the captured_by user via a batched members→profiles
+    // lookup after the main query.
     let query = supabase
       .from('sponsor_leads')
       .select(
         `
         *,
         sponsor:sponsors(id, organization_name, contact_email),
-        event:events(id, title, start_date),
-        captured_by:profiles!sponsor_leads_captured_by_user_id_fkey(id, full_name, email)
+        event:events(id, title, start_date)
       `
       )
       .eq('event_id', eventId)
@@ -171,25 +175,46 @@ export const getSponsorLeadsForEvent = cache(
 
     if (error) {
       console.error('Error fetching sponsor leads for event:', error)
-      // Fallback without explicit FK syntax in case the shortcut isn't resolvable
-      const { data: fallback } = await supabase
-        .from('sponsor_leads')
-        .select(
-          `
-          *,
-          sponsor:sponsors(id, organization_name, contact_email),
-          event:events(id, title, start_date)
-        `
-        )
-        .eq('event_id', eventId)
-        .order('created_at', { ascending: false })
-      return ((fallback as any[]) ?? []).map(row => ({
-        ...row,
-        captured_by: null,
-      })) as SponsorLeadWithRelations[]
+      return []
     }
 
-    return ((data as any[]) ?? []) as SponsorLeadWithRelations[]
+    const rows = (data as any[]) ?? []
+
+    // Hydrate captured_by display info via members→profiles
+    const capturedByIds = Array.from(
+      new Set(rows.map((r) => r.captured_by_user_id).filter(Boolean))
+    )
+    const capturedByMap = new Map<
+      string,
+      { id: string; full_name: string | null; email: string | null }
+    >()
+    if (capturedByIds.length > 0) {
+      try {
+        const admin = createAdminSupabaseClient()
+        const { data: memberRows } = await admin
+          .from('members')
+          .select('id, profile:profiles(full_name, email)')
+          .in('id', capturedByIds)
+        for (const row of memberRows || []) {
+          const profileRaw = (row as any).profile
+          const profile = Array.isArray(profileRaw) ? profileRaw[0] : profileRaw
+          capturedByMap.set((row as any).id, {
+            id: (row as any).id,
+            full_name: profile?.full_name ?? null,
+            email: profile?.email ?? null,
+          })
+        }
+      } catch (err) {
+        console.error('[getSponsorLeadsForEvent] captured_by hydration failed:', err)
+      }
+    }
+
+    return rows.map((row) => ({
+      ...row,
+      captured_by: row.captured_by_user_id
+        ? capturedByMap.get(row.captured_by_user_id) ?? null
+        : null,
+    })) as SponsorLeadWithRelations[]
   }
 )
 

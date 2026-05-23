@@ -12,7 +12,7 @@
 import 'server-only'
 
 import { cache } from 'react'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createServerSupabaseClient, createAdminSupabaseClient } from '@/lib/supabase/server'
 import { getCurrentUser, getUserHierarchyLevel } from '@/lib/auth'
 import type {
   ActiveImpersonationSession,
@@ -262,22 +262,13 @@ export async function getImpersonationAuditSessions(
 
   const supabase = await createServerSupabaseClient()
 
+  // Phase E fix 2026-05-23 (Agent Q): impersonation_sessions.admin_id and
+  // target_user_id FK to auth.users(id), NOT yi_connect.profiles(id).
+  // PostgREST cannot resolve `admin:profiles!...` embed. Drop embeds; hydrate
+  // names via a batched members→profiles lookup after the main query.
   let query = supabase
     .from('impersonation_sessions')
-    .select(
-      `
-      *,
-      admin:profiles!impersonation_sessions_admin_id_fkey (
-        full_name,
-        email
-      ),
-      target:profiles!impersonation_sessions_target_user_id_fkey (
-        full_name,
-        email
-      )
-    `,
-      { count: 'exact' }
-    )
+    .select('*', { count: 'exact' })
     .order('started_at', { ascending: false })
 
   // Apply filters
@@ -309,10 +300,41 @@ export async function getImpersonationAuditSessions(
     return { sessions: [], total: 0 }
   }
 
+  // Hydrate admin/target display names via batched members→profiles lookup.
+  const allUserIds = Array.from(
+    new Set(
+      (data || [])
+        .flatMap((s: any) => [s.admin_id, s.target_user_id])
+        .filter(Boolean)
+    )
+  )
+  const profileMap = new Map<string, { full_name: string; email: string }>()
+  if (allUserIds.length > 0) {
+    try {
+      const admin = createAdminSupabaseClient()
+      const { data: memberRows } = await admin
+        .from('members')
+        .select('id, profile:profiles(full_name, email)')
+        .in('id', allUserIds)
+      for (const row of memberRows || []) {
+        const profileRaw = (row as any).profile
+        const profile = Array.isArray(profileRaw) ? profileRaw[0] : profileRaw
+        if (profile) {
+          profileMap.set((row as any).id, {
+            full_name: profile.full_name || '',
+            email: profile.email || '',
+          })
+        }
+      }
+    } catch (err) {
+      console.error('[getAuditSessions] profile hydration failed:', err)
+    }
+  }
+
   // Transform data
-  const sessions: ImpersonationAuditSession[] = (data || []).map((session) => {
-    const admin = session.admin as { full_name: string; email: string } | null
-    const target = session.target as { full_name: string; email: string } | null
+  const sessions: ImpersonationAuditSession[] = (data || []).map((session: any) => {
+    const admin = profileMap.get(session.admin_id) || null
+    const target = profileMap.get(session.target_user_id) || null
 
     // Calculate duration if session ended
     let durationMinutes: number | null = null
@@ -516,6 +538,8 @@ export async function getImpersonationAnalytics(): Promise<ImpersonationAnalytic
   thirtyDaysAgo.setDate(now.getDate() - 30)
 
   // Fetch all sessions
+  // Phase E fix 2026-05-23 (Agent Q): admin_id/target_user_id FK to auth.users(id),
+  // not profiles. Drop embeds; hydrate names via a separate members→profiles lookup.
   const { data: allSessions, error: sessionsError } = await supabase
     .from('impersonation_sessions')
     .select(`
@@ -524,15 +548,7 @@ export async function getImpersonationAnalytics(): Promise<ImpersonationAnalytic
       target_user_id,
       started_at,
       ended_at,
-      actions_taken,
-      admin:profiles!impersonation_sessions_admin_id_fkey (
-        full_name,
-        email
-      ),
-      target:profiles!impersonation_sessions_target_user_id_fkey (
-        full_name,
-        email
-      )
+      actions_taken
     `)
     .order('started_at', { ascending: false })
 
@@ -542,6 +558,37 @@ export async function getImpersonationAnalytics(): Promise<ImpersonationAnalytic
   }
 
   const sessions = allSessions || []
+
+  // Hydrate admin/target display info via batched members→profiles lookup
+  const allUserIdsForAnalytics = Array.from(
+    new Set(
+      sessions
+        .flatMap((s: any) => [s.admin_id, s.target_user_id])
+        .filter(Boolean)
+    )
+  )
+  const profileMapForAnalytics = new Map<string, { full_name: string; email: string }>()
+  if (allUserIdsForAnalytics.length > 0) {
+    try {
+      const adminClient = createAdminSupabaseClient()
+      const { data: memberRows } = await adminClient
+        .from('members')
+        .select('id, profile:profiles(full_name, email)')
+        .in('id', allUserIdsForAnalytics)
+      for (const row of memberRows || []) {
+        const profileRaw = (row as any).profile
+        const profile = Array.isArray(profileRaw) ? profileRaw[0] : profileRaw
+        if (profile) {
+          profileMapForAnalytics.set((row as any).id, {
+            full_name: profile.full_name || '',
+            email: profile.email || '',
+          })
+        }
+      }
+    } catch (err) {
+      console.error('[getImpersonationAnalytics] profile hydration failed:', err)
+    }
+  }
 
   // Calculate summary stats
   const totalSessions = sessions.length
@@ -577,7 +624,7 @@ export async function getImpersonationAnalytics(): Promise<ImpersonationAnalytic
     } else {
       userCounts.set(session.target_user_id, {
         count: 1,
-        user: session.target as unknown as { full_name: string; email: string } | null,
+        user: profileMapForAnalytics.get(session.target_user_id) || null,
       })
     }
   }
@@ -634,7 +681,7 @@ export async function getImpersonationAnalytics(): Promise<ImpersonationAnalytic
       adminStats.set(session.admin_id, {
         sessionCount: 1,
         totalActions: session.actions_taken || 0,
-        admin: session.admin as unknown as { full_name: string; email: string } | null,
+        admin: profileMapForAnalytics.get(session.admin_id) || null,
       })
     }
   }

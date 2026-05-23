@@ -44,34 +44,36 @@ async function PageContent() {
 async function JuryStats({ userId }: { userId: string }) {
   const supabase = await createServerSupabaseClient()
 
-  // Get jury member assignments
+  // Get jury panel memberships (jury_members table was renamed to jury_panel_members)
   const { data: juryAssignments } = await supabase
-    .from('jury_members')
+    .from('jury_panel_members')
     .select(`
       id,
-      cycle:award_cycles(
+      panel:jury_panels(
         id,
-        cycle_name,
-        _count:nominations(count)
+        cycle_id,
+        cycle:award_cycles(
+          id,
+          cycle_name,
+          _count:nominations(count)
+        )
       )
     `)
-    .eq('member_id', userId)
+    .eq('juror_id', userId)
+    .eq('is_active', true)
 
   if (!juryAssignments || juryAssignments.length === 0) {
     return null
   }
 
-  // Get total scores submitted by this jury member
+  // Get total scores submitted by this juror (jury_scores.juror_id, not jury_member_id)
   const { data: scores } = await supabase
     .from('jury_scores')
-    .select('id, jury_member_id')
-    .in(
-      'jury_member_id',
-      juryAssignments.map((j) => j.id)
-    )
+    .select('id, juror_id')
+    .eq('juror_id', userId)
 
   const totalAssignments = juryAssignments.reduce(
-    (sum, j) => sum + ((j.cycle as any)?._count || 0),
+    (sum, j) => sum + ((j.panel as any)?.cycle?._count || 0),
     0
   )
   const completedScores = scores?.length || 0
@@ -137,11 +139,13 @@ async function JuryStats({ userId }: { userId: string }) {
 async function JuryNominationsTable({ userId }: { userId: string }) {
   const supabase = await createServerSupabaseClient()
 
-  // Get all jury assignments for this user
+  // Get all jury panel assignments for this user
+  // (jury_members table renamed to jury_panel_members; cycle_id lives on jury_panels)
   const { data: juryMembers } = await supabase
-    .from('jury_members')
-    .select('id, cycle_id')
-    .eq('member_id', userId)
+    .from('jury_panel_members')
+    .select('id, panel:jury_panels(id, cycle_id)')
+    .eq('juror_id', userId)
+    .eq('is_active', true)
 
   if (!juryMembers || juryMembers.length === 0) {
     return (
@@ -159,10 +163,12 @@ async function JuryNominationsTable({ userId }: { userId: string }) {
     )
   }
 
-  const juryMemberIds = juryMembers.map((j) => j.id)
-  const cycleIds = juryMembers.map((j) => j.cycle_id)
+  const cycleIds = juryMembers
+    .map((j) => (j.panel as any)?.cycle_id)
+    .filter(Boolean)
 
   // Get all nominations for these cycles with jury scores
+  // jury_scores uses juror_id (not jury_member_id)
   const { data: nominations } = await supabase
     .from('nominations')
     .select(`
@@ -177,8 +183,7 @@ async function JuryNominationsTable({ userId }: { userId: string }) {
       ),
       jury_scores(
         id,
-        jury_member_id,
-        total_score,
+        juror_id,
         weighted_score
       )
     `)
@@ -227,7 +232,7 @@ async function JuryNominationsTable({ userId }: { userId: string }) {
                 const nominee = nomination.nominee
                 const cycle = nomination.cycle
                 const myScore = nomination.jury_scores?.find(
-                  (s: any) => juryMemberIds.includes(s.jury_member_id)
+                  (s: any) => s.juror_id === userId
                 )
                 const isScored = !!myScore
 

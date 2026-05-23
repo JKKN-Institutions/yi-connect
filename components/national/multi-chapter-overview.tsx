@@ -74,6 +74,10 @@ export function ChaptersStatusGrid() {
       try {
         const supabase = createBrowserSupabaseClient()
 
+        // Phase E fix 2026-05-23 (Agent Q): yi_connect.chapters has no chair_id
+        // column or FK to profiles. The denormalized `chair_name` column already
+        // stores the chair's display name, so we read it directly instead of
+        // embedding profiles.
         const { data, error } = await supabase
           .from('chapters')
           .select(
@@ -84,7 +88,7 @@ export function ChaptersStatusGrid() {
             status,
             member_count,
             created_at,
-            chair:profiles!chapters_chair_id_fkey(full_name)
+            chair_name
           `
           )
           .order('name')
@@ -92,9 +96,9 @@ export function ChaptersStatusGrid() {
         if (error) throw error
 
         setChapters(
-          data?.map((ch) => ({
+          data?.map((ch: any) => ({
             ...ch,
-            chair_name: (ch.chair as any)?.full_name || null,
+            chair_name: ch.chair_name || null,
           })) || []
         )
       } catch (error) {

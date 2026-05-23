@@ -39,6 +39,41 @@ export interface PaginatedMaterials {
 }
 
 // ============================================================================
+// Embed Flattening Helpers
+// ============================================================================
+
+/**
+ * Phase E fix 2026-05-23 (Agent Q): event_materials.uploaded_by and reviewed_by
+ * are FKs to yi_connect.members(id), NOT yi_connect.profiles(id). The previous
+ * embed `uploader:profiles!uploaded_by(...)` failed with PGRST200. The corrected
+ * embed chains members→profiles and returns `{ id, profile: { full_name, ... } }`.
+ *
+ * Downstream consumers expect a flat `uploader: { id, full_name, avatar_url }`
+ * shape. This helper normalizes the nested embed result back to the legacy flat
+ * shape so callers do not need to change.
+ */
+function flattenMaterialMember(row: any): any {
+  if (!row || typeof row !== 'object') return row
+  const flat: any = { ...row }
+  for (const key of ['uploader', 'reviewer']) {
+    const memberRaw = flat[key]
+    const member = Array.isArray(memberRaw) ? memberRaw[0] : memberRaw
+    if (!member) {
+      flat[key] = null
+      continue
+    }
+    const profileRaw = member.profile
+    const profile = Array.isArray(profileRaw) ? profileRaw[0] : profileRaw
+    flat[key] = {
+      id: member.id,
+      full_name: profile?.full_name ?? '',
+      avatar_url: profile?.avatar_url ?? null,
+    }
+  }
+  return flat
+}
+
+// ============================================================================
 // Material Queries
 // ============================================================================
 
@@ -72,14 +107,18 @@ export const getMaterials = cache(
       .select(
         `
         *,
-        uploader:profiles!uploaded_by(
+        uploader:members!event_materials_uploaded_by_fkey(
           id,
-          full_name,
-          avatar_url
+          profile:profiles(
+            full_name,
+            avatar_url
+          )
         ),
-        reviewer:profiles!reviewed_by(
+        reviewer:members!event_materials_reviewed_by_fkey(
           id,
-          full_name
+          profile:profiles(
+            full_name
+          )
         )
       `,
         { count: 'exact' }
@@ -123,7 +162,7 @@ export const getMaterials = cache(
     }
 
     return {
-      data: (data || []) as EventMaterialWithUploader[],
+      data: (data || []).map(flattenMaterialMember) as EventMaterialWithUploader[],
       total: count || 0,
       page,
       pageSize,
@@ -149,14 +188,18 @@ export const getMaterialById = cache(
       .select(
         `
         *,
-        uploader:profiles!uploaded_by(
+        uploader:members!event_materials_uploaded_by_fkey(
           id,
-          full_name,
-          avatar_url
+          profile:profiles(
+            full_name,
+            avatar_url
+          )
         ),
-        reviewer:profiles!reviewed_by(
+        reviewer:members!event_materials_reviewed_by_fkey(
           id,
-          full_name
+          profile:profiles(
+            full_name
+          )
         ),
         event:events(
           id,
@@ -175,7 +218,7 @@ export const getMaterialById = cache(
       throw new Error(`Failed to fetch material: ${error.message}`)
     }
 
-    return data as EventMaterialWithUploader
+    return flattenMaterialMember(data) as EventMaterialWithUploader
   }
 )
 
@@ -280,10 +323,12 @@ export const getPendingApprovalMaterials = cache(
       .select(
         `
         *,
-        uploader:profiles!uploaded_by(
+        uploader:members!event_materials_uploaded_by_fkey(
           id,
-          full_name,
-          avatar_url
+          profile:profiles(
+            full_name,
+            avatar_url
+          )
         ),
         event:events(
           id,
@@ -302,7 +347,7 @@ export const getPendingApprovalMaterials = cache(
       throw new Error(`Failed to fetch pending materials: ${error.message}`)
     }
 
-    return (data || []) as EventMaterialWithUploader[]
+    return (data || []).map(flattenMaterialMember) as EventMaterialWithUploader[]
   }
 )
 
@@ -335,10 +380,12 @@ export const getTrainerMaterials = cache(
       .select(
         `
         *,
-        uploader:profiles!uploaded_by(
+        uploader:members!event_materials_uploaded_by_fkey(
           id,
-          full_name,
-          avatar_url
+          profile:profiles(
+            full_name,
+            avatar_url
+          )
         ),
         event:events(
           id,
@@ -356,7 +403,7 @@ export const getTrainerMaterials = cache(
       throw new Error(`Failed to fetch trainer materials: ${error.message}`)
     }
 
-    return (data || []) as EventMaterialWithUploader[]
+    return (data || []).map(flattenMaterialMember) as EventMaterialWithUploader[]
   }
 )
 

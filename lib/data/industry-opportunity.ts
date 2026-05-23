@@ -8,6 +8,38 @@ import 'server-only'
 import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentUser } from '@/lib/data/auth'
+
+/**
+ * Phase E fix 2026-05-23 (Agent Q): member_visit_requests.requested_by and
+ * yi_reviewer_id are FKs to yi_connect.members(id), NOT profiles(id), and
+ * visit_request_interests.member_id is also a FK to members(id). The previous
+ * `member:profiles!requested_by(...)` embeds failed with PGRST200. Corrected
+ * embeds chain members→profiles. This helper flattens the nested
+ * `{ id, profile: { full_name, email, avatar_url } }` shape back to the legacy
+ * flat shape downstream consumers and `VisitRequestWithDetails` expect.
+ */
+function flattenVisitRequestMembers(row: any): any {
+  if (!row || typeof row !== 'object') return row
+  const flat: any = { ...row }
+  for (const key of ['member', 'yi_reviewer']) {
+    const memberRaw = flat[key]
+    const member = Array.isArray(memberRaw) ? memberRaw[0] : memberRaw
+    if (!member) {
+      flat[key] = key === 'yi_reviewer' ? null : flat[key]
+      continue
+    }
+    const profileRaw = member.profile
+    const profile = Array.isArray(profileRaw) ? profileRaw[0] : profileRaw
+    flat[key] = {
+      id: member.id,
+      full_name: profile?.full_name ?? '',
+      email: profile?.email ?? '',
+      avatar_url: profile?.avatar_url ?? null,
+      company: profile?.company ?? null,
+    }
+  }
+  return flat
+}
 import type {
   IndustryOpportunity,
   OpportunityListItem,
@@ -780,11 +812,13 @@ export const getVisitRequests = cache(
       .select(
         `
         *,
-        member:profiles!requested_by(
+        member:members!member_visit_requests_requested_by_fkey(
           id,
-          full_name,
-          email,
-          avatar_url
+          profile:profiles(
+            full_name,
+            email,
+            avatar_url
+          )
         ),
         industry:industries!industry_id(
           id,
@@ -798,9 +832,11 @@ export const getVisitRequests = cache(
           expiry_date,
           partnership_stage
         ),
-        yi_reviewer:profiles!yi_reviewer_id(
+        yi_reviewer:members!member_visit_requests_yi_reviewer_id_fkey(
           id,
-          full_name
+          profile:profiles(
+            full_name
+          )
         )
       `,
         { count: 'exact' }
@@ -852,14 +888,15 @@ export const getVisitRequests = cache(
     }
 
     // Transform data
-    const transformedData: VisitRequestWithDetails[] = (data || []).map((req: any) => ({
-      ...req,
-      member: req.member,
-      industry: req.industry,
-      mou: req.mou,
-      yi_reviewer: req.yi_reviewer,
-      interest_count: interestCounts.get(req.id) || 0,
-    }))
+    const transformedData: VisitRequestWithDetails[] = (data || []).map((req: any) => {
+      const flat = flattenVisitRequestMembers(req)
+      return {
+        ...flat,
+        industry: req.industry,
+        mou: req.mou,
+        interest_count: interestCounts.get(req.id) || 0,
+      }
+    })
 
     return {
       data: transformedData,
@@ -888,11 +925,13 @@ export const getVisitRequestById = cache(
       .select(
         `
         *,
-        member:profiles!requested_by(
+        member:members!member_visit_requests_requested_by_fkey(
           id,
-          full_name,
-          email,
-          avatar_url
+          profile:profiles(
+            full_name,
+            email,
+            avatar_url
+          )
         ),
         industry:industries!industry_id(
           id,
@@ -906,9 +945,11 @@ export const getVisitRequestById = cache(
           expiry_date,
           partnership_stage
         ),
-        yi_reviewer:profiles!yi_reviewer_id(
+        yi_reviewer:members!member_visit_requests_yi_reviewer_id_fkey(
           id,
-          full_name
+          profile:profiles(
+            full_name
+          )
         )
       `
       )
@@ -923,22 +964,37 @@ export const getVisitRequestById = cache(
     }
 
     // Get interested members
+    // visit_request_interests.member_id → members(id), not profiles. Chain through members.
     const { data: interests } = await supabase
       .from('visit_request_interests')
       .select(
         `
-        member:profiles!member_id(
+        member:members!visit_request_interests_member_id_fkey(
           id,
-          full_name,
-          avatar_url
+          profile:profiles(
+            full_name,
+            avatar_url
+          )
         )
       `
       )
       .eq('visit_request_id', requestId)
 
+    const flat = flattenVisitRequestMembers(data)
     return {
-      ...data,
-      interested_members: interests?.map((i: any) => i.member) || [],
+      ...flat,
+      interested_members:
+        interests?.map((i: any) => {
+          const memberRaw = i.member
+          const member = Array.isArray(memberRaw) ? memberRaw[0] : memberRaw
+          const profileRaw = member?.profile
+          const profile = Array.isArray(profileRaw) ? profileRaw[0] : profileRaw
+          return {
+            id: member?.id,
+            full_name: profile?.full_name ?? '',
+            avatar_url: profile?.avatar_url ?? null,
+          }
+        }) || [],
     } as VisitRequestWithDetails
   }
 )

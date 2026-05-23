@@ -9,7 +9,7 @@
 
 import { updateTag } from 'next/cache'
 import { redirect } from 'next/navigation'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createServerSupabaseClient, createAdminSupabaseClient } from '@/lib/supabase/server'
 import { getCurrentUser } from '@/lib/auth'
 import {
   createChapterSchema,
@@ -442,18 +442,39 @@ export async function sendChairInvitationWhatsApp(
     const supabase = await createServerSupabaseClient()
 
     // Get invitation details
+    // Phase E fix 2026-05-23 (Agent Q): chapter_invitations.invited_by FK targets
+    // auth.users(id), NOT yi_connect.profiles(id), so PostgREST cannot resolve
+    // `inviter:profiles!invited_by(...)`. Drop the embed and hydrate the inviter
+    // name via a separate members→profiles lookup keyed by invited_by.
     const { data: invitation, error: inviteError } = await supabase
       .from('chapter_invitations')
       .select(`
         *,
-        chapter:chapters(name, location),
-        inviter:profiles!invited_by(full_name)
+        chapter:chapters(name, location)
       `)
       .eq('id', invitationId)
       .single()
 
     if (inviteError || !invitation) {
       return { success: false, message: 'Invitation not found' }
+    }
+
+    // Hydrate inviter name via admin client (invited_by → auth.users.id == members.id)
+    let inviterName = 'Yi Connect Admin'
+    if ((invitation as any).invited_by) {
+      try {
+        const admin = createAdminSupabaseClient()
+        const { data: inviterRow } = await admin
+          .from('members')
+          .select('id, profile:profiles(full_name)')
+          .eq('id', (invitation as any).invited_by)
+          .single()
+        const profileRaw = (inviterRow as any)?.profile
+        const profile = Array.isArray(profileRaw) ? profileRaw[0] : profileRaw
+        if (profile?.full_name) inviterName = profile.full_name
+      } catch (err) {
+        console.error('[sendChairInvitationWhatsApp] inviter hydration failed:', err)
+      }
     }
 
     if (!invitation.phone) {
@@ -484,7 +505,7 @@ ${acceptUrl}
 This link expires in 7 days.
 
 Best regards,
-${invitation.inviter?.full_name}
+${inviterName}
 Yi Connect`
 
     // Send via WhatsApp

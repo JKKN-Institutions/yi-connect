@@ -9,7 +9,7 @@
 
 import { revalidatePath, updateTag } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createAdminSupabaseClient } from '@/lib/supabase/server';
 import { getCurrentUser } from '@/lib/data/auth';
 import { uploadImage } from './upload';
 import { sendEmail, sendBatchEmails } from '@/lib/email';
@@ -1935,6 +1935,12 @@ export async function exportEvents(
     }
 
     // Build query
+    // Phase E fix 2026-05-23 (Agent Q): events.organizer_id's only declared FK
+    // is to auth.users(id), NOT yi_connect.profiles(id). PostgREST therefore
+    // can't resolve `organizer:profiles!events_organizer_id_fkey(...)` embeds
+    // and returns PGRST200. Drop the embed and hydrate organizer names via a
+    // separate members → profiles lookup keyed by organizer_id (same pattern
+    // as lib/data/events.ts resolveOrganizer helper).
     let query = supabase
       .from('events')
       .select(`
@@ -1951,7 +1957,7 @@ export async function exportEvents(
         is_virtual,
         meeting_link,
         created_at,
-        organizer:profiles!events_organizer_id_fkey(full_name),
+        organizer_id,
         vertical:verticals(name),
         rsvps:event_rsvps(count)
       `)
@@ -1972,8 +1978,37 @@ export async function exportEvents(
       return { success: false, error: 'No events to export' };
     }
 
+    // Hydrate organizer names via a single batched members lookup.
+    const organizerIds = Array.from(
+      new Set(
+        (events as any[])
+          .map((e) => e.organizer_id)
+          .filter((id): id is string => Boolean(id))
+      )
+    );
+    const organizerNames = new Map<string, string>();
+    if (organizerIds.length > 0) {
+      try {
+        const admin = createAdminSupabaseClient();
+        const { data: organizerRows } = await admin
+          .from('members')
+          .select('id, profile:profiles(full_name)')
+          .in('id', organizerIds);
+        for (const row of organizerRows || []) {
+          const profile = Array.isArray((row as any).profile)
+            ? (row as any).profile[0]
+            : (row as any).profile;
+          if (profile?.full_name) {
+            organizerNames.set((row as any).id, profile.full_name);
+          }
+        }
+      } catch (err) {
+        console.error('[exportEvents] organizer hydration failed:', err);
+      }
+    }
+
     // Transform data for CSV
-    const exportData = events.map(event => ({
+    const exportData = (events as any[]).map((event) => ({
       'Title': event.title,
       'Category': event.category,
       'Status': event.status,
@@ -1982,7 +2017,7 @@ export async function exportEvents(
       'Venue': event.is_virtual ? 'Virtual' : (event.venue || 'TBD'),
       'Max Attendees': event.max_attendees || 'Unlimited',
       'Registrations': (event.rsvps as any)?.[0]?.count || 0,
-      'Organizer': (event.organizer as any)?.full_name || 'Unknown',
+      'Organizer': (event.organizer_id && organizerNames.get(event.organizer_id)) || 'Unknown',
       'Vertical': (event.vertical as any)?.name || 'General',
       'Created': event.created_at ? new Date(event.created_at).toLocaleDateString() : ''
     }));

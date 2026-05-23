@@ -17,7 +17,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createServerSupabaseClient, createAdminSupabaseClient } from '@/lib/supabase/server'
 import { getCurrentUser, getUserHierarchyLevel } from '@/lib/auth'
 import type {
   AuditExportFormat,
@@ -178,6 +178,11 @@ export async function GET(request: NextRequest) {
     const supabase = await createServerSupabaseClient()
 
     // Build sessions query
+    // Phase E fix 2026-05-23 (Agent Q): impersonation_sessions.admin_id and
+    // target_user_id both FK to auth.users(id), NOT yi_connect.profiles(id).
+    // PostgREST cannot resolve `admin:profiles!...` or `target:profiles!...`.
+    // Drop the embeds and hydrate names via a batched members→profiles lookup
+    // after the main query returns.
     let sessionsQuery = supabase
       .from('impersonation_sessions')
       .select(`
@@ -190,9 +195,7 @@ export async function GET(request: NextRequest) {
         end_reason,
         timeout_minutes,
         pages_visited,
-        actions_taken,
-        admin:profiles!impersonation_sessions_admin_id_fkey(full_name, email),
-        target:profiles!impersonation_sessions_target_user_id_fkey(full_name, email)
+        actions_taken
       `)
       .order('started_at', { ascending: false })
 
@@ -249,20 +252,38 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    // Helper to extract profile data from Supabase join (handles array/object)
-    type ProfileData = { full_name: string; email: string }
-    function extractProfile(data: unknown): ProfileData | null {
-      if (!data) return null
-      if (Array.isArray(data)) {
-        return data[0] as ProfileData | null
+    // Hydrate admin/target display info via batched members→profiles lookup.
+    // (admin_id and target_user_id share the auth.users.id == members.id == profiles.id
+    // identity, so we can resolve both via a single members query.)
+    const adminIds = (sessionsData || []).map((s: any) => s.admin_id).filter(Boolean)
+    const allUserIds = Array.from(new Set([...adminIds, ...targetUserIds]))
+    const profileMap = new Map<string, { full_name: string; email: string }>()
+    if (allUserIds.length > 0) {
+      try {
+        const admin = createAdminSupabaseClient()
+        const { data: memberRows } = await admin
+          .from('members')
+          .select('id, profile:profiles(full_name, email)')
+          .in('id', allUserIds)
+        for (const row of memberRows || []) {
+          const profileRaw = (row as any).profile
+          const profile = Array.isArray(profileRaw) ? profileRaw[0] : profileRaw
+          if (profile) {
+            profileMap.set((row as any).id, {
+              full_name: profile.full_name || '',
+              email: profile.email || '',
+            })
+          }
+        }
+      } catch (err) {
+        console.error('[impersonation-audit/export] profile hydration failed:', err)
       }
-      return data as ProfileData
     }
 
     // Transform sessions to export format
-    const sessions: SessionExportEntry[] = (sessionsData || []).map((s) => {
-      const admin = extractProfile(s.admin)
-      const target = extractProfile(s.target)
+    const sessions: SessionExportEntry[] = (sessionsData || []).map((s: any) => {
+      const admin = profileMap.get(s.admin_id) || null
+      const target = profileMap.get(s.target_user_id) || null
 
       // Calculate duration
       let durationMinutes: number | null = null

@@ -121,7 +121,7 @@ export default async function DelegateMessagesPage({
                 return (
                   <li key={t.id}>
                     <Link
-                      href={`/me/messages?thread=${t.id}`}
+                      href={`/yi-future/me/messages?thread=${t.id}`}
                       className={`block px-3 py-3 hover:bg-ivory/60 ${
                         isActive ? "bg-yi-gold/10" : ""
                       }`}

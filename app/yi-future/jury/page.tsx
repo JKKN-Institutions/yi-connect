@@ -107,7 +107,7 @@ export default async function JuryDashboard() {
             return (
               <li key={a.team_id}>
                 <Link
-                  href={`/jury/${a.team_id}`}
+                  href={`/yi-future/jury/${a.team_id}`}
                   className="block bg-white border border-navy/10 rounded-lg p-4 hover:border-yi-gold/50 hover:shadow-sm transition-all"
                 >
                   <div className="flex items-start justify-between gap-3">

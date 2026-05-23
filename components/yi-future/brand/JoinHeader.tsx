@@ -36,7 +36,7 @@ export function JoinHeader(): React.JSX.Element {
           priority
         />
         <Image
-          src="/cii-logo.png"
+          src="/yi-future/cii-logo.png"
           alt="Confederation of Indian Industry (CII)"
           width={140}
           height={50}
@@ -45,7 +45,7 @@ export function JoinHeader(): React.JSX.Element {
         />
       </div>
       <Image
-        src="/future-6-logo.png"
+        src="/yi-future/future-6-logo.png"
         alt="Future 6.0"
         width={180}
         height={140}

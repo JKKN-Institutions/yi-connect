@@ -157,7 +157,7 @@ export default async function HostDashboard() {
           { label: "Finalists", value: stats.finalists, href: "/host/finalists" },
           { label: "Partners", value: stats.partners, href: "/host/partners" },
           { label: "Internship slots", value: stats.slots, href: "/host/internships" },
-          { label: "Interviews", value: stats.interviews, href: "/host/interviews" },
+          { label: "Interviews", value: stats.interviews, href: "/yi-future/host/interviews" },
           { label: "Govt engagements", value: stats.government, href: "/host/government" },
         ].map((m) => (
           <Link

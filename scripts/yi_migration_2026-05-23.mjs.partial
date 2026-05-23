@@ -1,0 +1,357 @@
+#!/usr/bin/env node
+// Yi Connect data migration — OLD (jxvbjpkypzedtrqewesc.public) → NEW (bkmpbcoxbjyafieabxao.yi_connect)
+// Date: 2026-05-23
+// Director-locked: "Full member-and-events migration with auth.users recreation"
+//
+// Usage:
+//   node yi_migration_2026-05-23.mjs                 # dry-run all phases (default)
+//   node yi_migration_2026-05-23.mjs --live          # ACTUALLY write to NEW project
+//   node yi_migration_2026-05-23.mjs --phase=N       # run only phase N (1-7)
+//   node yi_migration_2026-05-23.mjs --live --phase=1
+
+import { readFileSync } from "fs";
+import { resolve } from "path";
+
+// ─── CONFIG ─────────────────────────────────────────────────────────
+const LIVE = process.argv.includes("--live");
+const PHASE_FILTER = (() => {
+  const f = process.argv.find((a) => a.startsWith("--phase="));
+  return f ? parseInt(f.split("=")[1], 10) : null;
+})();
+
+const PROJECT_ROOT = "/Users/omm/PROJECTS/yi-connect";
+
+function loadEnv(path) {
+  const text = readFileSync(resolve(PROJECT_ROOT, path), "utf8");
+  const env = {};
+  for (const line of text.split("\n")) {
+    const m = line.match(/^([A-Z_]+)="?([^"]*)"?$/);
+    if (m) env[m[1]] = m[2];
+  }
+  return env;
+}
+
+const NEW_ENV = loadEnv(".env.local");
+const OLD_ENV = loadEnv(".env.local.backup-jxvbjpkypzedtrqewesc-pre-phaseB");
+
+const NEW_URL = NEW_ENV.NEXT_PUBLIC_SUPABASE_URL;
+const NEW_KEY = NEW_ENV.SUPABASE_SERVICE_ROLE_KEY;
+const OLD_URL = OLD_ENV.NEXT_PUBLIC_SUPABASE_URL;
+const OLD_KEY = OLD_ENV.SUPABASE_SERVICE_ROLE_KEY;
+
+// Chapter ID remap (only Yi Erode has real data)
+const CHAPTER_REMAP = {
+  "1a475942-94cc-478d-ab78-89242a0c3a67": "fe71c429-2647-4262-b35b-e356c960903d", // Yi Erode
+};
+// Chapter IDs to SKIP entirely (demo/test chapters that don't exist in NEW)
+const CHAPTER_SKIP = new Set([
+  "3494f9ec-08c3-44b4-89f2-412ddcb69b3e", // Yi DemoChapter
+  "de000001-0000-4000-a000-000000000001", // Yi DemoChapter 2
+]);
+
+// Per-table NEW column whitelist (only fields that exist in NEW; OLD-extras dropped)
+const COLUMN_DROP = {
+  members: [
+    "assessment_completed_at", "assessment_status", "assigned_vertical_id", "mentor_id",
+    "skill_will_category", "renewal_date", // renewal_date is a generated column
+  ],
+  profiles: ["is_active"],
+  events: [
+    "contact_person_role", "entry_method", "host_willingness_rating", "industry_id",
+    "learning_outcomes", "logistics_arrival_time", "logistics_food", "logistics_meeting_point",
+    "logistics_parking", "requirements", "venue_latitude", "venue_longitude",
+  ],
+};
+// Null these fields when migrating (FK targets that may not exist in NEW)
+const COLUMN_NULL = {
+  events: ["organizer_id"], // organizer may point to a member that wasn't migrated
+};
+
+// ─── HELPERS ────────────────────────────────────────────────────────
+async function fetchAll(baseUrl, key, table, schema = "public") {
+  const headers = {
+    apikey: key,
+    Authorization: `Bearer ${key}`,
+  };
+  if (schema !== "public") headers["Accept-Profile"] = schema;
+  const res = await fetch(`${baseUrl}/rest/v1/${table}?select=*`, { headers });
+  if (!res.ok) throw new Error(`GET ${table} (${schema}) failed: ${res.status} ${await res.text()}`);
+  return res.json();
+}
+
+async function fetchIds(baseUrl, key, table, schema = "public", idCol = "id") {
+  const headers = {
+    apikey: key,
+    Authorization: `Bearer ${key}`,
+  };
+  if (schema !== "public") headers["Accept-Profile"] = schema;
+  const res = await fetch(`${baseUrl}/rest/v1/${table}?select=${idCol}`, { headers });
+  if (!res.ok) throw new Error(`GET ${table}.${idCol} failed: ${res.status}`);
+  const rows = await res.json();
+  return new Set(rows.map((r) => r[idCol]));
+}
+
+async function postRows(baseUrl, key, table, rows, schema = "yi_connect") {
+  if (rows.length === 0) return { inserted: 0, errors: [] };
+  const headers = {
+    apikey: key,
+    Authorization: `Bearer ${key}`,
+    "Content-Type": "application/json",
+    Prefer: "return=minimal",
+    "Content-Profile": schema,
+  };
+  // Row-by-row: single failures don't kill the whole migration
+  const errors = [];
+  let inserted = 0;
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const res = await fetch(`${baseUrl}/rest/v1/${table}`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(row),
+    });
+    if (!res.ok) {
+      const body = await res.text();
+      errors.push({ rowIdx: i, rowId: row.id, rowEmail: row.email, status: res.status, body: body.slice(0, 200) });
+    } else {
+      inserted++;
+    }
+  }
+  return { inserted, errors };
+}
+
+function nullColumns(rows, nullList) {
+  if (!nullList || nullList.length === 0) return rows;
+  return rows.map((row) => {
+    const copy = { ...row };
+    for (const c of nullList) copy[c] = null;
+    return copy;
+  });
+}
+
+function dropColumns(rows, dropList) {
+  if (!dropList || dropList.length === 0) return rows;
+  return rows.map((row) => {
+    const copy = { ...row };
+    for (const c of dropList) delete copy[c];
+    return copy;
+  });
+}
+
+function remapChapter(rows, field = "chapter_id") {
+  return rows.map((row) => {
+    if (row[field] && CHAPTER_REMAP[row[field]]) {
+      return { ...row, [field]: CHAPTER_REMAP[row[field]] };
+    }
+    return row;
+  });
+}
+function filterSkippedChapters(rows, field = "chapter_id") {
+  return rows.filter((r) => !r[field] || !CHAPTER_SKIP.has(r[field]));
+}
+
+function isTestTitle(title) {
+  if (!title) return false;
+  const t = title.toLowerCase();
+  return (
+    t === "testing" ||
+    t === "testtest" ||
+    t === "test event" ||
+    t.includes("test from connect") ||
+    t.includes("test event-connect") ||
+    t.startsWith("retest ") ||
+    t.startsWith("cd-retest")
+  );
+}
+
+function log(...args) {
+  console.log(`[${LIVE ? "LIVE" : "DRY"}]`, ...args);
+}
+
+// ─── PHASES ─────────────────────────────────────────────────────────
+
+// Phase 1: provision missing auth.users in NEW (preserve UUIDs, random passwords, no email sent)
+async function phase1_authUsers() {
+  log("PHASE 1: auth.users provisioning");
+  const oldUsersRes = await fetch(`${OLD_URL}/auth/v1/admin/users?per_page=1000`, {
+    headers: { apikey: OLD_KEY, Authorization: `Bearer ${OLD_KEY}` },
+  });
+  const oldUsers = (await oldUsersRes.json()).users || [];
+  const newUsersRes = await fetch(`${NEW_URL}/auth/v1/admin/users?per_page=1000`, {
+    headers: { apikey: NEW_KEY, Authorization: `Bearer ${NEW_KEY}` },
+  });
+  const newUsersAll = (await newUsersRes.json()).users || [];
+  const newIdsSet = new Set(newUsersAll.map((u) => u.id));
+  const newEmailsSet = new Set(newUsersAll.map((u) => (u.email || "").toLowerCase()));
+
+  // Skip if EITHER the UUID or the email already exists in NEW
+  const toCreate = oldUsers.filter(
+    (u) => !newIdsSet.has(u.id) && !newEmailsSet.has((u.email || "").toLowerCase())
+  );
+  log(`  OLD users: ${oldUsers.length}, NEW already has: ${newUsersAll.length}, to create: ${toCreate.length}`);
+
+  if (!LIVE) {
+    log("  DRY-RUN — sample 3 users that would be created:");
+    toCreate.slice(0, 3).forEach((u) => log(`    ${u.id}  ${u.email}`));
+    return { created: 0, errors: [] };
+  }
+
+  let created = 0;
+  const errors = [];
+  for (const u of toCreate) {
+    // Random 32-char password (user won't know — Director triggers reset email later)
+    const password = "Y!" + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2).toUpperCase();
+    const res = await fetch(`${NEW_URL}/auth/v1/admin/users`, {
+      method: "POST",
+      headers: {
+        apikey: NEW_KEY,
+        Authorization: `Bearer ${NEW_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        id: u.id,
+        email: u.email,
+        password,
+        email_confirm: true,
+        user_metadata: u.user_metadata || {},
+        app_metadata: u.app_metadata || {},
+      }),
+    });
+    if (res.ok) {
+      created++;
+    } else {
+      errors.push({ id: u.id, email: u.email, status: res.status, body: await res.text() });
+    }
+  }
+  log(`  CREATED: ${created}, ERRORS: ${errors.length}`);
+  if (errors.length) console.log(JSON.stringify(errors.slice(0, 5), null, 2));
+  return { created, errors };
+}
+
+// Generic phase: copy table from OLD.public → NEW.yi_connect with column drop + chapter remap
+async function genericPhase(name, table, opts = {}) {
+  log(`PHASE: ${name} (${table})`);
+  const oldRows = await fetchAll(OLD_URL, OLD_KEY, table);
+  const newIds = await fetchIds(NEW_URL, NEW_KEY, table, "yi_connect", opts.idCol || "id");
+  log(`  OLD: ${oldRows.length}, NEW already has: ${newIds.size}`);
+
+  let toMigrate = oldRows.filter((r) => !newIds.has(r[opts.idCol || "id"]));
+  const chapterField = opts.chapterField || "chapter_id";
+  // Skip rows scoped to demo chapters that don't exist in NEW
+  if (opts.chapterField !== false) {
+    const beforeSkip = toMigrate.length;
+    toMigrate = filterSkippedChapters(toMigrate, chapterField);
+    const skipped = beforeSkip - toMigrate.length;
+    if (skipped > 0) log(`  Skipped ${skipped} row(s) scoped to demo chapters`);
+  }
+  // Optional filter (e.g. skip test events)
+  if (opts.filter) toMigrate = toMigrate.filter(opts.filter);
+  // Drop OLD-only columns
+  toMigrate = dropColumns(toMigrate, COLUMN_DROP[table]);
+  // Null FK columns whose targets may not exist
+  toMigrate = nullColumns(toMigrate, COLUMN_NULL[table]);
+  // Chapter ID remap
+  if (opts.chapterField !== false) toMigrate = remapChapter(toMigrate, chapterField);
+  // Pre-dedup by email (if table has email column and NEW already has same email)
+  if (opts.emailDedup) {
+    const newEmailsRes = await fetch(`${NEW_URL}/rest/v1/${table}?select=email`, {
+      headers: { apikey: NEW_KEY, Authorization: `Bearer ${NEW_KEY}`, "Accept-Profile": "yi_connect" },
+    });
+    if (newEmailsRes.ok) {
+      const newEmails = new Set((await newEmailsRes.json()).map((r) => (r.email || "").toLowerCase()));
+      const beforeEmail = toMigrate.length;
+      toMigrate = toMigrate.filter((r) => !newEmails.has((r.email || "").toLowerCase()));
+      const skipped = beforeEmail - toMigrate.length;
+      if (skipped > 0) log(`  Skipped ${skipped} row(s) with email already in NEW`);
+    }
+  }
+
+  log(`  Would insert: ${toMigrate.length}`);
+  if (!LIVE) {
+    if (toMigrate.length) log(`  Sample row keys: ${Object.keys(toMigrate[0]).join(", ")}`);
+    return { inserted: 0, errors: [] };
+  }
+  const result = await postRows(NEW_URL, NEW_KEY, table, toMigrate);
+  log(`  INSERTED: ${result.inserted}, ERRORS: ${result.errors.length}`);
+  if (result.errors.length) console.log(JSON.stringify(result.errors.slice(0, 3), null, 2));
+  return result;
+}
+
+// Phase 6: events — dedup by (chapter_id, title, start_date) since OLD/NEW have different UUIDs for same event
+async function phase6_eventsSmart() {
+  log("PHASE 6: events (title+date dedup + skip test + skip demo chapters)");
+  const oldRows = await fetchAll(OLD_URL, OLD_KEY, "events");
+  const newRows = await fetchAll(NEW_URL, NEW_KEY, "events", "yi_connect");
+  // Build dedup keys for NEW events (post-chapter-remap perspective)
+  const newKeys = new Set(
+    newRows.map((r) => `${r.chapter_id}|${(r.title || "").trim().toLowerCase()}|${(r.start_date || "").slice(0, 10)}`)
+  );
+  log(`  OLD: ${oldRows.length}, NEW: ${newRows.length}, distinct NEW dedup keys: ${newKeys.size}`);
+
+  // Step 1: skip demo chapters
+  let toMigrate = filterSkippedChapters(oldRows, "chapter_id");
+  log(`  After demo-chapter skip: ${toMigrate.length}`);
+  // Step 2: skip test titles
+  toMigrate = toMigrate.filter((r) => !isTestTitle(r.title));
+  log(`  After test-title skip: ${toMigrate.length}`);
+  // Step 3: remap chapter_id BEFORE dedup
+  toMigrate = remapChapter(toMigrate, "chapter_id");
+  // Step 4: title+date dedup against NEW
+  toMigrate = toMigrate.filter((r) => {
+    const key = `${r.chapter_id}|${(r.title || "").trim().toLowerCase()}|${(r.start_date || "").slice(0, 10)}`;
+    return !newKeys.has(key);
+  });
+  log(`  After title+date dedup: ${toMigrate.length}`);
+  // Step 5: drop OLD-only columns
+  toMigrate = dropColumns(toMigrate, COLUMN_DROP.events);
+
+  log(`  Would insert: ${toMigrate.length}`);
+  if (!LIVE) {
+    log(`  Sample titles that would be inserted:`);
+    toMigrate.slice(0, 8).forEach((r) => log(`    ${(r.start_date || "?").slice(0, 10)}  ${r.title}`));
+    return { inserted: 0, errors: [] };
+  }
+  const result = await postRows(NEW_URL, NEW_KEY, "events", toMigrate);
+  log(`  INSERTED: ${result.inserted}, ERRORS: ${result.errors.length}`);
+  if (result.errors.length) console.log(JSON.stringify(result.errors.slice(0, 3), null, 2));
+  return result;
+}
+
+// ─── MAIN ───────────────────────────────────────────────────────────
+async function main() {
+  console.log("=".repeat(60));
+  console.log(`Yi Connect Migration  —  ${LIVE ? "LIVE" : "DRY-RUN"}`);
+  console.log(`OLD: ${OLD_URL}`);
+  console.log(`NEW: ${NEW_URL}`);
+  console.log(`Phase filter: ${PHASE_FILTER || "all"}`);
+  console.log("=".repeat(60));
+
+  const phases = [
+    { n: 1, name: "auth.users",         fn: phase1_authUsers },
+    { n: 2, name: "profiles",           fn: () => genericPhase("profiles", "profiles", { emailDedup: true }) },
+    { n: 3, name: "user_roles",         fn: () => genericPhase("user_roles", "user_roles", { chapterField: false }) },
+    { n: 4, name: "approved_emails",    fn: () => genericPhase("approved_emails", "approved_emails", { chapterField: "assigned_chapter_id", emailDedup: true }) },
+    { n: 5, name: "members",            fn: () => genericPhase("members", "members") },
+    { n: 6, name: "events (title+date dedup)", fn: phase6_eventsSmart },
+    { n: 7, name: "verticals",          fn: () => genericPhase("verticals", "verticals") },
+    // Note: announcements table does not exist in NEW yi_connect schema — skipped intentionally
+  ];
+
+  for (const p of phases) {
+    if (PHASE_FILTER && p.n !== PHASE_FILTER) continue;
+    console.log();
+    try {
+      await p.fn();
+    } catch (e) {
+      console.error(`  PHASE ${p.n} FAILED:`, e.message);
+    }
+  }
+  console.log();
+  console.log("=".repeat(60));
+  console.log("DONE");
+}
+
+main().catch((e) => {
+  console.error("FATAL:", e);
+  process.exit(1);
+});

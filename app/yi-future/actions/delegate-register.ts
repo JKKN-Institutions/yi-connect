@@ -230,7 +230,7 @@ export async function registerDelegate(
 
   return {
     ok: true,
-    redirect: `/join/thank-you?email=${encodeURIComponent(email)}`,
+    redirect: `/yi-future/join/thank-you?email=${encodeURIComponent(email)}`,
   };
 }
 

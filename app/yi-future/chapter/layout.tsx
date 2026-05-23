@@ -3,22 +3,22 @@ import { createClient } from "@/lib/yi-future/supabase/server";
 import { AdminShell, type NavItem } from "@/components/yi-future/admin/AdminShell";
 
 const NAV: NavItem[] = [
-  { label: "Overview", href: "/chapter" },
-  { label: "Setup", href: "/chapter/setup" },
-  { label: "Outreach", href: "/chapter/outreach" },
-  { label: "Colleges", href: "/chapter/colleges" },
-  { label: "Delegates", href: "/chapter/delegates" },
-  { label: "Teams", href: "/chapter/teams" },
-  { label: "Journey", href: "/chapter/journey" },
-  { label: "Mentors", href: "/chapter/mentors" },
-  { label: "Experts", href: "/chapter/experts" },
-  { label: "Jury", href: "/chapter/jury" },
-  { label: "Scoring", href: "/chapter/scoring" },
-  { label: "Final Event", href: "/chapter/final" },
-  { label: "Submissions", href: "/chapter/submissions" },
-  { label: "Results", href: "/chapter/results" },
-  { label: "Consent", href: "/chapter/consent" },
-  { label: "My Bug Reports", href: "/my-bug-reports" },
+  { label: "Overview", href: "/yi-future/chapter" },
+  { label: "Setup", href: "/yi-future/chapter/setup" },
+  { label: "Outreach", href: "/yi-future/chapter/outreach" },
+  { label: "Colleges", href: "/yi-future/chapter/colleges" },
+  { label: "Delegates", href: "/yi-future/chapter/delegates" },
+  { label: "Teams", href: "/yi-future/chapter/teams" },
+  { label: "Journey", href: "/yi-future/chapter/journey" },
+  { label: "Mentors", href: "/yi-future/chapter/mentors" },
+  { label: "Experts", href: "/yi-future/chapter/experts" },
+  { label: "Jury", href: "/yi-future/chapter/jury" },
+  { label: "Scoring", href: "/yi-future/chapter/scoring" },
+  { label: "Final Event", href: "/yi-future/chapter/final" },
+  { label: "Submissions", href: "/yi-future/chapter/submissions" },
+  { label: "Results", href: "/yi-future/chapter/results" },
+  { label: "Consent", href: "/yi-future/chapter/consent" },
+  { label: "My Bug Reports", href: "/yi-future/my-bug-reports" },
 ];
 
 export default async function ChapterLayout({

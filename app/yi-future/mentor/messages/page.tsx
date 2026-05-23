@@ -91,7 +91,7 @@ export default async function MentorMessagesPage({
                 return (
                   <li key={t.id}>
                     <Link
-                      href={`/mentor/messages?thread=${t.id}`}
+                      href={`/yi-future/mentor/messages?thread=${t.id}`}
                       className={`block px-3 py-3 hover:bg-ivory/60 ${
                         isActive ? "bg-yi-gold/10" : ""
                       }`}

@@ -61,6 +61,8 @@ export default async function DelegateHome() {
   const tm = me.team_members[0];
   const team = tm?.teams ?? null;
   const isCaptain = team?.captain_id === me.id;
+  const statusLabel = (s: string) =>
+    s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
   return (
     <div className="space-y-6">
@@ -78,13 +80,13 @@ export default async function DelegateHome() {
       {/* Quick nav */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
         {[
-          { label: "Journey", href: "/me/journey" },
-          { label: "Submissions", href: "/me/submissions" },
-          { label: "Feedback", href: "/me/feedback" },
-          { label: "Resume", href: "/me/resume" },
-          { label: "Interviews", href: "/me/interviews" },
-          { label: "Consent", href: "/me/consent" },
-          { label: "Results", href: "/me/results" },
+          { label: "Journey", href: "/yi-future/me/journey" },
+          { label: "Submissions", href: "/yi-future/me/submissions" },
+          { label: "Feedback", href: "/yi-future/me/feedback" },
+          { label: "Resume", href: "/yi-future/me/resume" },
+          { label: "Interviews", href: "/yi-future/me/interviews" },
+          { label: "Consent", href: "/yi-future/me/consent" },
+          { label: "Results", href: "/yi-future/me/results" },
         ].map((n) => (
           <Link
             key={n.href}
@@ -109,7 +111,7 @@ export default async function DelegateHome() {
               </h2>
               <div className="mt-1 text-xs text-navy/60">
                 <code className="px-1.5 py-0.5 bg-navy/5 rounded font-mono">
-                  {team.status ?? "registered"}
+                  {statusLabel(team.status ?? "registered")}
                 </code>
                 {isCaptain && (
                   <span className="ml-2 text-yi-gold font-semibold">

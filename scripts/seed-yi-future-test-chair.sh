@@ -99,11 +99,25 @@ else
 fi
 
 # ── 3. Upsert auth user ─────────────────────────────────────────────────────
+# IMPORTANT: /auth/v1/admin/users?email=X does NOT filter by query string —
+# it returns the first user in the system regardless of the email param.
+# Confirmed 2026-05-23 after this bug rotated the wrong user's password.
+# Use the Supabase Management API to SQL the auth.users table directly.
 echo "── Looking up auth user $TEST_CHAIR_EMAIL..."
-EMAIL_ENC=$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))" "$TEST_CHAIR_EMAIL")
-EXISTING_USER=$(curl -sf "$URL/auth/v1/admin/users?email=$EMAIL_ENC" \
-  -H "apikey: $KEY" -H "Authorization: Bearer $KEY" 2>/dev/null \
-  | python3 -c "import sys,json; d=json.load(sys.stdin); users=d.get('users',[]); print(users[0]['id'] if users else '')")
+if [ ! -f ~/.supabase/access-token ]; then
+  echo "ERROR: ~/.supabase/access-token not found — needed for auth.users lookup."
+  echo "  Get a personal access token from https://supabase.com/dashboard/account/tokens"
+  echo "  and save it (no newline) to ~/.supabase/access-token"
+  exit 1
+fi
+MGMT_TOKEN=$(cat ~/.supabase/access-token | tr -d '\n')
+PROJECT_REF=$(echo "$URL" | sed -E 's|https://||; s|\.supabase\.co.*||')
+
+EXISTING_USER=$(curl -sf -X POST "https://api.supabase.com/v1/projects/$PROJECT_REF/database/query" \
+  -H "Authorization: Bearer $MGMT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"query\":\"SELECT id FROM auth.users WHERE email = '$TEST_CHAIR_EMAIL' LIMIT 1;\"}" 2>/dev/null \
+  | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0]['id'] if d else '')")
 
 if [ -z "$EXISTING_USER" ]; then
   echo "   creating auth user..."

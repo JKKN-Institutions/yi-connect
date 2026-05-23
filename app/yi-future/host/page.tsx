@@ -154,11 +154,11 @@ export default async function HostDashboard() {
       {/* Metrics */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         {[
-          { label: "Finalists", value: stats.finalists, href: "/host/finalists" },
-          { label: "Partners", value: stats.partners, href: "/host/partners" },
-          { label: "Internship slots", value: stats.slots, href: "/host/internships" },
-          { label: "Interviews", value: stats.interviews, href: "/host/interviews" },
-          { label: "Govt engagements", value: stats.government, href: "/host/government" },
+          { label: "Finalists", value: stats.finalists, href: "/yi-future/host/finalists" },
+          { label: "Partners", value: stats.partners, href: "/yi-future/host/partners" },
+          { label: "Internship slots", value: stats.slots, href: "/yi-future/host/internships" },
+          { label: "Interviews", value: stats.interviews, href: "/yi-future/host/interviews" },
+          { label: "Govt engagements", value: stats.government, href: "/yi-future/host/government" },
         ].map((m) => (
           <Link
             key={m.label}

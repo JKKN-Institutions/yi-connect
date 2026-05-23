@@ -16,14 +16,17 @@ export const metadata = {
 async function MyNominationsSection({ userId }: { userId: string }) {
   const supabase = await createServerSupabaseClient()
 
+  // Phase E fix 2026-05-23 (Agent re-audit): apply same pattern as Agent P
+  // commit 4e25bcc — nominee FK rename + drop winner embed. rank/final_score
+  // live directly on the nominations row, and NominationStatusCard already
+  // reads them off the root.
   const { data: nominations } = await supabase
     .from('nominations')
     .select(`
       *,
       cycle:award_cycles(*, category:award_categories(*)),
-      nominee:members!nominations_nominee_id_fkey(id, full_name, avatar_url, company, designation),
-      jury_scores(count),
-      winner:award_winners(*)
+      nominee:members!nominations_nominee_member_id_fkey(id, full_name, avatar_url, company, designation),
+      jury_scores(count)
     `)
     .eq('nominator_id', userId)
     .order('created_at', { ascending: false })

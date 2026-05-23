@@ -497,28 +497,16 @@ export const getMemberRegistrations = cache(
   async (memberId: string): Promise<RegistrationWithEvent[]> => {
     const supabase = await createClient();
 
-    const { data, error } = await supabase
+    // Phase E fix 2026-05-23 (Agent re-audit): drop `national_event:national_events(...)`
+    // embed. national_event_registrations.national_event_id is a text column
+    // referencing national_events.national_event_id (also text); no PostgREST-
+    // recognised FK was ever declared, so the embed throws PGRST200. Fetch the
+    // registrations first, then resolve event metadata via a single batched
+    // lookup keyed by the text national_event_id (same pattern Agent O uses
+    // for organizer resolution in lib/data/events.ts).
+    const { data: registrations, error } = await supabase
       .from('national_event_registrations')
-      .select(
-        `
-        *,
-        national_event:national_events (
-          id,
-          national_event_id,
-          title,
-          event_type,
-          start_date,
-          end_date,
-          city,
-          is_virtual,
-          status,
-          is_featured,
-          current_registrations,
-          max_participants,
-          registration_deadline
-        )
-      `
-      )
+      .select('*')
       .eq('member_id', memberId)
       .order('registered_at', { ascending: false });
 
@@ -527,7 +515,40 @@ export const getMemberRegistrations = cache(
       return [];
     }
 
-    return (data as unknown as RegistrationWithEvent[]) || [];
+    const regs = registrations || [];
+    if (regs.length === 0) return [];
+
+    // Batch-resolve event metadata in one round trip.
+    const eventIds = Array.from(
+      new Set(
+        regs
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          .map((r: any) => r.national_event_id)
+          .filter((v: string | null): v is string => !!v)
+      )
+    );
+
+    const eventsById = new Map<string, unknown>();
+    if (eventIds.length > 0) {
+      const { data: events } = await supabase
+        .from('national_events')
+        .select(
+          'id, national_event_id, title, event_type, start_date, end_date, city, is_virtual, status, is_featured, current_registrations, max_participants, registration_deadline'
+        )
+        .in('national_event_id', eventIds);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (events || []).forEach((e: any) => {
+        if (e?.national_event_id) eventsById.set(e.national_event_id, e);
+      });
+    }
+
+    return regs.map(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (r: any) => ({
+        ...r,
+        national_event: eventsById.get(r.national_event_id) ?? null,
+      })
+    ) as unknown as RegistrationWithEvent[];
   }
 );
 

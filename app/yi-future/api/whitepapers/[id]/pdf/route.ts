@@ -38,6 +38,12 @@ export async function GET(
   }
 
   const svc = await createServiceClient();
+  // Phase E fix 2026-05-23 (Agent re-audit): drop `chapters:host_chapter_id`
+  // embed. whitepapers.host_chapter_id is a cross-schema FK
+  // (future.whitepapers -> yi.chapters), which PostgREST cannot resolve when
+  // scoped to the `future` schema (PGRST200). Fetch the whitepaper first,
+  // then resolve the chapter name via a follow-up lookup against yi.chapters
+  // using the service client's schema switcher.
   const { data, error } = await svc
     .schema("future")
     .from("whitepapers")
@@ -50,8 +56,8 @@ export async function GET(
       cover_image_url,
       status,
       published_at,
+      host_chapter_id,
       tracks:track_id ( name, icon ),
-      chapters:host_chapter_id ( name ),
       editions:edition_id ( name )
       `
     )
@@ -92,14 +98,24 @@ export async function GET(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (data as any).tracks
   );
-  const chapter = pickOne<{ name: string | null }>(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (data as any).chapters
-  );
   const edition = pickOne<{ name: string | null }>(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (data as any).editions
   );
+
+  // Resolve host chapter via follow-up lookup against yi.chapters.
+  let chapter: { name: string | null } | null = null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const hostChapterId = (data as any).host_chapter_id as string | null;
+  if (hostChapterId) {
+    const { data: chapterRow } = await svc
+      .schema("yi")
+      .from("chapters")
+      .select("name")
+      .eq("id", hostChapterId)
+      .maybeSingle();
+    chapter = chapterRow ? { name: chapterRow.name ?? null } : null;
+  }
 
   const title = data.title ?? "Untitled Whitepaper";
   const sections: Section[] = Array.isArray(data.sections)

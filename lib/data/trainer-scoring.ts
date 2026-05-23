@@ -212,7 +212,10 @@ export const getEligibleTrainersForEvent = cache(
       throw new Error('Unauthorized')
     }
 
-    // Get trainers eligible for the service type
+    // Phase E fix 2026-05-23 (Agent re-audit): disambiguate the members embed
+    // via explicit FK hint. trainer_profiles has two FKs to members
+    // (member_id + approved_by), so PostgREST returns PGRST201 without a hint.
+    // Same fix Agent G applied in session-bookings getBookingById (commit 37de8ce).
     const { data: trainers, error } = await supabase
       .from('trainer_profiles')
       .select(`
@@ -225,7 +228,7 @@ export const getEligibleTrainersForEvent = cache(
         last_session_date,
         sessions_this_month,
         days_since_last_session,
-        member:members!inner(
+        member:members!trainer_profiles_member_id_fkey(
           id,
           profile:profiles(
             full_name,
@@ -558,6 +561,8 @@ export const getTrainerDistributionStats = cache(
       throw new Error('Unauthorized')
     }
 
+    // Phase E fix 2026-05-23 (Agent re-audit): disambiguate the members embed
+    // — same PGRST201 root cause as getEligibleTrainersForEvent above.
     let query = supabase
       .from('trainer_profiles')
       .select(`
@@ -567,7 +572,7 @@ export const getTrainerDistributionStats = cache(
         sessions_this_quarter,
         days_since_last_session,
         average_rating,
-        member:members!inner(
+        member:members!trainer_profiles_member_id_fkey(
           id,
           profile:profiles(
             full_name,

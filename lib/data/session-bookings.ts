@@ -142,6 +142,11 @@ export const getBookings = cache(
   async (filters: SessionBookingFilters = {}): Promise<SessionBookingFull[]> => {
     const supabase = await createServerSupabaseClient()
 
+    // Phase E fix 2026-05-23 (Agent re-audit): drop session_type:session_types(...)
+    // embed — session_types table does not exist in yi_connect schema.
+    // session_bookings.session_type is a denormalized text column already
+    // returned via select('*'). Same drop Agent G applied at getBookingById
+    // (commit 37de8ce).
     let query = supabase
       .from('session_bookings')
       .select(`
@@ -152,15 +157,10 @@ export const getBookings = cache(
           email,
           stakeholder_type
         ),
-        session_type:session_types(
-          id,
-          name,
-          display_name
-        ),
         assigned_trainer:trainer_profiles(
           id,
           member_id,
-          member:members(
+          member:members!trainer_profiles_member_id_fkey(
             id,
             profile:profiles(
               full_name,
@@ -253,6 +253,9 @@ export const getBookingsForDate = cache(
   async (date: string): Promise<SessionBookingFull[]> => {
     const supabase = await createServerSupabaseClient()
 
+    // Phase E fix 2026-05-23 (Agent re-audit): drop session_type:session_types(...)
+    // embed (table missing — same fix as getBookings above) and disambiguate
+    // the members embed via the trainer_profiles_member_id_fkey FK hint.
     const { data, error } = await supabase
       .from('session_bookings')
       .select(`
@@ -262,13 +265,9 @@ export const getBookingsForDate = cache(
           full_name,
           stakeholder_type
         ),
-        session_type:session_types(
-          id,
-          display_name
-        ),
         assigned_trainer:trainer_profiles(
           id,
-          member:members(
+          member:members!trainer_profiles_member_id_fkey(
             id,
             profile:profiles(
               full_name,
@@ -427,7 +426,9 @@ export const getAvailableTrainersForSession = cache(
     // Get session type to know required certifications
     const sessionType = await getSessionTypeById(sessionTypeId)
 
-    // Get eligible trainers
+    // Phase E fix 2026-05-23 (Agent re-audit): disambiguate the members embed
+    // via explicit FK hint. trainer_profiles has two FKs to members
+    // (member_id + approved_by), so PostgREST returns PGRST201 without a hint.
     const { data: trainers, error } = await supabase
       .from('trainer_profiles')
       .select(`
@@ -437,7 +438,7 @@ export const getAvailableTrainersForSession = cache(
         average_rating,
         sessions_this_month,
         eligible_session_types,
-        member:members(
+        member:members!trainer_profiles_member_id_fkey(
           id,
           profile:profiles(
             full_name,

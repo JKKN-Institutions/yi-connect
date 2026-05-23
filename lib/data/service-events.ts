@@ -7,8 +7,62 @@
 
 import 'server-only'
 import { cache } from 'react'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminSupabaseClient } from '@/lib/supabase/server'
 import { getCurrentUser } from '@/lib/data/auth'
+
+/**
+ * Resolve a single organizer profile via the admin client.
+ *
+ * Phase E fix 2026-05-23 (Agent re-audit): mirror Agent O's resolveOrganizer
+ * pattern from lib/data/events.ts. yi_connect.events.organizer_id's only
+ * declared FK is to auth.users(id), NOT yi_connect.members(id), so PostgREST
+ * cannot resolve `organizer:members!organizer_id(...)` embeds (PGRST200).
+ * This helper does a single-row members lookup keyed by organizer_id and
+ * returns the same shape the embed produced. Returns null when organizerId
+ * is missing or the lookup fails (organizer info is decorative — never
+ * block the page on it).
+ */
+async function resolveOrganizer(
+  organizerId: string | null | undefined
+): Promise<{
+  id: string
+  profile: {
+    full_name: string
+    email: string
+    avatar_url?: string | null
+  } | null
+} | null> {
+  if (!organizerId) return null
+  try {
+    const admin = createAdminSupabaseClient()
+    const { data: row } = await admin
+      .from('members')
+      .select('id, profile:profiles(full_name, email, avatar_url)')
+      .eq('id', organizerId)
+      .single()
+    if (!row) return null
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const profile = Array.isArray((row as any).profile)
+      ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (row as any).profile[0]
+      : // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (row as any).profile
+    return {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      id: (row as any).id,
+      profile: profile
+        ? {
+            full_name: profile.full_name,
+            email: profile.email,
+            avatar_url: profile.avatar_url ?? null,
+          }
+        : null,
+    }
+  } catch (err) {
+    console.error('[service-events resolveOrganizer] failed:', err)
+    return null
+  }
+}
 import type {
   EventWithServiceDetails,
   EventSessionReport,
@@ -266,6 +320,9 @@ export const getServiceEventById = cache(
       throw new Error('Unauthorized')
     }
 
+    // Phase E fix 2026-05-23 (Agent re-audit): drop `organizer:members!organizer_id(...)`
+    // embed. See resolveOrganizer note above — events.organizer_id FK targets
+    // auth.users, not members, so the embed throws PGRST200.
     const { data, error } = await supabase
       .from('events')
       .select(
@@ -273,14 +330,6 @@ export const getServiceEventById = cache(
         *,
         venue:venues(*),
         template:event_templates(*),
-        organizer:members!organizer_id(
-          id,
-          profile:profiles(
-            full_name,
-            email,
-            avatar_url
-          )
-        ),
         chapter:chapters(
           id,
           name,
@@ -299,6 +348,12 @@ export const getServiceEventById = cache(
       console.error('Error fetching service event:', error)
       throw new Error(`Failed to fetch service event: ${error.message}`)
     }
+
+    // Resolve organizer via follow-up lookup (decorative; never block on it).
+    const organizer = await resolveOrganizer(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (data as any).organizer_id
+    )
 
     // Polymorphic stakeholder resolution.
     // There is NO `stakeholders` table — resolve via stakeholder_type
@@ -340,6 +395,7 @@ export const getServiceEventById = cache(
 
     return {
       ...data,
+      organizer,
       service_details: {
         is_service_event: data.is_service_event,
         service_type: data.service_type,

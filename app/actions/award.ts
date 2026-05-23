@@ -284,8 +284,7 @@ export async function submitNomination(
           category:award_categories (name)
         ),
         nominee:members!nominations_nominee_member_id_fkey (
-          first_name,
-          last_name
+          full_name
         )
       `)
       .single()
@@ -435,8 +434,7 @@ export async function assignJuryMember(
       .select(`
         *,
         member:members (
-          first_name,
-          last_name,
+          full_name,
           email
         )
       `)
@@ -535,69 +533,100 @@ export async function updateJuryScores(
 export async function declareWinners(
   cycleId: string,
   winners: Array<{ nomination_id: string; rank: number; final_score: number }>,
-  announcedById: string
+  // announcedById retained for signature compatibility; nominations table has
+  // no announced_by_id column, so it is intentionally unused.
+  _announcedById: string
 ): Promise<ActionResult> {
   try {
     const supabase = await createClient()
 
-    // Insert all winners
-    const winnersData = winners.map((w) => ({
-      cycle_id: cycleId,
-      nomination_id: w.nomination_id,
-      rank: w.rank,
-      final_score: w.final_score,
-      announced_by_id: announcedById,
-      announced_at: new Date().toISOString(),
-    }))
+    // Winner state lives on nominations (rank, final_score, awarded_at).
+    // The previously-targeted award_winners table does not exist in yi_connect.
+    const awardedAt = new Date().toISOString()
+    const results: any[] = []
 
-    const { data, error } = await supabase
-      .from('award_winners')
-      .insert(winnersData)
-      .select(`
-        *,
-        nomination:nominations (
+    for (const w of winners) {
+      const { data, error } = await supabase
+        .from('nominations')
+        .update({
+          rank: w.rank,
+          final_score: w.final_score,
+          awarded_at: awardedAt,
+          status: 'awarded',
+        })
+        .eq('id', w.nomination_id)
+        .eq('cycle_id', cycleId)
+        .select(`
+          *,
           nominee:members!nominations_nominee_member_id_fkey (
-            first_name,
-            last_name,
+            full_name,
             email
           )
-        )
-      `)
+        `)
+        .single()
 
-    if (error) throw error
+      if (error) throw error
+      results.push(data)
+    }
 
     // Update cycle status
     await supabase
       .from('award_cycles')
       .update({
         status: 'completed',
-        winners_announced_at: new Date().toISOString(),
+        winners_announced_at: awardedAt,
       })
       .eq('id', cycleId)
 
     revalidatePath('/awards/admin/review')
     revalidatePath('/awards/leaderboard')
     revalidatePath('/awards')
-    return { success: true, data }
+    return { success: true, data: results }
   } catch (error) {
     return { success: false, error: 'Failed to declare winners' }
   }
 }
 
 export async function generateCertificate(
-  winnerId: string
+  // nominationId is the winning nomination row (since award_winners does not
+  // exist, nominations is the source of truth for winner state).
+  nominationId: string
 ): Promise<ActionResult> {
   try {
     const supabase = await createClient()
 
+    // Look up the nomination to derive recipient + award context for the cert.
+    const { data: nom, error: nomErr } = await supabase
+      .from('nominations')
+      .select(`
+        id,
+        cycle_id,
+        title,
+        citation,
+        nominee:members!nominations_nominee_member_id_fkey (
+          full_name
+        )
+      `)
+      .eq('id', nominationId)
+      .single()
+
+    if (nomErr) throw nomErr
+
+    const recipientName =
+      (nom as any)?.nominee?.full_name ?? 'Recipient'
+
     const { data, error } = await supabase
-      .from('award_winners')
-      .update({
-        certificate_generated: true,
-        certificate_generated_at: new Date().toISOString(),
-        certificate_url: `/certificates/${winnerId}.pdf`,
+      .from('award_certificates')
+      .insert({
+        nomination_id: nominationId,
+        cycle_id: (nom as any).cycle_id,
+        recipient_name: recipientName,
+        award_title: (nom as any).title ?? '',
+        citation: (nom as any).citation ?? null,
+        pdf_url: `/certificates/${nominationId}.pdf`,
+        status: 'issued',
+        issued_at: new Date().toISOString(),
       })
-      .eq('id', winnerId)
       .select()
       .single()
 

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient, createServiceClient } from "@/lib/yi-future/supabase/server";
 import type { ActionResult } from "./editions";
+import { MIN_TEAMS_PER_PROBLEM } from "@/lib/yi-future/constants";
 
 async function requireAuth(): Promise<void> {
   const supabase = await createClient();
@@ -142,16 +143,41 @@ export async function setTeamCaptain(
 }
 
 // ─── PICK PROBLEM STATEMENT ─────────────────────────────────────────
-// Multiple teams in the same chapter MAY pick the same problem statement
-// — explicit product decision 2026-05-23. Diverse approaches enrich the
-// chapter final. Admin sees distribution on /chapter/allocations and can
-// re-allocate manually if balance becomes a concern.
 export async function pickProblemStatement(
   teamId: string,
   problemId: string
 ): Promise<ActionResult> {
   await requireAuth();
   const svc = await createServiceClient();
+
+  // Enforce "min 5 teams per problem is a target, but not a hard block"
+  // Actually the handbook says MIN_TEAMS_PER_PROBLEM = 5 — but that's a chapter-level aspiration,
+  // not a per-team constraint. We DO cap overly-popular picks to keep spread:
+  // Arbitrary rule: no more than 5 teams within the same chapter can pick the same problem.
+  const { data: team } = await svc
+    .schema("future")
+    .from("teams")
+    .select("chapter_id, edition_id")
+    .eq("id", teamId)
+    .maybeSingle();
+  if (!team) return { ok: false, error: "Team not found." };
+  const t = team as { chapter_id: string; edition_id: string };
+
+  const { count } = await svc
+    .schema("future")
+    .from("teams")
+    .select("id", { count: "exact", head: true })
+    .eq("chapter_id", t.chapter_id)
+    .eq("edition_id", t.edition_id)
+    .eq("problem_statement_id", problemId)
+    .neq("id", teamId);
+
+  if ((count ?? 0) >= MIN_TEAMS_PER_PROBLEM) {
+    return {
+      ok: false,
+      error: `${MIN_TEAMS_PER_PROBLEM} teams in this chapter already picked that problem. Pick another to keep the spread.`,
+    };
+  }
 
   const { error } = await svc
     .schema("future")

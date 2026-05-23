@@ -8,6 +8,9 @@ export default async function DelegateLayout({
   children: React.ReactNode;
 }) {
   const session = await readSession();
+  if (session?.type === "jury") {
+    redirect("/yi-future/jury");
+  }
   if (!session || session.type !== "delegate") {
     redirect("/yi-future/join");
   }

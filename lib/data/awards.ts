@@ -184,14 +184,14 @@ export const getNominations = cache(async (filters?: NominationFilters) => {
         *,
         category:award_categories(*)
       ),
-      nominee:members!nominations_nominee_id_fkey(
+      nominee:members!nominations_nominee_member_id_fkey(
         id,
         full_name,
         avatar_url,
         company,
         designation
       ),
-      nominator:members!nominations_nominator_id_fkey(
+      nominator:profiles!nominations_nominator_id_fkey(
         id,
         full_name,
         avatar_url
@@ -241,14 +241,14 @@ export const getNominationById = cache(async (id: string) => {
         *,
         category:award_categories(*)
       ),
-      nominee:members!nominations_nominee_id_fkey(
+      nominee:members!nominations_nominee_member_id_fkey(
         id,
         full_name,
         avatar_url,
         company,
         designation
       ),
-      nominator:members!nominations_nominator_id_fkey(
+      nominator:profiles!nominations_nominator_id_fkey(
         id,
         full_name,
         avatar_url
@@ -281,7 +281,7 @@ export const getMyNominations = cache(async (memberId: string) => {
         *,
         category:award_categories(*)
       ),
-      nominee:members!nominations_nominee_id_fkey(
+      nominee:members!nominations_nominee_member_id_fkey(
         id,
         full_name,
         avatar_url,
@@ -395,7 +395,7 @@ export const getNominationsForJury = cache(async (juryMemberId: string) => {
     .from('nominations')
     .select(`
       *,
-      nominee:members!nominations_nominee_id_fkey(
+      nominee:members!nominations_nominee_member_id_fkey(
         id,
         full_name,
         avatar_url,
@@ -433,7 +433,7 @@ export const getWinnersByCycle = cache(async (cycleId: string) => {
       *,
       nomination:nominations(
         *,
-        nominee:members!nominations_nominee_id_fkey(
+        nominee:members!nominations_nominee_member_id_fkey(
           id,
           full_name,
           avatar_url,
@@ -467,7 +467,7 @@ export const getAnnouncedWinners = cache(async (limit = 20) => {
       ),
       nomination:nominations(
         *,
-        nominee:members!nominations_nominee_id_fkey(
+        nominee:members!nominations_nominee_member_id_fkey(
           id,
           full_name,
           avatar_url,

@@ -305,38 +305,9 @@ export const getUserById = cache(async (id: string): Promise<UserFull | null> =>
     .eq('id', id)
     .single()
 
-  // Fetch role change history
-  const { data: roleChanges } = await supabase
-    .from('user_role_changes')
-    .select(
-      `
-      id,
-      user_id,
-      role_id,
-      action,
-      notes,
-      created_at,
-      changed_by,
-      role:roles!user_role_changes_role_id_fkey(name),
-      changed_by_profile:profiles!user_role_changes_changed_by_fkey(full_name)
-    `
-    )
-    .eq('user_id', id)
-    .order('created_at', { ascending: false })
-    .limit(20)
-
-  const role_changes: UserRoleChangeInfo[] =
-    roleChanges?.map((rc: any) => ({
-      id: rc.id,
-      user_id: rc.user_id,
-      role_id: rc.role_id,
-      role_name: rc.role?.name || 'Unknown',
-      action: rc.action,
-      changed_by: rc.changed_by,
-      changed_by_name: rc.changed_by_profile?.full_name || null,
-      notes: rc.notes,
-      created_at: rc.created_at
-    })) || []
+  // Role change history disabled — user_role_changes table not provisioned
+  // in yi_connect schema. Return empty audit history until restored.
+  const role_changes: UserRoleChangeInfo[] = []
 
   // Check if user is active
   const { data: approvedEmail } = await supabase
@@ -513,45 +484,11 @@ export const getUserStats = cache(async (): Promise<UserStats> => {
 
 /**
  * Get user role change history
+ * Feature disabled — user_role_changes table not provisioned in
+ * yi_connect schema. Returns empty array until restored.
  */
 export const getUserRoleChanges = cache(
-  async (userId: string): Promise<UserRoleChangeInfo[]> => {
-    const supabase = await createServerSupabaseClient()
-
-    const { data, error } = await supabase
-      .from('user_role_changes')
-      .select(
-        `
-        id,
-        user_id,
-        role_id,
-        action,
-        notes,
-        created_at,
-        changed_by,
-        role:roles!user_role_changes_role_id_fkey(name),
-        changed_by_profile:profiles!user_role_changes_changed_by_fkey(full_name)
-      `
-      )
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-
-    if (error) {
-      throw new Error(`Failed to fetch role changes: ${error.message}`)
-    }
-
-    return (
-      data?.map((rc: any) => ({
-        id: rc.id,
-        user_id: rc.user_id,
-        role_id: rc.role_id,
-        role_name: rc.role?.name || 'Unknown',
-        action: rc.action,
-        changed_by: rc.changed_by,
-        changed_by_name: rc.changed_by_profile?.full_name || null,
-        notes: rc.notes,
-        created_at: rc.created_at
-      })) || []
-    )
+  async (_userId: string): Promise<UserRoleChangeInfo[]> => {
+    return []
   }
 )

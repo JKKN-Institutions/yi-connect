@@ -200,24 +200,9 @@ export async function assignRole(
       }
     }
 
-    // ✅ Explicitly log to audit trail (admin client may bypass triggers)
-    const { error: auditError } = await adminClient.from('user_role_changes').insert({
-      user_id: validation.data.user_id,
-      role_id: validation.data.role_id,
-      action: 'assigned',
-      changed_by: user.id,
-      notes: validation.data.notes || null
-    })
-
-    if (auditError) {
-      console.error('[assignRole] Failed to log audit trail:', {
-        user_id: validation.data.user_id,
-        role_id: validation.data.role_id,
-        changed_by: user.id,
-        error: auditError.message
-      })
-      // Don't fail the operation if audit logging fails, just log the error
-    }
+    // Audit log skipped — user_role_changes table not provisioned in
+    // yi_connect schema. Role assignment still succeeds; audit feature
+    // disabled until the table is recreated.
 
     // Invalidate caches
     revalidatePath('/admin/users')
@@ -1237,20 +1222,10 @@ export async function deleteUserPermanently(
     const userName = profile.full_name || 'User';
     const userEmail = profile.email;
 
-    // 1. ✅ Anonymize audit trail records (preserve for compliance, don't delete)
-    await adminClient
-      .from('user_role_changes')
-      .update({
-        user_id: '00000000-0000-0000-0000-000000000000',  // Placeholder UUID
-        notes: `Original user deleted: ${userId} (${profile.full_name || profile.email})`
-      })
-      .eq('user_id', userId);
-
-    // 2. Update user_role_changes where this user was the changed_by (set to null)
-    await adminClient
-      .from('user_role_changes')
-      .update({ changed_by: null })
-      .eq('changed_by', userId);
+    // 1. & 2. Audit trail anonymization skipped — user_role_changes table
+    // not provisioned in yi_connect schema. Original implementation
+    // anonymized records and nulled changed_by references for compliance.
+    // Restore both updates here once the table is recreated.
 
     // 3. Delete from user_roles (has FK to profiles.id)
     await adminClient

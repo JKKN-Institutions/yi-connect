@@ -97,8 +97,10 @@ async function getFilteredMemberIds(
       joined_at,
       engagement_score,
       leadership_readiness_score,
-      profile:profiles!members_id_fkey(email),
-      roles:user_roles(role:roles(name)),
+      profile:profiles!members_id_fkey(
+        email,
+        roles:user_roles(role:roles(name))
+      ),
       skills:member_skills(skill_id),
       verticals:vertical_members(vertical_id)
     `)
@@ -177,10 +179,22 @@ async function getFilteredMemberIds(
   let filteredMembers = members;
 
   // Filter by roles
+  // Phase E fix 2026-05-23: roles now live under profile.roles (see select).
+  // Accept both legacy m.roles and new m.profile.roles shapes.
   if (filter.roles && filter.roles.length > 0) {
     filteredMembers = filteredMembers.filter((m) => {
-      const roles = m.roles as { role: { name: string }[] }[] | undefined;
-      const memberRoles = roles?.flatMap((r) => r.role?.map((role) => role.name) || []) || [];
+      const profile = (m as { profile?: unknown }).profile;
+      const profileObj = Array.isArray(profile) ? profile[0] : profile;
+      const profileRoles =
+        (profileObj as { roles?: { role: { name: string } | { name: string }[] }[] } | undefined)
+          ?.roles ?? [];
+      const legacyRoles = ((m as { roles?: unknown }).roles ?? []) as { role: { name: string } | { name: string }[] }[];
+      const merged = [...profileRoles, ...legacyRoles];
+      const memberRoles = merged.flatMap((r) => {
+        const role = r.role;
+        if (Array.isArray(role)) return role.map((x) => x.name);
+        return role?.name ? [role.name] : [];
+      });
       return filter.roles!.some(role => memberRoles.includes(role));
     });
   }
@@ -222,478 +236,62 @@ async function getFilteredMemberIds(
 // ============================================================================
 // ANNOUNCEMENT ACTIONS
 // ============================================================================
+//
+// NOTE: The `announcements` and `announcement_recipients` tables are not
+// provisioned in the yi_connect schema. The functions below short-circuit
+// with a disabled-feature response to avoid PGRST205 runtime errors.
+// Restore by creating the tables and reinstating the original logic.
 
-/**
- * Create a new announcement
- */
+const ANNOUNCEMENTS_DISABLED: ActionResponse<any> = {
+  success: false,
+  message: 'Announcements feature is currently disabled',
+  error: 'announcements table not provisioned in yi_connect schema',
+};
+
+/** Create a new announcement (feature disabled) */
 export async function createAnnouncement(
-  formData: unknown
+  _formData: unknown
 ): Promise<ActionResponse<{ id: string }>> {
-  try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return { success: false, message: 'Unauthorized', error: 'Please log in' };
-    }
-
-    const chapterId = await getCurrentChapterId();
-    if (!chapterId) {
-      return { success: false, message: 'Chapter not found', error: 'No chapter associated with user' };
-    }
-
-    // Validate input
-    const validation = createAnnouncementSchema.safeParse(formData);
-    if (!validation.success) {
-      return {
-        success: false,
-        message: 'Validation failed',
-        error: validation.error.issues[0].message,
-      };
-    }
-
-    const data = validation.data;
-    const supabase = await createClient();
-
-    // Create announcement
-    const { data: announcement, error } = await supabase
-      .from('announcements')
-      .insert({
-        chapter_id: chapterId,
-        title: data.title,
-        content: data.content,
-        channels: data.channels,
-        priority: data.priority || 'normal',
-        audience_filter: data.audience_filter || null,
-        segment_id: data.segment_id || null,
-        template_id: data.template_id || null,
-        scheduled_at: data.scheduled_at || null,
-        status: data.scheduled_at ? 'scheduled' : 'draft',
-        created_by: user.id,
-        metadata: data.metadata || {},
-      })
-      .select('id')
-      .single();
-
-    if (error) {
-      return { success: false, message: 'Failed to create announcement', error: error.message };
-    }
-
-    // Invalidate cache
-    revalidateTag('communications', 'default');
-    revalidateTag('announcements', 'default');
-
-    return {
-      success: true,
-      message: 'Announcement created successfully',
-      data: { id: announcement.id },
-    };
-  } catch (error) {
-    return { success: false, message: 'An unexpected error occurred', error: String(error) };
-  }
+  return ANNOUNCEMENTS_DISABLED;
 }
 
-/**
- * Update an existing announcement
- */
+/** Update an existing announcement (feature disabled) */
 export async function updateAnnouncement(
-  id: string,
-  formData: unknown
+  _id: string,
+  _formData: unknown
 ): Promise<ActionResponse> {
-  try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return { success: false, message: 'Unauthorized', error: 'Please log in' };
-    }
-
-    // Validate input
-    const validation = updateAnnouncementSchema.safeParse(formData);
-    if (!validation.success) {
-      return {
-        success: false,
-        message: 'Validation failed',
-        error: validation.error.issues[0].message,
-      };
-    }
-
-    const data = validation.data;
-    const supabase = await createClient();
-
-    // Update announcement
-    const { error } = await supabase
-      .from('announcements')
-      .update({
-        title: data.title,
-        content: data.content,
-        channels: data.channels,
-        priority: data.priority,
-        audience_filter: data.audience_filter,
-        segment_id: data.segment_id,
-        scheduled_at: data.scheduled_at,
-        metadata: data.metadata,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', id);
-
-    if (error) {
-      console.error('Error updating announcement:', error);
-      return { success: false, message: 'Failed to update announcement', error: error.message };
-    }
-
-    // Invalidate cache
-    revalidateTag('communications', 'default');
-    revalidateTag('announcements', 'default');
-    revalidateTag(`announcement-${id}`, 'default');
-
-    return { success: true, message: 'Announcement updated successfully' };
-  } catch (error) {
-    return { success: false, message: 'An unexpected error occurred', error: String(error) };
-  }
+  return ANNOUNCEMENTS_DISABLED;
 }
 
-/**
- * Send announcement immediately
- */
-export async function sendAnnouncement(id: string): Promise<ActionResponse> {
-  try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return { success: false, message: 'Unauthorized', error: 'Please log in' };
-    }
-
-    const supabase = await createClient();
-
-    // Get announcement details
-    const { data: announcement, error: fetchError } = await supabase
-      .from('announcements')
-      .select('*, communication_segments(*)')
-      .eq('id', id)
-      .single();
-
-    if (fetchError || !announcement) {
-      return { success: false, message: 'Announcement not found', error: fetchError?.message };
-    }
-
-    // Check if announcement can be sent
-    if (announcement.status === 'sent') {
-      return { success: false, message: 'Announcement already sent', error: 'Cannot resend' };
-    }
-
-    // Update status to sending
-    const { error: updateError } = await supabase
-      .from('announcements')
-      .update({
-        status: 'sending',
-        sent_at: new Date().toISOString(),
-      })
-      .eq('id', id);
-
-    if (updateError) {
-      return { success: false, message: 'Failed to send announcement', error: updateError.message };
-    }
-
-    // Get filtered member IDs based on audience_filter or segment
-    const memberIds = await getFilteredMemberIds(
-      supabase,
-      announcement.chapter_id,
-      announcement.audience_filter,
-      announcement.segment_id
-    );
-
-    // Create announcement_recipients records
-    if (memberIds.length > 0) {
-      const recipients = memberIds.flatMap(memberId =>
-        announcement.channels.map((channel: string) => ({
-          announcement_id: id,
-          member_id: memberId,
-          channel,
-          status: 'queued',
-        }))
-      );
-
-      await supabase.from('announcement_recipients').insert(recipients);
-
-      // If in_app channel is included, create notifications
-      if (announcement.channels.includes('in_app')) {
-        const notifications = memberIds.map(memberId => ({
-          member_id: memberId,
-          title: announcement.title,
-          message: announcement.content.substring(0, 200),
-          category: 'announcements',
-          announcement_id: id,
-        }));
-
-        await supabase.from('notifications').insert(notifications);
-      }
-
-      // Send email notifications
-      if (announcement.channels.includes('email')) {
-        try {
-          // Fetch member emails
-          const { data: members } = await supabase
-            .from('members')
-            .select('id, profile:profiles!members_id_fkey(full_name, email)')
-            .in('id', memberIds);
-
-          // Get chapter name
-          const { data: chapter } = await supabase
-            .from('chapters')
-            .select('name')
-            .eq('id', announcement.chapter_id)
-            .single();
-
-          const chapterName = chapter?.name || 'Yi Chapter';
-          const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://yi-connect-app.vercel.app';
-
-          if (members && members.length > 0) {
-            const emailMessages = members
-              .filter((m) => {
-                const profile = m.profile as { email?: string }[] | undefined;
-                return profile?.[0]?.email;
-              })
-              .map((member) => {
-                const profile = member.profile as { email: string; full_name?: string }[];
-                const template = announcementEmail({
-                  memberName: profile[0]?.full_name || 'Member',
-                  title: announcement.title,
-                  content: announcement.content,
-                  priority: announcement.priority || 'normal',
-                  chapterName,
-                  viewLink: `${APP_URL}/communications/announcements/${announcement.id}`,
-                });
-                return {
-                  to: profile[0].email,
-                  subject: template.subject,
-                  html: template.html,
-                };
-              });
-
-            const emailResult = await sendBatchEmails(emailMessages);
-
-            // Update recipient statuses for email channel
-            await supabase
-              .from('announcement_recipients')
-              .update({ status: 'sent', sent_at: new Date().toISOString() })
-              .eq('announcement_id', id)
-              .eq('channel', 'email');
-          }
-        } catch (emailError) {
-          // Don't fail the entire operation if email fails
-        }
-      }
-
-      // Send push notifications (if configured)
-      if (announcement.channels.includes('push') || announcement.channels.includes('in_app')) {
-        try {
-          await sendAnnouncementPush(
-            announcement.chapter_id,
-            {
-              id: announcement.id,
-              title: announcement.title,
-              content: announcement.content
-            }
-          );
-        } catch (pushError) {
-          // Don't fail the entire operation if push fails
-        }
-      }
-    }
-
-    // Update status to sent
-    await supabase
-      .from('announcements')
-      .update({ status: 'sent' })
-      .eq('id', id);
-
-    // Invalidate cache
-    revalidateTag('communications', 'default');
-    revalidateTag('announcements', 'default');
-    revalidateTag(`announcement-${id}`, 'default');
-
-    return {
-      success: true,
-      message: `Announcement sent successfully to ${memberIds.length} members`,
-    };
-  } catch (error) {
-    return { success: false, message: 'An unexpected error occurred', error: String(error) };
-  }
+/** Send announcement immediately (feature disabled) */
+export async function sendAnnouncement(_id: string): Promise<ActionResponse> {
+  return ANNOUNCEMENTS_DISABLED;
 }
 
-/**
- * Schedule announcement for later
- */
+/** Schedule announcement for later (feature disabled) */
 export async function scheduleAnnouncement(
-  id: string,
-  scheduledAt: string
+  _id: string,
+  _scheduledAt: string
 ): Promise<ActionResponse> {
-  try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return { success: false, message: 'Unauthorized', error: 'Please log in' };
-    }
-
-    // Validate scheduled time is in future
-    if (new Date(scheduledAt) <= new Date()) {
-      return { success: false, message: 'Invalid schedule time', error: 'Must be in the future' };
-    }
-
-    const supabase = await createClient();
-
-    const { error } = await supabase
-      .from('announcements')
-      .update({
-        scheduled_at: scheduledAt,
-        status: 'scheduled',
-      })
-      .eq('id', id);
-
-    if (error) {
-      return { success: false, message: 'Failed to schedule announcement', error: error.message };
-    }
-
-    revalidateTag('communications', 'default');
-    revalidateTag('announcements', 'default');
-    revalidateTag(`announcement-${id}`, 'default');
-
-    return { success: true, message: 'Announcement scheduled successfully' };
-  } catch (error) {
-    return { success: false, message: 'An unexpected error occurred', error: String(error) };
-  }
+  return ANNOUNCEMENTS_DISABLED;
 }
 
-/**
- * Cancel scheduled announcement
- */
-export async function cancelAnnouncement(id: string, reason?: string): Promise<ActionResponse> {
-  try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return { success: false, message: 'Unauthorized', error: 'Please log in' };
-    }
-
-    const supabase = await createClient();
-
-    const { error } = await supabase
-      .from('announcements')
-      .update({
-        status: 'cancelled',
-        metadata: { cancelled_reason: reason, cancelled_at: new Date().toISOString() },
-      })
-      .eq('id', id);
-
-    if (error) {
-      return { success: false, message: 'Failed to cancel announcement', error: error.message };
-    }
-
-    revalidateTag('communications', 'default');
-    revalidateTag('announcements', 'default');
-    revalidateTag(`announcement-${id}`, 'default');
-
-    return { success: true, message: 'Announcement cancelled successfully' };
-  } catch (error) {
-    return { success: false, message: 'An unexpected error occurred', error: String(error) };
-  }
+/** Cancel scheduled announcement (feature disabled) */
+export async function cancelAnnouncement(_id: string, _reason?: string): Promise<ActionResponse> {
+  return ANNOUNCEMENTS_DISABLED;
 }
 
-/**
- * Delete announcement (only drafts)
- */
-export async function deleteAnnouncement(id: string): Promise<ActionResponse> {
-  try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return { success: false, message: 'Unauthorized', error: 'Please log in' };
-    }
-
-    const supabase = await createClient();
-
-    // Check if announcement is draft
-    const { data: announcement } = await supabase
-      .from('announcements')
-      .select('status')
-      .eq('id', id)
-      .single();
-
-    if (announcement?.status !== 'draft') {
-      return {
-        success: false,
-        message: 'Cannot delete',
-        error: 'Only draft announcements can be deleted',
-      };
-    }
-
-    const { error } = await supabase.from('announcements').delete().eq('id', id);
-
-    if (error) {
-      return { success: false, message: 'Failed to delete announcement', error: error.message };
-    }
-
-    revalidateTag('communications', 'default');
-    revalidateTag('announcements', 'default');
-
-    return { success: true, message: 'Announcement deleted successfully' };
-  } catch (error) {
-    return { success: false, message: 'An unexpected error occurred', error: String(error) };
-  }
+/** Delete announcement (feature disabled) */
+export async function deleteAnnouncement(_id: string): Promise<ActionResponse> {
+  return ANNOUNCEMENTS_DISABLED;
 }
 
-/**
- * Duplicate announcement
- */
+/** Duplicate announcement (feature disabled) */
 export async function duplicateAnnouncement(
-  id: string,
-  newTitle?: string
+  _id: string,
+  _newTitle?: string
 ): Promise<ActionResponse<{ id: string }>> {
-  try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return { success: false, message: 'Unauthorized', error: 'Please log in' };
-    }
-
-    const supabase = await createClient();
-
-    // Get original announcement
-    const { data: original, error: fetchError } = await supabase
-      .from('announcements')
-      .select('*')
-      .eq('id', id)
-      .single();
-
-    if (fetchError || !original) {
-      return { success: false, message: 'Announcement not found', error: fetchError?.message };
-    }
-
-    // Create duplicate
-    const { data: duplicate, error: createError } = await supabase
-      .from('announcements')
-      .insert({
-        chapter_id: original.chapter_id,
-        title: newTitle || `${original.title} (Copy)`,
-        content: original.content,
-        channels: original.channels,
-        audience_filter: original.audience_filter,
-        segment_id: original.segment_id,
-        template_id: original.template_id,
-        status: 'draft',
-        created_by: user.id,
-        metadata: original.metadata,
-      })
-      .select('id')
-      .single();
-
-    if (createError) {
-      return { success: false, message: 'Failed to duplicate announcement', error: createError.message };
-    }
-
-    revalidateTag('communications', 'default');
-    revalidateTag('announcements', 'default');
-
-    return {
-      success: true,
-      message: 'Announcement duplicated successfully',
-      data: { id: duplicate.id },
-    };
-  } catch (error) {
-    return { success: false, message: 'An unexpected error occurred', error: String(error) };
-  }
+  return ANNOUNCEMENTS_DISABLED;
 }
 
 // ============================================================================

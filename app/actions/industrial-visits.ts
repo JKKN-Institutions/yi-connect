@@ -275,28 +275,34 @@ export async function cancelIV(id: string, reason: string): Promise<IVActionResu
       .eq('id', validatedData.id)
       .single();
 
+    // Phase E fix 2026-05-23: event_rsvps.member_id FK targets
+    // yi_connect.members, not profiles. Nest profiles under the member
+    // join so the email + name fields still come through.
     const { data: attendees } = await supabase
       .from('event_rsvps')
-      .select('member:profiles!event_rsvps_member_id_fkey(full_name, email)')
+      .select('member:members!event_rsvps_member_id_fkey(profile:profiles(full_name, email))')
       .eq('event_id', validatedData.id)
       .eq('status', 'confirmed');
 
     // Send cancellation emails to all attendees
     if (attendees && attendees.length > 0 && eventDetails) {
       const cancellationEmails = attendees
-        .filter((a) => {
-          const member = a.member as { email?: string }[] | undefined;
-          return member?.[0]?.email;
+        .map((a) => {
+          const member = (a as { member?: unknown }).member;
+          const memberObj = Array.isArray(member) ? member[0] : member;
+          const profile = (memberObj as { profile?: unknown } | null)?.profile;
+          const profileObj = Array.isArray(profile) ? profile[0] : profile;
+          return profileObj as { email?: string; full_name?: string } | null;
         })
-        .map((attendee) => {
-          const member = attendee.member as { email: string; full_name?: string }[];
+        .filter((p): p is { email: string; full_name?: string } => Boolean(p?.email))
+        .map((profile) => {
           const emailTemplate = eventCancellationEmail({
-            memberName: member[0]?.full_name || 'Member',
+            memberName: profile.full_name || 'Member',
             eventTitle: eventDetails.title,
             reason: validatedData.reason,
           });
           return {
-            to: member[0].email,
+            to: profile.email,
             subject: emailTemplate.subject,
             html: emailTemplate.html,
           };
@@ -633,37 +639,13 @@ export async function joinWaitlist(eventId: string): Promise<IVActionResult<{ id
 }
 
 /**
- * Leave Waitlist
+ * Leave Waitlist (feature disabled — iv_waitlist table not provisioned)
  */
-export async function leaveWaitlist(id: string): Promise<IVActionResult> {
-  try {
-    const supabase = await createClient();
-
-    const validatedData = leaveWaitlistSchema.parse({ id });
-
-    const { error } = await supabase
-      .from('iv_waitlist')
-      .update({ status: 'withdrawn' })
-      .eq('id', validatedData.id);
-
-    if (error) {
-      console.error('Error leaving waitlist:', error);
-      return { success: false, error: `Failed to leave waitlist: ${error.message}` };
-    }
-
-    revalidateTag('industrial-visits', 'max');
-
-    return {
-      success: true,
-      message: 'Removed from waitlist',
-    };
-  } catch (error: unknown) {
-    console.error('Error in leaveWaitlist:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to leave waitlist',
-    };
-  }
+export async function leaveWaitlist(_id: string): Promise<IVActionResult> {
+  return {
+    success: false,
+    error: 'Waitlist feature is currently disabled (iv_waitlist table not provisioned)',
+  };
 }
 
 /**
@@ -694,9 +676,14 @@ export async function promoteFromWaitlist(eventId: string): Promise<IVActionResu
     revalidateTag(`iv-${eventId}`, 'max');
 
     // Get event details and promoted member's email
+    // Phase E fix 2026-05-23: drop `industry:industries(name)` embed —
+    // yi_connect.events has neither an industry_id column nor a FK to
+    // industries (the IV stakeholder lookup is via the polymorphic
+    // stakeholder_id/type pair, which PostgREST cannot embed). Fall back
+    // to event.title for the email body's industryName slot.
     const { data: eventDetails } = await supabase
       .from('events')
-      .select('title, start_date, industry:industries(name)')
+      .select('title, start_date')
       .eq('id', eventId)
       .single();
 
@@ -716,7 +703,7 @@ export async function promoteFromWaitlist(eventId: string): Promise<IVActionResu
 
       const emailTemplate = ivWaitlistPromotionEmail({
         memberName: promoted.member_name,
-        industryName: (eventDetails.industry as any)?.name || eventDetails.title,
+        industryName: eventDetails.title,
         visitDate,
         confirmByDate,
       });
@@ -862,134 +849,16 @@ export async function createIndustryPortalUser(formData: FormData): Promise<IVAc
 
 /**
  * Industry Creates IV Slot (Self-Service)
+ *
+ * Disabled — relies on `industry_portal_users` table which is not provisioned
+ * in the yi_connect schema. Restore by recreating the table and reinstating
+ * the original implementation from git history.
  */
-export async function industryCreateIVSlot(formData: FormData): Promise<IVActionResult<{ id: string }>> {
-  try {
-    const supabase = await createClient();
-
-    // Get authenticated industry user
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      return { success: false, error: 'Unauthorized' };
-    }
-
-    // Get industry portal user details
-    const { data: portalUser } = await supabase
-      .from('industry_portal_users')
-      .select('industry_id, industry:industries(chapter_id)')
-      .eq('email', user.email)
-      .eq('status', 'active')
-      .single();
-
-    if (!portalUser) {
-      return { success: false, error: 'Industry portal user not found' };
-    }
-
-    const rawData = {
-      title: formData.get('title') as string,
-      description: formData.get('description') as string | null,
-      start_date: formData.get('start_date') as string,
-      end_date: formData.get('end_date') as string,
-      max_capacity: parseInt(formData.get('max_capacity') as string),
-      contact_person_name: formData.get('contact_person_name') as string | null,
-      contact_person_phone: formData.get('contact_person_phone') as string | null,
-      contact_person_role: formData.get('contact_person_role') as string | null,
-      requirements: formData.get('requirements') as string | null,
-      learning_outcomes: formData.get('learning_outcomes') as string | null,
-      logistics_parking: formData.get('logistics_parking') as string | null,
-      logistics_food: formData.get('logistics_food') as string | null,
-      logistics_meeting_point: formData.get('logistics_meeting_point') as string | null,
-      logistics_arrival_time: formData.get('logistics_arrival_time') as string | null,
-    };
-
-    const validatedData = industryCreateIVSlotSchema.parse(rawData);
-
-    // Create event with self_service entry method
-    const { data, error } = await supabase
-      .from('events')
-      .insert({
-        ...validatedData,
-        chapter_id: (portalUser.industry as any).chapter_id,
-        industry_id: portalUser.industry_id,
-        category: 'industrial_visit',
-        entry_method: 'self_service',
-        status: 'published', // Auto-publish industry-created slots
-        waitlist_enabled: true,
-        current_registrations: 0,
-      })
-      .select('id')
-      .single();
-
-    if (error) {
-      console.error('Error creating IV slot:', error);
-      return { success: false, error: `Failed to create IV slot: ${error.message}` };
-    }
-
-    // Get industry and chapter admin details for notification
-    const { data: industryDetails } = await supabase
-      .from('industries')
-      .select('name')
-      .eq('id', portalUser.industry_id)
-      .single();
-
-    const chapterId = (portalUser.industry as any).chapter_id;
-
-    // Get chapter Chair/Co-Chair emails
-    const { data: chapterAdmins } = await supabase
-      .from('user_roles')
-      .select(`
-        user:profiles!user_roles_user_id_fkey(full_name, email)
-      `)
-      .eq('chapter_id', chapterId)
-      .in('role_id', ['Chair', 'Co-Chair']);
-
-    // Send notification to chapter admins
-    if (chapterAdmins && chapterAdmins.length > 0) {
-      const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://yi-connect-app.vercel.app';
-      const adminEmails = chapterAdmins
-        .filter((a) => {
-          const user = a.user as { email?: string }[] | undefined;
-          return user?.[0]?.email;
-        })
-        .map((admin) => {
-          const user = admin.user as { email: string; full_name?: string }[];
-          const emailTemplate = adminNewIVSlotEmail({
-            adminName: user[0]?.full_name || 'Admin',
-            industryName: industryDetails?.name || 'Industry Partner',
-            slotTitle: validatedData.title,
-            slotDate: new Date(validatedData.start_date).toLocaleDateString('en-IN', {
-              weekday: 'long',
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric',
-            }),
-            capacity: validatedData.max_capacity,
-            manageLink: `${APP_URL}/admin/industrial-visits/${data.id}`,
-          });
-          return {
-            to: user[0].email,
-            subject: emailTemplate.subject,
-            html: emailTemplate.html,
-          };
-        });
-
-      await sendBatchEmails(adminEmails);
-    }
-
-    revalidateTag('industrial-visits', 'max');
-
-    return {
-      success: true,
-      data: { id: data.id },
-      message: 'IV slot created successfully and is now visible to members!',
-    };
-  } catch (error: unknown) {
-    console.error('Error in industryCreateIVSlot:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to create IV slot',
-    };
-  }
+export async function industryCreateIVSlot(_formData: FormData): Promise<IVActionResult<{ id: string }>> {
+  return {
+    success: false,
+    error: 'Industry portal is currently disabled (industry_portal_users table not provisioned)',
+  };
 }
 
 /**
@@ -1028,49 +897,19 @@ export async function industryIncreaseCapacity(id: string, newCapacity: number):
     }
 
     // Notify waitlisted members about capacity increase
+    // Phase E fix 2026-05-23: drop `industry:industries(name)` embed —
+    // yi_connect.events has no FK to industries. industryName falls back
+    // to a generic label in the email template below.
     const { data: eventDetails } = await supabase
       .from('events')
-      .select('title, industry:industries(name)')
+      .select('title')
       .eq('id', validatedData.id)
       .single();
 
-    const { data: waitlistedMembers } = await supabase
-      .from('iv_waitlist')
-      .select(`
-        position,
-        member:profiles!iv_waitlist_member_id_fkey(full_name, email)
-      `)
-      .eq('event_id', validatedData.id)
-      .eq('status', 'waiting')
-      .order('position', { ascending: true });
-
-    if (waitlistedMembers && waitlistedMembers.length > 0 && eventDetails) {
-      const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://yi-connect-app.vercel.app';
-      const waitlistEmails = waitlistedMembers
-        .filter((w) => {
-          const member = w.member as { email?: string }[] | undefined;
-          return member?.[0]?.email;
-        })
-        .map((waitlisted) => {
-          const member = waitlisted.member as { email: string; full_name?: string }[];
-          const position = waitlisted.position;
-          const emailTemplate = waitlistCapacityNotificationEmail({
-            memberName: member[0]?.full_name || 'Member',
-            eventTitle: eventDetails.title,
-            industryName: (eventDetails.industry as { name?: string } | null)?.name || 'Industry Partner',
-            newCapacity: validatedData.new_capacity,
-            currentPosition: position,
-            bookingLink: `${APP_URL}/industrial-visits`,
-          });
-          return {
-            to: member[0].email,
-            subject: emailTemplate.subject,
-            html: emailTemplate.html,
-          };
-        });
-
-      await sendBatchEmails(waitlistEmails);
-    }
+    // Waitlist notifications disabled — iv_waitlist table not provisioned
+    // in yi_connect schema. Original implementation read pending waitlist
+    // members and emailed each one. Reinstate after the table is recreated.
+    void eventDetails;
 
     revalidateTag(`iv-${id}`, 'max');
 
@@ -1217,16 +1056,17 @@ export async function exportIVAttendees(formData: FormData): Promise<IVActionRes
     }
 
     // Get attendees
+    // Phase E fix 2026-05-23: event_rsvps.member_id FK targets
+    // yi_connect.members, not profiles. company sits on members; the rest
+    // come from the nested profile join.
     const { data: attendees, error: attendeesError } = await supabase
       .from('event_rsvps')
       .select(`
         *,
-        member:profiles!event_rsvps_member_id_fkey(
+        member:members!event_rsvps_member_id_fkey(
           id,
-          full_name,
-          email,
-          phone,
-          company
+          company,
+          profile:profiles(full_name, email, phone)
         )
       `)
       .eq('event_id', validatedData.event_id)
@@ -1238,8 +1078,15 @@ export async function exportIVAttendees(formData: FormData): Promise<IVActionRes
     }
 
     // Transform data based on format
+    type MemberShape = {
+      company?: string | null;
+      profile?:
+        | { full_name?: string | null; email?: string | null; phone?: string | null }
+        | { full_name?: string | null; email?: string | null; phone?: string | null }[]
+        | null;
+    } | null;
     type RsvpData = {
-      member?: { full_name?: string; email?: string; phone?: string; company?: string };
+      member?: MemberShape | MemberShape[];
       created_at: string;
       family_count?: number;
       family_names?: string[];
@@ -1249,12 +1096,22 @@ export async function exportIVAttendees(formData: FormData): Promise<IVActionRes
       dietary_restrictions?: string;
       special_requirements?: string;
     };
+    const unwrapMember = (m: RsvpData['member']): MemberShape => {
+      const obj = Array.isArray(m) ? m[0] : m;
+      return obj ?? null;
+    };
+    const unwrapProfile = (p: NonNullable<MemberShape>['profile']) => {
+      const obj = Array.isArray(p) ? p[0] : p;
+      return obj ?? null;
+    };
     const exportData = (attendees || []).map((rsvp: RsvpData) => {
+      const member = unwrapMember(rsvp.member);
+      const profile = unwrapProfile(member?.profile);
       const baseData: Record<string, unknown> = {
-        Name: rsvp.member?.full_name || 'Unknown',
-        Email: rsvp.member?.email || '',
-        Phone: rsvp.member?.phone || '',
-        Company: rsvp.member?.company || '',
+        Name: profile?.full_name || 'Unknown',
+        Email: profile?.email || '',
+        Phone: profile?.phone || '',
+        Company: member?.company || '',
         'Registration Date': new Date(rsvp.created_at).toLocaleDateString(),
       };
 

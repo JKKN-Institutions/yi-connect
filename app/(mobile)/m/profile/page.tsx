@@ -82,9 +82,9 @@ async function EngagementSection() {
     .eq('id', user.id)
     .single()
 
-  // Count events attended (registrations with attended status)
+  // Count events attended (event_registrations table renamed to event_rsvps)
   const { count: eventsAttended } = await supabase
-    .from('event_registrations')
+    .from('event_rsvps')
     .select('id', { count: 'exact', head: true })
     .eq('member_id', user.id)
     .eq('status', 'attended')
@@ -96,15 +96,20 @@ async function EngagementSection() {
     .eq('nominee_id', user.id)
     .eq('status', 'approved')
 
-  // Get total service hours from event attendance
+  // Get total service hours from event attendance (computed from start/end dates;
+  // events table has no duration_hours column)
   const { data: serviceEvents } = await supabase
-    .from('event_registrations')
-    .select('event:events(duration_hours)')
+    .from('event_rsvps')
+    .select('event:events(start_date, end_date)')
     .eq('member_id', user.id)
     .eq('status', 'attended')
 
   const totalServiceHours = serviceEvents?.reduce((acc, reg) => {
-    const hours = (reg.event as any)?.duration_hours || 0
+    const event = (reg.event as any)
+    if (!event?.start_date || !event?.end_date) return acc
+    const start = new Date(event.start_date).getTime()
+    const end = new Date(event.end_date).getTime()
+    const hours = Math.max(0, (end - start) / (1000 * 60 * 60))
     return acc + hours
   }, 0) || 0
 

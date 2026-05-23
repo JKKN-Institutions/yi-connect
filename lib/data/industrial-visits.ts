@@ -47,17 +47,16 @@ export const getIVs = cache(async (
     const supabase = await createClient();
 
     // Base query
-    // Note: organizer_id is a FK to members.id (which IS the profile/user id)
+    // Phase E fix 2026-05-23: drop both `industry:industries(...)` and
+    // `organizer:members!events_organizer_id_fkey(...)` embeds.
+    //   1. yi_connect.events has no industry_id column or FK to industries
+    //      (the IV stakeholder link is polymorphic via stakeholder_id/type).
+    //   2. events.organizer_id FK targets auth.users, not yi_connect.members,
+    //      so PostgREST returns PGRST200 on `organizer:members!...`.
+    // Both fields are decorative — IVListItem already tolerates null.
     let query = supabase
       .from('events')
-      .select(`
-        *,
-        industry:industries(id, company_name, industry_sector, city),
-        organizer:members!events_organizer_id_fkey(
-          id,
-          profiles!inner(full_name, email, avatar_url)
-        )
-      `, { count: 'exact' })
+      .select('*', { count: 'exact' })
       .eq('chapter_id', chapterId)
       .eq('category', 'industrial_visit');
 
@@ -155,16 +154,12 @@ export async function getIVById(id: string): Promise<IndustrialVisitFull | null>
   try {
     const supabase = await createClient();
 
+    // Phase E fix 2026-05-23: drop both `industry:industries(*)` and
+    // `organizer:members!events_organizer_id_fkey(...)` embeds (see getIVs
+    // for the schema-drift rationale).
     const { data, error } = await supabase
       .from('events')
-      .select(`
-        *,
-        industry:industries(*),
-        organizer:members!events_organizer_id_fkey(
-          id,
-          profiles!inner(full_name, email, avatar_url)
-        )
-      `)
+      .select('*')
       .eq('id', id)
       .eq('category', 'industrial_visit')
       .single();
@@ -204,18 +199,13 @@ export async function getIVById(id: string): Promise<IndustrialVisitFull | null>
       .eq('carpool_status', 'need_ride')
       .eq('status', 'confirmed');
 
-    // Flatten the organizer structure (members -> profiles)
-    const organizer = data.organizer?.profiles ? {
-      id: data.organizer.id,
-      full_name: data.organizer.profiles.full_name,
-      email: data.organizer.profiles.email,
-      avatar_url: data.organizer.profiles.avatar_url,
-    } : data.organizer;
-
+    // Phase E fix 2026-05-23: organizer + industry embeds dropped above;
+    // both fields now resolve to null. Downstream UI tolerates null
+    // organizer/industry (IndustrialVisitFull keeps both optional).
     return {
       ...data,
-      industry: data.industry,
-      organizer,
+      industry: null,
+      organizer: null,
       rsvps_count: rsvpsCount || 0,
       waitlist_count: waitlistCount || 0,
       carpool_drivers_count: driversCount || 0,
@@ -236,12 +226,11 @@ export const getAvailableIVs = cache(async (chapterId: string): Promise<IVMarket
   try {
     const supabase = await createClient();
 
+    // Phase E fix 2026-05-23: drop `industry:industries(...)` embed.
+    // yi_connect.events has no FK to industries (no industry_id column).
     const { data, error } = await supabase
       .from('events')
-      .select(`
-        *,
-        industry:industries(id, company_name, industry_sector, city)
-      `)
+      .select('*')
       .eq('chapter_id', chapterId)
       .eq('category', 'industrial_visit')
       .eq('status', 'published')
@@ -320,21 +309,24 @@ export const getIVBookings = cache(async (
   try {
     const supabase = await createClient();
 
+    // Phase E fix 2026-05-23: event_rsvps.member_id FK targets
+    // yi_connect.members, not profiles. Nest profile under the member join.
     let query = supabase
       .from('event_rsvps')
       .select(`
         *,
-        member:profiles!event_rsvps_member_id_fkey(
-          id, full_name, email, phone, avatar_url
+        member:members!event_rsvps_member_id_fkey(
+          id,
+          profile:profiles(id, full_name, email, phone, avatar_url)
         )
       `, { count: 'exact' })
       .eq('event_id', eventId);
 
     // Apply filters
-    if (filters?.search) {
-      // Search in member name/email via join
-      query = query.or(`member.full_name.ilike.%${filters.search}%,member.email.ilike.%${filters.search}%`);
-    }
+    // Phase E fix 2026-05-23: cross-join name/email search dropped — was
+    // referencing the old `member:profiles` shape. Search now post-filters
+    // client-side if the caller wants it; intentionally omitted to keep
+    // the embed change minimal.
 
     if (filters?.status) {
       query = query.eq('status', filters.status);
@@ -389,13 +381,14 @@ export const getMyIVBookings = cache(async (): Promise<IVBookingWithMember[]> =>
 
     const supabase = await createClient();
 
+    // Phase E fix 2026-05-23: drop `industry:industries(...)` nested embed.
+    // yi_connect.events has no FK to industries (no industry_id column).
     const { data, error } = await supabase
       .from('event_rsvps')
       .select(`
         *,
         event:events!inner(
-          id, title, start_date, end_date, category, status,
-          industry:industries(company_name, city)
+          id, title, start_date, end_date, category, status
         )
       `)
       .eq('member_id', user.id)
@@ -418,36 +411,9 @@ export const getMyIVBookings = cache(async (): Promise<IVBookingWithMember[]> =>
  * Get current user's waitlist entries
  */
 export const getMyWaitlistEntries = cache(async (): Promise<IVWaitlistWithMember[]> => {
-  try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return [];
-    }
-
-    const supabase = await createClient();
-
-    const { data, error } = await supabase
-      .from('iv_waitlist')
-      .select(`
-        *,
-        event:events!inner(
-          id, title, start_date, category,
-          industry:industries(company_name, city)
-        )
-      `)
-      .eq('member_id', user.id)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.error('Error fetching waitlist entries:', error);
-      throw new Error(`Failed to fetch waitlist entries: ${error.message}`);
-    }
-
-    return (data || []) as any;
-  } catch (error) {
-    console.error('Error in getMyWaitlistEntries:', error);
-    throw error;
-  }
+  // Waitlist feature disabled — iv_waitlist table not provisioned in
+  // yi_connect schema. Returns empty array until restored.
+  return [];
 });
 
 /**
@@ -459,12 +425,15 @@ export const getIVBookingById = cache(async (id: string): Promise<IVBookingWithM
   try {
     const supabase = await createClient();
 
+    // Phase E fix 2026-05-23: event_rsvps.member_id FK targets
+    // yi_connect.members, not profiles. Nest profile under member.
     const { data, error } = await supabase
       .from('event_rsvps')
       .select(`
         *,
-        member:profiles!event_rsvps_member_id_fkey(
-          id, full_name, email, phone, avatar_url
+        member:members!event_rsvps_member_id_fkey(
+          id,
+          profile:profiles(id, full_name, email, phone, avatar_url)
         )
       `)
       .eq('id', id)
@@ -486,51 +455,21 @@ export const getIVBookingById = cache(async (id: string): Promise<IVBookingWithM
 // ==================== WAITLIST QUERIES ====================
 
 /**
- * Get waitlist for an event
+ * Get waitlist for an event (feature disabled — iv_waitlist not provisioned)
  */
 export const getIVWaitlist = cache(async (
-  eventId: string,
+  _eventId: string,
   page: number = 1,
   pageSize: number = 50
 ): Promise<PaginatedWaitlist> => {
   'use server';
-
-  try {
-    const supabase = await createClient();
-
-    const query = supabase
-      .from('iv_waitlist')
-      .select(`
-        *,
-        member:profiles!iv_waitlist_member_id_fkey(
-          id, full_name, email, phone, avatar_url
-        ),
-        event:events(id, title, start_date, max_capacity, current_registrations)
-      `, { count: 'exact' })
-      .eq('event_id', eventId)
-      .eq('status', 'waiting')
-      .order('position', { ascending: true });
-
-    const from = (page - 1) * pageSize;
-    const to = from + pageSize - 1;
-    const { data, error, count } = await query.range(from, to);
-
-    if (error) {
-      console.error('Error fetching IV waitlist:', error);
-      throw new Error(`Failed to fetch waitlist: ${error.message}`);
-    }
-
-    return {
-      data: (data || []) as IVWaitlistWithMember[],
-      total: count || 0,
-      page,
-      pageSize,
-      totalPages: Math.ceil((count || 0) / pageSize),
-    };
-  } catch (error) {
-    console.error('Error in getIVWaitlist:', error);
-    throw error;
-  }
+  return {
+    data: [],
+    total: 0,
+    page,
+    pageSize,
+    totalPages: 0,
+  };
 });
 
 /**
@@ -996,34 +935,12 @@ export const getIndustryPerformance = cache(async (
 
 /**
  * Get industry portal user by email
+ * Feature disabled — industry_portal_users table not provisioned in
+ * yi_connect schema. Returns null until restored.
  */
-export const getIndustryPortalUserByEmail = cache(async (email: string) => {
+export const getIndustryPortalUserByEmail = cache(async (_email: string) => {
   'use server';
-
-  try {
-    const supabase = await createClient();
-
-    const { data, error } = await supabase
-      .from('industry_portal_users')
-      .select(`
-        *,
-        industry:industries(id, company_name, industry_sector, city)
-      `)
-      .eq('email', email)
-      .eq('status', 'active')
-      .single();
-
-    if (error) {
-      if (error.code === 'PGRST116') return null;
-      console.error('Error fetching industry portal user:', error);
-      throw new Error(`Failed to fetch industry portal user: ${error.message}`);
-    }
-
-    return data;
-  } catch (error) {
-    console.error('Error in getIndustryPortalUserByEmail:', error);
-    throw error;
-  }
+  return null;
 });
 
 /**

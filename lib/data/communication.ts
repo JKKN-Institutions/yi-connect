@@ -41,305 +41,58 @@ import type {
 // ============================================================================
 // ANNOUNCEMENT DATA FUNCTIONS
 // ============================================================================
+//
+// NOTE: The `announcements` and `announcement_recipients` tables are not
+// provisioned in the yi_connect schema. These fetchers return empty
+// shapes to avoid PGRST205 runtime errors. Restore by recreating the
+// tables and reinstating the original queries.
 
-/**
- * Get paginated announcements with filters
- * Cache: moderate updates (use cache with 'minutes' lifetime)
- */
+/** Get paginated announcements with filters (feature disabled) */
 export const getAnnouncements = cache(
   async (
-    chapterId?: string,
-    filters?: AnnouncementFilters,
+    _chapterId?: string,
+    _filters?: AnnouncementFilters,
     page: number = 1,
     pageSize: number = 20
   ): Promise<PaginatedAnnouncements> => {
-    const supabase = await createClient();
-    const cId = chapterId || (await getCurrentChapterId());
-
-    if (!cId) {
-      return {
-        data: [],
-        items: [], // Alias for data
-        total: 0,
-        page,
-        pageSize,
-        totalPages: 0,
-        page_count: 0 // Alias for totalPages
-      };
-    }
-
-    let query = supabase
-      .from('announcements')
-      .select(
-        `
-      id,
-      title,
-      content,
-      status,
-      channels,
-      scheduled_at,
-      sent_at,
-      created_at,
-      created_by,
-      segment_id,
-      members!created_by (
-        id,
-        profiles!inner (
-          full_name
-        )
-      ),
-      communication_segments (
-        name
-      )
-    `,
-        { count: 'exact' }
-      )
-      .eq('chapter_id', cId);
-
-    // Apply filters
-    if (filters?.status?.length) {
-      query = query.in('status', filters.status);
-    }
-
-    if (filters?.search) {
-      query = query.or(
-        `title.ilike.%${filters.search}%,content.ilike.%${filters.search}%`
-      );
-    }
-
-    if (filters?.scheduled_after) {
-      query = query.gte('scheduled_at', filters.scheduled_after);
-    }
-
-    if (filters?.scheduled_before) {
-      query = query.lte('scheduled_at', filters.scheduled_before);
-    }
-
-    if (filters?.sent_after) {
-      query = query.gte('sent_at', filters.sent_after);
-    }
-
-    if (filters?.sent_before) {
-      query = query.lte('sent_at', filters.sent_before);
-    }
-
-    // Pagination
-    const from = (page - 1) * pageSize;
-    const to = from + pageSize - 1;
-
-    query = query.order('created_at', { ascending: false }).range(from, to);
-
-    const { data, error, count } = await query;
-
-    if (error) {
-      console.error('Error fetching announcements:', error);
-      return {
-        data: [],
-        items: [], // Alias for data
-        total: 0,
-        page,
-        pageSize,
-        totalPages: 0,
-        page_count: 0 // Alias for totalPages
-      };
-    }
-
-    // Get recipient counts for each announcement
-    const announcementIds = data?.map((a) => a.id) || [];
-    const { data: recipientCounts } = await supabase
-      .from('announcement_recipients')
-      .select('announcement_id, status')
-      .in('announcement_id', announcementIds);
-
-    // Process data
-    const announcements: AnnouncementListItem[] = (data || []).map(
-      (announcement) => {
-        const memberData = announcement.members as any;
-        const recipients =
-          recipientCounts?.filter(
-            (r) => r.announcement_id === announcement.id
-          ) || [];
-
-        return {
-          id: announcement.id,
-          title: announcement.title,
-          content: announcement.content,
-          status: announcement.status as any,
-          channels: announcement.channels as AnnouncementChannel[],
-          scheduled_at: announcement.scheduled_at,
-          sent_at: announcement.sent_at,
-          created_by: announcement.created_by,
-          created_by_name: memberData?.profiles?.full_name || 'Unknown',
-          segment_name: announcement.communication_segments?.[0]?.name,
-          recipient_count: recipients.length,
-          delivered_count: recipients.filter(
-            (r) =>
-              r.status === 'delivered' ||
-              r.status === 'opened' ||
-              r.status === 'clicked'
-          ).length,
-          opened_count: recipients.filter(
-            (r) => r.status === 'opened' || r.status === 'clicked'
-          ).length,
-          created_at: announcement.created_at
-        };
-      }
-    );
-
-    const totalPages = Math.ceil((count || 0) / pageSize);
-
     return {
-      data: announcements,
-      items: announcements, // Alias for data
-      total: count || 0,
+      data: [],
+      items: [],
+      total: 0,
       page,
       pageSize,
-      totalPages,
-      page_count: totalPages // Alias for totalPages
+      totalPages: 0,
+      page_count: 0
     };
   }
 );
 
-/**
- * Get single announcement with full details
- * Cache: stable data (use cache with 'minutes' lifetime)
- */
+/** Get single announcement with full details (feature disabled) */
 export const getAnnouncementById = cache(
-  async (id: string): Promise<AnnouncementWithDetails | null> => {
-    const supabase = await createClient();
-
-    const { data: announcement, error } = await supabase
-      .from('announcements')
-      .select(
-        `
-      *,
-      members!created_by (
-        id,
-        profiles!inner (
-          full_name,
-          email,
-          avatar_url
-        )
-      ),
-      communication_segments (*),
-      announcement_templates (*),
-      communication_analytics (*)
-    `
-      )
-      .eq('id', id)
-      .single();
-
-    if (error || !announcement) {
-      return null;
-    }
-
-    // Get recipient summary
-    const { data: recipients } = await supabase
-      .from('announcement_recipients')
-      .select('status')
-      .eq('announcement_id', id);
-
-    const recipientSummary = {
-      total: recipients?.length || 0,
-      queued: recipients?.filter((r) => r.status === 'queued').length || 0,
-      sent: recipients?.filter((r) => r.status === 'sent').length || 0,
-      delivered:
-        recipients?.filter((r) => r.status === 'delivered').length || 0,
-      opened: recipients?.filter((r) => r.status === 'opened').length || 0,
-      clicked: recipients?.filter((r) => r.status === 'clicked').length || 0,
-      failed: recipients?.filter((r) => r.status === 'failed').length || 0,
-      bounced: recipients?.filter((r) => r.status === 'bounced').length || 0
-    };
-
-    const memberData = announcement.members as any;
-
-    const fullName = memberData?.profiles?.full_name || '';
-    const [firstName = '', ...lastNameParts] = fullName.split(' ');
-    const lastName = lastNameParts.join(' ');
-
-    return {
-      ...announcement,
-      created_by_name: fullName || 'Unknown',
-      created_by_email: memberData?.profiles?.email || '',
-      creator: memberData?.profiles
-        ? {
-            id: memberData.id,
-            first_name: firstName,
-            last_name: lastName,
-            email: memberData.profiles.email,
-            avatar_url: memberData.profiles.avatar_url
-          }
-        : undefined,
-      segment: announcement.communication_segments as any,
-      template: announcement.announcement_templates as any,
-      analytics: (announcement.communication_analytics as any) || [],
-      recipients_summary: recipientSummary
-    } as AnnouncementWithDetails;
+  async (_id: string): Promise<AnnouncementWithDetails | null> => {
+    return null;
   }
 );
 
-/**
- * Get announcement recipients with delivery status
- * Cache: realtime updates for delivery tracking
- */
+/** Get announcement recipients with delivery status (feature disabled) */
 export const getAnnouncementRecipients = cache(
-  async (announcementId: string) => {
-    const supabase = await createClient();
-
-    const { data, error } = await supabase
-      .from('announcement_recipients')
-      .select(
-        `
-      id,
-      channel,
-      status,
-      delivered_at,
-      opened_at,
-      clicked_at,
-      failed_reason,
-      member_id,
-      members (
-        id,
-        profiles!inner (
-          full_name,
-          email,
-          avatar_url
-        )
-      )
-    `
-      )
-      .eq('announcement_id', announcementId)
-      .order('delivered_at', { ascending: false });
-
-    if (error) {
-      console.error('Error fetching announcement recipients:', error);
-      return [];
-    }
-
-    return (data || []).map((recipient) => {
-      const fullName = (recipient.members as any)?.profiles?.full_name || '';
-      const [firstName = '', ...lastNameParts] = fullName.split(' ');
-      const lastName = lastNameParts.join(' ');
-
-      return {
-        id: recipient.id,
-        channel: recipient.channel,
-        status: recipient.status,
-        delivered_at: recipient.delivered_at,
-        opened_at: recipient.opened_at,
-        clicked_at: recipient.clicked_at,
-        failed_reason: recipient.failed_reason,
-        member: recipient.members
-          ? {
-              id: (recipient.members as any).id,
-              first_name: firstName,
-              last_name: lastName,
-              email: (recipient.members as any).profiles?.email,
-              avatar_url: (recipient.members as any).profiles?.avatar_url
-            }
-          : null
-      };
-    });
+  async (_announcementId: string) => {
+    return [] as Array<{
+      id: string;
+      channel: string;
+      status: string;
+      delivered_at: string | null;
+      opened_at: string | null;
+      clicked_at: string | null;
+      failed_reason: string | null;
+      member: {
+        id: string;
+        first_name: string;
+        last_name: string;
+        email?: string;
+        avatar_url?: string;
+      } | null;
+    }>;
   }
 );
 
@@ -1010,284 +763,28 @@ export const getActiveAutomationRules = cache(
 // ============================================================================
 
 /**
- * Get communication analytics for a chapter
+ * Get communication analytics for a chapter (announcements feature disabled)
+ * Depends on `announcements` + `announcement_recipients` tables which are not
+ * present in yi_connect schema. Returns empty analytics until restored.
  */
 export const getCommunicationAnalytics = cache(
   async (
-    chapterId?: string,
-    dateRange?: { start_date: string; end_date: string }
+    _chapterId?: string,
+    _dateRange?: { start_date: string; end_date: string }
   ): Promise<CommunicationDashboardAnalytics> => {
-    const supabase = await createClient();
-    const cId = chapterId || (await getCurrentChapterId());
-
-    if (!cId) {
-      return {
-        overview: {
-          total_announcements: 0,
-          total_sent: 0,
-          average_engagement_rate: 0,
-          average_click_through_rate: 0
-        },
-        by_channel: [],
-        trends: [],
-        top_performing: []
-      };
-    }
-
-    // Get total announcements
-    let announcementsQuery = supabase
-      .from('announcements')
-      .select('id, title, content, status, sent_at', { count: 'exact' })
-      .eq('chapter_id', cId)
-      .eq('status', 'sent');
-
-    if (dateRange) {
-      announcementsQuery = announcementsQuery
-        .gte('sent_at', dateRange.start_date)
-        .lte('sent_at', dateRange.end_date);
-    }
-
-    const { data: announcements, count: total_announcements } =
-      await announcementsQuery;
-    const announcementIds = announcements?.map((a) => a.id) || [];
-
-    // Get analytics for all sent announcements
-    const { data: analytics } = await supabase
-      .from('communication_analytics')
-      .select('*')
-      .in('announcement_id', announcementIds);
-
-    // Calculate overview
-    const total_sent =
-      analytics?.reduce((sum, a) => sum + a.total_sent, 0) || 0;
-    const average_engagement_rate = analytics?.length
-      ? analytics.reduce((sum, a) => sum + (a.engagement_rate || 0), 0) /
-        analytics.length
-      : 0;
-    const average_click_through_rate = analytics?.length
-      ? analytics.reduce((sum, a) => sum + (a.click_through_rate || 0), 0) /
-        analytics.length
-      : 0;
-
-    // Calculate channel performance
-    const channelMap = new Map<string, ChannelPerformance>();
-    analytics?.forEach((a) => {
-      const existing = channelMap.get(a.channel) || {
-        channel: a.channel as AnnouncementChannel,
-        total_sent: 0,
-        delivered: 0,
-        opened: 0,
-        clicked: 0,
-        failed: 0,
-        delivery_rate: 0,
-        open_rate: 0,
-        click_rate: 0,
-        failure_rate: 0
-      };
-
-      existing.total_sent += a.total_sent;
-      channelMap.set(a.channel, existing);
-    });
-
-    // Calculate rates
-    const by_channel: ChannelPerformance[] = Array.from(
-      channelMap.values()
-    ).map((ch) => {
-      const chAnalytics =
-        analytics?.filter((a) => a.channel === ch.channel) || [];
-      const total = chAnalytics.reduce((sum, a) => sum + a.total_sent, 0);
-      const delivered = chAnalytics.reduce((sum, a) => sum + a.delivered, 0);
-      const opened = chAnalytics.reduce((sum, a) => sum + a.opened, 0);
-      const clicked = chAnalytics.reduce((sum, a) => sum + a.clicked, 0);
-      const failed = chAnalytics.reduce((sum, a) => sum + a.failed, 0);
-
-      return {
-        channel: ch.channel,
-        total_sent: total,
-        delivered,
-        opened,
-        clicked,
-        failed,
-        delivery_rate: total > 0 ? (delivered / total) * 100 : 0,
-        open_rate: delivered > 0 ? (opened / delivered) * 100 : 0,
-        click_rate: opened > 0 ? (clicked / opened) * 100 : 0,
-        failure_rate: total > 0 ? (failed / total) * 100 : 0
-      };
-    });
-
-    // Get top performing announcements
-    const announcementsWithEngagement = await Promise.all(
-      (announcements || []).slice(0, 10).map(async (a) => {
-        const aAnalytics =
-          analytics?.filter((an) => an.announcement_id === a.id) || [];
-        const avgEngagement = aAnalytics.length
-          ? aAnalytics.reduce((sum, an) => sum + (an.engagement_rate || 0), 0) /
-            aAnalytics.length
-          : 0;
-
-        return {
-          ...a,
-          engagement_rate: avgEngagement
-        };
-      })
-    );
-
-    const top_performing = announcementsWithEngagement
-      .sort((a, b) => (b.engagement_rate || 0) - (a.engagement_rate || 0))
-      .slice(0, 5)
-      .map((a) => ({
-        id: a.id,
-        title: a.title,
-        content: a.content || '',
-        status: a.status as any,
-        channels: [] as AnnouncementChannel[],
-        sent_at: a.sent_at,
-        created_by: '',
-        created_at: a.sent_at || ''
-      }));
-
-    // Calculate engagement trends (last 30 days)
-    const trends: EngagementTrend[] = await calculateEngagementTrends(
-      supabase,
-      cId,
-      dateRange
-    );
-
     return {
       overview: {
-        total_announcements: total_announcements || 0,
-        total_sent,
-        average_engagement_rate,
-        average_click_through_rate
+        total_announcements: 0,
+        total_sent: 0,
+        average_engagement_rate: 0,
+        average_click_through_rate: 0
       },
-      by_channel,
-      trends,
-      top_performing
+      by_channel: [],
+      trends: [],
+      top_performing: []
     };
   }
 );
-
-/**
- * Calculate engagement trends over time
- * Aggregates daily metrics for sent announcements
- */
-async function calculateEngagementTrends(
-  supabase: any,
-  chapterId: string,
-  dateRange?: { start_date: string; end_date: string }
-): Promise<EngagementTrend[]> {
-  // Default to last 30 days if no date range provided
-  const endDate = dateRange?.end_date || new Date().toISOString().split('T')[0];
-  const startDate =
-    dateRange?.start_date ||
-    new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-
-  // Get all sent announcements in the date range
-  const { data: announcements, error: announcementsError } = await supabase
-    .from('announcements')
-    .select('id, sent_at')
-    .eq('chapter_id', chapterId)
-    .eq('status', 'sent')
-    .gte('sent_at', startDate)
-    .lte('sent_at', endDate)
-    .order('sent_at', { ascending: true });
-
-  if (announcementsError || !announcements?.length) {
-    return [];
-  }
-
-  const announcementIds = announcements.map((a: any) => a.id);
-
-  // Get recipient statuses for all announcements
-  const { data: recipients, error: recipientsError } = await supabase
-    .from('announcement_recipients')
-    .select('announcement_id, status, delivered_at, opened_at, clicked_at')
-    .in('announcement_id', announcementIds);
-
-  if (recipientsError) {
-    console.error('Error fetching recipients for trends:', recipientsError);
-    return [];
-  }
-
-  // Create a map of announcement_id to sent_date
-  const announcementDateMap = new Map<string, string>();
-  announcements.forEach((a: any) => {
-    const date = a.sent_at ? a.sent_at.split('T')[0] : null;
-    if (date) {
-      announcementDateMap.set(a.id, date);
-    }
-  });
-
-  // Aggregate metrics by date
-  const dailyMetrics = new Map<
-    string,
-    {
-      sent: number;
-      delivered: number;
-      opened: number;
-      clicked: number;
-    }
-  >();
-
-  // Initialize all dates in range
-  const currentDate = new Date(startDate);
-  const endDateObj = new Date(endDate);
-  while (currentDate <= endDateObj) {
-    const dateStr = currentDate.toISOString().split('T')[0];
-    dailyMetrics.set(dateStr, { sent: 0, delivered: 0, opened: 0, clicked: 0 });
-    currentDate.setDate(currentDate.getDate() + 1);
-  }
-
-  // Aggregate recipient data by the announcement's sent date
-  (recipients || []).forEach((recipient: any) => {
-    const announcementDate = announcementDateMap.get(recipient.announcement_id);
-    if (!announcementDate) return;
-
-    const metrics = dailyMetrics.get(announcementDate);
-    if (!metrics) return;
-
-    metrics.sent++;
-
-    if (
-      recipient.status === 'delivered' ||
-      recipient.status === 'opened' ||
-      recipient.status === 'clicked'
-    ) {
-      metrics.delivered++;
-    }
-
-    if (recipient.status === 'opened' || recipient.status === 'clicked') {
-      metrics.opened++;
-    }
-
-    if (recipient.status === 'clicked') {
-      metrics.clicked++;
-    }
-  });
-
-  // Convert to EngagementTrend array
-  const trends: EngagementTrend[] = [];
-  dailyMetrics.forEach((metrics, date) => {
-    const engagementRate =
-      metrics.delivered > 0
-        ? ((metrics.opened + metrics.clicked) / metrics.delivered) * 100
-        : 0;
-
-    trends.push({
-      date,
-      sent: metrics.sent,
-      delivered: metrics.delivered,
-      opened: metrics.opened,
-      clicked: metrics.clicked,
-      engagement_rate: Math.round(engagementRate * 100) / 100
-    });
-  });
-
-  // Sort by date
-  trends.sort((a, b) => a.date.localeCompare(b.date));
-
-  return trends;
-}
 
 // ============================================================================
 // HELPER FUNCTIONS

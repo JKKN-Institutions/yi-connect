@@ -13,8 +13,11 @@ export default async function DelegateLayout({
   if (session?.type === "jury") redirect("/yi-future/jury");
   if (session?.type === "mentor") redirect("/yi-future/mentor");
   if (session?.type === "partner") redirect("/yi-future/partner");
-  if (!session || session.type !== "delegate") {
-    redirect("/yi-future/join");
+  if (!session) {
+    redirect("/yi-future/join?_d=nosession");
+  }
+  if (session.type !== "delegate") {
+    redirect(`/yi-future/join?_d=type-${session.type}`);
   }
 
   return (

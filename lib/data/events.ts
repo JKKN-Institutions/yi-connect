@@ -49,6 +49,55 @@ import type {
 // ============================================================================
 
 /**
+ * Resolve a single organizer profile via the admin client.
+ *
+ * Phase E fix 2026-05-23 (Agent O): yi_connect.events.organizer_id's only
+ * declared FK is to auth.users(id), NOT yi_connect.members(id). PostgREST
+ * therefore can't resolve `organizer:members!organizer_id (...)` embeds and
+ * returns PGRST200. This helper does a single-row members lookup keyed by
+ * organizer_id and returns the same shape the embed produced. Returns null
+ * when organizerId is missing or the lookup fails (organizer info is
+ * decorative — never block the page on it).
+ */
+async function resolveOrganizer(
+  organizerId: string | null | undefined
+): Promise<{
+  id: string;
+  profile: {
+    full_name: string;
+    email: string;
+    avatar_url?: string | null;
+  } | null;
+} | null> {
+  if (!organizerId) return null;
+  try {
+    const admin = createAdminSupabaseClient();
+    const { data: row } = await admin
+      .from('members')
+      .select('id, profile:profiles(full_name, email, avatar_url)')
+      .eq('id', organizerId)
+      .single();
+    if (!row) return null;
+    const profile = Array.isArray((row as any).profile)
+      ? (row as any).profile[0]
+      : (row as any).profile;
+    return {
+      id: (row as any).id,
+      profile: profile
+        ? {
+            full_name: profile.full_name,
+            email: profile.email,
+            avatar_url: profile.avatar_url ?? null,
+          }
+        : null,
+    };
+  } catch (err) {
+    console.error('[resolveOrganizer] failed:', err);
+    return null;
+  }
+}
+
+/**
  * Get paginated events with filters and sorting
  */
 export const getEvents = cache(
@@ -277,14 +326,6 @@ export const getEventById = cache(
       *,
       venue:venues (*),
       template:event_templates (*),
-      organizer:members!organizer_id (
-        id,
-        profile:profiles (
-          full_name,
-          email,
-          avatar_url
-        )
-      ),
       chapter:chapters (
         id,
         name,
@@ -299,7 +340,12 @@ export const getEventById = cache(
       return null;
     }
 
-    return data as EventWithDetails;
+    // Phase E fix 2026-05-23 (Agent O): resolve organizer via follow-up lookup
+    // — events.organizer_id FK targets auth.users, not members, so the embed
+    // would throw PGRST200.
+    const organizer = await resolveOrganizer((data as any).organizer_id);
+
+    return { ...(data as any), organizer } as EventWithDetails;
   }
 );
 
@@ -322,14 +368,6 @@ export const getEventWithRSVPs = cache(
       *,
       venue:venues (*),
       template:event_templates (*),
-      organizer:members!organizer_id (
-        id,
-        profile:profiles (
-          full_name,
-          email,
-          avatar_url
-        )
-      ),
       chapter:chapters (
         id,
         name,
@@ -359,7 +397,10 @@ export const getEventWithRSVPs = cache(
       return null;
     }
 
-    return data as EventWithRSVPs;
+    // Phase E fix 2026-05-23 (Agent O): see resolveOrganizer note.
+    const organizer = await resolveOrganizer((data as any).organizer_id);
+
+    return { ...(data as any), organizer } as EventWithRSVPs;
   }
 );
 
@@ -382,14 +423,6 @@ export const getEventWithVolunteers = cache(
       *,
       venue:venues (*),
       template:event_templates (*),
-      organizer:members!organizer_id (
-        id,
-        profile:profiles (
-          full_name,
-          email,
-          avatar_url
-        )
-      ),
       chapter:chapters (
         id,
         name,
@@ -419,6 +452,10 @@ export const getEventWithVolunteers = cache(
       return null;
     }
 
+    // Phase E fix 2026-05-23 (Agent O): see resolveOrganizer note.
+    const organizer = await resolveOrganizer((data as any).organizer_id);
+    (data as any).organizer = organizer;
+
     return data as EventWithVolunteers;
   }
 );
@@ -442,14 +479,6 @@ export const getEventWithMetrics = cache(
       *,
       venue:venues (*),
       template:event_templates (*),
-      organizer:members!organizer_id (
-        id,
-        profile:profiles (
-          full_name,
-          email,
-          avatar_url
-        )
-      ),
       chapter:chapters (
         id,
         name,
@@ -465,7 +494,10 @@ export const getEventWithMetrics = cache(
       return null;
     }
 
-    return data as EventWithMetrics;
+    // Phase E fix 2026-05-23 (Agent O): see resolveOrganizer note.
+    const organizer = await resolveOrganizer((data as any).organizer_id);
+
+    return { ...(data as any), organizer } as EventWithMetrics;
   }
 );
 
@@ -488,14 +520,6 @@ export const getEventFull = cache(
       *,
       venue:venues (*),
       template:event_templates (*),
-      organizer:members!organizer_id (
-        id,
-        profile:profiles (
-          full_name,
-          email,
-          avatar_url
-        )
-      ),
       chapter:chapters (
         id,
         name,
@@ -548,8 +572,11 @@ export const getEventFull = cache(
       return null;
     }
 
+    // Phase E fix 2026-05-23 (Agent O): see resolveOrganizer note.
+    const organizer = await resolveOrganizer((data as any).organizer_id);
+
     // Type assertion is safe here because our query selects exactly what EventFull expects
-    return data as unknown as EventFull;
+    return { ...(data as any), organizer } as unknown as EventFull;
   }
 );
 
@@ -565,7 +592,12 @@ export const getMemberUpcomingEvents = cache(
       throw new Error('Unauthorized');
     }
 
-    // Get events where member has RSVP'd or is volunteering
+    // Phase E fix 2026-05-23 (Agent O): drop nested
+    // `organizer:members!organizer_id(...)` embeds — events.organizer_id FK
+    // points to auth.users not members, so PostgREST returns PGRST200 and the
+    // whole RSVP/volunteer fetch fails. We fetch events first, then batch-
+    // resolve organizers in a single follow-up admin lookup (mirrors the
+    // pattern Agent C established in getEvents).
     const { data: rsvpEvents } = await supabase
       .from('event_rsvps')
       .select(
@@ -591,12 +623,6 @@ export const getMemberUpcomingEvents = cache(
           id,
           name,
           city
-        ),
-        organizer:members!organizer_id (
-          id,
-          profile:profiles (
-            full_name
-          )
         )
       )
     `
@@ -631,12 +657,6 @@ export const getMemberUpcomingEvents = cache(
           id,
           name,
           city
-        ),
-        organizer:members!organizer_id (
-          id,
-          profile:profiles (
-            full_name
-          )
         )
       )
     `
@@ -660,6 +680,52 @@ export const getMemberUpcomingEvents = cache(
         eventMap.set(item.event.id, item.event as any);
       }
     });
+
+    // Phase E fix 2026-05-23 (Agent O): batch-resolve organizers via admin
+    // client. Decorative data only — if the lookup fails, every event still
+    // renders with `organizer: null`.
+    const organizerIds = Array.from(
+      new Set(
+        Array.from(eventMap.values())
+          .map((e: any) => e.organizer_id)
+          .filter((id: string | null): id is string => !!id)
+      )
+    );
+
+    if (organizerIds.length > 0) {
+      try {
+        const admin = createAdminSupabaseClient();
+        const { data: orgRows } = await admin
+          .from('members')
+          .select('id, profile:profiles(full_name)')
+          .in('id', organizerIds);
+
+        const organizersById = new Map<string, any>();
+        (orgRows || []).forEach((row: any) => {
+          const profile = Array.isArray(row.profile)
+            ? row.profile[0]
+            : row.profile;
+          organizersById.set(row.id, {
+            id: row.id,
+            profile: profile ? { full_name: profile.full_name } : null,
+          });
+        });
+
+        eventMap.forEach((event: any, key) => {
+          eventMap.set(key, {
+            ...event,
+            organizer: event.organizer_id
+              ? organizersById.get(event.organizer_id) || null
+              : null,
+          });
+        });
+      } catch (orgErr) {
+        console.error(
+          '[getMemberUpcomingEvents] failed to resolve organizers:',
+          orgErr
+        );
+      }
+    }
 
     return Array.from(eventMap.values()).sort(
       (a, b) =>

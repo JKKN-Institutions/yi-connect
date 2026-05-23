@@ -5,7 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createAdminSupabaseClient } from '@/lib/supabase/server';
 import { getCurrentUser } from '@/lib/data/auth';
 import type { EventFilters } from '@/types/event';
 
@@ -36,7 +36,9 @@ export async function GET(request: NextRequest) {
       start_date_to: searchParams.get('start_date_to') || undefined
     };
 
-    // Build query
+    // Phase E fix 2026-05-23 (Agent O): drop `organizer:members!organizer_id`
+    // embed — events.organizer_id FK targets auth.users, not members, so
+    // PostgREST returns PGRST200. Two-step resolution below mirrors getEvents.
     let query = supabase.from('events').select(
       `
       id,
@@ -57,13 +59,6 @@ export async function GET(request: NextRequest) {
         id,
         name,
         city
-      ),
-      organizer:members!organizer_id (
-        id,
-        profile:profiles (
-          full_name,
-          email
-        )
       )
     `,
       { count: 'exact' }
@@ -116,6 +111,43 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Phase E fix 2026-05-23 (Agent O): batch-resolve organizers via admin
+    // client since the embed was dropped above. Decorative — failure here
+    // just yields organizer:null per row, never blocks the export.
+    const organizerIds = Array.from(
+      new Set(
+        (data || [])
+          .map((e: any) => e.organizer_id)
+          .filter((id: string | null): id is string => !!id)
+      )
+    );
+    const organizersById = new Map<
+      string,
+      { id: string; profile: { full_name: string; email: string } | null }
+    >();
+    if (organizerIds.length > 0) {
+      try {
+        const admin = createAdminSupabaseClient();
+        const { data: orgRows } = await admin
+          .from('members')
+          .select('id, profile:profiles(full_name, email)')
+          .in('id', organizerIds);
+        (orgRows || []).forEach((row: any) => {
+          const profile = Array.isArray(row.profile)
+            ? row.profile[0]
+            : row.profile;
+          organizersById.set(row.id, {
+            id: row.id,
+            profile: profile
+              ? { full_name: profile.full_name, email: profile.email }
+              : null
+          });
+        });
+      } catch (orgErr) {
+        console.error('[events export] failed to resolve organizers:', orgErr);
+      }
+    }
+
     // Transform data
     const transformedData = (data || []).map((event: any) => ({
       id: event.id,
@@ -147,18 +179,8 @@ export async function GET(request: NextRequest) {
             city: event.venue.city
           }
         : null,
-      organizer: Array.isArray(event.organizer)
-        ? event.organizer[0]
-          ? {
-              id: event.organizer[0].id,
-              profile: event.organizer[0].profile
-            }
-          : null
-        : event.organizer
-        ? {
-            id: event.organizer.id,
-            profile: event.organizer.profile
-          }
+      organizer: event.organizer_id
+        ? organizersById.get(event.organizer_id) || null
         : null
     }));
 

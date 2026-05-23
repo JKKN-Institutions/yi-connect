@@ -16,7 +16,7 @@ export function BrandStrip({
       className={`flex items-center justify-center ${className}`}
     >
       <Image
-        src="/future-6-logo.png"
+        src="/yi-future/future-6-logo.png"
         alt="Future 6.0 by Yi YUVA"
         width={130}
         height={100}
@@ -35,7 +35,7 @@ export function ProgramWordmark(): React.JSX.Element {
       className="inline-flex items-center"
     >
       <Image
-        src="/future-6-logo.png"
+        src="/yi-future/future-6-logo.png"
         alt="Future 6.0 by Yi YUVA"
         width={36}
         height={28}

@@ -395,6 +395,11 @@ export const getCurrentUserMember = cache(async () => {
 
   // Get the member record for the current user
   // Note: member.id IS the profile/user id in the members table
+  // Phase E fix 2026-05-23 (Agent O): drop `skill_will_category` from SELECT.
+  // Column was never ported to yi_connect.members during Phase D — same root
+  // cause as the getMembers fix on 2026-05-22 (Agent F). Without this drop,
+  // any caller (e.g. ProfileMenu, /api/members/me) hits PGRST 42703 and the
+  // member record returns null, logging the user out.
   const { data: member, error } = await supabase
     .from('members')
     .select(
@@ -409,7 +414,6 @@ export const getCurrentUserMember = cache(async () => {
       membership_status,
       membership_type,
       renewal_date,
-      skill_will_category,
       willingness_level,
       is_active,
       created_at,

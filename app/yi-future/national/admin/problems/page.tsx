@@ -30,7 +30,7 @@ async function getTracks(): Promise<Track[]> {
     .schema("future")
     .from("tracks")
     .select(
-      "id, edition_id, slug, name, color_hex, icon, display_order, editions(slug, name, is_active)"
+      "id, edition_id, slug, name, color_hex, icon, display_order, editions!tracks_edition_id_fkey(slug, name, is_active)"
     )
     .order("display_order", { ascending: true });
   return (data as unknown as Track[]) ?? [];

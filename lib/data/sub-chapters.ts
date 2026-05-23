@@ -34,11 +34,6 @@ export const getSubChapters = cache(
       .from('sub_chapters')
       .select(`
         *,
-        yi_mentor:members!sub_chapters_yi_mentor_id_fkey(
-          id,
-          profile:profiles(full_name, email, phone, avatar_url)
-        ),
-        vertical:verticals(id, name, color),
         leads:sub_chapter_leads(*)
       `)
       .order('created_at', { ascending: false })
@@ -87,11 +82,6 @@ export const getSubChapterById = cache(
       .from('sub_chapters')
       .select(`
         *,
-        yi_mentor:members!sub_chapters_yi_mentor_id_fkey(
-          id,
-          profile:profiles(full_name, email, phone, avatar_url)
-        ),
-        vertical:verticals(id, name, color),
         leads:sub_chapter_leads(*)
       `)
       .eq('id', id)
@@ -277,15 +267,7 @@ export const getSubChapterEvents = cache(
       .from('sub_chapter_events')
       .select(`
         *,
-        sub_chapter:sub_chapters(*),
-        requested_speaker:members!sub_chapter_events_requested_speaker_id_fkey(
-          id,
-          profile:profiles(full_name, email, phone, avatar_url)
-        ),
-        approved_by_member:members!sub_chapter_events_approved_by_fkey(
-          id,
-          profile:profiles(full_name)
-        )
+        sub_chapter:sub_chapters(*)
       `)
       .order('event_date', { ascending: true })
 
@@ -334,15 +316,7 @@ export const getSubChapterEventById = cache(
       .from('sub_chapter_events')
       .select(`
         *,
-        sub_chapter:sub_chapters(*),
-        requested_speaker:members!sub_chapter_events_requested_speaker_id_fkey(
-          id,
-          profile:profiles(full_name, email, phone, avatar_url)
-        ),
-        approved_by_member:members!sub_chapter_events_approved_by_fkey(
-          id,
-          profile:profiles(full_name)
-        )
+        sub_chapter:sub_chapters(*)
       `)
       .eq('id', id)
       .single()
@@ -380,11 +354,7 @@ export const getUpcomingSubChapterEvents = cache(
       .from('sub_chapter_events')
       .select(`
         *,
-        sub_chapter:sub_chapters(*),
-        requested_speaker:members!sub_chapter_events_requested_speaker_id_fkey(
-          id,
-          profile:profiles(full_name, email, phone, avatar_url)
-        )
+        sub_chapter:sub_chapters(*)
       `)
       .eq('sub_chapter_id', subChapterId)
       .gte('event_date', today)

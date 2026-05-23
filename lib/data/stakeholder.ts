@@ -602,10 +602,7 @@ export const getGovernmentStakeholderById = cache(async (stakeholderId: string):
 
   const { data: stakeholder, error } = await supabase
     .from('government_stakeholders')
-    .select(`
-      *,
-      connected_member:members!government_stakeholders_connected_through_member_id_fkey(id, profiles!inner(full_name))
-    `)
+    .select('*')
     .eq('id', stakeholderId)
     .single()
 
@@ -728,10 +725,7 @@ export const getNGOById = cache(async (ngoId: string): Promise<NGODetail | null>
 
   const { data: ngo, error } = await supabase
     .from('ngos')
-    .select(`
-      *,
-      connected_member:members!ngos_connected_through_member_id_fkey(id, profiles!inner(full_name))
-    `)
+    .select('*')
     .eq('id', ngoId)
     .single()
 
@@ -849,10 +843,7 @@ export const getVendorById = cache(async (vendorId: string): Promise<VendorDetai
 
   const { data: vendor, error } = await supabase
     .from('vendors')
-    .select(`
-      *,
-      connected_member:members!vendors_connected_through_member_id_fkey(id, profiles!inner(full_name))
-    `)
+    .select('*')
     .eq('id', vendorId)
     .single()
 
@@ -974,10 +965,7 @@ export const getSpeakerById = cache(async (speakerId: string): Promise<SpeakerDe
 
   const { data: speaker, error } = await supabase
     .from('speakers')
-    .select(`
-      *,
-      connected_member:members!speakers_connected_through_member_id_fkey(id, profiles!inner(full_name))
-    `)
+    .select('*')
     .eq('id', speakerId)
     .single()
 

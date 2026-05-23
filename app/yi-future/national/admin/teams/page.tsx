@@ -434,15 +434,14 @@ export default async function NationalTeamsPage({
                     className="border-t border-navy/5 hover:bg-navy/[0.015]"
                   >
                     <td className="px-3 py-2.5">
-                      <div className="font-semibold text-navy">
-                        {t.team_name}
-                      </div>
-                      <div
-                        className="text-[10px] text-navy/40 mt-0.5"
-                        title="Chapter-side view requires chapter admin sign-in"
+                      <Link
+                        href={`/yi-future/national/admin/teams/${t.id}`}
+                        className="font-semibold text-navy hover:text-yi-gold hover:underline"
                       >
-                        /chapter/teams/{t.id.slice(0, 8)}… ·{" "}
-                        <span className="italic">chapter admin only</span>
+                        {t.team_name}
+                      </Link>
+                      <div className="text-[10px] text-navy/40 mt-0.5">
+                        Click for full details
                       </div>
                     </td>
                     <td className="px-3 py-2.5 text-navy/80">

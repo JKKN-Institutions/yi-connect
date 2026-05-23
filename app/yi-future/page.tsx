@@ -281,6 +281,13 @@ export default async function Home() {
               Register as a delegate →
             </Link>
             <Link
+              href="/yi-future/unlock"
+              className="inline-flex items-center justify-center px-8 py-4 rounded-lg text-base font-semibold transition-colors"
+              style={{ border: "1px solid rgba(255,255,255,0.2)", color: "rgba(255,255,255,0.85)" }}
+            >
+              Have a code? Unlock →
+            </Link>
+            <Link
               href="/yi-future/about"
               className="inline-flex items-center justify-center px-8 py-4 rounded-lg text-base font-semibold transition-colors"
               style={{ border: "1px solid rgba(255,255,255,0.2)", color: "rgba(255,255,255,0.85)" }}

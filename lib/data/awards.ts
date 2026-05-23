@@ -255,12 +255,8 @@ export const getNominationById = cache(async (id: string) => {
       ),
       jury_scores:jury_scores(
         *,
-        jury_member:jury_members(
-          *,
-          member:members(id, full_name, avatar_url)
-        )
-      ),
-      winner:award_winners(*)
+        juror:profiles(id, full_name, avatar_url)
+      )
     `)
     .eq('id', id)
     .single()
@@ -368,13 +364,10 @@ export const getJuryScores = cache(async (nominationId: string) => {
     .from('jury_scores')
     .select(`
       *,
-      jury_member:jury_members(
-        *,
-        member:members(id, full_name, avatar_url)
-      )
+      juror:profiles(id, full_name, avatar_url)
     `)
     .eq('nomination_id', nominationId)
-    .order('scored_at', { ascending: false })
+    .order('submitted_at', { ascending: false })
 
   if (error) throw error
 

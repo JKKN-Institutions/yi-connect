@@ -330,7 +330,7 @@ export async function notifyFinalsConfirmed(teamId: string): Promise<void> {
   const { data: advancement } = await svc
     .schema("future")
     .from("advancements")
-    .select("to_event_id, total_score, events(name, venue, start_date, chapters(city, name))")
+    .select("to_event_id, total_score, events!advancements_to_event_id_fkey(name, venue, start_date, chapters(city, name))")
     .eq("team_id", teamId)
     .order("advanced_at", { ascending: false })
     .limit(1)

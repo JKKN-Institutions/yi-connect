@@ -4,7 +4,6 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient, createServiceClient } from "@/lib/yi-future/supabase/server";
 import type { ActionResult } from "./editions";
-import { MIN_TEAMS_PER_PROBLEM } from "@/lib/yi-future/constants";
 
 async function requireAuth(): Promise<void> {
   const supabase = await createClient();

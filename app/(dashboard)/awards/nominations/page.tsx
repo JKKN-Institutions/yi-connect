@@ -22,11 +22,10 @@ async function MyNominationsSection({ userId }: { userId: string }) {
         category:award_categories(*),
         _count:nominations(count)
       ),
-      nominee:members!nominations_nominee_id_fkey(
+      nominee:members!nominations_nominee_member_id_fkey(
         id, full_name, avatar_url, company, designation
       ),
-      jury_scores(count),
-      winner:award_winners(*)
+      jury_scores(count)
     `)
     .eq('nominator_id', userId)
     .order('created_at', { ascending: false })
@@ -78,11 +77,10 @@ async function NominatedMeSection({ userId }: { userId: string }) {
         category:award_categories(*),
         _count:nominations(count)
       ),
-      nominator:members!nominations_nominator_id_fkey(
+      nominator:profiles!nominations_nominator_id_fkey(
         id, full_name, avatar_url
       ),
-      jury_scores(count),
-      winner:award_winners(*)
+      jury_scores(count)
     `)
     .eq('nominee_id', userId)
     .order('created_at', { ascending: false })
@@ -128,14 +126,13 @@ async function AllNominationsSection({ userId }: { userId: string }) {
         category:award_categories(*),
         _count:nominations(count)
       ),
-      nominee:members!nominations_nominee_id_fkey(
+      nominee:members!nominations_nominee_member_id_fkey(
         id, full_name, avatar_url, company, designation
       ),
-      nominator:members!nominations_nominator_id_fkey(
+      nominator:profiles!nominations_nominator_id_fkey(
         id, full_name, avatar_url
       ),
-      jury_scores(count),
-      winner:award_winners(*)
+      jury_scores(count)
     `)
     .neq('status', 'draft')
     .order('created_at', { ascending: false })

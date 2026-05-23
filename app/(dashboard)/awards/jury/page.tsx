@@ -172,7 +172,7 @@ async function JuryNominationsTable({ userId }: { userId: string }) {
         cycle_name,
         category:award_categories(name)
       ),
-      nominee:members!nominations_nominee_id_fkey(
+      nominee:members!nominations_nominee_member_id_fkey(
         id, full_name, avatar_url, company, designation
       ),
       jury_scores(

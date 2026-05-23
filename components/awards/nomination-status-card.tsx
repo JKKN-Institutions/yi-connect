@@ -234,17 +234,17 @@ export function NominationStatusCard({
         </div>
 
         {/* Winner Badge */}
-        {nomination.winner && (
+        {nomination.rank && (
           <div className='flex items-center gap-2 p-3 bg-yellow-50 dark:bg-yellow-950 rounded-lg border border-yellow-200 dark:border-yellow-800'>
             <Trophy className='h-5 w-5 text-yellow-500' />
             <div>
               <p className='font-semibold text-sm'>
-                {nomination.winner.rank === 1 && '1st Place Winner'}
-                {nomination.winner.rank === 2 && '2nd Place Winner'}
-                {nomination.winner.rank === 3 && '3rd Place Winner'}
+                {nomination.rank === 1 && '1st Place Winner'}
+                {nomination.rank === 2 && '2nd Place Winner'}
+                {nomination.rank === 3 && '3rd Place Winner'}
               </p>
               <p className='text-xs text-muted-foreground'>
-                Final Score: {nomination.winner.final_score?.toFixed(2) ?? 'N/A'}
+                Final Score: {nomination.final_score?.toFixed(2) ?? 'N/A'}
               </p>
             </div>
           </div>

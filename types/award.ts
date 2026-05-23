@@ -84,6 +84,9 @@ export interface NominationWithDetails extends Nomination {
   }
   jury_scores?: JuryScore[]
   winner?: AwardWinner
+  // Winner fields (denormalized onto nominations root; award_winners table doesn't exist)
+  rank?: number | null
+  final_score?: number | null
   // Calculated score fields (added when fetching with scores)
   average_score?: number | null
   weighted_average_score?: number | null

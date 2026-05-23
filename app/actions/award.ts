@@ -283,7 +283,7 @@ export async function submitNomination(
           cycle_name,
           category:award_categories (name)
         ),
-        nominee:members!nominations_nominee_id_fkey (
+        nominee:members!nominations_nominee_member_id_fkey (
           first_name,
           last_name
         )
@@ -556,7 +556,7 @@ export async function declareWinners(
       .select(`
         *,
         nomination:nominations (
-          nominee:members!nominations_nominee_id_fkey (
+          nominee:members!nominations_nominee_member_id_fkey (
             first_name,
             last_name,
             email

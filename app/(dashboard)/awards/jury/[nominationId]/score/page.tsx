@@ -39,10 +39,10 @@ async function PageContent({
         *,
         category:award_categories(*)
       ),
-      nominee:members!nominations_nominee_id_fkey(
+      nominee:members!nominations_nominee_member_id_fkey(
         id, full_name, avatar_url, company, designation
       ),
-      nominator:members!nominations_nominator_id_fkey(
+      nominator:profiles!nominations_nominator_id_fkey(
         id, full_name, avatar_url
       )
     `

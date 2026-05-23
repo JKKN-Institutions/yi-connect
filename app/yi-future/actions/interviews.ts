@@ -85,7 +85,7 @@ export async function scheduleInterview(
   try {
     const { data: partner } = await (svc as any)
       .schema("future")
-      .from("partners")
+      .from("corporate_partners")
       .select("organization")
       .eq("id", partner_id)
       .maybeSingle();

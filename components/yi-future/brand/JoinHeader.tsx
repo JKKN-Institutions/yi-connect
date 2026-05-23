@@ -12,7 +12,7 @@ export function JoinHeader(): React.JSX.Element {
     >
       <div className="flex items-center justify-center flex-wrap gap-x-8 gap-y-4 sm:gap-x-10">
         <Image
-          src="/yi-logo.png"
+          src="/yi-future/yi-logo.png"
           alt="Young Indians (Yi)"
           width={90}
           height={70}
@@ -20,7 +20,7 @@ export function JoinHeader(): React.JSX.Element {
           priority
         />
         <Image
-          src="/yuva-logo.png"
+          src="/yi-future/yuva-logo.png"
           alt="Yi YUVA — Learning Beyond Education"
           width={160}
           height={100}

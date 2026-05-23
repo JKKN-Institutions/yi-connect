@@ -1451,6 +1451,12 @@ export const getMyVisitRequests = cache(
       throw new Error('Unauthorized')
     }
 
+    // Phase E fix 2026-05-23 (Agent V): member_visit_requests.requested_by is a
+    // FK to yi_connect.members(id), NOT profiles(id) — same pattern Agent Q
+    // fixed in getVisitRequests/getVisitRequestById. Chain through members to
+    // reach profiles, then flatten via flattenVisitRequestMembers so callers
+    // continue to see the legacy flat `{ id, full_name, avatar_url }` shape on
+    // the `requester` key.
     const { data, error } = await supabase
       .from('member_visit_requests')
       .select(`
@@ -1461,9 +1467,13 @@ export const getMyVisitRequests = cache(
           city,
           state
         ),
-        requester:profiles!requested_by(
-          full_name,
-          avatar_url
+        member:members!member_visit_requests_requested_by_fkey(
+          id,
+          profile:profiles(
+            full_name,
+            email,
+            avatar_url
+          )
         )
       `)
       .eq('requested_by', memberId)
@@ -1474,7 +1484,20 @@ export const getMyVisitRequests = cache(
       return []
     }
 
-    return data || []
+    // Flatten member nesting, then alias to legacy `requester` key for
+    // backward compatibility with downstream UI.
+    return (data || []).map((row: any) => {
+      const flat = flattenVisitRequestMembers(row)
+      return {
+        ...flat,
+        requester: flat.member
+          ? {
+              full_name: flat.member.full_name,
+              avatar_url: flat.member.avatar_url,
+            }
+          : null,
+      }
+    })
   }
 )
 
@@ -1566,6 +1589,14 @@ export const getOpportunityApplications = cache(
       throw new Error('Unauthorized')
     }
 
+    // Phase E fix 2026-05-23 (Agent V): yi_connect.opportunity_applications
+    // does NOT have these columns — schema drift between TS types and live DB:
+    //   • skills_to_contribute, availability_notes, submitted_at  → not in DB
+    //   • review_notes                                            → actual column is reviewer_notes
+    // Drop the four missing fields from the select; alias reviewer_notes back
+    // to `review_notes` so downstream components (application-review-card.tsx,
+    // which uses optional chaining) keep working. submitted_at is reconstructed
+    // below via `app.applied_at` fallback.
     const { data, error } = await supabase
       .from('opportunity_applications')
       .select(`
@@ -1576,15 +1607,12 @@ export const getOpportunityApplications = cache(
         motivation_statement,
         learning_goals,
         relevant_experience,
-        skills_to_contribute,
-        availability_notes,
         resume_url,
         portfolio_url,
         match_score,
         match_breakdown,
-        submitted_at,
         reviewed_at,
-        review_notes,
+        review_notes:reviewer_notes,
         applied_at,
         member:members!member_id(
           id,

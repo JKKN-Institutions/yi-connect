@@ -58,7 +58,7 @@ export async function createTeam(
   revalidatePath("/chapter/teams");
   const newId = (inserted as { id: string } | null)?.id;
   if (newId) {
-    redirect(`/chapter/teams/${newId}`);
+    redirect(`/yi-future/chapter/teams/${newId}`);
   }
   redirect("/yi-future/chapter/teams");
 }

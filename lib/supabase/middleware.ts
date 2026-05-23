@@ -301,6 +301,13 @@ function handleYiFutureAuth(
  * `{ type: <expectedType>, ... }`. Redirects to `joinPath` if missing,
  * malformed, or type mismatch.
  */
+const YIFUTURE_ROLE_HOME: Record<string, string> = {
+  delegate: '/yi-future/me',
+  mentor: '/yi-future/mentor',
+  jury: '/yi-future/jury',
+  partner: '/yi-future/partner',
+}
+
 function requireAccessCodeCookie(
   request: NextRequest,
   supabaseResponse: NextResponse,
@@ -309,18 +316,26 @@ function requireAccessCodeCookie(
   joinPath: string
 ): NextResponse {
   const session = request.cookies.get(cookieName)?.value
-  const redirectToJoin = () => {
+  const redirectTo = (path: string) => {
     const url = request.nextUrl.clone()
-    url.pathname = joinPath
+    url.pathname = path
+    url.search = ''
     return NextResponse.redirect(url)
   }
+  const redirectToJoin = () => redirectTo(joinPath)
 
   if (!session) return redirectToJoin()
   try {
     const parsed = JSON.parse(session)
-    if (parsed?.type !== expectedType) return redirectToJoin()
+    if (parsed?.type === expectedType) return supabaseResponse
+    // Valid session for a different role — route to that role's home
+    // instead of bouncing them to the public registration form.
+    if (cookieName === 'yifuture_session' && typeof parsed?.type === 'string') {
+      const correctHome = YIFUTURE_ROLE_HOME[parsed.type]
+      if (correctHome) return redirectTo(correctHome)
+    }
+    return redirectToJoin()
   } catch {
     return redirectToJoin()
   }
-  return supabaseResponse
 }

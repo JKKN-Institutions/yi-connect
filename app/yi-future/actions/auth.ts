@@ -87,7 +87,7 @@ export async function validateAccessCode(
     }
     return {
       ok: true,
-      redirect: firstUnlock ? "/join?just_joined=1" : "/me",
+      redirect: firstUnlock ? "/yi-future/join?just_joined=1" : "/yi-future/me",
     };
   }
 
@@ -105,7 +105,7 @@ export async function validateAccessCode(
       edition_id: mentor.edition_id,
       name: mentor.full_name ?? undefined,
     });
-    return { ok: true, redirect: "/mentor" };
+    return { ok: true, redirect: "/yi-future/mentor" };
   }
 
   // 3. Jury
@@ -122,7 +122,7 @@ export async function validateAccessCode(
       edition_id: jury.edition_id,
       name: jury.jury_name ?? undefined,
     });
-    return { ok: true, redirect: "/jury" };
+    return { ok: true, redirect: "/yi-future/jury" };
   }
 
   // 4. Corporate Partner — edition_id derived via event_id → events → edition_id
@@ -142,7 +142,7 @@ export async function validateAccessCode(
       edition_id: eventRef.edition_id,
       name: partner.organization ?? undefined,
     });
-    return { ok: true, redirect: "/partner" };
+    return { ok: true, redirect: "/yi-future/partner" };
   }
 
   return {

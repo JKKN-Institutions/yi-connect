@@ -47,6 +47,9 @@ async function getDelegateView(id: string): Promise<DelegateView | null> {
 
 export default async function DelegateHome() {
   const session = await readSession();
+  if (session?.type === "jury") redirect("/yi-future/jury");
+  if (session?.type === "mentor") redirect("/yi-future/mentor");
+  if (session?.type === "partner") redirect("/yi-future/partner");
   if (!session || session.type !== "delegate") redirect("/yi-future/join");
 
   const me = await getDelegateView(session.id);

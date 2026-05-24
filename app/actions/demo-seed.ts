@@ -190,7 +190,7 @@ export async function seedDemoMembers(): Promise<{
 
   // Get Member role ID
   const { data: memberRole } = await supabaseAdmin
-    .from('roles')
+    .schema('yi_connect').from('roles')
     .select('id')
     .eq('name', 'Member')
     .single()
@@ -208,7 +208,7 @@ export async function seedDemoMembers(): Promise<{
     try {
       // Check if user already exists
       const { data: existingUser } = await supabaseAdmin
-        .from('profiles')
+        .schema('yi_connect').from('profiles')
         .select('id')
         .eq('email', member.email)
         .single()
@@ -242,7 +242,7 @@ export async function seedDemoMembers(): Promise<{
 
       // Update profile with additional data
       await supabaseAdmin
-        .from('profiles')
+        .schema('yi_connect').from('profiles')
         .update({
           phone: member.phone,
           chapter_id: DEMO_CHAPTER_ID,
@@ -250,7 +250,7 @@ export async function seedDemoMembers(): Promise<{
         .eq('id', userId)
 
       // Create member record
-      await supabaseAdmin.from('members').insert({
+      await supabaseAdmin.schema('yi_connect').from('members').insert({
         id: userId,
         chapter_id: DEMO_CHAPTER_ID,
         membership_number: `YI-DEMO-${String(created + 1).padStart(3, '0')}`,
@@ -273,7 +273,7 @@ export async function seedDemoMembers(): Promise<{
       })
 
       // Assign Member role
-      await supabaseAdmin.from('user_roles').insert({
+      await supabaseAdmin.schema('yi_connect').from('user_roles').insert({
         user_id: userId,
         role_id: memberRole.id,
       })
@@ -345,7 +345,7 @@ export async function cleanupDemoMembers(): Promise<{
 
   // Get user IDs
   const { data: profiles } = await supabaseAdmin
-    .from('profiles')
+    .schema('yi_connect').from('profiles')
     .select('id')
     .in('email', demoEmails)
 

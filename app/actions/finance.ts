@@ -101,7 +101,7 @@ export async function createBudget(
     const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
-      .from('budgets')
+      .schema('yi_connect').from('budgets')
       .insert([{
         ...validation.data,
         created_by: user.id,
@@ -159,7 +159,7 @@ export async function updateBudget(
     const supabase = await createServerSupabaseClient()
 
     const { error } = await supabase
-      .from('budgets')
+      .schema('yi_connect').from('budgets')
       .update(validation.data)
       .eq('id', budgetId)
 
@@ -214,13 +214,13 @@ export async function allocateBudget(
 
     // Delete existing allocations
     await supabase
-      .from('budget_allocations')
+      .schema('yi_connect').from('budget_allocations')
       .delete()
       .eq('budget_id', validation.data.budget_id)
 
     // Insert new allocations
     const { error } = await supabase
-      .from('budget_allocations')
+      .schema('yi_connect').from('budget_allocations')
       .insert(
         validation.data.allocations.map(alloc => ({
           budget_id: validation.data.budget_id,
@@ -240,7 +240,7 @@ export async function allocateBudget(
     )
 
     await supabase
-      .from('budgets')
+      .schema('yi_connect').from('budgets')
       .update({ allocated_amount: totalAllocated })
       .eq('id', validation.data.budget_id)
 
@@ -267,7 +267,7 @@ export async function deleteBudget(budgetId: string): Promise<FormState> {
     const supabase = await createServerSupabaseClient()
 
     const { error } = await supabase
-      .from('budgets')
+      .schema('yi_connect').from('budgets')
       .delete()
       .eq('id', budgetId)
 
@@ -322,7 +322,7 @@ export async function createExpenseCategory(
     const supabase = await createServerSupabaseClient()
 
     const { error } = await supabase
-      .from('expense_categories')
+      .schema('yi_connect').from('expense_categories')
       .insert([validation.data])
 
     if (error) {
@@ -372,7 +372,7 @@ export async function updateExpenseCategory(
     const supabase = await createServerSupabaseClient()
 
     const { error } = await supabase
-      .from('expense_categories')
+      .schema('yi_connect').from('expense_categories')
       .update(validation.data)
       .eq('id', categoryId)
 
@@ -404,7 +404,7 @@ export async function deleteExpenseCategory(categoryId: string): Promise<FormSta
     const supabase = await createServerSupabaseClient()
 
     const { error } = await supabase
-      .from('expense_categories')
+      .schema('yi_connect').from('expense_categories')
       .delete()
       .eq('id', categoryId)
 
@@ -466,7 +466,7 @@ export async function createExpense(
     const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
-      .from('expenses')
+      .schema('yi_connect').from('expenses')
       .insert([{
         ...validation.data,
         created_by: user.id,
@@ -533,7 +533,7 @@ export async function updateExpense(
     const supabase = await createServerSupabaseClient()
 
     const { error } = await supabase
-      .from('expenses')
+      .schema('yi_connect').from('expenses')
       .update(validation.data)
       .eq('id', expenseId)
 
@@ -565,7 +565,7 @@ export async function submitExpense(expenseId: string): Promise<FormState> {
     const supabase = await createServerSupabaseClient()
 
     const { error } = await supabase
-      .from('expenses')
+      .schema('yi_connect').from('expenses')
       .update({
         status: 'submitted',
         submitted_by: user.id,
@@ -618,7 +618,7 @@ export async function approveExpense(
     const supabase = await createServerSupabaseClient()
 
     const { error } = await supabase
-      .from('expenses')
+      .schema('yi_connect').from('expenses')
       .update({
         status: 'approved',
         approved_by: user.id,
@@ -673,7 +673,7 @@ export async function rejectExpense(
     const supabase = await createServerSupabaseClient()
 
     const { error } = await supabase
-      .from('expenses')
+      .schema('yi_connect').from('expenses')
       .update({
         status: 'rejected',
         rejection_reason: validation.data.rejection_reason,
@@ -710,7 +710,7 @@ export async function deleteExpense(expenseId: string): Promise<FormState> {
     const supabase = await createServerSupabaseClient()
 
     const { error } = await supabase
-      .from('expenses')
+      .schema('yi_connect').from('expenses')
       .delete()
       .eq('id', expenseId)
 
@@ -784,7 +784,7 @@ export async function createSponsor(
     const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
-      .from('sponsors')
+      .schema('yi_connect').from('sponsors')
       .insert([{
         ...validation.data,
         created_by: user.id,
@@ -857,7 +857,7 @@ export async function updateSponsor(
     const supabase = await createServerSupabaseClient()
 
     const { error } = await supabase
-      .from('sponsors')
+      .schema('yi_connect').from('sponsors')
       .update(validation.data)
       .eq('id', sponsorId)
 
@@ -889,7 +889,7 @@ export async function deleteSponsor(sponsorId: string): Promise<FormState> {
     const supabase = await createServerSupabaseClient()
 
     const { error } = await supabase
-      .from('sponsors')
+      .schema('yi_connect').from('sponsors')
       .delete()
       .eq('id', sponsorId)
 
@@ -957,7 +957,7 @@ export async function createSponsorshipDeal(
     const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
-      .from('sponsorship_deals')
+      .schema('yi_connect').from('sponsorship_deals')
       .insert([{
         ...validation.data,
         created_by: user.id,
@@ -1028,7 +1028,7 @@ export async function updateSponsorshipDeal(
     const supabase = await createServerSupabaseClient()
 
     const { error } = await supabase
-      .from('sponsorship_deals')
+      .schema('yi_connect').from('sponsorship_deals')
       .update(validation.data)
       .eq('id', dealId)
 
@@ -1060,7 +1060,7 @@ export async function deleteSponsorshipDeal(dealId: string): Promise<FormState> 
     const supabase = await createServerSupabaseClient()
 
     const { error } = await supabase
-      .from('sponsorship_deals')
+      .schema('yi_connect').from('sponsorship_deals')
       .delete()
       .eq('id', dealId)
 
@@ -1117,7 +1117,7 @@ export async function recordSponsorshipPayment(
 
     // Insert payment record
     const { error: paymentError } = await supabase
-      .from('sponsorship_payments')
+      .schema('yi_connect').from('sponsorship_payments')
       .insert([{
         ...validation.data,
         recorded_by: user.id,
@@ -1160,7 +1160,7 @@ export async function createReimbursementRequest(
     // Get user profile for requester details
     const supabase = await createServerSupabaseClient()
     const { data: profile } = await supabase
-      .from('profiles')
+      .schema('yi_connect').from('profiles')
       .select('full_name, email, phone')
       .eq('id', user.id)
       .single()
@@ -1189,7 +1189,7 @@ export async function createReimbursementRequest(
     }
 
     const { data, error } = await supabase
-      .from('reimbursement_requests')
+      .schema('yi_connect').from('reimbursement_requests')
       .insert([{
         ...validation.data,
         requester_id: user.id,
@@ -1253,7 +1253,7 @@ export async function updateReimbursementRequest(
     const supabase = await createServerSupabaseClient()
 
     const { error } = await supabase
-      .from('reimbursement_requests')
+      .schema('yi_connect').from('reimbursement_requests')
       .update(validation.data)
       .eq('id', requestId)
 
@@ -1285,7 +1285,7 @@ export async function submitReimbursementRequest(requestId: string): Promise<For
     const supabase = await createServerSupabaseClient()
 
     const { error } = await supabase
-      .from('reimbursement_requests')
+      .schema('yi_connect').from('reimbursement_requests')
       .update({
         status: 'submitted',
         submitted_at: new Date().toISOString(),
@@ -1338,7 +1338,7 @@ export async function approveReimbursementRequest(
     const supabase = await createServerSupabaseClient()
 
     const { error } = await supabase
-      .from('reimbursement_requests')
+      .schema('yi_connect').from('reimbursement_requests')
       .update({
         status: 'approved',
         final_approved_by: user.id,
@@ -1389,7 +1389,7 @@ export async function rejectReimbursementRequest(
     const supabase = await createServerSupabaseClient()
 
     const { error } = await supabase
-      .from('reimbursement_requests')
+      .schema('yi_connect').from('reimbursement_requests')
       .update({
         status: 'rejected',
         rejection_reason: validation.data.rejection_reason,
@@ -1441,7 +1441,7 @@ export async function payReimbursement(
     const supabase = await createServerSupabaseClient()
 
     const { error } = await supabase
-      .from('reimbursement_requests')
+      .schema('yi_connect').from('reimbursement_requests')
       .update({
         status: 'paid',
         payment_reference: validation.data.payment_reference,
@@ -1478,7 +1478,7 @@ export async function deleteReimbursementRequest(requestId: string): Promise<For
     const supabase = await createServerSupabaseClient()
 
     const { error } = await supabase
-      .from('reimbursement_requests')
+      .schema('yi_connect').from('reimbursement_requests')
       .delete()
       .eq('id', requestId)
 
@@ -1557,7 +1557,7 @@ export async function createSponsorshipTier(
     const supabase = await createServerSupabaseClient()
 
     const { error } = await supabase
-      .from('sponsorship_tiers')
+      .schema('yi_connect').from('sponsorship_tiers')
       .insert([validation.data])
       .select()
       .single()
@@ -1624,7 +1624,7 @@ export async function updateSponsorshipTier(
     const supabase = await createServerSupabaseClient()
 
     const { error } = await supabase
-      .from('sponsorship_tiers')
+      .schema('yi_connect').from('sponsorship_tiers')
       .update(updateData)
       .eq('id', tier_id)
 
@@ -1657,7 +1657,7 @@ export async function deleteSponsorshipTier(tierId: string): Promise<FormState> 
 
     // Prevent delete if deals still reference this tier
     const { count: dealsCount, error: countErr } = await supabase
-      .from('sponsorship_deals')
+      .schema('yi_connect').from('sponsorship_deals')
       .select('id', { count: 'exact', head: true })
       .eq('tier_id', tierId)
 
@@ -1673,7 +1673,7 @@ export async function deleteSponsorshipTier(tierId: string): Promise<FormState> 
     }
 
     const { error } = await supabase
-      .from('sponsorship_tiers')
+      .schema('yi_connect').from('sponsorship_tiers')
       .delete()
       .eq('id', tierId)
 

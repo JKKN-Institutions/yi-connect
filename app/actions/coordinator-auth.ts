@@ -31,7 +31,7 @@ export async function loginCoordinator(
 
     // Find coordinator by email
     const { data: coordinator, error } = await supabase
-      .from('stakeholder_coordinators')
+      .schema('yi_connect').from('stakeholder_coordinators')
       .select('id, password_hash, status, requires_password_change')
       .eq('email', input.email.toLowerCase())
       .single()
@@ -52,7 +52,7 @@ export async function loginCoordinator(
 
     // Update last login
     await supabase
-      .from('stakeholder_coordinators')
+      .schema('yi_connect').from('stakeholder_coordinators')
       .update({ last_login: new Date().toISOString() })
       .eq('id', coordinator.id)
 
@@ -135,7 +135,7 @@ export async function changeCoordinatorPassword(
 
     // Get current password hash
     const { data: coordinator, error: fetchError } = await supabase
-      .from('stakeholder_coordinators')
+      .schema('yi_connect').from('stakeholder_coordinators')
       .select('password_hash')
       .eq('id', session.id)
       .single()
@@ -153,7 +153,7 @@ export async function changeCoordinatorPassword(
     // Update password
     const newHash = hashPassword(input.newPassword)
     const { error: updateError } = await supabase
-      .from('stakeholder_coordinators')
+      .schema('yi_connect').from('stakeholder_coordinators')
       .update({
         password_hash: newHash,
         requires_password_change: false,

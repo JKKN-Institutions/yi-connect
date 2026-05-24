@@ -59,7 +59,7 @@ export async function subscribeToPush(
     }
 
     const { data, error } = await supabase
-      .from('push_subscriptions')
+      .schema('yi_connect').from('push_subscriptions')
       .upsert({
         user_id: user.id,
         endpoint: validated.endpoint,
@@ -104,7 +104,7 @@ export async function unsubscribeFromPush(
     }
 
     let query = supabase
-      .from('push_subscriptions')
+      .schema('yi_connect').from('push_subscriptions')
       .delete()
       .eq('user_id', user.id)
 
@@ -152,7 +152,7 @@ export async function getPushSubscriptions(): Promise<{
     }
 
     const { data, error } = await supabase
-      .from('push_subscriptions')
+      .schema('yi_connect').from('push_subscriptions')
       .select('id, endpoint, device_info, created_at, last_used')
       .eq('user_id', user.id)
       .eq('is_active', true)
@@ -211,7 +211,7 @@ export async function getNotificationPreferences(): Promise<{
     }
 
     const { data, error } = await supabase
-      .from('notification_preferences')
+      .schema('yi_connect').from('notification_preferences')
       .select('*')
       .eq('user_id', user.id)
       .single()
@@ -304,7 +304,7 @@ export async function updateNotificationPreferences(
     }
 
     const { error } = await supabase
-      .from('notification_preferences')
+      .schema('yi_connect').from('notification_preferences')
       .upsert(updateData, { onConflict: 'user_id' })
 
     if (error) {
@@ -341,7 +341,7 @@ export async function logPushNotification(
     const supabase = await createClient()
 
     const { data, error } = await supabase
-      .from('push_notification_logs')
+      .schema('yi_connect').from('push_notification_logs')
       .insert({
         user_id: userId,
         subscription_id: subscriptionId,
@@ -392,7 +392,7 @@ export async function updateNotificationLogStatus(
     }
 
     const { error } = await supabase
-      .from('push_notification_logs')
+      .schema('yi_connect').from('push_notification_logs')
       .update(updateData)
       .eq('id', logId)
 

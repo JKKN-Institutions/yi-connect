@@ -61,7 +61,7 @@ export async function updateUserProfile(
     const supabase = await createServerSupabaseClient()
 
     const { error } = await supabase
-      .from('profiles')
+      .schema('yi_connect').from('profiles')
       .update({
         full_name: validation.data.full_name,
         phone: validation.data.phone,
@@ -167,7 +167,7 @@ export async function assignRole(
     })
 
     const { error: insertError, data: insertData } = await adminClient
-      .from('user_roles')
+      .schema('yi_connect').from('user_roles')
       .insert({
         user_id: validation.data.user_id,
         role_id: validation.data.role_id
@@ -248,7 +248,7 @@ export async function removeRole(
 
     // Get the user_role record to check permissions and get user_id
     const { data: userRole, error: fetchError } = await supabase
-      .from('user_roles')
+      .schema('yi_connect').from('user_roles')
       .select('user_id, role_id, roles!inner(hierarchy_level)')
       .eq('id', validation.data.user_role_id)
       .single()
@@ -262,7 +262,7 @@ export async function removeRole(
     // Prevent removing own Super Admin role
     if (userRole.user_id === user.id) {
       const { data: role } = await supabase
-        .from('roles')
+        .schema('yi_connect').from('roles')
         .select('name')
         .eq('id', userRole.role_id)
         .single()
@@ -288,7 +288,7 @@ export async function removeRole(
 
     // Remove the role
     const { error } = await supabase
-      .from('user_roles')
+      .schema('yi_connect').from('user_roles')
       .delete()
       .eq('id', validation.data.user_role_id)
 
@@ -364,7 +364,7 @@ export async function bulkAssignRole(
 
     // ✅ Pre-fetch user names for better error reporting
     const { data: users } = await supabase
-      .from('profiles')
+      .schema('yi_connect').from('profiles')
       .select('id, full_name, email')
       .in('id', validation.data.user_ids)
 
@@ -383,7 +383,7 @@ export async function bulkAssignRole(
       try {
         // Check if already assigned
         const { data: existing } = await supabase
-          .from('user_roles')
+          .schema('yi_connect').from('user_roles')
           .select('id')
           .eq('user_id', userId)
           .eq('role_id', validation.data.role_id)
@@ -396,7 +396,7 @@ export async function bulkAssignRole(
         }
 
         // Assign role
-        const { error } = await supabase.from('user_roles').insert({
+        const { error } = await supabase.schema('yi_connect').from('user_roles').insert({
           user_id: userId,
           role_id: validation.data.role_id
         })
@@ -480,7 +480,7 @@ export async function bulkRemoveRole(
 
     // ✅ Pre-fetch user names for better error reporting
     const { data: users } = await supabase
-      .from('profiles')
+      .schema('yi_connect').from('profiles')
       .select('id, full_name, email')
       .in('id', validation.data.user_ids)
 
@@ -500,7 +500,7 @@ export async function bulkRemoveRole(
         // Prevent removing own Super Admin role
         if (userId === user.id) {
           const { data: role } = await supabase
-            .from('roles')
+            .schema('yi_connect').from('roles')
             .select('name')
             .eq('id', validation.data.role_id)
             .single()
@@ -512,7 +512,7 @@ export async function bulkRemoveRole(
 
         // Remove role
         const { error } = await supabase
-          .from('user_roles')
+          .schema('yi_connect').from('user_roles')
           .delete()
           .eq('user_id', userId)
           .eq('role_id', validation.data.role_id)
@@ -578,7 +578,7 @@ export async function changeUserStatus(
 
     // Get user's email
     const { data: profile } = await supabase
-      .from('profiles')
+      .schema('yi_connect').from('profiles')
       .select('email')
       .eq('id', validation.data.user_id)
       .single()
@@ -591,7 +591,7 @@ export async function changeUserStatus(
 
     // Update approved_emails status
     const { error } = await supabase
-      .from('approved_emails')
+      .schema('yi_connect').from('approved_emails')
       .update({
         is_active: validation.data.is_active
       })
@@ -676,7 +676,7 @@ export async function bulkDeactivateUsers(
 
         // Get user info
         const { data: profile } = await adminClient
-          .from('profiles')
+          .schema('yi_connect').from('profiles')
           .select('id, full_name, email')
           .eq('id', userId)
           .single()
@@ -696,7 +696,7 @@ export async function bulkDeactivateUsers(
 
         // 1. Deactivate in profiles table
         const { error: profileError } = await adminClient
-          .from('profiles')
+          .schema('yi_connect').from('profiles')
           .update({ is_active: false })
           .eq('id', userId)
 
@@ -704,7 +704,7 @@ export async function bulkDeactivateUsers(
 
         // 2. Deactivate in members table (if exists)
         const { error: memberError } = await adminClient
-          .from('members')
+          .schema('yi_connect').from('members')
           .update({ is_active: false, membership_status: 'inactive' })
           .eq('id', userId)
 
@@ -713,7 +713,7 @@ export async function bulkDeactivateUsers(
         // 3. Deactivate in approved_emails table
         if (profile.email) {
           const { error: emailError } = await adminClient
-            .from('approved_emails')
+            .schema('yi_connect').from('approved_emails')
             .update({ is_active: false })
             .eq('email', profile.email)
 
@@ -806,7 +806,7 @@ export async function bulkAssignChapter(
     for (const userId of validation.data.user_ids) {
       try {
         const { error } = await supabase
-          .from('profiles')
+          .schema('yi_connect').from('profiles')
           .update({
             chapter_id: validation.data.chapter_id
           })
@@ -860,7 +860,7 @@ export async function deleteUser(userId: string): Promise<FormState> {
 
     // Get user's email
     const { data: profile } = await supabase
-      .from('profiles')
+      .schema('yi_connect').from('profiles')
       .select('email')
       .eq('id', userId)
       .single()
@@ -873,7 +873,7 @@ export async function deleteUser(userId: string): Promise<FormState> {
 
     // Deactivate user via approved_emails
     const { error } = await supabase
-      .from('approved_emails')
+      .schema('yi_connect').from('approved_emails')
       .update({
         is_active: false
       })
@@ -939,7 +939,7 @@ export async function inviteUser(
 
     // Check if email already exists in approved_emails
     const { data: existing } = await supabase
-      .from('approved_emails')
+      .schema('yi_connect').from('approved_emails')
       .select('id')
       .eq('email', validation.data.email)
       .single()
@@ -964,7 +964,7 @@ export async function inviteUser(
       : `[Metadata: ${JSON.stringify(metadata)}]`
 
     // Add email to approved list
-    const { error } = await supabase.from('approved_emails').insert({
+    const { error } = await supabase.schema('yi_connect').from('approved_emails').insert({
       email: validation.data.email,
       approved_by: user.id,
       is_active: true,
@@ -982,7 +982,7 @@ export async function inviteUser(
       try {
         // Get inviter's name
         const { data: inviterProfile } = await supabase
-          .from('profiles')
+          .schema('yi_connect').from('profiles')
           .select('full_name')
           .eq('id', user.id)
           .single()
@@ -1058,7 +1058,7 @@ export async function deactivateUserFromTable(
 
     // Get user info
     const { data: profile } = await adminClient
-      .from('profiles')
+      .schema('yi_connect').from('profiles')
       .select('id, full_name, email')
       .eq('id', userId)
       .single();
@@ -1074,7 +1074,7 @@ export async function deactivateUserFromTable(
 
     // Deactivate in profiles table
     const { error: profileError } = await adminClient
-      .from('profiles')
+      .schema('yi_connect').from('profiles')
       .update({ is_active: false })
       .eq('id', userId);
 
@@ -1084,14 +1084,14 @@ export async function deactivateUserFromTable(
 
     // Deactivate in members table (if exists)
     await adminClient
-      .from('members')
+      .schema('yi_connect').from('members')
       .update({ is_active: false, membership_status: 'inactive' })
       .eq('id', userId);
 
     // Deactivate in approved_emails table
     if (profile.email) {
       await adminClient
-        .from('approved_emails')
+        .schema('yi_connect').from('approved_emails')
         .update({ is_active: false })
         .eq('email', profile.email);
     }
@@ -1128,7 +1128,7 @@ export async function reactivateUserFromTable(
 
     // Get user info
     const { data: profile } = await adminClient
-      .from('profiles')
+      .schema('yi_connect').from('profiles')
       .select('id, full_name, email')
       .eq('id', userId)
       .single();
@@ -1144,7 +1144,7 @@ export async function reactivateUserFromTable(
 
     // Reactivate in profiles table
     const { error: profileError } = await adminClient
-      .from('profiles')
+      .schema('yi_connect').from('profiles')
       .update({ is_active: true })
       .eq('id', userId);
 
@@ -1154,14 +1154,14 @@ export async function reactivateUserFromTable(
 
     // Reactivate in members table (if exists)
     await adminClient
-      .from('members')
+      .schema('yi_connect').from('members')
       .update({ is_active: true, membership_status: 'active' })
       .eq('id', userId);
 
     // Reactivate in approved_emails table
     if (profile.email) {
       await adminClient
-        .from('approved_emails')
+        .schema('yi_connect').from('approved_emails')
         .update({ is_active: true })
         .eq('email', profile.email);
     }
@@ -1207,7 +1207,7 @@ export async function deleteUserPermanently(
 
     // Get user info
     const { data: profile } = await adminClient
-      .from('profiles')
+      .schema('yi_connect').from('profiles')
       .select('id, full_name, email')
       .eq('id', userId)
       .single();
@@ -1229,27 +1229,27 @@ export async function deleteUserPermanently(
 
     // 3. Delete from user_roles (has FK to profiles.id)
     await adminClient
-      .from('user_roles')
+      .schema('yi_connect').from('user_roles')
       .delete()
       .eq('user_id', userId);
 
     // 4. Handle approved_emails foreign key constraint
     if (userEmail) {
       await adminClient
-        .from('approved_emails')
+        .schema('yi_connect').from('approved_emails')
         .update({ created_member_id: null, member_created: false })
         .eq('email', userEmail);
     }
 
     // Also update any approved_emails where this user was the created_member_id
     await adminClient
-      .from('approved_emails')
+      .schema('yi_connect').from('approved_emails')
       .update({ created_member_id: null })
       .eq('created_member_id', userId);
 
     // 5. Delete from members table (cascades to skills, certifications, etc.)
     const { error: memberError } = await adminClient
-      .from('members')
+      .schema('yi_connect').from('members')
       .delete()
       .eq('id', userId);
 
@@ -1259,7 +1259,7 @@ export async function deleteUserPermanently(
 
     // 6. Delete from profiles table
     const { error: profileError } = await adminClient
-      .from('profiles')
+      .schema('yi_connect').from('profiles')
       .delete()
       .eq('id', userId);
 
@@ -1270,7 +1270,7 @@ export async function deleteUserPermanently(
     // 7. Delete from approved_emails table
     if (userEmail) {
       await adminClient
-        .from('approved_emails')
+        .schema('yi_connect').from('approved_emails')
         .delete()
         .eq('email', userEmail);
     }
@@ -1325,7 +1325,7 @@ export async function exportUsers(
 
     // Build query with filters
     let query = supabase
-      .from('profiles')
+      .schema('yi_connect').from('profiles')
       .select(`
         id,
         full_name,

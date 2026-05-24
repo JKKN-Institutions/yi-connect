@@ -74,7 +74,7 @@ export async function createOpportunity(
 
     // Get user's chapter
     const { data: member } = await supabase
-      .from('members')
+      .schema('yi_connect').from('members')
       .select('chapter_id')
       .eq('id', user.id)
       .single()
@@ -85,7 +85,7 @@ export async function createOpportunity(
 
     // Insert opportunity
     const { data, error } = await supabase
-      .from('industry_opportunities')
+      .schema('yi_connect').from('industry_opportunities')
       .insert({
         chapter_id: member.chapter_id,
         industry_id: validated.industry_id,
@@ -156,7 +156,7 @@ export async function updateOpportunity(
     const validated = updateOpportunitySchema.parse(input)
 
     const { error } = await supabase
-      .from('industry_opportunities')
+      .schema('yi_connect').from('industry_opportunities')
       .update({
         ...validated,
         updated_at: new Date().toISOString(),
@@ -194,7 +194,7 @@ export async function publishOpportunity(
     }
 
     const { error } = await supabase
-      .from('industry_opportunities')
+      .schema('yi_connect').from('industry_opportunities')
       .update({
         status: 'accepting_applications',
         published_at: new Date().toISOString(),
@@ -234,7 +234,7 @@ export async function closeOpportunity(
     }
 
     const { error } = await supabase
-      .from('industry_opportunities')
+      .schema('yi_connect').from('industry_opportunities')
       .update({
         status: 'closed',
         closed_at: new Date().toISOString(),
@@ -279,7 +279,7 @@ export async function submitApplication(
 
     // Check if already applied
     const { data: existing } = await supabase
-      .from('opportunity_applications')
+      .schema('yi_connect').from('opportunity_applications')
       .select('id')
       .eq('opportunity_id', validated.opportunity_id)
       .eq('member_id', user.id)
@@ -291,7 +291,7 @@ export async function submitApplication(
 
     // Check if opportunity is accepting applications
     const { data: opportunity } = await supabase
-      .from('industry_opportunities')
+      .schema('yi_connect').from('industry_opportunities')
       .select('status, application_deadline, max_participants, positions_filled')
       .eq('id', validated.opportunity_id)
       .single()
@@ -313,7 +313,7 @@ export async function submitApplication(
 
     // Get member snapshot for application
     const { data: member } = await supabase
-      .from('members')
+      .schema('yi_connect').from('members')
       .select(`
         id,
         company,
@@ -372,7 +372,7 @@ export async function submitApplication(
 
     // Insert application
     const { data, error } = await supabase
-      .from('opportunity_applications')
+      .schema('yi_connect').from('opportunity_applications')
       .insert({
         opportunity_id: validated.opportunity_id,
         member_id: user.id,
@@ -432,7 +432,7 @@ export async function withdrawApplication(
     }
 
     const { data: application } = await supabase
-      .from('opportunity_applications')
+      .schema('yi_connect').from('opportunity_applications')
       .select('id, opportunity_id, member_id, status')
       .eq('id', applicationId)
       .single()
@@ -446,7 +446,7 @@ export async function withdrawApplication(
     }
 
     const { error } = await supabase
-      .from('opportunity_applications')
+      .schema('yi_connect').from('opportunity_applications')
       .update({
         status: 'withdrawn',
         status_changed_at: new Date().toISOString(),
@@ -484,7 +484,7 @@ export async function reviewApplication(
     const validated = reviewApplicationSchema.parse(input)
 
     const { data: application } = await supabase
-      .from('opportunity_applications')
+      .schema('yi_connect').from('opportunity_applications')
       .select(`
         id,
         opportunity_id,
@@ -507,7 +507,7 @@ export async function reviewApplication(
     }
 
     const { error } = await supabase
-      .from('opportunity_applications')
+      .schema('yi_connect').from('opportunity_applications')
       .update({
         status: validated.status,
         reviewer_notes: validated.reviewer_notes || null,
@@ -619,7 +619,7 @@ export async function bulkReviewApplications(
     const validated = bulkReviewApplicationsSchema.parse(input)
 
     const { data, error } = await supabase
-      .from('opportunity_applications')
+      .schema('yi_connect').from('opportunity_applications')
       .update({
         status: validated.status,
         reviewer_notes: validated.reviewer_notes || null,
@@ -669,7 +669,7 @@ export async function createVisitRequest(
 
     // Get member's chapter
     const { data: member } = await supabase
-      .from('members')
+      .schema('yi_connect').from('members')
       .select('chapter_id')
       .eq('id', user.id)
       .single()
@@ -680,7 +680,7 @@ export async function createVisitRequest(
 
     // Check for active MoU with industry
     const { data: mou } = await supabase
-      .from('stakeholder_mous')
+      .schema('yi_connect').from('stakeholder_mous')
       .select('id')
       .eq('stakeholder_id', validated.industry_id)
       .eq('mou_status', 'signed')
@@ -688,7 +688,7 @@ export async function createVisitRequest(
       .single()
 
     const { data, error } = await supabase
-      .from('member_visit_requests')
+      .schema('yi_connect').from('member_visit_requests')
       .insert({
         chapter_id: member.chapter_id,
         requested_by: user.id,
@@ -756,7 +756,7 @@ export async function reviewVisitRequest(
     }
 
     const { error } = await supabase
-      .from('member_visit_requests')
+      .schema('yi_connect').from('member_visit_requests')
       .update({
         status: newStatus,
         yi_reviewer_id: user.id,
@@ -801,7 +801,7 @@ export async function scheduleVisit(
     const validated = scheduleVisitSchema.parse(input)
 
     const { error } = await supabase
-      .from('member_visit_requests')
+      .schema('yi_connect').from('member_visit_requests')
       .update({
         status: 'scheduled',
         scheduled_date: validated.scheduled_date,
@@ -845,7 +845,7 @@ export async function completeVisit(
     const validated = completeVisitSchema.parse(input)
 
     const { error } = await supabase
-      .from('member_visit_requests')
+      .schema('yi_connect').from('member_visit_requests')
       .update({
         status: 'completed',
         completed_at: new Date().toISOString(),
@@ -889,7 +889,7 @@ export async function toggleBookmark(
 
     // Check if already bookmarked
     const { data: existing } = await supabase
-      .from('opportunity_bookmarks')
+      .schema('yi_connect').from('opportunity_bookmarks')
       .select('id')
       .eq('opportunity_id', opportunityId)
       .eq('member_id', user.id)
@@ -898,7 +898,7 @@ export async function toggleBookmark(
     if (existing) {
       // Remove bookmark
       await supabase
-        .from('opportunity_bookmarks')
+        .schema('yi_connect').from('opportunity_bookmarks')
         .delete()
         .eq('id', existing.id)
 
@@ -906,7 +906,7 @@ export async function toggleBookmark(
       return { success: true, data: { bookmarked: false } }
     } else {
       // Add bookmark
-      await supabase.from('opportunity_bookmarks').insert({
+      await supabase.schema('yi_connect').from('opportunity_bookmarks').insert({
         opportunity_id: opportunityId,
         member_id: user.id,
       })
@@ -937,7 +937,7 @@ export async function expressInterestInVisit(
 
     // Check if already expressed interest
     const { data: existing } = await supabase
-      .from('visit_request_interests')
+      .schema('yi_connect').from('visit_request_interests')
       .select('id')
       .eq('visit_request_id', visitRequestId)
       .eq('member_id', user.id)
@@ -947,7 +947,7 @@ export async function expressInterestInVisit(
       return { success: false, error: 'Already expressed interest' }
     }
 
-    const { error } = await supabase.from('visit_request_interests').insert({
+    const { error } = await supabase.schema('yi_connect').from('visit_request_interests').insert({
       visit_request_id: visitRequestId,
       member_id: user.id,
       interest_reason: reason || null,

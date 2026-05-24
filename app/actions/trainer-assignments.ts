@@ -58,7 +58,7 @@ export async function assignTrainersToEvent(
 
     // Get event details for scoring
     const { data: event, error: eventError } = await supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .select('id, service_type, stakeholder_id, trainers_needed')
       .eq('id', validated.event_id)
       .eq('is_service_event', true)
@@ -72,7 +72,7 @@ export async function assignTrainersToEvent(
     let stakeholderCity: string | null = null
     if (event.stakeholder_id) {
       const { data: stakeholder } = await supabase
-        .from('stakeholders')
+        .schema('yi_connect').from('stakeholders')
         .select('city')
         .eq('id', event.stakeholder_id)
         .single()
@@ -117,7 +117,7 @@ export async function assignTrainersToEvent(
     })
 
     const { data, error } = await supabase
-      .from('event_trainer_assignments')
+      .schema('yi_connect').from('event_trainer_assignments')
       .insert(assignments)
       .select('id')
 
@@ -163,7 +163,7 @@ export async function sendTrainerInvitations(
     // PostgREST cannot resolve `trainer:profiles!event_trainer_assignments_trainer_profile_id_fkey(...)`.
     // Chain the embed through trainer_profiles → members → profiles.
     let query = supabase
-      .from('event_trainer_assignments')
+      .schema('yi_connect').from('event_trainer_assignments')
       .select(`
         id,
         trainer_profile_id,
@@ -194,7 +194,7 @@ export async function sendTrainerInvitations(
 
     // Get event details for email
     const { data: event } = await supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .select('title, start_date, location')
       .eq('id', eventId)
       .single()
@@ -205,7 +205,7 @@ export async function sendTrainerInvitations(
 
     // Update status to invited
     const { error: updateError } = await supabase
-      .from('event_trainer_assignments')
+      .schema('yi_connect').from('event_trainer_assignments')
       .update({
         status: 'invited',
         response_deadline: responseDeadline.toISOString(),
@@ -297,7 +297,7 @@ export async function respondToTrainerInvite(
 
     // Get the assignment
     const { data: assignment, error: fetchError } = await supabase
-      .from('event_trainer_assignments')
+      .schema('yi_connect').from('event_trainer_assignments')
       .select('id, event_id, trainer_profile_id, status, response_deadline')
       .eq('id', validated.assignment_id)
       .single()
@@ -308,7 +308,7 @@ export async function respondToTrainerInvite(
 
     // Verify trainer owns this assignment
     const { data: trainerProfile } = await supabase
-      .from('trainer_profiles')
+      .schema('yi_connect').from('trainer_profiles')
       .select('id')
       .eq('member_id', user.id)
       .single()
@@ -329,7 +329,7 @@ export async function respondToTrainerInvite(
     // Update assignment
     const newStatus = validated.accept ? 'accepted' : 'declined'
     const { error: updateError } = await supabase
-      .from('event_trainer_assignments')
+      .schema('yi_connect').from('event_trainer_assignments')
       .update({
         status: newStatus,
         responded_at: new Date().toISOString(),
@@ -371,7 +371,7 @@ export async function confirmTrainer(
 
     // Get assignment
     const { data: assignment, error: fetchError } = await supabase
-      .from('event_trainer_assignments')
+      .schema('yi_connect').from('event_trainer_assignments')
       .select('id, event_id, status')
       .eq('id', validated.assignment_id)
       .single()
@@ -386,7 +386,7 @@ export async function confirmTrainer(
 
     // Update to confirmed
     const { error: updateError } = await supabase
-      .from('event_trainer_assignments')
+      .schema('yi_connect').from('event_trainer_assignments')
       .update({
         status: 'confirmed',
         confirmed_at: new Date().toISOString(),
@@ -429,13 +429,13 @@ export async function updateTrainerAssignment(
     const { id, ...updateData } = validated
 
     const { data: assignment } = await supabase
-      .from('event_trainer_assignments')
+      .schema('yi_connect').from('event_trainer_assignments')
       .select('event_id')
       .eq('id', id)
       .single()
 
     const { error } = await supabase
-      .from('event_trainer_assignments')
+      .schema('yi_connect').from('event_trainer_assignments')
       .update(updateData)
       .eq('id', id)
 
@@ -472,13 +472,13 @@ export async function cancelTrainerAssignment(
     }
 
     const { data: assignment } = await supabase
-      .from('event_trainer_assignments')
+      .schema('yi_connect').from('event_trainer_assignments')
       .select('event_id')
       .eq('id', assignmentId)
       .single()
 
     const { error } = await supabase
-      .from('event_trainer_assignments')
+      .schema('yi_connect').from('event_trainer_assignments')
       .update({
         status: 'cancelled',
         notes: reason || null,
@@ -522,7 +522,7 @@ export async function rateTrainer(input: RateTrainerInput): Promise<ActionRespon
 
     // Get assignment to verify status
     const { data: assignment, error: fetchError } = await supabase
-      .from('event_trainer_assignments')
+      .schema('yi_connect').from('event_trainer_assignments')
       .select('id, event_id, status, trainer_profile_id')
       .eq('id', validated.assignment_id)
       .single()
@@ -537,7 +537,7 @@ export async function rateTrainer(input: RateTrainerInput): Promise<ActionRespon
 
     // Update rating
     const { error: updateError } = await supabase
-      .from('event_trainer_assignments')
+      .schema('yi_connect').from('event_trainer_assignments')
       .update({
         trainer_rating: validated.trainer_rating,
         trainer_feedback: validated.trainer_feedback || null,
@@ -580,13 +580,13 @@ export async function rateCoordinator(input: RateCoordinatorInput): Promise<Acti
 
     // Verify trainer owns this assignment
     const { data: trainerProfile } = await supabase
-      .from('trainer_profiles')
+      .schema('yi_connect').from('trainer_profiles')
       .select('id')
       .eq('member_id', user.id)
       .single()
 
     const { data: assignment, error: fetchError } = await supabase
-      .from('event_trainer_assignments')
+      .schema('yi_connect').from('event_trainer_assignments')
       .select('id, event_id, trainer_profile_id')
       .eq('id', validated.assignment_id)
       .single()
@@ -601,7 +601,7 @@ export async function rateCoordinator(input: RateCoordinatorInput): Promise<Acti
 
     // Update rating
     const { error: updateError } = await supabase
-      .from('event_trainer_assignments')
+      .schema('yi_connect').from('event_trainer_assignments')
       .update({
         coordinator_rating: validated.coordinator_rating,
         coordinator_feedback: validated.coordinator_feedback || null,
@@ -635,7 +635,7 @@ async function updateTrainerAverageRating(trainerProfileId: string): Promise<voi
 
   // Get all ratings for this trainer
   const { data: assignments } = await supabase
-    .from('event_trainer_assignments')
+    .schema('yi_connect').from('event_trainer_assignments')
     .select('trainer_rating')
     .eq('trainer_profile_id', trainerProfileId)
     .eq('status', 'completed')
@@ -651,7 +651,7 @@ async function updateTrainerAverageRating(trainerProfileId: string): Promise<voi
 
   // Update trainer profile
   await supabase
-    .from('trainer_profiles')
+    .schema('yi_connect').from('trainer_profiles')
     .update({
       average_rating: Math.round(avgRating * 100) / 100,
       total_sessions: assignments.length,
@@ -675,13 +675,13 @@ export async function markTrainerAttendance(
     }
 
     const { data: assignment } = await supabase
-      .from('event_trainer_assignments')
+      .schema('yi_connect').from('event_trainer_assignments')
       .select('event_id')
       .eq('id', assignmentId)
       .single()
 
     const { error } = await supabase
-      .from('event_trainer_assignments')
+      .schema('yi_connect').from('event_trainer_assignments')
       .update({
         attendance_confirmed: attended,
       })

@@ -42,7 +42,7 @@ export async function createAwardCategory(
     const validated = CreateAwardCategorySchema.parse(data)
 
     const { data: category, error } = await supabase
-      .from('award_categories')
+      .schema('yi_connect').from('award_categories')
       .insert(validated)
       .select()
       .single()
@@ -78,7 +78,7 @@ export async function updateAwardCategory(
     const validated = UpdateAwardCategorySchema.parse({ ...data, id })
 
     const { data: category, error } = await supabase
-      .from('award_categories')
+      .schema('yi_connect').from('award_categories')
       .update(validated)
       .eq('id', id)
       .select()
@@ -104,7 +104,7 @@ export async function deleteAwardCategory(id: string): Promise<ActionResult> {
 
     // Check if category has cycles
     const { count } = await supabase
-      .from('award_cycles')
+      .schema('yi_connect').from('award_cycles')
       .select('id', { count: 'exact', head: true })
       .eq('category_id', id)
 
@@ -116,7 +116,7 @@ export async function deleteAwardCategory(id: string): Promise<ActionResult> {
     }
 
     const { error } = await supabase
-      .from('award_categories')
+      .schema('yi_connect').from('award_categories')
       .delete()
       .eq('id', id)
 
@@ -138,7 +138,7 @@ export async function toggleCategoryStatus(
     const supabase = await createClient()
 
     const { data, error } = await supabase
-      .from('award_categories')
+      .schema('yi_connect').from('award_categories')
       .update({ is_active: isActive })
       .eq('id', id)
       .select()
@@ -167,7 +167,7 @@ export async function createAwardCycle(
     const validated = CreateAwardCycleSchema.parse(data)
 
     const { data: cycle, error } = await supabase
-      .from('award_cycles')
+      .schema('yi_connect').from('award_cycles')
       .insert(validated)
       .select(`
         *,
@@ -198,7 +198,7 @@ export async function updateAwardCycle(
     const validated = UpdateAwardCycleSchema.parse({ ...data, id })
 
     const { data: cycle, error } = await supabase
-      .from('award_cycles')
+      .schema('yi_connect').from('award_cycles')
       .update(validated)
       .eq('id', id)
       .select(`
@@ -229,7 +229,7 @@ export async function advanceCycleStatus(
     const supabase = await createClient()
 
     const { data, error } = await supabase
-      .from('award_cycles')
+      .schema('yi_connect').from('award_cycles')
       .update({
         status: newStatus,
         ...(newStatus === 'completed' && {
@@ -269,7 +269,7 @@ export async function submitNomination(
     const validated = CreateNominationSchema.parse(data)
 
     const { data: nomination, error } = await supabase
-      .from('nominations')
+      .schema('yi_connect').from('nominations')
       .insert({
         ...validated,
         submitted_at:
@@ -317,7 +317,7 @@ export async function updateNomination(
     const validated = UpdateNominationSchema.parse({ ...data, id })
 
     const { data: nomination, error } = await supabase
-      .from('nominations')
+      .schema('yi_connect').from('nominations')
       .update({
         ...validated,
         ...(validated.status === 'submitted' && {
@@ -346,7 +346,7 @@ export async function withdrawNomination(id: string): Promise<ActionResult> {
     const supabase = await createClient()
 
     const { data, error } = await supabase
-      .from('nominations')
+      .schema('yi_connect').from('nominations')
       .update({ status: 'withdrawn' })
       .eq('id', id)
       .select()
@@ -371,7 +371,7 @@ export async function reviewNomination(
     const supabase = await createClient()
 
     const { data: nomination, error } = await supabase
-      .from('nominations')
+      .schema('yi_connect').from('nominations')
       .update({
         status,
         review_notes: reviewNotes,
@@ -406,7 +406,7 @@ export async function assignJuryMember(
 
     // Check if already assigned
     const { data: existing } = await supabase
-      .from('jury_members')
+      .schema('yi_connect').from('jury_members')
       .select('id')
       .eq('cycle_id', cycleId)
       .eq('member_id', memberId)
@@ -418,13 +418,13 @@ export async function assignJuryMember(
 
     // Count nominations for this cycle
     const { count } = await supabase
-      .from('nominations')
+      .schema('yi_connect').from('nominations')
       .select('id', { count: 'exact', head: true })
       .eq('cycle_id', cycleId)
       .eq('status', 'approved')
 
     const { data, error } = await supabase
-      .from('jury_members')
+      .schema('yi_connect').from('jury_members')
       .insert({
         cycle_id: cycleId,
         member_id: memberId,
@@ -460,7 +460,7 @@ export async function submitJuryScores(
 
     // Check if already scored
     const { data: existing } = await supabase
-      .from('jury_scores')
+      .schema('yi_connect').from('jury_scores')
       .select('id')
       .eq('nomination_id', validated.nomination_id)
       .eq('jury_member_id', validated.jury_member_id)
@@ -474,7 +474,7 @@ export async function submitJuryScores(
     }
 
     const { data: score, error } = await supabase
-      .from('jury_scores')
+      .schema('yi_connect').from('jury_scores')
       .insert(validated)
       .select()
       .single()
@@ -483,7 +483,7 @@ export async function submitJuryScores(
 
     // Update jury member progress
     await supabase
-      .from('jury_members')
+      .schema('yi_connect').from('jury_members')
       .update({ scored_nominations: supabase.rpc('increment', { x: 1 }) })
       .eq('id', validated.jury_member_id)
 
@@ -508,7 +508,7 @@ export async function updateJuryScores(
     const validated = UpdateJuryScoreSchema.parse({ ...data, id: scoreId })
 
     const { data: score, error } = await supabase
-      .from('jury_scores')
+      .schema('yi_connect').from('jury_scores')
       .update(validated)
       .eq('id', scoreId)
       .select()
@@ -547,7 +547,7 @@ export async function declareWinners(
 
     for (const w of winners) {
       const { data, error } = await supabase
-        .from('nominations')
+        .schema('yi_connect').from('nominations')
         .update({
           rank: w.rank,
           final_score: w.final_score,
@@ -571,7 +571,7 @@ export async function declareWinners(
 
     // Update cycle status
     await supabase
-      .from('award_cycles')
+      .schema('yi_connect').from('award_cycles')
       .update({
         status: 'completed',
         winners_announced_at: awardedAt,
@@ -597,7 +597,7 @@ export async function generateCertificate(
 
     // Look up the nomination to derive recipient + award context for the cert.
     const { data: nom, error: nomErr } = await supabase
-      .from('nominations')
+      .schema('yi_connect').from('nominations')
       .select(`
         id,
         cycle_id,
@@ -616,7 +616,7 @@ export async function generateCertificate(
       (nom as any)?.nominee?.full_name ?? 'Recipient'
 
     const { data, error } = await supabase
-      .from('award_certificates')
+      .schema('yi_connect').from('award_certificates')
       .insert({
         nomination_id: nominationId,
         cycle_id: (nom as any).cycle_id,

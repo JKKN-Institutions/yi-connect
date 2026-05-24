@@ -62,7 +62,7 @@ export async function createMember(
     const { data: { user: currentUser } } = await supabase.auth.getUser();
 
     // 1. Add email to approved_emails whitelist (required by handle_new_user trigger)
-    const { error: whitelistError } = await supabase.from('approved_emails').insert({
+    const { error: whitelistError } = await supabase.schema('yi_connect').from('approved_emails').insert({
       email,
       assigned_chapter_id: chapterId || null,
       approved_by: currentUser?.id || null,
@@ -160,7 +160,7 @@ export async function createMember(
     };
   }
 
-  const { error } = await supabase.from('members').insert({
+  const { error } = await supabase.schema('yi_connect').from('members').insert({
     id: validation.data.id,
     chapter_id: validation.data.chapter_id || null,
     membership_number: validation.data.membership_number || null,
@@ -280,7 +280,7 @@ export async function updateMember(
   });
 
   const { error } = await supabase
-    .from('members')
+    .schema('yi_connect').from('members')
     .update(updateData)
     .eq('id', validation.data.id);
 
@@ -313,7 +313,7 @@ export async function deleteMember(memberId: string): Promise<FormState> {
   const supabase = await createServerSupabaseClient();
 
   const { error } = await supabase
-    .from('members')
+    .schema('yi_connect').from('members')
     .update({ is_active: false })
     .eq('id', memberId);
 
@@ -353,7 +353,7 @@ export async function deactivateMemberFromTable(
 
   // First get member info for the message
   const { data: member } = await adminClient
-    .from('members')
+    .schema('yi_connect').from('members')
     .select('id, profiles!inner(full_name, email)')
     .eq('id', memberId)
     .single();
@@ -370,7 +370,7 @@ export async function deactivateMemberFromTable(
 
   // Deactivate in members table
   const { error: memberError } = await adminClient
-    .from('members')
+    .schema('yi_connect').from('members')
     .update({ is_active: false, membership_status: 'inactive' })
     .eq('id', memberId);
 
@@ -383,7 +383,7 @@ export async function deactivateMemberFromTable(
 
   // Deactivate in profiles table
   const { error: profileError } = await adminClient
-    .from('profiles')
+    .schema('yi_connect').from('profiles')
     .update({ is_active: false })
     .eq('id', memberId);
 
@@ -394,7 +394,7 @@ export async function deactivateMemberFromTable(
   // Deactivate in approved_emails table
   if (memberEmail) {
     await adminClient
-      .from('approved_emails')
+      .schema('yi_connect').from('approved_emails')
       .update({ is_active: false })
       .eq('email', memberEmail);
   }
@@ -432,7 +432,7 @@ export async function reactivateMemberFromTable(
 
   // First get member info for the message
   const { data: member } = await adminClient
-    .from('members')
+    .schema('yi_connect').from('members')
     .select('id, profiles!inner(full_name, email)')
     .eq('id', memberId)
     .single();
@@ -449,7 +449,7 @@ export async function reactivateMemberFromTable(
 
   // Reactivate in members table
   const { error: memberError } = await adminClient
-    .from('members')
+    .schema('yi_connect').from('members')
     .update({ is_active: true, membership_status: 'active' })
     .eq('id', memberId);
 
@@ -462,7 +462,7 @@ export async function reactivateMemberFromTable(
 
   // Reactivate in profiles table
   const { error: profileError } = await adminClient
-    .from('profiles')
+    .schema('yi_connect').from('profiles')
     .update({ is_active: true })
     .eq('id', memberId);
 
@@ -473,7 +473,7 @@ export async function reactivateMemberFromTable(
   // Reactivate in approved_emails table
   if (memberEmail) {
     await adminClient
-      .from('approved_emails')
+      .schema('yi_connect').from('approved_emails')
       .update({ is_active: true })
       .eq('email', memberEmail);
   }
@@ -511,7 +511,7 @@ export async function deleteMemberPermanently(
 
   // First get member info for the message
   const { data: member } = await adminClient
-    .from('members')
+    .schema('yi_connect').from('members')
     .select('id, profiles!inner(full_name, email)')
     .eq('id', memberId)
     .single();
@@ -531,20 +531,20 @@ export async function deleteMemberPermanently(
     // Update approved_emails to remove the reference to this member
     if (memberEmail) {
       await adminClient
-        .from('approved_emails')
+        .schema('yi_connect').from('approved_emails')
         .update({ created_member_id: null, member_created: false })
         .eq('email', memberEmail);
     }
 
     // Also update any approved_emails where this member was the created_member_id
     await adminClient
-      .from('approved_emails')
+      .schema('yi_connect').from('approved_emails')
       .update({ created_member_id: null })
       .eq('created_member_id', memberId);
 
     // 2. Delete from members table (this will cascade delete skills, certifications, etc.)
     const { error: memberError } = await adminClient
-      .from('members')
+      .schema('yi_connect').from('members')
       .delete()
       .eq('id', memberId);
 
@@ -554,7 +554,7 @@ export async function deleteMemberPermanently(
 
     // 3. Delete from profiles table
     const { error: profileError } = await adminClient
-      .from('profiles')
+      .schema('yi_connect').from('profiles')
       .delete()
       .eq('id', memberId);
 
@@ -565,7 +565,7 @@ export async function deleteMemberPermanently(
     // 4. Delete from approved_emails table (the email whitelist entry)
     if (memberEmail) {
       await adminClient
-        .from('approved_emails')
+        .schema('yi_connect').from('approved_emails')
         .delete()
         .eq('email', memberEmail);
     }
@@ -631,7 +631,7 @@ export async function bulkDeleteMembers(
 
   // Get all members info for processing
   const { data: members } = await adminClient
-    .from('members')
+    .schema('yi_connect').from('members')
     .select('id, profiles!inner(full_name, email)')
     .in('id', memberIds);
 
@@ -652,20 +652,20 @@ export async function bulkDeleteMembers(
       // 1. Handle approved_emails foreign key constraint
       if (memberEmail) {
         await adminClient
-          .from('approved_emails')
+          .schema('yi_connect').from('approved_emails')
           .update({ created_member_id: null, member_created: false })
           .eq('email', memberEmail);
       }
 
       // Also update any approved_emails where this member was the created_member_id
       await adminClient
-        .from('approved_emails')
+        .schema('yi_connect').from('approved_emails')
         .update({ created_member_id: null })
         .eq('created_member_id', member.id);
 
       // 2. Delete from members table (cascades to skills, certifications, etc.)
       const { error: memberError } = await adminClient
-        .from('members')
+        .schema('yi_connect').from('members')
         .delete()
         .eq('id', member.id);
 
@@ -675,14 +675,14 @@ export async function bulkDeleteMembers(
 
       // 3. Delete from profiles table
       await adminClient
-        .from('profiles')
+        .schema('yi_connect').from('profiles')
         .delete()
         .eq('id', member.id);
 
       // 4. Delete from approved_emails table
       if (memberEmail) {
         await adminClient
-          .from('approved_emails')
+          .schema('yi_connect').from('approved_emails')
           .delete()
           .eq('email', memberEmail);
       }
@@ -761,7 +761,7 @@ export async function bulkDeactivateMembers(
 
   // Get all members info
   const { data: members } = await adminClient
-    .from('members')
+    .schema('yi_connect').from('members')
     .select('id, profiles!inner(full_name, email)')
     .in('id', memberIds);
 
@@ -781,7 +781,7 @@ export async function bulkDeactivateMembers(
     try {
       // Deactivate in members table
       const { error: memberError } = await adminClient
-        .from('members')
+        .schema('yi_connect').from('members')
         .update({ is_active: false, membership_status: 'inactive' })
         .eq('id', member.id);
 
@@ -791,14 +791,14 @@ export async function bulkDeactivateMembers(
 
       // Deactivate in profiles table
       await adminClient
-        .from('profiles')
+        .schema('yi_connect').from('profiles')
         .update({ is_active: false })
         .eq('id', member.id);
 
       // Deactivate in approved_emails table
       if (memberEmail) {
         await adminClient
-          .from('approved_emails')
+          .schema('yi_connect').from('approved_emails')
           .update({ is_active: false })
           .eq('email', memberEmail);
       }
@@ -862,7 +862,7 @@ export async function addMemberSkill(
 
   const supabase = await createServerSupabaseClient();
 
-  const { error } = await supabase.from('member_skills').insert({
+  const { error } = await supabase.schema('yi_connect').from('member_skills').insert({
     member_id: validation.data.member_id,
     skill_id: validation.data.skill_id,
     proficiency: validation.data.proficiency,
@@ -918,7 +918,7 @@ export async function updateMemberSkill(
 
   // Get member_id for cache invalidation
   const { data: memberSkill } = await supabase
-    .from('member_skills')
+    .schema('yi_connect').from('member_skills')
     .select('member_id')
     .eq('id', validation.data.id)
     .single();
@@ -932,7 +932,7 @@ export async function updateMemberSkill(
   });
 
   const { error } = await supabase
-    .from('member_skills')
+    .schema('yi_connect').from('member_skills')
     .update(updateData)
     .eq('id', validation.data.id);
 
@@ -962,12 +962,12 @@ export async function deleteMemberSkill(id: string): Promise<FormState> {
 
   // Get member_id for cache invalidation
   const { data: memberSkill } = await supabase
-    .from('member_skills')
+    .schema('yi_connect').from('member_skills')
     .select('member_id')
     .eq('id', id)
     .single();
 
-  const { error } = await supabase.from('member_skills').delete().eq('id', id);
+  const { error } = await supabase.schema('yi_connect').from('member_skills').delete().eq('id', id);
 
   if (error) {
     return {
@@ -1017,7 +1017,7 @@ export async function addMemberCertification(
 
   const supabase = await createServerSupabaseClient();
 
-  const { error } = await supabase.from('member_certifications').insert({
+  const { error } = await supabase.schema('yi_connect').from('member_certifications').insert({
     member_id: validation.data.member_id,
     certification_id: validation.data.certification_id,
     certificate_number: validation.data.certificate_number || null,
@@ -1069,7 +1069,7 @@ export async function updateMemberCertification(
 
   // Get member_id for cache invalidation
   const { data: memberCert } = await supabase
-    .from('member_certifications')
+    .schema('yi_connect').from('member_certifications')
     .select('member_id')
     .eq('id', validation.data.id)
     .single();
@@ -1083,7 +1083,7 @@ export async function updateMemberCertification(
   });
 
   const { error } = await supabase
-    .from('member_certifications')
+    .schema('yi_connect').from('member_certifications')
     .update(updateData)
     .eq('id', validation.data.id);
 
@@ -1115,13 +1115,13 @@ export async function deleteMemberCertification(
 
   // Get member_id for cache invalidation
   const { data: memberCert } = await supabase
-    .from('member_certifications')
+    .schema('yi_connect').from('member_certifications')
     .select('member_id')
     .eq('id', id)
     .single();
 
   const { error } = await supabase
-    .from('member_certifications')
+    .schema('yi_connect').from('member_certifications')
     .delete()
     .eq('id', id);
 
@@ -1174,7 +1174,7 @@ export async function setAvailability(
   const supabase = await createServerSupabaseClient();
 
   // Upsert availability (update if exists, insert if not)
-  const { error } = await supabase.from('availability').upsert(
+  const { error } = await supabase.schema('yi_connect').from('availability').upsert(
     {
       member_id: validation.data.member_id,
       date: validation.data.date,
@@ -1205,7 +1205,7 @@ export async function setAvailability(
 export async function deleteAvailability(id: string): Promise<FormState> {
   const supabase = await createServerSupabaseClient();
 
-  const { error } = await supabase.from('availability').delete().eq('id', id);
+  const { error } = await supabase.schema('yi_connect').from('availability').delete().eq('id', id);
 
   if (error) {
     return {
@@ -1311,7 +1311,7 @@ export async function createSkill(
 
   const supabase = await createServerSupabaseClient();
 
-  const { error } = await supabase.from('skills').insert({
+  const { error } = await supabase.schema('yi_connect').from('skills').insert({
     name: validation.data.name,
     category: validation.data.category,
     description: validation.data.description || null,
@@ -1370,7 +1370,7 @@ export async function updateSkill(
   });
 
   const { error } = await supabase
-    .from('skills')
+    .schema('yi_connect').from('skills')
     .update(updateData)
     .eq('id', validation.data.id);
 
@@ -1396,7 +1396,7 @@ export async function updateSkill(
 export async function deleteSkill(id: string): Promise<FormState> {
   const supabase = await createServerSupabaseClient();
 
-  const { error } = await supabase.from('skills').delete().eq('id', id);
+  const { error } = await supabase.schema('yi_connect').from('skills').delete().eq('id', id);
 
   if (error) {
     return {
@@ -1444,7 +1444,7 @@ export async function createCertification(
 
   const supabase = await createServerSupabaseClient();
 
-  const { error } = await supabase.from('certifications').insert({
+  const { error } = await supabase.schema('yi_connect').from('certifications').insert({
     name: validation.data.name,
     issuing_organization: validation.data.issuing_organization,
     description: validation.data.description || null,
@@ -1507,7 +1507,7 @@ export async function updateCertification(
   });
 
   const { error } = await supabase
-    .from('certifications')
+    .schema('yi_connect').from('certifications')
     .update(updateData)
     .eq('id', validation.data.id);
 
@@ -1533,7 +1533,7 @@ export async function updateCertification(
 export async function deleteCertification(id: string): Promise<FormState> {
   const supabase = await createServerSupabaseClient();
 
-  const { error } = await supabase.from('certifications').delete().eq('id', id);
+  const { error } = await supabase.schema('yi_connect').from('certifications').delete().eq('id', id);
 
   if (error) {
     return {

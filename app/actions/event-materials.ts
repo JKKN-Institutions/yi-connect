@@ -67,7 +67,7 @@ export async function uploadMaterial(
 
     // Verify event exists
     const { data: event, error: eventError } = await supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .select('id, status')
       .eq('id', validated.event_id)
       .single()
@@ -78,7 +78,7 @@ export async function uploadMaterial(
 
     // Insert material
     const { data, error } = await supabase
-      .from('event_materials')
+      .schema('yi_connect').from('event_materials')
       .insert({
         event_id: validated.event_id,
         trainer_assignment_id: validated.trainer_assignment_id || null,
@@ -135,7 +135,7 @@ export async function updateMaterial(
 
     // Get material to verify ownership
     const { data: material, error: fetchError } = await supabase
-      .from('event_materials')
+      .schema('yi_connect').from('event_materials')
       .select('id, event_id, uploaded_by, status')
       .eq('id', materialId)
       .single()
@@ -160,7 +160,7 @@ export async function updateMaterial(
 
     // Update material
     const { error } = await supabase
-      .from('event_materials')
+      .schema('yi_connect').from('event_materials')
       .update({
         ...validated,
         updated_at: new Date().toISOString(),
@@ -201,7 +201,7 @@ export async function submitMaterialForReview(
 
     // Get material
     const { data: material, error: fetchError } = await supabase
-      .from('event_materials')
+      .schema('yi_connect').from('event_materials')
       .select('id, event_id, uploaded_by, status, material_type')
       .eq('id', validated.material_id)
       .single()
@@ -222,7 +222,7 @@ export async function submitMaterialForReview(
 
     // Update status
     const { error } = await supabase
-      .from('event_materials')
+      .schema('yi_connect').from('event_materials')
       .update({
         status: 'pending_review',
         submitted_at: new Date().toISOString(),
@@ -237,13 +237,13 @@ export async function submitMaterialForReview(
 
     // Get event and uploader details for notification
     const { data: eventDetails } = await supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .select('title, chapter_id')
       .eq('id', material.event_id)
       .single()
 
     const { data: uploaderProfile } = await supabase
-      .from('profiles')
+      .schema('yi_connect').from('profiles')
       .select('full_name')
       .eq('id', user.id)
       .single()
@@ -251,7 +251,7 @@ export async function submitMaterialForReview(
     // Get chapter reviewers (Chair, Co-Chair)
     if (eventDetails?.chapter_id) {
       const { data: reviewers } = await supabase
-        .from('user_roles')
+        .schema('yi_connect').from('user_roles')
         .select('user:profiles!user_roles_user_id_fkey(full_name, email)')
         .eq('chapter_id', eventDetails.chapter_id)
         .in('role_id', ['Chair', 'Co-Chair'])
@@ -313,7 +313,7 @@ export async function reviewMaterial(
 
     // Get material
     const { data: material, error: fetchError } = await supabase
-      .from('event_materials')
+      .schema('yi_connect').from('event_materials')
       .select('id, event_id, status, uploaded_by')
       .eq('id', validated.material_id)
       .single()
@@ -335,7 +335,7 @@ export async function reviewMaterial(
 
     // Update material
     const { error } = await supabase
-      .from('event_materials')
+      .schema('yi_connect').from('event_materials')
       .update({
         status: newStatus,
         reviewed_at: new Date().toISOString(),
@@ -352,19 +352,19 @@ export async function reviewMaterial(
 
     // Get uploader details and event title for notification
     const { data: uploaderDetails } = await supabase
-      .from('profiles')
+      .schema('yi_connect').from('profiles')
       .select('full_name, email')
       .eq('id', material.uploaded_by)
       .single()
 
     const { data: eventDetails } = await supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .select('title')
       .eq('id', material.event_id)
       .single()
 
     const { data: materialDetails } = await supabase
-      .from('event_materials')
+      .schema('yi_connect').from('event_materials')
       .select('material_type')
       .eq('id', validated.material_id)
       .single()
@@ -428,7 +428,7 @@ export async function createMaterialVersion(
 
     // Get parent material
     const { data: parent, error: fetchError } = await supabase
-      .from('event_materials')
+      .schema('yi_connect').from('event_materials')
       .select('*')
       .eq('id', validated.parent_material_id)
       .single()
@@ -439,7 +439,7 @@ export async function createMaterialVersion(
 
     // Mark old version as superseded
     await supabase
-      .from('event_materials')
+      .schema('yi_connect').from('event_materials')
       .update({
         is_current_version: false,
         status: 'superseded',
@@ -448,7 +448,7 @@ export async function createMaterialVersion(
 
     // Create new version
     const { data, error } = await supabase
-      .from('event_materials')
+      .schema('yi_connect').from('event_materials')
       .insert({
         event_id: parent.event_id,
         trainer_assignment_id: parent.trainer_assignment_id,
@@ -504,7 +504,7 @@ export async function deleteMaterial(
 
     // Get material
     const { data: material, error: fetchError } = await supabase
-      .from('event_materials')
+      .schema('yi_connect').from('event_materials')
       .select('id, event_id, uploaded_by, status')
       .eq('id', validated.id)
       .single()
@@ -529,7 +529,7 @@ export async function deleteMaterial(
 
     // Delete material
     const { error } = await supabase
-      .from('event_materials')
+      .schema('yi_connect').from('event_materials')
       .delete()
       .eq('id', validated.id)
 
@@ -565,14 +565,14 @@ export async function trackMaterialDownload(
     // Fallback if RPC doesn't exist - fetch current and increment
     if (error) {
       const { data: material } = await supabase
-        .from('event_materials')
+        .schema('yi_connect').from('event_materials')
         .select('download_count')
         .eq('id', materialId)
         .single()
 
       if (material) {
         await supabase
-          .from('event_materials')
+          .schema('yi_connect').from('event_materials')
           .update({
             download_count: (material.download_count || 0) + 1,
             last_downloaded_at: new Date().toISOString(),
@@ -605,7 +605,7 @@ export async function shareMaterial(
 
     // Get material
     const { data: material, error: fetchError } = await supabase
-      .from('event_materials')
+      .schema('yi_connect').from('event_materials')
       .select('id, event_id, status')
       .eq('id', materialId)
       .single()
@@ -620,7 +620,7 @@ export async function shareMaterial(
     }
 
     const { error } = await supabase
-      .from('event_materials')
+      .schema('yi_connect').from('event_materials')
       .update({ is_shared: isShared })
       .eq('id', materialId)
 
@@ -659,7 +659,7 @@ export async function markAsTemplate(
     // The database policies restrict this to Chapter leadership and above
 
     const { data: material } = await supabase
-      .from('event_materials')
+      .schema('yi_connect').from('event_materials')
       .select('event_id, status')
       .eq('id', materialId)
       .single()
@@ -669,7 +669,7 @@ export async function markAsTemplate(
     }
 
     const { error } = await supabase
-      .from('event_materials')
+      .schema('yi_connect').from('event_materials')
       .update({ is_template: isTemplate })
       .eq('id', materialId)
 

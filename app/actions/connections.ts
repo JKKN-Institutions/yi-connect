@@ -60,7 +60,7 @@ export async function createConnection(
     // Resolve target member via service-role (cross-chapter scans need to work).
     const admin = createAdminSupabaseClient();
     const { data: target, error: targetErr } = await admin
-      .from('members')
+      .schema('yi_connect').from('members')
       .select('id, allow_networking_qr')
       .eq('profile_qr_token', targetQrToken)
       .maybeSingle();
@@ -94,7 +94,7 @@ export async function createConnection(
     };
 
     const { data: created, error: insertErr } = await supabase
-      .from('member_connections')
+      .schema('yi_connect').from('member_connections')
       .insert(insertRow)
       .select('id')
       .single();
@@ -104,7 +104,7 @@ export async function createConnection(
       if ((insertErr as any).code === '23505') {
         // Look it up so caller can still navigate to the record
         const { data: existing } = await supabase
-          .from('member_connections')
+          .schema('yi_connect').from('member_connections')
           .select('id')
           .eq('from_member_id', user.id)
           .eq('to_member_id', (target as any).id)
@@ -161,7 +161,7 @@ export async function updateConnectionNote(
 
     const supabase = await createServerSupabaseClient();
     const { error } = await supabase
-      .from('member_connections')
+      .schema('yi_connect').from('member_connections')
       .update({ note: note && note.trim().length > 0 ? note.trim() : null })
       .eq('id', connectionId)
       .eq('from_member_id', user.id);
@@ -197,7 +197,7 @@ export async function deleteConnection(
 
     const supabase = await createServerSupabaseClient();
     const { error } = await supabase
-      .from('member_connections')
+      .schema('yi_connect').from('member_connections')
       .delete()
       .eq('id', connectionId)
       .eq('from_member_id', user.id);
@@ -237,7 +237,7 @@ export async function resetMyProfileQrToken(): Promise<
     const admin = createAdminSupabaseClient();
 
     const { error } = await admin
-      .from('members')
+      .schema('yi_connect').from('members')
       .update({ profile_qr_token: newToken })
       .eq('id', user.id);
 
@@ -276,7 +276,7 @@ export async function toggleNetworkingOptOut(
 
     const admin = createAdminSupabaseClient();
     const { error } = await admin
-      .from('members')
+      .schema('yi_connect').from('members')
       .update({ allow_networking_qr: parsed.data.enabled })
       .eq('id', user.id);
 

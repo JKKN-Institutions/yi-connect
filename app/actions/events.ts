@@ -176,7 +176,7 @@ export async function createEvent(
 
     // Insert event
     const { data, error } = await supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .insert({
         ...sanitizedData,
         organizer_id: user.id,
@@ -225,7 +225,7 @@ export async function updateEvent(
 
     // Check if user has permission to update
     const { data: event } = await supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .select('organizer_id')
       .eq('id', eventId)
       .single();
@@ -266,7 +266,7 @@ export async function updateEvent(
 
     // Update event
     const { error } = await supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .update(sanitizedData)
       .eq('id', eventId);
 
@@ -308,7 +308,7 @@ export async function publishEvent(
 
     // Check permission
     const { data: event } = await supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .select('organizer_id, status, title, public_slug')
       .eq('id', validated.id)
       .single();
@@ -327,7 +327,7 @@ export async function publishEvent(
 
     // Update status
     const { error } = await supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .update({ status: 'published' })
       .eq('id', validated.id);
 
@@ -338,7 +338,7 @@ export async function publishEvent(
 
     // Ensure rsvp_token exists (for pre-migration events)
     const { data: publishedEvent } = await supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .select('rsvp_token')
       .eq('id', validated.id)
       .single();
@@ -350,7 +350,7 @@ export async function publishEvent(
         .join('');
 
       await supabase
-        .from('events')
+        .schema('yi_connect').from('events')
         .update({ rsvp_token: token })
         .eq('id', validated.id);
     }
@@ -364,7 +364,7 @@ export async function publishEvent(
 
       while (attempts < MAX_ATTEMPTS) {
         const { error: slugError } = await supabase
-          .from('events')
+          .schema('yi_connect').from('events')
           .update({ public_slug: slug })
           .eq('id', validated.id);
 
@@ -417,7 +417,7 @@ export async function cancelEvent(
 
     // Check permission
     const { data: event } = await supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .select('organizer_id, status')
       .eq('id', validated.id)
       .single();
@@ -439,7 +439,7 @@ export async function cancelEvent(
 
     // Update status and add cancellation note
     const { error } = await supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .update({
         status: 'cancelled',
         notes: validated.reason
@@ -453,13 +453,13 @@ export async function cancelEvent(
 
     // Send cancellation notifications to all RSVPs
     const { data: eventDetails } = await supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .select('title')
       .eq('id', validated.id)
       .single();
 
     const { data: rsvps } = await supabase
-      .from('event_rsvps')
+      .schema('yi_connect').from('event_rsvps')
       .select('member:member_id(id, email, full_name)')
       .eq('event_id', validated.id)
       .eq('status', 'confirmed');
@@ -527,7 +527,7 @@ export async function completeEvent(
     }
 
     const { data: event } = await supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .select('organizer_id, status, chapter_id')
       .eq('id', eventId)
       .single();
@@ -545,7 +545,7 @@ export async function completeEvent(
 
     if (event.status !== 'completed') {
       const { error } = await supabase
-        .from('events')
+        .schema('yi_connect').from('events')
         .update({ status: 'completed' })
         .eq('id', eventId);
       if (error) {
@@ -596,7 +596,7 @@ export async function deleteEvent(eventId: string): Promise<ActionResponse> {
 
     // Check permission
     const { data: event } = await supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .select('organizer_id, status')
       .eq('id', eventId)
       .single();
@@ -619,7 +619,7 @@ export async function deleteEvent(eventId: string): Promise<ActionResponse> {
     }
 
     // Delete event
-    const { error } = await supabase.from('events').delete().eq('id', eventId);
+    const { error } = await supabase.schema('yi_connect').from('events').delete().eq('id', eventId);
 
     if (error) {
       console.error('Error deleting event:', error);
@@ -667,7 +667,7 @@ export async function createVenue(
     const validated = createVenueSchema.parse(input);
 
     const { data, error } = await supabase
-      .from('venues')
+      .schema('yi_connect').from('venues')
       .insert(validated)
       .select('id')
       .single();
@@ -709,7 +709,7 @@ export async function updateVenue(
     const validated = updateVenueSchema.parse(input);
 
     const { error } = await supabase
-      .from('venues')
+      .schema('yi_connect').from('venues')
       .update(validated)
       .eq('id', venueId);
 
@@ -747,7 +747,7 @@ export async function deleteVenue(venueId: string): Promise<ActionResponse> {
 
     // Check if venue is being used
     const { data: bookings } = await supabase
-      .from('venue_bookings')
+      .schema('yi_connect').from('venue_bookings')
       .select('id')
       .eq('venue_id', venueId)
       .limit(1);
@@ -760,7 +760,7 @@ export async function deleteVenue(venueId: string): Promise<ActionResponse> {
       };
     }
 
-    const { error } = await supabase.from('venues').delete().eq('id', venueId);
+    const { error } = await supabase.schema('yi_connect').from('venues').delete().eq('id', venueId);
 
     if (error) {
       console.error('Error deleting venue:', error);
@@ -814,7 +814,7 @@ export async function createOrUpdateRSVP(
 
     // Check if event allows guests + load custom field definitions
     const { data: event } = await supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .select(
         'allow_guests, guest_limit, max_capacity, current_registrations, status, registration_form_fields'
       )
@@ -861,7 +861,7 @@ export async function createOrUpdateRSVP(
 
     // Upsert RSVP
     const { data, error } = await supabase
-      .from('event_rsvps')
+      .schema('yi_connect').from('event_rsvps')
       .upsert(
         {
           ...validated,
@@ -911,7 +911,7 @@ export async function updateRSVP(
 
     // Check permission
     const { data: rsvp } = await supabase
-      .from('event_rsvps')
+      .schema('yi_connect').from('event_rsvps')
       .select('member_id, event_id')
       .eq('id', rsvpId)
       .single();
@@ -926,7 +926,7 @@ export async function updateRSVP(
     }
 
     const { error } = await supabase
-      .from('event_rsvps')
+      .schema('yi_connect').from('event_rsvps')
       .update(validated)
       .eq('id', rsvpId);
 
@@ -960,7 +960,7 @@ export async function deleteRSVP(rsvpId: string): Promise<ActionResponse> {
 
     // Check permission
     const { data: rsvp } = await supabase
-      .from('event_rsvps')
+      .schema('yi_connect').from('event_rsvps')
       .select('member_id, event_id')
       .eq('id', rsvpId)
       .single();
@@ -975,7 +975,7 @@ export async function deleteRSVP(rsvpId: string): Promise<ActionResponse> {
     }
 
     const { error } = await supabase
-      .from('event_rsvps')
+      .schema('yi_connect').from('event_rsvps')
       .delete()
       .eq('id', rsvpId);
 
@@ -1019,7 +1019,7 @@ export async function createGuestRSVP(
 
     // Check if event allows guests + load form fields
     const { data: event } = await supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .select('allow_guests, status, registration_form_fields')
       .eq('id', validated.event_id)
       .single();
@@ -1045,7 +1045,7 @@ export async function createGuestRSVP(
     }
 
     const { data, error } = await supabase
-      .from('guest_rsvps')
+      .schema('yi_connect').from('guest_rsvps')
       .insert({
         ...validated,
         invited_by_member_id: validated.invited_by_member_id || user.id,
@@ -1089,7 +1089,7 @@ export async function updateGuestRSVP(
 
     // Check permission
     const { data: guestRsvp } = await supabase
-      .from('guest_rsvps')
+      .schema('yi_connect').from('guest_rsvps')
       .select('invited_by_member_id, event_id')
       .eq('id', guestRsvpId)
       .single();
@@ -1104,7 +1104,7 @@ export async function updateGuestRSVP(
     }
 
     const { error } = await supabase
-      .from('guest_rsvps')
+      .schema('yi_connect').from('guest_rsvps')
       .update(validated)
       .eq('id', guestRsvpId);
 
@@ -1140,7 +1140,7 @@ export async function deleteGuestRSVP(
 
     // Check permission
     const { data: guestRsvp } = await supabase
-      .from('guest_rsvps')
+      .schema('yi_connect').from('guest_rsvps')
       .select('invited_by_member_id, event_id')
       .eq('id', guestRsvpId)
       .single();
@@ -1155,7 +1155,7 @@ export async function deleteGuestRSVP(
     }
 
     const { error } = await supabase
-      .from('guest_rsvps')
+      .schema('yi_connect').from('guest_rsvps')
       .delete()
       .eq('id', guestRsvpId);
 
@@ -1195,7 +1195,7 @@ export async function assignVolunteer(
 
     // Only event organizers and admins can assign volunteers
     const { data: event } = await supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .select('organizer_id')
       .eq('id', input.event_id)
       .single();
@@ -1212,7 +1212,7 @@ export async function assignVolunteer(
     const validated = assignVolunteerSchema.parse(input);
 
     const { data, error } = await supabase
-      .from('event_volunteers')
+      .schema('yi_connect').from('event_volunteers')
       .insert({
         ...validated,
         status: 'invited'
@@ -1227,19 +1227,19 @@ export async function assignVolunteer(
 
     // Send notification to volunteer
     const { data: eventDetails } = await supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .select('title, start_date')
       .eq('id', validated.event_id)
       .single();
 
     const { data: volunteer } = await supabase
-      .from('profiles')
+      .schema('yi_connect').from('profiles')
       .select('email, full_name')
       .eq('id', validated.member_id)
       .single();
 
     const { data: role } = await supabase
-      .from('volunteer_roles')
+      .schema('yi_connect').from('volunteer_roles')
       .select('name')
       .eq('id', validated.role_id)
       .single();
@@ -1295,7 +1295,7 @@ export async function updateVolunteer(
 
     // Check permission
     const { data: volunteer } = await supabase
-      .from('event_volunteers')
+      .schema('yi_connect').from('event_volunteers')
       .select('member_id, event_id, event:events!inner(organizer_id)')
       .eq('id', volunteerId)
       .single();
@@ -1326,7 +1326,7 @@ export async function updateVolunteer(
     }
 
     const { error } = await supabase
-      .from('event_volunteers')
+      .schema('yi_connect').from('event_volunteers')
       .update(validated)
       .eq('id', volunteerId);
 
@@ -1362,7 +1362,7 @@ export async function deleteVolunteer(
 
     // Check permission
     const { data: volunteer } = await supabase
-      .from('event_volunteers')
+      .schema('yi_connect').from('event_volunteers')
       .select('member_id, event_id, event:events!inner(organizer_id)')
       .eq('id', volunteerId)
       .single();
@@ -1382,7 +1382,7 @@ export async function deleteVolunteer(
     }
 
     const { error } = await supabase
-      .from('event_volunteers')
+      .schema('yi_connect').from('event_volunteers')
       .delete()
       .eq('id', volunteerId);
 
@@ -1424,7 +1424,7 @@ export async function checkInAttendee(
 
     // Verify event exists and is ongoing/published
     const { data: event } = await supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .select('status, organizer_id')
       .eq('id', validated.event_id)
       .single();
@@ -1442,7 +1442,7 @@ export async function checkInAttendee(
 
     // Check if already checked in
     const { data: existing } = await supabase
-      .from('event_checkins')
+      .schema('yi_connect').from('event_checkins')
       .select('id')
       .eq('event_id', validated.event_id)
       .eq('attendee_type', validated.attendee_type)
@@ -1455,7 +1455,7 @@ export async function checkInAttendee(
 
     // Create check-in
     const { data, error } = await supabase
-      .from('event_checkins')
+      .schema('yi_connect').from('event_checkins')
       .insert({
         ...validated,
         checked_in_by: user.id,
@@ -1472,13 +1472,13 @@ export async function checkInAttendee(
     // Update RSVP status to attended
     if (validated.attendee_type === 'member') {
       await supabase
-        .from('event_rsvps')
+        .schema('yi_connect').from('event_rsvps')
         .update({ status: 'attended' })
         .eq('event_id', validated.event_id)
         .eq('member_id', validated.attendee_id);
     } else {
       await supabase
-        .from('guest_rsvps')
+        .schema('yi_connect').from('guest_rsvps')
         .update({ status: 'attended' })
         .eq('event_id', validated.event_id)
         .eq('id', validated.attendee_id);
@@ -1516,7 +1516,7 @@ export async function selfCheckIn(
 
     // Get event details
     const { data: event } = await supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .select('id, title, status, venue, start_date, end_date')
       .eq('id', eventId)
       .single();
@@ -1534,7 +1534,7 @@ export async function selfCheckIn(
 
     // Check if already checked in
     const { data: existing } = await supabase
-      .from('event_checkins')
+      .schema('yi_connect').from('event_checkins')
       .select('id, checked_in_at')
       .eq('event_id', eventId)
       .eq('attendee_type', 'member')
@@ -1551,7 +1551,7 @@ export async function selfCheckIn(
     // Create check-in
     const checkInTime = new Date().toISOString();
     const { error: insertError } = await supabase
-      .from('event_checkins')
+      .schema('yi_connect').from('event_checkins')
       .insert({
         event_id: eventId,
         attendee_type: 'member',
@@ -1567,7 +1567,7 @@ export async function selfCheckIn(
 
     // Update RSVP status to attended
     await supabase
-      .from('event_rsvps')
+      .schema('yi_connect').from('event_rsvps')
       .update({ status: 'attended' })
       .eq('event_id', eventId)
       .eq('member_id', user.id);
@@ -1612,7 +1612,7 @@ export async function submitEventFeedback(
 
     // Check if event is completed
     const { data: event } = await supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .select('status')
       .eq('id', validated.event_id)
       .single();
@@ -1635,7 +1635,7 @@ export async function submitEventFeedback(
     };
 
     const { data, error } = await supabase
-      .from('event_feedback')
+      .schema('yi_connect').from('event_feedback')
       .insert(feedbackData)
       .select('id')
       .single();
@@ -1680,7 +1680,7 @@ export async function updateEventFeedback(
 
     // Check permission
     const { data: feedback } = await supabase
-      .from('event_feedback')
+      .schema('yi_connect').from('event_feedback')
       .select('member_id, event_id')
       .eq('id', feedbackId)
       .single();
@@ -1695,7 +1695,7 @@ export async function updateEventFeedback(
     }
 
     const { error } = await supabase
-      .from('event_feedback')
+      .schema('yi_connect').from('event_feedback')
       .update(validated)
       .eq('id', feedbackId);
 
@@ -1736,7 +1736,7 @@ export async function deleteEventFeedback(
 
     // Check permission
     const { data: feedback } = await supabase
-      .from('event_feedback')
+      .schema('yi_connect').from('event_feedback')
       .select('member_id, event_id')
       .eq('id', feedbackId)
       .single();
@@ -1751,7 +1751,7 @@ export async function deleteEventFeedback(
     }
 
     const { error } = await supabase
-      .from('event_feedback')
+      .schema('yi_connect').from('event_feedback')
       .delete()
       .eq('id', feedbackId);
 
@@ -1798,7 +1798,7 @@ export async function uploadEventDocument(
 
     // Check permission
     const { data: event } = await supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .select('organizer_id')
       .eq('id', validated.event_id)
       .single();
@@ -1813,7 +1813,7 @@ export async function uploadEventDocument(
     }
 
     const { data, error } = await supabase
-      .from('event_documents')
+      .schema('yi_connect').from('event_documents')
       .insert({
         ...validated,
         uploaded_by: user.id
@@ -1853,7 +1853,7 @@ export async function deleteEventDocument(
 
     // Check permission
     const { data: document } = await supabase
-      .from('event_documents')
+      .schema('yi_connect').from('event_documents')
       .select('uploaded_by, event_id, event:events!inner(organizer_id)')
       .eq('id', documentId)
       .single();
@@ -1874,7 +1874,7 @@ export async function deleteEventDocument(
 
     // Get document details to find the storage path
     const { data: docDetails } = await supabase
-      .from('event_documents')
+      .schema('yi_connect').from('event_documents')
       .select('file_url')
       .eq('id', documentId)
       .single();
@@ -1896,7 +1896,7 @@ export async function deleteEventDocument(
     }
 
     const { error } = await supabase
-      .from('event_documents')
+      .schema('yi_connect').from('event_documents')
       .delete()
       .eq('id', documentId);
 
@@ -1947,7 +1947,7 @@ export async function exportEvents(
     // registration_deadline, meeting_link). Aliasing back to the export
     // column names below.
     let query = supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .select(`
         id,
         title,
@@ -1996,7 +1996,7 @@ export async function exportEvents(
       try {
         const admin = createAdminSupabaseClient();
         const { data: organizerRows } = await admin
-          .from('members')
+          .schema('yi_connect').from('members')
           .select('id, profile:profiles(full_name)')
           .in('id', organizerIds);
         for (const row of organizerRows || []) {
@@ -2086,7 +2086,7 @@ import type {
 async function canManageEventSessions(eventId: string, userId: string): Promise<boolean> {
   const supabase = await createClient();
   const { data: event } = await supabase
-    .from('events')
+    .schema('yi_connect').from('events')
     .select('organizer_id')
     .eq('id', eventId)
     .single();
@@ -2119,7 +2119,7 @@ export async function createSession(
     let sortOrder = validated.sort_order;
     if (sortOrder === undefined) {
       const { data: lastSession } = await supabase
-        .from('event_sessions')
+        .schema('yi_connect').from('event_sessions')
         .select('sort_order')
         .eq('event_id', validated.event_id)
         .order('sort_order', { ascending: false })
@@ -2129,7 +2129,7 @@ export async function createSession(
     }
 
     const { data: session, error } = await supabase
-      .from('event_sessions')
+      .schema('yi_connect').from('event_sessions')
       .insert({
         event_id: validated.event_id,
         title: validated.title,
@@ -2158,7 +2158,7 @@ export async function createSession(
         sort_order: idx,
       }));
       const { error: spkErr } = await supabase
-        .from('session_speakers')
+        .schema('yi_connect').from('session_speakers')
         .insert(rows);
       if (spkErr) {
         console.error('Error attaching speakers:', spkErr);
@@ -2191,7 +2191,7 @@ export async function updateSession(
     const supabase = await createClient();
 
     const { data: existing } = await supabase
-      .from('event_sessions')
+      .schema('yi_connect').from('event_sessions')
       .select('event_id')
       .eq('id', sessionId)
       .single();
@@ -2216,7 +2216,7 @@ export async function updateSession(
 
     if (Object.keys(updatePayload).length > 0) {
       const { error } = await supabase
-        .from('event_sessions')
+        .schema('yi_connect').from('event_sessions')
         .update(updatePayload)
         .eq('id', sessionId);
       if (error) {
@@ -2227,14 +2227,14 @@ export async function updateSession(
 
     // Replace speakers if provided
     if (validated.speaker_ids !== undefined) {
-      await supabase.from('session_speakers').delete().eq('session_id', sessionId);
+      await supabase.schema('yi_connect').from('session_speakers').delete().eq('session_id', sessionId);
       if (validated.speaker_ids.length > 0) {
         const rows = validated.speaker_ids.map((sid, idx) => ({
           session_id: sessionId,
           speaker_id: sid,
           sort_order: idx,
         }));
-        const { error: spkErr } = await supabase.from('session_speakers').insert(rows);
+        const { error: spkErr } = await supabase.schema('yi_connect').from('session_speakers').insert(rows);
         if (spkErr) console.error('Error replacing speakers:', spkErr);
       }
     }
@@ -2264,7 +2264,7 @@ export async function deleteSession(
     const supabase = await createClient();
 
     const { data: existing } = await supabase
-      .from('event_sessions')
+      .schema('yi_connect').from('event_sessions')
       .select('event_id')
       .eq('id', validated.id)
       .single();
@@ -2274,7 +2274,7 @@ export async function deleteSession(
     if (!authorized) return { success: false, error: 'Permission denied' };
 
     const { error } = await supabase
-      .from('event_sessions')
+      .schema('yi_connect').from('event_sessions')
       .delete()
       .eq('id', validated.id);
     if (error) {
@@ -2313,7 +2313,7 @@ export async function reorderSessions(
     // Update sort_order for each session sequentially
     for (let i = 0; i < validated.session_ids.length; i++) {
       const { error } = await supabase
-        .from('event_sessions')
+        .schema('yi_connect').from('event_sessions')
         .update({ sort_order: i })
         .eq('id', validated.session_ids[i])
         .eq('event_id', validated.event_id);
@@ -2349,7 +2349,7 @@ export async function toggleSessionInterest(
 
     // Fetch session to find event_id for revalidation
     const { data: session } = await supabase
-      .from('event_sessions')
+      .schema('yi_connect').from('event_sessions')
       .select('id, event_id')
       .eq('id', validated.session_id)
       .single();
@@ -2357,7 +2357,7 @@ export async function toggleSessionInterest(
 
     // Check existing interest
     const { data: existing } = await supabase
-      .from('session_interests')
+      .schema('yi_connect').from('session_interests')
       .select('id')
       .eq('session_id', validated.session_id)
       .eq('member_id', user.id)
@@ -2366,7 +2366,7 @@ export async function toggleSessionInterest(
     let isInterested: boolean;
     if (existing) {
       const { error } = await supabase
-        .from('session_interests')
+        .schema('yi_connect').from('session_interests')
         .delete()
         .eq('id', existing.id);
       if (error) {
@@ -2376,7 +2376,7 @@ export async function toggleSessionInterest(
       isInterested = false;
     } else {
       const { error } = await supabase
-        .from('session_interests')
+        .schema('yi_connect').from('session_interests')
         .insert({ session_id: validated.session_id, member_id: user.id });
       if (error) {
         console.error('Error adding interest:', error);
@@ -2453,7 +2453,7 @@ export async function checkInByTicketToken(
     let displayDesignation: string | null = null;
 
     const { data: memberRsvp } = await supabase
-      .from('event_rsvps')
+      .schema('yi_connect').from('event_rsvps')
       .select(`
         id,
         event_id,
@@ -2489,7 +2489,7 @@ export async function checkInByTicketToken(
       // 2. Fall back to guest RSVP
       // ----------------------------------------------------------------
       const { data: guestRsvp } = await supabase
-        .from('guest_rsvps')
+        .schema('yi_connect').from('guest_rsvps')
         .select('id, event_id, status, full_name, email, company, designation')
         .eq('ticket_token', ticketToken)
         .maybeSingle();
@@ -2516,7 +2516,7 @@ export async function checkInByTicketToken(
     // 3. Verify event is accepting check-ins
     // ------------------------------------------------------------------
     const { data: event } = await supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .select('id, title, status')
       .eq('id', eventId)
       .single();
@@ -2537,7 +2537,7 @@ export async function checkInByTicketToken(
     // ------------------------------------------------------------------
     const nowIso = new Date().toISOString();
     const { data: existingCheckin } = await supabase
-      .from('event_checkins')
+      .schema('yi_connect').from('event_checkins')
       .select('id, checked_in_at')
       .eq('event_id', eventId)
       .eq('attendee_type', attendeeType)
@@ -2552,7 +2552,7 @@ export async function checkInByTicketToken(
       checkedInAt = existingCheckin.checked_in_at ?? nowIso;
     } else {
       const { error: insertError } = await supabase
-        .from('event_checkins')
+        .schema('yi_connect').from('event_checkins')
         .insert({
           event_id: eventId,
           attendee_type: attendeeType,
@@ -2575,13 +2575,13 @@ export async function checkInByTicketToken(
       // Flip RSVP status → attended
       if (attendeeType === 'member') {
         await supabase
-          .from('event_rsvps')
+          .schema('yi_connect').from('event_rsvps')
           .update({ status: 'attended', checked_in_at: nowIso, checked_in_by: user.id })
           .eq('event_id', eventId)
           .eq('member_id', attendeeId);
       } else {
         await supabase
-          .from('guest_rsvps')
+          .schema('yi_connect').from('guest_rsvps')
           .update({ status: 'attended', checked_in_at: nowIso, checked_in_by: user.id })
           .eq('id', attendeeId);
       }
@@ -2741,7 +2741,7 @@ export async function updateEventFormFields(
 
     // Load event to check permission
     const { data: event, error: eventError } = await supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .select('organizer_id')
       .eq('id', validated.event_id)
       .single();
@@ -2763,7 +2763,7 @@ export async function updateEventFormFields(
     );
 
     const { error: updateError } = await supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .update({
         registration_form_fields: normalized as unknown as any
       } as any)

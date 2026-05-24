@@ -43,7 +43,7 @@ export async function toggleMemberRSVP(
 
     // 1. Validate token matches event
     const { data: event, error: eventError } = await supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .select('id, rsvp_token, status, max_capacity, current_registrations')
       .eq('id', input.event_id)
       .eq('rsvp_token', input.token)
@@ -56,7 +56,7 @@ export async function toggleMemberRSVP(
 
     // 2. Validate member exists
     const { data: member } = await supabase
-      .from('members')
+      .schema('yi_connect').from('members')
       .select('id')
       .eq('id', input.member_id)
       .eq('is_active', true)
@@ -68,7 +68,7 @@ export async function toggleMemberRSVP(
 
     // 3. Check existing RSVP
     const { data: existingRsvp } = await supabase
-      .from('event_rsvps')
+      .schema('yi_connect').from('event_rsvps')
       .select('id, status')
       .eq('event_id', input.event_id)
       .eq('member_id', input.member_id)
@@ -79,7 +79,7 @@ export async function toggleMemberRSVP(
       const newStatus = existingRsvp.status === 'confirmed' ? 'declined' : 'confirmed';
 
       const { error: updateError } = await supabase
-        .from('event_rsvps')
+        .schema('yi_connect').from('event_rsvps')
         .update({
           status: newStatus,
           guests_count: newStatus === 'confirmed' ? (input.guests_count ?? 0) : 0,
@@ -103,7 +103,7 @@ export async function toggleMemberRSVP(
 
     // 5. Create new RSVP
     const { error: insertError } = await supabase
-      .from('event_rsvps')
+      .schema('yi_connect').from('event_rsvps')
       .insert({
         event_id: input.event_id,
         member_id: input.member_id,
@@ -140,7 +140,7 @@ export async function updateGuestCount(
 
     // Validate token
     const { data: event } = await supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .select('id')
       .eq('id', input.event_id)
       .eq('rsvp_token', input.token)
@@ -151,7 +151,7 @@ export async function updateGuestCount(
     }
 
     const { error } = await supabase
-      .from('event_rsvps')
+      .schema('yi_connect').from('event_rsvps')
       .update({
         guests_count: Math.max(0, Math.min(5, input.guests_count)),
         updated_at: new Date().toISOString()
@@ -187,7 +187,7 @@ export async function addGuestRSVP(
 
     // Validate token and check capacity + load custom field definitions
     const { data: event } = await supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .select('id, status, max_capacity, current_registrations, registration_form_fields')
       .eq('id', input.event_id)
       .eq('rsvp_token', input.token)
@@ -213,7 +213,7 @@ export async function addGuestRSVP(
     }
 
     const { data, error } = await supabase
-      .from('guest_rsvps')
+      .schema('yi_connect').from('guest_rsvps')
       .insert({
         event_id: input.event_id,
         full_name: trimmedName,

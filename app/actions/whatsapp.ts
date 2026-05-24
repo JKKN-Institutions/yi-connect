@@ -399,7 +399,7 @@ export async function createWhatsAppGroup(
   }
 
   // Insert the group
-  const { error } = await supabase.from('whatsapp_groups').insert(validated.data);
+  const { error } = await supabase.schema('yi_connect').from('whatsapp_groups').insert(validated.data);
 
   if (error) {
     console.error('Error creating WhatsApp group:', error);
@@ -447,7 +447,7 @@ export async function updateWhatsAppGroup(
   const { id: _, ...updateData } = validated.data;
 
   const { error } = await supabase
-    .from('whatsapp_groups')
+    .schema('yi_connect').from('whatsapp_groups')
     .update(updateData)
     .eq('id', id);
 
@@ -468,7 +468,7 @@ export async function deleteWhatsAppGroup(id: string): Promise<WhatsAppActionSta
   const supabase = await createServerSupabaseClient();
 
   const { error } = await supabase
-    .from('whatsapp_groups')
+    .schema('yi_connect').from('whatsapp_groups')
     .delete()
     .eq('id', id);
 
@@ -529,7 +529,7 @@ export async function createWhatsAppTemplate(
   // Get current user for created_by
   const { data: { user } } = await supabase.auth.getUser();
 
-  const { error } = await supabase.from('whatsapp_templates').insert({
+  const { error } = await supabase.schema('yi_connect').from('whatsapp_templates').insert({
     ...validated.data,
     created_by: user?.id,
   });
@@ -586,7 +586,7 @@ export async function updateWhatsAppTemplate(
   const { id: _, ...updateData } = validated.data;
 
   const { error } = await supabase
-    .from('whatsapp_templates')
+    .schema('yi_connect').from('whatsapp_templates')
     .update(updateData)
     .eq('id', id);
 
@@ -607,7 +607,7 @@ export async function deleteWhatsAppTemplate(id: string): Promise<WhatsAppAction
   const supabase = await createServerSupabaseClient();
 
   const { error } = await supabase
-    .from('whatsapp_templates')
+    .schema('yi_connect').from('whatsapp_templates')
     .delete()
     .eq('id', id);
 
@@ -644,7 +644,7 @@ export async function logWhatsAppMessage(
   // Get current user
   const { data: { user } } = await supabase.auth.getUser();
 
-  const { error } = await supabase.from('whatsapp_message_logs').insert({
+  const { error } = await supabase.schema('yi_connect').from('whatsapp_message_logs').insert({
     ...validated.data,
     sent_by: user?.id,
   });
@@ -664,7 +664,7 @@ export async function incrementTemplateUsage(templateId: string): Promise<void> 
   const supabase = await createServerSupabaseClient();
 
   const { error } = await supabase
-    .from('whatsapp_templates')
+    .schema('yi_connect').from('whatsapp_templates')
     .update({ usage_count: supabase.rpc('increment', { row_id: templateId }) as unknown as number })
     .eq('id', templateId);
 
@@ -672,14 +672,14 @@ export async function incrementTemplateUsage(templateId: string): Promise<void> 
   if (error) {
     // Fallback: fetch current count and increment
     const { data: template } = await supabase
-      .from('whatsapp_templates')
+      .schema('yi_connect').from('whatsapp_templates')
       .select('usage_count')
       .eq('id', templateId)
       .single();
 
     if (template) {
       await supabase
-        .from('whatsapp_templates')
+        .schema('yi_connect').from('whatsapp_templates')
         .update({ usage_count: (template.usage_count || 0) + 1 })
         .eq('id', templateId);
     }

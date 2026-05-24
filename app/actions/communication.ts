@@ -78,7 +78,7 @@ async function getFilteredMemberIds(
   let filter = audienceFilter;
   if (segmentId && !filter) {
     const { data: segment } = await supabase
-      .from('communication_segments')
+      .schema('yi_connect').from('communication_segments')
       .select('filter_rules')
       .eq('id', segmentId)
       .single();
@@ -87,7 +87,7 @@ async function getFilteredMemberIds(
 
   // Start with base query for active members in chapter
   let query = supabase
-    .from('members')
+    .schema('yi_connect').from('members')
     .select(`
       id,
       is_active,
@@ -323,7 +323,7 @@ export async function createTemplate(formData: unknown): Promise<ActionResponse<
     const supabase = await createClient();
 
     const { data: template, error } = await supabase
-      .from('announcement_templates')
+      .schema('yi_connect').from('announcement_templates')
       .insert({
         chapter_id: chapterId,
         name: data.name,
@@ -376,7 +376,7 @@ export async function updateTemplate(id: string, formData: unknown): Promise<Act
     const supabase = await createClient();
 
     const { error } = await supabase
-      .from('announcement_templates')
+      .schema('yi_connect').from('announcement_templates')
       .update({
         name: data.name,
         type: data.type,
@@ -413,7 +413,7 @@ export async function deleteTemplate(id: string): Promise<ActionResponse> {
 
     const supabase = await createClient();
 
-    const { error } = await supabase.from('announcement_templates').delete().eq('id', id);
+    const { error } = await supabase.schema('yi_connect').from('announcement_templates').delete().eq('id', id);
 
     if (error) {
       return { success: false, message: 'Failed to delete template', error: error.message };
@@ -444,7 +444,7 @@ export async function duplicateTemplate(
     const supabase = await createClient();
 
     const { data: original, error: fetchError } = await supabase
-      .from('announcement_templates')
+      .schema('yi_connect').from('announcement_templates')
       .select('*')
       .eq('id', id)
       .single();
@@ -454,7 +454,7 @@ export async function duplicateTemplate(
     }
 
     const { data: duplicate, error: createError } = await supabase
-      .from('announcement_templates')
+      .schema('yi_connect').from('announcement_templates')
       .insert({
         chapter_id: original.chapter_id,
         name: newName,
@@ -511,7 +511,7 @@ export async function createNotification(formData: unknown): Promise<ActionRespo
     const supabase = await createClient();
 
     const { data: notification, error } = await supabase
-      .from('notifications')
+      .schema('yi_connect').from('notifications')
       .insert({
         member_id: data.member_id,
         title: data.title,
@@ -554,7 +554,7 @@ export async function markNotificationAsRead(id: string): Promise<ActionResponse
     const supabase = await createClient();
 
     const { error } = await supabase
-      .from('notifications')
+      .schema('yi_connect').from('notifications')
       .update({ read: true, read_at: new Date().toISOString() })
       .eq('id', id)
       .eq('member_id', user.id); // Ensure user can only mark their own notifications
@@ -589,7 +589,7 @@ export async function markAllNotificationsAsRead(
     const supabase = await createClient();
 
     let query = supabase
-      .from('notifications')
+      .schema('yi_connect').from('notifications')
       .update({ read: true, read_at: new Date().toISOString() })
       .eq('member_id', targetMemberId)
       .eq('read', false);
@@ -626,7 +626,7 @@ export async function deleteNotification(id: string): Promise<ActionResponse> {
     const supabase = await createClient();
 
     const { error } = await supabase
-      .from('notifications')
+      .schema('yi_connect').from('notifications')
       .delete()
       .eq('id', id)
       .eq('member_id', user.id); // Ensure user can only delete their own notifications
@@ -676,7 +676,7 @@ export async function createNewsletter(formData: unknown): Promise<ActionRespons
     const supabase = await createClient();
 
     const { data: newsletter, error } = await supabase
-      .from('newsletters')
+      .schema('yi_connect').from('newsletters')
       .insert({
         chapter_id: chapterId,
         title: data.title,
@@ -732,7 +732,7 @@ export async function updateNewsletter(id: string, formData: unknown): Promise<A
     const supabase = await createClient();
 
     const { error } = await supabase
-      .from('newsletters')
+      .schema('yi_connect').from('newsletters')
       .update({
         title: data.title,
         content: data.content,
@@ -769,7 +769,7 @@ export async function publishNewsletter(id: string): Promise<ActionResponse> {
     const supabase = await createClient();
 
     const { error } = await supabase
-      .from('newsletters')
+      .schema('yi_connect').from('newsletters')
       .update({
         status: 'published',
         sent_at: new Date().toISOString(),
@@ -804,7 +804,7 @@ export async function deleteNewsletter(id: string): Promise<ActionResponse> {
 
     // Only allow deleting drafts
     const { data: newsletter } = await supabase
-      .from('newsletters')
+      .schema('yi_connect').from('newsletters')
       .select('status')
       .eq('id', id)
       .single();
@@ -817,7 +817,7 @@ export async function deleteNewsletter(id: string): Promise<ActionResponse> {
       };
     }
 
-    const { error } = await supabase.from('newsletters').delete().eq('id', id);
+    const { error } = await supabase.schema('yi_connect').from('newsletters').delete().eq('id', id);
 
     if (error) {
       return { success: false, message: 'Failed to delete newsletter', error: error.message };
@@ -864,7 +864,7 @@ export async function createSegment(formData: unknown): Promise<ActionResponse<{
     const supabase = await createClient();
 
     const { data: segment, error } = await supabase
-      .from('communication_segments')
+      .schema('yi_connect').from('communication_segments')
       .insert({
         chapter_id: chapterId,
         name: data.name,
@@ -918,7 +918,7 @@ export async function updateSegment(id: string, formData: unknown): Promise<Acti
     const supabase = await createClient();
 
     const { error } = await supabase
-      .from('communication_segments')
+      .schema('yi_connect').from('communication_segments')
       .update({
         name: data.name,
         description: data.description,
@@ -958,7 +958,7 @@ export async function deleteSegment(id: string): Promise<ActionResponse> {
 
     const supabase = await createClient();
 
-    const { error } = await supabase.from('communication_segments').delete().eq('id', id);
+    const { error } = await supabase.schema('yi_connect').from('communication_segments').delete().eq('id', id);
 
     if (error) {
       return { success: false, message: 'Failed to delete segment', error: error.message };
@@ -1005,7 +1005,7 @@ export async function createAutomationRule(formData: unknown): Promise<ActionRes
     const supabase = await createClient();
 
     const { data: rule, error } = await supabase
-      .from('communication_automation_rules')
+      .schema('yi_connect').from('communication_automation_rules')
       .insert({
         chapter_id: chapterId,
         name: data.name,
@@ -1059,7 +1059,7 @@ export async function updateAutomationRule(id: string, formData: unknown): Promi
     const supabase = await createClient();
 
     const { error } = await supabase
-      .from('communication_automation_rules')
+      .schema('yi_connect').from('communication_automation_rules')
       .update({
         name: data.name,
         conditions: data.conditions,
@@ -1097,7 +1097,7 @@ export async function toggleAutomationRule(id: string, enabled: boolean): Promis
     const supabase = await createClient();
 
     const { error } = await supabase
-      .from('communication_automation_rules')
+      .schema('yi_connect').from('communication_automation_rules')
       .update({ enabled, updated_at: new Date().toISOString() })
       .eq('id', id);
 
@@ -1130,7 +1130,7 @@ export async function deleteAutomationRule(id: string): Promise<ActionResponse> 
 
     const supabase = await createClient();
 
-    const { error } = await supabase.from('communication_automation_rules').delete().eq('id', id);
+    const { error } = await supabase.schema('yi_connect').from('communication_automation_rules').delete().eq('id', id);
 
     if (error) {
       return { success: false, message: 'Failed to delete automation rule', error: error.message };

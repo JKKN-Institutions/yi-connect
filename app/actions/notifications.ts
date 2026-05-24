@@ -37,7 +37,7 @@ export async function markAsRead(notificationId: string): Promise<ActionResponse
     const supabase = await createServerSupabaseClient();
 
     const { error } = await supabase
-      .from('notifications')
+      .schema('yi_connect').from('notifications')
       .update({ read: true, updated_at: new Date().toISOString() })
       .eq('id', notificationId)
       .eq('member_id', user.id);
@@ -71,7 +71,7 @@ export async function markAllAsRead(): Promise<ActionResponse> {
     const supabase = await createServerSupabaseClient();
 
     const { error } = await supabase
-      .from('notifications')
+      .schema('yi_connect').from('notifications')
       .update({ read: true, updated_at: new Date().toISOString() })
       .eq('member_id', user.id)
       .eq('read', false);
@@ -105,7 +105,7 @@ export async function deleteNotification(notificationId: string): Promise<Action
     const supabase = await createServerSupabaseClient();
 
     const { error } = await supabase
-      .from('notifications')
+      .schema('yi_connect').from('notifications')
       .delete()
       .eq('id', notificationId)
       .eq('member_id', user.id);

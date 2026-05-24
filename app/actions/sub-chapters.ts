@@ -39,7 +39,7 @@ export async function createSubChapter(
   const supabase = await createClient()
 
   const { data, error } = await supabase
-    .from('sub_chapters')
+    .schema('yi_connect').from('sub_chapters')
     .insert({
       chapter_id: input.chapter_id,
       type: input.type,
@@ -76,7 +76,7 @@ export async function updateSubChapterStatus(
   const supabase = await createClient()
 
   const { error } = await supabase
-    .from('sub_chapters')
+    .schema('yi_connect').from('sub_chapters')
     .update({ status, updated_at: new Date().toISOString() })
     .eq('id', id)
 
@@ -101,7 +101,7 @@ export async function assignYiMentor(
   const supabase = await createClient()
 
   const { error } = await supabase
-    .from('sub_chapters')
+    .schema('yi_connect').from('sub_chapters')
     .update({
       yi_mentor_id: mentorId,
       yi_mentor_assigned_at: new Date().toISOString(),
@@ -135,7 +135,7 @@ export async function updateSubChapter(
   const supabase = await createClient()
 
   const { error } = await supabase
-    .from('sub_chapters')
+    .schema('yi_connect').from('sub_chapters')
     .update({ ...updates, updated_at: new Date().toISOString() })
     .eq('id', id)
 
@@ -176,7 +176,7 @@ export async function createSubChapterLead(
 
   // Check if email already exists
   const { data: existing } = await supabase
-    .from('sub_chapter_leads')
+    .schema('yi_connect').from('sub_chapter_leads')
     .select('id')
     .eq('email', input.email)
     .single()
@@ -187,7 +187,7 @@ export async function createSubChapterLead(
 
   // Fetch sub-chapter name for the email
   const { data: subChapter } = await supabase
-    .from('sub_chapters')
+    .schema('yi_connect').from('sub_chapters')
     .select('name')
     .eq('id', input.sub_chapter_id)
     .single()
@@ -197,7 +197,7 @@ export async function createSubChapterLead(
   const passwordHash = await bcrypt.hash(temporaryPassword, 10)
 
   const { data, error } = await supabase
-    .from('sub_chapter_leads')
+    .schema('yi_connect').from('sub_chapter_leads')
     .insert({
       sub_chapter_id: input.sub_chapter_id,
       full_name: input.full_name,
@@ -261,7 +261,7 @@ export async function updateLeadStatus(
   const supabase = await createClient()
 
   const { error } = await supabase
-    .from('sub_chapter_leads')
+    .schema('yi_connect').from('sub_chapter_leads')
     .update({ status, updated_at: new Date().toISOString() })
     .eq('id', id)
 
@@ -288,7 +288,7 @@ export async function changeLeadPassword(
 
   // Get current password hash
   const { data: lead, error: fetchError } = await supabase
-    .from('sub_chapter_leads')
+    .schema('yi_connect').from('sub_chapter_leads')
     .select('password_hash')
     .eq('id', leadId)
     .single()
@@ -307,7 +307,7 @@ export async function changeLeadPassword(
   const newPasswordHash = await bcrypt.hash(newPassword, 10)
 
   const { error } = await supabase
-    .from('sub_chapter_leads')
+    .schema('yi_connect').from('sub_chapter_leads')
     .update({
       password_hash: newPasswordHash,
       requires_password_change: false,
@@ -336,7 +336,7 @@ export async function addSubChapterMember(
   const supabase = await createClient()
 
   const { data, error } = await supabase
-    .from('sub_chapter_members')
+    .schema('yi_connect').from('sub_chapter_members')
     .insert({
       sub_chapter_id: input.sub_chapter_id,
       full_name: input.full_name,
@@ -382,7 +382,7 @@ export async function bulkAddSubChapterMembers(
   }))
 
   const { data, error } = await supabase
-    .from('sub_chapter_members')
+    .schema('yi_connect').from('sub_chapter_members')
     .insert(membersToInsert)
     .select('id')
 
@@ -416,7 +416,7 @@ export async function updateMemberStatus(
   }
 
   const { error } = await supabase
-    .from('sub_chapter_members')
+    .schema('yi_connect').from('sub_chapter_members')
     .update(updates)
     .eq('id', id)
 
@@ -445,7 +445,7 @@ export async function createSubChapterEvent(
   const supabase = await createClient()
 
   const { data, error } = await supabase
-    .from('sub_chapter_events')
+    .schema('yi_connect').from('sub_chapter_events')
     .insert({
       sub_chapter_id: input.sub_chapter_id,
       event_type: input.event_type,
@@ -490,7 +490,7 @@ export async function updateSubChapterEvent(
   const { id, ...updates } = input
 
   const { error } = await supabase
-    .from('sub_chapter_events')
+    .schema('yi_connect').from('sub_chapter_events')
     .update({ ...updates, updated_at: new Date().toISOString() })
     .eq('id', id)
 
@@ -512,7 +512,7 @@ export async function submitEventForApproval(id: string): Promise<ActionResult> 
   const supabase = await createClient()
 
   const { error } = await supabase
-    .from('sub_chapter_events')
+    .schema('yi_connect').from('sub_chapter_events')
     .update({
       status: 'pending_approval',
       submitted_at: new Date().toISOString(),
@@ -543,7 +543,7 @@ export async function approveEvent(
   const supabase = await createClient()
 
   const { error } = await supabase
-    .from('sub_chapter_events')
+    .schema('yi_connect').from('sub_chapter_events')
     .update({
       status: 'approved',
       approved_by: approvedBy,
@@ -576,7 +576,7 @@ export async function rejectEvent(
   const supabase = await createClient()
 
   const { error } = await supabase
-    .from('sub_chapter_events')
+    .schema('yi_connect').from('sub_chapter_events')
     .update({
       status: 'rejected',
       approved_by: rejectedBy,
@@ -605,7 +605,7 @@ export async function confirmSpeaker(id: string): Promise<ActionResult> {
   const supabase = await createClient()
 
   const { error } = await supabase
-    .from('sub_chapter_events')
+    .schema('yi_connect').from('sub_chapter_events')
     .update({
       speaker_confirmed: true,
       speaker_confirmed_at: new Date().toISOString(),
@@ -648,7 +648,7 @@ export async function updateEventStatus(
   }
 
   const { error } = await supabase
-    .from('sub_chapter_events')
+    .schema('yi_connect').from('sub_chapter_events')
     .update(updates)
     .eq('id', id)
 
@@ -674,7 +674,7 @@ export async function completeSubChapterEvent(
   const { id, ...outcomes } = input
 
   const { error } = await supabase
-    .from('sub_chapter_events')
+    .schema('yi_connect').from('sub_chapter_events')
     .update({
       status: 'completed',
       actual_participants: outcomes.actual_participants,
@@ -708,7 +708,7 @@ export async function recordEventFeedback(
 
   // Get current feedback stats
   const { data: event, error: fetchError } = await supabase
-    .from('sub_chapter_events')
+    .schema('yi_connect').from('sub_chapter_events')
     .select('feedback_score, feedback_count')
     .eq('id', eventId)
     .single()
@@ -724,7 +724,7 @@ export async function recordEventFeedback(
   const newScore = (currentScore * currentCount + score) / newCount
 
   const { error } = await supabase
-    .from('sub_chapter_events')
+    .schema('yi_connect').from('sub_chapter_events')
     .update({
       feedback_score: newScore,
       feedback_count: newCount,

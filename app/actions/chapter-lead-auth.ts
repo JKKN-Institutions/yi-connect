@@ -32,7 +32,7 @@ export async function loginChapterLead(
 
   // Find lead by email
   const { data: lead, error } = await supabase
-    .from('sub_chapter_leads')
+    .schema('yi_connect').from('sub_chapter_leads')
     .select('id, password_hash, status, requires_password_change, sub_chapter_id')
     .eq('email', input.email.toLowerCase())
     .single()
@@ -58,7 +58,7 @@ export async function loginChapterLead(
 
   // Update last login
   await supabase
-    .from('sub_chapter_leads')
+    .schema('yi_connect').from('sub_chapter_leads')
     .update({
       last_login_at: new Date().toISOString(),
       login_count: supabase.rpc('increment', { row_count: 1 }),
@@ -122,7 +122,7 @@ export async function changeChapterLeadPassword(
 
   // Get current password hash
   const { data: lead, error: fetchError } = await supabase
-    .from('sub_chapter_leads')
+    .schema('yi_connect').from('sub_chapter_leads')
     .select('password_hash')
     .eq('id', leadId)
     .single()
@@ -146,7 +146,7 @@ export async function changeChapterLeadPassword(
   const newPasswordHash = await bcrypt.hash(newPassword, 10)
 
   const { error } = await supabase
-    .from('sub_chapter_leads')
+    .schema('yi_connect').from('sub_chapter_leads')
     .update({
       password_hash: newPasswordHash,
       requires_password_change: false,
@@ -190,7 +190,7 @@ export async function resetChapterLeadPassword(
 
   // Fetch lead details for email
   const { data: lead, error: fetchError } = await supabase
-    .from('sub_chapter_leads')
+    .schema('yi_connect').from('sub_chapter_leads')
     .select(`
       id,
       full_name,
@@ -215,7 +215,7 @@ export async function resetChapterLeadPassword(
   const passwordHash = await bcrypt.hash(temporaryPassword, 10)
 
   const { error } = await supabase
-    .from('sub_chapter_leads')
+    .schema('yi_connect').from('sub_chapter_leads')
     .update({
       password_hash: passwordHash,
       requires_password_change: true,

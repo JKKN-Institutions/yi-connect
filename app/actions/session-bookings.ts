@@ -87,7 +87,7 @@ export async function createBooking(
     ]
 
     const { data, error } = await supabase
-      .from('session_bookings')
+      .schema('yi_connect').from('session_bookings')
       .insert({
         coordinator_id: input.coordinator_id,
         stakeholder_type: input.stakeholder_type,
@@ -159,7 +159,7 @@ export async function assignTrainer(
 
     // Get current booking
     const { data: booking } = await supabase
-      .from('session_bookings')
+      .schema('yi_connect').from('session_bookings')
       .select('status_history')
       .eq('id', input.booking_id)
       .single()
@@ -175,7 +175,7 @@ export async function assignTrainer(
     ]
 
     const { error } = await supabase
-      .from('session_bookings')
+      .schema('yi_connect').from('session_bookings')
       .update({
         assigned_trainer_id: input.trainer_id,
         assigned_at: new Date().toISOString(),
@@ -227,7 +227,7 @@ export async function confirmBooking(bookingId: string): Promise<ActionResult> {
 
     // Get current booking
     const { data: booking } = await supabase
-      .from('session_bookings')
+      .schema('yi_connect').from('session_bookings')
       .select('status_history')
       .eq('id', bookingId)
       .single()
@@ -243,7 +243,7 @@ export async function confirmBooking(bookingId: string): Promise<ActionResult> {
     ]
 
     const { error } = await supabase
-      .from('session_bookings')
+      .schema('yi_connect').from('session_bookings')
       .update({
         status: 'confirmed',
         status_history: statusHistory,
@@ -281,7 +281,7 @@ export async function completeSession(
 
     // Get current booking
     const { data: booking } = await supabase
-      .from('session_bookings')
+      .schema('yi_connect').from('session_bookings')
       .select('status_history, assigned_trainer_id')
       .eq('id', input.booking_id)
       .single()
@@ -297,7 +297,7 @@ export async function completeSession(
     ]
 
     const { error } = await supabase
-      .from('session_bookings')
+      .schema('yi_connect').from('session_bookings')
       .update({
         status: 'completed',
         status_history: statusHistory,
@@ -318,14 +318,14 @@ export async function completeSession(
     if (booking?.assigned_trainer_id) {
       // Get current stats
       const { data: trainerProfile } = await supabase
-        .from('trainer_profiles')
+        .schema('yi_connect').from('trainer_profiles')
         .select('total_sessions, total_students_impacted')
         .eq('id', booking.assigned_trainer_id)
         .single()
 
       if (trainerProfile) {
         const { error: updateError } = await supabase
-          .from('trainer_profiles')
+          .schema('yi_connect').from('trainer_profiles')
           .update({
             total_sessions: (trainerProfile.total_sessions || 0) + 1,
             total_students_impacted: (trainerProfile.total_students_impacted || 0) + input.attendance_count,
@@ -376,7 +376,7 @@ export async function rescheduleBooking(
 
     // Get current booking
     const { data: booking } = await supabase
-      .from('session_bookings')
+      .schema('yi_connect').from('session_bookings')
       .select('status_history, preferred_date')
       .eq('id', input.booking_id)
       .single()
@@ -392,7 +392,7 @@ export async function rescheduleBooking(
     ]
 
     const { error } = await supabase
-      .from('session_bookings')
+      .schema('yi_connect').from('session_bookings')
       .update({
         preferred_date: input.new_date,
         preferred_time_slot: input.new_time_slot || null,
@@ -437,7 +437,7 @@ export async function cancelBooking(
 
     // Get current booking
     const { data: booking } = await supabase
-      .from('session_bookings')
+      .schema('yi_connect').from('session_bookings')
       .select('status_history')
       .eq('id', input.booking_id)
       .single()
@@ -453,7 +453,7 @@ export async function cancelBooking(
     ]
 
     const { error } = await supabase
-      .from('session_bookings')
+      .schema('yi_connect').from('session_bookings')
       .update({
         status: 'cancelled',
         status_history: statusHistory,
@@ -495,7 +495,7 @@ export async function updateBookingStatus(
 
     // Get current booking
     const { data: booking } = await supabase
-      .from('session_bookings')
+      .schema('yi_connect').from('session_bookings')
       .select('status_history')
       .eq('id', bookingId)
       .single()
@@ -511,7 +511,7 @@ export async function updateBookingStatus(
     ]
 
     const { error } = await supabase
-      .from('session_bookings')
+      .schema('yi_connect').from('session_bookings')
       .update({
         status,
         status_history: statusHistory,
@@ -566,7 +566,7 @@ export async function createCoordinator(input: {
     const passwordHash = await hashPassword(temporaryPassword)
 
     const { data, error } = await supabase
-      .from('stakeholder_coordinators')
+      .schema('yi_connect').from('stakeholder_coordinators')
       .insert({
         stakeholder_type: input.stakeholder_type,
         stakeholder_id: input.stakeholder_id,
@@ -619,7 +619,7 @@ export async function verifyCoordinator(coordinatorId: string): Promise<ActionRe
     }
 
     const { error } = await supabase
-      .from('stakeholder_coordinators')
+      .schema('yi_connect').from('stakeholder_coordinators')
       .update({
         status: 'active',
         verified_at: new Date().toISOString(),
@@ -652,7 +652,7 @@ export async function deactivateCoordinator(coordinatorId: string): Promise<Acti
     const supabase = await createServerSupabaseClient()
 
     const { error } = await supabase
-      .from('stakeholder_coordinators')
+      .schema('yi_connect').from('stakeholder_coordinators')
       .update({
         status: 'inactive',
         updated_at: new Date().toISOString(),
@@ -688,7 +688,7 @@ export async function resetCoordinatorPassword(
     const passwordHash = await hashPassword(temporaryPassword)
 
     const { error } = await supabase
-      .from('stakeholder_coordinators')
+      .schema('yi_connect').from('stakeholder_coordinators')
       .update({
         password_hash: passwordHash,
         failed_login_attempts: 0,

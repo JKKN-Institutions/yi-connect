@@ -53,7 +53,7 @@ async function generateOAuthState(chapterId: string, userId: string): Promise<st
 
   // Store state in DB (auto-expires via expires_at column)
   const { error } = await supabase
-    .from('oauth_states')
+    .schema('yi_connect').from('oauth_states')
     .insert({
       nonce,
       chapter_id: chapterId,
@@ -92,7 +92,7 @@ async function verifyOAuthState(stateString: string): Promise<YiCreativeOAuthSta
 
     // Look up state in DB and verify it hasn't expired
     const { data: storedState, error } = await supabase
-      .from('oauth_states')
+      .schema('yi_connect').from('oauth_states')
       .select('*')
       .eq('nonce', state.nonce)
       .gt('expires_at', new Date().toISOString())
@@ -105,7 +105,7 @@ async function verifyOAuthState(stateString: string): Promise<YiCreativeOAuthSta
 
     // Delete used state (single-use)
     await supabase
-      .from('oauth_states')
+      .schema('yi_connect').from('oauth_states')
       .delete()
       .eq('nonce', state.nonce)
 
@@ -184,7 +184,7 @@ export async function initiateYiCreativeConnect(chapterId?: string): Promise<Ini
     } else {
       // Regular user - get from members table
       const { data: member } = await supabase
-        .from('members')
+        .schema('yi_connect').from('members')
         .select('chapter_id')
         .eq('id', user.id)
         .single()
@@ -270,7 +270,7 @@ export async function connectYiCreativeManual(
     if (!isNationalAdmin) {
       // Regular user - verify they own this chapter
       const { data: member } = await supabase
-        .from('members')
+        .schema('yi_connect').from('members')
         .select('chapter_id')
         .eq('id', user.id)
         .single()
@@ -498,7 +498,7 @@ export async function disconnectYiCreativeAction(chapterId?: string): Promise<Di
     } else {
       // Regular user - get from members table
       const { data: member } = await supabase
-        .from('members')
+        .schema('yi_connect').from('members')
         .select('chapter_id')
         .eq('id', user.id)
         .single()
@@ -562,7 +562,7 @@ export async function reconnectYiCreativeAction(chapterId?: string): Promise<Ini
       targetChapterId = chapterId
     } else {
       const { data: member } = await supabase
-        .from('members')
+        .schema('yi_connect').from('members')
         .select('chapter_id')
         .eq('id', user.id)
         .single()
@@ -612,7 +612,7 @@ export async function getYiCreativePublicKey(chapterId?: string): Promise<{ succ
       targetChapterId = chapterId
     } else {
       const { data: member } = await supabase
-        .from('members')
+        .schema('yi_connect').from('members')
         .select('chapter_id')
         .eq('id', user.id)
         .single()

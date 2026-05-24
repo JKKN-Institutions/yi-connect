@@ -76,7 +76,7 @@ export async function updateSyncConfig(
 
     // Check if config exists
     const { data: existing } = await supabase
-      .from('national_sync_config')
+      .schema('yi_connect').from('national_sync_config')
       .select('id')
       .eq('chapter_id', chapterId)
       .single();
@@ -91,7 +91,7 @@ export async function updateSyncConfig(
     let result;
     if (existing) {
       const { data, error } = await supabase
-        .from('national_sync_config')
+        .schema('yi_connect').from('national_sync_config')
         .update(insertData)
         .eq('chapter_id', chapterId)
         .select()
@@ -101,7 +101,7 @@ export async function updateSyncConfig(
       result = data;
     } else {
       const { data, error } = await supabase
-        .from('national_sync_config')
+        .schema('yi_connect').from('national_sync_config')
         .insert(insertData)
         .select()
         .single();
@@ -222,7 +222,7 @@ export async function testConnection(
 
     if (chapterId) {
       await supabase
-        .from('national_sync_config')
+        .schema('yi_connect').from('national_sync_config')
         .update({
           connection_status: connected ? 'connected' : 'error',
           last_connection_test: new Date().toISOString()
@@ -258,7 +258,7 @@ export async function toggleSync(
     }
 
     const { error } = await supabase
-      .from('national_sync_config')
+      .schema('yi_connect').from('national_sync_config')
       .update({ sync_enabled: enabled })
       .eq('chapter_id', chapterId);
 
@@ -309,7 +309,7 @@ export async function triggerManualSync(
 
     // Create sync log entry
     const { data: syncLog, error } = await supabase
-      .from('national_sync_logs')
+      .schema('yi_connect').from('national_sync_logs')
       .insert({
         chapter_id: chapterId,
         sync_type: validated.data.entity_type as SyncEntityType,
@@ -359,7 +359,7 @@ export async function cancelSync(
     const supabase = await createClient();
 
     const { error } = await supabase
-      .from('national_sync_logs')
+      .schema('yi_connect').from('national_sync_logs')
       .update({
         status: 'cancelled',
         completed_at: new Date().toISOString()
@@ -390,7 +390,7 @@ export async function retrySyncFailures(
 
     // Get original sync log
     const { data: originalLog } = await supabase
-      .from('national_sync_logs')
+      .schema('yi_connect').from('national_sync_logs')
       .select('*')
       .eq('id', syncLogId)
       .single();
@@ -401,7 +401,7 @@ export async function retrySyncFailures(
 
     // Create new sync log for retry
     const { data: newLog, error } = await supabase
-      .from('national_sync_logs')
+      .schema('yi_connect').from('national_sync_logs')
       .insert({
         chapter_id: originalLog.chapter_id,
         sync_type: originalLog.sync_type,
@@ -464,7 +464,7 @@ export async function registerForNationalEvent(
 
     // Check if already registered
     const { data: existing } = await supabase
-      .from('national_event_registrations')
+      .schema('yi_connect').from('national_event_registrations')
       .select('id')
       .eq('national_event_id', validated.data.national_event_id)
       .eq('member_id', memberId)
@@ -476,7 +476,7 @@ export async function registerForNationalEvent(
 
     // Create registration
     const { data, error } = await supabase
-      .from('national_event_registrations')
+      .schema('yi_connect').from('national_event_registrations')
       .insert({
         ...validated.data,
         chapter_id: chapterId,
@@ -524,7 +524,7 @@ export async function cancelEventRegistration(
     }
 
     const { error } = await supabase
-      .from('national_event_registrations')
+      .schema('yi_connect').from('national_event_registrations')
       .update({
         status: 'cancelled',
         cancelled_at: new Date().toISOString(),
@@ -568,7 +568,7 @@ export async function submitEventFeedback(
     }
 
     const { error } = await supabase
-      .from('national_event_registrations')
+      .schema('yi_connect').from('national_event_registrations')
       .update({
         feedback_submitted: true,
         feedback_rating: validated.data.rating,
@@ -609,7 +609,7 @@ export async function markBroadcastRead(
 
     // Upsert receipt
     const { data, error } = await supabase
-      .from('national_broadcast_receipts')
+      .schema('yi_connect').from('national_broadcast_receipts')
       .upsert(
         {
           chapter_id: chapterId,
@@ -660,7 +660,7 @@ export async function acknowledgeBroadcast(
 
     // Upsert receipt with acknowledgment
     const { data, error } = await supabase
-      .from('national_broadcast_receipts')
+      .schema('yi_connect').from('national_broadcast_receipts')
       .upsert(
         {
           chapter_id: chapterId,
@@ -719,7 +719,7 @@ export async function resolveConflict(
     }
 
     const { error } = await supabase
-      .from('national_data_conflicts')
+      .schema('yi_connect').from('national_data_conflicts')
       .update({
         resolution_status: validated.data.resolution,
         resolution_notes: validated.data.resolution_notes,
@@ -733,14 +733,14 @@ export async function resolveConflict(
 
     // Update sync entity conflict status
     const { data: conflict } = await supabase
-      .from('national_data_conflicts')
+      .schema('yi_connect').from('national_data_conflicts')
       .select('sync_entity_id')
       .eq('id', validated.data.conflict_id)
       .single();
 
     if (conflict?.sync_entity_id) {
       await supabase
-        .from('national_sync_entities')
+        .schema('yi_connect').from('national_sync_entities')
         .update({ has_conflict: false })
         .eq('id', conflict.sync_entity_id);
     }
@@ -811,7 +811,7 @@ export async function createRoleMapping(
       return { success: false, error: validated.error.issues[0]?.message };
     }
 
-    const { error } = await supabase.from('national_role_mappings').insert({
+    const { error } = await supabase.schema('yi_connect').from('national_role_mappings').insert({
       ...validated.data,
       chapter_id: chapterId,
       created_by: createdBy,

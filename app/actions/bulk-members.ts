@@ -63,7 +63,7 @@ export async function processBulkMemberUpload(
 
   // Get all existing emails for quick lookup
   const { data: existingEmails } = await adminClient
-    .from('approved_emails')
+    .schema('yi_connect').from('approved_emails')
     .select('email')
 
   const existingEmailSet = new Set(
@@ -72,7 +72,7 @@ export async function processBulkMemberUpload(
 
   // Get all existing profiles
   const { data: existingProfiles } = await adminClient
-    .from('profiles')
+    .schema('yi_connect').from('profiles')
     .select('email')
 
   const existingProfileSet = new Set(
@@ -222,7 +222,7 @@ async function createNewMember(
     }
 
     // 1. Add email to approved_emails whitelist
-    const { error: whitelistError } = await adminClient.from('approved_emails').insert({
+    const { error: whitelistError } = await adminClient.schema('yi_connect').from('approved_emails').insert({
       email: memberData.email,
       assigned_chapter_id: chapterId,
       approved_by: approvedById,
@@ -252,7 +252,7 @@ async function createNewMember(
 
     if (createUserError || !newUser.user) {
       // Rollback: delete from approved_emails
-      await adminClient.from('approved_emails').delete().eq('email', memberData.email)
+      await adminClient.schema('yi_connect').from('approved_emails').delete().eq('email', memberData.email)
       throw createUserError || new Error('Failed to create user')
     }
 
@@ -261,7 +261,7 @@ async function createNewMember(
     // 3. Update member record with additional data
     // The handle_new_user trigger creates a basic member record, we need to update it with full data
     const { error: updateMemberError } = await adminClient
-      .from('members')
+      .schema('yi_connect').from('members')
       .update({
         company: memberData.company || null,
         designation: memberData.designation || null,
@@ -292,7 +292,7 @@ async function createNewMember(
     // 4. Update profile with phone if provided
     if (memberData.phone) {
       await adminClient
-        .from('profiles')
+        .schema('yi_connect').from('profiles')
         .update({ phone: memberData.phone })
         .eq('id', userId)
     }
@@ -339,7 +339,7 @@ async function updateExistingMember(
   try {
     // Get profile by email
     const { data: profile, error: profileError } = await adminClient
-      .from('profiles')
+      .schema('yi_connect').from('profiles')
       .select('id')
       .eq('email', email)
       .single()
@@ -350,7 +350,7 @@ async function updateExistingMember(
 
     // Check if member record exists
     const { data: existingMember } = await adminClient
-      .from('members')
+      .schema('yi_connect').from('members')
       .select('id')
       .eq('id', profile.id)
       .single()
@@ -378,7 +378,7 @@ async function updateExistingMember(
     if (existingMember) {
       // Update existing member record
       const { error: updateError } = await adminClient
-        .from('members')
+        .schema('yi_connect').from('members')
         .update(memberRecord)
         .eq('id', profile.id)
 
@@ -388,7 +388,7 @@ async function updateExistingMember(
     } else {
       // Create new member record (profile exists but member doesn't)
       const { error: insertError } = await adminClient
-        .from('members')
+        .schema('yi_connect').from('members')
         .insert({
           id: profile.id,
           chapter_id: options.defaultChapterId,
@@ -404,7 +404,7 @@ async function updateExistingMember(
 
     // Update profile name and phone
     await adminClient
-      .from('profiles')
+      .schema('yi_connect').from('profiles')
       .update({
         full_name: memberData.full_name,
         phone: memberData.phone || null
@@ -439,7 +439,7 @@ export async function checkDuplicateEmails(
 
   // Check against database
   const { data: existingEmails } = await adminClient
-    .from('approved_emails')
+    .schema('yi_connect').from('approved_emails')
     .select('email')
     .in('email', emails.map(e => e.toLowerCase()))
 

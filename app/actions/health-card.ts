@@ -67,13 +67,13 @@ export async function createHealthCardEntry(
     // Get member ID for tracking who submitted
     // Note: members.id = profiles.id = auth user id (NOT user_id)
     const { data: member } = await supabase
-      .from('members')
+      .schema('yi_connect').from('members')
       .select('id')
       .eq('id', user.id)
       .single()
 
     const { data, error } = await supabase
-      .from('health_card_entries')
+      .schema('yi_connect').from('health_card_entries')
       .insert({
         ...sanitized,
         member_id: member?.id || null,
@@ -118,7 +118,7 @@ export async function updateHealthCardEntry(
 
     // Check if entry exists
     const { data: existing } = await supabase
-      .from('health_card_entries')
+      .schema('yi_connect').from('health_card_entries')
       .select('id')
       .eq('id', id)
       .single()
@@ -128,7 +128,7 @@ export async function updateHealthCardEntry(
     }
 
     const { error } = await supabase
-      .from('health_card_entries')
+      .schema('yi_connect').from('health_card_entries')
       .update(sanitized)
       .eq('id', id)
 
@@ -163,7 +163,7 @@ export async function deleteHealthCardEntry(entryId: string): Promise<ActionResp
     // Check if user is a chair (hierarchy_level >= 4)
     // Note: members.id = profiles.id = auth user id (NOT user_id)
     const { data: member } = await supabase
-      .from('members')
+      .schema('yi_connect').from('members')
       .select('id, hierarchy_level')
       .eq('id', user.id)
       .single()
@@ -173,7 +173,7 @@ export async function deleteHealthCardEntry(entryId: string): Promise<ActionResp
     }
 
     const { error } = await supabase
-      .from('health_card_entries')
+      .schema('yi_connect').from('health_card_entries')
       .delete()
       .eq('id', entryId)
 
@@ -218,7 +218,7 @@ export async function getHealthCardEntries(
     const supabase = await createClient()
 
     let query = supabase
-      .from('health_card_entries')
+      .schema('yi_connect').from('health_card_entries')
       .select(
         `
         *,
@@ -278,7 +278,7 @@ export async function getHealthCardSummaryByVertical(
 
     // Get all entries grouped by vertical
     const { data: entries } = await supabase
-      .from('health_card_entries')
+      .schema('yi_connect').from('health_card_entries')
       .select(
         `
         vertical_id,
@@ -297,7 +297,7 @@ export async function getHealthCardSummaryByVertical(
     // Get vertical details
     const verticalIds = [...new Set(entries.map((e) => e.vertical_id))]
     const { data: verticals } = await supabase
-      .from('verticals')
+      .schema('yi_connect').from('verticals')
       .select('id, name, slug, color, icon')
       .in('id', verticalIds)
 
@@ -392,7 +392,7 @@ export async function getChapterHealthStats(chapterId: string, calendarYear?: nu
     const year = calendarYear || getCurrentCalendarYear()
 
     const { data: entries } = await supabase
-      .from('health_card_entries')
+      .schema('yi_connect').from('health_card_entries')
       .select('ec_members_count, non_ec_members_count, activity_date')
       .eq('chapter_id', chapterId)
       .eq('calendar_year', year)

@@ -40,12 +40,12 @@ async function AuditStats() {
 
   // Get total sessions count
   const { count: totalSessions } = await supabase
-    .from('impersonation_sessions')
+    .schema('yi_connect').from('impersonation_sessions')
     .select('*', { count: 'exact', head: true })
 
   // Get active sessions count
   const { count: activeSessions } = await supabase
-    .from('impersonation_sessions')
+    .schema('yi_connect').from('impersonation_sessions')
     .select('*', { count: 'exact', head: true })
     .is('ended_at', null)
 
@@ -53,13 +53,13 @@ async function AuditStats() {
   const sevenDaysAgo = new Date()
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
   const { count: recentSessions } = await supabase
-    .from('impersonation_sessions')
+    .schema('yi_connect').from('impersonation_sessions')
     .select('*', { count: 'exact', head: true })
     .gte('started_at', sevenDaysAgo.toISOString())
 
   // Get total actions recorded
   const { count: totalActions } = await supabase
-    .from('impersonation_action_log')
+    .schema('yi_connect').from('impersonation_action_log')
     .select('*', { count: 'exact', head: true })
 
   return (

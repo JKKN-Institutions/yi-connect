@@ -21,7 +21,7 @@ async function MyNominationsSection({ userId }: { userId: string }) {
   // live directly on the nominations row, and NominationStatusCard already
   // reads them off the root.
   const { data: nominations } = await supabase
-    .from('nominations')
+    .schema('yi_connect').from('nominations')
     .select(`
       *,
       cycle:award_cycles(*, category:award_categories(*)),

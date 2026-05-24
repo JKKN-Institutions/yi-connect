@@ -31,7 +31,7 @@ async function PageContent({
 
   // Get the nomination with full details
   const { data: nomination, error } = await supabase
-    .from('nominations')
+    .schema('yi_connect').from('nominations')
     .select(
       `
       *,
@@ -56,7 +56,7 @@ async function PageContent({
 
   // Check if user is a jury member for this cycle
   const { data: juryMember } = await supabase
-    .from('jury_members')
+    .schema('yi_connect').from('jury_members')
     .select('id')
     .eq('cycle_id', nomination.cycle_id)
     .eq('member_id', user.id)
@@ -89,7 +89,7 @@ async function PageContent({
 
   // Check if user already scored this nomination
   const { data: existingScore } = await supabase
-    .from('jury_scores')
+    .schema('yi_connect').from('jury_scores')
     .select('*')
     .eq('nomination_id', nominationId)
     .eq('jury_member_id', juryMember.id)

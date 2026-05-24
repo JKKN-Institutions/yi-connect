@@ -92,7 +92,7 @@ async function MembersContent({ params }: PageProps) {
   // Get chairs from the database
   const supabase = await createClient()
   const { data: chairsData } = await supabase
-    .from('vertical_chairs')
+    .schema('yi_connect').from('vertical_chairs')
     .select('*')
     .eq('vertical_id', id)
     .order('start_date', { ascending: false })
@@ -106,7 +106,7 @@ async function MembersContent({ params }: PageProps) {
   const allIds = [...new Set([...memberIds, ...chairIds])]
 
   const { data: memberDetailsData } = await supabase
-    .from('members')
+    .schema('yi_connect').from('members')
     .select(`
       id,
       avatar_url,

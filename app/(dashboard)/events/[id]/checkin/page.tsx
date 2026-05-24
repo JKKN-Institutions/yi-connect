@@ -60,7 +60,7 @@ async function CheckInContent({ params, searchParams }: PageProps) {
   if (user) {
     const supabase = await createClient();
     const { data: checkin } = await supabase
-      .from('event_checkins')
+      .schema('yi_connect').from('event_checkins')
       .select('id')
       .eq('event_id', id)
       .eq('attendee_id', user.id)

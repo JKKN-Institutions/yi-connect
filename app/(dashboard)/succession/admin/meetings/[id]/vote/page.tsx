@@ -42,7 +42,7 @@ async function VotingContent({ meetingId }: { meetingId: string }) {
 
   // Get existing votes by this user for this meeting
   const { data: existingVotes } = await supabase
-    .from('succession_votes')
+    .schema('yi_connect').from('succession_votes')
     .select('*')
     .eq('meeting_id', meetingId)
     .eq('voter_member_id', user.id)

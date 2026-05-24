@@ -62,7 +62,7 @@ async function NewVerticalFormWrapper() {
   // Get user's chapter from their profile/member record
   const supabase = await createClient();
   const { data: member } = await supabase
-    .from('members')
+    .schema('yi_connect').from('members')
     .select('chapter_id')
     .eq('id', user.id)
     .single();

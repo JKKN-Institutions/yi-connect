@@ -121,7 +121,7 @@ async function MemberDetailContent({ id }: { id: string }) {
     const { createAdminSupabaseClient } = await import('@/lib/supabase/server')
     const admin = createAdminSupabaseClient()
     const { data: tgt } = await admin
-      .from('members')
+      .schema('yi_connect').from('members')
       .select('profile_qr_token, allow_networking_qr')
       .eq('id', id)
       .maybeSingle()

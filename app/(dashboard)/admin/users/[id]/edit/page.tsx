@@ -46,7 +46,7 @@ async function EditFormData({ paramsPromise }: { paramsPromise: Promise<{ id: st
   // Fetch chapters for dropdown
   const supabase = await createServerSupabaseClient();
   const { data: chapters } = await supabase
-    .from('chapters')
+    .schema('yi_connect').from('chapters')
     .select('id, name, location')
     .order('name', { ascending: true });
 

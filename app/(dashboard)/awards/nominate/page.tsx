@@ -54,7 +54,7 @@ async function NominationFormSection({
 
   // Get cycle details
   const { data: cycle } = await supabase
-    .from('award_cycles')
+    .schema('yi_connect').from('award_cycles')
     .select(
       `
       *,
@@ -102,7 +102,7 @@ async function NominationFormSection({
 
   // Get eligible members (all members except self)
   const { data: members } = await supabase
-    .from('members')
+    .schema('yi_connect').from('members')
     .select('id, full_name, avatar_url, company, designation')
     .eq('status', 'active')
     .neq('id', user.id)

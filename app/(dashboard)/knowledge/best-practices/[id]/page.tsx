@@ -60,7 +60,7 @@ async function BestPracticeContent({ practiceId }: { practiceId: string }) {
     const supabase = await createClient();
     // Get user's highest role hierarchy level using a raw query approach
     const { data: userRoles } = await supabase
-      .from('user_roles')
+      .schema('yi_connect').from('user_roles')
       .select(`
         role_id,
         roles!inner (

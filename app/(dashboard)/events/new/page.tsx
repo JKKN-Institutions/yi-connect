@@ -69,7 +69,7 @@ async function NewEventFormWrapper() {
   // Get user's profile for chapter_id
   const supabase = await createClient();
   const { data: profile } = await supabase
-    .from('profiles')
+    .schema('yi_connect').from('profiles')
     .select('chapter_id')
     .eq('id', user.id)
     .single();

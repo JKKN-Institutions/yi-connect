@@ -15,7 +15,7 @@ async function MyNominationsSection({ userId }: { userId: string }) {
 
   // Get nominations where user is the nominator
   const { data: myNominations } = await supabase
-    .from('nominations')
+    .schema('yi_connect').from('nominations')
     .select(`
       *,
       cycle:award_cycles(*,
@@ -70,7 +70,7 @@ async function NominatedMeSection({ userId }: { userId: string }) {
 
   // Get nominations where user is the nominee
   const { data: nominationsReceived } = await supabase
-    .from('nominations')
+    .schema('yi_connect').from('nominations')
     .select(`
       *,
       cycle:award_cycles(*,
@@ -119,7 +119,7 @@ async function AllNominationsSection({ userId }: { userId: string }) {
 
   // Get all submitted nominations (public view)
   const { data: allNominations } = await supabase
-    .from('nominations')
+    .schema('yi_connect').from('nominations')
     .select(`
       *,
       cycle:award_cycles(*,

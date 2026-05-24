@@ -83,7 +83,7 @@ async function AssignMembersFormWrapper({ params }: PageProps) {
   // Get all chapter members with their profile info
   const supabase = await createClient();
   const { data: membersData } = await supabase
-    .from('members')
+    .schema('yi_connect').from('members')
     .select(`
       id,
       avatar_url,

@@ -72,7 +72,7 @@ async function UserDetailContent({ paramsPromise }: { paramsPromise: Promise<{ i
   // Fetch roles for role management
   const supabase = await createServerSupabaseClient()
   const { data: roles } = await supabase
-    .from('roles')
+    .schema('yi_connect').from('roles')
     .select('*')
     .order('hierarchy_level', { ascending: false })
 

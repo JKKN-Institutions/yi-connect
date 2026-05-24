@@ -48,7 +48,7 @@ async function WelcomeSection() {
 
   if (profile?.chapter_id) {
     const { data: chapter } = await supabase
-      .from('chapters')
+      .schema('yi_connect').from('chapters')
       .select('name')
       .eq('id', profile.chapter_id)
       .single();
@@ -219,7 +219,7 @@ async function UpcomingEventsCard() {
   const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
   const { count } = await supabase
-    .from('events')
+    .schema('yi_connect').from('events')
     .select('*', { count: 'exact', head: true })
     .eq('chapter_id', profile.chapter_id)
     .in('status', ['published', 'ongoing'])
@@ -255,7 +255,7 @@ async function BudgetUtilizationCard() {
   }
 
   const { data: budgetData } = await supabase
-    .from('budgets')
+    .schema('yi_connect').from('budgets')
     .select('amount, spent_amount')
     .eq('chapter_id', profile.chapter_id)
     .gte('calendar_year', new Date().getFullYear());
@@ -293,7 +293,7 @@ async function EngagementScoreCard() {
   }
 
   const { data } = await supabase
-    .from('engagement_metrics')
+    .schema('yi_connect').from('engagement_metrics')
     .select('overall_engagement_score')
     .eq('chapter_id', profile.chapter_id);
 
@@ -418,7 +418,7 @@ async function RecentActivityCard() {
 
   // Get recent events
   const { data: recentEvents } = await supabase
-    .from('events')
+    .schema('yi_connect').from('events')
     .select('title, start_date, category')
     .eq('chapter_id', profile.chapter_id)
     .order('created_at', { ascending: false })
@@ -486,7 +486,7 @@ async function UpcomingEventsListCard() {
   }
 
   const { data: upcomingEvents } = await supabase
-    .from('events')
+    .schema('yi_connect').from('events')
     .select('id, title, start_date, venue_address')
     .eq('chapter_id', profile.chapter_id)
     .in('status', ['published', 'ongoing'])

@@ -50,6 +50,7 @@ export async function getUserPushSubscriptions(userId: string) {
   const supabase = await createServerSupabaseClient()
 
   const { data, error } = await supabase
+    .schema('yi_connect')
     .from('push_subscriptions')
     .select('id, endpoint, p256dh, auth')
     .eq('user_id', userId)
@@ -72,6 +73,7 @@ export async function getMultipleUsersPushSubscriptions(userIds: string[]) {
   const supabase = await createServerSupabaseClient()
 
   const { data, error } = await supabase
+    .schema('yi_connect')
     .from('push_subscriptions')
     .select('id, user_id, endpoint, p256dh, auth')
     .in('user_id', userIds)
@@ -118,6 +120,7 @@ export async function sendPushToSubscription(
     // Update last_used timestamp
     const supabase = await createServerSupabaseClient()
     await supabase
+      .schema('yi_connect')
       .from('push_subscriptions')
       .update({ last_used: new Date().toISOString() })
       .eq('id', subscription.id)
@@ -129,6 +132,7 @@ export async function sendPushToSubscription(
       // Subscription no longer valid, mark as inactive
       const supabase = await createServerSupabaseClient()
       await supabase
+        .schema('yi_connect')
         .from('push_subscriptions')
         .update({ is_active: false })
         .eq('id', subscription.id)
@@ -256,6 +260,7 @@ export async function sendAnnouncementPush(
 
   // Get all active members in the chapter
   const { data: members, error } = await supabase
+    .schema('yi_connect')
     .from('members')
     .select('id')
     .eq('chapter_id', chapterId)

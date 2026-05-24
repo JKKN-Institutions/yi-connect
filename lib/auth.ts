@@ -77,6 +77,7 @@ export const getCurrentChapterId = cache(async (): Promise<string | null> => {
   // chapter_id is stored in the members table, not profiles
   // Note: member.id IS the profile/user id in the members table
   const { data: member } = await supabase
+    .schema('yi_connect')
     .from('members')
     .select('chapter_id')
     .eq('id', user.id)
@@ -99,6 +100,7 @@ export const getUserProfile = cache(async () => {
 
   // Fetch profile and chapter separately to avoid auth.users permission issues
   const { data: profile } = await supabase
+    .schema('yi_connect')
     .from('profiles')
     .select('*, chapter:chapters!profiles_chapter_id_fkey(*)')
     .eq('id', user.id)
@@ -108,9 +110,11 @@ export const getUserProfile = cache(async () => {
 
   // Use the secure database function to get roles
   // Note: get_user_roles_detailed returns role_id, role_name, hierarchy_level, permissions
-  const { data: userRoles } = await supabase.rpc('get_user_roles_detailed', {
-    p_user_id: user.id
-  })
+  const { data: userRoles } = await supabase
+    .schema('yi_connect')
+    .rpc('get_user_roles_detailed', {
+      p_user_id: user.id
+    })
 
   return {
     ...profile,
@@ -142,10 +146,9 @@ export async function requireRole(allowedRoles: string[]) {
     permissions: string[] | null
   }> | null = null
 
-  const { data: rpcRoles, error: rpcError } = await supabase.rpc(
-    'get_user_roles_detailed',
-    { p_user_id: user.id }
-  )
+  const { data: rpcRoles, error: rpcError } = await supabase
+    .schema('yi_connect')
+    .rpc('get_user_roles_detailed', { p_user_id: user.id })
 
   if (rpcError) {
     // Surface the failure so it's debuggable instead of silently redirecting
@@ -167,6 +170,7 @@ export async function requireRole(allowedRoles: string[]) {
   // otherwise lock-out a correctly-seeded Super Admin.
   if (!userRoles || userRoles.length === 0) {
     const { data: fallbackRows, error: fallbackError } = await supabase
+      .schema('yi_connect')
       .from('user_roles')
       .select('role:roles!inner(id, name, hierarchy_level, permissions)')
       .eq('user_id', user.id)
@@ -255,9 +259,11 @@ export async function hasPermission(
   const supabase = await createServerSupabaseClient()
 
   // Get user roles with permissions
-  const { data: userRoles, error } = await supabase.rpc('get_user_roles_detailed', {
-    p_user_id: user.id
-  })
+  const { data: userRoles, error } = await supabase
+    .schema('yi_connect')
+    .rpc('get_user_roles_detailed', {
+      p_user_id: user.id
+    })
 
   // ✅ Log RPC errors for debugging
   if (error) {
@@ -289,10 +295,12 @@ export async function hasPermission(
 
   // Vertical-specific permissions for vertical chairs
   if (context?.verticalId) {
-    const { data: isChair } = await supabase.rpc('is_vertical_chair', {
-      p_user_id: user.id,
-      p_vertical_id: context.verticalId
-    })
+    const { data: isChair } = await supabase
+      .schema('yi_connect')
+      .rpc('is_vertical_chair', {
+        p_user_id: user.id,
+        p_vertical_id: context.verticalId
+      })
 
     if (isChair) {
       // Vertical chairs have these permissions for their vertical
@@ -311,10 +319,12 @@ export async function hasPermission(
 
   // Sub-chapter lead permissions
   if (context?.subChapterId) {
-    const { data: isLead } = await supabase.rpc('is_sub_chapter_lead', {
-      p_user_id: user.id,
-      p_sub_chapter_id: context.subChapterId
-    })
+    const { data: isLead } = await supabase
+      .schema('yi_connect')
+      .rpc('is_sub_chapter_lead', {
+        p_user_id: user.id,
+        p_sub_chapter_id: context.subChapterId
+      })
 
     if (isLead) {
       const chapterLeadPermissions = [
@@ -330,9 +340,11 @@ export async function hasPermission(
 
   // Check if user is any vertical chair (without specific vertical context)
   if (!context?.verticalId) {
-    const { data: isAnyChair } = await supabase.rpc('is_vertical_chair', {
-      p_user_id: user.id
-    })
+    const { data: isAnyChair } = await supabase
+      .schema('yi_connect')
+      .rpc('is_vertical_chair', {
+        p_user_id: user.id
+      })
 
     if (isAnyChair) {
       // General vertical chair permissions
@@ -346,9 +358,11 @@ export async function hasPermission(
 
   // Check if user is any sub-chapter lead
   if (!context?.subChapterId) {
-    const { data: isAnyLead } = await supabase.rpc('is_sub_chapter_lead', {
-      p_user_id: user.id
-    })
+    const { data: isAnyLead } = await supabase
+      .schema('yi_connect')
+      .rpc('is_sub_chapter_lead', {
+        p_user_id: user.id
+      })
 
     if (isAnyLead) {
       const generalLeadPermissions = ['view_chapter_dashboard']
@@ -406,9 +420,11 @@ export const getUserHierarchyLevel = cache(async (): Promise<number> => {
 
   const supabase = await createServerSupabaseClient()
 
-  const { data: userRoles } = await supabase.rpc('get_user_roles_detailed', {
-    p_user_id: user.id
-  })
+  const { data: userRoles } = await supabase
+    .schema('yi_connect')
+    .rpc('get_user_roles_detailed', {
+      p_user_id: user.id
+    })
 
   if (!userRoles || userRoles.length === 0) return 0
 

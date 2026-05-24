@@ -29,21 +29,32 @@ type Jury = {
   is_active: boolean | null;
   jury_team_assignments: {
     team_id: string;
-    teams: { team_name: string } | null;
+    teams: { team_name: string; chapter_id: string } | null;
   }[];
 };
 
 type Team = { id: string; team_name: string };
 
-async function getJury(editionId: string): Promise<Jury[]> {
+async function getJury(
+  editionId: string,
+  chapterId: string
+): Promise<Jury[]> {
   const svc = await createServiceClient();
+  // Note: jury_assignments has no chapter_id (jury are edition-scoped), but
+  // teams DO have chapter_id. We must scope the nested teams join to the
+  // current chapter, otherwise a jury_team_assignments row pointing at a
+  // team in a different chapter (cross-chapter mis-assignment, accidental
+  // or not) will surface here as a "REVIEWING" entry. Using !inner on
+  // teams + .eq("...teams.chapter_id") makes PostgREST drop the assignment
+  // row entirely when the joined team is in another chapter.
   const { data } = await svc
     .schema("future")
     .from("jury_assignments")
     .select(
-      "id, jury_name, jury_title, organization, email, phone, archetype, access_code, is_active, jury_team_assignments(team_id, teams(team_name))"
+      "id, jury_name, jury_title, organization, email, phone, archetype, access_code, is_active, jury_team_assignments(team_id, teams!inner(team_name, chapter_id))"
     )
     .eq("edition_id", editionId)
+    .eq("jury_team_assignments.teams.chapter_id", chapterId)
     .order("jury_name", { ascending: true });
   return (data as unknown as Jury[]) ?? [];
 }
@@ -101,7 +112,7 @@ export default async function JuryPage() {
   if (!ctx) redirect("/yi-future/chapter");
 
   const [jury, teams] = await Promise.all([
-    getJury(ctx.editionId),
+    getJury(ctx.editionId, ctx.chapterId),
     getTeams(ctx.chapterId, ctx.editionId),
   ]);
 

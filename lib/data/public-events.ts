@@ -87,31 +87,29 @@ export const getEventByRsvpToken = cache(async (token: string): Promise<PublicEv
 });
 
 /**
- * Fetch all active chapter members for RSVP display
+ * Fetch all active chapter members for RSVP display.
+ *
+ * Calls the SECURITY DEFINER RPC `yi_connect.get_rsvp_event_members`
+ * which is gated by the rsvp_token (anon callers must already possess
+ * a valid token). The RPC closes the anon-read leak that direct
+ * SELECT on profiles + members exposed — see migration
+ * 20260524240000_close_rsvp_anon_leak_via_rpc.sql.
+ *
  * Returns: id, full_name, avatar_url, company, designation
  */
-export const getChapterMembersForRSVP = cache(async (chapterId: string): Promise<PublicMember[]> => {
+export const getChapterMembersForRSVP = cache(async (rsvpToken: string): Promise<PublicMember[]> => {
   const supabase = await createServerSupabaseClient();
 
   const { data, error } = await supabase
-    .schema('yi_connect').from('members')
-    .select(`
-      id,
-      company,
-      designation,
-      profile:profiles(full_name, avatar_url)
-    `)
-    .eq('chapter_id', chapterId)
-    .eq('is_active', true)
-    .order('created_at', { ascending: true });
+    .schema('yi_connect')
+    .rpc('get_rsvp_event_members', { p_rsvp_token: rsvpToken });
 
   if (error || !data) return [];
 
-  // Flatten the profile join
-  return data.map((m: any) => ({
+  return (data as any[]).map((m) => ({
     id: m.id,
-    full_name: m.profile?.full_name || 'Unknown Member',
-    avatar_url: m.profile?.avatar_url || null,
+    full_name: m.full_name || 'Unknown Member',
+    avatar_url: m.avatar_url || null,
     company: m.company || null,
     designation: m.designation || null,
   }));

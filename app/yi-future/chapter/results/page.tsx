@@ -20,7 +20,7 @@ async function getDefaultThreshold(editionId: string): Promise<number | null> {
     .from("rubrics")
     .select("threshold_for_national")
     .eq("edition_id", editionId)
-    .eq("scope", "chapter_final")
+    .eq("scope", "chapter")
     .eq("is_default", true)
     .maybeSingle();
   return (data as { threshold_for_national: number | null } | null)

@@ -71,7 +71,7 @@ async function getDefaultRubric(editionId: string): Promise<RubricRow | null> {
     .from("rubrics")
     .select("id, total_max, threshold_for_national")
     .eq("edition_id", editionId)
-    .eq("scope", "chapter_final")
+    .eq("scope", "chapter")
     .eq("is_default", true)
     .maybeSingle();
   return (data as unknown as RubricRow) ?? null;
@@ -145,7 +145,7 @@ export default async function ScoringPage() {
 
       {!rubric && (
         <div className="bg-yi-saffron/10 border border-yi-saffron/30 rounded-md p-3 text-sm text-yi-saffron">
-          No default chapter_final rubric — configure one in national admin.
+          No default chapter rubric — configure one in national admin.
         </div>
       )}
 

@@ -80,7 +80,7 @@ export async function createJury(
     });
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/chapter/jury");
+  revalidatePath("/yi-future/chapter/jury");
   redirect("/yi-future/chapter/jury");
 }
 
@@ -119,7 +119,7 @@ export async function updateJury(
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/chapter/jury");
+  revalidatePath("/yi-future/chapter/jury");
   redirect("/yi-future/chapter/jury");
 }
 
@@ -133,7 +133,7 @@ export async function regenerateJuryCode(id: string): Promise<ActionResult> {
     .update({ access_code })
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/chapter/jury");
+  revalidatePath("/yi-future/chapter/jury");
   return { ok: true, message: `New code: ${access_code}` };
 }
 
@@ -152,7 +152,7 @@ export async function deleteJury(id: string): Promise<ActionResult> {
     .delete()
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/chapter/jury");
+  revalidatePath("/yi-future/chapter/jury");
   return { ok: true, message: "Jury removed." };
 }
 
@@ -171,7 +171,7 @@ export async function assignJuryToTeam(
       { onConflict: "jury_id,team_id" }
     );
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/chapter/jury");
+  revalidatePath("/yi-future/chapter/jury");
   return { ok: true, message: "Assigned." };
 }
 
@@ -188,7 +188,7 @@ export async function unassignJuryFromTeam(
     .eq("jury_id", juryId)
     .eq("team_id", teamId);
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/chapter/jury");
+  revalidatePath("/yi-future/chapter/jury");
   return { ok: true, message: "Unassigned." };
 }
 
@@ -259,7 +259,7 @@ export async function autoAllocateJury(
     .upsert(rows, { onConflict: "jury_id,team_id" });
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/chapter/jury");
+  revalidatePath("/yi-future/chapter/jury");
   return {
     ok: true,
     message: `Allocated ${rows.length} assignments across ${teamList.length} teams.`,

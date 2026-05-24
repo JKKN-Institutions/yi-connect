@@ -254,8 +254,8 @@ export async function sendMessage(
       status: "pending",
     } as never);
 
-  revalidatePath("/mentor/messages");
-  revalidatePath("/me/messages");
+  revalidatePath("/yi-future/mentor/messages");
+  revalidatePath("/yi-future/me/messages");
 
   return {
     ok: true,

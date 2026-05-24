@@ -153,7 +153,7 @@ export async function saveDraft(
     if (error) return { ok: false, error: error.message };
   }
 
-  revalidatePath("/host/post-event");
+  revalidatePath("/yi-future/host/post-event");
   return { ok: true, message: "Draft saved." };
 }
 
@@ -200,6 +200,6 @@ export async function submit(eventId: string): Promise<ActionResult> {
     .eq("id", existing.id);
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/host/post-event");
+  revalidatePath("/yi-future/host/post-event");
   return { ok: true, message: "Report submitted." };
 }

@@ -125,9 +125,9 @@ export async function setPreferences(
     .insert(rows as never);
   if (insErr) return { ok: false, error: insErr.message };
 
-  revalidatePath("/me/team/preferences");
-  revalidatePath("/me/team");
-  revalidatePath("/chapter/allocations");
+  revalidatePath("/yi-future/me/team/preferences");
+  revalidatePath("/yi-future/me/team");
+  revalidatePath("/yi-future/chapter/allocations");
   return { ok: true, message: "Top 3 saved." };
 }
 

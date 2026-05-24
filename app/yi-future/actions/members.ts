@@ -59,8 +59,8 @@ export async function addMember(
     .insert({ team_id: teamId, delegate_id: delegateId, role_in_team: "member" });
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath(`/chapter/teams/${teamId}`);
-  revalidatePath("/me/team");
+  revalidatePath(`/yi-future/chapter/teams/${teamId}`);
+  revalidatePath("/yi-future/me/team");
   return { ok: true, message: "Member added." };
 }
 
@@ -96,8 +96,8 @@ export async function removeMember(
     .eq("delegate_id", delegateId);
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath(`/chapter/teams/${teamId}`);
-  revalidatePath("/me/team");
+  revalidatePath(`/yi-future/chapter/teams/${teamId}`);
+  revalidatePath("/yi-future/me/team");
   return { ok: true, message: "Member removed." };
 }
 
@@ -122,6 +122,6 @@ export async function setMemberRole(
     .eq("delegate_id", delegateId);
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath(`/chapter/teams/${teamId}`);
+  revalidatePath(`/yi-future/chapter/teams/${teamId}`);
   return { ok: true };
 }

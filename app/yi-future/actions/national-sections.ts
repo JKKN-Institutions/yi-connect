@@ -79,8 +79,8 @@ export async function seedNationalSections(
   });
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/host/agenda/day1");
-  revalidatePath("/host/agenda/day2");
+  revalidatePath("/yi-future/host/agenda/day1");
+  revalidatePath("/yi-future/host/agenda/day2");
   return { ok: true, message: "National sections seeded." };
 }
 
@@ -112,9 +112,9 @@ export async function activateNationalSection(
     .eq("section_key", sectionKey);
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/host/agenda/day1");
-  revalidatePath("/host/agenda/day2");
-  revalidatePath(`/host/event/${eventId}/live`);
+  revalidatePath("/yi-future/host/agenda/day1");
+  revalidatePath("/yi-future/host/agenda/day2");
+  revalidatePath(`/yi-future/host/event/${eventId}/live`);
   revalidatePath(`/event/${eventId}/display`);
   return { ok: true, message: `Day ${day} · "${sectionKey}" is live.` };
 }
@@ -132,9 +132,9 @@ export async function endAllNationalSections(
     .eq("is_active", true);
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/host/agenda/day1");
-  revalidatePath("/host/agenda/day2");
-  revalidatePath(`/host/event/${eventId}/live`);
+  revalidatePath("/yi-future/host/agenda/day1");
+  revalidatePath("/yi-future/host/agenda/day2");
+  revalidatePath(`/yi-future/host/event/${eventId}/live`);
   revalidatePath(`/event/${eventId}/display`);
   return { ok: true, message: "All national sections closed." };
 }
@@ -155,6 +155,6 @@ export async function updateNationalSectionNotes(
     .eq("section_key", sectionKey);
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath(`/host/agenda/day${day}`);
+  revalidatePath(`/yi-future/host/agenda/day${day}`);
   return { ok: true };
 }

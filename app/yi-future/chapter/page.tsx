@@ -165,7 +165,7 @@ export default async function ChapterDashboard() {
       const chapterId = String(formData.get("chapter_id") ?? "").trim();
       const role = String(formData.get("role") ?? "").trim() as CoreTeamRole;
       await linkSelfToChapter({ chapterId, role });
-      revalidatePath("/chapter");
+      revalidatePath("/yi-future/chapter");
     }
 
     return (

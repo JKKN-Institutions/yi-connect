@@ -71,8 +71,8 @@ export async function createDelegate(
     });
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/chapter/delegates");
-  revalidatePath("/chapter/teams");
+  revalidatePath("/yi-future/chapter/delegates");
+  revalidatePath("/yi-future/chapter/teams");
   redirect("/yi-future/chapter/delegates");
 }
 
@@ -112,7 +112,7 @@ export async function updateDelegate(
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/chapter/delegates");
+  revalidatePath("/yi-future/chapter/delegates");
   redirect("/yi-future/chapter/delegates");
 }
 
@@ -127,7 +127,7 @@ export async function regenerateAccessCode(id: string): Promise<ActionResult> {
     .update({ access_code })
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/chapter/delegates");
+  revalidatePath("/yi-future/chapter/delegates");
   return { ok: true, message: `New code: ${access_code}` };
 }
 
@@ -153,6 +153,6 @@ export async function deleteDelegate(id: string): Promise<ActionResult> {
     .delete()
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/chapter/delegates");
+  revalidatePath("/yi-future/chapter/delegates");
   return { ok: true, message: "Delegate removed." };
 }

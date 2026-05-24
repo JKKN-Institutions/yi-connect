@@ -58,7 +58,7 @@ export async function createInternship(
     });
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/host/internships");
+  revalidatePath("/yi-future/host/internships");
   redirect("/yi-future/host/internships");
 }
 
@@ -101,7 +101,7 @@ export async function updateInternship(
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/host/internships");
+  revalidatePath("/yi-future/host/internships");
   redirect("/yi-future/host/internships");
 }
 
@@ -117,7 +117,7 @@ export async function toggleInternshipActive(
     .update({ is_active: next })
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/host/internships");
+  revalidatePath("/yi-future/host/internships");
   return { ok: true };
 }
 
@@ -130,6 +130,6 @@ export async function deleteInternship(id: string): Promise<ActionResult> {
     .delete()
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/host/internships");
+  revalidatePath("/yi-future/host/internships");
   return { ok: true, message: "Slot removed." };
 }

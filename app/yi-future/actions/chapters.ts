@@ -61,7 +61,7 @@ export async function updateChapter(
   if (error) return { ok: false, error: error.message };
 
   revalidatePath("/national/admin/chapters");
-  revalidatePath("/chapter/setup");
+  revalidatePath("/yi-future/chapter/setup");
   return { ok: true, message: "Chapter updated." };
 }
 

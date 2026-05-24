@@ -53,7 +53,7 @@ export async function createExpert(
     });
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/chapter/experts");
+  revalidatePath("/yi-future/chapter/experts");
   redirect("/yi-future/chapter/experts");
 }
 
@@ -90,7 +90,7 @@ export async function updateExpert(
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/chapter/experts");
+  revalidatePath("/yi-future/chapter/experts");
   redirect("/yi-future/chapter/experts");
 }
 
@@ -103,6 +103,6 @@ export async function deleteExpert(id: string): Promise<ActionResult> {
     .delete()
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/chapter/experts");
+  revalidatePath("/yi-future/chapter/experts");
   return { ok: true, message: "Expert removed." };
 }

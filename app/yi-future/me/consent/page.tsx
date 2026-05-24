@@ -82,7 +82,7 @@ async function uploadSignedUrl(formData: FormData): Promise<void> {
 
   if (ex && ex.status === "approved") {
     // Already approved — don't allow silent overwrite.
-    revalidatePath("/me/consent");
+    revalidatePath("/yi-future/me/consent");
     return;
   }
 
@@ -112,8 +112,8 @@ async function uploadSignedUrl(formData: FormData): Promise<void> {
       .insert(payload as never);
   }
 
-  revalidatePath("/me/consent");
-  revalidatePath("/chapter/consent");
+  revalidatePath("/yi-future/me/consent");
+  revalidatePath("/yi-future/chapter/consent");
 }
 
 // ─── PAGE ───────────────────────────────────────────────────────────

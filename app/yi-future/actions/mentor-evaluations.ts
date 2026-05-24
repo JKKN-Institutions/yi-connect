@@ -152,8 +152,8 @@ export async function saveMentorEvaluation(input: {
     if (error) return { ok: false, error: error.message };
   }
 
-  revalidatePath("/mentor");
-  revalidatePath(`/mentor/scoring/${input.teamId}`);
+  revalidatePath("/yi-future/mentor");
+  revalidatePath(`/yi-future/mentor/scoring/${input.teamId}`);
 
   return {
     ok: true,

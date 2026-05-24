@@ -84,7 +84,7 @@ async function saveDeliverables(eventId: string, formData: FormData) {
       { onConflict: "event_id" }
     );
 
-  revalidatePath("/host/deliverables");
+  revalidatePath("/yi-future/host/deliverables");
 }
 
 export default async function HostDeliverablesPage() {

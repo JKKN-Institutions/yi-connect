@@ -79,7 +79,7 @@ export async function scheduleInterview(
     });
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/host/interviews");
+  revalidatePath("/yi-future/host/interviews");
 
   // Fire-and-forget push to the delegate
   try {
@@ -125,7 +125,7 @@ export async function setInterviewOutcome(
     })
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/host/interviews");
+  revalidatePath("/yi-future/host/interviews");
   revalidatePath("/partner");
   return { ok: true };
 }
@@ -139,6 +139,6 @@ export async function deleteInterview(id: string): Promise<ActionResult> {
     .delete()
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/host/interviews");
+  revalidatePath("/yi-future/host/interviews");
   return { ok: true, message: "Interview removed." };
 }

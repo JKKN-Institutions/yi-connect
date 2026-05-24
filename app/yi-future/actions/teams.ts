@@ -55,7 +55,7 @@ export async function createTeam(
     .maybeSingle();
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/chapter/teams");
+  revalidatePath("/yi-future/chapter/teams");
   const newId = (inserted as { id: string } | null)?.id;
   if (newId) {
     redirect(`/yi-future/chapter/teams/${newId}`);
@@ -94,7 +94,7 @@ export async function updateTeamName(
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath(`/chapter/teams/${id}`);
+  revalidatePath(`/yi-future/chapter/teams/${id}`);
   return { ok: true, message: "Team name updated." };
 }
 
@@ -136,8 +136,8 @@ export async function setTeamCaptain(
     .eq("team_id", teamId)
     .eq("delegate_id", delegateId);
 
-  revalidatePath(`/chapter/teams/${teamId}`);
-  revalidatePath("/me/team");
+  revalidatePath(`/yi-future/chapter/teams/${teamId}`);
+  revalidatePath("/yi-future/me/team");
   return { ok: true, message: "Captain set." };
 }
 
@@ -164,8 +164,8 @@ export async function pickProblemStatement(
     .eq("id", teamId);
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath(`/chapter/teams/${teamId}`);
-  revalidatePath("/me/team");
+  revalidatePath(`/yi-future/chapter/teams/${teamId}`);
+  revalidatePath("/yi-future/me/team");
   return { ok: true, message: "Problem selected." };
 }
 
@@ -183,7 +183,7 @@ export async function clearProblem(teamId: string): Promise<ActionResult> {
     })
     .eq("id", teamId);
   if (error) return { ok: false, error: error.message };
-  revalidatePath(`/chapter/teams/${teamId}`);
+  revalidatePath(`/yi-future/chapter/teams/${teamId}`);
   return { ok: true };
 }
 
@@ -198,7 +198,7 @@ export async function deleteTeam(id: string): Promise<ActionResult> {
     .delete()
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/chapter/teams");
+  revalidatePath("/yi-future/chapter/teams");
   return { ok: true, message: "Team deleted." };
 }
 

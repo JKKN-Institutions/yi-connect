@@ -75,7 +75,7 @@ export async function createPartner(
     });
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/host/partners");
+  revalidatePath("/yi-future/host/partners");
   redirect("/yi-future/host/partners");
 }
 
@@ -121,7 +121,7 @@ export async function updatePartner(
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/host/partners");
+  revalidatePath("/yi-future/host/partners");
   redirect("/yi-future/host/partners");
 }
 
@@ -135,7 +135,7 @@ export async function regeneratePartnerCode(id: string): Promise<ActionResult> {
     .update({ access_code })
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/host/partners");
+  revalidatePath("/yi-future/host/partners");
   return { ok: true, message: `New code: ${access_code}` };
 }
 
@@ -154,6 +154,6 @@ export async function deletePartner(id: string): Promise<ActionResult> {
     .delete()
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/host/partners");
+  revalidatePath("/yi-future/host/partners");
   return { ok: true, message: "Partner removed." };
 }

@@ -106,8 +106,8 @@ export async function saveSubmissionDraft(input: {
     );
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/me/submissions");
-  revalidatePath("/chapter/submissions");
+  revalidatePath("/yi-future/me/submissions");
+  revalidatePath("/yi-future/chapter/submissions");
   return { ok: true, message: "Draft saved." };
 }
 
@@ -163,8 +163,8 @@ export async function submitSubmission(input: {
     );
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/me/submissions");
-  revalidatePath("/chapter/submissions");
+  revalidatePath("/yi-future/me/submissions");
+  revalidatePath("/yi-future/chapter/submissions");
   return { ok: true, message: "Submitted for review." };
 }
 
@@ -194,8 +194,8 @@ export async function reviewSubmission(
     .eq("id", submissionId);
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/chapter/submissions");
-  revalidatePath("/me/submissions");
+  revalidatePath("/yi-future/chapter/submissions");
+  revalidatePath("/yi-future/me/submissions");
   return {
     ok: true,
     message: decision === "approved" ? "Approved." : "Rejected.",

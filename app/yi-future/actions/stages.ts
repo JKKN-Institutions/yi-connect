@@ -141,7 +141,7 @@ export async function advanceEditionStage(input: {
       override_reason: input.overrideReason ?? null,
     });
 
-  revalidatePath("/chapter");
+  revalidatePath("/yi-future/chapter");
   revalidatePath("/national/admin/editions");
   return {
     ok: true,

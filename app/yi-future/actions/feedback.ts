@@ -62,9 +62,9 @@ export async function createFeedback(
     });
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath(`/chapter/teams/${input.teamId}`);
-  revalidatePath("/me/feedback");
-  revalidatePath("/mentor");
+  revalidatePath(`/yi-future/chapter/teams/${input.teamId}`);
+  revalidatePath("/yi-future/me/feedback");
+  revalidatePath("/yi-future/mentor");
 
   // Fire-and-forget push to every member of the team
   try {
@@ -135,7 +135,7 @@ export async function deleteFeedback(id: string): Promise<ActionResult> {
     .delete()
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/mentor");
+  revalidatePath("/yi-future/mentor");
   return { ok: true, message: "Feedback removed." };
 }
 
@@ -179,7 +179,7 @@ export async function autoAllocateMentors(editionId: string, chapterId: string):
     .upsert(rows, { onConflict: "mentor_id,team_id" });
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/chapter/mentors");
+  revalidatePath("/yi-future/chapter/mentors");
   return {
     ok: true,
     message: `Assigned ${teamList.length} teams across ${mentorList.length} mentors.`,

@@ -55,7 +55,7 @@ export async function createNationalEvent(
     });
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/host");
+  revalidatePath("/yi-future/host");
   redirect("/yi-future/host");
 }
 
@@ -90,7 +90,7 @@ export async function updateNationalEvent(
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/host");
+  revalidatePath("/yi-future/host");
   return { ok: true, message: "Event updated." };
 }
 
@@ -106,6 +106,6 @@ export async function publishNationalEvent(
     .update({ is_published: publish })
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/host");
+  revalidatePath("/yi-future/host");
   return { ok: true };
 }

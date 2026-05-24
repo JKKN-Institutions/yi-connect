@@ -80,7 +80,7 @@ export async function createChapterFinal(
     .from("chapter_final_sections")
     .insert(sectionRows);
 
-  revalidatePath("/chapter/final");
+  revalidatePath("/yi-future/chapter/final");
   redirect(`/chapter/final/${eventId}`);
 }
 
@@ -119,8 +119,8 @@ export async function updateEvent(
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/chapter/final");
-  revalidatePath(`/chapter/final/${id}`);
+  revalidatePath("/yi-future/chapter/final");
+  revalidatePath(`/yi-future/chapter/final/${id}`);
   return { ok: true, message: "Event updated." };
 }
 
@@ -136,7 +136,7 @@ export async function setEventPublished(
     .update({ is_published: publish })
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
-  revalidatePath(`/chapter/final/${id}`);
+  revalidatePath(`/yi-future/chapter/final/${id}`);
   return { ok: true };
 }
 
@@ -171,8 +171,8 @@ export async function activateSection(
     .eq("section", section);
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath(`/chapter/final/${eventId}`);
-  revalidatePath(`/chapter/final/${eventId}/live`);
+  revalidatePath(`/yi-future/chapter/final/${eventId}`);
+  revalidatePath(`/yi-future/chapter/final/${eventId}/live`);
   revalidatePath(`/event/${eventId}/display`);
   return { ok: true, message: `Section "${section}" is live.` };
 }
@@ -190,8 +190,8 @@ export async function endAllSections(
     .eq("event_id", eventId)
     .eq("is_active", true);
   if (error) return { ok: false, error: error.message };
-  revalidatePath(`/chapter/final/${eventId}`);
-  revalidatePath(`/chapter/final/${eventId}/live`);
+  revalidatePath(`/yi-future/chapter/final/${eventId}`);
+  revalidatePath(`/yi-future/chapter/final/${eventId}/live`);
   revalidatePath(`/event/${eventId}/display`);
   return { ok: true, message: "Event paused / all sections closed." };
 }
@@ -211,6 +211,6 @@ export async function updateSectionNotes(
     .eq("event_id", eventId)
     .eq("section", section);
   if (error) return { ok: false, error: error.message };
-  revalidatePath(`/chapter/final/${eventId}`);
+  revalidatePath(`/yi-future/chapter/final/${eventId}`);
   return { ok: true };
 }

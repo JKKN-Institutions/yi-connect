@@ -66,7 +66,7 @@ export async function addCoreTeamMember(
     });
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/chapter/setup");
+  revalidatePath("/yi-future/chapter/setup");
   return { ok: true, message: "Core team member added." };
 }
 
@@ -94,7 +94,7 @@ export async function updateCoreTeamMember(
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/chapter/setup");
+  revalidatePath("/yi-future/chapter/setup");
   return { ok: true, message: "Updated." };
 }
 
@@ -110,6 +110,6 @@ export async function removeCoreTeamMember(
     .delete()
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/chapter/setup");
+  revalidatePath("/yi-future/chapter/setup");
   return { ok: true, message: "Removed." };
 }

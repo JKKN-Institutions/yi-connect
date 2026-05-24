@@ -299,7 +299,7 @@ export async function completeProfile(
     .eq("id", session.id);
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/me");
+  revalidatePath("/yi-future/me");
   revalidatePath("/join");
   return {
     ok: true,
@@ -352,7 +352,7 @@ export async function saveQuizResult(
     .eq("id", session.id);
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/me");
+  revalidatePath("/yi-future/me");
   revalidatePath("/join");
   return { ok: true };
 }

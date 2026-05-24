@@ -79,7 +79,7 @@ export async function linkSelfToChapter(input: {
         .eq("id", row.id);
       if (upErr) return { ok: false, error: upErr.message };
     }
-    revalidatePath("/chapter");
+    revalidatePath("/yi-future/chapter");
     return { ok: true, message: "Already linked." };
   }
 
@@ -98,6 +98,6 @@ export async function linkSelfToChapter(input: {
     });
   if (insErr) return { ok: false, error: insErr.message };
 
-  revalidatePath("/chapter");
+  revalidatePath("/yi-future/chapter");
   return { ok: true, message: "Linked. Refreshing…" };
 }

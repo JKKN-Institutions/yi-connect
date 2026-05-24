@@ -144,8 +144,8 @@ export async function addResource(input: {
     return { ok: false, error: "Invalid resource type." };
   }
 
-  revalidatePath("/mentor/resources");
-  revalidatePath("/me/resources");
+  revalidatePath("/yi-future/mentor/resources");
+  revalidatePath("/yi-future/me/resources");
   return { ok: true, message: "Resource added." };
 }
 
@@ -230,8 +230,8 @@ export async function deleteResource(
     }
   }
 
-  revalidatePath("/mentor/resources");
-  revalidatePath("/me/resources");
+  revalidatePath("/yi-future/mentor/resources");
+  revalidatePath("/yi-future/me/resources");
   return { ok: true, message: "Resource deleted." };
 }
 

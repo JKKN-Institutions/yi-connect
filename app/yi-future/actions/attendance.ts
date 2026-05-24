@@ -40,6 +40,6 @@ export async function saveAttendance(
     .upsert(rows, { onConflict: "phase_event_id,delegate_id" });
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath(`/chapter/journey/${eventId}`);
+  revalidatePath(`/yi-future/chapter/journey/${eventId}`);
   return { ok: true, message: "Attendance saved." };
 }

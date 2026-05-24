@@ -51,7 +51,7 @@ export async function createMediaCoverage(
     });
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/host/media");
+  revalidatePath("/yi-future/host/media");
   return { ok: true, message: "Coverage logged." };
 }
 
@@ -64,6 +64,6 @@ export async function deleteMediaCoverage(id: string): Promise<ActionResult> {
     .delete()
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/host/media");
+  revalidatePath("/yi-future/host/media");
   return { ok: true };
 }

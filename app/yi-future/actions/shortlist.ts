@@ -228,8 +228,8 @@ export async function publishShortlist(input: {
     .upsert(rows as never, { onConflict: "from_event_id,team_id" });
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath(`/chapter/final/${input.chapterFinalEventId}`);
-  revalidatePath("/chapter/results");
+  revalidatePath(`/yi-future/chapter/final/${input.chapterFinalEventId}`);
+  revalidatePath("/yi-future/chapter/results");
   return {
     ok: true,
     message: `Shortlisted ${rows.length} team(s).`,

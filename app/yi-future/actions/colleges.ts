@@ -50,7 +50,7 @@ export async function createCollege(
     });
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/chapter/colleges");
+  revalidatePath("/yi-future/chapter/colleges");
   redirect("/yi-future/chapter/colleges");
 }
 
@@ -91,7 +91,7 @@ export async function updateCollege(
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/chapter/colleges");
+  revalidatePath("/yi-future/chapter/colleges");
   redirect("/yi-future/chapter/colleges");
 }
 
@@ -120,7 +120,7 @@ export async function deleteCollege(id: string): Promise<ActionResult> {
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/chapter/colleges");
+  revalidatePath("/yi-future/chapter/colleges");
   return { ok: true, message: "College deleted." };
 }
 
@@ -134,7 +134,7 @@ export async function approvePendingCollege(id: string): Promise<ActionResult> {
     .update({ is_approved: true } as never)
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/chapter/colleges");
+  revalidatePath("/yi-future/chapter/colleges");
   return { ok: true, message: "College approved." };
 }
 
@@ -186,7 +186,7 @@ export async function mergePendingCollege(
     .eq("id", sourceId);
   if (mergeErr) return { ok: false, error: mergeErr.message };
 
-  revalidatePath("/chapter/colleges");
+  revalidatePath("/yi-future/chapter/colleges");
   return { ok: true, message: "Merged successfully." };
 }
 
@@ -210,6 +210,6 @@ export async function editAndApprovePendingCollege(
     } as never)
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/chapter/colleges");
+  revalidatePath("/yi-future/chapter/colleges");
   return { ok: true, message: "Approved." };
 }

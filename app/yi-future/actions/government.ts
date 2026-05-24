@@ -65,7 +65,7 @@ export async function createGovEngagement(
     });
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/host/government");
+  revalidatePath("/yi-future/host/government");
   redirect("/yi-future/host/government");
 }
 
@@ -113,7 +113,7 @@ export async function updateGovEngagement(
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/host/government");
+  revalidatePath("/yi-future/host/government");
   redirect("/yi-future/host/government");
 }
 
@@ -126,6 +126,6 @@ export async function deleteGovEngagement(id: string): Promise<ActionResult> {
     .delete()
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/host/government");
+  revalidatePath("/yi-future/host/government");
   return { ok: true, message: "Engagement removed." };
 }

@@ -123,8 +123,8 @@ export async function submitConsent(
     if (error) return { ok: false, error: error.message };
   }
 
-  revalidatePath("/me/consent");
-  revalidatePath("/chapter/consent");
+  revalidatePath("/yi-future/me/consent");
+  revalidatePath("/yi-future/chapter/consent");
   return { ok: true, message: "Consent saved." };
 }
 
@@ -145,7 +145,7 @@ export async function approveConsent(
     })
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/chapter/consent");
+  revalidatePath("/yi-future/chapter/consent");
 
   // Fire-and-forget push to the delegate
   try {
@@ -188,7 +188,7 @@ export async function rejectConsent(
     })
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/chapter/consent");
+  revalidatePath("/yi-future/chapter/consent");
 
   // Fire-and-forget push to the delegate
   try {

@@ -57,10 +57,10 @@ export async function announceAward(
     });
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/chapter/final");
-  revalidatePath("/chapter/results");
-  revalidatePath("/host");
-  revalidatePath("/me");
+  revalidatePath("/yi-future/chapter/final");
+  revalidatePath("/yi-future/chapter/results");
+  revalidatePath("/yi-future/host");
+  revalidatePath("/yi-future/me");
 
   // Fire-and-forget push to every delegate on the winning team
   try {
@@ -102,7 +102,7 @@ export async function deleteAward(id: string): Promise<ActionResult> {
     .delete()
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/chapter/results");
-  revalidatePath("/host");
+  revalidatePath("/yi-future/chapter/results");
+  revalidatePath("/yi-future/host");
   return { ok: true };
 }

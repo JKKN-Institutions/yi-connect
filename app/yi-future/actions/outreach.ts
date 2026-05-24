@@ -48,7 +48,7 @@ export async function logOutreachActivity(
     });
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/chapter/outreach");
+  revalidatePath("/yi-future/chapter/outreach");
   redirect("/yi-future/chapter/outreach");
 }
 
@@ -62,6 +62,6 @@ export async function deleteOutreachEntry(id: string): Promise<ActionResult> {
     .delete()
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/chapter/outreach");
+  revalidatePath("/yi-future/chapter/outreach");
   return { ok: true, message: "Entry removed." };
 }

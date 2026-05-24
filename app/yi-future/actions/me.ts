@@ -38,7 +38,7 @@ export async function updateMyResume(
     .eq("id", delegateId);
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/me");
-  revalidatePath("/me/resume");
+  revalidatePath("/yi-future/me");
+  revalidatePath("/yi-future/me/resume");
   return { ok: true, message: "Resume link updated." };
 }

@@ -140,8 +140,8 @@ export async function sendInvite(input: {
     if (error) return { ok: false, error: error.message };
   }
 
-  revalidatePath("/me/team/directory");
-  revalidatePath("/me/team/invites");
+  revalidatePath("/yi-future/me/team/directory");
+  revalidatePath("/yi-future/me/team/invites");
   return { ok: true, message: "Invite sent." };
 }
 
@@ -186,7 +186,7 @@ export async function respondInvite(
       .update({ status: "declined", responded_at: nowIso } as never)
       .eq("id", inviteId);
     if (error) return { ok: false, error: error.message };
-    revalidatePath("/me/team/invites");
+    revalidatePath("/yi-future/me/team/invites");
     return { ok: true, message: "Invite declined." };
   }
 
@@ -245,10 +245,10 @@ export async function respondInvite(
     .eq("status", "pending")
     .neq("id", inviteId);
 
-  revalidatePath("/me");
-  revalidatePath("/me/team");
-  revalidatePath("/me/team/invites");
-  revalidatePath("/me/team/directory");
+  revalidatePath("/yi-future/me");
+  revalidatePath("/yi-future/me/team");
+  revalidatePath("/yi-future/me/team/invites");
+  revalidatePath("/yi-future/me/team/directory");
   return { ok: true, message: "You joined the team." };
 }
 
@@ -297,9 +297,9 @@ export async function freezeTeam(teamId: string): Promise<ActionResult> {
     .eq("team_id", teamId)
     .eq("status", "pending");
 
-  revalidatePath("/me/team");
-  revalidatePath("/me/team/directory");
-  revalidatePath("/me/team/invites");
+  revalidatePath("/yi-future/me/team");
+  revalidatePath("/yi-future/me/team/directory");
+  revalidatePath("/yi-future/me/team/invites");
   return { ok: true, message: "Team frozen." };
 }
 
@@ -350,6 +350,6 @@ export async function setLeader(
     .eq("id", teamId);
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/me/team");
+  revalidatePath("/yi-future/me/team");
   return { ok: true, message: "Leader updated." };
 }

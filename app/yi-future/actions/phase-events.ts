@@ -88,7 +88,7 @@ export async function createPhaseEvent(
     .maybeSingle();
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/chapter/journey");
+  revalidatePath("/yi-future/chapter/journey");
   const newId = (inserted as { id: string } | null)?.id;
   if (newId) redirect(`/chapter/journey/${newId}`);
   redirect("/yi-future/chapter/journey");
@@ -132,8 +132,8 @@ export async function updatePhaseEvent(
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath(`/chapter/journey/${id}`);
-  revalidatePath("/chapter/journey");
+  revalidatePath(`/yi-future/chapter/journey/${id}`);
+  revalidatePath("/yi-future/chapter/journey");
   return { ok: true, message: "Event updated." };
 }
 
@@ -155,8 +155,8 @@ export async function setEventComplete(
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath(`/chapter/journey/${id}`);
-  revalidatePath("/chapter/journey");
+  revalidatePath(`/yi-future/chapter/journey/${id}`);
+  revalidatePath("/yi-future/chapter/journey");
   return {
     ok: true,
     message: complete ? "Event marked complete." : "Marked incomplete.",
@@ -181,6 +181,6 @@ export async function deletePhaseEvent(id: string): Promise<ActionResult> {
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/chapter/journey");
+  revalidatePath("/yi-future/chapter/journey");
   return { ok: true, message: "Event deleted." };
 }

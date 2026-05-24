@@ -283,9 +283,9 @@ export async function allocateProblem(
       .insert(logRows as never);
   }
 
-  revalidatePath("/chapter/allocations");
-  revalidatePath(`/chapter/teams/${teamId}`);
-  revalidatePath("/me/team");
+  revalidatePath("/yi-future/chapter/allocations");
+  revalidatePath(`/yi-future/chapter/teams/${teamId}`);
+  revalidatePath("/yi-future/me/team");
   return { ok: true, message: `Allocated: ${p.title}` };
 }
 
@@ -376,7 +376,7 @@ export async function autoAllocate(
     }
   }
 
-  revalidatePath("/chapter/allocations");
+  revalidatePath("/yi-future/chapter/allocations");
 
   if (failed.length > 0) {
     return {

@@ -63,7 +63,7 @@ export async function createHostSpeaker(
     });
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/host/speakers");
+  revalidatePath("/yi-future/host/speakers");
   redirect("/yi-future/host/speakers");
 }
 
@@ -101,7 +101,7 @@ export async function updateHostSpeaker(
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/host/speakers");
+  revalidatePath("/yi-future/host/speakers");
   redirect("/yi-future/host/speakers");
 }
 
@@ -116,6 +116,6 @@ export async function deleteHostSpeaker(
     .delete()
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/host/speakers");
+  revalidatePath("/yi-future/host/speakers");
   return { ok: true, message: "Speaker removed." };
 }

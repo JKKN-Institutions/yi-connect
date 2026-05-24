@@ -65,7 +65,7 @@ export async function createWhitepaper(
     });
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/host/whitepaper");
+  revalidatePath("/yi-future/host/whitepaper");
   revalidatePath("/national/admin/whitepapers");
   redirect("/yi-future/host/whitepaper");
 }
@@ -101,7 +101,7 @@ export async function updateWhitepaper(
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/host/whitepaper");
+  revalidatePath("/yi-future/host/whitepaper");
   revalidatePath("/national/admin/whitepapers");
   return { ok: true, message: "Whitepaper updated." };
 }
@@ -119,7 +119,7 @@ export async function publishWhitepaper(id: string): Promise<ActionResult> {
     })
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/host/whitepaper");
+  revalidatePath("/yi-future/host/whitepaper");
   revalidatePath("/national/admin/whitepapers");
   return { ok: true, message: "Published." };
 }
@@ -133,7 +133,7 @@ export async function unpublishWhitepaper(id: string): Promise<ActionResult> {
     .update({ status: "draft", published_at: null })
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/host/whitepaper");
+  revalidatePath("/yi-future/host/whitepaper");
   revalidatePath("/national/admin/whitepapers");
   return { ok: true };
 }
@@ -147,7 +147,7 @@ export async function deleteWhitepaper(id: string): Promise<ActionResult> {
     .delete()
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/host/whitepaper");
+  revalidatePath("/yi-future/host/whitepaper");
   revalidatePath("/national/admin/whitepapers");
   return { ok: true, message: "Deleted." };
 }

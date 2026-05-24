@@ -68,7 +68,7 @@ export async function createMentor(
     });
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/chapter/mentors");
+  revalidatePath("/yi-future/chapter/mentors");
   redirect("/yi-future/chapter/mentors");
 }
 
@@ -105,7 +105,7 @@ export async function updateMentor(
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/chapter/mentors");
+  revalidatePath("/yi-future/chapter/mentors");
   redirect("/yi-future/chapter/mentors");
 }
 
@@ -122,7 +122,7 @@ export async function regenerateMentorAccessCode(
     .update({ access_code })
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/chapter/mentors");
+  revalidatePath("/yi-future/chapter/mentors");
   return { ok: true, message: `New code: ${access_code}` };
 }
 
@@ -144,7 +144,7 @@ export async function deleteMentor(id: string): Promise<ActionResult> {
     .delete()
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/chapter/mentors");
+  revalidatePath("/yi-future/chapter/mentors");
   return { ok: true, message: "Mentor removed." };
 }
 
@@ -162,8 +162,8 @@ export async function assignMentorToTeam(
       onConflict: "mentor_id,team_id",
     });
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/chapter/mentors");
-  revalidatePath(`/chapter/teams/${teamId}`);
+  revalidatePath("/yi-future/chapter/mentors");
+  revalidatePath(`/yi-future/chapter/teams/${teamId}`);
   return { ok: true, message: "Assigned." };
 }
 
@@ -180,7 +180,7 @@ export async function unassignMentorFromTeam(
     .eq("mentor_id", mentorId)
     .eq("team_id", teamId);
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/chapter/mentors");
-  revalidatePath(`/chapter/teams/${teamId}`);
+  revalidatePath("/yi-future/chapter/mentors");
+  revalidatePath(`/yi-future/chapter/teams/${teamId}`);
   return { ok: true, message: "Unassigned." };
 }

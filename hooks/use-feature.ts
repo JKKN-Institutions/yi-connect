@@ -45,6 +45,7 @@ export function useChapterFeature(feature: FeatureName): UseFeatureResult {
         }
 
         const { data: member } = await supabase
+          .schema('yi_connect')
           .from('members')
           .select('chapter_id')
           .eq('id', session.user.id)
@@ -88,7 +89,7 @@ export function useChapterFeature(feature: FeatureName): UseFeatureResult {
       const supabase = createBrowserSupabaseClient()
 
       // Check if user is National Admin (they have access to all features)
-      const { data: isNationalAdmin } = await supabase.rpc('is_national_admin')
+      const { data: isNationalAdmin } = await supabase.schema('yi_connect').rpc('is_national_admin')
 
       if (isNationalAdmin) {
         setIsEnabled(true)
@@ -99,6 +100,7 @@ export function useChapterFeature(feature: FeatureName): UseFeatureResult {
 
       // Check feature toggle for this chapter
       const { data: featureToggle, error: fetchError } = await supabase
+        .schema('yi_connect')
         .from('chapter_feature_toggles')
         .select('is_enabled')
         .eq('chapter_id', chapterId)
@@ -170,6 +172,7 @@ export function useChapterFeatures(): {
 
         // Get user's chapter
         const { data: member } = await supabase
+          .schema('yi_connect')
           .from('members')
           .select('chapter_id')
           .eq('id', session.user.id)
@@ -184,7 +187,7 @@ export function useChapterFeatures(): {
         }
 
         // Check if National Admin
-        const { data: isNationalAdmin } = await supabase.rpc('is_national_admin')
+        const { data: isNationalAdmin } = await supabase.schema('yi_connect').rpc('is_national_admin')
 
         if (isNationalAdmin) {
           // National Admin has all features
@@ -213,6 +216,7 @@ export function useChapterFeatures(): {
 
         // Get enabled features for chapter
         const { data: enabledFeatures, error: fetchError } = await supabase
+          .schema('yi_connect')
           .from('chapter_feature_toggles')
           .select('feature')
           .eq('chapter_id', member.chapter_id)

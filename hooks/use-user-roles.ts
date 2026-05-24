@@ -62,7 +62,7 @@ export function useUserRoles() {
         // Fetch user roles with timeout
         const result = await withTimeout(
           (async () => {
-            return await supabase.rpc('get_user_roles_detailed', {
+            return await supabase.schema('yi_connect').rpc('get_user_roles_detailed', {
               p_user_id: session.user.id
             });
           })(),

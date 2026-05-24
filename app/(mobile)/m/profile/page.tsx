@@ -77,6 +77,7 @@ async function EngagementSection() {
 
   // Get member engagement score
   const { data: member } = await supabase
+    .schema('yi_connect')
     .from('members')
     .select('engagement_score, yi_activity_score')
     .eq('id', user.id)
@@ -84,6 +85,7 @@ async function EngagementSection() {
 
   // Count events attended (event_registrations table renamed to event_rsvps)
   const { count: eventsAttended } = await supabase
+    .schema('yi_connect')
     .from('event_rsvps')
     .select('id', { count: 'exact', head: true })
     .eq('member_id', user.id)
@@ -91,6 +93,7 @@ async function EngagementSection() {
 
   // Count awards received
   const { count: awardsCount } = await supabase
+    .schema('yi_connect')
     .from('award_nominations')
     .select('id', { count: 'exact', head: true })
     .eq('nominee_id', user.id)
@@ -99,6 +102,7 @@ async function EngagementSection() {
   // Get total service hours from event attendance (computed from start/end dates;
   // events table has no duration_hours column)
   const { data: serviceEvents } = await supabase
+    .schema('yi_connect')
     .from('event_rsvps')
     .select('event:events(start_date, end_date)')
     .eq('member_id', user.id)

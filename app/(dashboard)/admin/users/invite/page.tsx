@@ -31,11 +31,11 @@ async function InviteFormData() {
 
   const [{ data: roles }, { data: chapters }] = await Promise.all([
     supabase
-      .from('roles')
+      .schema('yi_connect').from('roles')
       .select('*')
       .order('hierarchy_level', { ascending: false }),
     supabase
-      .from('chapters')
+      .schema('yi_connect').from('chapters')
       .select('id, name, location')
       .order('name', { ascending: true })
   ]);

@@ -51,7 +51,7 @@ async function TimelineContent() {
 
   // Fetch timeline steps for this cycle
   const { data: steps, error } = await supabase
-    .from('succession_timeline_steps')
+    .schema('yi_connect').from('succession_timeline_steps')
     .select('*')
     .eq('cycle_id', cycle.id)
     .order('step_number', { ascending: true })

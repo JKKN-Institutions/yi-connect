@@ -37,7 +37,7 @@ async function NewApproachContent() {
 
   // Get all members (potential candidates)
   const { data: members } = await supabase
-    .from('members')
+    .schema('yi_connect').from('members')
     .select('id, first_name, last_name, email')
     .is('deleted_at', null)
     .order('first_name')

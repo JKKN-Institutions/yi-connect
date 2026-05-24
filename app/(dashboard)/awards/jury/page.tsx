@@ -46,7 +46,7 @@ async function JuryStats({ userId }: { userId: string }) {
 
   // Get jury panel memberships (jury_members table was renamed to jury_panel_members)
   const { data: juryAssignments } = await supabase
-    .from('jury_panel_members')
+    .schema('yi_connect').from('jury_panel_members')
     .select(`
       id,
       panel:jury_panels(
@@ -68,7 +68,7 @@ async function JuryStats({ userId }: { userId: string }) {
 
   // Get total scores submitted by this juror (jury_scores.juror_id, not jury_member_id)
   const { data: scores } = await supabase
-    .from('jury_scores')
+    .schema('yi_connect').from('jury_scores')
     .select('id, juror_id')
     .eq('juror_id', userId)
 
@@ -142,7 +142,7 @@ async function JuryNominationsTable({ userId }: { userId: string }) {
   // Get all jury panel assignments for this user
   // (jury_members table renamed to jury_panel_members; cycle_id lives on jury_panels)
   const { data: juryMembers } = await supabase
-    .from('jury_panel_members')
+    .schema('yi_connect').from('jury_panel_members')
     .select('id, panel:jury_panels(id, cycle_id)')
     .eq('juror_id', userId)
     .eq('is_active', true)
@@ -170,7 +170,7 @@ async function JuryNominationsTable({ userId }: { userId: string }) {
   // Get all nominations for these cycles with jury scores
   // jury_scores uses juror_id (not jury_member_id)
   const { data: nominations } = await supabase
-    .from('nominations')
+    .schema('yi_connect').from('nominations')
     .select(`
       *,
       cycle:award_cycles(

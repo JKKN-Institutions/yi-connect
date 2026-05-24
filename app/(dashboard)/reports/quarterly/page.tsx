@@ -19,7 +19,7 @@ export default async function QuarterlyReportPage() {
 
   const supabase = await createClient();
   const { data: profile } = await supabase
-    .from('profiles')
+    .schema('yi_connect').from('profiles')
     .select('chapter_id')
     .eq('id', user.id)
     .single();
@@ -29,7 +29,7 @@ export default async function QuarterlyReportPage() {
   }
 
   const { data: chapter } = await supabase
-    .from('chapters')
+    .schema('yi_connect').from('chapters')
     .select('id, name')
     .eq('id', profile.chapter_id)
     .single();

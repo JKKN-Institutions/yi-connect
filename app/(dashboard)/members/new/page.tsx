@@ -65,7 +65,7 @@ async function NewMemberForm() {
   // Admins should be able to create new members even if they have their own profile
   if (!isAdmin) {
     const { data: existingMember } = await supabase
-      .from('members')
+      .schema('yi_connect').from('members')
       .select('id')
       .eq('id', user.id)
       .single();
@@ -77,7 +77,7 @@ async function NewMemberForm() {
 
   // Get user profile
   const { data: profile } = await supabase
-    .from('profiles')
+    .schema('yi_connect').from('profiles')
     .select('*')
     .eq('id', user.id)
     .single();

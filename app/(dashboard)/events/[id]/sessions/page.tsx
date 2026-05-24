@@ -131,7 +131,7 @@ async function SessionsLoader({
 async function loadSpeakers(chapterId: string | null): Promise<SpeakerOption[]> {
   const supabase = await createClient()
   let query = supabase
-    .from('speakers')
+    .schema('yi_connect').from('speakers')
     .select('id, speaker_name, current_organization, designation')
     .eq('status', 'active')
     .order('speaker_name', { ascending: true })

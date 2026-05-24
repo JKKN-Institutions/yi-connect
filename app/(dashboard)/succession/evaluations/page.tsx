@@ -41,7 +41,7 @@ async function EvaluationsContent() {
 
   // Check if user is an evaluator for the active cycle
   const { data: evaluator } = await supabase
-    .from('succession_evaluators')
+    .schema('yi_connect').from('succession_evaluators')
     .select('id')
     .eq('cycle_id', activeCycle.id)
     .eq('member_id', user.id)
@@ -64,7 +64,7 @@ async function EvaluationsContent() {
 
   // Get nominations assigned to this evaluator with criteria
   const { data: nominations } = await supabase
-    .from('succession_nominations')
+    .schema('yi_connect').from('succession_nominations')
     .select(
       `
       id,
@@ -101,7 +101,7 @@ async function EvaluationsContent() {
   const nominationsWithScoring = await Promise.all(
     (nominations || []).map(async (nomination: any) => {
       const { data: scores } = await supabase
-        .from('succession_evaluation_scores')
+        .schema('yi_connect').from('succession_evaluation_scores')
         .select('id, created_at')
         .eq('nomination_id', nomination.id)
         .eq('evaluator_id', evaluator.id)
@@ -109,7 +109,7 @@ async function EvaluationsContent() {
       let weightedScore = 0
       if (scores && scores.length > 0) {
         const { data: detailedScores } = await supabase
-          .from('succession_evaluation_scores')
+          .schema('yi_connect').from('succession_evaluation_scores')
           .select(
             `
             score,

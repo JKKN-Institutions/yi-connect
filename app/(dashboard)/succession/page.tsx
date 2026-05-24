@@ -249,12 +249,12 @@ async function SuccessionContent() {
 
     // Get cycle statistics
     const { count: nominationCount } = await supabase
-      .from('succession_nominations')
+      .schema('yi_connect').from('succession_nominations')
       .select('id', { count: 'exact', head: true })
       .eq('cycle_id', activeCycle.id)
 
     const { count: applicationCount } = await supabase
-      .from('succession_applications')
+      .schema('yi_connect').from('succession_applications')
       .select('id', { count: 'exact', head: true })
       .eq('cycle_id', activeCycle.id)
 

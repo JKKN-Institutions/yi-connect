@@ -47,7 +47,7 @@ async function EvaluatorsContent() {
   // Get all members for assignment
   const supabase = await createClient()
   const { data: members } = await supabase
-    .from('members')
+    .schema('yi_connect').from('members')
     .select('id, first_name, last_name, email')
     .is('deleted_at', null)
     .order('first_name')

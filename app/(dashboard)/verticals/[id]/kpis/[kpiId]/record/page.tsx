@@ -52,7 +52,7 @@ async function RecordKPIHeader({ params }: PageProps) {
   // Get KPI details
   const supabase = await createClient()
   const { data: kpi } = await supabase
-    .from('vertical_kpis')
+    .schema('yi_connect').from('vertical_kpis')
     .select('kpi_name')
     .eq('id', kpiId)
     .single()
@@ -91,7 +91,7 @@ async function RecordKPIFormWrapper({ params }: PageProps) {
   // Get KPI details
   const supabase = await createClient()
   const { data: kpi, error } = await supabase
-    .from('vertical_kpis')
+    .schema('yi_connect').from('vertical_kpis')
     .select('*')
     .eq('id', kpiId)
     .single()
@@ -100,7 +100,7 @@ async function RecordKPIFormWrapper({ params }: PageProps) {
 
   // Get existing actuals
   const { data: actualsData } = await supabase
-    .from('vertical_kpi_actuals')
+    .schema('yi_connect').from('vertical_kpi_actuals')
     .select('*')
     .eq('kpi_id', kpiId)
 

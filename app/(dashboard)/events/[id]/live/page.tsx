@@ -44,7 +44,7 @@ export default async function LiveEventDashboardPage({ params }: PageProps) {
   // Existing check-ins for this event (server pre-fetch so counter starts
   // correct even before the Realtime channel connects)
   const { data: checkinsRows } = await supabase
-    .from('event_checkins')
+    .schema('yi_connect').from('event_checkins')
     .select('id, attendee_type, attendee_id, checked_in_at, check_in_method')
     .eq('event_id', id)
     .order('checked_in_at', { ascending: false })
@@ -52,13 +52,13 @@ export default async function LiveEventDashboardPage({ params }: PageProps) {
 
   // Confirmed / attended RSVPs for denominator
   const { data: rsvpRows } = await supabase
-    .from('event_rsvps')
+    .schema('yi_connect').from('event_rsvps')
     .select('id, member_id, status')
     .eq('event_id', id)
     .in('status', ['confirmed', 'attended']);
 
   const { data: guestRsvpRows } = await supabase
-    .from('guest_rsvps')
+    .schema('yi_connect').from('guest_rsvps')
     .select('id, full_name, status')
     .eq('event_id', id)
     .in('status', ['confirmed', 'attended']);

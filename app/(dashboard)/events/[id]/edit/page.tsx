@@ -81,7 +81,7 @@ async function EventEditContent({ params }: PageProps) {
 
   // Fetch venues for the form
   const { data: venuesData } = await supabase
-    .from('venues')
+    .schema('yi_connect').from('venues')
     .select('*')
     .eq('is_active', true)
     .order('name', { ascending: true });
@@ -89,7 +89,7 @@ async function EventEditContent({ params }: PageProps) {
 
   // Fetch templates for the form
   const { data: templatesData } = await supabase
-    .from('event_templates')
+    .schema('yi_connect').from('event_templates')
     .select('*')
     .order('name', { ascending: true });
   const templates = (templatesData || []) as EventTemplate[];

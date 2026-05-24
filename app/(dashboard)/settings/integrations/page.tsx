@@ -45,7 +45,7 @@ async function IntegrationsContent() {
 
   // Get user's chapter
   const { data: member } = await supabase
-    .from('members')
+    .schema('yi_connect').from('members')
     .select('chapter_id')
     .eq('id', user.id)
     .single()

@@ -66,7 +66,7 @@ async function NominateContent() {
 
   // Get all members for the dropdown
   const { data: members } = await supabase
-    .from('members')
+    .schema('yi_connect').from('members')
     .select('id, first_name, last_name, email')
     .is('deleted_at', null)
     .order('first_name')

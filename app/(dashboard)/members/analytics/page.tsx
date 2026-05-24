@@ -79,7 +79,7 @@ async function OverviewSection() {
 
   const supabase = await createClient();
   const { data: member } = await supabase
-    .from('members')
+    .schema('yi_connect').from('members')
     .select('chapter_id')
     .eq('id', user.id)
     .single();
@@ -95,7 +95,7 @@ async function ChartsSection() {
 
   const supabase = await createClient();
   const { data: member } = await supabase
-    .from('members')
+    .schema('yi_connect').from('members')
     .select('chapter_id')
     .eq('id', user.id)
     .single();
@@ -117,7 +117,7 @@ async function SkillsGapSection() {
 
   const supabase = await createClient();
   const { data: member } = await supabase
-    .from('members')
+    .schema('yi_connect').from('members')
     .select('chapter_id')
     .eq('id', user.id)
     .single();

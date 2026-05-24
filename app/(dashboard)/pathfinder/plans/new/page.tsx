@@ -92,7 +92,7 @@ async function NewPlanContent({
   // Get user's chapter from member record
   // Note: members.id = profiles.id = auth user id (NOT user_id)
   const { data: member, error: memberError } = await supabase
-    .from('members')
+    .schema('yi_connect').from('members')
     .select('id, chapter_id')
     .eq('id', user.id)
     .single()
@@ -104,7 +104,7 @@ async function NewPlanContent({
   if (isAdmin && chapterIdParam) {
     // Admin with chapter param - verify chapter exists
     const { data: chapter } = await supabase
-      .from('chapters')
+      .schema('yi_connect').from('chapters')
       .select('id')
       .eq('id', chapterIdParam)
       .single()
@@ -117,7 +117,7 @@ async function NewPlanContent({
   // If still no chapter and user is admin, show chapter selector
   if (!chapterId && isAdmin) {
     const { data: chapters, error: chaptersError } = await supabase
-      .from('chapters')
+      .schema('yi_connect').from('chapters')
       .select('id, name, location')
       .eq('status', 'active')
       .order('name')
@@ -169,7 +169,7 @@ async function NewPlanContent({
 
   // Get verticals for this chapter
   const { data: verticals } = await supabase
-    .from('verticals')
+    .schema('yi_connect').from('verticals')
     .select('id, name, slug, color, icon')
     .eq('chapter_id', chapterId)
     .eq('is_active', true)
@@ -232,7 +232,7 @@ async function NewPlanContent({
   // Check if plan already exists for this vertical and year
   const calendarYear = getCurrentCalendarYear()
   const { data: existingPlan } = await supabase
-    .from('aaa_plans')
+    .schema('yi_connect').from('aaa_plans')
     .select('id')
     .eq('vertical_id', verticalId)
     .eq('calendar_year', calendarYear)

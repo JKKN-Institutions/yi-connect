@@ -44,7 +44,7 @@ async function getUserProfileForBugReporter() {
 
   const supabase = await createServerSupabaseClient()
   const { data: profile } = await supabase
-    .from('profiles')
+    .schema('yi_connect').from('profiles')
     .select('id, email, full_name')
     .eq('id', user.id)
     .single()

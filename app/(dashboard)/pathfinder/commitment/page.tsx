@@ -64,7 +64,7 @@ async function CommitmentContent() {
   // Get user's member profile
   // Note: members.id = profiles.id = auth user id (NOT user_id)
   const { data: member } = await supabase
-    .from('members')
+    .schema('yi_connect').from('members')
     .select('id, full_name, chapter_id')
     .eq('id', user.id)
     .single()
@@ -96,7 +96,7 @@ async function CommitmentContent() {
 
   // Get user's AAA plan if they're an EC Chair
   const { data: aaaPlan } = await supabase
-    .from('aaa_plans')
+    .schema('yi_connect').from('aaa_plans')
     .select('id')
     .eq('created_by', member.id)
     .eq('calendar_year', calendarYear)

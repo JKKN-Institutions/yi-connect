@@ -130,9 +130,9 @@ async function UsersTableWrapper({ searchParamsPromise }: { searchParamsPromise:
   const supabase = await createServerSupabaseClient()
 
   const [{ data: roles }, { data: chapters }] = await Promise.all([
-    supabase.from('roles').select('*').order('hierarchy_level', { ascending: false }),
+    supabase.schema('yi_connect').from('roles').select('*').order('hierarchy_level', { ascending: false }),
     supabase
-      .from('chapters')
+      .schema('yi_connect').from('chapters')
       .select('id, name, location')
       .order('name', { ascending: true })
   ])

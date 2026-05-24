@@ -18,7 +18,7 @@ export default async function NewAwardCategoryPage() {
   const supabase = await createServerSupabaseClient()
 
   const { data: profile } = await supabase
-    .from('profiles')
+    .schema('yi_connect').from('profiles')
     .select('chapter_id')
     .eq('id', user!.id)
     .single()

@@ -25,7 +25,7 @@ export default async function ReportsHistoryPage() {
   const supabase = await createClient();
 
   const { data: profile } = await supabase
-    .from('profiles')
+    .schema('yi_connect').from('profiles')
     .select('chapter_id')
     .eq('id', user.id)
     .single();
@@ -38,7 +38,7 @@ export default async function ReportsHistoryPage() {
   let reports: Awaited<ReturnType<typeof listChapterReports>> = [];
   if (isNational) {
     const { data } = await supabase
-      .from('chapter_reports')
+      .schema('yi_connect').from('chapter_reports')
       .select('*')
       .order('generated_at', { ascending: false })
       .limit(50);

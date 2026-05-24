@@ -12,19 +12,29 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { IncreaseCapacityForm } from '@/components/industrial-visits/industry-portal/increase-capacity-form';
 import { getCurrentIndustryId } from '@/lib/auth/industry-portal';
-import { createClient } from '@/lib/supabase/server';
 
-async function getSlot(id: string, industryId: string) {
-  const supabase = await createClient();
+// Phase E stub 2026-05-24: this page used to query a non-existent table
+// `iv_events`. The real industrial-visit data lives in `yi_connect.events`,
+// but that table has NO `industry_id` column or FK to industries (see
+// lib/data/industrial-visits.ts line 50-52 and 617-619 for the same gap).
+//
+// Until the IV ↔ industry linkage is re-modelled (likely via
+// event_industry_partners or by adding events.industry_id), there is no
+// safe way to look up "this industry's slot by id". Returning null here
+// triggers notFound() so the route stays alive without a 500.
+//
+// TODO: once the schema is fixed, re-implement getSlot() to query
+// yi_connect.events (or the new linking table) with proper RLS/scoping.
+interface SlotRow {
+  id: string;
+  title: string;
+  max_capacity: number;
+  current_registrations: number;
+  industry_id: string;
+}
 
-  const { data: slot } = await supabase
-    .from('iv_events')
-    .select('id, title, max_capacity, current_registrations, industry_id')
-    .eq('id', id)
-    .eq('industry_id', industryId)
-    .single();
-
-  return slot;
+async function getSlot(_id: string, _industryId: string): Promise<SlotRow | null> {
+  return null;
 }
 
 interface IncreaseCapacityPageProps {

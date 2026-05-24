@@ -24,6 +24,7 @@ export async function getCurrentIndustryId(): Promise<string | null> {
 
     // Check if user's email is in stakeholder_contacts for an industry
     const { data: contact } = await supabase
+      .schema('yi_connect')
       .from('stakeholder_contacts')
       .select('stakeholder_id')
       .eq('stakeholder_type', 'industries')
@@ -36,6 +37,7 @@ export async function getCurrentIndustryId(): Promise<string | null> {
 
     // Also check if there's an industry where the user is the creator
     const { data: industry } = await supabase
+      .schema('yi_connect')
       .from('industries')
       .select('id')
       .eq('created_by', user.id)
@@ -67,6 +69,7 @@ export async function checkIndustryPortalAccess(): Promise<{
 
     const supabase = await createClient();
     const { data: industry } = await supabase
+      .schema('yi_connect')
       .from('industries')
       .select('id, name')
       .eq('id', industryId)

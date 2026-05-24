@@ -232,6 +232,7 @@ export async function getEventForSync(
   const supabase = await createClient()
 
   const { data, error } = await supabase
+    .schema('yi_connect')
     .from('events')
     .select(
       `

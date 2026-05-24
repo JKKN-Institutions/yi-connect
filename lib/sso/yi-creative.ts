@@ -221,6 +221,7 @@ async function getEventDataForSSO(
   eventId: string
 ): Promise<YiCreativeEventData | null> {
   const { data: event, error } = await supabase
+    .schema('yi_connect')
     .from('events')
     .select(`
       id,
@@ -318,6 +319,7 @@ export async function getUserSSOPayload(
 
   // Fetch user profile
   const { data: profile, error: profileError } = await supabase
+    .schema('yi_connect')
     .from('profiles')
     .select('id, email, full_name, avatar_url')
     .eq('id', userId)
@@ -330,6 +332,7 @@ export async function getUserSSOPayload(
 
   // Fetch user's chapter memberships with roles
   const { data: memberships, error: membershipError } = await supabase
+    .schema('yi_connect')
     .from('members')
     .select(`
       chapter_id,
@@ -346,9 +349,11 @@ export async function getUserSSOPayload(
   }
 
   // Fetch user's roles
-  const { data: userRoles, error: rolesError } = await supabase.rpc('get_user_roles_detailed', {
-    p_user_id: userId
-  })
+  const { data: userRoles, error: rolesError } = await supabase
+    .schema('yi_connect')
+    .rpc('get_user_roles_detailed', {
+      p_user_id: userId
+    })
 
   if (rolesError) {
     console.error('[Yi Creative SSO] Failed to fetch roles:', rolesError.message)
@@ -387,6 +392,7 @@ export async function getUserSSOPayload(
   if (chapters.length === 0) {
     // Try to get chapter from the member record itself
     const { data: member } = await supabase
+      .schema('yi_connect')
       .from('members')
       .select('chapter_id, chapter:chapters(id, name, location)')
       .eq('id', userId)
@@ -458,6 +464,7 @@ export async function createYiCreativeSSOSession(
 
     // Get user's chapter as fallback
     const { data: member } = await supabase
+      .schema('yi_connect')
       .from('members')
       .select('chapter_id')
       .eq('id', userId)

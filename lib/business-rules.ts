@@ -147,11 +147,13 @@ export async function getTrainerWorkload(
   const targetYear = year || new Date().getFullYear()
   const targetMonth = month || new Date().getMonth() + 1
 
-  const { data, error } = await supabase.rpc('get_trainer_session_count', {
-    p_trainer_id: trainerId,
-    p_year: targetYear,
-    p_month: targetMonth,
-  })
+  const { data, error } = await supabase
+    .schema('yi_connect')
+    .rpc('get_trainer_session_count', {
+      p_trainer_id: trainerId,
+      p_year: targetYear,
+      p_month: targetMonth,
+    })
 
   if (error) {
     console.error('Error getting trainer workload:', error)
@@ -167,6 +169,7 @@ export async function getTrainerWorkload(
 
   // Get trainer name
   const { data: member } = await supabase
+    .schema('yi_connect')
     .from('members')
     .select('full_name')
     .eq('id', trainerId)
@@ -215,11 +218,13 @@ export async function validateTrainerAssignment(
   const year = sessionDate.getFullYear()
   const month = sessionDate.getMonth() + 1
 
-  const { data, error } = await supabase.rpc('validate_trainer_workload', {
-    p_trainer_id: trainerId,
-    p_session_date: sessionDate.toISOString().split('T')[0],
-    p_max_sessions: maxSessions,
-  })
+  const { data, error } = await supabase
+    .schema('yi_connect')
+    .rpc('validate_trainer_workload', {
+      p_trainer_id: trainerId,
+      p_session_date: sessionDate.toISOString().split('T')[0],
+      p_max_sessions: maxSessions,
+    })
 
   if (error) {
     console.error('Error validating trainer workload:', error)
@@ -268,6 +273,7 @@ export async function getAvailableTrainers(
   const supabase = await createServerSupabaseClient()
 
   const { data: trainers } = await supabase
+    .schema('yi_connect')
     .from('trainer_availability_summary')
     .select('*')
     .order('available_slots', { ascending: false })
@@ -277,6 +283,7 @@ export async function getAvailableTrainers(
   // Filter by vertical if specified
   if (verticalId) {
     const { data: verticalTrainers } = await supabase
+      .schema('yi_connect')
       .from('skill_will_assessments')
       .select('member_id')
       .eq('assigned_vertical_id', verticalId)
@@ -334,9 +341,11 @@ export async function validateMaterialsDeadline(
   const materialsApprovalDays = settings?.materialsApprovalDaysBefore ??
     BUSINESS_RULES.MATERIALS_APPROVAL_DAYS_BEFORE_SESSION
 
-  const { data, error } = await supabase.rpc('validate_materials_deadline', {
-    p_booking_id: bookingId,
-  })
+  const { data, error } = await supabase
+    .schema('yi_connect')
+    .rpc('validate_materials_deadline', {
+      p_booking_id: bookingId,
+    })
 
   if (error) {
     console.error('Error validating materials deadline:', error)
@@ -393,9 +402,11 @@ export async function getMaterialsApprovalStatus(
 ): Promise<MaterialsApprovalStatus | null> {
   const supabase = await createServerSupabaseClient()
 
-  const { data, error } = await supabase.rpc('check_materials_approval_status', {
-    p_booking_id: bookingId,
-  })
+  const { data, error } = await supabase
+    .schema('yi_connect')
+    .rpc('check_materials_approval_status', {
+      p_booking_id: bookingId,
+    })
 
   if (error || !data?.[0]) {
     console.error('Error checking materials status:', error)
@@ -434,6 +445,7 @@ export async function getPendingMaterials(): Promise<
   const supabase = await createServerSupabaseClient()
 
   const { data } = await supabase
+    .schema('yi_connect')
     .from('materials_pending_approval')
     .select('*')
     .order('session_date', { ascending: true })
@@ -466,9 +478,11 @@ export async function getBookingRestrictions(
 ): Promise<BookingRestrictions | null> {
   const supabase = await createServerSupabaseClient()
 
-  const { data, error } = await supabase.rpc('get_booking_restrictions', {
-    p_stakeholder_type: stakeholderType,
-  })
+  const { data, error } = await supabase
+    .schema('yi_connect')
+    .rpc('get_booking_restrictions', {
+      p_stakeholder_type: stakeholderType,
+    })
 
   if (error || !data?.[0]) {
     console.error('Error getting booking restrictions:', error)
@@ -506,13 +520,15 @@ export async function validateBookingRequest(
 ): Promise<ValidationResult> {
   const supabase = await createServerSupabaseClient()
 
-  const { data, error } = await supabase.rpc('validate_booking_request', {
-    p_stakeholder_id: stakeholderId,
-    p_stakeholder_type: stakeholderType,
-    p_session_date: sessionDate.toISOString().split('T')[0],
-    p_start_time: startTime,
-    p_end_time: endTime,
-  })
+  const { data, error } = await supabase
+    .schema('yi_connect')
+    .rpc('validate_booking_request', {
+      p_stakeholder_id: stakeholderId,
+      p_stakeholder_type: stakeholderType,
+      p_session_date: sessionDate.toISOString().split('T')[0],
+      p_start_time: startTime,
+      p_end_time: endTime,
+    })
 
   if (error) {
     console.error('Error validating booking:', error)
@@ -554,6 +570,7 @@ export async function checkSessionReadiness(
 
   // Get booking status
   const { data: booking } = await supabase
+    .schema('yi_connect')
     .from('session_bookings')
     .select('status, session_date')
     .eq('id', bookingId)
@@ -588,6 +605,7 @@ export async function checkSessionReadiness(
 
   // Check trainer assignment
   const { count: trainerCount } = await supabase
+    .schema('yi_connect')
     .from('session_booking_trainers')
     .select('*', { count: 'exact', head: true })
     .eq('booking_id', bookingId)

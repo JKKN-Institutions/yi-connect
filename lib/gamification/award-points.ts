@@ -54,6 +54,7 @@ export async function awardPoints(
   };
 
   const { data, error } = await supabase
+    .schema('yi_connect')
     .from('member_points_log')
     .insert(payload)
     .select('id')

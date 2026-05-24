@@ -72,6 +72,7 @@ export const getCoordinatorProfile = cache(
     const supabase = await createServerSupabaseClient()
 
     const { data: coordinator } = await supabase
+      .schema('yi_connect')
       .from('stakeholder_coordinators')
       .select(
         `
@@ -96,6 +97,7 @@ export const getCoordinatorProfile = cache(
 
     if (coordinator.stakeholder_type === 'industry') {
       const { data: industry } = await supabase
+        .schema('yi_connect')
         .from('industries')
         .select('name')
         .eq('id', coordinator.stakeholder_id)
@@ -104,6 +106,7 @@ export const getCoordinatorProfile = cache(
     } else {
       // School or College - from stakeholders table
       const { data: stakeholder } = await supabase
+        .schema('yi_connect')
         .from('stakeholders')
         .select('name')
         .eq('id', coordinator.stakeholder_id)
@@ -216,6 +219,7 @@ export async function canAccessBooking(bookingId: string): Promise<boolean> {
   const supabase = await createServerSupabaseClient()
 
   const { data: booking } = await supabase
+    .schema('yi_connect')
     .from('session_bookings')
     .select('stakeholder_id')
     .eq('id', bookingId)
@@ -240,6 +244,7 @@ export async function canManageOpportunity(
   const supabase = await createServerSupabaseClient()
 
   const { data: opportunity } = await supabase
+    .schema('yi_connect')
     .from('industry_opportunities')
     .select('industry_id')
     .eq('id', opportunityId)
@@ -271,9 +276,11 @@ export async function validateMoUForOpportunity(): Promise<{
   const supabase = await createServerSupabaseClient()
 
   // Use the database function to check MoU status
-  const { data: hasActiveMoU, error } = await supabase.rpc('has_active_mou', {
-    p_industry_id: coordinator.stakeholder_id,
-  })
+  const { data: hasActiveMoU, error } = await supabase
+    .schema('yi_connect')
+    .rpc('has_active_mou', {
+      p_industry_id: coordinator.stakeholder_id,
+    })
 
   if (error) {
     console.error('Error checking MoU status:', error)
@@ -348,6 +355,7 @@ export async function getAvailableSessionSlots(
   const endDate = new Date(year, month, 0)
 
   const { count } = await supabase
+    .schema('yi_connect')
     .from('session_bookings')
     .select('*', { count: 'exact', head: true })
     .eq('stakeholder_id', coordinator.stakeholder_id)
@@ -409,9 +417,11 @@ export async function getUserType(): Promise<{
 
   // Check user roles for internal users
   const supabase = await createServerSupabaseClient()
-  const { data: userRoles } = await supabase.rpc('get_user_roles_detailed', {
-    p_user_id: user.id,
-  })
+  const { data: userRoles } = await supabase
+    .schema('yi_connect')
+    .rpc('get_user_roles_detailed', {
+      p_user_id: user.id,
+    })
 
   if (!userRoles || userRoles.length === 0) {
     return { type: USER_TYPES.YI_MEMBER, isExternal: false }
@@ -430,9 +440,11 @@ export async function getUserType(): Promise<{
   }
 
   // Check for vertical chair
-  const { data: isVerticalChair } = await supabase.rpc('is_vertical_chair', {
-    p_user_id: user.id,
-  })
+  const { data: isVerticalChair } = await supabase
+    .schema('yi_connect')
+    .rpc('is_vertical_chair', {
+      p_user_id: user.id,
+    })
 
   if (isVerticalChair) {
     return { type: USER_TYPES.VERTICAL_CHAIR, isExternal: false }
@@ -468,12 +480,14 @@ export async function getCoordinatorDashboardStats(): Promise<{
     { count: completedSessions },
   ] = await Promise.all([
     supabase
+      .schema('yi_connect')
       .from('session_bookings')
       .select('*', { count: 'exact', head: true })
       .eq('stakeholder_id', coordinator.stakeholder_id)
       .in('status', ['pending', 'pending_chair_approval']),
 
     supabase
+      .schema('yi_connect')
       .from('session_bookings')
       .select('*', { count: 'exact', head: true })
       .eq('stakeholder_id', coordinator.stakeholder_id)
@@ -481,6 +495,7 @@ export async function getCoordinatorDashboardStats(): Promise<{
       .gte('session_date', now),
 
     supabase
+      .schema('yi_connect')
       .from('session_bookings')
       .select('*', { count: 'exact', head: true })
       .eq('stakeholder_id', coordinator.stakeholder_id)
@@ -491,6 +506,7 @@ export async function getCoordinatorDashboardStats(): Promise<{
   let totalStudents = 0
   if (coordinator.stakeholder_type !== 'industry') {
     const { data: stakeholder } = await supabase
+      .schema('yi_connect')
       .from('stakeholders')
       .select('student_count')
       .eq('id', coordinator.stakeholder_id)

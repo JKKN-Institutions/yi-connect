@@ -59,7 +59,7 @@ export const getChapterYiCreativeConnection = cache(
     const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
-      .from('yi_creative_connections')
+      .schema('yi_connect').from('yi_creative_connections')
       .select('*')
       .eq('chapter_id', chapterId)
       .single()
@@ -86,7 +86,7 @@ export async function getChapterYiCreativeConnectionWithDetails(
   const supabase = await createServerSupabaseClient()
 
   const { data, error } = await supabase
-    .from('yi_creative_connections')
+    .schema('yi_connect').from('yi_creative_connections')
     .select(
       `
       *,
@@ -139,7 +139,7 @@ export async function getCurrentChapterYiCreativeConnection(): Promise<YiCreativ
   if (!user) return null
 
   const { data: member } = await supabase
-    .from('members')
+    .schema('yi_connect').from('members')
     .select('chapter_id')
     .eq('id', user.id)
     .single()
@@ -209,7 +209,7 @@ export async function createYiCreativeConnection(
   })
 
   const { data: connection, error } = await supabase
-    .from('yi_creative_connections')
+    .schema('yi_connect').from('yi_creative_connections')
     .insert(insertData)
     .select()
     .single()
@@ -238,7 +238,7 @@ export async function updateYiCreativeConnection(
   })
 
   const { data: connection, error } = await supabase
-    .from('yi_creative_connections')
+    .schema('yi_connect').from('yi_creative_connections')
     .update(updateData)
     .eq('chapter_id', chapterId)
     .select()
@@ -259,7 +259,7 @@ export async function disconnectYiCreative(chapterId: string): Promise<boolean> 
   const supabase = await createServerSupabaseClient()
 
   const { error } = await supabase
-    .from('yi_creative_connections')
+    .schema('yi_connect').from('yi_creative_connections')
     .update({
       status: 'disconnected',
       access_token: null,
@@ -283,7 +283,7 @@ export async function deleteYiCreativeConnection(chapterId: string): Promise<boo
   const supabase = await createServerSupabaseClient()
 
   const { error } = await supabase
-    .from('yi_creative_connections')
+    .schema('yi_connect').from('yi_creative_connections')
     .delete()
     .eq('chapter_id', chapterId)
 

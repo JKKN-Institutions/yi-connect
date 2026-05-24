@@ -39,7 +39,7 @@ export const getCMPTargets = cache(async (
   const supabase = await createServerSupabaseClient()
 
   let query = supabase
-    .from('cmp_targets')
+    .schema('yi_connect').from('cmp_targets')
     .select(`
       *,
       vertical:verticals(id, name, color),
@@ -109,7 +109,7 @@ export const getAllCMPTargets = cache(async (
   const supabase = await createServerSupabaseClient()
 
   let query = supabase
-    .from('cmp_targets')
+    .schema('yi_connect').from('cmp_targets')
     .select(`
       *,
       vertical:verticals(id, name, color),
@@ -156,7 +156,7 @@ export const getCMPTargetById = cache(async (id: string): Promise<CMPTarget | nu
   const supabase = await createServerSupabaseClient()
 
   const { data, error } = await supabase
-    .from('cmp_targets')
+    .schema('yi_connect').from('cmp_targets')
     .select(`
       *,
       vertical:verticals(id, name, color),
@@ -185,7 +185,7 @@ export const getCMPTargetsByVertical = cache(async (
   const supabase = await createServerSupabaseClient()
 
   let query = supabase
-    .from('cmp_targets')
+    .schema('yi_connect').from('cmp_targets')
     .select(`
       *,
       vertical:verticals(id, name, color),
@@ -229,7 +229,7 @@ export const getCMPProgress = cache(async (
   const year = calendarYear || new Date().getFullYear()
 
   let query = supabase
-    .from('cmp_progress')
+    .schema('yi_connect').from('cmp_progress')
     .select('*')
     .eq('calendar_year', year)
     .order('vertical_name', { ascending: true })
@@ -263,7 +263,7 @@ export const getCMPProgressFiltered = cache(async (
   const supabase = await createServerSupabaseClient()
 
   let query = supabase
-    .from('cmp_progress')
+    .schema('yi_connect').from('cmp_progress')
     .select('*')
     .order('vertical_name', { ascending: true })
 
@@ -362,7 +362,7 @@ export const hasTargetsForYear = cache(async (
   const supabase = await createServerSupabaseClient()
 
   let query = supabase
-    .from('cmp_targets')
+    .schema('yi_connect').from('cmp_targets')
     .select('id', { count: 'exact', head: true })
     .eq('calendar_year', calendarYear)
 
@@ -393,7 +393,7 @@ export const getVerticalsForCMPTargets = cache(async (): Promise<{
   const supabase = await createServerSupabaseClient()
 
   const { data, error } = await supabase
-    .from('verticals')
+    .schema('yi_connect').from('verticals')
     .select('id, name, color')
     .eq('is_active', true)
     .order('name')
@@ -419,7 +419,7 @@ export async function createCMPTarget(
   const supabase = await createServerSupabaseClient()
 
   const { data: target, error } = await supabase
-    .from('cmp_targets')
+    .schema('yi_connect').from('cmp_targets')
     .insert(data)
     .select(`
       *,
@@ -455,7 +455,7 @@ export async function updateCMPTarget(
   }
 
   const { data: target, error } = await supabase
-    .from('cmp_targets')
+    .schema('yi_connect').from('cmp_targets')
     .update(updateData)
     .eq('id', id)
     .select(`
@@ -479,7 +479,7 @@ export async function updateCMPTarget(
 export async function deleteCMPTarget(id: string): Promise<void> {
   const supabase = await createServerSupabaseClient()
 
-  const { error } = await supabase.from('cmp_targets').delete().eq('id', id)
+  const { error } = await supabase.schema('yi_connect').from('cmp_targets').delete().eq('id', id)
 
   if (error) {
     console.error('Error deleting CMP target:', error)
@@ -499,7 +499,7 @@ export async function createDefaultCMPTargets(
 
   // Get all active verticals
   const { data: verticals, error: verticalError } = await supabase
-    .from('verticals')
+    .schema('yi_connect').from('verticals')
     .select('id, name')
     .eq('is_active', true)
 
@@ -525,7 +525,7 @@ export async function createDefaultCMPTargets(
 
   // Insert all targets (upsert to handle duplicates)
   const { data, error } = await supabase
-    .from('cmp_targets')
+    .schema('yi_connect').from('cmp_targets')
     .upsert(defaultTargets, {
       onConflict: 'vertical_id,calendar_year,chapter_id,is_national_target',
       ignoreDuplicates: false,
@@ -553,7 +553,7 @@ export async function copyCMPTargetsToYear(
 
   // Get existing targets for source year
   let query = supabase
-    .from('cmp_targets')
+    .schema('yi_connect').from('cmp_targets')
     .select('*')
     .eq('calendar_year', sourceYear)
 
@@ -584,7 +584,7 @@ export async function copyCMPTargetsToYear(
   }))
 
   const { data, error } = await supabase
-    .from('cmp_targets')
+    .schema('yi_connect').from('cmp_targets')
     .upsert(newTargets, {
       onConflict: 'vertical_id,calendar_year,chapter_id,is_national_target',
       ignoreDuplicates: false,

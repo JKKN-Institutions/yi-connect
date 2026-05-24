@@ -55,7 +55,7 @@ export const getIVs = cache(async (
     //      so PostgREST returns PGRST200 on `organizer:members!...`.
     // Both fields are decorative — IVListItem already tolerates null.
     let query = supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .select('*', { count: 'exact' })
       .eq('chapter_id', chapterId)
       .eq('category', 'industrial_visit');
@@ -158,7 +158,7 @@ export async function getIVById(id: string): Promise<IndustrialVisitFull | null>
     // `organizer:members!events_organizer_id_fkey(...)` embeds (see getIVs
     // for the schema-drift rationale).
     const { data, error } = await supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .select('*')
       .eq('id', id)
       .eq('category', 'industrial_visit')
@@ -172,28 +172,28 @@ export async function getIVById(id: string): Promise<IndustrialVisitFull | null>
 
     // Get RSVP count
     const { count: rsvpsCount } = await supabase
-      .from('event_rsvps')
+      .schema('yi_connect').from('event_rsvps')
       .select('*', { count: 'exact', head: true })
       .eq('event_id', id)
       .eq('status', 'confirmed');
 
     // Get waitlist count
     const { count: waitlistCount } = await supabase
-      .from('iv_waitlist')
+      .schema('yi_connect').from('iv_waitlist')
       .select('*', { count: 'exact', head: true })
       .eq('event_id', id)
       .eq('status', 'waiting');
 
     // Get carpool stats
     const { count: driversCount } = await supabase
-      .from('event_rsvps')
+      .schema('yi_connect').from('event_rsvps')
       .select('*', { count: 'exact', head: true })
       .eq('event_id', id)
       .eq('carpool_status', 'offering_ride')
       .eq('status', 'confirmed');
 
     const { count: ridersCount } = await supabase
-      .from('event_rsvps')
+      .schema('yi_connect').from('event_rsvps')
       .select('*', { count: 'exact', head: true })
       .eq('event_id', id)
       .eq('carpool_status', 'need_ride')
@@ -229,7 +229,7 @@ export const getAvailableIVs = cache(async (chapterId: string): Promise<IVMarket
     // Phase E fix 2026-05-23: drop `industry:industries(...)` embed.
     // yi_connect.events has no FK to industries (no industry_id column).
     const { data, error } = await supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .select('*')
       .eq('chapter_id', chapterId)
       .eq('category', 'industrial_visit')
@@ -247,7 +247,7 @@ export const getAvailableIVs = cache(async (chapterId: string): Promise<IVMarket
       (data || []).map(async (event: any) => {
         // Get carpool drivers count
         const { count: driversCount } = await supabase
-          .from('event_rsvps')
+          .schema('yi_connect').from('event_rsvps')
           .select('*', { count: 'exact', head: true })
           .eq('event_id', event.id)
           .eq('carpool_status', 'offering_ride')
@@ -312,7 +312,7 @@ export const getIVBookings = cache(async (
     // Phase E fix 2026-05-23: event_rsvps.member_id FK targets
     // yi_connect.members, not profiles. Nest profile under the member join.
     let query = supabase
-      .from('event_rsvps')
+      .schema('yi_connect').from('event_rsvps')
       .select(`
         *,
         member:members!event_rsvps_member_id_fkey(
@@ -384,7 +384,7 @@ export const getMyIVBookings = cache(async (): Promise<IVBookingWithMember[]> =>
     // Phase E fix 2026-05-23: drop `industry:industries(...)` nested embed.
     // yi_connect.events has no FK to industries (no industry_id column).
     const { data, error } = await supabase
-      .from('event_rsvps')
+      .schema('yi_connect').from('event_rsvps')
       .select(`
         *,
         event:events!inner(
@@ -428,7 +428,7 @@ export const getIVBookingById = cache(async (id: string): Promise<IVBookingWithM
     // Phase E fix 2026-05-23: event_rsvps.member_id FK targets
     // yi_connect.members, not profiles. Nest profile under member.
     const { data, error } = await supabase
-      .from('event_rsvps')
+      .schema('yi_connect').from('event_rsvps')
       .select(`
         *,
         member:members!event_rsvps_member_id_fkey(
@@ -485,7 +485,7 @@ export const getMyWaitlistPosition = cache(async (
     const supabase = await createClient();
 
     const { data, error } = await supabase
-      .from('iv_waitlist')
+      .schema('yi_connect').from('iv_waitlist')
       .select('*')
       .eq('event_id', eventId)
       .eq('member_id', memberId)
@@ -517,7 +517,7 @@ export const checkIVCapacity = cache(async (eventId: string): Promise<IVCapacity
     const supabase = await createClient();
 
     // Call database function
-    const { data, error } = await supabase.rpc('check_iv_capacity', {
+    const { data, error } = await supabase.schema('yi_connect').rpc('check_iv_capacity', {
       p_event_id: eventId
     }).single();
 
@@ -528,7 +528,7 @@ export const checkIVCapacity = cache(async (eventId: string): Promise<IVCapacity
 
     // Get waitlist count
     const { count: waitlistCount } = await supabase
-      .from('iv_waitlist')
+      .schema('yi_connect').from('iv_waitlist')
       .select('*', { count: 'exact', head: true })
       .eq('event_id', eventId)
       .eq('status', 'waiting');
@@ -553,7 +553,7 @@ export const getCarpoolMatches = cache(async (eventId: string): Promise<CarpoolM
     const supabase = await createClient();
 
     // Call database function
-    const { data, error } = await supabase.rpc('calculate_carpool_matches', {
+    const { data, error } = await supabase.schema('yi_connect').rpc('calculate_carpool_matches', {
       p_event_id: eventId
     });
 
@@ -585,7 +585,7 @@ export const getIVAnalytics = cache(async (
     const supabase = await createClient();
 
     // Call database function
-    const { data, error } = await supabase.rpc('get_iv_analytics', {
+    const { data, error } = await supabase.schema('yi_connect').rpc('get_iv_analytics', {
       p_chapter_id: chapterId,
       p_date_from: dateFrom || null,
       p_date_to: dateTo || null
@@ -653,7 +653,7 @@ export const getMonthlyIVTrends = cache(async (
     startDate.setMonth(startDate.getMonth() - months);
 
     const { data: events, error } = await supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .select('id, start_date, current_registrations')
       .eq('chapter_id', chapterId)
       .eq('category', 'industrial_visit')
@@ -717,7 +717,7 @@ export const getIndustryPerformance = cache(async (
 
     // Get industry details
     const { data: industry, error: industryError } = await supabase
-      .from('industries')
+      .schema('yi_connect').from('industries')
       .select('id, company_name')
       .eq('id', industryId)
       .single();
@@ -728,7 +728,7 @@ export const getIndustryPerformance = cache(async (
 
     // Get IV stats
     let query = supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .select('id, host_willingness_rating, start_date', { count: 'exact' })
       .eq('industry_id', industryId)
       .eq('category', 'industrial_visit');
@@ -750,7 +750,7 @@ export const getIndustryPerformance = cache(async (
 
     // Calculate total participants
     const { count: participantsCount } = await supabase
-      .from('event_rsvps')
+      .schema('yi_connect').from('event_rsvps')
       .select('*', { count: 'exact', head: true })
       .in('event_id', (ivs || []).map(iv => iv.id))
       .eq('status', 'confirmed');
@@ -821,7 +821,7 @@ export async function getIndustryDashboardStats(industryId: string) {
 
     // Get all slots for this industry
     const { data: slots, error: slotsError } = await supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .select('id, start_date, max_capacity, current_registrations, status')
       .eq('industry_id', industryId)
       .eq('category', 'industrial_visit');
@@ -856,7 +856,7 @@ export async function getIndustryDashboardStats(industryId: string) {
 
     // Get pending bookings count (if manual entry method)
     const { count: pendingCount } = await supabase
-      .from('event_rsvps')
+      .schema('yi_connect').from('event_rsvps')
       .select('*', { count: 'exact', head: true })
       .in('event_id', (slots || []).map((s) => s.id))
       .eq('status', 'pending');
@@ -884,7 +884,7 @@ export async function getIndustryUpcomingSlots(industryId: string, limit: number
     const supabase = await createClient();
 
     const { data, error } = await supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .select('id, title, start_date, max_capacity, current_registrations, status')
       .eq('industry_id', industryId)
       .eq('category', 'industrial_visit')
@@ -923,7 +923,7 @@ export const getMyIndustrySlots = cache(
       const supabase = await createClient();
 
       let query = supabase
-        .from('events')
+        .schema('yi_connect').from('events')
         .select(
           `
           id,

@@ -102,7 +102,7 @@ export const getPendingSubmissions = cache(
 
     // Get completed events from vertical_activities
     let eventsQuery = supabase
-      .from('vertical_activities')
+      .schema('yi_connect').from('vertical_activities')
       .select(`
         id,
         title,
@@ -134,7 +134,7 @@ export const getPendingSubmissions = cache(
 
     // Get health card entries for the same period
     let entriesQuery = supabase
-      .from('health_card_entries')
+      .schema('yi_connect').from('health_card_entries')
       .select('id, activity_date, activity_name, vertical_id')
 
     if (filters?.date_from) {
@@ -280,13 +280,13 @@ async function calculateVerticalTrend(
   // Count activities and entries for the previous period
   const [prevActivities, prevEntries] = await Promise.all([
     supabase
-      .from('vertical_activities')
+      .schema('yi_connect').from('vertical_activities')
       .select('id', { count: 'exact', head: true })
       .eq('vertical_id', verticalId)
       .gte('activity_date', prevStartStr)
       .lte('activity_date', prevEndStr),
     supabase
-      .from('health_card_entries')
+      .schema('yi_connect').from('health_card_entries')
       .select('id', { count: 'exact', head: true })
       .eq('vertical_id', verticalId)
       .gte('activity_date', prevStartStr)
@@ -306,13 +306,13 @@ async function calculateVerticalTrend(
   // Count current period
   const [curActivities, curEntries] = await Promise.all([
     supabase
-      .from('vertical_activities')
+      .schema('yi_connect').from('vertical_activities')
       .select('id', { count: 'exact', head: true })
       .eq('vertical_id', verticalId)
       .gte('activity_date', startDate.toISOString().slice(0, 10))
       .lte('activity_date', endDate.toISOString().slice(0, 10)),
     supabase
-      .from('health_card_entries')
+      .schema('yi_connect').from('health_card_entries')
       .select('id', { count: 'exact', head: true })
       .eq('vertical_id', verticalId)
       .gte('activity_date', startDate.toISOString().slice(0, 10))
@@ -349,7 +349,7 @@ export const getVerticalSubmissionRates = cache(
 
     // Get all verticals
     const { data: verticals } = await supabase
-      .from('verticals')
+      .schema('yi_connect').from('verticals')
       .select('id, name, slug')
       .eq('is_active', true)
 
@@ -360,7 +360,7 @@ export const getVerticalSubmissionRates = cache(
     for (const vertical of verticals) {
       // Count activities for this vertical
       let activitiesQuery = supabase
-        .from('vertical_activities')
+        .schema('yi_connect').from('vertical_activities')
         .select('id, activity_date', { count: 'exact' })
         .eq('vertical_id', vertical.id)
 
@@ -375,7 +375,7 @@ export const getVerticalSubmissionRates = cache(
 
       // Count health card entries for this vertical
       let entriesQuery = supabase
-        .from('health_card_entries')
+        .schema('yi_connect').from('health_card_entries')
         .select('id, activity_date, created_at', { count: 'exact' })
         .eq('vertical_id', vertical.id)
 
@@ -446,7 +446,7 @@ export const getChapterSubmissionRate = cache(
 
     // Get chapter info from user
     const { data: member } = await supabase
-      .from('members')
+      .schema('yi_connect').from('members')
       .select('chapter:chapters(id, name)')
       .eq('id', user.id)
       .single()
@@ -494,14 +494,14 @@ export const getMonthlySubmissionRates = cache(
 
       // Count activities for this month
       const { count: eventCount } = await supabase
-        .from('vertical_activities')
+        .schema('yi_connect').from('vertical_activities')
         .select('id', { count: 'exact' })
         .gte('activity_date', monthStart)
         .lte('activity_date', monthEnd)
 
       // Count submissions for this month
       const { count: submittedCount } = await supabase
-        .from('health_card_entries')
+        .schema('yi_connect').from('health_card_entries')
         .select('id', { count: 'exact' })
         .gte('activity_date', monthStart)
         .lte('activity_date', monthEnd)
@@ -630,14 +630,14 @@ export const getVerticalQualitySummary = cache(
 
     // Get vertical info
     const { data: vertical } = await supabase
-      .from('verticals')
+      .schema('yi_connect').from('verticals')
       .select('id, name')
       .eq('id', verticalId)
       .single()
 
     // Get health card entries
     let query = supabase
-      .from('health_card_entries')
+      .schema('yi_connect').from('health_card_entries')
       .select('*')
       .eq('vertical_id', verticalId)
 
@@ -704,7 +704,7 @@ export const getChapterQualitySummary = cache(
 
     // Get all verticals
     const { data: verticals } = await supabase
-      .from('verticals')
+      .schema('yi_connect').from('verticals')
       .select('id')
       .eq('is_active', true)
 
@@ -747,7 +747,7 @@ export const getChapterQualitySummary = cache(
 
     // Get chapter info
     const { data: member } = await supabase
-      .from('members')
+      .schema('yi_connect').from('members')
       .select('chapter:chapters(id)')
       .eq('id', user.id)
       .single()
@@ -780,7 +780,7 @@ export const getTimelinessMetrics = cache(
 
     // Get health card entries with activity dates
     let query = supabase
-      .from('health_card_entries')
+      .schema('yi_connect').from('health_card_entries')
       .select('id, activity_date, created_at')
 
     if (filters?.date_from) {
@@ -852,7 +852,7 @@ export const getHealthCardTrackingDashboard = cache(
 
     // Get chapter info
     const { data: member } = await supabase
-      .from('members')
+      .schema('yi_connect').from('members')
       .select('chapter:chapters(id, name)')
       .eq('id', user.id)
       .single()

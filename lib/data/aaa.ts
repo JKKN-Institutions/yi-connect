@@ -32,7 +32,7 @@ export async function getAAAPlans(
   const supabase = await createClient()
 
   let query = supabase
-    .from('aaa_plans')
+    .schema('yi_connect').from('aaa_plans')
     .select(`
       *,
       vertical:verticals(id, name, slug, color, icon),
@@ -83,7 +83,7 @@ export async function getAAAPlanById(id: string): Promise<AAAPlanWithDetails | n
   const supabase = await createClient()
 
   const { data, error } = await supabase
-    .from('aaa_plans')
+    .schema('yi_connect').from('aaa_plans')
     .select(`
       *,
       vertical:verticals(id, name, slug, color, icon),
@@ -115,7 +115,7 @@ export async function getAAAPlanByVertical(
   const supabase = await createClient()
 
   const { data, error } = await supabase
-    .from('aaa_plans')
+    .schema('yi_connect').from('aaa_plans')
     .select(`
       *,
       vertical:verticals(id, name, slug, color, icon),
@@ -154,7 +154,7 @@ export async function getCommitmentCards(
   const supabase = await createClient()
 
   const { data, error } = await supabase
-    .from('commitment_cards')
+    .schema('yi_connect').from('commitment_cards')
     .select(`
       *,
       member:members(id, full_name, email, avatar_url, designation, company),
@@ -182,7 +182,7 @@ export async function getCommitmentCardByMember(
   const supabase = await createClient()
 
   const { data, error } = await supabase
-    .from('commitment_cards')
+    .schema('yi_connect').from('commitment_cards')
     .select('*')
     .eq('member_id', memberId)
     .eq('pathfinder_year', pathfinderYear)
@@ -210,7 +210,7 @@ export async function getMentorAssignments(
   const supabase = await createClient()
 
   const { data, error } = await supabase
-    .from('mentor_assignments')
+    .schema('yi_connect').from('mentor_assignments')
     .select(`
       *,
       ec_chair:members!mentor_assignments_ec_chair_id_fkey(id, full_name, email, avatar_url),
@@ -244,7 +244,7 @@ export async function getPathfinderDashboard(
 
   // Get chapter info
   const { data: chapter } = await supabase
-    .from('chapters')
+    .schema('yi_connect').from('chapters')
     .select('id, name')
     .eq('id', chapterId)
     .single()
@@ -255,7 +255,7 @@ export async function getPathfinderDashboard(
   // vertical_chairs has TWO FKs to members (member_id + appointed_by) — disambiguate
   // full_name + avatar_url live in profiles, not members — nested join
   const { data: verticals } = await supabase
-    .from('verticals')
+    .schema('yi_connect').from('verticals')
     .select(`
       id, name, slug, color, icon,
       current_chair:vertical_chairs(
@@ -274,21 +274,21 @@ export async function getPathfinderDashboard(
 
   // Get all AAA plans for this year
   const { data: plans } = await supabase
-    .from('aaa_plans')
+    .schema('yi_connect').from('aaa_plans')
     .select('*')
     .eq('chapter_id', chapterId)
     .eq('calendar_year', calendarYear)
 
   // Get all commitment cards for this year
   const { data: commitments } = await supabase
-    .from('commitment_cards')
+    .schema('yi_connect').from('commitment_cards')
     .select('member_id, signed_at')
     .eq('chapter_id', chapterId)
     .eq('pathfinder_year', calendarYear)
 
   // Get all mentor assignments for this year
   const { data: mentors } = await supabase
-    .from('mentor_assignments')
+    .schema('yi_connect').from('mentor_assignments')
     .select('ec_chair_id, mentor_name')
     .eq('chapter_id', chapterId)
     .eq('pathfinder_year', calendarYear)

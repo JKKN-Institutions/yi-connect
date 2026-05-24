@@ -77,14 +77,14 @@ export async function calculateEngagementScores(
 
   // Batch query 1: Get attendance data (RSVPs with check-ins)
   const { data: rsvpData } = await supabase
-    .from('event_rsvps')
+    .schema('yi_connect').from('event_rsvps')
     .select('member_id, status, checked_in_at, event_id')
     .in('member_id', memberIds)
     .gte('created_at', periodStartStr);
 
   // Batch query 2: Get volunteer hours
   const { data: volunteerData } = await supabase
-    .from('event_volunteers')
+    .schema('yi_connect').from('event_volunteers')
     .select('member_id, hours_contributed, status')
     .in('member_id', memberIds)
     .eq('status', 'completed')
@@ -92,14 +92,14 @@ export async function calculateEngagementScores(
 
   // Batch query 3: Get feedback submissions
   const { data: feedbackData } = await supabase
-    .from('event_feedback')
+    .schema('yi_connect').from('event_feedback')
     .select('member_id')
     .in('member_id', memberIds)
     .gte('created_at', periodStartStr);
 
   // Batch query 4: Get skills count
   const { data: skillsData } = await supabase
-    .from('member_skills')
+    .schema('yi_connect').from('member_skills')
     .select('member_id')
     .in('member_id', memberIds);
 
@@ -253,13 +253,13 @@ export async function calculateReadinessScores(
 
   // Batch query 1: Get member tenure data (member_since)
   const { data: membersData } = await supabase
-    .from('members')
+    .schema('yi_connect').from('members')
     .select('id, member_since')
     .in('id', memberIds);
 
   // Batch query 2: Get leadership roles held (hierarchy level >= 2)
   const { data: rolesData } = await supabase
-    .from('user_roles')
+    .schema('yi_connect').from('user_roles')
     .select(`
       user_id,
       role:roles(hierarchy_level)
@@ -268,14 +268,14 @@ export async function calculateReadinessScores(
 
   // Batch query 3: Get nominations received (as nominee)
   const { data: nominationsData } = await supabase
-    .from('nominations')
+    .schema('yi_connect').from('nominations')
     .select('nominee_id')
     .in('nominee_id', memberIds)
     .eq('status', 'approved');
 
   // Batch query 4: Get event participation count (proxy for training)
   const { data: eventParticipation } = await supabase
-    .from('event_rsvps')
+    .schema('yi_connect').from('event_rsvps')
     .select('member_id')
     .in('member_id', memberIds)
     .not('checked_in_at', 'is', null);
@@ -401,7 +401,7 @@ export const getCurrentUserMember = cache(async () => {
   // any caller (e.g. ProfileMenu, /api/members/me) hits PGRST 42703 and the
   // member record returns null, logging the user out.
   const { data: member, error } = await supabase
-    .from('members')
+    .schema('yi_connect').from('members')
     .select(
       `
       id,
@@ -441,7 +441,7 @@ export const getCurrentUserMember = cache(async () => {
 
   // Get user's role from user_roles table
   const { data: userRole } = await supabase
-    .from('user_roles')
+    .schema('yi_connect').from('user_roles')
     .select('roles(name)')
     .eq('user_id', user.id)
     .single();
@@ -477,7 +477,7 @@ export const getMembers = cache(
     const supabase = createAdminSupabaseClient();
     const { page = 1, pageSize = 10, filters = {}, sort } = params;
 
-    let query = supabase.from('members').select(
+    let query = supabase.schema('yi_connect').from('members').select(
       `
       id,
       company,
@@ -554,7 +554,7 @@ export const getMembers = cache(
     const rolesMap = new Map<string, Array<{ role_name: string; hierarchy_level: number }>>();
 
     for (const memberId of memberIds) {
-      const { data: roles } = await supabase.rpc('get_user_roles_detailed', {
+      const { data: roles } = await supabase.schema('yi_connect').rpc('get_user_roles_detailed', {
         p_user_id: memberId
       });
       rolesMap.set(memberId, roles || []);
@@ -564,7 +564,7 @@ export const getMembers = cache(
     const verticalsMap = new Map<string, Array<{ id: string; name: string; color: string | null }>>();
     if (memberIds.length > 0) {
       const { data: verticalMembers } = await supabase
-        .from('vertical_members')
+        .schema('yi_connect').from('vertical_members')
         .select(`
           member_id,
           vertical:verticals(id, name, color)
@@ -585,7 +585,7 @@ export const getMembers = cache(
     const trainersSet = new Set<string>();
     if (memberIds.length > 0) {
       const { data: trainers } = await supabase
-        .from('trainer_profiles')
+        .schema('yi_connect').from('trainer_profiles')
         .select('member_id')
         .in('member_id', memberIds)
         .eq('is_trainer_eligible', true);
@@ -608,7 +608,7 @@ export const getMembers = cache(
     const skillsMap = new Map<string, { count: number; topSkills: SkillInfo[] }>();
     if (memberIds.length > 0) {
       const { data: memberSkills } = await supabase
-        .from('member_skills')
+        .schema('yi_connect').from('member_skills')
         .select(`
           member_id,
           proficiency,
@@ -698,7 +698,7 @@ export const getMemberById = cache(
     const supabase = await createServerSupabaseClient();
 
     const { data, error } = await supabase
-      .from('members')
+      .schema('yi_connect').from('members')
       .select(
         `
       *,
@@ -775,7 +775,7 @@ export const getMemberWithProfile = cache(
     const supabase = await createServerSupabaseClient();
 
     const { data, error } = await supabase
-      .from('members')
+      .schema('yi_connect').from('members')
       .select(
         `
       *,
@@ -817,7 +817,7 @@ export const getSkills = cache(async (): Promise<Skill[]> => {
   const supabase = await createServerSupabaseClient();
 
   const { data, error } = await supabase
-    .from('skills')
+    .schema('yi_connect').from('skills')
     .select('*')
     .eq('is_active', true)
     .order('category')
@@ -838,7 +838,7 @@ export const getSkillsWithMembers = cache(
     const supabase = await createServerSupabaseClient();
 
     const { data, error } = await supabase
-      .from('skills')
+      .schema('yi_connect').from('skills')
       .select(
         `
       *,
@@ -892,7 +892,7 @@ export const getSkillGaps = cache(
   async (chapterId: string): Promise<SkillGapAnalysis[]> => {
     const supabase = await createServerSupabaseClient();
 
-    const { data, error } = await supabase.rpc('get_skill_gaps', {
+    const { data, error } = await supabase.schema('yi_connect').rpc('get_skill_gaps', {
       p_chapter_id: chapterId
     });
 
@@ -915,7 +915,7 @@ export const getCertifications = cache(async (): Promise<Certification[]> => {
   const supabase = await createServerSupabaseClient();
 
   const { data, error } = await supabase
-    .from('certifications')
+    .schema('yi_connect').from('certifications')
     .select('*')
     .eq('is_active', true)
     .order('issuing_organization')
@@ -937,7 +937,7 @@ export const getExpiringCertifications = cache(async (memberId: string) => {
   thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
 
   const { data, error } = await supabase
-    .from('member_certifications')
+    .schema('yi_connect').from('member_certifications')
     .select(
       `
       *,
@@ -975,7 +975,7 @@ export const getMemberAnalytics = cache(
     const supabase = createAdminSupabaseClient();
 
     // Build query based on chapter filter
-    let membersQuery = supabase.from('members').select('*');
+    let membersQuery = supabase.schema('yi_connect').from('members').select('*');
     if (chapterId) {
       membersQuery = membersQuery.eq('chapter_id', chapterId);
     }
@@ -1068,7 +1068,7 @@ export const getMemberAnalytics = cache(
     };
     if (memberIds.length > 0) {
       const { data: skillsData } = await supabase
-        .from('member_skills')
+        .schema('yi_connect').from('member_skills')
         .select(`
           skill:skills(category)
         `)
@@ -1196,7 +1196,7 @@ export const getMemberEngagementBreakdown = cache(
     ] = await Promise.all([
       // RSVP data with event details
       supabase
-        .from('event_rsvps')
+        .schema('yi_connect').from('event_rsvps')
         .select('member_id, status, checked_in_at, event_id, created_at, event:events(title, start_date)')
         .eq('member_id', memberId)
         .gte('created_at', periodStartStr)
@@ -1204,7 +1204,7 @@ export const getMemberEngagementBreakdown = cache(
 
       // Volunteer data with event details
       supabase
-        .from('event_volunteers')
+        .schema('yi_connect').from('event_volunteers')
         .select('member_id, hours_contributed, status, created_at, event:events(title, start_date)')
         .eq('member_id', memberId)
         .eq('status', 'completed')
@@ -1213,7 +1213,7 @@ export const getMemberEngagementBreakdown = cache(
 
       // Feedback data with event details
       supabase
-        .from('event_feedback')
+        .schema('yi_connect').from('event_feedback')
         .select('member_id, created_at, event:events(title, start_date)')
         .eq('member_id', memberId)
         .gte('created_at', periodStartStr)
@@ -1221,27 +1221,27 @@ export const getMemberEngagementBreakdown = cache(
 
       // Skills data
       supabase
-        .from('member_skills')
+        .schema('yi_connect').from('member_skills')
         .select('member_id, created_at, skill:skills(name)')
         .eq('member_id', memberId)
         .order('created_at', { ascending: false }),
 
       // Member tenure data
       supabase
-        .from('members')
+        .schema('yi_connect').from('members')
         .select('id, member_since')
         .eq('id', memberId)
         .single(),
 
       // Leadership roles
       supabase
-        .from('user_roles')
+        .schema('yi_connect').from('user_roles')
         .select('user_id, role:roles(name, hierarchy_level)')
         .eq('user_id', memberId),
 
       // Nominations received
       supabase
-        .from('nominations')
+        .schema('yi_connect').from('nominations')
         .select('nominee_id, created_at, nominator:profiles!nominations_nominator_id_fkey(full_name)')
         .eq('nominee_id', memberId)
         .eq('status', 'approved')
@@ -1249,14 +1249,14 @@ export const getMemberEngagementBreakdown = cache(
 
       // Event participation count
       supabase
-        .from('event_rsvps')
+        .schema('yi_connect').from('event_rsvps')
         .select('member_id')
         .eq('member_id', memberId)
         .not('checked_in_at', 'is', null),
 
       // Recent events for timeline (last 10)
       supabase
-        .from('event_rsvps')
+        .schema('yi_connect').from('event_rsvps')
         .select('member_id, checked_in_at, created_at, event:events(title, start_date)')
         .eq('member_id', memberId)
         .not('checked_in_at', 'is', null)
@@ -1265,7 +1265,7 @@ export const getMemberEngagementBreakdown = cache(
 
       // Recent skills added (last 5)
       supabase
-        .from('member_skills')
+        .schema('yi_connect').from('member_skills')
         .select('created_at, skill:skills(name)')
         .eq('member_id', memberId)
         .order('created_at', { ascending: false })
@@ -1437,7 +1437,7 @@ export const getMemberAvailability = cache(
     const supabase = await createServerSupabaseClient();
 
     const { data, error } = await supabase
-      .from('availability')
+      .schema('yi_connect').from('availability')
       .select('*')
       .eq('member_id', memberId)
       .gte('date', startDate)
@@ -1460,7 +1460,7 @@ export const getAvailableMembers = cache(
     const supabase = await createServerSupabaseClient();
 
     let query = supabase
-      .from('availability')
+      .schema('yi_connect').from('availability')
       .select(
         `
       *,
@@ -1514,7 +1514,7 @@ export const getCurrentUserChapter = cache(async () => {
   // Get the member record for the current user
   // Note: member.id IS the profile/user id in the members table
   const { data: member, error: memberError } = await supabase
-    .from('members')
+    .schema('yi_connect').from('members')
     .select('chapter_id')
     .eq('id', user.id)
     .single();
@@ -1525,7 +1525,7 @@ export const getCurrentUserChapter = cache(async () => {
 
   // Get the chapter details
   const { data: chapter, error: chapterError } = await supabase
-    .from('chapters')
+    .schema('yi_connect').from('chapters')
     .select('id, name, location, region')
     .eq('id', member.chapter_id)
     .single();

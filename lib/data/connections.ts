@@ -49,7 +49,7 @@ export async function getMemberByQrToken(
   const supabase = createAdminSupabaseClient();
 
   const { data, error } = await supabase
-    .from('members')
+    .schema('yi_connect').from('members')
     .select(
       `
       id,
@@ -105,7 +105,7 @@ export const getMyProfileQr = cache(
     if (!user) return null;
 
     const { data, error } = await supabase
-      .from('members')
+      .schema('yi_connect').from('members')
       .select('profile_qr_token, allow_networking_qr')
       .eq('id', user.id)
       .maybeSingle();
@@ -144,7 +144,7 @@ export async function getMyConnections(
 
   // 1. Rows where I am `from` (what I scanned). RLS enforces from_member_id = auth.uid().
   const { data: mine, error: mineErr } = await supabase
-    .from('member_connections')
+    .schema('yi_connect').from('member_connections')
     .select('id, from_member_id, to_member_id, event_id, note, created_at')
     .eq('from_member_id', memberId)
     .order('created_at', { ascending: false });
@@ -178,19 +178,19 @@ export async function getMyConnections(
   ] = await Promise.all([
     otherIds.length > 0
       ? admin
-          .from('members')
+          .schema('yi_connect').from('members')
           .select('id, company, designation, linkedin_url, chapter_id')
           .in('id', otherIds as string[])
       : Promise.resolve({ data: [] as any[] }),
     otherIds.length > 0
       ? admin
-          .from('profiles')
+          .schema('yi_connect').from('profiles')
           .select('id, full_name, avatar_url')
           .in('id', otherIds as string[])
       : Promise.resolve({ data: [] as any[] }),
     eventIds.length > 0
       ? admin
-          .from('events')
+          .schema('yi_connect').from('events')
           .select('id, title, start_date')
           .in('id', eventIds as string[])
       : Promise.resolve({ data: [] as any[] }),
@@ -206,7 +206,7 @@ export async function getMyConnections(
   const { data: chaptersData } =
     chapterIds.length > 0
       ? await admin
-          .from('chapters')
+          .schema('yi_connect').from('chapters')
           .select('id, name')
           .in('id', chapterIds as string[])
       : { data: [] as any[] };
@@ -228,7 +228,7 @@ export async function getMyConnections(
   let reverseSet = new Set<string>();
   if (otherIds.length > 0) {
     const { data: reverse } = await supabase
-      .from('member_connections')
+      .schema('yi_connect').from('member_connections')
       .select('from_member_id, to_member_id')
       .eq('to_member_id', memberId)
       .in('from_member_id', otherIds as string[]);
@@ -313,7 +313,7 @@ export async function getMutualConnectionCount(
   const supabase = await createServerSupabaseClient();
 
   const { count, error } = await supabase
-    .from('member_connections')
+    .schema('yi_connect').from('member_connections')
     .select('id', { count: 'exact', head: true })
     .or(
       `and(from_member_id.eq.${memberId1},to_member_id.eq.${memberId2}),and(from_member_id.eq.${memberId2},to_member_id.eq.${memberId1})`
@@ -337,7 +337,7 @@ export async function hasConnectedTo(
   if (!fromId || !toId || fromId === toId) return false;
   const supabase = await createServerSupabaseClient();
   const { count } = await supabase
-    .from('member_connections')
+    .schema('yi_connect').from('member_connections')
     .select('id', { count: 'exact', head: true })
     .eq('from_member_id', fromId)
     .eq('to_member_id', toId);

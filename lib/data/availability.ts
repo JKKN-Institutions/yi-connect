@@ -26,7 +26,7 @@ export const getMemberAvailabilityForDate = cache(
     const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
-      .from('availability')
+      .schema('yi_connect').from('availability')
       .select('*')
       .eq('member_id', memberId)
       .eq('date', date)
@@ -49,7 +49,7 @@ export const getMemberAvailabilityPreferences = cache(
 
     // Get the most recent availability record to get preferences
     const { data, error } = await supabase
-      .from('availability')
+      .schema('yi_connect').from('availability')
       .select(
         'member_id, time_commitment_hours, preferred_days, notice_period, geographic_flexibility, preferred_contact_method'
       )
@@ -93,7 +93,7 @@ export const getMemberAvailability = cache(
     const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
-      .from('availability')
+      .schema('yi_connect').from('availability')
       .select('*')
       .eq('member_id', memberId)
       .gte('date', startDate)
@@ -116,7 +116,7 @@ export const getAvailability = cache(
     const supabase = await createServerSupabaseClient()
 
     let query = supabase
-      .from('availability')
+      .schema('yi_connect').from('availability')
       .select(
         `
         *,
@@ -186,7 +186,7 @@ export const getAvailableMembersForDate = cache(
     const supabase = await createServerSupabaseClient()
 
     let query = supabase
-      .from('availability')
+      .schema('yi_connect').from('availability')
       .select(
         `
         member_id,
@@ -248,7 +248,7 @@ export const getMemberAvailabilitySummary = cache(
     const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
-      .from('availability')
+      .schema('yi_connect').from('availability')
       .select('status, is_assigned')
       .eq('member_id', memberId)
       .gte('date', startDate)
@@ -288,14 +288,14 @@ export const getChapterAvailabilityOverview = cache(
 
     // Get total active members in chapter
     const { count: totalMembers } = await supabase
-      .from('members')
+      .schema('yi_connect').from('members')
       .select('*', { count: 'exact', head: true })
       .eq('chapter_id', chapterId)
       .eq('membership_status', 'active')
 
     // Get availability for the date
     const { data: availabilities } = await supabase
-      .from('availability')
+      .schema('yi_connect').from('availability')
       .select(
         `
         status,

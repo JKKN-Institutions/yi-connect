@@ -23,7 +23,7 @@ export async function getStretchGoals(
   const supabase = await createClient()
 
   let query = supabase
-    .from('stretch_goals')
+    .schema('yi_connect').from('stretch_goals')
     .select(`
       *,
       vertical:verticals(id, name, color),
@@ -71,7 +71,7 @@ export async function getStretchGoalById(id: string): Promise<StretchGoal | null
   const supabase = await createClient()
 
   const { data, error } = await supabase
-    .from('stretch_goals')
+    .schema('yi_connect').from('stretch_goals')
     .select(`
       *,
       vertical:verticals(id, name, color),
@@ -100,7 +100,7 @@ export async function getStretchGoalProgress(
   const supabase = await createClient()
 
   let query = supabase
-    .from('stretch_goal_progress')
+    .schema('yi_connect').from('stretch_goal_progress')
     .select('*')
     .order('vertical_name', { ascending: true })
 
@@ -178,7 +178,7 @@ export async function createStretchGoal(
   const supabase = await createClient()
 
   const { data: goal, error } = await supabase
-    .from('stretch_goals')
+    .schema('yi_connect').from('stretch_goals')
     .insert(data)
     .select(`
       *,
@@ -211,7 +211,7 @@ export async function updateStretchGoal(
   }
 
   const { data: goal, error } = await supabase
-    .from('stretch_goals')
+    .schema('yi_connect').from('stretch_goals')
     .update(data)
     .eq('id', id)
     .select(`
@@ -236,7 +236,7 @@ export async function updateStretchGoal(
 export async function deleteStretchGoal(id: string): Promise<void> {
   const supabase = await createClient()
 
-  const { error } = await supabase.from('stretch_goals').delete().eq('id', id)
+  const { error } = await supabase.schema('yi_connect').from('stretch_goals').delete().eq('id', id)
 
   if (error) {
     console.error('Error deleting stretch goal:', error)
@@ -256,7 +256,7 @@ export async function createDefaultStretchGoals(
 
   // Get CMP targets for the calendar year
   let cmpQuery = supabase
-    .from('cmp_targets')
+    .schema('yi_connect').from('cmp_targets')
     .select('*')
     .eq('calendar_year', calendarYear)
 
@@ -290,7 +290,7 @@ export async function createDefaultStretchGoals(
   }))
 
   const { data, error } = await supabase
-    .from('stretch_goals')
+    .schema('yi_connect').from('stretch_goals')
     .insert(stretchGoals)
     .select()
 

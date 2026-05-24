@@ -23,7 +23,7 @@ export const getEventSponsorOptions = cache(async (eventId: string) => {
   const supabase = await createServerSupabaseClient()
 
   const { data, error } = await supabase
-    .from('sponsorship_deals')
+    .schema('yi_connect').from('sponsorship_deals')
     .select(
       `
       id,
@@ -82,7 +82,7 @@ export async function resolveTicketToken(
 
   // Try member RSVP first
   const { data: rsvp } = await supabase
-    .from('event_rsvps')
+    .schema('yi_connect').from('event_rsvps')
     .select(
       `
       id,
@@ -114,7 +114,7 @@ export async function resolveTicketToken(
 
   // Try guest RSVP
   const { data: guest } = await supabase
-    .from('guest_rsvps')
+    .schema('yi_connect').from('guest_rsvps')
     .select('id, event_id, full_name, email, phone, company, designation')
     .eq('ticket_token', ticketToken)
     .eq('event_id', eventId)
@@ -150,7 +150,7 @@ export const getSponsorLeadsForEvent = cache(
     // the embed and hydrate the captured_by user via a batched members→profiles
     // lookup after the main query.
     let query = supabase
-      .from('sponsor_leads')
+      .schema('yi_connect').from('sponsor_leads')
       .select(
         `
         *,
@@ -192,7 +192,7 @@ export const getSponsorLeadsForEvent = cache(
       try {
         const admin = createAdminSupabaseClient()
         const { data: memberRows } = await admin
-          .from('members')
+          .schema('yi_connect').from('members')
           .select('id, profile:profiles(full_name, email)')
           .in('id', capturedByIds)
         for (const row of memberRows || []) {
@@ -227,7 +227,7 @@ export const getSponsorLeadsForSponsor = cache(
     const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
-      .from('sponsor_leads')
+      .schema('yi_connect').from('sponsor_leads')
       .select(
         `
         *,
@@ -258,7 +258,7 @@ export const getLeadById = cache(
     const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
-      .from('sponsor_leads')
+      .schema('yi_connect').from('sponsor_leads')
       .select(
         `
         *,
@@ -286,7 +286,7 @@ export const getEventLeadsSummary = cache(
     const supabase = await createServerSupabaseClient()
 
     const { data } = await supabase
-      .from('sponsor_leads')
+      .schema('yi_connect').from('sponsor_leads')
       .select('interest_level')
       .eq('event_id', eventId)
 

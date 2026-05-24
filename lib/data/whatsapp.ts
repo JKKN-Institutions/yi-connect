@@ -47,7 +47,7 @@ export async function getWhatsAppConnection(
   const supabase = await createServerSupabaseClient()
 
   const { data, error } = await supabase
-    .from('whatsapp_connections')
+    .schema('yi_connect').from('whatsapp_connections')
     .select('*')
     .eq('chapter_id', chapterId)
     .single()
@@ -102,7 +102,7 @@ export async function getWhatsAppGroups(
   const supabase = await createServerSupabaseClient()
 
   let query = supabase
-    .from('whatsapp_groups')
+    .schema('yi_connect').from('whatsapp_groups')
     .select('id, jid, name, group_type, description, member_count, is_default, is_active')
     .eq('chapter_id', chapterId)
 
@@ -154,7 +154,7 @@ export async function getWhatsAppGroupById(
   const supabase = await createServerSupabaseClient()
 
   const { data, error } = await supabase
-    .from('whatsapp_groups')
+    .schema('yi_connect').from('whatsapp_groups')
     .select(`
       *,
       chapter:chapters!whatsapp_groups_chapter_id_fkey (
@@ -191,7 +191,7 @@ export async function getDefaultGroup(
   const supabase = await createServerSupabaseClient()
 
   const { data, error } = await supabase
-    .from('whatsapp_groups')
+    .schema('yi_connect').from('whatsapp_groups')
     .select('*')
     .eq('chapter_id', chapterId)
     .eq('is_default', true)
@@ -226,7 +226,7 @@ export async function getGroupsByType(
   const supabase = await createServerSupabaseClient()
 
   const { data, error } = await supabase
-    .from('whatsapp_groups')
+    .schema('yi_connect').from('whatsapp_groups')
     .select('*')
     .eq('chapter_id', chapterId)
     .eq('group_type', groupType)
@@ -266,7 +266,7 @@ export async function getWhatsAppTemplates(
   const supabase = await createServerSupabaseClient()
 
   let query = supabase
-    .from('whatsapp_templates')
+    .schema('yi_connect').from('whatsapp_templates')
     .select('id, name, category, content, variables, is_active, usage_count, chapter_id')
 
   // Filter by chapter OR national (chapter_id is null)
@@ -343,7 +343,7 @@ export async function getWhatsAppTemplateById(
   const supabase = await createServerSupabaseClient()
 
   const { data, error } = await supabase
-    .from('whatsapp_templates')
+    .schema('yi_connect').from('whatsapp_templates')
     .select(`
       *,
       chapter:chapters (
@@ -387,7 +387,7 @@ export async function getTemplatesByCategory(
   const supabase = await createServerSupabaseClient()
 
   const { data, error } = await supabase
-    .from('whatsapp_templates')
+    .schema('yi_connect').from('whatsapp_templates')
     .select('*')
     .or(`chapter_id.eq.${chapterId},chapter_id.is.null`)
     .eq('category', category)
@@ -431,7 +431,7 @@ export async function getMessageLogs(
   const supabase = await createServerSupabaseClient()
 
   let query = supabase
-    .from('whatsapp_message_logs')
+    .schema('yi_connect').from('whatsapp_message_logs')
     .select(`
       id,
       recipient_type,
@@ -543,7 +543,7 @@ export async function getRecentMessages(
   const supabase = await createServerSupabaseClient()
 
   const { data, error } = await supabase
-    .from('whatsapp_message_logs')
+    .schema('yi_connect').from('whatsapp_message_logs')
     .select('id, recipient_type, recipient_name, status, sent_at, message_content')
     .eq('chapter_id', chapterId)
     .order('sent_at', { ascending: false })
@@ -613,27 +613,27 @@ export async function getWhatsAppDashboardStats(
     { count: templatesCount },
   ] = await Promise.all([
     supabase
-      .from('whatsapp_message_logs')
+      .schema('yi_connect').from('whatsapp_message_logs')
       .select('*', { count: 'exact', head: true })
       .eq('chapter_id', chapterId)
       .gte('sent_at', todayISO),
     supabase
-      .from('whatsapp_message_logs')
+      .schema('yi_connect').from('whatsapp_message_logs')
       .select('*', { count: 'exact', head: true })
       .eq('chapter_id', chapterId)
       .gte('sent_at', weekAgoISO),
     supabase
-      .from('whatsapp_message_logs')
+      .schema('yi_connect').from('whatsapp_message_logs')
       .select('*', { count: 'exact', head: true })
       .eq('chapter_id', chapterId)
       .gte('sent_at', monthAgoISO),
     supabase
-      .from('whatsapp_groups')
+      .schema('yi_connect').from('whatsapp_groups')
       .select('*', { count: 'exact', head: true })
       .eq('chapter_id', chapterId)
       .eq('is_active', true),
     supabase
-      .from('whatsapp_templates')
+      .schema('yi_connect').from('whatsapp_templates')
       .select('*', { count: 'exact', head: true })
       .or(`chapter_id.eq.${chapterId},chapter_id.is.null`)
       .eq('is_active', true),
@@ -663,7 +663,7 @@ export async function getWhatsAppDashboardStats(
 export async function incrementTemplateUsage(templateId: string): Promise<void> {
   const supabase = await createServerSupabaseClient()
 
-  const { error } = await supabase.rpc('increment_template_usage', {
+  const { error } = await supabase.schema('yi_connect').rpc('increment_template_usage', {
     template_id: templateId,
   })
 
@@ -692,7 +692,7 @@ export async function groupJidExists(
   const supabase = await createServerSupabaseClient()
 
   const { count, error } = await supabase
-    .from('whatsapp_groups')
+    .schema('yi_connect').from('whatsapp_groups')
     .select('*', { count: 'exact', head: true })
     .eq('chapter_id', chapterId)
     .eq('jid', jid)

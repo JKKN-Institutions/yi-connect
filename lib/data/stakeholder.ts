@@ -64,7 +64,7 @@ export const getSchoolsPaginated = cache(
     const { chapterId, page = 1, pageSize = 20, filters = {}, sort } = params
 
     // Base query - get schools with optional chapter filter
-    let schoolsQuery = supabase.from('schools').select('*', { count: 'exact' })
+    let schoolsQuery = supabase.schema('yi_connect').from('schools').select('*', { count: 'exact' })
 
     if (chapterId) {
       schoolsQuery = schoolsQuery.eq('chapter_id', chapterId)
@@ -112,22 +112,22 @@ export const getSchoolsPaginated = cache(
     // Fetch related data for counts
     const [contactsData, interactionsData, mousData, healthData] = await Promise.all([
       supabase
-        .from('stakeholder_contacts')
+        .schema('yi_connect').from('stakeholder_contacts')
         .select('stakeholder_id')
         .eq('stakeholder_type', 'schools')
         .in('stakeholder_id', schoolIds),
       supabase
-        .from('stakeholder_interactions')
+        .schema('yi_connect').from('stakeholder_interactions')
         .select('stakeholder_id')
         .eq('stakeholder_type', 'schools')
         .in('stakeholder_id', schoolIds),
       supabase
-        .from('stakeholder_mous')
+        .schema('yi_connect').from('stakeholder_mous')
         .select('stakeholder_id, mou_status')
         .eq('stakeholder_type', 'schools')
         .in('stakeholder_id', schoolIds),
       supabase
-        .from('relationship_health_scores')
+        .schema('yi_connect').from('relationship_health_scores')
         .select('stakeholder_id, overall_score, health_tier, days_since_last_interaction')
         .eq('stakeholder_type', 'schools')
         .in('stakeholder_id', schoolIds),
@@ -209,7 +209,7 @@ export const getSchoolById = cache(async (schoolId: string): Promise<SchoolDetai
   const supabase = await createServerSupabaseClient()
 
   const { data: school, error } = await supabase
-    .from('schools')
+    .schema('yi_connect').from('schools')
     .select(`
       *,
       connected_member:members!schools_connected_through_member_id_fkey(
@@ -257,7 +257,7 @@ export const getCollegesPaginated = cache(
     const supabase = await createServerSupabaseClient()
     const { chapterId, page = 1, pageSize = 20, filters = {}, sort } = params
 
-    let collegesQuery = supabase.from('colleges').select('*', { count: 'exact' })
+    let collegesQuery = supabase.schema('yi_connect').from('colleges').select('*', { count: 'exact' })
     if (chapterId) collegesQuery = collegesQuery.eq('chapter_id', chapterId)
 
     // Apply filters
@@ -291,10 +291,10 @@ export const getCollegesPaginated = cache(
 
     const collegeIds = colleges.map((c) => c.id)
     const [contactsData, interactionsData, mousData, healthData] = await Promise.all([
-      supabase.from('stakeholder_contacts').select('stakeholder_id').eq('stakeholder_type', 'colleges').in('stakeholder_id', collegeIds),
-      supabase.from('stakeholder_interactions').select('stakeholder_id').eq('stakeholder_type', 'colleges').in('stakeholder_id', collegeIds),
-      supabase.from('stakeholder_mous').select('stakeholder_id, mou_status').eq('stakeholder_type', 'colleges').in('stakeholder_id', collegeIds),
-      supabase.from('relationship_health_scores').select('stakeholder_id, overall_score, health_tier, days_since_last_interaction').eq('stakeholder_type', 'colleges').in('stakeholder_id', collegeIds),
+      supabase.schema('yi_connect').from('stakeholder_contacts').select('stakeholder_id').eq('stakeholder_type', 'colleges').in('stakeholder_id', collegeIds),
+      supabase.schema('yi_connect').from('stakeholder_interactions').select('stakeholder_id').eq('stakeholder_type', 'colleges').in('stakeholder_id', collegeIds),
+      supabase.schema('yi_connect').from('stakeholder_mous').select('stakeholder_id, mou_status').eq('stakeholder_type', 'colleges').in('stakeholder_id', collegeIds),
+      supabase.schema('yi_connect').from('relationship_health_scores').select('stakeholder_id, overall_score, health_tier, days_since_last_interaction').eq('stakeholder_type', 'colleges').in('stakeholder_id', collegeIds),
     ])
 
     const contactCounts = new Map<string, number>()
@@ -339,7 +339,7 @@ export const getCollegeById = cache(async (collegeId: string): Promise<CollegeDe
   const supabase = await createServerSupabaseClient()
 
   const { data: college, error } = await supabase
-    .from('colleges')
+    .schema('yi_connect').from('colleges')
     .select(`
       *,
       connected_member:members!colleges_connected_through_member_id_fkey(id, profiles!inner(full_name))
@@ -383,7 +383,7 @@ export const getIndustriesPaginated = cache(
     const supabase = await createServerSupabaseClient()
     const { chapterId, page = 1, pageSize = 20, filters = {}, sort } = params
 
-    let industriesQuery = supabase.from('industries').select('*', { count: 'exact' })
+    let industriesQuery = supabase.schema('yi_connect').from('industries').select('*', { count: 'exact' })
     if (chapterId) industriesQuery = industriesQuery.eq('chapter_id', chapterId)
 
     // Apply filters
@@ -417,10 +417,10 @@ export const getIndustriesPaginated = cache(
 
     const industryIds = industries.map((i) => i.id)
     const [contactsData, interactionsData, mousData, healthData] = await Promise.all([
-      supabase.from('stakeholder_contacts').select('stakeholder_id').eq('stakeholder_type', 'industries').in('stakeholder_id', industryIds),
-      supabase.from('stakeholder_interactions').select('stakeholder_id').eq('stakeholder_type', 'industries').in('stakeholder_id', industryIds),
-      supabase.from('stakeholder_mous').select('stakeholder_id, mou_status').eq('stakeholder_type', 'industries').in('stakeholder_id', industryIds),
-      supabase.from('relationship_health_scores').select('stakeholder_id, overall_score, health_tier, days_since_last_interaction').eq('stakeholder_type', 'industries').in('stakeholder_id', industryIds),
+      supabase.schema('yi_connect').from('stakeholder_contacts').select('stakeholder_id').eq('stakeholder_type', 'industries').in('stakeholder_id', industryIds),
+      supabase.schema('yi_connect').from('stakeholder_interactions').select('stakeholder_id').eq('stakeholder_type', 'industries').in('stakeholder_id', industryIds),
+      supabase.schema('yi_connect').from('stakeholder_mous').select('stakeholder_id, mou_status').eq('stakeholder_type', 'industries').in('stakeholder_id', industryIds),
+      supabase.schema('yi_connect').from('relationship_health_scores').select('stakeholder_id, overall_score, health_tier, days_since_last_interaction').eq('stakeholder_type', 'industries').in('stakeholder_id', industryIds),
     ])
 
     const contactCounts = new Map<string, number>()
@@ -465,7 +465,7 @@ export const getIndustryById = cache(async (industryId: string): Promise<Industr
   const supabase = await createServerSupabaseClient()
 
   const { data: industry, error } = await supabase
-    .from('industries')
+    .schema('yi_connect').from('industries')
     .select(`
       *,
       connected_member:members!industries_connected_through_member_id_fkey(id, profiles!inner(full_name))
@@ -509,7 +509,7 @@ export const getGovernmentStakeholdersPaginated = cache(
     const supabase = await createServerSupabaseClient()
     const { chapterId, page = 1, pageSize = 20, filters = {}, sort } = params
 
-    let govQuery = supabase.from('government_stakeholders').select('*', { count: 'exact' })
+    let govQuery = supabase.schema('yi_connect').from('government_stakeholders').select('*', { count: 'exact' })
     if (chapterId) govQuery = govQuery.eq('chapter_id', chapterId)
 
     // Apply filters
@@ -543,10 +543,10 @@ export const getGovernmentStakeholdersPaginated = cache(
 
     const govIds = govStakeholders.map((g) => g.id)
     const [contactsData, interactionsData, mousData, healthData] = await Promise.all([
-      supabase.from('stakeholder_contacts').select('stakeholder_id').eq('stakeholder_type', 'government').in('stakeholder_id', govIds),
-      supabase.from('stakeholder_interactions').select('stakeholder_id').eq('stakeholder_type', 'government').in('stakeholder_id', govIds),
-      supabase.from('stakeholder_mous').select('stakeholder_id, mou_status').eq('stakeholder_type', 'government').in('stakeholder_id', govIds),
-      supabase.from('relationship_health_scores').select('stakeholder_id, overall_score, health_tier, days_since_last_interaction').eq('stakeholder_type', 'government').in('stakeholder_id', govIds),
+      supabase.schema('yi_connect').from('stakeholder_contacts').select('stakeholder_id').eq('stakeholder_type', 'government').in('stakeholder_id', govIds),
+      supabase.schema('yi_connect').from('stakeholder_interactions').select('stakeholder_id').eq('stakeholder_type', 'government').in('stakeholder_id', govIds),
+      supabase.schema('yi_connect').from('stakeholder_mous').select('stakeholder_id, mou_status').eq('stakeholder_type', 'government').in('stakeholder_id', govIds),
+      supabase.schema('yi_connect').from('relationship_health_scores').select('stakeholder_id, overall_score, health_tier, days_since_last_interaction').eq('stakeholder_type', 'government').in('stakeholder_id', govIds),
     ])
 
     const contactCounts = new Map<string, number>()
@@ -601,7 +601,7 @@ export const getGovernmentStakeholderById = cache(async (stakeholderId: string):
   const supabase = await createServerSupabaseClient()
 
   const { data: stakeholder, error } = await supabase
-    .from('government_stakeholders')
+    .schema('yi_connect').from('government_stakeholders')
     .select('*')
     .eq('id', stakeholderId)
     .single()
@@ -642,7 +642,7 @@ export const getNGOsPaginated = cache(
     const supabase = await createServerSupabaseClient()
     const { chapterId, page = 1, pageSize = 20, filters = {}, sort } = params
 
-    let ngosQuery = supabase.from('ngos').select('*', { count: 'exact' })
+    let ngosQuery = supabase.schema('yi_connect').from('ngos').select('*', { count: 'exact' })
     if (chapterId) ngosQuery = ngosQuery.eq('chapter_id', chapterId)
 
     // Apply filters
@@ -676,10 +676,10 @@ export const getNGOsPaginated = cache(
 
     const ngoIds = ngos.map((n) => n.id)
     const [contactsData, interactionsData, mousData, healthData] = await Promise.all([
-      supabase.from('stakeholder_contacts').select('stakeholder_id').eq('stakeholder_type', 'ngos').in('stakeholder_id', ngoIds),
-      supabase.from('stakeholder_interactions').select('stakeholder_id').eq('stakeholder_type', 'ngos').in('stakeholder_id', ngoIds),
-      supabase.from('stakeholder_mous').select('stakeholder_id, mou_status').eq('stakeholder_type', 'ngos').in('stakeholder_id', ngoIds),
-      supabase.from('relationship_health_scores').select('stakeholder_id, overall_score, health_tier, days_since_last_interaction').eq('stakeholder_type', 'ngos').in('stakeholder_id', ngoIds),
+      supabase.schema('yi_connect').from('stakeholder_contacts').select('stakeholder_id').eq('stakeholder_type', 'ngos').in('stakeholder_id', ngoIds),
+      supabase.schema('yi_connect').from('stakeholder_interactions').select('stakeholder_id').eq('stakeholder_type', 'ngos').in('stakeholder_id', ngoIds),
+      supabase.schema('yi_connect').from('stakeholder_mous').select('stakeholder_id, mou_status').eq('stakeholder_type', 'ngos').in('stakeholder_id', ngoIds),
+      supabase.schema('yi_connect').from('relationship_health_scores').select('stakeholder_id, overall_score, health_tier, days_since_last_interaction').eq('stakeholder_type', 'ngos').in('stakeholder_id', ngoIds),
     ])
 
     const contactCounts = new Map<string, number>()
@@ -724,7 +724,7 @@ export const getNGOById = cache(async (ngoId: string): Promise<NGODetail | null>
   const supabase = await createServerSupabaseClient()
 
   const { data: ngo, error } = await supabase
-    .from('ngos')
+    .schema('yi_connect').from('ngos')
     .select('*')
     .eq('id', ngoId)
     .single()
@@ -765,7 +765,7 @@ export const getVendorsPaginated = cache(
     const supabase = await createServerSupabaseClient()
     const { chapterId, page = 1, pageSize = 20, filters = {}, sort } = params
 
-    let vendorsQuery = supabase.from('vendors').select('*', { count: 'exact' })
+    let vendorsQuery = supabase.schema('yi_connect').from('vendors').select('*', { count: 'exact' })
     if (chapterId) vendorsQuery = vendorsQuery.eq('chapter_id', chapterId)
 
     // Apply filters
@@ -799,9 +799,9 @@ export const getVendorsPaginated = cache(
 
     const vendorIds = vendors.map((v) => v.id)
     const [contactsData, interactionsData, healthData] = await Promise.all([
-      supabase.from('stakeholder_contacts').select('stakeholder_id').eq('stakeholder_type', 'vendors').in('stakeholder_id', vendorIds),
-      supabase.from('stakeholder_interactions').select('stakeholder_id').eq('stakeholder_type', 'vendors').in('stakeholder_id', vendorIds),
-      supabase.from('relationship_health_scores').select('stakeholder_id, overall_score, health_tier, days_since_last_interaction').eq('stakeholder_type', 'vendors').in('stakeholder_id', vendorIds),
+      supabase.schema('yi_connect').from('stakeholder_contacts').select('stakeholder_id').eq('stakeholder_type', 'vendors').in('stakeholder_id', vendorIds),
+      supabase.schema('yi_connect').from('stakeholder_interactions').select('stakeholder_id').eq('stakeholder_type', 'vendors').in('stakeholder_id', vendorIds),
+      supabase.schema('yi_connect').from('relationship_health_scores').select('stakeholder_id, overall_score, health_tier, days_since_last_interaction').eq('stakeholder_type', 'vendors').in('stakeholder_id', vendorIds),
     ])
 
     const contactCounts = new Map<string, number>()
@@ -842,7 +842,7 @@ export const getVendorById = cache(async (vendorId: string): Promise<VendorDetai
   const supabase = await createServerSupabaseClient()
 
   const { data: vendor, error } = await supabase
-    .from('vendors')
+    .schema('yi_connect').from('vendors')
     .select('*')
     .eq('id', vendorId)
     .single()
@@ -881,7 +881,7 @@ export const getSpeakersPaginated = cache(
     const supabase = await createServerSupabaseClient()
     const { chapterId, page = 1, pageSize = 20, filters = {}, sort } = params
 
-    let speakersQuery = supabase.from('speakers').select('*', { count: 'exact' })
+    let speakersQuery = supabase.schema('yi_connect').from('speakers').select('*', { count: 'exact' })
     if (chapterId) speakersQuery = speakersQuery.eq('chapter_id', chapterId)
 
     // Apply filters
@@ -915,9 +915,9 @@ export const getSpeakersPaginated = cache(
 
     const speakerIds = speakers.map((s) => s.id)
     const [contactsData, interactionsData, healthData] = await Promise.all([
-      supabase.from('stakeholder_contacts').select('stakeholder_id').eq('stakeholder_type', 'speakers').in('stakeholder_id', speakerIds),
-      supabase.from('stakeholder_interactions').select('stakeholder_id').eq('stakeholder_type', 'speakers').in('stakeholder_id', speakerIds),
-      supabase.from('relationship_health_scores').select('stakeholder_id, overall_score, health_tier, days_since_last_interaction').eq('stakeholder_type', 'speakers').in('stakeholder_id', speakerIds),
+      supabase.schema('yi_connect').from('stakeholder_contacts').select('stakeholder_id').eq('stakeholder_type', 'speakers').in('stakeholder_id', speakerIds),
+      supabase.schema('yi_connect').from('stakeholder_interactions').select('stakeholder_id').eq('stakeholder_type', 'speakers').in('stakeholder_id', speakerIds),
+      supabase.schema('yi_connect').from('relationship_health_scores').select('stakeholder_id, overall_score, health_tier, days_since_last_interaction').eq('stakeholder_type', 'speakers').in('stakeholder_id', speakerIds),
     ])
 
     const contactCounts = new Map<string, number>()
@@ -964,7 +964,7 @@ export const getSpeakerById = cache(async (speakerId: string): Promise<SpeakerDe
   const supabase = await createServerSupabaseClient()
 
   const { data: speaker, error } = await supabase
-    .from('speakers')
+    .schema('yi_connect').from('speakers')
     .select('*')
     .eq('id', speakerId)
     .single()
@@ -999,7 +999,7 @@ export const getStakeholderContacts = cache(
     const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
-      .from('stakeholder_contacts')
+      .schema('yi_connect').from('stakeholder_contacts')
       .select('*')
       .eq('stakeholder_type', stakeholderType)
       .eq('stakeholder_id', stakeholderId)
@@ -1020,7 +1020,7 @@ export const getStakeholderInteractions = cache(
     const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
-      .from('stakeholder_interactions')
+      .schema('yi_connect').from('stakeholder_interactions')
       .select(`
         *,
         led_by:members!stakeholder_interactions_led_by_member_id_fkey(
@@ -1046,7 +1046,7 @@ export const getStakeholderMous = cache(
     const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
-      .from('stakeholder_mous')
+      .schema('yi_connect').from('stakeholder_mous')
       .select('*')
       .eq('stakeholder_type', stakeholderType)
       .eq('stakeholder_id', stakeholderId)
@@ -1066,7 +1066,7 @@ export const getStakeholderDocuments = cache(
     const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
-      .from('stakeholder_documents')
+      .schema('yi_connect').from('stakeholder_documents')
       .select('*')
       .eq('stakeholder_type', stakeholderType)
       .eq('stakeholder_id', stakeholderId)
@@ -1086,7 +1086,7 @@ export const getStakeholderHealthScore = cache(
     const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
-      .from('relationship_health_scores')
+      .schema('yi_connect').from('relationship_health_scores')
       .select('*')
       .eq('stakeholder_type', stakeholderType)
       .eq('stakeholder_id', stakeholderId)
@@ -1112,43 +1112,43 @@ export const searchStakeholders = cache(
     // Search across all stakeholder types
     const [schools, colleges, industries, government, ngos, vendors, speakers] = await Promise.all([
       supabase
-        .from('schools')
+        .schema('yi_connect').from('schools')
         .select('id, school_name, status, city, state, last_contact_date')
         .eq('chapter_id', chapterId)
         .textSearch('search_vector', searchTerm)
         .limit(5),
       supabase
-        .from('colleges')
+        .schema('yi_connect').from('colleges')
         .select('id, college_name, status, city, state, last_contact_date')
         .eq('chapter_id', chapterId)
         .textSearch('search_vector', searchTerm)
         .limit(5),
       supabase
-        .from('industries')
+        .schema('yi_connect').from('industries')
         .select('id, company_name, status, city, state')
         .eq('chapter_id', chapterId)
         .textSearch('search_vector', searchTerm)
         .limit(5),
       supabase
-        .from('government_stakeholders')
+        .schema('yi_connect').from('government_stakeholders')
         .select('id, official_name, status, city, state, last_contact_date')
         .eq('chapter_id', chapterId)
         .textSearch('search_vector', searchTerm)
         .limit(5),
       supabase
-        .from('ngos')
+        .schema('yi_connect').from('ngos')
         .select('id, ngo_name, status, city, state, last_contact_date')
         .eq('chapter_id', chapterId)
         .textSearch('search_vector', searchTerm)
         .limit(5),
       supabase
-        .from('vendors')
+        .schema('yi_connect').from('vendors')
         .select('id, vendor_name, status, city, state, last_contact_date')
         .eq('chapter_id', chapterId)
         .textSearch('search_vector', searchTerm)
         .limit(5),
       supabase
-        .from('speakers')
+        .schema('yi_connect').from('speakers')
         .select('id, speaker_name, status, city, state, last_contact_date')
         .eq('chapter_id', chapterId)
         .textSearch('search_vector', searchTerm)
@@ -1272,18 +1272,18 @@ export const getStakeholderOverview = cache(async (chapterId: string | null): Pr
     recentInteractions,
     pendingFollowUps,
   ] = await Promise.all([
-    applyChapterFilter(supabase.from('schools').select('id, status', { count: 'exact' })),
-    applyChapterFilter(supabase.from('colleges').select('id, status', { count: 'exact' })),
-    applyChapterFilter(supabase.from('industries').select('id, status', { count: 'exact' })),
-    applyChapterFilter(supabase.from('government_stakeholders').select('id, status', { count: 'exact' })),
-    applyChapterFilter(supabase.from('ngos').select('id, status', { count: 'exact' })),
-    applyChapterFilter(supabase.from('vendors').select('id, status', { count: 'exact' })),
-    applyChapterFilter(supabase.from('speakers').select('id, status', { count: 'exact' })),
-    applyChapterFilter(supabase.from('relationship_health_scores').select('health_tier')),
-    applyChapterFilter(supabase.from('stakeholder_mous').select('id', { count: 'exact' }).eq('mou_status', 'signed')),
-    applyChapterFilter(supabase.from('stakeholder_mous').select('id, expiry_date').eq('mou_status', 'signed')),
-    applyChapterFilter(supabase.from('stakeholder_interactions').select('id', { count: 'exact' }).gte('interaction_date', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())),
-    applyChapterFilter(supabase.from('stakeholder_interactions').select('id', { count: 'exact' }).eq('requires_follow_up', true)),
+    applyChapterFilter(supabase.schema('yi_connect').from('schools').select('id, status', { count: 'exact' })),
+    applyChapterFilter(supabase.schema('yi_connect').from('colleges').select('id, status', { count: 'exact' })),
+    applyChapterFilter(supabase.schema('yi_connect').from('industries').select('id, status', { count: 'exact' })),
+    applyChapterFilter(supabase.schema('yi_connect').from('government_stakeholders').select('id, status', { count: 'exact' })),
+    applyChapterFilter(supabase.schema('yi_connect').from('ngos').select('id, status', { count: 'exact' })),
+    applyChapterFilter(supabase.schema('yi_connect').from('vendors').select('id, status', { count: 'exact' })),
+    applyChapterFilter(supabase.schema('yi_connect').from('speakers').select('id, status', { count: 'exact' })),
+    applyChapterFilter(supabase.schema('yi_connect').from('relationship_health_scores').select('health_tier')),
+    applyChapterFilter(supabase.schema('yi_connect').from('stakeholder_mous').select('id', { count: 'exact' }).eq('mou_status', 'signed')),
+    applyChapterFilter(supabase.schema('yi_connect').from('stakeholder_mous').select('id, expiry_date').eq('mou_status', 'signed')),
+    applyChapterFilter(supabase.schema('yi_connect').from('stakeholder_interactions').select('id', { count: 'exact' }).gte('interaction_date', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())),
+    applyChapterFilter(supabase.schema('yi_connect').from('stakeholder_interactions').select('id', { count: 'exact' }).eq('requires_follow_up', true)),
   ])
 
   // Calculate status distributions
@@ -1352,7 +1352,7 @@ export const getPendingFollowUps = cache(async (chapterId: string | null): Promi
   const supabase = await createServerSupabaseClient()
 
   let query = supabase
-    .from('stakeholder_interactions')
+    .schema('yi_connect').from('stakeholder_interactions')
     .select(`
       *,
       led_by:members!stakeholder_interactions_led_by_member_id_fkey(
@@ -1394,7 +1394,7 @@ export const getExpiringMous = cache(async (chapterId: string | null, daysAhead:
   const futureDate = new Date(now.getTime() + daysAhead * 24 * 60 * 60 * 1000)
 
   let query = supabase
-    .from('stakeholder_mous')
+    .schema('yi_connect').from('stakeholder_mous')
     .select('*')
     .eq('mou_status', 'signed')
     .gte('expiry_date', now.toISOString())
@@ -1433,7 +1433,7 @@ export const getSpeakerFAQs = cache(
     const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
-      .from('speaker_faqs')
+      .schema('yi_connect').from('speaker_faqs')
       .select('*')
       .eq('speaker_id', speakerId)
       .order('sort_order', { ascending: true })
@@ -1464,7 +1464,7 @@ export const getSpeakerWithDetails = cache(
     try {
       const supabase = await createServerSupabaseClient()
       const { data, error } = await supabase
-        .from('session_speakers')
+        .schema('yi_connect').from('session_speakers')
         .select(`
           role,
           session:event_sessions!inner(

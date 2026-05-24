@@ -73,7 +73,7 @@ async function resolveOrganizer(
   try {
     const admin = createAdminSupabaseClient();
     const { data: row } = await admin
-      .from('members')
+      .schema('yi_connect').from('members')
       .select('id, profile:profiles(full_name, email, avatar_url)')
       .eq('id', organizerId)
       .single();
@@ -125,7 +125,7 @@ export const getEvents = cache(
     // declaration to yi_connect.members in PostgREST's schema cache, so the
     // nested embed throws PGRST200. Pattern (Agent C two-step): fetch events
     // first, then resolve organizer profiles in a follow-up batch query below.
-    let query = supabase.from('events').select(
+    let query = supabase.schema('yi_connect').from('events').select(
       `
       id,
       title,
@@ -234,7 +234,7 @@ export const getEvents = cache(
       try {
         const admin = createAdminSupabaseClient();
         const { data: orgRows } = await admin
-          .from('members')
+          .schema('yi_connect').from('members')
           .select('id, profile:profiles(full_name, email, avatar_url)')
           .in('id', organizerIds);
 
@@ -320,7 +320,7 @@ export const getEventById = cache(
     }
 
     const { data, error } = await supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .select(
         `
       *,
@@ -362,7 +362,7 @@ export const getEventWithRSVPs = cache(
     }
 
     const { data, error } = await supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .select(
         `
       *,
@@ -417,7 +417,7 @@ export const getEventWithVolunteers = cache(
     }
 
     const { data, error } = await supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .select(
         `
       *,
@@ -473,7 +473,7 @@ export const getEventWithMetrics = cache(
     }
 
     const { data, error } = await supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .select(
         `
       *,
@@ -514,7 +514,7 @@ export const getEventFull = cache(
     }
 
     const { data, error } = await supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .select(
         `
       *,
@@ -599,7 +599,7 @@ export const getMemberUpcomingEvents = cache(
     // resolve organizers in a single follow-up admin lookup (mirrors the
     // pattern Agent C established in getEvents).
     const { data: rsvpEvents } = await supabase
-      .from('event_rsvps')
+      .schema('yi_connect').from('event_rsvps')
       .select(
         `
       event:events (
@@ -633,7 +633,7 @@ export const getMemberUpcomingEvents = cache(
       .order('event.start_date', { ascending: true });
 
     const { data: volunteerEvents } = await supabase
-      .from('event_volunteers')
+      .schema('yi_connect').from('event_volunteers')
       .select(
         `
       event:events (
@@ -696,7 +696,7 @@ export const getMemberUpcomingEvents = cache(
       try {
         const admin = createAdminSupabaseClient();
         const { data: orgRows } = await admin
-          .from('members')
+          .schema('yi_connect').from('members')
           .select('id, profile:profiles(full_name)')
           .in('id', organizerIds);
 
@@ -750,7 +750,7 @@ export const getVenues = cache(
       throw new Error('Unauthorized');
     }
 
-    let query = supabase.from('venues').select('*');
+    let query = supabase.schema('yi_connect').from('venues').select('*');
 
     // Apply filters
     if (filters?.search) {
@@ -799,7 +799,7 @@ export const getVenueWithBookings = cache(
     }
 
     const { data, error } = await supabase
-      .from('venues')
+      .schema('yi_connect').from('venues')
       .select(
         `
       *,
@@ -842,7 +842,7 @@ export const getRSVPs = cache(
       throw new Error('Unauthorized');
     }
 
-    let query = supabase.from('event_rsvps').select(`
+    let query = supabase.schema('yi_connect').from('event_rsvps').select(`
       *,
       member:members (
         id,
@@ -904,7 +904,7 @@ export const getMemberRSVP = cache(
     }
 
     const { data, error } = await supabase
-      .from('event_rsvps')
+      .schema('yi_connect').from('event_rsvps')
       .select('*')
       .eq('event_id', eventId)
       .eq('member_id', memberId)
@@ -935,7 +935,7 @@ export const getGuestRSVPs = cache(
     }
 
     const { data, error } = await supabase
-      .from('guest_rsvps')
+      .schema('yi_connect').from('guest_rsvps')
       .select('*')
       .eq('event_id', eventId)
       .order('created_at', { ascending: false });
@@ -964,7 +964,7 @@ export const getVolunteerRoles = cache(async (): Promise<VolunteerRole[]> => {
   }
 
   const { data, error } = await supabase
-    .from('volunteer_roles')
+    .schema('yi_connect').from('volunteer_roles')
     .select('*')
     .eq('is_active', true)
     .order('name', { ascending: true });
@@ -988,7 +988,7 @@ export const getVolunteers = cache(
       throw new Error('Unauthorized');
     }
 
-    let query = supabase.from('event_volunteers').select(`
+    let query = supabase.schema('yi_connect').from('event_volunteers').select(`
       *,
       member:members (
         id,
@@ -1047,7 +1047,7 @@ export const getVolunteerRoleWithMembers = cache(
     }
 
     const { data, error } = await supabase
-      .from('volunteer_roles')
+      .schema('yi_connect').from('volunteer_roles')
       .select(
         `
       *,
@@ -1095,7 +1095,7 @@ export const getMatchedVolunteers = cache(
 
     // Get event details
     const { data: event } = await supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .select('start_date, end_date')
       .eq('id', criteria.event_id)
       .single();
@@ -1106,7 +1106,7 @@ export const getMatchedVolunteers = cache(
 
     // Get members with volunteer history and skills
     const { data: members } = await supabase
-      .from('members')
+      .schema('yi_connect').from('members')
       .select(
         `
       id,
@@ -1221,7 +1221,7 @@ export const getEventAnalytics = cache(
 
     const supabase = createAdminSupabaseClient();
 
-    let query = supabase.from('events').select('*');
+    let query = supabase.schema('yi_connect').from('events').select('*');
 
     if (chapterId) {
       query = query.eq('chapter_id', chapterId);
@@ -1273,7 +1273,7 @@ export const getEventAnalytics = cache(
 
     // Get volunteer stats
     const { data: volunteers } = await supabase
-      .from('event_volunteers')
+      .schema('yi_connect').from('event_volunteers')
       .select('hours_contributed')
       .in(
         'event_id',
@@ -1342,7 +1342,7 @@ export const getEventFeedback = cache(
     }
 
     const { data, error } = await supabase
-      .from('event_feedback')
+      .schema('yi_connect').from('event_feedback')
       .select('*')
       .eq('event_id', eventId)
       .order('created_at', { ascending: false });
@@ -1368,7 +1368,7 @@ export const getEventDocuments = cache(
     }
 
     const { data, error } = await supabase
-      .from('event_documents')
+      .schema('yi_connect').from('event_documents')
       .select('*')
       .eq('event_id', eventId)
       .order('created_at', { ascending: false });
@@ -1393,7 +1393,7 @@ export const getEventTemplates = cache(async (): Promise<EventTemplate[]> => {
   }
 
   const { data, error} = await supabase
-    .from('event_templates')
+    .schema('yi_connect').from('event_templates')
     .select('*')
     .order('name', { ascending: true });
 
@@ -1423,7 +1423,7 @@ export const getVolunteerMatches = cache(
 
     // Get the event details
     const { data: event } = await supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .select('start_date, end_date')
       .eq('id', criteria.event_id)
       .single();
@@ -1434,7 +1434,7 @@ export const getVolunteerMatches = cache(
 
     // Fetch all members with their skills and volunteer history
     const { data: members, error } = await supabase
-      .from('members')
+      .schema('yi_connect').from('members')
       .select(`
         id,
         profile:profiles (
@@ -1574,7 +1574,7 @@ export const getSessions = cache(
     const supabase = await createClient();
 
     const { data, error } = await supabase
-      .from('event_sessions')
+      .schema('yi_connect').from('event_sessions')
       .select(
         `
         *,
@@ -1627,7 +1627,7 @@ export const getSessionById = cache(
     const supabase = await createClient();
 
     const { data, error } = await supabase
-      .from('event_sessions')
+      .schema('yi_connect').from('event_sessions')
       .select(
         `
         *,
@@ -1681,7 +1681,7 @@ export const getMemberSessionInterests = cache(
   async (eventId: string, memberId: string): Promise<Set<string>> => {
     const supabase = await createClient();
     const { data, error } = await supabase
-      .from('session_interests')
+      .schema('yi_connect').from('session_interests')
       .select('session_id, event_sessions!inner(event_id)')
       .eq('member_id', memberId)
       .eq('event_sessions.event_id', eventId);

@@ -103,7 +103,7 @@ export const getMaterials = cache(
     const sortDirection = params?.sortDirection || 'desc'
 
     let query = supabase
-      .from('event_materials')
+      .schema('yi_connect').from('event_materials')
       .select(
         `
         *,
@@ -184,7 +184,7 @@ export const getMaterialById = cache(
     }
 
     const { data, error } = await supabase
-      .from('event_materials')
+      .schema('yi_connect').from('event_materials')
       .select(
         `
         *,
@@ -254,7 +254,7 @@ export const getMaterialVersionHistory = cache(
 
     // Get the current material
     const { data: current, error: currentError } = await supabase
-      .from('event_materials')
+      .schema('yi_connect').from('event_materials')
       .select('*')
       .eq('id', materialId)
       .single()
@@ -272,7 +272,7 @@ export const getMaterialVersionHistory = cache(
 
     while (parentId) {
       const { data: parent } = await supabase
-        .from('event_materials')
+        .schema('yi_connect').from('event_materials')
         .select('id, parent_material_id')
         .eq('id', parentId)
         .single()
@@ -287,7 +287,7 @@ export const getMaterialVersionHistory = cache(
 
     // Get all versions (materials with same root or parent chain)
     const { data: allVersions, error: versionsError } = await supabase
-      .from('event_materials')
+      .schema('yi_connect').from('event_materials')
       .select('*')
       .or(`id.eq.${rootId},parent_material_id.eq.${rootId}`)
       .order('version', { ascending: false })
@@ -319,7 +319,7 @@ export const getPendingApprovalMaterials = cache(
     }
 
     const { data, error } = await supabase
-      .from('event_materials')
+      .schema('yi_connect').from('event_materials')
       .select(
         `
         *,
@@ -365,7 +365,7 @@ export const getTrainerMaterials = cache(
 
     // First get assignments for this trainer
     const { data: assignments } = await supabase
-      .from('event_trainer_assignments')
+      .schema('yi_connect').from('event_trainer_assignments')
       .select('id')
       .eq('trainer_profile_id', trainerProfileId)
 
@@ -376,7 +376,7 @@ export const getTrainerMaterials = cache(
     const assignmentIds = assignments.map((a: any) => a.id)
 
     const { data, error } = await supabase
-      .from('event_materials')
+      .schema('yi_connect').from('event_materials')
       .select(
         `
         *,
@@ -420,7 +420,7 @@ export const getSharedMaterials = cache(
     }
 
     let query = supabase
-      .from('event_materials')
+      .schema('yi_connect').from('event_materials')
       .select('*')
       .eq('is_shared', true)
       .eq('status', 'approved')
@@ -455,7 +455,7 @@ export const getMaterialTemplates = cache(
     }
 
     const { data, error } = await supabase
-      .from('event_materials')
+      .schema('yi_connect').from('event_materials')
       .select('*')
       .eq('is_template', true)
       .eq('status', 'approved')
@@ -493,7 +493,7 @@ export const getEventMaterialAnalytics = cache(
     }
 
     const { data, error } = await supabase
-      .from('event_materials')
+      .schema('yi_connect').from('event_materials')
       .select('status, material_type, download_count')
       .eq('event_id', eventId)
       .eq('is_current_version', true)

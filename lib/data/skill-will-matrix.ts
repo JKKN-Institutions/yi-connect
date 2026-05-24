@@ -218,7 +218,7 @@ export const getSkillWillMatrixData = cache(async (
   // NOTE: skill_will_category is computed on-the-fly via assignCategory()
   // below, not stored on the members table (Phase D drift cleanup).
   let query = supabase
-    .from('members')
+    .schema('yi_connect').from('members')
     .select(`
       id,
       years_of_experience,

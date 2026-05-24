@@ -217,7 +217,7 @@ export const getEligibleTrainersForEvent = cache(
     // (member_id + approved_by), so PostgREST returns PGRST201 without a hint.
     // Same fix Agent G applied in session-bookings getBookingById (commit 37de8ce).
     const { data: trainers, error } = await supabase
-      .from('trainer_profiles')
+      .schema('yi_connect').from('trainer_profiles')
       .select(`
         id,
         member_id,
@@ -252,7 +252,7 @@ export const getEligibleTrainersForEvent = cache(
     // Get certification counts for each trainer
     const trainerIds = trainers.map((t: any) => t.id)
     const { data: certifications } = await supabase
-      .from('trainer_certifications')
+      .schema('yi_connect').from('trainer_certifications')
       .select('trainer_profile_id')
       .in('trainer_profile_id', trainerIds)
       .eq('is_active', true)
@@ -265,7 +265,7 @@ export const getEligibleTrainersForEvent = cache(
 
     // Check for existing assignments to this event
     const { data: existingAssignments } = await supabase
-      .from('event_trainer_assignments')
+      .schema('yi_connect').from('event_trainer_assignments')
       .select('trainer_profile_id')
       .eq('event_id', params.eventId)
       .not('status', 'in', '("declined","cancelled")')
@@ -339,7 +339,7 @@ export const getEventTrainerAssignments = cache(
     }
 
     const { data, error } = await supabase
-      .from('event_trainer_assignments')
+      .schema('yi_connect').from('event_trainer_assignments')
       .select(`
         *,
         trainer:trainer_profiles(
@@ -384,7 +384,7 @@ export const getTrainerAssignmentById = cache(
     }
 
     const { data, error } = await supabase
-      .from('event_trainer_assignments')
+      .schema('yi_connect').from('event_trainer_assignments')
       .select(`
         *,
         trainer:trainer_profiles(
@@ -439,7 +439,7 @@ export const getTrainerPendingInvitations = cache(
 
     // First get the trainer profile ID for this member
     const { data: trainerProfile } = await supabase
-      .from('trainer_profiles')
+      .schema('yi_connect').from('trainer_profiles')
       .select('id')
       .eq('member_id', memberId)
       .single()
@@ -454,7 +454,7 @@ export const getTrainerPendingInvitations = cache(
     // consumer reads `event.stakeholder` from this query.
     // (Fixed 2026-05-23 — Agent G.)
     const { data, error } = await supabase
-      .from('event_trainer_assignments')
+      .schema('yi_connect').from('event_trainer_assignments')
       .select(`
         *,
         event:events(
@@ -497,7 +497,7 @@ export const getTrainerUpcomingSessions = cache(
 
     // First get the trainer profile ID for this member
     const { data: trainerProfile } = await supabase
-      .from('trainer_profiles')
+      .schema('yi_connect').from('trainer_profiles')
       .select('id')
       .eq('member_id', memberId)
       .single()
@@ -510,7 +510,7 @@ export const getTrainerUpcomingSessions = cache(
     // getTrainerPendingInvitations above. Polymorphic FK can't be embedded.
     // (Fixed 2026-05-23 — Agent G.)
     const { data, error } = await supabase
-      .from('event_trainer_assignments')
+      .schema('yi_connect').from('event_trainer_assignments')
       .select(`
         *,
         event:events(
@@ -564,7 +564,7 @@ export const getTrainerDistributionStats = cache(
     // Phase E fix 2026-05-23 (Agent re-audit): disambiguate the members embed
     // — same PGRST201 root cause as getEligibleTrainersForEvent above.
     let query = supabase
-      .from('trainer_profiles')
+      .schema('yi_connect').from('trainer_profiles')
       .select(`
         id,
         total_sessions,
@@ -620,7 +620,7 @@ export const calculateTrainerScoreViaDB = cache(
       throw new Error('Unauthorized')
     }
 
-    const { data, error } = await supabase.rpc('calculate_event_trainer_score', {
+    const { data, error } = await supabase.schema('yi_connect').rpc('calculate_event_trainer_score', {
       p_trainer_profile_id: trainerProfileId,
       p_event_id: eventId,
     })

@@ -109,7 +109,7 @@ export const getChapterSettings = cache(
   async (chapterId: string): Promise<ChapterSettings> => {
     const supabase = await createServerSupabaseClient();
 
-    const { data, error } = await supabase.rpc('get_chapter_settings', {
+    const { data, error } = await supabase.schema('yi_connect').rpc('get_chapter_settings', {
       p_chapter_id: chapterId,
     });
 
@@ -169,7 +169,7 @@ export const getCurrentChapterSettings = cache(
     }
 
     const { data: member } = await supabase
-      .from('members')
+      .schema('yi_connect').from('members')
       .select('chapter_id')
       .eq('id', user.id)
       .single();
@@ -297,10 +297,10 @@ export async function updateChapterSettings(
   }
 
   // Ensure settings exist
-  await supabase.rpc('ensure_chapter_settings', { p_chapter_id: chapterId });
+  await supabase.schema('yi_connect').rpc('ensure_chapter_settings', { p_chapter_id: chapterId });
 
   const { error } = await supabase
-    .from('chapter_settings')
+    .schema('yi_connect').from('chapter_settings')
     .update(dbUpdates)
     .eq('chapter_id', chapterId);
 

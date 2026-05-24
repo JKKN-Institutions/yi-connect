@@ -31,7 +31,7 @@ export const getSubChapters = cache(
     const supabase = await createClient()
 
     let query = supabase
-      .from('sub_chapters')
+      .schema('yi_connect').from('sub_chapters')
       .select(`
         *,
         leads:sub_chapter_leads(*)
@@ -79,7 +79,7 @@ export const getSubChapterById = cache(
     const supabase = await createClient()
 
     const { data, error } = await supabase
-      .from('sub_chapters')
+      .schema('yi_connect').from('sub_chapters')
       .select(`
         *,
         leads:sub_chapter_leads(*)
@@ -132,7 +132,7 @@ export const getSubChapterLeads = cache(
     const supabase = await createClient()
 
     const { data, error } = await supabase
-      .from('sub_chapter_leads')
+      .schema('yi_connect').from('sub_chapter_leads')
       .select('*')
       .eq('sub_chapter_id', subChapterId)
       .order('is_primary_lead', { ascending: false })
@@ -155,7 +155,7 @@ export const getSubChapterLeadById = cache(
     const supabase = await createClient()
 
     const { data, error } = await supabase
-      .from('sub_chapter_leads')
+      .schema('yi_connect').from('sub_chapter_leads')
       .select('*')
       .eq('id', id)
       .single()
@@ -177,7 +177,7 @@ export const getSubChapterLeadByEmail = cache(
     const supabase = await createClient()
 
     const { data, error } = await supabase
-      .from('sub_chapter_leads')
+      .schema('yi_connect').from('sub_chapter_leads')
       .select(`
         *,
         sub_chapter:sub_chapters(*)
@@ -210,7 +210,7 @@ export const getSubChapterMembers = cache(
     const supabase = await createClient()
 
     let query = supabase
-      .from('sub_chapter_members')
+      .schema('yi_connect').from('sub_chapter_members')
       .select('*')
       .eq('sub_chapter_id', subChapterId)
       .order('joined_at', { ascending: false })
@@ -238,7 +238,7 @@ export const getSubChapterMemberCount = cache(
     const supabase = await createClient()
 
     const { count, error } = await supabase
-      .from('sub_chapter_members')
+      .schema('yi_connect').from('sub_chapter_members')
       .select('*', { count: 'exact', head: true })
       .eq('sub_chapter_id', subChapterId)
       .eq('is_active', true)
@@ -264,7 +264,7 @@ export const getSubChapterEvents = cache(
     const supabase = await createClient()
 
     let query = supabase
-      .from('sub_chapter_events')
+      .schema('yi_connect').from('sub_chapter_events')
       .select(`
         *,
         sub_chapter:sub_chapters(*)
@@ -313,7 +313,7 @@ export const getSubChapterEventById = cache(
     const supabase = await createClient()
 
     const { data, error } = await supabase
-      .from('sub_chapter_events')
+      .schema('yi_connect').from('sub_chapter_events')
       .select(`
         *,
         sub_chapter:sub_chapters(*)
@@ -351,7 +351,7 @@ export const getUpcomingSubChapterEvents = cache(
     const today = new Date().toISOString().split('T')[0]
 
     const { data, error } = await supabase
-      .from('sub_chapter_events')
+      .schema('yi_connect').from('sub_chapter_events')
       .select(`
         *,
         sub_chapter:sub_chapters(*)
@@ -382,7 +382,7 @@ export const getSubChapterStats = cache(
   async (chapterId?: string): Promise<SubChapterStats> => {
     const supabase = await createClient()
 
-    let query = supabase.from('sub_chapters').select('*')
+    let query = supabase.schema('yi_connect').from('sub_chapters').select('*')
 
     if (chapterId) {
       query = query.eq('chapter_id', chapterId)
@@ -431,21 +431,21 @@ export const getSubChapterDashboardStats = cache(
 
     // Get sub-chapter data
     const { data: subChapter } = await supabase
-      .from('sub_chapters')
+      .schema('yi_connect').from('sub_chapters')
       .select('total_events, total_members, students_reached_this_year')
       .eq('id', subChapterId)
       .single()
 
     // Get pending events count
     const { count: pendingCount } = await supabase
-      .from('sub_chapter_events')
+      .schema('yi_connect').from('sub_chapter_events')
       .select('*', { count: 'exact', head: true })
       .eq('sub_chapter_id', subChapterId)
       .in('status', ['pending_approval', 'draft'])
 
     // Get upcoming events count
     const { count: upcomingCount } = await supabase
-      .from('sub_chapter_events')
+      .schema('yi_connect').from('sub_chapter_events')
       .select('*', { count: 'exact', head: true })
       .eq('sub_chapter_id', subChapterId)
       .gte('event_date', today)
@@ -484,7 +484,7 @@ export const getAvailableSpeakers = cache(
     const supabase = await createClient()
 
     let query = supabase
-      .from('members')
+      .schema('yi_connect').from('members')
       .select(`
         id,
         profile:profiles(full_name, email, phone, avatar_url),

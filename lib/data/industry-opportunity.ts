@@ -240,16 +240,16 @@ async function fetchMemberMatchData(
 ): Promise<MemberMatchData | null> {
   const [memberResult, skillsResult, engagementResult] = await Promise.all([
     supabase
-      .from('members')
+      .schema('yi_connect').from('members')
       .select('industry, years_of_experience')
       .eq('id', memberId)
       .single(),
     supabase
-      .from('member_skills')
+      .schema('yi_connect').from('member_skills')
       .select('skill:skills(name)')
       .eq('member_id', memberId),
     supabase
-      .from('engagement_metrics')
+      .schema('yi_connect').from('engagement_metrics')
       .select('engagement_score, total_events_attended, volunteer_hours')
       .eq('member_id', memberId)
       .single(),
@@ -304,7 +304,7 @@ export const getOpportunities = cache(
     const sortDirection = params?.sortDirection || 'desc'
 
     let query = supabase
-      .from('industry_opportunities')
+      .schema('yi_connect').from('industry_opportunities')
       .select(
         `
         *,
@@ -374,12 +374,12 @@ export const getOpportunities = cache(
 
       const [applicationsResult, bookmarksResult] = await Promise.all([
         supabase
-          .from('opportunity_applications')
+          .schema('yi_connect').from('opportunity_applications')
           .select('opportunity_id')
           .eq('member_id', params.memberId)
           .in('opportunity_id', opportunityIds),
         supabase
-          .from('opportunity_bookmarks')
+          .schema('yi_connect').from('opportunity_bookmarks')
           .select('opportunity_id')
           .eq('member_id', params.memberId)
           .in('opportunity_id', opportunityIds),
@@ -438,7 +438,7 @@ export const getOpportunityById = cache(
     }
 
     const { data, error } = await supabase
-      .from('industry_opportunities')
+      .schema('yi_connect').from('industry_opportunities')
       .select(
         `
         *,
@@ -463,7 +463,7 @@ export const getOpportunityById = cache(
 
     // Get applications summary
     const { data: applications } = await supabase
-      .from('opportunity_applications')
+      .schema('yi_connect').from('opportunity_applications')
       .select('status')
       .eq('opportunity_id', opportunityId)
 
@@ -485,7 +485,7 @@ export const getOpportunityById = cache(
     )
 
     // Increment view count
-    await supabase.rpc('increment_opportunity_views', {
+    await supabase.schema('yi_connect').rpc('increment_opportunity_views', {
       opportunity_id: opportunityId,
     })
 
@@ -581,7 +581,7 @@ export const getApplications = cache(
     const sortDirection = filters?.sort_direction || 'desc'
 
     let query = supabase
-      .from('opportunity_applications')
+      .schema('yi_connect').from('opportunity_applications')
       .select(
         `
         *,
@@ -687,7 +687,7 @@ export const getApplicationById = cache(
     }
 
     const { data, error } = await supabase
-      .from('opportunity_applications')
+      .schema('yi_connect').from('opportunity_applications')
       .select(
         `
         *,
@@ -761,7 +761,7 @@ export const checkMemberApplication = cache(
     }
 
     const { data, error } = await supabase
-      .from('opportunity_applications')
+      .schema('yi_connect').from('opportunity_applications')
       .select('*')
       .eq('opportunity_id', opportunityId)
       .eq('member_id', memberId)
@@ -808,7 +808,7 @@ export const getVisitRequests = cache(
     const sortDirection = params?.sortDirection || 'desc'
 
     let query = supabase
-      .from('member_visit_requests')
+      .schema('yi_connect').from('member_visit_requests')
       .select(
         `
         *,
@@ -877,7 +877,7 @@ export const getVisitRequests = cache(
 
     if (requestIds.length > 0) {
       const { data: interests } = await supabase
-        .from('visit_request_interests')
+        .schema('yi_connect').from('visit_request_interests')
         .select('visit_request_id')
         .in('visit_request_id', requestIds)
 
@@ -921,7 +921,7 @@ export const getVisitRequestById = cache(
     }
 
     const { data, error } = await supabase
-      .from('member_visit_requests')
+      .schema('yi_connect').from('member_visit_requests')
       .select(
         `
         *,
@@ -966,7 +966,7 @@ export const getVisitRequestById = cache(
     // Get interested members
     // visit_request_interests.member_id → members(id), not profiles. Chain through members.
     const { data: interests } = await supabase
-      .from('visit_request_interests')
+      .schema('yi_connect').from('visit_request_interests')
       .select(
         `
         member:members!visit_request_interests_member_id_fkey(
@@ -1035,7 +1035,7 @@ export const getIndustryImpactMetrics = cache(
     }
 
     const { data, error } = await supabase
-      .from('industry_impact_metrics')
+      .schema('yi_connect').from('industry_impact_metrics')
       .select('*')
       .eq('industry_id', industryId)
       .single()
@@ -1064,7 +1064,7 @@ export const getTopIndustriesByEngagement = cache(
     }
 
     const { data, error } = await supabase
-      .from('industry_impact_metrics')
+      .schema('yi_connect').from('industry_impact_metrics')
       .select(
         `
         *,
@@ -1105,7 +1105,7 @@ export const getMemberBookmarks = cache(
     }
 
     const { data: bookmarks, error } = await supabase
-      .from('opportunity_bookmarks')
+      .schema('yi_connect').from('opportunity_bookmarks')
       .select('opportunity_id')
       .eq('member_id', memberId)
 
@@ -1144,7 +1144,7 @@ export const checkMemberBookmark = cache(
     }
 
     const { data, error } = await supabase
-      .from('opportunity_bookmarks')
+      .schema('yi_connect').from('opportunity_bookmarks')
       .select('id')
       .eq('opportunity_id', opportunityId)
       .eq('member_id', memberId)
@@ -1178,7 +1178,7 @@ export const calculateMemberOpportunityMatch = cache(
     }
 
     // Use database function if available
-    const { data, error } = await supabase.rpc('calculate_opportunity_match_score', {
+    const { data, error } = await supabase.schema('yi_connect').rpc('calculate_opportunity_match_score', {
       p_member_id: memberId,
       p_opportunity_id: opportunityId,
     })
@@ -1218,7 +1218,7 @@ export const getActiveIndustryPartners = cache(
     }
 
     let query = supabase
-      .from('industries')
+      .schema('yi_connect').from('industries')
       .select(`
         id,
         name: company_name,
@@ -1266,7 +1266,7 @@ export const getOpportunitiesForMember = cache(
     }
 
     let query = supabase
-      .from('industry_opportunities')
+      .schema('yi_connect').from('industry_opportunities')
       .select(`
         *,
         stakeholder:industries!industry_id(
@@ -1346,7 +1346,7 @@ export const getOpportunityCategories = cache(
     }
 
     const { data, error } = await supabase
-      .from('industry_opportunities')
+      .schema('yi_connect').from('industry_opportunities')
       .select(`
         stakeholder:industries!industry_id(
           industry_type: industry_sector
@@ -1424,7 +1424,7 @@ export const getMemberApplication = cache(
     }
 
     const { data, error } = await supabase
-      .from('opportunity_applications')
+      .schema('yi_connect').from('opportunity_applications')
       .select('*')
       .eq('opportunity_id', opportunityId)
       .eq('member_id', memberId)
@@ -1458,7 +1458,7 @@ export const getMyVisitRequests = cache(
     // continue to see the legacy flat `{ id, full_name, avatar_url }` shape on
     // the `requester` key.
     const { data, error } = await supabase
-      .from('member_visit_requests')
+      .schema('yi_connect').from('member_visit_requests')
       .select(`
         *,
         stakeholder:industries!industry_id(
@@ -1514,7 +1514,7 @@ export const getOpportunitiesForManagement = cache(
     }
 
     let query = supabase
-      .from('industry_opportunities')
+      .schema('yi_connect').from('industry_opportunities')
       .select(`
         *,
         stakeholder:industries!industry_id(
@@ -1539,7 +1539,7 @@ export const getOpportunitiesForManagement = cache(
 
     if (opportunityIds.length > 0) {
       const { data: applications } = await supabase
-        .from('opportunity_applications')
+        .schema('yi_connect').from('opportunity_applications')
         .select('opportunity_id, status')
         .in('opportunity_id', opportunityIds)
 
@@ -1598,7 +1598,7 @@ export const getOpportunityApplications = cache(
     // which uses optional chaining) keep working. submitted_at is reconstructed
     // below via `app.applied_at` fallback.
     const { data, error } = await supabase
-      .from('opportunity_applications')
+      .schema('yi_connect').from('opportunity_applications')
       .select(`
         id,
         opportunity_id,

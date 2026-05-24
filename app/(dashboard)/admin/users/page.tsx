@@ -152,7 +152,7 @@ async function PageContent(props: PageProps) {
   await requireRole(['Super Admin', 'National Admin', 'Chair'])
 
   return (
-    <div className='flex flex-1 flex-col gap-6 p-6'>
+    <div className='space-y-6'>
       {/* Header */}
       <div className='flex items-center justify-between'>
         <div>
@@ -222,7 +222,7 @@ export default function UsersPage(props: PageProps) {
   return (
     <Suspense
       fallback={
-        <div className='flex flex-1 flex-col gap-6 p-6'>
+        <div className='space-y-6'>
           <div className='flex items-center justify-between'>
             <Skeleton className='h-10 w-64' />
             <Skeleton className='h-10 w-32' />

@@ -1,29 +1,34 @@
 /**
  * Chapters Data Table
  *
- * Advanced data table for chapters with server-side filtering, sorting, and pagination.
+ * Server-driven data table for chapters. Filtering, sorting, and pagination
+ * are reflected in the URL as searchParams, so the server refetches on change.
  */
 
 'use client';
 
-import { useState } from 'react';
+import { useTransition, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import {
   ColumnDef,
-  ColumnFiltersState,
-  SortingState,
-  VisibilityState,
   flexRender,
   getCoreRowModel,
-  getFacetedRowModel,
-  getFacetedUniqueValues,
-  getFilteredRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
   useReactTable
 } from '@tanstack/react-table';
-import { MoreHorizontal, Pencil, Trash2, Plus } from 'lucide-react';
+import {
+  MoreHorizontal,
+  Pencil,
+  Trash2,
+  Plus,
+  ArrowUp,
+  ArrowDown,
+  ChevronsUpDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight
+} from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 
@@ -46,63 +51,150 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { DataTableColumnHeader } from '@/components/data-table/data-table-column-header';
-import { DataTablePagination } from '@/components/data-table/data-table-pagination';
 import { deleteChapter } from '@/app/actions/chapters';
 import type { ChapterListItem } from '@/types/chapter';
 
 interface ChaptersTableProps {
   data: ChapterListItem[];
   pageCount: number;
+  page: number;
+  pageSize: number;
+  total: number;
+  search: string;
+  sortField: string | null;
+  sortDirection: 'asc' | 'desc' | null;
 }
 
-export function ChaptersTable({ data, pageCount }: ChaptersTableProps) {
-  const router = useRouter();
-  const [sorting, setSorting] = useState<SortingState>([]);
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
-  const [rowSelection, setRowSelection] = useState({});
+const SORTABLE_FIELDS = new Set([
+  'name',
+  'location',
+  'region',
+  'established_date'
+]);
 
-  // Define columns
+export function ChaptersTable({
+  data,
+  pageCount,
+  page,
+  pageSize,
+  total,
+  search,
+  sortField,
+  sortDirection
+}: ChaptersTableProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const [isPending, startTransition] = useTransition();
+  const [searchValue, setSearchValue] = useState(search);
+
+  // Sync local search input when the URL changes (e.g. after browser back)
+  useEffect(() => {
+    setSearchValue(search);
+  }, [search]);
+
+  const updateParams = (mutator: (params: URLSearchParams) => void) => {
+    const params = new URLSearchParams();
+    if (search) params.set('search', search);
+    if (sortField) params.set('sort_field', sortField);
+    if (sortDirection) params.set('sort_direction', sortDirection);
+    if (page > 1) params.set('page', String(page));
+    if (pageSize !== 10) params.set('pageSize', String(pageSize));
+
+    mutator(params);
+
+    startTransition(() => {
+      const qs = params.toString();
+      router.push(qs ? `${pathname}?${qs}` : pathname);
+    });
+  };
+
+  const handleSearchChange = (value: string) => {
+    setSearchValue(value);
+    updateParams((p) => {
+      if (value) p.set('search', value);
+      else p.delete('search');
+      p.delete('page');
+    });
+  };
+
+  const handleSort = (field: string) => {
+    if (!SORTABLE_FIELDS.has(field)) return;
+
+    let nextDirection: 'asc' | 'desc' | null = 'asc';
+    if (sortField === field) {
+      if (sortDirection === 'asc') nextDirection = 'desc';
+      else if (sortDirection === 'desc') nextDirection = null;
+    }
+
+    updateParams((p) => {
+      if (nextDirection) {
+        p.set('sort_field', field);
+        p.set('sort_direction', nextDirection);
+      } else {
+        p.delete('sort_field');
+        p.delete('sort_direction');
+      }
+      p.delete('page');
+    });
+  };
+
+  const goToPage = (targetPage: number) => {
+    const clamped = Math.max(1, Math.min(pageCount, targetPage));
+    updateParams((p) => {
+      if (clamped <= 1) p.delete('page');
+      else p.set('page', String(clamped));
+    });
+  };
+
+  const SortHeader = ({ field, title }: { field: string; title: string }) => {
+    const isActive = sortField === field;
+    return (
+      <Button
+        variant='ghost'
+        size='sm'
+        className='-ml-3 h-8 data-[state=open]:bg-accent'
+        onClick={() => handleSort(field)}
+      >
+        <span>{title}</span>
+        {isActive && sortDirection === 'desc' ? (
+          <ArrowDown className='ml-2 h-4 w-4' />
+        ) : isActive && sortDirection === 'asc' ? (
+          <ArrowUp className='ml-2 h-4 w-4' />
+        ) : (
+          <ChevronsUpDown className='ml-2 h-4 w-4' />
+        )}
+      </Button>
+    );
+  };
+
   const columns: ColumnDef<ChapterListItem>[] = [
     {
       id: 's.no',
-      header: ({ column }) => (
-        <DataTableColumnHeader column={column} title='S.No' />
+      header: () => <span className='font-medium'>S.No</span>,
+      cell: ({ row }) => (
+        <span className='text-center p-2'>
+          {(page - 1) * pageSize + row.index + 1}
+        </span>
       ),
-      cell: ({ row }) => {
-        return <span className='text-center p-2'>{row.index + 1}</span>;
-      },
-
       size: 40
     },
     {
       accessorKey: 'name',
-      header: ({ column }) => (
-        <DataTableColumnHeader column={column} title='Chapter Name' />
-      ),
-      cell: ({ row }) => {
-        return (
-          <div className='flex flex-col'>
-            <span className='font-medium'>{row.getValue('name')}</span>
-          </div>
-        );
-      }
+      header: () => <SortHeader field='name' title='Chapter Name' />,
+      cell: ({ row }) => (
+        <div className='flex flex-col'>
+          <span className='font-medium'>{row.getValue('name')}</span>
+        </div>
+      )
     },
     {
       accessorKey: 'location',
-      header: ({ column }) => (
-        <DataTableColumnHeader column={column} title='Location' />
-      ),
-      cell: ({ row }) => {
-        return <span>{row.getValue('location')}</span>;
-      }
+      header: () => <SortHeader field='location' title='Location' />,
+      cell: ({ row }) => <span>{row.getValue('location')}</span>
     },
     {
       accessorKey: 'region',
-      header: ({ column }) => (
-        <DataTableColumnHeader column={column} title='Region' />
-      ),
+      header: () => <SortHeader field='region' title='Region' />,
       cell: ({ row }) => {
         const region = row.getValue('region') as string | null;
         return region ? (
@@ -110,16 +202,11 @@ export function ChaptersTable({ data, pageCount }: ChaptersTableProps) {
         ) : (
           <span className='text-muted-foreground'>-</span>
         );
-      },
-      filterFn: (row, id, value) => {
-        return value.includes(row.getValue(id));
       }
     },
     {
       accessorKey: 'established_date',
-      header: ({ column }) => (
-        <DataTableColumnHeader column={column} title='Established' />
-      ),
+      header: () => <SortHeader field='established_date' title='Established' />,
       cell: ({ row }) => {
         const date = row.getValue('established_date') as string | null;
         return date ? (
@@ -131,9 +218,7 @@ export function ChaptersTable({ data, pageCount }: ChaptersTableProps) {
     },
     {
       accessorKey: 'member_count',
-      header: ({ column }) => (
-        <DataTableColumnHeader column={column} title='Members' />
-      ),
+      header: () => <span className='font-medium'>Members</span>,
       cell: ({ row }) => {
         const count = row.getValue('member_count') as number;
         return (
@@ -197,25 +282,14 @@ export function ChaptersTable({ data, pageCount }: ChaptersTableProps) {
     data,
     columns,
     pageCount,
-    state: {
-      sorting,
-      columnFilters,
-      columnVisibility,
-      rowSelection
-    },
-    enableRowSelection: true,
-    onRowSelectionChange: setRowSelection,
-    onSortingChange: setSorting,
-    onColumnFiltersChange: setColumnFilters,
-    onColumnVisibilityChange: setColumnVisibility,
-    getCoreRowModel: getCoreRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getFacetedRowModel: getFacetedRowModel(),
-    getFacetedUniqueValues: getFacetedUniqueValues(),
-    manualPagination: true
+    manualPagination: true,
+    manualSorting: true,
+    manualFiltering: true,
+    getCoreRowModel: getCoreRowModel()
   });
+
+  const canPreviousPage = page > 1;
+  const canNextPage = page < pageCount;
 
   return (
     <div className='space-y-4'>
@@ -224,10 +298,8 @@ export function ChaptersTable({ data, pageCount }: ChaptersTableProps) {
         <div className='flex flex-1 items-center space-x-2'>
           <Input
             placeholder='Search chapters...'
-            value={(table.getColumn('name')?.getFilterValue() as string) ?? ''}
-            onChange={(event) =>
-              table.getColumn('name')?.setFilterValue(event.target.value)
-            }
+            value={searchValue}
+            onChange={(event) => handleSearchChange(event.target.value)}
             className='h-8 w-[150px] lg:w-[250px]'
           />
         </div>
@@ -245,28 +317,23 @@ export function ChaptersTable({ data, pageCount }: ChaptersTableProps) {
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header) => {
-                  return (
-                    <TableHead key={header.id}>
-                      {header.isPlaceholder
-                        ? null
-                        : flexRender(
-                            header.column.columnDef.header,
-                            header.getContext()
-                          )}
-                    </TableHead>
-                  );
-                })}
+                {headerGroup.headers.map((header) => (
+                  <TableHead key={header.id}>
+                    {header.isPlaceholder
+                      ? null
+                      : flexRender(
+                          header.column.columnDef.header,
+                          header.getContext()
+                        )}
+                  </TableHead>
+                ))}
               </TableRow>
             ))}
           </TableHeader>
           <TableBody>
             {table.getRowModel().rows?.length ? (
               table.getRowModel().rows.map((row) => (
-                <TableRow
-                  key={row.id}
-                  data-state={row.getIsSelected() && 'selected'}
-                >
+                <TableRow key={row.id}>
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id}>
                       {flexRender(
@@ -292,7 +359,54 @@ export function ChaptersTable({ data, pageCount }: ChaptersTableProps) {
       </div>
 
       {/* Pagination */}
-      <DataTablePagination table={table} />
+      <div className='flex items-center justify-between px-2'>
+        <div className='flex-1 text-sm text-muted-foreground'>
+          {total} chapter{total === 1 ? '' : 's'} total
+        </div>
+        <div className='flex items-center space-x-6 lg:space-x-8'>
+          <div className='flex w-[120px] items-center justify-center text-sm font-medium'>
+            Page {page} of {pageCount}
+          </div>
+          <div className='flex items-center space-x-2'>
+            <Button
+              variant='outline'
+              className='hidden h-8 w-8 p-0 lg:flex'
+              onClick={() => goToPage(1)}
+              disabled={!canPreviousPage || isPending}
+            >
+              <span className='sr-only'>Go to first page</span>
+              <ChevronsLeft className='h-4 w-4' />
+            </Button>
+            <Button
+              variant='outline'
+              className='h-8 w-8 p-0'
+              onClick={() => goToPage(page - 1)}
+              disabled={!canPreviousPage || isPending}
+            >
+              <span className='sr-only'>Previous page</span>
+              <ChevronLeft className='h-4 w-4' />
+            </Button>
+            <Button
+              variant='outline'
+              className='h-8 w-8 p-0'
+              onClick={() => goToPage(page + 1)}
+              disabled={!canNextPage || isPending}
+            >
+              <span className='sr-only'>Next page</span>
+              <ChevronRight className='h-4 w-4' />
+            </Button>
+            <Button
+              variant='outline'
+              className='hidden h-8 w-8 p-0 lg:flex'
+              onClick={() => goToPage(pageCount)}
+              disabled={!canNextPage || isPending}
+            >
+              <span className='sr-only'>Go to last page</span>
+              <ChevronsRight className='h-4 w-4' />
+            </Button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

@@ -67,6 +67,12 @@ export function RoleManagerDialog({
 
   // Track optimistically added/removed roles
   const [optimisticRoles, setOptimisticRoles] = useState<RoleInfo[]>([])
+  const [isAdding, setIsAdding] = useState(false)
+
+  // Combine actual roles with optimistic updates
+  const displayRoles = user ? [...user.roles, ...optimisticRoles] : []
+  const userRoleIds = new Set(displayRoles.map((r) => r.role_id))
+  const availableRoles = roles.filter((r) => !userRoleIds.has(r.id))
 
   // Reset optimistic roles and add form state when dialog opens
   useEffect(() => {
@@ -78,14 +84,6 @@ export function RoleManagerDialog({
   }, [open])
 
   if (!user) return null
-
-  // Combine actual roles with optimistic updates
-  const displayRoles = [...user.roles, ...optimisticRoles]
-  const userRoleIds = new Set(displayRoles.map((r) => r.role_id))
-  const availableRoles = roles.filter((r) => !userRoleIds.has(r.id))
-
-  // Show add form by default if there are available roles
-  const [isAdding, setIsAdding] = useState(availableRoles.length > 0)
 
   // Handle assign role
   const handleAssignRole = async () => {

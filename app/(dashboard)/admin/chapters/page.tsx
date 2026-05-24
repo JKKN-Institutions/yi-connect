@@ -6,30 +6,66 @@
  */
 
 import { Suspense } from 'react'
-import Link from 'next/link'
 import { connection } from 'next/server'
 import { requireRole } from '@/lib/auth'
 import { getChapters } from '@/lib/data/chapters'
 import { ChaptersTable } from '@/components/admin/chapters-table'
-import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Card } from '@/components/ui/card'
-import { Plus } from 'lucide-react'
+import type { ChapterListItem, ChapterSort } from '@/types/chapter'
 
 export const metadata = {
   title: 'Manage Chapters - Yi Connect Admin',
   description: 'Manage Yi chapters across different regions',
 }
 
-async function ChaptersContent() {
-  // Require Super Admin or National Admin role
+interface PageProps {
+  searchParams: Promise<{
+    page?: string
+    pageSize?: string
+    search?: string
+    sort_field?: string
+    sort_direction?: string
+  }>
+}
+
+const PAGE_SIZE = 10
+
+async function ChaptersContent({ searchParamsPromise }: { searchParamsPromise: PageProps['searchParams'] }) {
   await requireRole(['Super Admin', 'National Admin'])
 
-  // Get chapters with pagination
-  const { data: chapters, total, pageSize } = await getChapters(1, 10)
-  const pageCount = Math.ceil(total / pageSize)
+  const params = await searchParamsPromise
+  const page = Number(params.page) || 1
+  const pageSize = Number(params.pageSize) || PAGE_SIZE
+  const search = params.search?.trim() || undefined
 
-  return <ChaptersTable data={chapters} pageCount={pageCount} />
+  const sort: ChapterSort | undefined = params.sort_field
+    ? {
+        column: params.sort_field as keyof ChapterListItem,
+        direction: (params.sort_direction as 'asc' | 'desc') || 'asc',
+      }
+    : undefined
+
+  const { data: chapters, total } = await getChapters(
+    page,
+    pageSize,
+    search ? { search } : undefined,
+    sort
+  )
+  const pageCount = Math.max(1, Math.ceil(total / pageSize))
+
+  return (
+    <ChaptersTable
+      data={chapters}
+      pageCount={pageCount}
+      page={page}
+      pageSize={pageSize}
+      total={total}
+      search={search ?? ''}
+      sortField={sort?.column ?? null}
+      sortDirection={sort?.direction ?? null}
+    />
+  )
 }
 
 function ChaptersTableSkeleton() {
@@ -54,13 +90,11 @@ function ChaptersTableSkeleton() {
   )
 }
 
-export default async function AdminChaptersPage() {
-  // Opt out of static prerendering
+export default async function AdminChaptersPage(props: PageProps) {
   await connection()
 
   return (
     <div className="space-y-6">
-      {/* Page Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Chapter Management</h1>
@@ -70,9 +104,8 @@ export default async function AdminChaptersPage() {
         </div>
       </div>
 
-      {/* Chapters Table with Suspense */}
       <Suspense fallback={<ChaptersTableSkeleton />}>
-        <ChaptersContent />
+        <ChaptersContent searchParamsPromise={props.searchParams} />
       </Suspense>
     </div>
   )

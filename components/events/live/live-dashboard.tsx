@@ -122,6 +122,7 @@ export function LiveDashboard({
         }
 
         const { data } = await supabase
+          .schema('yi_connect')
           .from('members')
           .select(
             'id, company, designation, profile:profiles(full_name, avatar_url)'
@@ -169,6 +170,7 @@ export function LiveDashboard({
       }
 
       const { data } = await supabase
+        .schema('yi_connect')
         .from('guest_rsvps')
         .select('id, full_name, company')
         .eq('id', row.attendee_id)
@@ -299,6 +301,7 @@ export function LiveDashboard({
     // -- Polling fallback (in case Realtime drops silently)
     const pollId = setInterval(async () => {
       const { data: latest } = await supabase
+        .schema('yi_connect')
         .from('event_checkins')
         .select('id, attendee_type, attendee_id, checked_in_at, check_in_method')
         .eq('event_id', event.id)
@@ -319,11 +322,13 @@ export function LiveDashboard({
         const [{ count: memberCount }, { count: guestCount }] =
           await Promise.all([
             supabase
+              .schema('yi_connect')
               .from('event_rsvps')
               .select('id', { count: 'exact', head: true })
               .eq('event_id', event.id)
               .in('status', ['confirmed', 'attended']),
             supabase
+              .schema('yi_connect')
               .from('guest_rsvps')
               .select('id', { count: 'exact', head: true })
               .eq('event_id', event.id)

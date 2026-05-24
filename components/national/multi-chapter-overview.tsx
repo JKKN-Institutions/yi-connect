@@ -79,6 +79,7 @@ export function ChaptersStatusGrid() {
         // stores the chair's display name, so we read it directly instead of
         // embedding profiles.
         const { data, error } = await supabase
+          .schema('yi_connect')
           .from('chapters')
           .select(
             `
@@ -259,6 +260,7 @@ export function PendingInvitationsCard() {
         const supabase = createBrowserSupabaseClient()
 
         const { data, error } = await supabase
+          .schema('yi_connect')
           .from('chapter_invitations')
           .select(
             `

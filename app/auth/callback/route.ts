@@ -48,6 +48,7 @@ export async function GET(request: NextRequest) {
     if (!exchangeError && data.user) {
       // Check if this is first login (no member record exists)
       const { data: existingMember } = await supabase
+        .schema('yi_connect')
         .from('members')
         .select('id')
         .eq('id', data.user.id)
@@ -83,6 +84,7 @@ async function createMemberFromRequest(userId: string, email: string) {
   try {
     // 1. Get the approved email record
     const { data: approvedEmail } = await supabase
+      .schema('yi_connect')
       .from('approved_emails')
       .select('*, request:member_requests(*)')
       .eq('email', email)
@@ -96,6 +98,7 @@ async function createMemberFromRequest(userId: string, email: string) {
 
     // 2. Create member record with data from request
     const { data: member, error: memberError } = await supabase
+      .schema('yi_connect')
       .from('members')
       .insert({
         id: userId,
@@ -141,6 +144,7 @@ async function createMemberFromRequest(userId: string, email: string) {
 
     // 3. Update approved_emails to mark member as created
     await supabase
+      .schema('yi_connect')
       .from('approved_emails')
       .update({
         member_created: true,
@@ -150,6 +154,7 @@ async function createMemberFromRequest(userId: string, email: string) {
 
     // 4. Update member_requests to link created member
     await supabase
+      .schema('yi_connect')
       .from('member_requests')
       .update({
         created_member_id: userId

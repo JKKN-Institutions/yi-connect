@@ -41,6 +41,7 @@ export function NextSessionCard({
 
     const fetchSessions = async () => {
       const { data } = await supabase
+        .schema('yi_connect')
         .from('event_sessions')
         .select(
           `

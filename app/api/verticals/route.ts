@@ -19,7 +19,7 @@ export async function GET() {
 
     // Fetch verticals (chapter filtering handled by RLS)
     const { data, error } = await supabase
-      .from('verticals')
+      .schema('yi_connect').from('verticals')
       .select('id, name, slug, description, color, icon, is_active')
       .eq('is_active', true)
       .order('display_order', { ascending: true })

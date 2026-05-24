@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
 
     // Build query
     let query = supabase
-      .from('activity_templates')
+      .schema('yi_connect').from('activity_templates')
       .select(
         `
         *,

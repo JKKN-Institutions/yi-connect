@@ -62,7 +62,7 @@ async function requireNationalAdmin() {
 
   // Check if user has National Admin role
   const { data: userRoles } = await supabase
-    .from('user_roles')
+    .schema('yi_connect').from('user_roles')
     .select('role:roles(name, hierarchy_level)')
     .eq('user_id', user.id)
 
@@ -291,7 +291,7 @@ export async function createChapterWithInvitation(
 
     // 2. Create chair invitation
     const { data: invitation, error: inviteError } = await supabase
-      .from('chapter_invitations')
+      .schema('yi_connect').from('chapter_invitations')
       .insert({
         chapter_id: chapter.id,
         email: input.chair_email || null,
@@ -338,7 +338,7 @@ export async function createChapterWithInvitation(
     }))
 
     const { error: featuresError } = await supabase
-      .from('chapter_feature_toggles')
+      .schema('yi_connect').from('chapter_feature_toggles')
       .insert(featureInserts)
 
     if (featuresError) {
@@ -381,7 +381,7 @@ export async function deleteChapter(id: string): Promise<ActionResponse> {
 
     // Check if chapter has members
     const { count } = await supabase
-      .from('members')
+      .schema('yi_connect').from('members')
       .select('*', { count: 'exact', head: true })
       .eq('chapter_id', id)
 
@@ -447,7 +447,7 @@ export async function sendChairInvitationWhatsApp(
     // `inviter:profiles!invited_by(...)`. Drop the embed and hydrate the inviter
     // name via a separate members→profiles lookup keyed by invited_by.
     const { data: invitation, error: inviteError } = await supabase
-      .from('chapter_invitations')
+      .schema('yi_connect').from('chapter_invitations')
       .select(`
         *,
         chapter:chapters(name, location)
@@ -465,7 +465,7 @@ export async function sendChairInvitationWhatsApp(
       try {
         const admin = createAdminSupabaseClient()
         const { data: inviterRow } = await admin
-          .from('members')
+          .schema('yi_connect').from('members')
           .select('id, profile:profiles(full_name)')
           .eq('id', (invitation as any).invited_by)
           .single()
@@ -618,7 +618,7 @@ export async function resendInvitation(
 
     // Reset token expiry
     const { error: updateError } = await supabase
-      .from('chapter_invitations')
+      .schema('yi_connect').from('chapter_invitations')
       .update({
         token_expires_at: new Date(
           Date.now() + 7 * 24 * 60 * 60 * 1000
@@ -650,7 +650,7 @@ export async function revokeInvitation(
     const supabase = await createServerSupabaseClient()
 
     const { error } = await supabase
-      .from('chapter_invitations')
+      .schema('yi_connect').from('chapter_invitations')
       .update({ status: 'revoked' })
       .eq('id', invitationId)
 

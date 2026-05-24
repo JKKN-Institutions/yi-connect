@@ -56,7 +56,7 @@ export async function updateProfile(
     // Update profile in database
     const supabase = await createServerSupabaseClient()
     const { error } = await supabase
-      .from('profiles')
+      .schema('yi_connect').from('profiles')
       .update({
         full_name: validation.data.full_name,
         phone: validation.data.phone || null,
@@ -163,7 +163,7 @@ export async function uploadAvatar(
 
     // Update profile with new avatar URL
     const { error: updateError } = await supabase
-      .from('profiles')
+      .schema('yi_connect').from('profiles')
       .update({
         avatar_url: publicUrl,
         updated_at: new Date().toISOString(),

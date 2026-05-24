@@ -79,7 +79,7 @@ export async function createSchool(prevState: FormState, formData: FormData): Pr
   const supabase = await createClient()
 
   const { data, error } = await supabase
-    .from('schools')
+    .schema('yi_connect').from('schools')
     .insert({
       ...validated.data,
       chapter_id: chapterId,
@@ -135,7 +135,7 @@ export async function updateSchool(
   const supabase = await createClient()
 
   const { error } = await supabase
-    .from('schools')
+    .schema('yi_connect').from('schools')
     .update(validated.data)
     .eq('id', schoolId)
     .eq('chapter_id', chapterId)
@@ -161,7 +161,7 @@ export async function deleteSchool(schoolId: string): Promise<FormState> {
   const supabase = await createClient()
 
   const { error } = await supabase
-    .from('schools')
+    .schema('yi_connect').from('schools')
     .delete()
     .eq('id', schoolId)
     .eq('chapter_id', chapterId)
@@ -211,7 +211,7 @@ export async function createCollege(prevState: FormState, formData: FormData): P
   const supabase = await createClient()
 
   const { data, error } = await supabase
-    .from('colleges')
+    .schema('yi_connect').from('colleges')
     .insert({
       ...validated.data,
       chapter_id: chapterId,
@@ -264,7 +264,7 @@ export async function updateCollege(
   const supabase = await createClient()
 
   const { error } = await supabase
-    .from('colleges')
+    .schema('yi_connect').from('colleges')
     .update(validated.data)
     .eq('id', collegeId)
     .eq('chapter_id', chapterId)
@@ -290,7 +290,7 @@ export async function deleteCollege(collegeId: string): Promise<FormState> {
   const supabase = await createClient()
 
   const { error } = await supabase
-    .from('colleges')
+    .schema('yi_connect').from('colleges')
     .delete()
     .eq('id', collegeId)
     .eq('chapter_id', chapterId)
@@ -341,7 +341,7 @@ export async function createIndustry(prevState: FormState, formData: FormData): 
   const supabase = await createClient()
 
   const { data, error } = await supabase
-    .from('industries')
+    .schema('yi_connect').from('industries')
     .insert({
       ...validated.data,
       chapter_id: chapterId,
@@ -395,7 +395,7 @@ export async function updateIndustry(
   const supabase = await createClient()
 
   const { error } = await supabase
-    .from('industries')
+    .schema('yi_connect').from('industries')
     .update(validated.data)
     .eq('id', industryId)
     .eq('chapter_id', chapterId)
@@ -421,7 +421,7 @@ export async function deleteIndustry(industryId: string): Promise<FormState> {
   const supabase = await createClient()
 
   const { error } = await supabase
-    .from('industries')
+    .schema('yi_connect').from('industries')
     .delete()
     .eq('id', industryId)
     .eq('chapter_id', chapterId)
@@ -474,7 +474,7 @@ export async function createGovernmentStakeholder(prevState: FormState, formData
   const supabase = await createClient()
 
   const { data, error } = await supabase
-    .from('government_stakeholders')
+    .schema('yi_connect').from('government_stakeholders')
     .insert({
       ...validated.data,
       chapter_id: chapterId,
@@ -530,7 +530,7 @@ export async function updateGovernmentStakeholder(
   const supabase = await createClient()
 
   const { error } = await supabase
-    .from('government_stakeholders')
+    .schema('yi_connect').from('government_stakeholders')
     .update(validated.data)
     .eq('id', stakeholderId)
     .eq('chapter_id', chapterId)
@@ -556,7 +556,7 @@ export async function deleteGovernmentStakeholder(stakeholderId: string): Promis
   const supabase = await createClient()
 
   const { error } = await supabase
-    .from('government_stakeholders')
+    .schema('yi_connect').from('government_stakeholders')
     .delete()
     .eq('id', stakeholderId)
     .eq('chapter_id', chapterId)
@@ -608,7 +608,7 @@ export async function createNGO(prevState: FormState, formData: FormData): Promi
   const supabase = await createClient()
 
   const { data, error } = await supabase
-    .from('ngos')
+    .schema('yi_connect').from('ngos')
     .insert({
       ...validated.data,
       chapter_id: chapterId,
@@ -663,7 +663,7 @@ export async function updateNGO(
   const supabase = await createClient()
 
   const { error } = await supabase
-    .from('ngos')
+    .schema('yi_connect').from('ngos')
     .update(validated.data)
     .eq('id', ngoId)
     .eq('chapter_id', chapterId)
@@ -689,7 +689,7 @@ export async function deleteNGO(ngoId: string): Promise<FormState> {
   const supabase = await createClient()
 
   const { error } = await supabase
-    .from('ngos')
+    .schema('yi_connect').from('ngos')
     .delete()
     .eq('id', ngoId)
     .eq('chapter_id', chapterId)
@@ -739,7 +739,7 @@ export async function createVendor(prevState: FormState, formData: FormData): Pr
   const supabase = await createClient()
 
   const { data, error } = await supabase
-    .from('vendors')
+    .schema('yi_connect').from('vendors')
     .insert({
       ...validated.data,
       chapter_id: chapterId,
@@ -792,7 +792,7 @@ export async function updateVendor(
   const supabase = await createClient()
 
   const { error } = await supabase
-    .from('vendors')
+    .schema('yi_connect').from('vendors')
     .update(validated.data)
     .eq('id', vendorId)
     .eq('chapter_id', chapterId)
@@ -818,7 +818,7 @@ export async function deleteVendor(vendorId: string): Promise<FormState> {
   const supabase = await createClient()
 
   const { error } = await supabase
-    .from('vendors')
+    .schema('yi_connect').from('vendors')
     .delete()
     .eq('id', vendorId)
     .eq('chapter_id', chapterId)
@@ -876,7 +876,7 @@ export async function createSpeaker(prevState: FormState, formData: FormData): P
   const supabase = await createClient()
 
   const { data, error } = await supabase
-    .from('speakers')
+    .schema('yi_connect').from('speakers')
     .insert({
       ...validated.data,
       chapter_id: chapterId,
@@ -937,7 +937,7 @@ export async function updateSpeaker(
   const supabase = await createClient()
 
   const { error } = await supabase
-    .from('speakers')
+    .schema('yi_connect').from('speakers')
     .update(validated.data)
     .eq('id', speakerId)
     .eq('chapter_id', chapterId)
@@ -963,7 +963,7 @@ export async function deleteSpeaker(speakerId: string): Promise<FormState> {
   const supabase = await createClient()
 
   const { error } = await supabase
-    .from('speakers')
+    .schema('yi_connect').from('speakers')
     .delete()
     .eq('id', speakerId)
     .eq('chapter_id', chapterId)
@@ -1010,7 +1010,7 @@ export async function createContact(prevState: FormState, formData: FormData): P
   const supabase = await createClient()
 
   const { error } = await supabase
-    .from('stakeholder_contacts')
+    .schema('yi_connect').from('stakeholder_contacts')
     .insert({
       ...validated.data,
       chapter_id: chapterId,
@@ -1061,7 +1061,7 @@ export async function createInteraction(prevState: FormState, formData: FormData
   }
 
   const { error } = await supabase
-    .from('stakeholder_interactions')
+    .schema('yi_connect').from('stakeholder_interactions')
     .insert({
       ...validated.data,
       chapter_id: chapterId,
@@ -1106,7 +1106,7 @@ export async function createMou(prevState: FormState, formData: FormData): Promi
   const supabase = await createClient()
 
   const { error } = await supabase
-    .from('stakeholder_mous')
+    .schema('yi_connect').from('stakeholder_mous')
     .insert({
       ...validated.data,
       chapter_id: chapterId,
@@ -1155,7 +1155,7 @@ export async function createDocument(prevState: FormState, formData: FormData): 
   }
 
   const { error } = await supabase
-    .from('stakeholder_documents')
+    .schema('yi_connect').from('stakeholder_documents')
     .insert({
       ...validated.data,
       chapter_id: chapterId,
@@ -1183,7 +1183,7 @@ export async function deleteContact(contactId: string): Promise<FormState> {
   const supabase = await createClient()
 
   const { error } = await supabase
-    .from('stakeholder_contacts')
+    .schema('yi_connect').from('stakeholder_contacts')
     .delete()
     .eq('id', contactId)
     .eq('chapter_id', chapterId)
@@ -1209,7 +1209,7 @@ export async function deleteDocument(documentId: string): Promise<FormState> {
   const supabase = await createClient()
 
   const { error } = await supabase
-    .from('stakeholder_documents')
+    .schema('yi_connect').from('stakeholder_documents')
     .delete()
     .eq('id', documentId)
     .eq('chapter_id', chapterId)

@@ -96,7 +96,7 @@ export async function createVertical(input: CreateVerticalInput): Promise<Action
 
     // Check if slug is unique for this chapter
     const { data: existing } = await supabase
-      .from('verticals')
+      .schema('yi_connect').from('verticals')
       .select('id')
       .eq('chapter_id', sanitized.chapter_id)
       .eq('slug', sanitized.slug)
@@ -108,7 +108,7 @@ export async function createVertical(input: CreateVerticalInput): Promise<Action
 
     // Create vertical
     const { data, error } = await supabase
-      .from('verticals')
+      .schema('yi_connect').from('verticals')
       .insert(sanitized)
       .select('id')
       .single()
@@ -142,14 +142,14 @@ export async function updateVertical(id: string, input: UpdateVerticalInput): Pr
     // If slug is being updated, check uniqueness
     if (sanitized.slug) {
       const { data: existing } = await supabase
-        .from('verticals')
+        .schema('yi_connect').from('verticals')
         .select('id, chapter_id')
         .eq('id', id)
         .single()
 
       if (existing) {
         const { data: duplicate } = await supabase
-          .from('verticals')
+          .schema('yi_connect').from('verticals')
           .select('id')
           .eq('chapter_id', existing.chapter_id)
           .eq('slug', sanitized.slug)
@@ -164,7 +164,7 @@ export async function updateVertical(id: string, input: UpdateVerticalInput): Pr
 
     // Update vertical
     const { error } = await supabase
-      .from('verticals')
+      .schema('yi_connect').from('verticals')
       .update({ ...sanitized, updated_at: new Date().toISOString() })
       .eq('id', id)
 
@@ -193,7 +193,7 @@ export async function deleteVertical(id: string): Promise<ActionResponse> {
 
     // Check if vertical has any plans
     const { data: plans } = await supabase
-      .from('vertical_plans')
+      .schema('yi_connect').from('vertical_plans')
       .select('id')
       .eq('vertical_id', id)
       .limit(1)
@@ -203,7 +203,7 @@ export async function deleteVertical(id: string): Promise<ActionResponse> {
     }
 
     // Delete vertical (cascade will handle chairs, members, etc.)
-    const { error } = await supabase.from('verticals').delete().eq('id', id)
+    const { error } = await supabase.schema('yi_connect').from('verticals').delete().eq('id', id)
 
     if (error) throw error
 
@@ -237,14 +237,14 @@ export async function assignVerticalChair(input: AssignVerticalChairInput): Prom
 
     // Mark existing active chairs as inactive
     await supabase
-      .from('vertical_chairs')
+      .schema('yi_connect').from('vertical_chairs')
       .update({ is_active: false, updated_at: new Date().toISOString() })
       .eq('vertical_id', sanitized.vertical_id)
       .eq('is_active', true)
 
     // Create new chair assignment
     const { data, error } = await supabase
-      .from('vertical_chairs')
+      .schema('yi_connect').from('vertical_chairs')
       .insert({ ...sanitized, is_active: true })
       .select('id')
       .single()
@@ -278,7 +278,7 @@ export async function updateVerticalChair(id: string, input: UpdateVerticalChair
 
     // Update chair
     const { error } = await supabase
-      .from('vertical_chairs')
+      .schema('yi_connect').from('vertical_chairs')
       .update({ ...sanitized, updated_at: new Date().toISOString() })
       .eq('id', id)
 
@@ -314,7 +314,7 @@ export async function createVerticalPlan(input: CreateVerticalPlanInput): Promis
 
     // Check if plan already exists for this vertical and calendar year
     const { data: existing } = await supabase
-      .from('vertical_plans')
+      .schema('yi_connect').from('vertical_plans')
       .select('id')
       .eq('vertical_id', planData.vertical_id)
       .eq('calendar_year', planData.calendar_year)
@@ -326,7 +326,7 @@ export async function createVerticalPlan(input: CreateVerticalPlanInput): Promis
 
     // Create plan
     const { data: plan, error: planError } = await supabase
-      .from('vertical_plans')
+      .schema('yi_connect').from('vertical_plans')
       .insert({
         ...sanitizeData(planData),
         created_by: user.id,
@@ -343,7 +343,7 @@ export async function createVerticalPlan(input: CreateVerticalPlanInput): Promis
         plan_id: plan.id,
       }))
 
-      const { error: kpisError } = await supabase.from('vertical_kpis').insert(kpisToInsert)
+      const { error: kpisError } = await supabase.schema('yi_connect').from('vertical_kpis').insert(kpisToInsert)
 
       if (kpisError) throw kpisError
     }
@@ -375,7 +375,7 @@ export async function updateVerticalPlan(id: string, input: UpdateVerticalPlanIn
 
     // Update plan
     const { error } = await supabase
-      .from('vertical_plans')
+      .schema('yi_connect').from('vertical_plans')
       .update({ ...sanitized, updated_at: new Date().toISOString() })
       .eq('id', id)
 
@@ -403,7 +403,7 @@ export async function approveVerticalPlan(planId: string): Promise<ActionRespons
 
     // Update plan status to approved
     const { error } = await supabase
-      .from('vertical_plans')
+      .schema('yi_connect').from('vertical_plans')
       .update({
         status: 'approved',
         approved_by: user.id,
@@ -436,7 +436,7 @@ export async function activateVerticalPlan(planId: string): Promise<ActionRespon
 
     // Get plan details
     const { data: plan, error: planError } = await supabase
-      .from('vertical_plans')
+      .schema('yi_connect').from('vertical_plans')
       .select('vertical_id, calendar_year, status')
       .eq('id', planId)
       .single()
@@ -453,7 +453,7 @@ export async function activateVerticalPlan(planId: string): Promise<ActionRespon
 
     // Deactivate any existing active plan for this vertical and calendar year
     await supabase
-      .from('vertical_plans')
+      .schema('yi_connect').from('vertical_plans')
       .update({ status: 'completed', updated_at: new Date().toISOString() })
       .eq('vertical_id', plan.vertical_id)
       .eq('calendar_year', plan.calendar_year)
@@ -461,7 +461,7 @@ export async function activateVerticalPlan(planId: string): Promise<ActionRespon
 
     // Activate this plan
     const { error } = await supabase
-      .from('vertical_plans')
+      .schema('yi_connect').from('vertical_plans')
       .update({ status: 'active', updated_at: new Date().toISOString() })
       .eq('id', planId)
 
@@ -497,7 +497,7 @@ export async function createKPI(input: CreateKPIInput): Promise<ActionResponse<{
 
     // Create KPI
     const { data, error } = await supabase
-      .from('vertical_kpis')
+      .schema('yi_connect').from('vertical_kpis')
       .insert(sanitized)
       .select('id')
       .single()
@@ -530,7 +530,7 @@ export async function updateKPI(id: string, input: UpdateKPIInput): Promise<Acti
 
     // Update KPI
     const { error } = await supabase
-      .from('vertical_kpis')
+      .schema('yi_connect').from('vertical_kpis')
       .update({ ...sanitized, updated_at: new Date().toISOString() })
       .eq('id', id)
 
@@ -557,7 +557,7 @@ export async function deleteKPI(id: string): Promise<ActionResponse> {
     const supabase = await createClient()
 
     // Delete KPI (cascade will handle actuals)
-    const { error } = await supabase.from('vertical_kpis').delete().eq('id', id)
+    const { error } = await supabase.schema('yi_connect').from('vertical_kpis').delete().eq('id', id)
 
     if (error) throw error
 
@@ -587,7 +587,7 @@ export async function recordKPIActual(input: RecordKPIActualInput): Promise<Acti
 
     // Check if actual already exists for this KPI and quarter
     const { data: existing } = await supabase
-      .from('vertical_kpi_actuals')
+      .schema('yi_connect').from('vertical_kpi_actuals')
       .select('id')
       .eq('kpi_id', sanitized.kpi_id)
       .eq('quarter', sanitized.quarter)
@@ -596,7 +596,7 @@ export async function recordKPIActual(input: RecordKPIActualInput): Promise<Acti
     if (existing) {
       // Update existing actual
       const { error } = await supabase
-        .from('vertical_kpi_actuals')
+        .schema('yi_connect').from('vertical_kpi_actuals')
         .update({
           actual_value: sanitized.actual_value,
           notes: sanitized.notes,
@@ -613,7 +613,7 @@ export async function recordKPIActual(input: RecordKPIActualInput): Promise<Acti
     } else {
       // Create new actual
       const { data, error } = await supabase
-        .from('vertical_kpi_actuals')
+        .schema('yi_connect').from('vertical_kpi_actuals')
         .insert({
           kpi_id: sanitized.kpi_id,
           quarter: sanitized.quarter,
@@ -655,7 +655,7 @@ export async function updateKPIActual(id: string, input: UpdateKPIActualInput): 
 
     // Update actual
     const { error } = await supabase
-      .from('vertical_kpi_actuals')
+      .schema('yi_connect').from('vertical_kpi_actuals')
       .update({ ...sanitized, updated_at: new Date().toISOString() })
       .eq('id', id)
 
@@ -691,7 +691,7 @@ export async function addVerticalMember(input: AddVerticalMemberInput): Promise<
 
     // Check if member is already in this vertical
     const { data: existing } = await supabase
-      .from('vertical_members')
+      .schema('yi_connect').from('vertical_members')
       .select('id, is_active')
       .eq('vertical_id', sanitized.vertical_id)
       .eq('member_id', sanitized.member_id)
@@ -703,7 +703,7 @@ export async function addVerticalMember(input: AddVerticalMemberInput): Promise<
       } else {
         // Reactivate the member
         const { error } = await supabase
-          .from('vertical_members')
+          .schema('yi_connect').from('vertical_members')
           .update({
             is_active: true,
             joined_date: sanitized.joined_date || new Date().toISOString().split('T')[0],
@@ -722,7 +722,7 @@ export async function addVerticalMember(input: AddVerticalMemberInput): Promise<
 
     // Add new member
     const { data, error } = await supabase
-      .from('vertical_members')
+      .schema('yi_connect').from('vertical_members')
       .insert({
         vertical_id: sanitized.vertical_id,
         member_id: sanitized.member_id,
@@ -761,7 +761,7 @@ export async function updateVerticalMember(id: string, input: UpdateVerticalMemb
 
     // Update member
     const { error } = await supabase
-      .from('vertical_members')
+      .schema('yi_connect').from('vertical_members')
       .update({ ...sanitized, updated_at: new Date().toISOString() })
       .eq('id', id)
 
@@ -789,7 +789,7 @@ export async function removeVerticalMember(id: string): Promise<ActionResponse> 
 
     // Mark as inactive instead of deleting
     const { error } = await supabase
-      .from('vertical_members')
+      .schema('yi_connect').from('vertical_members')
       .update({
         is_active: false,
         left_date: new Date().toISOString().split('T')[0],
@@ -829,7 +829,7 @@ export async function createActivity(input: CreateActivityInput): Promise<Action
 
     // Create activity
     const { data, error } = await supabase
-      .from('vertical_activities')
+      .schema('yi_connect').from('vertical_activities')
       .insert(sanitized)
       .select('id')
       .single()
@@ -862,7 +862,7 @@ export async function updateActivity(id: string, input: UpdateActivityInput): Pr
 
     // Update activity
     const { error } = await supabase
-      .from('vertical_activities')
+      .schema('yi_connect').from('vertical_activities')
       .update({ ...sanitized, updated_at: new Date().toISOString() })
       .eq('id', id)
 
@@ -889,7 +889,7 @@ export async function deleteActivity(id: string): Promise<ActionResponse> {
     const supabase = await createClient()
 
     // Delete activity
-    const { error } = await supabase.from('vertical_activities').delete().eq('id', id)
+    const { error } = await supabase.schema('yi_connect').from('vertical_activities').delete().eq('id', id)
 
     if (error) throw error
 
@@ -925,7 +925,7 @@ export async function createPerformanceReview(
 
     // Check if review already exists for this vertical, calendar year, and quarter
     const { data: existing } = await supabase
-      .from('vertical_performance_reviews')
+      .schema('yi_connect').from('vertical_performance_reviews')
       .select('id')
       .eq('vertical_id', sanitized.vertical_id)
       .eq('calendar_year', sanitized.calendar_year)
@@ -939,7 +939,7 @@ export async function createPerformanceReview(
     // Create review
     const reviewPeriod = `CY${sanitized.calendar_year}-Q${sanitized.quarter}`
     const { data, error } = await supabase
-      .from('vertical_performance_reviews')
+      .schema('yi_connect').from('vertical_performance_reviews')
       .insert({
         ...sanitized,
         review_period: reviewPeriod,
@@ -976,7 +976,7 @@ export async function updatePerformanceReview(id: string, input: UpdatePerforman
 
     // Update review
     const { error } = await supabase
-      .from('vertical_performance_reviews')
+      .schema('yi_connect').from('vertical_performance_reviews')
       .update({ ...sanitized, updated_at: new Date().toISOString() })
       .eq('id', id)
 
@@ -1004,7 +1004,7 @@ export async function publishPerformanceReview(id: string): Promise<ActionRespon
 
     // Update review status to published
     const { error } = await supabase
-      .from('vertical_performance_reviews')
+      .schema('yi_connect').from('vertical_performance_reviews')
       .update({
         status: 'published',
         updated_at: new Date().toISOString(),
@@ -1034,7 +1034,7 @@ export async function deletePerformanceReview(id: string): Promise<ActionRespons
     const supabase = await createClient()
 
     // Delete review
-    const { error } = await supabase.from('vertical_performance_reviews').delete().eq('id', id)
+    const { error } = await supabase.schema('yi_connect').from('vertical_performance_reviews').delete().eq('id', id)
 
     if (error) throw error
 
@@ -1068,7 +1068,7 @@ export async function createAchievement(input: CreateAchievementInput): Promise<
 
     // Create achievement
     const { data, error } = await supabase
-      .from('vertical_achievements')
+      .schema('yi_connect').from('vertical_achievements')
       .insert(sanitized)
       .select('id')
       .single()
@@ -1101,7 +1101,7 @@ export async function updateAchievement(id: string, input: UpdateAchievementInpu
 
     // Update achievement
     const { error } = await supabase
-      .from('vertical_achievements')
+      .schema('yi_connect').from('vertical_achievements')
       .update({ ...sanitized, updated_at: new Date().toISOString() })
       .eq('id', id)
 
@@ -1128,7 +1128,7 @@ export async function deleteAchievement(id: string): Promise<ActionResponse> {
     const supabase = await createClient()
 
     // Delete achievement
-    const { error } = await supabase.from('vertical_achievements').delete().eq('id', id)
+    const { error } = await supabase.schema('yi_connect').from('vertical_achievements').delete().eq('id', id)
 
     if (error) throw error
 

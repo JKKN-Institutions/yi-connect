@@ -44,7 +44,7 @@ export async function redirectToYiCreative(
     if (eventId) {
       const supabase = await createServerSupabaseClient()
       const { data: event } = await supabase
-        .from('events')
+        .schema('yi_connect').from('events')
         .select('chapter_id')
         .eq('id', eventId)
         .single()

@@ -63,7 +63,7 @@ export async function startAssessment(
 
     // Check for existing active assessment
     const { data: existing } = await supabase
-      .from('skill_will_assessments')
+      .schema('yi_connect').from('skill_will_assessments')
       .select('id, status')
       .eq('member_id', memberId)
       .in('status', ['pending', 'in_progress'])
@@ -76,7 +76,7 @@ export async function startAssessment(
 
     // Create new assessment
     const { data, error } = await supabase
-      .from('skill_will_assessments')
+      .schema('yi_connect').from('skill_will_assessments')
       .insert({
         member_id: memberId,
         chapter_id: chapterId,
@@ -116,7 +116,7 @@ export async function submitAnswer(
 
     // Get current assessment
     const { data: assessment, error: fetchError } = await supabase
-      .from('skill_will_assessments')
+      .schema('yi_connect').from('skill_will_assessments')
       .select('*')
       .eq('id', input.assessment_id)
       .single()
@@ -158,7 +158,7 @@ export async function submitAnswer(
 
     // Update assessment
     const { error: updateError } = await supabase
-      .from('skill_will_assessments')
+      .schema('yi_connect').from('skill_will_assessments')
       .update(updateData)
       .eq('id', input.assessment_id)
 
@@ -195,7 +195,7 @@ export async function submitAnswer(
         const reasonColumn = `q${input.question_number + 1}_ai_reason`
 
         await supabase
-          .from('skill_will_assessments')
+          .schema('yi_connect').from('skill_will_assessments')
           .update({
             [aiColumn]: suggestion.suggestion,
             [reasonColumn]: suggestion.reason,
@@ -238,7 +238,7 @@ export async function completeAssessment(
 
     // Get assessment with all answers
     const { data: assessment, error: fetchError } = await supabase
-      .from('skill_will_assessments')
+      .schema('yi_connect').from('skill_will_assessments')
       .select('*')
       .eq('id', input.assessment_id)
       .single()
@@ -261,14 +261,14 @@ export async function completeAssessment(
 
     // Get member data
     const { data: member } = await supabase
-      .from('members')
+      .schema('yi_connect').from('members')
       .select('full_name, join_date')
       .eq('id', user.id)
       .single()
 
     // Get verticals
     const { data: verticals } = await supabase
-      .from('verticals')
+      .schema('yi_connect').from('verticals')
       .select('id, name, description')
       .eq('chapter_id', assessment.chapter_id)
 
@@ -310,7 +310,7 @@ export async function completeAssessment(
 
     // Update assessment with results
     const { error: updateError } = await supabase
-      .from('skill_will_assessments')
+      .schema('yi_connect').from('skill_will_assessments')
       .update({
         status: 'completed',
         completed_at: new Date().toISOString(),
@@ -370,7 +370,7 @@ export async function getAssessment(
     }
 
     const { data, error } = await supabase
-      .from('skill_will_assessments')
+      .schema('yi_connect').from('skill_will_assessments')
       .select('*')
       .eq('id', assessmentId)
       .single()
@@ -399,7 +399,7 @@ export async function getMyAssessment(): Promise<ActionResult<SkillWillAssessmen
     }
 
     const { data, error } = await supabase
-      .from('skill_will_assessments')
+      .schema('yi_connect').from('skill_will_assessments')
       .select('*')
       .eq('member_id', user.id)
       .order('created_at', { ascending: false })
@@ -437,7 +437,7 @@ export async function assignVertical(
     }
 
     const { error } = await supabase
-      .from('skill_will_assessments')
+      .schema('yi_connect').from('skill_will_assessments')
       .update({
         assigned_vertical_id: input.vertical_id,
         assigned_by: user.id,
@@ -476,7 +476,7 @@ export async function assignMentor(
     }
 
     const { error } = await supabase
-      .from('skill_will_assessments')
+      .schema('yi_connect').from('skill_will_assessments')
       .update({
         mentor_id: input.mentor_id,
         mentor_assigned_at: new Date().toISOString(),
@@ -529,7 +529,7 @@ export async function reviewChangeRequest(
     }
 
     const { error } = await supabase
-      .from('skill_will_assessments')
+      .schema('yi_connect').from('skill_will_assessments')
       .update(updateData)
       .eq('id', assessmentId)
 
@@ -574,7 +574,7 @@ export async function respondToRecommendation(
     }
 
     const { error } = await supabase
-      .from('skill_will_assessments')
+      .schema('yi_connect').from('skill_will_assessments')
       .update(updateData)
       .eq('id', assessmentId)
       .eq('member_id', user.id)
@@ -607,7 +607,7 @@ export async function getAssessmentStats(
     const supabase = await createServerSupabaseClient()
 
     let query = supabase
-      .from('skill_will_assessments')
+      .schema('yi_connect').from('skill_will_assessments')
       .select('status, category')
 
     if (chapterId) {

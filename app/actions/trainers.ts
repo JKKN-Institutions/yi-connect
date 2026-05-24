@@ -97,7 +97,7 @@ export async function createTrainerProfile(
 
   // Check if trainer profile already exists
   const { data: existing } = await supabase
-    .from('trainer_profiles')
+    .schema('yi_connect').from('trainer_profiles')
     .select('id')
     .eq('member_id', validation.data.member_id)
     .single();
@@ -110,7 +110,7 @@ export async function createTrainerProfile(
 
   // Create trainer profile
   const { data, error } = await supabase
-    .from('trainer_profiles')
+    .schema('yi_connect').from('trainer_profiles')
     .insert({
       member_id: validation.data.member_id,
       chapter_id: validation.data.chapter_id,
@@ -214,7 +214,7 @@ export async function updateTrainerProfile(
   }
 
   const { error } = await supabase
-    .from('trainer_profiles')
+    .schema('yi_connect').from('trainer_profiles')
     .update(updateData)
     .eq('id', validation.data.id);
 
@@ -265,7 +265,7 @@ export async function addTrainerCertification(
   }
 
   const { error } = await supabase
-    .from('trainer_certifications')
+    .schema('yi_connect').from('trainer_certifications')
     .insert({
       trainer_profile_id: validation.data.trainer_profile_id,
       certification_name: validation.data.certification_name,
@@ -304,13 +304,13 @@ export async function deleteTrainerProfile(
 
   // First delete all certifications
   await supabase
-    .from('trainer_certifications')
+    .schema('yi_connect').from('trainer_certifications')
     .delete()
     .eq('trainer_profile_id', profileId);
 
   // Then delete the profile
   const { error } = await supabase
-    .from('trainer_profiles')
+    .schema('yi_connect').from('trainer_profiles')
     .delete()
     .eq('id', profileId);
 

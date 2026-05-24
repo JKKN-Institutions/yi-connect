@@ -70,7 +70,7 @@ export async function createPaymentMethod(
     // Destructure non-DB fields before spreading into insert
     const { account_number: _an, bank_name: _bn, ifsc_code: _ic, upi_id: _ui, ...createDbFields } = validation.data
     const { data, error } = await supabase
-      .from('payment_methods')
+      .schema('yi_connect').from('payment_methods')
       .insert([{
         ...createDbFields,
         account_details: accountDetails,
@@ -156,7 +156,7 @@ export async function updatePaymentMethod(
 
     // Fetch existing record for audit log
     const { data: existing } = await supabase
-      .from('payment_methods')
+      .schema('yi_connect').from('payment_methods')
       .select('*')
       .eq('id', methodId)
       .single()
@@ -180,7 +180,7 @@ export async function updatePaymentMethod(
     // Destructure non-DB fields before spreading into update
     const { account_number, bank_name, ifsc_code, upi_id, ...dbFields } = validation.data
     const { error } = await supabase
-      .from('payment_methods')
+      .schema('yi_connect').from('payment_methods')
       .update({
         ...dbFields,
         account_details: accountDetails,
@@ -246,7 +246,7 @@ export async function togglePaymentMethod(
 
     // Fetch current state
     const { data: existing } = await supabase
-      .from('payment_methods')
+      .schema('yi_connect').from('payment_methods')
       .select('*')
       .eq('id', methodId)
       .single()
@@ -264,7 +264,7 @@ export async function togglePaymentMethod(
     }
 
     const { error } = await supabase
-      .from('payment_methods')
+      .schema('yi_connect').from('payment_methods')
       .update(updates)
       .eq('id', methodId)
 
@@ -318,7 +318,7 @@ export async function deletePaymentMethod(
 
     // Fetch for audit log
     const { data: existing } = await supabase
-      .from('payment_methods')
+      .schema('yi_connect').from('payment_methods')
       .select('*')
       .eq('id', methodId)
       .single()
@@ -328,7 +328,7 @@ export async function deletePaymentMethod(
     }
 
     const { error } = await supabase
-      .from('payment_methods')
+      .schema('yi_connect').from('payment_methods')
       .delete()
       .eq('id', methodId)
 
@@ -410,7 +410,7 @@ export async function logFinancialAction(
     const changedFields = computeChangedFields(oldValues, newValues)
 
     const { error } = await supabase
-      .from('financial_audit_logs')
+      .schema('yi_connect').from('financial_audit_logs')
       .insert([{
         chapter_id: chapterId,
         action: validation.data.action,
@@ -461,7 +461,7 @@ async function logFinancialActionInternal(params: {
     const changedFields = computeChangedFields(params.oldValues, params.newValues)
 
     await supabase
-      .from('financial_audit_logs')
+      .schema('yi_connect').from('financial_audit_logs')
       .insert([{
         chapter_id: params.chapterId,
         action: params.action,
@@ -526,7 +526,7 @@ async function resolveChapterId(
   // sponsorship_payments don't have chapter_id directly, look up via deal
   if (entityType === 'sponsorship_payment') {
     const { data } = await supabase
-      .from('sponsorship_payments')
+      .schema('yi_connect').from('sponsorship_payments')
       .select('deal_id')
       .eq('id', entityId)
       .single()
@@ -534,7 +534,7 @@ async function resolveChapterId(
     if (!data?.deal_id) return null
 
     const { data: deal } = await supabase
-      .from('sponsorship_deals')
+      .schema('yi_connect').from('sponsorship_deals')
       .select('chapter_id')
       .eq('id', data.deal_id)
       .single()

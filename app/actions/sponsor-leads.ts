@@ -204,7 +204,7 @@ export async function captureSponsorsLead(
     })
 
     const { data: inserted, error } = await supabase
-      .from('sponsor_leads')
+      .schema('yi_connect').from('sponsor_leads')
       .insert(payload)
       .select('id, event_id, sponsor_id')
       .single()
@@ -220,12 +220,12 @@ export async function captureSponsorsLead(
     // Fetch sponsor + event for email + revalidation
     const [{ data: sponsor }, { data: event }] = await Promise.all([
       supabase
-        .from('sponsors')
+        .schema('yi_connect').from('sponsors')
         .select('id, organization_name, contact_email')
         .eq('id', validated.sponsor_id)
         .maybeSingle(),
       supabase
-        .from('events')
+        .schema('yi_connect').from('events')
         .select('id, title')
         .eq('id', validated.event_id)
         .maybeSingle(),
@@ -305,7 +305,7 @@ export async function updateSponsorLead(
     })
 
     const { data, error } = await supabase
-      .from('sponsor_leads')
+      .schema('yi_connect').from('sponsor_leads')
       .update(updateData)
       .eq('id', validated.id)
       .select('id, event_id')

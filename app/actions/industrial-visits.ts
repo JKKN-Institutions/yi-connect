@@ -86,7 +86,7 @@ export async function createIV(formData: FormData): Promise<IVActionResult<{ id:
     }
 
     const { data: profile } = await supabase
-      .from('profiles')
+      .schema('yi_connect').from('profiles')
       .select('id, chapter_id')
       .eq('id', user.id)
       .single();
@@ -97,7 +97,7 @@ export async function createIV(formData: FormData): Promise<IVActionResult<{ id:
 
     // Create event
     const { data, error } = await supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .insert({
         ...validatedData,
         chapter_id: profile.chapter_id,
@@ -182,7 +182,7 @@ export async function updateIV(formData: FormData): Promise<IVActionResult> {
 
     // Update
     const { error } = await supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .update(updates)
       .eq('id', id)
       .eq('category', 'industrial_visit');
@@ -219,7 +219,7 @@ export async function publishIV(id: string): Promise<IVActionResult> {
     const validatedData = publishIVSchema.parse({ id });
 
     const { error } = await supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .update({ status: 'published' })
       .eq('id', validatedData.id)
       .eq('category', 'industrial_visit');
@@ -255,7 +255,7 @@ export async function cancelIV(id: string, reason: string): Promise<IVActionResu
     const validatedData = cancelIVSchema.parse({ id, reason });
 
     const { error } = await supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .update({
         status: 'cancelled',
         custom_fields: { cancellation_reason: validatedData.reason }
@@ -270,7 +270,7 @@ export async function cancelIV(id: string, reason: string): Promise<IVActionResu
 
     // Get event details and all attendees for notification
     const { data: eventDetails } = await supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .select('title, start_date')
       .eq('id', validatedData.id)
       .single();
@@ -279,7 +279,7 @@ export async function cancelIV(id: string, reason: string): Promise<IVActionResu
     // yi_connect.members, not profiles. Nest profiles under the member
     // join so the email + name fields still come through.
     const { data: attendees } = await supabase
-      .from('event_rsvps')
+      .schema('yi_connect').from('event_rsvps')
       .select('member:members!event_rsvps_member_id_fkey(profile:profiles(full_name, email))')
       .eq('event_id', validatedData.id)
       .eq('status', 'confirmed');
@@ -336,7 +336,7 @@ export async function deleteIV(id: string): Promise<IVActionResult> {
 
     // Check if event has bookings
     const { count } = await supabase
-      .from('event_rsvps')
+      .schema('yi_connect').from('event_rsvps')
       .select('*', { count: 'exact', head: true })
       .eq('event_id', id);
 
@@ -349,7 +349,7 @@ export async function deleteIV(id: string): Promise<IVActionResult> {
 
     // Soft delete by setting is_active = false
     const { error } = await supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .update({ is_active: false })
       .eq('id', id)
       .eq('category', 'industrial_visit');
@@ -384,7 +384,7 @@ export async function rateHost(id: string, rating: number, comments?: string): P
     const validatedData = rateHostSchema.parse({ id, host_willingness_rating: rating, comments });
 
     const { error } = await supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .update({
         host_willingness_rating: validatedData.host_willingness_rating,
         custom_fields: { host_rating_comments: comments }
@@ -453,7 +453,7 @@ export async function createIVBooking(formData: FormData): Promise<IVActionResul
 
     // Create RSVP
     const { data, error } = await supabase
-      .from('event_rsvps')
+      .schema('yi_connect').from('event_rsvps')
       .insert({
         ...validatedData,
         status: 'confirmed',
@@ -515,7 +515,7 @@ export async function updateIVBooking(formData: FormData): Promise<IVActionResul
     const validatedData = updateIVBookingSchema.parse({ id, ...updates });
 
     const { error } = await supabase
-      .from('event_rsvps')
+      .schema('yi_connect').from('event_rsvps')
       .update(updates)
       .eq('id', id);
 
@@ -550,7 +550,7 @@ export async function cancelIVBooking(id: string, reason?: string): Promise<IVAc
 
     // Get booking details for event_id
     const { data: booking } = await supabase
-      .from('event_rsvps')
+      .schema('yi_connect').from('event_rsvps')
       .select('event_id, member_id')
       .eq('id', validatedData.id)
       .single();
@@ -561,7 +561,7 @@ export async function cancelIVBooking(id: string, reason?: string): Promise<IVAc
 
     // Update status to cancelled
     const { error } = await supabase
-      .from('event_rsvps')
+      .schema('yi_connect').from('event_rsvps')
       .update({
         status: 'cancelled',
         cancelled_at: new Date().toISOString(),
@@ -682,7 +682,7 @@ export async function promoteFromWaitlist(eventId: string): Promise<IVActionResu
     // stakeholder_id/type pair, which PostgREST cannot embed). Fall back
     // to event.title for the email body's industryName slot.
     const { data: eventDetails } = await supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .select('title, start_date')
       .eq('id', eventId)
       .single();
@@ -749,7 +749,7 @@ export async function updateCarpoolPreference(formData: FormData): Promise<IVAct
     const validatedData = updateCarpoolPreferenceSchema.parse(rawData);
 
     const { error } = await supabase
-      .from('event_rsvps')
+      .schema('yi_connect').from('event_rsvps')
       .update({
         carpool_status: validatedData.carpool_status,
         seats_available: validatedData.seats_available,
@@ -799,7 +799,7 @@ export async function createIndustryPortalUser(formData: FormData): Promise<IVAc
     const validatedData = createIndustryPortalUserSchema.parse(rawData);
 
     const { data, error } = await supabase
-      .from('industry_portal_users')
+      .schema('yi_connect').from('industry_portal_users')
       .insert(validatedData)
       .select('id')
       .single();
@@ -811,7 +811,7 @@ export async function createIndustryPortalUser(formData: FormData): Promise<IVAc
 
     // Get industry name for the invitation email
     const { data: industry } = await supabase
-      .from('industries')
+      .schema('yi_connect').from('industries')
       .select('name')
       .eq('id', validatedData.industry_id)
       .single();
@@ -872,7 +872,7 @@ export async function industryIncreaseCapacity(id: string, newCapacity: number):
 
     // Get current capacity
     const { data: event } = await supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .select('max_capacity, current_registrations')
       .eq('id', validatedData.id)
       .single();
@@ -887,7 +887,7 @@ export async function industryIncreaseCapacity(id: string, newCapacity: number):
 
     // Update capacity
     const { error } = await supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .update({ max_capacity: validatedData.new_capacity })
       .eq('id', validatedData.id);
 
@@ -901,7 +901,7 @@ export async function industryIncreaseCapacity(id: string, newCapacity: number):
     // yi_connect.events has no FK to industries. industryName falls back
     // to a generic label in the email template below.
     const { data: eventDetails } = await supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .select('title')
       .eq('id', validatedData.id)
       .single();
@@ -954,7 +954,7 @@ export async function memberRequestIV(formData: FormData): Promise<IVActionResul
 
     // Get user profile
     const { data: userProfile } = await supabase
-      .from('profiles')
+      .schema('yi_connect').from('profiles')
       .select('full_name, email, chapter_id')
       .eq('id', user.id)
       .single();
@@ -967,7 +967,7 @@ export async function memberRequestIV(formData: FormData): Promise<IVActionResul
     let industryName = validatedData.suggested_industry_name || 'Not specified';
     if (validatedData.industry_id) {
       const { data: industry } = await supabase
-        .from('industries')
+        .schema('yi_connect').from('industries')
         .select('name')
         .eq('id', validatedData.industry_id)
         .single();
@@ -976,7 +976,7 @@ export async function memberRequestIV(formData: FormData): Promise<IVActionResul
 
     // Get chapter admin emails
     const { data: chapterAdmins } = await supabase
-      .from('user_roles')
+      .schema('yi_connect').from('user_roles')
       .select('user:profiles!user_roles_user_id_fkey(full_name, email)')
       .eq('chapter_id', userProfile.chapter_id)
       .in('role_id', ['Chair', 'Co-Chair']);
@@ -1046,7 +1046,7 @@ export async function exportIVAttendees(formData: FormData): Promise<IVActionRes
 
     // Get event details
     const { data: event, error: eventError } = await supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .select('title, start_date')
       .eq('id', validatedData.event_id)
       .single();
@@ -1060,7 +1060,7 @@ export async function exportIVAttendees(formData: FormData): Promise<IVActionRes
     // yi_connect.members, not profiles. company sits on members; the rest
     // come from the nested profile join.
     const { data: attendees, error: attendeesError } = await supabase
-      .from('event_rsvps')
+      .schema('yi_connect').from('event_rsvps')
       .select(`
         *,
         member:members!event_rsvps_member_id_fkey(

@@ -114,7 +114,7 @@ export async function submitMemberRequest(formData: FormData): Promise<FormState
   try {
     // Check if email already has a pending or approved request
     const { data: existingRequest } = await supabase
-      .from('member_requests')
+      .schema('yi_connect').from('member_requests')
       .select('id, status')
       .eq('email', validation.data.email)
       .in('status', ['pending', 'approved'])
@@ -140,7 +140,7 @@ export async function submitMemberRequest(formData: FormData): Promise<FormState
 
     // Create member request
     const { data, error } = await supabase
-      .from('member_requests')
+      .schema('yi_connect').from('member_requests')
       .insert(insertPayload)
       .select()
       .single()
@@ -192,7 +192,7 @@ export async function getMemberRequests(params?: {
   // pointing at the yi_connect.chapters view (which surfaces yi.chapters
   // via member_requests_preferred_chapter_id_fkey).
   let query = supabase
-    .from('member_requests')
+    .schema('yi_connect').from('member_requests')
     .select(`
       *,
       chapter:chapters!member_requests_preferred_chapter_id_fkey(id, name, location)
@@ -235,7 +235,7 @@ export async function getMemberRequestById(id: string) {
   // Phase E fix 2026-05-23: `chapter:preferred_chapter_id(...)` is invalid
   // PostgREST syntax. Use the explicit FK hint.
   const { data, error } = await supabase
-    .from('member_requests')
+    .schema('yi_connect').from('member_requests')
     .select(`
       *,
       chapter:chapters!member_requests_preferred_chapter_id_fkey(id, name, location)
@@ -261,7 +261,7 @@ export async function approveMemberRequest(requestId: string, notes?: string): P
 
     // 1. Get request details
     const { data: request, error: fetchError } = await supabase
-      .from('member_requests')
+      .schema('yi_connect').from('member_requests')
       .select('*')
       .eq('id', requestId)
       .single()
@@ -276,7 +276,7 @@ export async function approveMemberRequest(requestId: string, notes?: string): P
 
     // 2. Check if email is already in whitelist
     const { data: existingApproval } = await supabase
-      .from('approved_emails')
+      .schema('yi_connect').from('approved_emails')
       .select('id')
       .eq('email', request.email)
       .single()
@@ -290,7 +290,7 @@ export async function approveMemberRequest(requestId: string, notes?: string): P
 
     // 3. Add email to whitelist
     const { data: approvedEmail, error: whitelistError } = await supabase
-      .from('approved_emails')
+      .schema('yi_connect').from('approved_emails')
       .insert({
         email: request.email,
         approved_by: user.id,
@@ -306,7 +306,7 @@ export async function approveMemberRequest(requestId: string, notes?: string): P
 
     // 4. Update request status to approved
     const { error: updateError } = await supabase
-      .from('member_requests')
+      .schema('yi_connect').from('member_requests')
       .update({
         status: 'approved',
         reviewed_by: user.id,
@@ -367,7 +367,7 @@ export async function rejectMemberRequest(requestId: string, notes: string): Pro
 
     // 1. Get request details
     const { data: request, error: fetchError } = await supabase
-      .from('member_requests')
+      .schema('yi_connect').from('member_requests')
       .select('*')
       .eq('id', requestId)
       .single()
@@ -382,7 +382,7 @@ export async function rejectMemberRequest(requestId: string, notes: string): Pro
 
     // 2. Update request status to rejected
     const { error: updateError } = await supabase
-      .from('member_requests')
+      .schema('yi_connect').from('member_requests')
       .update({
         status: 'rejected',
         reviewed_by: user.id,
@@ -443,7 +443,7 @@ export async function withdrawMemberRequest(requestId: string): Promise<FormStat
 
     // Get request
     const { data: request, error: fetchError } = await supabase
-      .from('member_requests')
+      .schema('yi_connect').from('member_requests')
       .select('*')
       .eq('id', requestId)
       .single()
@@ -454,7 +454,7 @@ export async function withdrawMemberRequest(requestId: string): Promise<FormStat
 
     // Only allow if user owns the request or is an admin
     const { data: profile } = await supabase
-      .from('profiles')
+      .schema('yi_connect').from('profiles')
       .select('email')
       .eq('id', user.id)
       .single()
@@ -464,7 +464,7 @@ export async function withdrawMemberRequest(requestId: string): Promise<FormStat
     if (!isOwner) {
       // Check if user is admin
       const { data: roles } = await supabase
-        .from('user_roles')
+        .schema('yi_connect').from('user_roles')
         .select('role:roles(hierarchy_level)')
         .eq('user_id', user.id)
 
@@ -480,7 +480,7 @@ export async function withdrawMemberRequest(requestId: string): Promise<FormStat
 
     // Update status
     const { error: updateError } = await supabase
-      .from('member_requests')
+      .schema('yi_connect').from('member_requests')
       .update({ status: 'withdrawn' })
       .eq('id', requestId)
 

@@ -60,7 +60,7 @@ export async function createReportConfiguration(input: {
     }
 
     const { data, error } = await supabase
-      .from('report_configurations')
+      .schema('yi_connect').from('report_configurations')
       .insert({
         name: input.name,
         description: input.description,
@@ -124,7 +124,7 @@ export async function updateReportConfiguration(
     }
 
     const { error } = await supabase
-      .from('report_configurations')
+      .schema('yi_connect').from('report_configurations')
       .update({
         ...input,
         updated_by: user.id,
@@ -155,7 +155,7 @@ export async function deleteReportConfiguration(
     const supabase = await createServerSupabaseClient()
 
     const { error } = await supabase
-      .from('report_configurations')
+      .schema('yi_connect').from('report_configurations')
       .delete()
       .eq('id', configId)
 
@@ -192,7 +192,7 @@ export async function generateReport(
 
     // Create pending report record
     const { data: report, error: insertError } = await supabase
-      .from('generated_reports')
+      .schema('yi_connect').from('generated_reports')
       .insert({
         name: `${formatReportType(request.report_type)} Report`,
         report_type: request.report_type,
@@ -237,7 +237,7 @@ async function startReportGeneration(
   try {
     // Update status to generating
     await supabase
-      .from('generated_reports')
+      .schema('yi_connect').from('generated_reports')
       .update({ generation_status: 'generating' })
       .eq('id', reportId)
 
@@ -248,7 +248,7 @@ async function startReportGeneration(
     switch (request.report_type) {
       case 'trainer_performance':
         const { data: trainerData } = await supabase
-          .from('trainer_performance_data')
+          .schema('yi_connect').from('trainer_performance_data')
           .select('*')
           .order('total_sessions', { ascending: false })
         data = trainerData || []
@@ -256,7 +256,7 @@ async function startReportGeneration(
 
       case 'stakeholder_engagement':
         const { data: stakeholderData } = await supabase
-          .from('stakeholder_engagement_data')
+          .schema('yi_connect').from('stakeholder_engagement_data')
           .select('*')
           .order('total_sessions', { ascending: false })
         data = stakeholderData || []
@@ -264,7 +264,7 @@ async function startReportGeneration(
 
       case 'vertical_impact':
         const { data: verticalData } = await supabase
-          .from('vertical_impact_data')
+          .schema('yi_connect').from('vertical_impact_data')
           .select('*')
           .order('performance_score', { ascending: false })
         data = verticalData || []
@@ -272,7 +272,7 @@ async function startReportGeneration(
 
       case 'member_activity':
         const { data: memberData } = await supabase
-          .from('member_activity_data')
+          .schema('yi_connect').from('member_activity_data')
           .select('*')
           .order('engagement_score', { ascending: false })
         data = memberData || []
@@ -292,7 +292,7 @@ async function startReportGeneration(
 
     // Update report with results
     await supabase
-      .from('generated_reports')
+      .schema('yi_connect').from('generated_reports')
       .update({
         generation_status: 'completed',
         row_count: rowCount,
@@ -305,7 +305,7 @@ async function startReportGeneration(
   } catch (error) {
     console.error('Report generation error:', error)
     await supabase
-      .from('generated_reports')
+      .schema('yi_connect').from('generated_reports')
       .update({
         generation_status: 'failed',
         error_message: error instanceof Error ? error.message : 'Generation failed',
@@ -388,7 +388,7 @@ export async function deleteGeneratedReport(
     const supabase = await createServerSupabaseClient()
 
     const { error } = await supabase
-      .from('generated_reports')
+      .schema('yi_connect').from('generated_reports')
       .delete()
       .eq('id', reportId)
 
@@ -424,14 +424,14 @@ export async function trackReportDownload(
     // Fallback if RPC doesn't exist
     if (error) {
       const { data: report } = await supabase
-        .from('generated_reports')
+        .schema('yi_connect').from('generated_reports')
         .select('download_count')
         .eq('id', reportId)
         .single()
 
       if (report) {
         await supabase
-          .from('generated_reports')
+          .schema('yi_connect').from('generated_reports')
           .update({
             download_count: (report.download_count || 0) + 1,
             last_downloaded_at: new Date().toISOString(),
@@ -470,7 +470,7 @@ export async function subscribeToReport(input: {
     }
 
     const { data, error } = await supabase
-      .from('report_subscriptions')
+      .schema('yi_connect').from('report_subscriptions')
       .upsert(
         {
           configuration_id: input.configuration_id,
@@ -514,7 +514,7 @@ export async function unsubscribeFromReport(
     }
 
     const { error } = await supabase
-      .from('report_subscriptions')
+      .schema('yi_connect').from('report_subscriptions')
       .update({
         is_active: false,
         unsubscribed_at: new Date().toISOString(),
@@ -570,7 +570,7 @@ export async function generateQuarterlyReport(
 
     // Permission: Chair+ of this chapter OR National Admin
     const { data: rolesRow } = await supabase
-      .from('user_roles')
+      .schema('yi_connect').from('user_roles')
       .select('role:roles(hierarchy_level)')
       .eq('user_id', user.id)
     const maxLevel = Math.max(
@@ -582,7 +582,7 @@ export async function generateQuarterlyReport(
       })
     )
     const { data: profile } = await supabase
-      .from('profiles')
+      .schema('yi_connect').from('profiles')
       .select('chapter_id')
       .eq('id', user.id)
       .single()
@@ -643,7 +643,7 @@ export async function generateQuarterlyReport(
 
     // Upsert the report (overwrite if regenerated)
     const { data: report, error: upsertErr } = await supabase
-      .from('chapter_reports')
+      .schema('yi_connect').from('chapter_reports')
       .upsert(
         {
           chapter_id: validated.chapter_id,
@@ -699,7 +699,7 @@ export async function sendReportToNational(
     if (!user) return { success: false, error: 'Unauthorized' }
 
     const { data: report } = await supabase
-      .from('chapter_reports')
+      .schema('yi_connect').from('chapter_reports')
       .select('*, chapter:chapters(name)')
       .eq('id', validated.report_id)
       .maybeSingle()
@@ -734,7 +734,7 @@ export async function sendReportToNational(
     }
 
     await supabase
-      .from('chapter_reports')
+      .schema('yi_connect').from('chapter_reports')
       .update({ sent_to_national: true, sent_at: new Date().toISOString() })
       .eq('id', validated.report_id)
 

@@ -62,7 +62,7 @@ export async function createAwardCategory(
   const supabase = await createServerSupabaseClient()
 
   const { data, error } = await supabase
-    .from('award_categories')
+    .schema('yi_connect').from('award_categories')
     .insert([validation.data])
     .select()
     .single()
@@ -99,7 +99,7 @@ export async function updateAwardCategory(
   const supabase = await createServerSupabaseClient()
 
   const { error } = await supabase
-    .from('award_categories')
+    .schema('yi_connect').from('award_categories')
     .update(validation.data)
     .eq('id', id)
 
@@ -118,7 +118,7 @@ export async function deleteAwardCategory(id: string): Promise<FormState> {
 
   // Check if category has cycles
   const { count } = await supabase
-    .from('award_cycles')
+    .schema('yi_connect').from('award_cycles')
     .select('id', { count: 'exact', head: true })
     .eq('category_id', id)
 
@@ -127,7 +127,7 @@ export async function deleteAwardCategory(id: string): Promise<FormState> {
   }
 
   const { error } = await supabase
-    .from('award_categories')
+    .schema('yi_connect').from('award_categories')
     .delete()
     .eq('id', id)
 
@@ -171,7 +171,7 @@ export async function createAwardCycle(
   const supabase = await createServerSupabaseClient()
 
   const { data, error } = await supabase
-    .from('award_cycles')
+    .schema('yi_connect').from('award_cycles')
     .insert([validation.data])
     .select()
     .single()
@@ -207,7 +207,7 @@ export async function updateAwardCycle(
   const supabase = await createServerSupabaseClient()
 
   const { error } = await supabase
-    .from('award_cycles')
+    .schema('yi_connect').from('award_cycles')
     .update(validation.data)
     .eq('id', id)
 
@@ -225,7 +225,7 @@ export async function openCycle(cycleId: string): Promise<FormState> {
   const supabase = await createServerSupabaseClient()
 
   const { error } = await supabase
-    .from('award_cycles')
+    .schema('yi_connect').from('award_cycles')
     .update({ status: 'open' })
     .eq('id', cycleId)
 
@@ -244,7 +244,7 @@ export async function closeCycle(cycleId: string): Promise<FormState> {
   const supabase = await createServerSupabaseClient()
 
   const { error } = await supabase
-    .from('award_cycles')
+    .schema('yi_connect').from('award_cycles')
     .update({ status: 'nominations_closed' })
     .eq('id', cycleId)
 
@@ -296,7 +296,7 @@ export async function createNomination(
   }
 
   const { data, error } = await supabase
-    .from('nominations')
+    .schema('yi_connect').from('nominations')
     .insert([validation.data])
     .select()
     .single()
@@ -337,7 +337,7 @@ export async function updateNomination(
   const supabase = await createServerSupabaseClient()
 
   const { error } = await supabase
-    .from('nominations')
+    .schema('yi_connect').from('nominations')
     .update(validation.data)
     .eq('id', id)
 
@@ -355,7 +355,7 @@ export async function submitNomination(nominationId: string): Promise<FormState>
   const supabase = await createServerSupabaseClient()
 
   const { error } = await supabase
-    .from('nominations')
+    .schema('yi_connect').from('nominations')
     .update({
       status: 'submitted',
       submitted_at: new Date().toISOString(),
@@ -376,7 +376,7 @@ export async function deleteNomination(nominationId: string): Promise<FormState>
   const supabase = await createServerSupabaseClient()
 
   const { error } = await supabase
-    .from('nominations')
+    .schema('yi_connect').from('nominations')
     .delete()
     .eq('id', nominationId)
 
@@ -411,7 +411,7 @@ export async function assignJuryMember(data: {
   const supabase = await createServerSupabaseClient()
 
   const { error } = await supabase
-    .from('jury_members')
+    .schema('yi_connect').from('jury_members')
     .insert([validation.data])
 
   if (error) {
@@ -429,7 +429,7 @@ export async function removeJuryMember(juryMemberId: string): Promise<FormState>
 
   // Check if jury member has submitted any scores
   const { count } = await supabase
-    .from('jury_scores')
+    .schema('yi_connect').from('jury_scores')
     .select('id', { count: 'exact', head: true })
     .eq('jury_member_id', juryMemberId)
 
@@ -438,7 +438,7 @@ export async function removeJuryMember(juryMemberId: string): Promise<FormState>
   }
 
   const { error } = await supabase
-    .from('jury_members')
+    .schema('yi_connect').from('jury_members')
     .delete()
     .eq('id', juryMemberId)
 
@@ -480,7 +480,7 @@ export async function submitJuryScore(
   const supabase = await createServerSupabaseClient()
 
   const { error } = await supabase
-    .from('jury_scores')
+    .schema('yi_connect').from('jury_scores')
     .insert([validation.data])
 
   if (error) {
@@ -520,7 +520,7 @@ export async function updateJuryScore(
   const supabase = await createServerSupabaseClient()
 
   const { error } = await supabase
-    .from('jury_scores')
+    .schema('yi_connect').from('jury_scores')
     .update(validation.data)
     .eq('id', id)
 
@@ -558,7 +558,7 @@ export async function selectWinners(cycleId: string, winners: Array<{
 
   // Insert winners
   const { error } = await supabase
-    .from('award_winners')
+    .schema('yi_connect').from('award_winners')
     .insert(winners.map(w => ({ cycle_id: cycleId, ...w })))
 
   if (error) {
@@ -567,7 +567,7 @@ export async function selectWinners(cycleId: string, winners: Array<{
 
   // Update nominations status
   await supabase
-    .from('nominations')
+    .schema('yi_connect').from('nominations')
     .update({ status: 'winner' })
     .in('id', winners.map(w => w.nomination_id))
 
@@ -585,7 +585,7 @@ export async function announceWinners(
   const supabase = await createServerSupabaseClient()
 
   const { error } = await supabase
-    .from('award_winners')
+    .schema('yi_connect').from('award_winners')
     .update({
       announced_at: new Date().toISOString(),
       announced_by: announcedBy,
@@ -599,7 +599,7 @@ export async function announceWinners(
 
   // Update cycle status
   await supabase
-    .from('award_cycles')
+    .schema('yi_connect').from('award_cycles')
     .update({ status: 'completed', winners_announced_at: new Date().toISOString() })
     .eq('id', cycleId)
 

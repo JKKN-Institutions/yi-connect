@@ -48,7 +48,7 @@ export async function fixDemoUserRoles(): Promise<{
     try {
       // Get the user's profile
       const { data: profile, error: profileError } = await supabaseAdmin
-        .from('profiles')
+        .schema('yi_connect').from('profiles')
         .select('id, email')
         .eq('email', account.email)
         .single()
@@ -60,7 +60,7 @@ export async function fixDemoUserRoles(): Promise<{
 
       // Get the role ID
       const { data: role, error: roleError } = await supabaseAdmin
-        .from('roles')
+        .schema('yi_connect').from('roles')
         .select('id, name')
         .eq('name', account.roleName)
         .single()
@@ -72,7 +72,7 @@ export async function fixDemoUserRoles(): Promise<{
 
       // Check if user already has this role
       const { data: existingRole } = await supabaseAdmin
-        .from('user_roles')
+        .schema('yi_connect').from('user_roles')
         .select('id')
         .eq('user_id', profile.id)
         .eq('role_id', role.id)
@@ -85,13 +85,13 @@ export async function fixDemoUserRoles(): Promise<{
 
       // Remove any existing roles for this user (clean slate)
       await supabaseAdmin
-        .from('user_roles')
+        .schema('yi_connect').from('user_roles')
         .delete()
         .eq('user_id', profile.id)
 
       // Assign the correct role
       const { error: insertError } = await supabaseAdmin
-        .from('user_roles')
+        .schema('yi_connect').from('user_roles')
         .insert({
           user_id: profile.id,
           role_id: role.id,
@@ -165,7 +165,7 @@ export async function checkDemoUserRoles(): Promise<{
     try {
       // Get user profile
       const { data: profile } = await supabaseAdmin
-        .from('profiles')
+        .schema('yi_connect').from('profiles')
         .select('id, email')
         .eq('email', email)
         .single()

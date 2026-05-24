@@ -76,7 +76,7 @@ export async function getIndustryProfile(industryId: string) {
     const supabase = await createClient();
 
     const { data, error } = await supabase
-      .from('industries')
+      .schema('yi_connect').from('industries')
       .select(`
         id,
         organization_name,
@@ -125,7 +125,7 @@ export async function getIndustryCoordinators(industryId: string) {
     const supabase = await createClient();
 
     const { data, error } = await supabase
-      .from('stakeholder_contacts')
+      .schema('yi_connect').from('stakeholder_contacts')
       .select('*')
       .eq('stakeholder_type', 'industries')
       .eq('stakeholder_id', industryId)
@@ -153,7 +153,7 @@ export async function getNotificationSettings(industryId: string) {
 
     // Check if settings exist in a settings table, or return defaults
     const { data, error } = await supabase
-      .from('industry_notification_settings')
+      .schema('yi_connect').from('industry_notification_settings')
       .select('*')
       .eq('industry_id', industryId)
       .single();
@@ -265,7 +265,7 @@ export async function updateCompanyProfile(
     const supabase = await createClient();
 
     const { error } = await supabase
-      .from('industries')
+      .schema('yi_connect').from('industries')
       .update({
         organization_name: validation.data.organization_name,
         industry_sector: validation.data.industry_sector || null,
@@ -334,7 +334,7 @@ export async function addCoordinator(
     // Get chapter_id from industry
     const supabase = await createClient();
     const { data: industry } = await supabase
-      .from('industries')
+      .schema('yi_connect').from('industries')
       .select('chapter_id')
       .eq('id', industryId)
       .single();
@@ -368,7 +368,7 @@ export async function addCoordinator(
 
     // Check if email already exists for this industry
     const { data: existingContact } = await supabase
-      .from('stakeholder_contacts')
+      .schema('yi_connect').from('stakeholder_contacts')
       .select('id')
       .eq('stakeholder_type', 'industries')
       .eq('stakeholder_id', industryId)
@@ -385,13 +385,13 @@ export async function addCoordinator(
     // If setting as primary, remove primary from others
     if (validation.data.is_primary_contact) {
       await supabase
-        .from('stakeholder_contacts')
+        .schema('yi_connect').from('stakeholder_contacts')
         .update({ is_primary_contact: false })
         .eq('stakeholder_type', 'industries')
         .eq('stakeholder_id', industryId);
     }
 
-    const { error } = await supabase.from('stakeholder_contacts').insert({
+    const { error } = await supabase.schema('yi_connect').from('stakeholder_contacts').insert({
       chapter_id: industry.chapter_id,
       stakeholder_type: 'industries',
       stakeholder_id: industryId,
@@ -443,7 +443,7 @@ export async function removeCoordinator(contactId: string): Promise<ActionRespon
 
     // Verify the contact belongs to this industry
     const { data: contact } = await supabase
-      .from('stakeholder_contacts')
+      .schema('yi_connect').from('stakeholder_contacts')
       .select('id, is_primary_contact')
       .eq('id', contactId)
       .eq('stakeholder_type', 'industries')
@@ -460,7 +460,7 @@ export async function removeCoordinator(contactId: string): Promise<ActionRespon
     // Don't allow removing the last primary contact
     if (contact.is_primary_contact) {
       const { count } = await supabase
-        .from('stakeholder_contacts')
+        .schema('yi_connect').from('stakeholder_contacts')
         .select('*', { count: 'exact', head: true })
         .eq('stakeholder_type', 'industries')
         .eq('stakeholder_id', industryId);
@@ -474,7 +474,7 @@ export async function removeCoordinator(contactId: string): Promise<ActionRespon
     }
 
     const { error } = await supabase
-      .from('stakeholder_contacts')
+      .schema('yi_connect').from('stakeholder_contacts')
       .delete()
       .eq('id', contactId);
 
@@ -518,14 +518,14 @@ export async function setPrimaryCoordinator(contactId: string): Promise<ActionRe
 
     // Remove primary from all other contacts
     await supabase
-      .from('stakeholder_contacts')
+      .schema('yi_connect').from('stakeholder_contacts')
       .update({ is_primary_contact: false })
       .eq('stakeholder_type', 'industries')
       .eq('stakeholder_id', industryId);
 
     // Set this contact as primary
     const { error } = await supabase
-      .from('stakeholder_contacts')
+      .schema('yi_connect').from('stakeholder_contacts')
       .update({ is_primary_contact: true })
       .eq('id', contactId)
       .eq('stakeholder_type', 'industries')
@@ -590,7 +590,7 @@ export async function updateNotificationSettings(
 
     // Upsert notification settings
     const { error } = await supabase
-      .from('industry_notification_settings')
+      .schema('yi_connect').from('industry_notification_settings')
       .upsert({
         industry_id: industryId,
         email_notifications: validation.data.email_notifications,

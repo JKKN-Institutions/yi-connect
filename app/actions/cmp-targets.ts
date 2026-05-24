@@ -322,7 +322,7 @@ export async function recordCMPProgressAction(
 
     // Get the target to know vertical_id and chapter_id
     const { data: target, error: targetError } = await supabase
-      .from('cmp_targets')
+      .schema('yi_connect').from('cmp_targets')
       .select('vertical_id, calendar_year, chapter_id, is_national_target')
       .eq('id', targetId)
       .single()
@@ -333,7 +333,7 @@ export async function recordCMPProgressAction(
 
     // Get user's chapter
     const { data: member } = await supabase
-      .from('members')
+      .schema('yi_connect').from('members')
       .select('chapter_id')
       .eq('id', user.id)
       .single()
@@ -346,7 +346,7 @@ export async function recordCMPProgressAction(
 
     // Create health card entry
     const { data: entry, error: insertError } = await supabase
-      .from('health_card_entries')
+      .schema('yi_connect').from('health_card_entries')
       .insert({
         vertical_id: target.vertical_id,
         chapter_id: chapterId,
@@ -415,7 +415,7 @@ export async function batchUpdateTargetsAction(
 
       if (Object.keys(updateData).length > 0) {
         const { error } = await supabase
-          .from('cmp_targets')
+          .schema('yi_connect').from('cmp_targets')
           .update(updateData)
           .eq('id', id)
 

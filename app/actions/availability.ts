@@ -45,7 +45,7 @@ export async function setAvailability(input: {
 
     // Upsert availability record
     const { data, error } = await supabase
-      .from('availability')
+      .schema('yi_connect').from('availability')
       .upsert(
         {
           member_id: input.member_id,
@@ -98,7 +98,7 @@ export async function bulkSetAvailability(input: {
       updated_at: new Date().toISOString(),
     }))
 
-    const { error } = await supabase.from('availability').upsert(records, {
+    const { error } = await supabase.schema('yi_connect').from('availability').upsert(records, {
       onConflict: 'member_id,date',
     })
 
@@ -129,7 +129,7 @@ export async function clearAvailability(
     const supabase = await createServerSupabaseClient()
 
     const { error } = await supabase
-      .from('availability')
+      .schema('yi_connect').from('availability')
       .delete()
       .eq('member_id', memberId)
       .eq('date', date)
@@ -191,14 +191,14 @@ export async function updateAvailabilityPreferences(input: {
 
     // Get existing records to update
     const { data: existingRecords } = await supabase
-      .from('availability')
+      .schema('yi_connect').from('availability')
       .select('id')
       .eq('member_id', input.member_id)
 
     if (existingRecords && existingRecords.length > 0) {
       // Update existing records
       const { error } = await supabase
-        .from('availability')
+        .schema('yi_connect').from('availability')
         .update(updateData)
         .eq('member_id', input.member_id)
 
@@ -208,7 +208,7 @@ export async function updateAvailabilityPreferences(input: {
     } else {
       // Create a new record with just preferences (for today)
       const today = new Date().toISOString().split('T')[0]
-      const { error } = await supabase.from('availability').insert({
+      const { error } = await supabase.schema('yi_connect').from('availability').insert({
         member_id: input.member_id,
         date: today,
         status: 'available',
@@ -247,7 +247,7 @@ export async function assignAvailabilityToSession(
     const supabase = await createServerSupabaseClient()
 
     const { error } = await supabase
-      .from('availability')
+      .schema('yi_connect').from('availability')
       .update({
         is_assigned: true,
         assigned_session_id: sessionId,
@@ -279,7 +279,7 @@ export async function unassignAvailability(availabilityId: string): Promise<Acti
     const supabase = await createServerSupabaseClient()
 
     const { error } = await supabase
-      .from('availability')
+      .schema('yi_connect').from('availability')
       .update({
         is_assigned: false,
         assigned_session_id: null,
@@ -314,7 +314,7 @@ export async function blockAvailability(
   try {
     const supabase = await createServerSupabaseClient()
 
-    const { error } = await supabase.from('availability').upsert(
+    const { error } = await supabase.schema('yi_connect').from('availability').upsert(
       {
         member_id: memberId,
         date,

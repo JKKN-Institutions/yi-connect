@@ -62,7 +62,7 @@ export async function submitSessionReport(
 
     // Verify event exists and is a service event
     const { data: event, error: eventError } = await supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .select('id, title, status, is_service_event, expected_students')
       .eq('id', validated.event_id)
       .eq('is_service_event', true)
@@ -74,7 +74,7 @@ export async function submitSessionReport(
 
     // Check if report already exists
     const { data: existing } = await supabase
-      .from('event_session_reports')
+      .schema('yi_connect').from('event_session_reports')
       .select('id')
       .eq('event_id', validated.event_id)
       .single()
@@ -93,7 +93,7 @@ export async function submitSessionReport(
 
     // Insert report
     const { data, error } = await supabase
-      .from('event_session_reports')
+      .schema('yi_connect').from('event_session_reports')
       .insert({
         event_id: validated.event_id,
         trainer_assignment_id: validated.trainer_assignment_id || null,
@@ -141,7 +141,7 @@ export async function submitSessionReport(
 
     // Update event status to completed
     await supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .update({ status: 'completed' })
       .eq('id', validated.event_id)
 
@@ -185,7 +185,7 @@ export async function updateSessionReport(
 
     // Get report to verify ownership/permissions
     const { data: report, error: fetchError } = await supabase
-      .from('event_session_reports')
+      .schema('yi_connect').from('event_session_reports')
       .select('id, event_id, submitted_by, verified_at')
       .eq('id', reportId)
       .single()
@@ -218,7 +218,7 @@ export async function updateSessionReport(
 
     // Update report
     const { error } = await supabase
-      .from('event_session_reports')
+      .schema('yi_connect').from('event_session_reports')
       .update({
         ...validated,
         actual_duration_minutes: actualDurationMinutes,
@@ -260,7 +260,7 @@ export async function verifySessionReport(
 
     // Get report
     const { data: report, error: fetchError } = await supabase
-      .from('event_session_reports')
+      .schema('yi_connect').from('event_session_reports')
       .select('id, event_id, verified_at')
       .eq('id', validated.report_id)
       .single()
@@ -282,7 +282,7 @@ export async function verifySessionReport(
 
     // Update report
     const { error } = await supabase
-      .from('event_session_reports')
+      .schema('yi_connect').from('event_session_reports')
       .update({
         verified_at: validated.verified ? new Date().toISOString() : null,
         verified_by: validated.verified ? user.id : null,
@@ -324,7 +324,7 @@ export async function completeFollowUp(
 
     // Get report
     const { data: report, error: fetchError } = await supabase
-      .from('event_session_reports')
+      .schema('yi_connect').from('event_session_reports')
       .select('id, event_id, follow_up_required, follow_up_completed, follow_up_notes')
       .eq('id', validated.report_id)
       .single()
@@ -343,7 +343,7 @@ export async function completeFollowUp(
 
     // Update report
     const { error } = await supabase
-      .from('event_session_reports')
+      .schema('yi_connect').from('event_session_reports')
       .update({
         follow_up_completed: true,
         follow_up_completed_at: new Date().toISOString(),
@@ -386,7 +386,7 @@ export async function addReportPhotos(
 
     // Get current report
     const { data: report, error: fetchError } = await supabase
-      .from('event_session_reports')
+      .schema('yi_connect').from('event_session_reports')
       .select('id, event_id, photo_urls, submitted_by')
       .eq('id', reportId)
       .single()
@@ -405,7 +405,7 @@ export async function addReportPhotos(
     const allPhotos = [...existingPhotos, ...photoUrls]
 
     const { error } = await supabase
-      .from('event_session_reports')
+      .schema('yi_connect').from('event_session_reports')
       .update({
         photo_urls: allPhotos,
         updated_at: new Date().toISOString(),
@@ -443,7 +443,7 @@ export async function uploadAttendanceSheet(
     }
 
     const { data: report } = await supabase
-      .from('event_session_reports')
+      .schema('yi_connect').from('event_session_reports')
       .select('event_id, submitted_by')
       .eq('id', reportId)
       .single()
@@ -457,7 +457,7 @@ export async function uploadAttendanceSheet(
     }
 
     const { error } = await supabase
-      .from('event_session_reports')
+      .schema('yi_connect').from('event_session_reports')
       .update({
         attendance_sheet_url: sheetUrl,
         updated_at: new Date().toISOString(),
@@ -493,7 +493,7 @@ async function updateTrainerStats(
 
   // Get trainer profile ID from assignment
   const { data: assignment } = await supabase
-    .from('event_trainer_assignments')
+    .schema('yi_connect').from('event_trainer_assignments')
     .select('trainer_profile_id')
     .eq('id', assignmentId)
     .single()
@@ -502,7 +502,7 @@ async function updateTrainerStats(
 
   // Update trainer profile stats
   const { data: profile } = await supabase
-    .from('trainer_profiles')
+    .schema('yi_connect').from('trainer_profiles')
     .select('total_sessions, total_students_impacted')
     .eq('id', assignment.trainer_profile_id)
     .single()
@@ -510,7 +510,7 @@ async function updateTrainerStats(
   if (!profile) return
 
   await supabase
-    .from('trainer_profiles')
+    .schema('yi_connect').from('trainer_profiles')
     .update({
       total_sessions: (profile.total_sessions || 0) + 1,
       total_students_impacted: (profile.total_students_impacted || 0) + studentsImpacted,
@@ -520,7 +520,7 @@ async function updateTrainerStats(
 
   // Mark assignment as completed
   await supabase
-    .from('event_trainer_assignments')
+    .schema('yi_connect').from('event_trainer_assignments')
     .update({ status: 'completed' })
     .eq('id', assignmentId)
 }
@@ -543,7 +543,7 @@ export async function getSessionReportSummary(): Promise<ActionResponse<{
     }
 
     const { data, error } = await supabase
-      .from('event_session_reports')
+      .schema('yi_connect').from('event_session_reports')
       .select('id, verified_at, follow_up_required, follow_up_completed')
 
     if (error) {

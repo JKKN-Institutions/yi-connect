@@ -67,7 +67,7 @@ export async function createAAAPlan(
 
     // Check if plan already exists for this vertical + year
     const { data: existing } = await supabase
-      .from('aaa_plans')
+      .schema('yi_connect').from('aaa_plans')
       .select('id')
       .eq('vertical_id', sanitized.vertical_id)
       .eq('calendar_year', sanitized.calendar_year)
@@ -80,7 +80,7 @@ export async function createAAAPlan(
     // Get member ID for created_by
     // Note: members.id = profiles.id = auth user id (NOT user_id)
     const { data: member } = await supabase
-      .from('members')
+      .schema('yi_connect').from('members')
       .select('id')
       .eq('id', user.id)
       .single()
@@ -90,7 +90,7 @@ export async function createAAAPlan(
     }
 
     const { data, error } = await supabase
-      .from('aaa_plans')
+      .schema('yi_connect').from('aaa_plans')
       .insert({
         ...sanitized,
         created_by: member.id,
@@ -135,7 +135,7 @@ export async function updateAAAPlan(
 
     // Check if plan exists
     const { data: existing } = await supabase
-      .from('aaa_plans')
+      .schema('yi_connect').from('aaa_plans')
       .select('id, vertical_id, first_event_locked')
       .eq('id', id)
       .single()
@@ -150,7 +150,7 @@ export async function updateAAAPlan(
     }
 
     const { error } = await supabase
-      .from('aaa_plans')
+      .schema('yi_connect').from('aaa_plans')
       .update(sanitized)
       .eq('id', id)
 
@@ -191,7 +191,7 @@ export async function lockFirstEventDate(
     const supabase = await createClient()
 
     const { data: existing } = await supabase
-      .from('aaa_plans')
+      .schema('yi_connect').from('aaa_plans')
       .select('id, vertical_id, first_event_locked')
       .eq('id', validated.plan_id)
       .single()
@@ -205,7 +205,7 @@ export async function lockFirstEventDate(
     }
 
     const { error } = await supabase
-      .from('aaa_plans')
+      .schema('yi_connect').from('aaa_plans')
       .update({
         first_event_date: validated.first_event_date,
         first_event_locked: true,
@@ -245,7 +245,7 @@ export async function approveAAAPlan(planId: string): Promise<ActionResponse> {
     // Get member for approved_by
     // Note: members.id = profiles.id = auth user id (NOT user_id)
     const { data: member } = await supabase
-      .from('members')
+      .schema('yi_connect').from('members')
       .select('id, hierarchy_level')
       .eq('id', user.id)
       .single()
@@ -255,7 +255,7 @@ export async function approveAAAPlan(planId: string): Promise<ActionResponse> {
     }
 
     const { error } = await supabase
-      .from('aaa_plans')
+      .schema('yi_connect').from('aaa_plans')
       .update({
         status: 'approved',
         approved_by: member.id,
@@ -291,7 +291,7 @@ export async function deleteAAAPlan(planId: string): Promise<ActionResponse> {
     const supabase = await createClient()
 
     const { data: existing } = await supabase
-      .from('aaa_plans')
+      .schema('yi_connect').from('aaa_plans')
       .select('id, vertical_id, status')
       .eq('id', planId)
       .single()
@@ -305,7 +305,7 @@ export async function deleteAAAPlan(planId: string): Promise<ActionResponse> {
     }
 
     const { error } = await supabase
-      .from('aaa_plans')
+      .schema('yi_connect').from('aaa_plans')
       .delete()
       .eq('id', planId)
 
@@ -348,7 +348,7 @@ export async function signCommitmentCard(
 
     // Check if commitment already exists
     const { data: existing } = await supabase
-      .from('commitment_cards')
+      .schema('yi_connect').from('commitment_cards')
       .select('id')
       .eq('member_id', sanitized.member_id)
       .eq('pathfinder_year', sanitized.pathfinder_year)
@@ -357,7 +357,7 @@ export async function signCommitmentCard(
     if (existing) {
       // Update existing
       const { error } = await supabase
-        .from('commitment_cards')
+        .schema('yi_connect').from('commitment_cards')
         .update({
           ...sanitized,
           signed_at: new Date().toISOString(),
@@ -377,7 +377,7 @@ export async function signCommitmentCard(
 
     // Create new
     const { data, error } = await supabase
-      .from('commitment_cards')
+      .schema('yi_connect').from('commitment_cards')
       .insert({
         ...sanitized,
         signed_at: new Date().toISOString(),
@@ -412,7 +412,7 @@ export async function getMyCommitmentCard(pathfinderYear: number) {
 
     // Note: members.id = profiles.id = auth user id (NOT user_id)
     const { data: member } = await supabase
-      .from('members')
+      .schema('yi_connect').from('members')
       .select('id')
       .eq('id', user.id)
       .single()
@@ -420,7 +420,7 @@ export async function getMyCommitmentCard(pathfinderYear: number) {
     if (!member) return null
 
     const { data } = await supabase
-      .from('commitment_cards')
+      .schema('yi_connect').from('commitment_cards')
       .select('*')
       .eq('member_id', member.id)
       .eq('pathfinder_year', pathfinderYear)
@@ -456,7 +456,7 @@ export async function assignMentor(
 
     // Check if assignment already exists
     const { data: existing } = await supabase
-      .from('mentor_assignments')
+      .schema('yi_connect').from('mentor_assignments')
       .select('id')
       .eq('ec_chair_id', sanitized.ec_chair_id)
       .eq('pathfinder_year', sanitized.pathfinder_year)
@@ -465,7 +465,7 @@ export async function assignMentor(
     if (existing) {
       // Update existing
       const { error } = await supabase
-        .from('mentor_assignments')
+        .schema('yi_connect').from('mentor_assignments')
         .update({
           mentor_id: sanitized.mentor_id,
           mentor_name: sanitized.mentor_name,
@@ -488,7 +488,7 @@ export async function assignMentor(
 
     // Create new
     const { data, error } = await supabase
-      .from('mentor_assignments')
+      .schema('yi_connect').from('mentor_assignments')
       .insert(sanitized)
       .select('id')
       .single()
@@ -521,7 +521,7 @@ export async function removeMentorAssignment(assignmentId: string): Promise<Acti
     const supabase = await createClient()
 
     const { error } = await supabase
-      .from('mentor_assignments')
+      .schema('yi_connect').from('mentor_assignments')
       .delete()
       .eq('id', assignmentId)
 

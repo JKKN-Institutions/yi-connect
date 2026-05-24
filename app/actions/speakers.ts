@@ -55,7 +55,7 @@ export async function createSpeakerFAQ(
   let sortOrder = parsed.data.sort_order
   if (sortOrder === undefined || sortOrder === null) {
     const { data: existing } = await supabase
-      .from('speaker_faqs')
+      .schema('yi_connect').from('speaker_faqs')
       .select('sort_order')
       .eq('speaker_id', parsed.data.speaker_id)
       .order('sort_order', { ascending: false })
@@ -65,7 +65,7 @@ export async function createSpeakerFAQ(
   }
 
   const { data, error } = await supabase
-    .from('speaker_faqs')
+    .schema('yi_connect').from('speaker_faqs')
     .insert({
       speaker_id: parsed.data.speaker_id,
       question: parsed.data.question,
@@ -111,7 +111,7 @@ export async function updateSpeakerFAQ(
   }
 
   const { data, error } = await supabase
-    .from('speaker_faqs')
+    .schema('yi_connect').from('speaker_faqs')
     .update(cleanUpdates)
     .eq('id', id)
     .select()
@@ -143,7 +143,7 @@ export async function deleteSpeakerFAQ(
 
   const supabase = await createClient()
 
-  const { error } = await supabase.from('speaker_faqs').delete().eq('id', faqId)
+  const { error } = await supabase.schema('yi_connect').from('speaker_faqs').delete().eq('id', faqId)
 
   if (error) {
     console.error('Error deleting speaker FAQ:', error)
@@ -173,7 +173,7 @@ export async function reorderSpeakerFAQs(
   const { speaker_id, ordered_ids } = parsed.data
   for (let i = 0; i < ordered_ids.length; i++) {
     const { error } = await supabase
-      .from('speaker_faqs')
+      .schema('yi_connect').from('speaker_faqs')
       .update({ sort_order: i })
       .eq('id', ordered_ids[i])
       .eq('speaker_id', speaker_id)

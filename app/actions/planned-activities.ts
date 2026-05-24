@@ -47,7 +47,7 @@ export async function createPlannedActivity(
     // Get member info for chapter_id and created_by
     // Note: members.id = profiles.id = auth user id
     const { data: member } = await supabase
-      .from('members')
+      .schema('yi_connect').from('members')
       .select('id, chapter_id')
       .eq('id', user.id)
       .single()
@@ -57,7 +57,7 @@ export async function createPlannedActivity(
     }
 
     const { data, error } = await supabase
-      .from('planned_activities')
+      .schema('yi_connect').from('planned_activities')
       .insert({
         activity_name: input.activity_name,
         activity_description: input.activity_description || null,
@@ -108,7 +108,7 @@ export async function getPlannedActivities(
 
     // Get member's chapter
     const { data: member } = await supabase
-      .from('members')
+      .schema('yi_connect').from('members')
       .select('id, chapter_id')
       .eq('id', user.id)
       .single()
@@ -118,7 +118,7 @@ export async function getPlannedActivities(
     }
 
     let query = supabase
-      .from('planned_activities')
+      .schema('yi_connect').from('planned_activities')
       .select(`
         *,
         vertical:verticals(id, name, slug, color, icon),
@@ -178,7 +178,7 @@ export async function getPlannedActivityById(
     const supabase = await createClient()
 
     const { data, error } = await supabase
-      .from('planned_activities')
+      .schema('yi_connect').from('planned_activities')
       .select(`
         *,
         vertical:verticals(id, name, slug, color, icon),
@@ -216,7 +216,7 @@ export async function getMyPlannedActivities(
 
     // Get member ID
     const { data: member } = await supabase
-      .from('members')
+      .schema('yi_connect').from('members')
       .select('id')
       .eq('id', user.id)
       .single()
@@ -252,7 +252,7 @@ export async function updatePlannedActivity(
     const supabase = await createClient()
 
     const { error } = await supabase
-      .from('planned_activities')
+      .schema('yi_connect').from('planned_activities')
       .update({
         ...(input.activity_name && { activity_name: input.activity_name }),
         ...(input.activity_description !== undefined && {
@@ -316,7 +316,7 @@ export async function deletePlannedActivity(id: string): Promise<ActionResponse>
 
     // Check if activity is completed (cannot delete completed activities)
     const { data: activity } = await supabase
-      .from('planned_activities')
+      .schema('yi_connect').from('planned_activities')
       .select('status')
       .eq('id', id)
       .single()
@@ -326,7 +326,7 @@ export async function deletePlannedActivity(id: string): Promise<ActionResponse>
     }
 
     const { error } = await supabase
-      .from('planned_activities')
+      .schema('yi_connect').from('planned_activities')
       .delete()
       .eq('id', id)
 
@@ -364,7 +364,7 @@ export async function getPlannedActivityPrefillData(
     const supabase = await createClient()
 
     const { data, error } = await supabase
-      .from('planned_activities')
+      .schema('yi_connect').from('planned_activities')
       .select('id, activity_name, activity_description, planned_date, vertical_id, expected_ec_count, expected_non_ec_count')
       .eq('id', id)
       .single()
@@ -409,7 +409,7 @@ export async function completePlannedActivity(
     const supabase = await createClient()
 
     const { error } = await supabase
-      .from('planned_activities')
+      .schema('yi_connect').from('planned_activities')
       .update({
         status: 'completed',
         health_card_entry_id: healthCardEntryId,
@@ -457,7 +457,7 @@ export async function getPlannedActivitiesStats(): Promise<{
 
     // Get member's chapter
     const { data: member } = await supabase
-      .from('members')
+      .schema('yi_connect').from('members')
       .select('chapter_id')
       .eq('id', user.id)
       .single()
@@ -467,7 +467,7 @@ export async function getPlannedActivitiesStats(): Promise<{
     }
 
     const { data, error } = await supabase
-      .from('planned_activities')
+      .schema('yi_connect').from('planned_activities')
       .select('status, planned_date')
       .eq('chapter_id', member.chapter_id)
 

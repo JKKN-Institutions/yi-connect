@@ -36,7 +36,7 @@ export async function createCategory(
     }
 
     const { data: member } = await supabase
-      .from('members')
+      .schema('yi_connect').from('members')
       .select('chapter_id')
       .eq('id', user.id)
       .single();
@@ -66,7 +66,7 @@ export async function createCategory(
 
     // Insert category
     const { error } = await supabase
-      .from('knowledge_categories')
+      .schema('yi_connect').from('knowledge_categories')
       .insert({
         ...validation.data,
         chapter_id: member.chapter_id,
@@ -115,7 +115,7 @@ export async function updateCategory(
     }
 
     const { error } = await supabase
-      .from('knowledge_categories')
+      .schema('yi_connect').from('knowledge_categories')
       .update(validation.data)
       .eq('id', categoryId);
 
@@ -134,7 +134,7 @@ export async function deleteCategory(categoryId: string): Promise<FormState> {
     const supabase = await createServerSupabaseClient();
 
     const { error } = await supabase
-      .from('knowledge_categories')
+      .schema('yi_connect').from('knowledge_categories')
       .delete()
       .eq('id', categoryId);
 
@@ -165,7 +165,7 @@ export async function createDocument(
     }
 
     const { data: member } = await supabase
-      .from('members')
+      .schema('yi_connect').from('members')
       .select('chapter_id, id')
       .eq('id', user.id)
       .single();
@@ -186,7 +186,7 @@ export async function createDocument(
 
     if (categoryId && categoryId !== 'none') {
       const { data: category } = await supabase
-        .from('knowledge_categories')
+        .schema('yi_connect').from('knowledge_categories')
         .select('slug')
         .eq('id', categoryId)
         .single();
@@ -233,7 +233,7 @@ export async function createDocument(
 
     // Insert document metadata
     const { data: document, error: dbError } = await supabase
-      .from('knowledge_documents')
+      .schema('yi_connect').from('knowledge_documents')
       .insert({
         title: formData.get('title'),
         description: formData.get('description') || null,
@@ -306,7 +306,7 @@ export async function updateDocument(
     }
 
     const { error } = await supabase
-      .from('knowledge_documents')
+      .schema('yi_connect').from('knowledge_documents')
       .update(validation.data)
       .eq('id', documentId);
 
@@ -326,7 +326,7 @@ export async function deleteDocument(documentId: string): Promise<FormState> {
 
     // Get document to delete file from storage
     const { data: document } = await supabase
-      .from('knowledge_documents')
+      .schema('yi_connect').from('knowledge_documents')
       .select('file_path')
       .eq('id', documentId)
       .single();
@@ -340,7 +340,7 @@ export async function deleteDocument(documentId: string): Promise<FormState> {
 
     // Delete from database (versions will cascade delete)
     const { error } = await supabase
-      .from('knowledge_documents')
+      .schema('yi_connect').from('knowledge_documents')
       .delete()
       .eq('id', documentId);
 
@@ -395,7 +395,7 @@ export async function getDocumentDownloadUrl(documentId: string): Promise<{ url:
 
     // Get document file path
     const { data: document } = await supabase
-      .from('knowledge_documents')
+      .schema('yi_connect').from('knowledge_documents')
       .select('file_path')
       .eq('id', documentId)
       .single();
@@ -438,7 +438,7 @@ export async function createWikiPage(
     }
 
     const { data: member } = await supabase
-      .from('members')
+      .schema('yi_connect').from('members')
       .select('chapter_id')
       .eq('id', user.id)
       .single();
@@ -465,7 +465,7 @@ export async function createWikiPage(
     }
 
     const { data: wikiPage, error } = await supabase
-      .from('wiki_pages')
+      .schema('yi_connect').from('wiki_pages')
       .insert({
         ...validation.data,
         chapter_id: member.chapter_id,
@@ -524,7 +524,7 @@ export async function updateWikiPage(
 
     // Get current version
     const { data: currentPage } = await supabase
-      .from('wiki_pages')
+      .schema('yi_connect').from('wiki_pages')
       .select('version, content')
       .eq('id', pageId)
       .single();
@@ -537,7 +537,7 @@ export async function updateWikiPage(
 
     // Save current version to history
     await supabase
-      .from('wiki_page_versions')
+      .schema('yi_connect').from('wiki_page_versions')
       .insert({
         wiki_page_id: pageId,
         version_number: currentPage.version,
@@ -548,7 +548,7 @@ export async function updateWikiPage(
 
     // Update wiki page
     const { error } = await supabase
-      .from('wiki_pages')
+      .schema('yi_connect').from('wiki_pages')
       .update({
         ...validation.data,
         version: newVersion,
@@ -577,7 +577,7 @@ export async function deleteWikiPage(pageId: string): Promise<FormState> {
     const supabase = await createServerSupabaseClient();
 
     const { error } = await supabase
-      .from('wiki_pages')
+      .schema('yi_connect').from('wiki_pages')
       .delete()
       .eq('id', pageId);
 
@@ -608,7 +608,7 @@ export async function createBestPractice(
     }
 
     const { data: member } = await supabase
-      .from('members')
+      .schema('yi_connect').from('members')
       .select('chapter_id')
       .eq('id', user.id)
       .single();
@@ -634,7 +634,7 @@ export async function createBestPractice(
     }
 
     const { data: bestPractice, error } = await supabase
-      .from('best_practices')
+      .schema('yi_connect').from('best_practices')
       .insert({
         ...validation.data,
         chapter_id: member.chapter_id,
@@ -683,7 +683,7 @@ export async function updateBestPractice(
     }
 
     const { error } = await supabase
-      .from('best_practices')
+      .schema('yi_connect').from('best_practices')
       .update(validation.data)
       .eq('id', practiceId);
 
@@ -702,7 +702,7 @@ export async function submitBestPractice(practiceId: string): Promise<FormState>
     const supabase = await createServerSupabaseClient();
 
     const { error } = await supabase
-      .from('best_practices')
+      .schema('yi_connect').from('best_practices')
       .update({ status: 'submitted' })
       .eq('id', practiceId)
       .eq('status', 'draft');
@@ -746,7 +746,7 @@ export async function reviewBestPractice(
     const newStatus = validation.data.action === 'approve' ? 'published' : 'rejected';
 
     const { error } = await supabase
-      .from('best_practices')
+      .schema('yi_connect').from('best_practices')
       .update({
         status: newStatus,
         reviewed_by: user.id,
@@ -777,7 +777,7 @@ export async function toggleBestPracticeUpvote(practiceId: string): Promise<Form
 
     // Check if already upvoted
     const { data: existing } = await supabase
-      .from('best_practice_upvotes')
+      .schema('yi_connect').from('best_practice_upvotes')
       .select('id')
       .eq('best_practice_id', practiceId)
       .eq('member_id', user.id)
@@ -786,7 +786,7 @@ export async function toggleBestPracticeUpvote(practiceId: string): Promise<Form
     if (existing) {
       // Remove upvote
       await supabase
-        .from('best_practice_upvotes')
+        .schema('yi_connect').from('best_practice_upvotes')
         .delete()
         .eq('id', existing.id);
 
@@ -796,7 +796,7 @@ export async function toggleBestPracticeUpvote(practiceId: string): Promise<Form
     } else {
       // Add upvote
       await supabase
-        .from('best_practice_upvotes')
+        .schema('yi_connect').from('best_practice_upvotes')
         .insert({
           best_practice_id: practiceId,
           member_id: user.id,
@@ -841,7 +841,7 @@ export async function hasUserUpvotedBestPractice(practiceId: string): Promise<bo
     if (!user) return false;
 
     const { data: existing } = await supabase
-      .from('best_practice_upvotes')
+      .schema('yi_connect').from('best_practice_upvotes')
       .select('id')
       .eq('best_practice_id', practiceId)
       .eq('member_id', user.id)
@@ -858,7 +858,7 @@ export async function deleteBestPractice(practiceId: string): Promise<FormState>
     const supabase = await createServerSupabaseClient();
 
     const { error } = await supabase
-      .from('best_practices')
+      .schema('yi_connect').from('best_practices')
       .delete()
       .eq('id', practiceId);
 
@@ -888,7 +888,7 @@ export async function logAccess(
     if (!user) return;
 
     await supabase
-      .from('knowledge_access_log')
+      .schema('yi_connect').from('knowledge_access_log')
       .insert({
         document_id: resourceType === 'document' ? resourceId : null,
         wiki_page_id: resourceType === 'wiki' ? resourceId : null,

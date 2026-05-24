@@ -68,7 +68,7 @@ export async function updateAutopilotFeature(
 
     // Permission check — must be Chair+ of this chapter
     const { data: roleRow } = await supabase
-      .from('user_roles')
+      .schema('yi_connect').from('user_roles')
       .select('role:roles(hierarchy_level)')
       .eq('user_id', user.id);
     const maxLevel = Math.max(
@@ -84,7 +84,7 @@ export async function updateAutopilotFeature(
     }
 
     const { data: profile } = await supabase
-      .from('profiles')
+      .schema('yi_connect').from('profiles')
       .select('chapter_id')
       .eq('id', user.id)
       .single();
@@ -106,7 +106,7 @@ export async function updateAutopilotFeature(
     };
 
     const { error } = await supabase
-      .from('chapter_feature_toggles')
+      .schema('yi_connect').from('chapter_feature_toggles')
       .upsert(payload, { onConflict: 'chapter_id,feature' });
 
     if (error) {
@@ -149,7 +149,7 @@ export async function triggerEventAutoPilot(
 
     // Load event with chapter, organizer, vertical
     const { data: event, error: eventError } = await supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .select(
         'id, title, start_date, end_date, venue, chapter_id, vertical_id, organizer_id, status'
       )
@@ -181,7 +181,7 @@ export async function triggerEventAutoPilot(
     // Create run row — use triggered_at as idempotency boundary
     const triggeredAt = new Date().toISOString();
     const { data: run, error: runError } = await supabase
-      .from('event_autopilot_runs')
+      .schema('yi_connect').from('event_autopilot_runs')
       .insert({
         event_id: event.id,
         chapter_id: event.chapter_id,
@@ -216,7 +216,7 @@ export async function triggerEventAutoPilot(
     // ----------------------------------------------------------------
     try {
       const { data: rsvps } = await supabase
-        .from('event_rsvps')
+        .schema('yi_connect').from('event_rsvps')
         .select(
           'member_id, status, member:member_id(profile:id(email, full_name, phone))'
         )
@@ -325,15 +325,15 @@ export async function triggerEventAutoPilot(
         { data: docs },
       ] = await Promise.all([
         supabase
-          .from('event_rsvps')
+          .schema('yi_connect').from('event_rsvps')
           .select('member_id, status')
           .eq('event_id', event.id),
         supabase
-          .from('event_feedback')
+          .schema('yi_connect').from('event_feedback')
           .select('rating')
           .eq('event_id', event.id),
         supabase
-          .from('event_documents')
+          .schema('yi_connect').from('event_documents')
           .select('id, document_type')
           .eq('event_id', event.id),
       ]);
@@ -379,7 +379,7 @@ export async function triggerEventAutoPilot(
       // Compute EC/non-EC breakdown
       if (attendedMemberIds.length > 0) {
         const { data: ecRoles } = await supabase
-          .from('user_roles')
+          .schema('yi_connect').from('user_roles')
           .select('user_id, role:roles(hierarchy_level)')
           .in('user_id', attendedMemberIds);
         const ecIds = new Set(
@@ -436,14 +436,14 @@ export async function triggerEventAutoPilot(
 
         // Resolve submitter profile
         const { data: submitterProfile } = await supabase
-          .from('profiles')
+          .schema('yi_connect').from('profiles')
           .select('full_name, email')
           .eq('id', user?.id ?? event.organizer_id)
           .maybeSingle();
 
         // Check if a draft already exists for this event
         const { data: existing } = await supabase
-          .from('health_card_entries')
+          .schema('yi_connect').from('health_card_entries')
           .select('id')
           .eq('chapter_id', event.chapter_id)
           .eq('vertical_id', event.vertical_id)
@@ -456,7 +456,7 @@ export async function triggerEventAutoPilot(
           steps.notes!.step3 = `health_card existing id=${existing.id}`;
         } else {
           const { error: hcError, data: hcRow } = await supabase
-            .from('health_card_entries')
+            .schema('yi_connect').from('health_card_entries')
             .insert({
               submitter_name: submitterProfile?.full_name || 'Auto-Pilot',
               submitter_role: 'chair',
@@ -539,7 +539,7 @@ export async function triggerEventAutoPilot(
       if (settings.email_chair_summary) {
         // Recipients: Chair + Co-Chair of this chapter
         const { data: chairs } = await supabase
-          .from('user_roles')
+          .schema('yi_connect').from('user_roles')
           .select(
             'user_id, role:roles(name, hierarchy_level), profile:profiles!user_roles_user_id_fkey(full_name, email, chapter_id)'
           )
@@ -557,7 +557,7 @@ export async function triggerEventAutoPilot(
 
         if (recipients.length === 0 && event.organizer_id) {
           const { data: org } = await supabase
-            .from('profiles')
+            .schema('yi_connect').from('profiles')
             .select('full_name, email')
             .eq('id', event.organizer_id)
             .maybeSingle();
@@ -644,7 +644,7 @@ export async function triggerEventAutoPilot(
 
     // Finalize the run
     await supabase
-      .from('event_autopilot_runs')
+      .schema('yi_connect').from('event_autopilot_runs')
       .update({
         status: finalStatus,
         steps_completed: steps as unknown as Record<string, unknown>,
@@ -685,7 +685,7 @@ export async function completeEventAndTriggerAutopilot(
 
     const supabase = await createClient();
     const { data: event } = await supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .select('organizer_id, status, chapter_id')
       .eq('id', eventId)
       .single();
@@ -693,7 +693,7 @@ export async function completeEventAndTriggerAutopilot(
 
     // Permission check
     const { data: rolesRow } = await supabase
-      .from('user_roles')
+      .schema('yi_connect').from('user_roles')
       .select('role:roles(hierarchy_level)')
       .eq('user_id', user.id);
     const level = Math.max(
@@ -710,7 +710,7 @@ export async function completeEventAndTriggerAutopilot(
 
     if (event.status !== 'completed') {
       const { error: updErr } = await supabase
-        .from('events')
+        .schema('yi_connect').from('events')
         .update({ status: 'completed' })
         .eq('id', eventId);
       if (updErr) {

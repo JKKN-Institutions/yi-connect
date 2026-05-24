@@ -20,7 +20,7 @@
  *   // Perform the mutation
  *   const supabase = await createServerSupabaseClient()
  *   const { data: event, error } = await supabase
- *     .from('events')
+ *     .schema('yi_connect').from('events')
  *     .insert(data)
  *     .select()
  *     .single()
@@ -343,7 +343,7 @@ export interface LogActionParams {
  *
  * export async function createEvent(data: CreateEventData) {
  *   // ... perform the create ...
- *   const newEvent = await supabase.from('events').insert(data).select().single()
+ *   const newEvent = await supabase.schema('yi_connect').from('events').insert(data).select().single()
  *
  *   // Log the action (safe to call, no-op if not impersonating)
  *   await logImpersonationAction({
@@ -493,7 +493,7 @@ export async function extendImpersonationSession(
     // Update session in database
     const supabase = await createServerSupabaseClient()
     await supabase
-      .from('impersonation_sessions')
+      .schema('yi_connect').from('impersonation_sessions')
       .update({
         timeout_minutes: Math.floor((newExpiry.getTime() - new Date(session.expires_at).getTime() + session.session_id ? additionalMinutes : 0) / 60000) + additionalMinutes,
       })

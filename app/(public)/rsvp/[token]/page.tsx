@@ -49,9 +49,11 @@ export default async function QuickRSVPPage({ params }: PageProps) {
   const isEventOver = event.status === 'completed' || new Date(event.end_date) < new Date();
   const isEventFull = event.max_capacity ? event.current_registrations >= event.max_capacity : false;
 
-  // Fetch members and RSVPs in parallel
+  // Fetch members and RSVPs in parallel. Members are fetched via a
+  // SECURITY DEFINER RPC gated by the rsvp_token — see lib/data/public-events.ts
+  // and migration 20260524240000_close_rsvp_anon_leak_via_rpc.sql.
   const [members, rsvps, guestRsvps] = await Promise.all([
-    event.chapter_id ? getChapterMembersForRSVP(event.chapter_id) : Promise.resolve([]),
+    event.chapter_id ? getChapterMembersForRSVP(token) : Promise.resolve([]),
     getEventRSVPsByToken(event.id),
     getGuestRSVPs(event.id),
   ]);

@@ -37,7 +37,7 @@ export async function GET() {
     }
 
     // Step 4: Call RPC function (same as requireRole)
-    const { data: userRoles, error: rolesError } = await supabase.rpc('get_user_roles_detailed', {
+    const { data: userRoles, error: rolesError } = await supabase.schema('yi_connect').rpc('get_user_roles_detailed', {
       p_user_id: user.id
     })
 

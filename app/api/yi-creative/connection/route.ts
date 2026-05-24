@@ -28,8 +28,8 @@ export async function GET(request: NextRequest) {
 
     // Check user's permission level and if National Admin
     const [{ data: hierarchyLevel }, { data: isNationalAdmin }] = await Promise.all([
-      supabase.rpc('get_user_hierarchy_level', { p_user_id: user.id }),
-      supabase.rpc('is_national_admin'),
+      supabase.schema('yi_connect').rpc('get_user_hierarchy_level', { p_user_id: user.id }),
+      supabase.schema('yi_connect').rpc('is_national_admin'),
     ])
 
     console.log('[Yi Creative Connection API] Permission check:', {
@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
     // National Admin can view any chapter, others only their own
     if (!isNationalAdmin) {
       const { data: member } = await supabase
-        .from('members')
+        .schema('yi_connect').from('members')
         .select('chapter_id')
         .eq('id', user.id)
         .single()
@@ -71,7 +71,7 @@ export async function GET(request: NextRequest) {
     // Fetch connection using admin client (RLS already verified above)
     const adminSupabase = createAdminSupabaseClient()
     const { data: connection, error } = await adminSupabase
-      .from('yi_creative_connections')
+      .schema('yi_connect').from('yi_creative_connections')
       .select('*')
       .eq('chapter_id', chapterId)
       .single()

@@ -184,7 +184,7 @@ export async function GET(request: NextRequest) {
     // Drop the embeds and hydrate names via a batched members→profiles lookup
     // after the main query returns.
     let sessionsQuery = supabase
-      .from('impersonation_sessions')
+      .schema('yi_connect').from('impersonation_sessions')
       .select(`
         id,
         admin_id,
@@ -230,7 +230,7 @@ export async function GET(request: NextRequest) {
     const targetUserIds = [...new Set(sessionsData?.map((s) => s.target_user_id) || [])]
 
     const { data: rolesData } = await supabase
-      .from('user_roles')
+      .schema('yi_connect').from('user_roles')
       .select('user_id, role:roles(name)')
       .in('user_id', targetUserIds.length > 0 ? targetUserIds : ['00000000-0000-0000-0000-000000000000'])
 
@@ -262,7 +262,7 @@ export async function GET(request: NextRequest) {
       try {
         const admin = createAdminSupabaseClient()
         const { data: memberRows } = await admin
-          .from('members')
+          .schema('yi_connect').from('members')
           .select('id, profile:profiles(full_name, email)')
           .in('id', allUserIds)
         for (const row of memberRows || []) {
@@ -319,7 +319,7 @@ export async function GET(request: NextRequest) {
 
       if (sessionIds.length > 0) {
         const { data: actionsData, error: actionsError } = await supabase
-          .from('impersonation_action_log')
+          .schema('yi_connect').from('impersonation_action_log')
           .select(`
             id,
             session_id,

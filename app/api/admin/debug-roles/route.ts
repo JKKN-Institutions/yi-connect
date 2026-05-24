@@ -27,7 +27,7 @@ export async function GET(request: Request) {
 
   // Get user profile
   const { data: profile, error: profileError } = await adminClient
-    .from('profiles')
+    .schema('yi_connect').from('profiles')
     .select('id, email')
     .eq('email', email)
     .single()
@@ -44,7 +44,7 @@ export async function GET(request: Request) {
   }
 
   // Test get_user_roles_detailed with admin client
-  const { data: detailedAdmin, error: detailedAdminError } = await adminClient.rpc(
+  const { data: detailedAdmin, error: detailedAdminError } = await adminClient.schema('yi_connect').rpc(
     'get_user_roles_detailed',
     { p_user_id: profile.id }
   )
@@ -58,7 +58,7 @@ export async function GET(request: Request) {
   results.get_user_roles_admin = rolesAdmin || { error: rolesAdminError?.message }
 
   // Test get_user_roles_detailed with anon client (simulating what requireRole does)
-  const { data: detailedAnon, error: detailedAnonError } = await anonClient.rpc(
+  const { data: detailedAnon, error: detailedAnonError } = await anonClient.schema('yi_connect').rpc(
     'get_user_roles_detailed',
     { p_user_id: profile.id }
   )
@@ -73,7 +73,7 @@ export async function GET(request: Request) {
 
   // Also check user_roles table directly
   const { data: userRolesData, error: userRolesError } = await adminClient
-    .from('user_roles')
+    .schema('yi_connect').from('user_roles')
     .select('*, roles(*)')
     .eq('user_id', profile.id)
 

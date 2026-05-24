@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
     // Phase E fix 2026-05-23 (Agent O): drop `organizer:members!organizer_id`
     // embed — events.organizer_id FK targets auth.users, not members, so
     // PostgREST returns PGRST200. Two-step resolution below mirrors getEvents.
-    let query = supabase.from('events').select(
+    let query = supabase.schema('yi_connect').from('events').select(
       `
       id,
       title,
@@ -129,7 +129,7 @@ export async function GET(request: NextRequest) {
       try {
         const admin = createAdminSupabaseClient();
         const { data: orgRows } = await admin
-          .from('members')
+          .schema('yi_connect').from('members')
           .select('id, profile:profiles(full_name, email)')
           .in('id', organizerIds);
         (orgRows || []).forEach((row: any) => {

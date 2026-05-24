@@ -5,15 +5,32 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getImpersonationActionLog } from '@/lib/data/impersonation'
-import { requireRole } from '@/lib/auth'
+import { getCurrentUser, getUserHierarchyLevel } from '@/lib/auth'
+
+// National Admin (6) or Super Admin (7) required
+const MIN_REQUIRED_LEVEL = 6
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ sessionId: string }> }
 ) {
   try {
-    // Require Super Admin or National Admin
-    await requireRole(['Super Admin', 'National Admin'])
+    // Explicit auth check — requireRole() uses redirect() which is wrong for
+    // API routes in Next.js 16 (silently returns 200 with redirect-html body).
+    const user = await getCurrentUser()
+    if (!user) {
+      return NextResponse.json(
+        { error: 'Unauthorized: Please log in' },
+        { status: 401 }
+      )
+    }
+    const hierarchyLevel = await getUserHierarchyLevel()
+    if (hierarchyLevel < MIN_REQUIRED_LEVEL) {
+      return NextResponse.json(
+        { error: 'Forbidden: National Admin or Super Admin access required' },
+        { status: 403 }
+      )
+    }
 
     const { sessionId } = await params
 
@@ -29,8 +46,6 @@ export async function GET(
 
     return NextResponse.json({ actions })
   } catch (err) {
-    // If requireRole throws (redirect), it won't be caught here in Next.js 16
-    // But just in case there's another error
     console.error('Error fetching action log:', err)
     return NextResponse.json(
       { error: 'Failed to fetch action log' },

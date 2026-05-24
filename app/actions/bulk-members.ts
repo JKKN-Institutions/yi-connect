@@ -52,6 +52,7 @@ export async function processBulkMemberUpload(
 
   // Get all chapters for lookup by name
   const { data: allChapters } = await adminClient
+    .schema('yi_connect')
     .from('chapters')
     .select('id, name')
 
@@ -471,6 +472,7 @@ export async function getChaptersForBulkUpload(): Promise<
   const supabase = await createServerSupabaseClient()
 
   const { data, error } = await supabase
+    .schema('yi_connect')
     .from('chapters')
     .select('id, name, location')
     .order('name')

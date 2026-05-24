@@ -991,6 +991,7 @@ export async function inviteUser(
         let chapterName = 'Young Indians'
         if (validation.data.chapter_id) {
           const { data: chapter } = await supabase
+            .schema('yi_connect')
             .from('chapters')
             .select('name')
             .eq('id', validation.data.chapter_id)

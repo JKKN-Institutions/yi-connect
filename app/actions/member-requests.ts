@@ -319,6 +319,7 @@ export async function approveMemberRequest(requestId: string, notes?: string): P
 
     // 5. Send approval email to applicant
     const { data: chapter } = await supabase
+      .schema('yi_connect')
       .from('chapters')
       .select('name')
       .eq('id', request.preferred_chapter_id)
@@ -395,6 +396,7 @@ export async function rejectMemberRequest(requestId: string, notes: string): Pro
 
     // 3. Send rejection email
     const { data: chapter } = await supabase
+      .schema('yi_connect')
       .from('chapters')
       .select('name')
       .eq('id', request.preferred_chapter_id)

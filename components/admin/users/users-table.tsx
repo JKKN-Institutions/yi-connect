@@ -157,15 +157,20 @@ export function UsersTable({ data, pageCount, roles, chapters }: UsersTableProps
     }
   }
 
-  // Get unique values for filters
+  // Get unique values for filters. Filter out empty strings — Radix
+  // Select crashes when a SelectItem has value="" and the dropdown opens.
   const roleOptions = Array.from(
-    new Set(data.flatMap((user) => user.role_names))
-  ).map((name) => ({ label: name, value: name }))
+    new Set(data.flatMap((user) => user.role_names ?? []))
+  )
+    .filter((name) => typeof name === 'string' && name.length > 0)
+    .map((name) => ({ label: name, value: name }))
 
-  const chapterOptions = chapters.map((chapter) => ({
-    label: chapter.name,
-    value: chapter.id
-  }))
+  const chapterOptions = chapters
+    .filter((c) => typeof c.id === 'string' && c.id.length > 0 && c.name)
+    .map((chapter) => ({
+      label: chapter.name,
+      value: chapter.id
+    }))
 
   const statusOptions = [
     { label: 'Active', value: 'true' },

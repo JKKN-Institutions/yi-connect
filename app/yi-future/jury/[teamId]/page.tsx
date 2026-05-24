@@ -7,6 +7,7 @@ import {
   getOtherJurorEvalsForTeam,
 } from "@/app/yi-future/actions/evaluations";
 import type { Rubric, CriteriaScores } from "@/lib/yi-future/rubric";
+import { SubmitButtons } from "./submit-buttons";
 
 type Team = {
   id: string;
@@ -414,26 +415,7 @@ export default async function JuryEvaluationPage({
           </div>
         </details>
 
-        {!submitted && (
-          <div className="flex items-center justify-end gap-3 pt-2 border-t border-navy/10">
-            <button
-              type="submit"
-              name="_submit"
-              value="0"
-              className="px-4 py-2 rounded-md text-sm font-semibold border border-navy/20 text-navy/70 hover:border-navy/40"
-            >
-              Save draft
-            </button>
-            <button
-              type="submit"
-              name="_submit"
-              value="1"
-              className="px-4 py-2 rounded-md bg-navy text-ivory text-sm font-semibold hover:bg-navy-dark"
-            >
-              Submit evaluation
-            </button>
-          </div>
-        )}
+        {!submitted && <SubmitButtons />}
       </form>
 
       {submitted && otherEvals.length > 0 && (

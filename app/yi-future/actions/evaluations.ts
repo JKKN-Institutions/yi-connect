@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
 import type { Database } from "@/types/yi-future/database";
 import type { ActionResult } from "./editions";
@@ -237,10 +238,15 @@ export async function saveEvaluation(input: {
     }
   }
 
+  // On successful submit, redirect back to the jury dashboard with a
+  // success flag so the chair sees confirmation and cannot duplicate-submit.
+  // Note: redirect() throws, so it must be after all DB writes/notifications.
+  if (input.submit) {
+    redirect("/yi-future/jury?submitted=1");
+  }
+
   return {
     ok: true,
-    message: input.submit
-      ? `Submitted — ${total}/${input.rubric.total_max}`
-      : "Draft saved.",
+    message: "Draft saved.",
   };
 }

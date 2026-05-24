@@ -62,12 +62,19 @@ async function getEvaluations(juryId: string): Promise<Evaluation[]> {
   return (data as unknown as Evaluation[]) ?? [];
 }
 
-export default async function JuryDashboard() {
+export default async function JuryDashboard({
+  searchParams,
+}: {
+  searchParams: Promise<{ submitted?: string }>;
+}) {
   const session = await readSession();
   if (!session || session.type !== "jury") redirect("/yi-future/join");
 
   const me = await getMyJury(session.id);
   if (!me) redirect("/yi-future/join");
+
+  const { submitted: submittedFlag } = await searchParams;
+  const justSubmitted = submittedFlag === "1";
 
   const [assignments, evaluations] = await Promise.all([
     getAssignments(me.id),
@@ -83,6 +90,11 @@ export default async function JuryDashboard() {
 
   return (
     <div className="space-y-5">
+      {justSubmitted && (
+        <div className="bg-yi-green/10 border border-yi-green/30 rounded-md p-3 text-sm font-semibold text-yi-green">
+          ✓ Evaluation submitted. Pick the next team below.
+        </div>
+      )}
       {/* ANTI-BIAS [PRD §5.1]: Show only team_name, problem, status, your score.
           Never join team_members or render delegate names on this dashboard. */}
       <div>
@@ -108,7 +120,8 @@ export default async function JuryDashboard() {
               <li key={a.team_id}>
                 <Link
                   href={`/yi-future/jury/${a.team_id}`}
-                  className="block bg-white border border-navy/10 rounded-lg p-4 hover:border-yi-gold/50 hover:shadow-sm transition-all"
+                  prefetch
+                  className="block bg-white border border-navy/10 rounded-lg p-4 hover:border-yi-gold/50 hover:shadow-sm active:scale-[0.99] active:bg-navy/5 transition-all"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">

@@ -236,7 +236,7 @@ export function LiveDashboard({
         'postgres_changes',
         {
           event: 'INSERT',
-          schema: 'public',
+          schema: 'yi_connect',
           table: 'event_checkins',
           filter: `event_id=eq.${event.id}`,
         },
@@ -265,7 +265,7 @@ export function LiveDashboard({
         'postgres_changes',
         {
           event: 'INSERT',
-          schema: 'public',
+          schema: 'yi_connect',
           table: 'event_rsvps',
           filter: `event_id=eq.${event.id}`,
         },
@@ -280,7 +280,7 @@ export function LiveDashboard({
         'postgres_changes',
         {
           event: 'UPDATE',
-          schema: 'public',
+          schema: 'yi_connect',
           table: 'event_rsvps',
           filter: `event_id=eq.${event.id}`,
         },

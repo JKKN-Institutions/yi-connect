@@ -62,7 +62,7 @@ export function NotificationBell({
         'postgres_changes',
         {
           event: 'INSERT',
-          schema: 'public',
+          schema: 'yi_connect',
           table: 'in_app_notifications',
           filter: `member_id=eq.${memberId}`
         },

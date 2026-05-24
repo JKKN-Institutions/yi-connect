@@ -211,9 +211,10 @@ export async function saveEvaluation(input: {
       });
   }
 
-  revalidatePath("/jury");
-  revalidatePath(`/jury/${input.teamId}`);
-  revalidatePath("/chapter/scoring");
+  revalidatePath("/yi-future/jury");
+  revalidatePath(`/yi-future/jury/${input.teamId}`);
+  revalidatePath("/yi-future/chapter/scoring");
+  revalidatePath("/yi-future/chapter/results");
 
   // Fire-and-forget push to team captain on submit
   if (input.submit && evaluationId) {

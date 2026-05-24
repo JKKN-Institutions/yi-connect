@@ -1,12 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getVolunteerMatches } from '@/lib/data/events';
 import type { VolunteerMatchCriteria } from '@/types/event';
+import { getCurrentUser, getCurrentChapterId } from '@/lib/auth';
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Require authentication and chapter membership — volunteer match data
+    // includes member skills/availability and must not leak to anon.
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized: Please log in', matches: [] },
+        { status: 401 }
+      );
+    }
+    const chapterId = await getCurrentChapterId();
+    if (!chapterId) {
+      return NextResponse.json(
+        { success: false, error: 'Forbidden: No chapter assigned', matches: [] },
+        { status: 403 }
+      );
+    }
+
     const { id } = await params;
     const searchParams = request.nextUrl.searchParams;
 

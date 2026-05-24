@@ -1,12 +1,34 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { cookies } from 'next/headers'
+import { getCurrentUser, getUserHierarchyLevel } from '@/lib/auth'
+
+// Super Admin hierarchy level (matches impersonation-audit/export pattern)
+const SUPER_ADMIN_LEVEL = 7
 
 /**
  * Diagnostic endpoint to debug the exact requireRole flow
  * This mimics what requireRole does but returns debug info instead of redirecting
+ *
+ * Gated to Super Admin only — previously leaked allowed-role catalog to anon.
  */
 export async function GET() {
+  // Auth gate FIRST — do not return any diagnostic info to unauthenticated callers
+  const authedUser = await getCurrentUser()
+  if (!authedUser) {
+    return NextResponse.json(
+      { error: 'Unauthorized: Please log in' },
+      { status: 401 }
+    )
+  }
+  const hierarchyLevel = await getUserHierarchyLevel()
+  if (hierarchyLevel < SUPER_ADMIN_LEVEL) {
+    return NextResponse.json(
+      { error: 'Forbidden: Super Admin access required' },
+      { status: 403 }
+    )
+  }
+
   const results: Record<string, unknown> = {}
 
   try {

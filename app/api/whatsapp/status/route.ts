@@ -12,6 +12,7 @@ import {
   getWhatsAppStatusAPI,
   connectWhatsAppAPI
 } from '@/lib/whatsapp/api-client';
+import { getCurrentUser } from '@/lib/auth';
 
 /**
  * Check if we're running on Vercel (serverless environment)
@@ -50,6 +51,15 @@ async function getLocalClient() {
 
 export async function GET() {
   try {
+    // Require authentication — anon callers must not see WhatsApp service state
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized: Please log in' },
+        { status: 401 }
+      );
+    }
+
     if (useApiClient()) {
       // Production: Use Railway service
       const status = await getWhatsAppStatusAPI();
@@ -97,6 +107,15 @@ export async function GET() {
 
 export async function POST() {
   try {
+    // Require authentication — anon callers must not initialize the WhatsApp client
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized: Please log in' },
+        { status: 401 }
+      );
+    }
+
     if (useApiClient()) {
       // Production: Use Railway service
       const result = await connectWhatsAppAPI();

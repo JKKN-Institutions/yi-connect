@@ -8,6 +8,7 @@ import {
   isServiceConfigured,
   sendMessageAPI
 } from '@/lib/whatsapp/api-client';
+import { getCurrentUser } from '@/lib/auth';
 
 /**
  * Check if we're running on Vercel (serverless environment)
@@ -31,6 +32,15 @@ function isServerless(): boolean {
 
 export async function POST(request: NextRequest) {
   try {
+    // Require authentication — anon callers must not be able to send messages
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized: Please log in' },
+        { status: 401 }
+      );
+    }
+
     const body = await request.json();
     const { phoneNumber, message } = body;
 

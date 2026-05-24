@@ -87,6 +87,7 @@ SET search_path TO yi_connect, public, extensions;
 
 -- =========================================================================
 -- (1) profiles — drop USING-true anon policy + create profiles_public view
+--     + add chapter-scoped anon SELECT policy for RSVP flow
 -- =========================================================================
 
 DROP POLICY IF EXISTS anon_view_profiles_for_rsvp ON yi_connect.profiles;
@@ -112,8 +113,46 @@ COMMENT ON VIEW yi_connect.profiles_public IS
 
 GRANT SELECT ON yi_connect.profiles_public TO anon, authenticated, service_role;
 
+-- Followup (2026-05-24, fix/anon-read-rls-leaks-data-layer-followup):
+-- The original drop above broke lib/data/public-events.ts:97
+-- (getChapterMembersForRSVP) which reads members joined with profiles
+-- via PostgREST FK embed (`profile:profiles(full_name, avatar_url)`).
+-- PostgREST embeds don't traverse views without an explicit FK, and
+-- profiles_public lacks columns needed for the join, so the data layer
+-- query has to read profiles directly. The policy below bounds anon
+-- SELECT on profiles to ONLY profiles whose member row belongs to a
+-- chapter with at least one active RSVP-token event — a far tighter
+-- surface than the original USING-true policy.
+CREATE POLICY anon_view_profiles_for_rsvp_scoped
+ON yi_connect.profiles
+FOR SELECT
+TO anon
+USING (
+  id IN (
+    SELECT m.id
+    FROM yi_connect.members m
+    WHERE m.is_active = true
+      AND m.chapter_id IN (
+        SELECT e.chapter_id
+        FROM yi_connect.events e
+        WHERE e.rsvp_token IS NOT NULL
+          AND e.status IN ('published', 'ongoing', 'completed')
+      )
+  )
+);
+
+COMMENT ON POLICY anon_view_profiles_for_rsvp_scoped ON yi_connect.profiles IS
+  'Bounds anon SELECT on profiles to rows whose member row belongs to '
+  'a chapter that currently has at least one active RSVP-token event. '
+  'Far tighter than the original anon_view_profiles_for_rsvp USING-true '
+  'policy this replaces. Required by lib/data/public-events.ts '
+  'getChapterMembersForRSVP which uses a PostgREST FK embed that views '
+  'cannot satisfy. Set 2026-05-24 by '
+  'fix/anon-read-rls-leaks-data-layer-followup.';
+
 -- =========================================================================
 -- (2) members — drop is_active=true anon policy + create members_public view
+--     + add chapter-scoped anon SELECT policy for RSVP flow
 -- =========================================================================
 
 DROP POLICY IF EXISTS anon_view_members_for_rsvp ON yi_connect.members;
@@ -137,6 +176,33 @@ COMMENT ON VIEW yi_connect.members_public IS
   'PII are intentionally NOT in this view.';
 
 GRANT SELECT ON yi_connect.members_public TO anon, authenticated, service_role;
+
+-- Followup (2026-05-24, fix/anon-read-rls-leaks-data-layer-followup):
+-- See note on the matching profiles policy above. Bounds anon SELECT
+-- on members to active members in chapters with active RSVP-token
+-- events. The original anon_view_members_for_rsvp policy was
+-- USING (is_active = true) — every active member in every chapter.
+-- This policy adds the chapter-scoping that was missing.
+CREATE POLICY anon_view_members_for_rsvp_scoped
+ON yi_connect.members
+FOR SELECT
+TO anon
+USING (
+  is_active = true
+  AND chapter_id IN (
+    SELECT e.chapter_id
+    FROM yi_connect.events e
+    WHERE e.rsvp_token IS NOT NULL
+      AND e.status IN ('published', 'ongoing', 'completed')
+  )
+);
+
+COMMENT ON POLICY anon_view_members_for_rsvp_scoped ON yi_connect.members IS
+  'Bounds anon SELECT on members to active members in chapters that '
+  'currently have at least one active RSVP-token event. Replaces the '
+  'broader anon_view_members_for_rsvp USING (is_active = true) policy. '
+  'Required by lib/data/public-events.ts getChapterMembersForRSVP. '
+  'Set 2026-05-24 by fix/anon-read-rls-leaks-data-layer-followup.';
 
 -- =========================================================================
 -- (3) chapters VIEW — flip to security_invoker so caller-RLS on yi.chapters

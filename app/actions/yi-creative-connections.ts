@@ -403,6 +403,7 @@ export async function handleYiCreativeOAuthCallback(
     // Get chapter name for registration
     const supabase = await createServerSupabaseClient()
     const { data: chapter } = await supabase
+      .schema('yi_connect')
       .from('chapters')
       .select('name')
       .eq('id', state.chapter_id)

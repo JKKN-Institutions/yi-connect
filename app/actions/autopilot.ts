@@ -414,6 +414,7 @@ export async function triggerEventAutoPilot(
       if (event.vertical_id && settings.auto_log_health_card) {
         // Load chapter + vertical info + current user (for submitter)
         const { data: chapter } = await supabase
+          .schema('yi_connect')
           .from('chapters')
           .select('id, name, region')
           .eq('id', event.chapter_id)

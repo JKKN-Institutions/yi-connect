@@ -28,7 +28,7 @@ export const getAssessmentById = cache(
     const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
-      .from('skill_will_assessments')
+      .schema('yi_connect').from('skill_will_assessments')
       .select(
         `
         *,
@@ -90,7 +90,7 @@ export const getMemberAssessment = cache(
     const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
-      .from('skill_will_assessments')
+      .schema('yi_connect').from('skill_will_assessments')
       .select(
         `
         *,
@@ -149,7 +149,7 @@ export const getInProgressAssessment = cache(
     const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
-      .from('skill_will_assessments')
+      .schema('yi_connect').from('skill_will_assessments')
       .select('*')
       .eq('member_id', memberId)
       .eq('status', 'in_progress')
@@ -177,7 +177,7 @@ export const getAssessments = cache(
     const supabase = await createServerSupabaseClient()
 
     let query = supabase
-      .from('skill_will_assessments')
+      .schema('yi_connect').from('skill_will_assessments')
       .select(
         `
         *,
@@ -312,7 +312,7 @@ export const getMembersPendingAssessment = cache(
 
     // Get members without any completed assessment
     const { data, error } = await supabase
-      .from('members')
+      .schema('yi_connect').from('members')
       .select(
         `
         id,
@@ -334,7 +334,7 @@ export const getMembersPendingAssessment = cache(
 
     // Get members with completed assessments
     const { data: assessedMembers } = await supabase
-      .from('skill_will_assessments')
+      .schema('yi_connect').from('skill_will_assessments')
       .select('member_id')
       .eq('chapter_id', chapterId)
       .eq('status', 'completed')
@@ -367,7 +367,7 @@ export const getAssessmentStats = cache(
     const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
-      .from('skill_will_assessments')
+      .schema('yi_connect').from('skill_will_assessments')
       .select('status, category, skill_score, will_score, mentor_id, assigned_vertical_id')
       .eq('chapter_id', chapterId)
 
@@ -455,7 +455,7 @@ export const getAvailableMentors = cache(
 
     // Get all Star-category members
     const { data: starMembers, error } = await supabase
-      .from('skill_will_assessments')
+      .schema('yi_connect').from('skill_will_assessments')
       .select(
         `
         member_id,
@@ -479,7 +479,7 @@ export const getAvailableMentors = cache(
 
     // Get mentee counts
     const { data: menteeCounts } = await supabase
-      .from('skill_will_assessments')
+      .schema('yi_connect').from('skill_will_assessments')
       .select('mentor_id')
       .eq('chapter_id', chapterId)
       .not('mentor_id', 'is', null)
@@ -508,7 +508,7 @@ export const getMentees = cache(
     const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
-      .from('skill_will_assessments')
+      .schema('yi_connect').from('skill_will_assessments')
       .select(
         `
         *,

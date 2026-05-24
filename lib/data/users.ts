@@ -32,7 +32,7 @@ export const getUsers = cache(
 
     // Base query with profile and chapter info
     let query = supabase
-      .from('profiles')
+      .schema('yi_connect').from('profiles')
       .select(
         `
         id,
@@ -95,7 +95,7 @@ export const getUsers = cache(
 
     if (userIds.length > 0) {
       const { data: userRoles } = await supabase
-        .from('user_roles')
+        .schema('yi_connect').from('user_roles')
         .select(
           `
           id,
@@ -135,7 +135,7 @@ export const getUsers = cache(
     let memberIds = new Set<string>()
     if (userIds.length > 0) {
       const { data: memberRecords } = await supabase
-        .from('members')
+        .schema('yi_connect').from('members')
         .select('id')
         .in('id', userIds)
 
@@ -147,7 +147,7 @@ export const getUsers = cache(
     let activeEmailsMap = new Map<string, boolean>()
     if (emails.length > 0) {
       const { data: approvedEmails } = await supabase
-        .from('approved_emails')
+        .schema('yi_connect').from('approved_emails')
         .select('email, is_active')
         .in('email', emails)
 
@@ -234,7 +234,7 @@ export const getUserById = cache(async (id: string): Promise<UserFull | null> =>
   const supabase = await createServerSupabaseClient()
 
   const { data, error } = await supabase
-    .from('profiles')
+    .schema('yi_connect').from('profiles')
     .select(
       `
       *,
@@ -262,7 +262,7 @@ export const getUserById = cache(async (id: string): Promise<UserFull | null> =>
 
   // Fetch user roles
   const { data: userRoles } = await supabase
-    .from('user_roles')
+    .schema('yi_connect').from('user_roles')
     .select(
       `
       id,
@@ -291,7 +291,7 @@ export const getUserById = cache(async (id: string): Promise<UserFull | null> =>
 
   // Fetch member record if exists
   const { data: member } = await supabase
-    .from('members')
+    .schema('yi_connect').from('members')
     .select(
       `
       id,
@@ -311,7 +311,7 @@ export const getUserById = cache(async (id: string): Promise<UserFull | null> =>
 
   // Check if user is active
   const { data: approvedEmail } = await supabase
-    .from('approved_emails')
+    .schema('yi_connect').from('approved_emails')
     .select('is_active')
     .eq('email', data.email)
     .single()
@@ -355,7 +355,7 @@ export const getAvailableRoles = cache(
     const supabase = await createServerSupabaseClient()
 
     // Get current user's hierarchy level
-    const { data: currentUserLevel } = await supabase.rpc(
+    const { data: currentUserLevel } = await supabase.schema('yi_connect').rpc(
       'get_user_hierarchy_level',
       {
         p_user_id: currentUserId
@@ -364,7 +364,7 @@ export const getAvailableRoles = cache(
 
     // Get all roles
     const { data: roles } = await supabase
-      .from('roles')
+      .schema('yi_connect').from('roles')
       .select('*, user_roles(user_id)')
       .order('hierarchy_level', { ascending: false })
 
@@ -374,7 +374,7 @@ export const getAvailableRoles = cache(
     let targetUserRoleIds = new Set<string>()
     if (targetUserId) {
       const { data: targetRoles } = await supabase
-        .from('user_roles')
+        .schema('yi_connect').from('user_roles')
         .select('role_id')
         .eq('user_id', targetUserId)
 
@@ -400,12 +400,12 @@ export const getUserStats = cache(async (): Promise<UserStats> => {
 
   // Total users
   const { count: totalUsers } = await supabase
-    .from('profiles')
+    .schema('yi_connect').from('profiles')
     .select('*', { count: 'exact', head: true })
 
   // Active/Inactive users
   const { data: approvedEmails } = await supabase
-    .from('approved_emails')
+    .schema('yi_connect').from('approved_emails')
     .select('is_active')
 
   const activeCount =
@@ -415,7 +415,7 @@ export const getUserStats = cache(async (): Promise<UserStats> => {
 
   // Users by role
   const { data: userRoles } = await supabase
-    .from('user_roles')
+    .schema('yi_connect').from('user_roles')
     .select('role_id, roles!inner(name)')
 
   const usersByRole: Record<string, number> = {}
@@ -426,7 +426,7 @@ export const getUserStats = cache(async (): Promise<UserStats> => {
 
   // Users by chapter
   const { data: profiles } = await supabase
-    .from('profiles')
+    .schema('yi_connect').from('profiles')
     .select('chapter_id, chapters(name)')
 
   const usersByChapter: Record<string, number> = {}
@@ -437,7 +437,7 @@ export const getUserStats = cache(async (): Promise<UserStats> => {
 
   // Users by hierarchy level
   const { data: hierarchyData } = await supabase
-    .from('user_roles')
+    .schema('yi_connect').from('user_roles')
     .select('user_id, roles!inner(hierarchy_level)')
 
   const usersByLevel: Record<number, Set<string>> = {}
@@ -461,12 +461,12 @@ export const getUserStats = cache(async (): Promise<UserStats> => {
   firstDayOfWeek.setDate(now.getDate() - now.getDay())
 
   const { count: newThisMonth } = await supabase
-    .from('profiles')
+    .schema('yi_connect').from('profiles')
     .select('*', { count: 'exact', head: true })
     .gte('created_at', firstDayOfMonth.toISOString())
 
   const { count: newThisWeek } = await supabase
-    .from('profiles')
+    .schema('yi_connect').from('profiles')
     .select('*', { count: 'exact', head: true })
     .gte('created_at', firstDayOfWeek.toISOString())
 

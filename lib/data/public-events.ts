@@ -59,7 +59,7 @@ export const getEventByRsvpToken = cache(async (token: string): Promise<PublicEv
   const supabase = await createServerSupabaseClient();
 
   const { data, error } = await supabase
-    .from('events')
+    .schema('yi_connect').from('events')
     .select(`
       id,
       title,
@@ -94,7 +94,7 @@ export const getChapterMembersForRSVP = cache(async (chapterId: string): Promise
   const supabase = await createServerSupabaseClient();
 
   const { data, error } = await supabase
-    .from('members')
+    .schema('yi_connect').from('members')
     .select(`
       id,
       company,
@@ -124,7 +124,7 @@ export const getEventRSVPsByToken = cache(async (eventId: string): Promise<Publi
   const supabase = await createServerSupabaseClient();
 
   const { data, error } = await supabase
-    .from('event_rsvps')
+    .schema('yi_connect').from('event_rsvps')
     .select('id, member_id, status, guests_count')
     .eq('event_id', eventId)
     .in('status', ['confirmed', 'pending', 'attended']);
@@ -141,7 +141,7 @@ export const getGuestRSVPs = cache(async (eventId: string): Promise<PublicGuestR
   const supabase = await createServerSupabaseClient();
 
   const { data, error } = await supabase
-    .from('guest_rsvps')
+    .schema('yi_connect').from('guest_rsvps')
     .select('id, full_name, status')
     .eq('event_id', eventId)
     .in('status', ['confirmed', 'pending', 'attended']);
@@ -233,7 +233,7 @@ export const getPublicEventBySlug = cache(
     const supabase = await createServerSupabaseClient();
 
     const { data, error } = await supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .select(
         `
         id,
@@ -268,7 +268,7 @@ export const getPublicEventBySlug = cache(
     // but we tolerate empty results gracefully.
     let sessions: PublicSession[] = [];
     const { data: sessionRows } = await supabase
-      .from('event_sessions')
+      .schema('yi_connect').from('event_sessions')
       .select(
         `
         id,

@@ -71,7 +71,7 @@ export const getPaymentMethods = cache(async (
   const supabase = await createServerSupabaseClient()
 
   let query = supabase
-    .from('payment_methods')
+    .schema('yi_connect').from('payment_methods')
     .select('*')
 
   if (chapterId) {
@@ -103,7 +103,7 @@ export const getActivePaymentMethods = cache(async (
   const supabase = await createServerSupabaseClient()
 
   let query = supabase
-    .from('payment_methods')
+    .schema('yi_connect').from('payment_methods')
     .select('*')
     .eq('is_active', true)
 
@@ -134,7 +134,7 @@ export const getPaymentMethodById = cache(async (
   const supabase = await createServerSupabaseClient()
 
   const { data, error } = await supabase
-    .from('payment_methods')
+    .schema('yi_connect').from('payment_methods')
     .select('*')
     .eq('id', methodId)
     .single()
@@ -157,7 +157,7 @@ export const getDefaultPaymentMethod = cache(async (
   const supabase = await createServerSupabaseClient()
 
   const { data, error } = await supabase
-    .from('payment_methods')
+    .schema('yi_connect').from('payment_methods')
     .select('*')
     .eq('chapter_id', chapterId)
     .eq('is_default', true)
@@ -191,7 +191,7 @@ export const getFinancialAuditLogs = cache(async (
   const supabase = await createServerSupabaseClient()
 
   let query = supabase
-    .from('financial_audit_logs')
+    .schema('yi_connect').from('financial_audit_logs')
     .select('*', { count: 'exact' })
 
   if (chapterId) {
@@ -268,7 +268,7 @@ export const getAuditLogsForEntity = cache(async (
   const supabase = await createServerSupabaseClient()
 
   const { data, error } = await supabase
-    .from('financial_audit_logs')
+    .schema('yi_connect').from('financial_audit_logs')
     .select('*')
     .eq('entity_type', entityType)
     .eq('entity_id', entityId)

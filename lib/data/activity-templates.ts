@@ -22,7 +22,7 @@ export async function getActivityTemplates(
   const supabase = await createClient()
 
   let query = supabase
-    .from('activity_templates')
+    .schema('yi_connect').from('activity_templates')
     .select(`
       *,
       vertical:verticals(id, name, color)
@@ -69,7 +69,7 @@ export async function getAllActivityTemplates(): Promise<ActivityTemplate[]> {
   const supabase = await createClient()
 
   const { data, error } = await supabase
-    .from('activity_templates')
+    .schema('yi_connect').from('activity_templates')
     .select(`
       *,
       vertical:verticals(id, name, color)
@@ -97,7 +97,7 @@ export async function getActivityTemplateById(id: string): Promise<ActivityTempl
   const supabase = await createClient()
 
   const { data, error } = await supabase
-    .from('activity_templates')
+    .schema('yi_connect').from('activity_templates')
     .select(`
       *,
       vertical:verticals(id, name, color)
@@ -122,7 +122,7 @@ export async function getPopularTemplates(limit: number = 6): Promise<ActivityTe
   const supabase = await createClient()
 
   const { data, error } = await supabase
-    .from('activity_templates')
+    .schema('yi_connect').from('activity_templates')
     .select(`
       *,
       vertical:verticals(id, name, color)
@@ -169,7 +169,7 @@ export async function createActivityTemplate(
   const supabase = await createClient()
 
   const { data: template, error } = await supabase
-    .from('activity_templates')
+    .schema('yi_connect').from('activity_templates')
     .insert(data)
     .select(`
       *,
@@ -195,7 +195,7 @@ export async function updateActivityTemplate(
   const supabase = await createClient()
 
   const { data: template, error } = await supabase
-    .from('activity_templates')
+    .schema('yi_connect').from('activity_templates')
     .update(data)
     .eq('id', id)
     .select(`
@@ -219,7 +219,7 @@ export async function deleteActivityTemplate(id: string): Promise<void> {
   const supabase = await createClient()
 
   const { error } = await supabase
-    .from('activity_templates')
+    .schema('yi_connect').from('activity_templates')
     .update({ is_active: false })
     .eq('id', id)
 
@@ -236,7 +236,7 @@ export async function hardDeleteActivityTemplate(id: string): Promise<void> {
   const supabase = await createClient()
 
   const { error } = await supabase
-    .from('activity_templates')
+    .schema('yi_connect').from('activity_templates')
     .delete()
     .eq('id', id)
 
@@ -252,7 +252,7 @@ export async function hardDeleteActivityTemplate(id: string): Promise<void> {
 export async function incrementTemplateUsage(id: string): Promise<void> {
   const supabase = await createClient()
 
-  const { error } = await supabase.rpc('increment_template_usage', {
+  const { error } = await supabase.schema('yi_connect').rpc('increment_template_usage', {
     template_id: id,
   })
 

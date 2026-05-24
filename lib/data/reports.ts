@@ -96,7 +96,7 @@ export const getReportConfigurations = cache(
     const supabase = await createServerSupabaseClient()
 
     let query = supabase
-      .from('report_configurations')
+      .schema('yi_connect').from('report_configurations')
       .select('*')
       .order('created_at', { ascending: false })
 
@@ -123,7 +123,7 @@ export const getReportConfiguration = cache(
     const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
-      .from('report_configurations')
+      .schema('yi_connect').from('report_configurations')
       .select('*')
       .eq('id', configId)
       .single()
@@ -155,7 +155,7 @@ export const getGeneratedReports = cache(
     const { chapterId, reportType, limit = 20, offset = 0 } = options
 
     let query = supabase
-      .from('generated_reports')
+      .schema('yi_connect').from('generated_reports')
       .select('*', { count: 'exact' })
       .order('generated_at', { ascending: false })
       .range(offset, offset + limit - 1)
@@ -190,7 +190,7 @@ export const getGeneratedReport = cache(
     const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
-      .from('generated_reports')
+      .schema('yi_connect').from('generated_reports')
       .select('*')
       .eq('id', reportId)
       .single()
@@ -216,7 +216,7 @@ export const getTrainerPerformanceData = cache(
     const supabase = await createServerSupabaseClient()
 
     let query = supabase
-      .from('trainer_performance_data')
+      .schema('yi_connect').from('trainer_performance_data')
       .select('*')
       .order('total_sessions', { ascending: false })
 
@@ -298,7 +298,7 @@ export const getStakeholderEngagementData = cache(
     const supabase = await createServerSupabaseClient()
 
     let query = supabase
-      .from('stakeholder_engagement_data')
+      .schema('yi_connect').from('stakeholder_engagement_data')
       .select('*')
       .order('total_sessions', { ascending: false })
 
@@ -376,7 +376,7 @@ export const getVerticalImpactData = cache(
     const supabase = await createServerSupabaseClient()
 
     let query = supabase
-      .from('vertical_impact_data')
+      .schema('yi_connect').from('vertical_impact_data')
       .select('*')
       .order('performance_score', { ascending: false })
 
@@ -449,7 +449,7 @@ export const getMemberActivityData = cache(
     const supabase = await createServerSupabaseClient()
 
     let query = supabase
-      .from('member_activity_data')
+      .schema('yi_connect').from('member_activity_data')
       .select('*')
       .order('engagement_score', { ascending: false })
 
@@ -544,20 +544,20 @@ export const getReportDashboardSummary = cache(
     // Get reports generated this month
     const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
     const { count: reportsThisMonth } = await supabase
-      .from('generated_reports')
+      .schema('yi_connect').from('generated_reports')
       .select('*', { count: 'exact', head: true })
       .gte('generated_at', startOfMonth.toISOString())
       .eq('generation_status', 'completed')
 
     // Get pending reports
     const { count: pendingReports } = await supabase
-      .from('generated_reports')
+      .schema('yi_connect').from('generated_reports')
       .select('*', { count: 'exact', head: true })
       .in('generation_status', ['pending', 'generating'])
 
     // Get recent reports
     const { data: recentReports } = await supabase
-      .from('generated_reports')
+      .schema('yi_connect').from('generated_reports')
       .select('*')
       .eq('generation_status', 'completed')
       .order('generated_at', { ascending: false })

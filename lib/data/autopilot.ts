@@ -21,7 +21,7 @@ export const isAutopilotEnabled = cache(
   async (chapterId: string): Promise<boolean> => {
     const supabase = await createClient();
     const { data, error } = await supabase
-      .from('chapter_feature_toggles')
+      .schema('yi_connect').from('chapter_feature_toggles')
       .select('is_enabled')
       .eq('chapter_id', chapterId)
       .eq('feature', 'event_autopilot')
@@ -38,7 +38,7 @@ export const getAutopilotSettings = cache(
   async (chapterId: string): Promise<AutopilotSettings> => {
     const supabase = await createClient();
     const { data } = await supabase
-      .from('chapter_feature_toggles')
+      .schema('yi_connect').from('chapter_feature_toggles')
       .select('settings')
       .eq('chapter_id', chapterId)
       .eq('feature', 'event_autopilot')
@@ -59,7 +59,7 @@ export const getLatestAutopilotRun = cache(
   async (eventId: string): Promise<EventAutopilotRun | null> => {
     const supabase = await createClient();
     const { data, error } = await supabase
-      .from('event_autopilot_runs')
+      .schema('yi_connect').from('event_autopilot_runs')
       .select('*')
       .eq('event_id', eventId)
       .order('triggered_at', { ascending: false })
@@ -80,7 +80,7 @@ export const listChapterAutopilotRuns = cache(
   ): Promise<EventAutopilotRun[]> => {
     const supabase = await createClient();
     const { data } = await supabase
-      .from('event_autopilot_runs')
+      .schema('yi_connect').from('event_autopilot_runs')
       .select('*')
       .eq('chapter_id', chapterId)
       .order('triggered_at', { ascending: false })

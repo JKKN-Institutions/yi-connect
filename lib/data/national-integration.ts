@@ -54,7 +54,7 @@ export const getSyncConfig = cache(
     if (!cId) return null;
 
     const { data, error } = await supabase
-      .from('national_sync_config')
+      .schema('yi_connect').from('national_sync_config')
       .select('*')
       .eq('chapter_id', cId)
       .single();
@@ -78,7 +78,7 @@ export const getSyncHealth = cache(
 
     if (!cId) return null;
 
-    const { data, error } = await supabase.rpc('get_sync_health_status', {
+    const { data, error } = await supabase.schema('yi_connect').rpc('get_sync_health_status', {
       p_chapter_id: cId
     });
 
@@ -113,7 +113,7 @@ export const getSyncLogs = cache(
     }
 
     let query = supabase
-      .from('national_sync_logs')
+      .schema('yi_connect').from('national_sync_logs')
       .select('*', { count: 'exact' })
       .eq('chapter_id', cId);
 
@@ -165,7 +165,7 @@ export const getSyncLogById = cache(
     const supabase = await createClient();
 
     const { data, error } = await supabase
-      .from('national_sync_logs')
+      .schema('yi_connect').from('national_sync_logs')
       .select('*')
       .eq('id', logId)
       .single();
@@ -190,7 +190,7 @@ export const getRecentSyncLogs = cache(
     if (!cId) return [];
 
     const { data, error } = await supabase
-      .from('national_sync_logs')
+      .schema('yi_connect').from('national_sync_logs')
       .select('*')
       .eq('chapter_id', cId)
       .order('started_at', { ascending: false })
@@ -223,7 +223,7 @@ export const getSyncEntities = cache(
     if (!cId) return [];
 
     let query = supabase
-      .from('national_sync_entities')
+      .schema('yi_connect').from('national_sync_entities')
       .select('*')
       .eq('chapter_id', cId);
 
@@ -277,7 +277,7 @@ export const getBenchmarks = cache(
     if (!cId) return [];
 
     let query = supabase
-      .from('national_benchmarks')
+      .schema('yi_connect').from('national_benchmarks')
       .select('*')
       .eq('chapter_id', cId);
 
@@ -323,7 +323,7 @@ export const getBenchmarkSummary = cache(
 
     if (!cId) return null;
 
-    const { data, error } = await supabase.rpc('get_benchmark_summary', {
+    const { data, error } = await supabase.schema('yi_connect').rpc('get_benchmark_summary', {
       p_chapter_id: cId,
       p_period_type: periodType
     });
@@ -349,7 +349,7 @@ export const getNationalEvents = cache(
     const supabase = await createClient();
 
     let query = supabase
-      .from('national_events')
+      .schema('yi_connect').from('national_events')
       .select(
         `
         id,
@@ -409,7 +409,7 @@ export const getUpcomingNationalEvents = cache(
     const supabase = await createClient();
 
     const { data, error } = await supabase
-      .from('national_events')
+      .schema('yi_connect').from('national_events')
       .select(
         `
         id,
@@ -449,7 +449,7 @@ export const getNationalEventById = cache(
     const supabase = await createClient();
 
     const { data, error } = await supabase
-      .from('national_events')
+      .schema('yi_connect').from('national_events')
       .select('*')
       .eq('id', eventId)
       .single();
@@ -473,7 +473,7 @@ export const getNationalEventStats = cache(
 
     if (!cId) return null;
 
-    const { data, error } = await supabase.rpc('get_national_event_stats', {
+    const { data, error } = await supabase.schema('yi_connect').rpc('get_national_event_stats', {
       p_chapter_id: cId
     });
 
@@ -505,7 +505,7 @@ export const getMemberRegistrations = cache(
     // lookup keyed by the text national_event_id (same pattern Agent O uses
     // for organizer resolution in lib/data/events.ts).
     const { data: registrations, error } = await supabase
-      .from('national_event_registrations')
+      .schema('yi_connect').from('national_event_registrations')
       .select('*')
       .eq('member_id', memberId)
       .order('registered_at', { ascending: false });
@@ -531,7 +531,7 @@ export const getMemberRegistrations = cache(
     const eventsById = new Map<string, unknown>();
     if (eventIds.length > 0) {
       const { data: events } = await supabase
-        .from('national_events')
+        .schema('yi_connect').from('national_events')
         .select(
           'id, national_event_id, title, event_type, start_date, end_date, city, is_virtual, status, is_featured, current_registrations, max_participants, registration_deadline'
         )
@@ -560,7 +560,7 @@ export const getRegistrationById = cache(
     const supabase = await createClient();
 
     const { data, error } = await supabase
-      .from('national_event_registrations')
+      .schema('yi_connect').from('national_event_registrations')
       .select('*')
       .eq('id', registrationId)
       .single();
@@ -585,7 +585,7 @@ export const checkMemberRegistration = cache(
     const supabase = await createClient();
 
     const { data, error } = await supabase
-      .from('national_event_registrations')
+      .schema('yi_connect').from('national_event_registrations')
       .select('*')
       .eq('national_event_id', eventId)
       .eq('member_id', memberId)
@@ -611,7 +611,7 @@ export const getLeadershipRoles = cache(
     const supabase = await createClient();
 
     let query = supabase
-      .from('national_leadership_directory')
+      .schema('yi_connect').from('national_leadership_directory')
       .select('*')
       .order('hierarchy_level', { ascending: true });
 
@@ -641,7 +641,7 @@ export const getRoleMappings = cache(
     if (!cId) return [];
 
     const { data, error } = await supabase
-      .from('national_role_mappings')
+      .schema('yi_connect').from('national_role_mappings')
       .select(
         `
         *,
@@ -689,7 +689,7 @@ export const getBroadcasts = cache(
     const supabase = await createClient();
 
     let query = supabase
-      .from('national_broadcasts')
+      .schema('yi_connect').from('national_broadcasts')
       .select('*')
       .order('published_at', { ascending: false });
 
@@ -728,7 +728,7 @@ export const getBroadcasts = cache(
     // Get receipts for the member
     const broadcastIds = broadcasts?.map((b) => b.id) || [];
     const { data: receipts } = await supabase
-      .from('national_broadcast_receipts')
+      .schema('yi_connect').from('national_broadcast_receipts')
       .select('*')
       .eq('member_id', memberId)
       .in('broadcast_id', broadcastIds);
@@ -760,7 +760,7 @@ export const getUnreadBroadcastsCount = cache(
   async (memberId: string): Promise<number> => {
     const supabase = await createClient();
 
-    const { data, error } = await supabase.rpc('get_unread_broadcasts_count', {
+    const { data, error } = await supabase.schema('yi_connect').rpc('get_unread_broadcasts_count', {
       p_member_id: memberId
     });
 
@@ -781,7 +781,7 @@ export const getBroadcastById = cache(
     const supabase = await createClient();
 
     const { data, error } = await supabase
-      .from('national_broadcasts')
+      .schema('yi_connect').from('national_broadcasts')
       .select('*')
       .eq('id', broadcastId)
       .single();
@@ -813,7 +813,7 @@ export const getDataConflicts = cache(
     if (!cId) return [];
 
     let query = supabase
-      .from('national_data_conflicts')
+      .schema('yi_connect').from('national_data_conflicts')
       .select('*')
       .eq('chapter_id', cId);
 
@@ -860,7 +860,7 @@ export const getPendingConflictsCount = cache(
     if (!cId) return 0;
 
     const { count, error } = await supabase
-      .from('national_data_conflicts')
+      .schema('yi_connect').from('national_data_conflicts')
       .select('*', { count: 'exact', head: true })
       .eq('chapter_id', cId)
       .eq('resolution_status', 'pending');
@@ -882,7 +882,7 @@ export const getConflictById = cache(
     const supabase = await createClient();
 
     const { data, error } = await supabase
-      .from('national_data_conflicts')
+      .schema('yi_connect').from('national_data_conflicts')
       .select('*')
       .eq('id', conflictId)
       .single();

@@ -38,7 +38,7 @@ export const getHealthCardEntries = cache(
     }
 
     let query = supabase
-      .from('health_card_entries')
+      .schema('yi_connect').from('health_card_entries')
       .select(
         `
         *,
@@ -110,7 +110,7 @@ export const getHealthCardEntryById = cache(
     if (!user) return null
 
     const { data, error } = await supabase
-      .from('health_card_entries')
+      .schema('yi_connect').from('health_card_entries')
       .select(
         `
         *,
@@ -155,7 +155,7 @@ export const getHealthCardSummaryByVertical = cache(
 
     // Get all entries for the chapter/year
     const { data: entries, error } = await supabase
-      .from('health_card_entries')
+      .schema('yi_connect').from('health_card_entries')
       .select(
         `
         vertical_id,
@@ -174,7 +174,7 @@ export const getHealthCardSummaryByVertical = cache(
     // Get vertical details
     const verticalIds = [...new Set(entries.map((e) => e.vertical_id))]
     const { data: verticals } = await supabase
-      .from('verticals')
+      .schema('yi_connect').from('verticals')
       .select('id, name, slug, color, icon')
       .in('id', verticalIds)
 
@@ -273,7 +273,7 @@ export const getChapterHealthStats = cache(
     if (!user) return null
 
     const { data: entries, error } = await supabase
-      .from('health_card_entries')
+      .schema('yi_connect').from('health_card_entries')
       .select('ec_members_count, non_ec_members_count, activity_date')
       .eq('chapter_id', chapterId)
       .eq('calendar_year', calendarYear)
@@ -334,7 +334,7 @@ export const getVerticalsForForm = cache(async (): Promise<{ id: string; name: s
   if (!user) return []
 
   const { data, error } = await supabase
-    .from('verticals')
+    .schema('yi_connect').from('verticals')
     .select('id, name, slug, color, icon')
     .eq('is_active', true)
     .order('display_order', { ascending: true })
@@ -364,7 +364,7 @@ export const getChapterById = cache(async (chapterId: string): Promise<{ id: str
   if (!user) return null
 
   const { data, error } = await supabase
-    .from('chapters')
+    .schema('yi_connect').from('chapters')
     .select('id, name')
     .eq('id', chapterId)
     .single()
@@ -387,7 +387,7 @@ export const getAllChapters = cache(async (): Promise<{ id: string; name: string
   if (!user) return []
 
   const { data, error } = await supabase
-    .from('chapters')
+    .schema('yi_connect').from('chapters')
     .select('id, name')
     .order('name', { ascending: true })
 

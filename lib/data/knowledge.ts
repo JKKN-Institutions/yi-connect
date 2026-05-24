@@ -31,7 +31,7 @@ export const getCategories = cache(
     const supabase = await createServerSupabaseClient();
 
     const { data, error } = await supabase
-      .from('knowledge_categories')
+      .schema('yi_connect').from('knowledge_categories')
       .select('*')
       .eq('chapter_id', chapterId)
       .eq('is_active', true)
@@ -47,7 +47,7 @@ export const getCategoryById = cache(
     const supabase = await createServerSupabaseClient();
 
     const { data, error } = await supabase
-      .from('knowledge_categories')
+      .schema('yi_connect').from('knowledge_categories')
       .select('*')
       .eq('id', categoryId)
       .single();
@@ -65,7 +65,7 @@ export const getCategoriesWithCounts = cache(
     const supabase = await createServerSupabaseClient();
 
     const { data, error } = await supabase
-      .from('knowledge_categories')
+      .schema('yi_connect').from('knowledge_categories')
       .select(`
         id,
         name,
@@ -107,7 +107,7 @@ export const getDocuments = cache(
     const to = from + pageSize - 1;
 
     let query = supabase
-      .from('knowledge_documents')
+      .schema('yi_connect').from('knowledge_documents')
       .select(`
         id,
         title,
@@ -192,7 +192,7 @@ export const getDocumentById = cache(
     const supabase = await createServerSupabaseClient();
 
     const { data, error } = await supabase
-      .from('knowledge_documents')
+      .schema('yi_connect').from('knowledge_documents')
       .select('*')
       .eq('id', documentId)
       .single();
@@ -210,7 +210,7 @@ export const getDocumentWithDetails = cache(
     const supabase = await createServerSupabaseClient();
 
     const { data, error } = await supabase
-      .from('knowledge_documents')
+      .schema('yi_connect').from('knowledge_documents')
       .select(`
         *,
         category:knowledge_categories(name),
@@ -251,7 +251,7 @@ export const getWikiPages = cache(
     const to = from + pageSize - 1;
 
     let query = supabase
-      .from('wiki_pages')
+      .schema('yi_connect').from('wiki_pages')
       .select(`
         id,
         title,
@@ -316,7 +316,7 @@ export const getWikiPageById = cache(
     const supabase = await createServerSupabaseClient();
 
     const { data, error } = await supabase
-      .from('wiki_pages')
+      .schema('yi_connect').from('wiki_pages')
       .select('*')
       .eq('id', pageId)
       .single();
@@ -334,7 +334,7 @@ export const getWikiPageBySlug = cache(
     const supabase = await createServerSupabaseClient();
 
     const { data, error } = await supabase
-      .from('wiki_pages')
+      .schema('yi_connect').from('wiki_pages')
       .select('*')
       .eq('chapter_id', chapterId)
       .eq('slug', slug)
@@ -362,7 +362,7 @@ export const getBestPractices = cache(
     const to = from + pageSize - 1;
 
     let query = supabase
-      .from('best_practices')
+      .schema('yi_connect').from('best_practices')
       .select(`
         id,
         title,
@@ -426,7 +426,7 @@ export const getBestPracticeById = cache(
     const supabase = await createServerSupabaseClient();
 
     const { data, error } = await supabase
-      .from('best_practices')
+      .schema('yi_connect').from('best_practices')
       .select('*')
       .eq('id', practiceId)
       .single();
@@ -448,7 +448,7 @@ export const getTags = cache(
     const supabase = await createServerSupabaseClient();
 
     const { data, error } = await supabase
-      .from('knowledge_tags')
+      .schema('yi_connect').from('knowledge_tags')
       .select('*')
       .eq('chapter_id', chapterId)
       .order('usage_count', { ascending: false })
@@ -468,7 +468,7 @@ export const getKnowledgeAnalytics = cache(
     const supabase = await createServerSupabaseClient();
 
     const { data, error } = await supabase
-      .rpc('get_knowledge_analytics', { p_chapter_id: chapterId });
+      .schema('yi_connect').rpc('get_knowledge_analytics', { p_chapter_id: chapterId });
 
     if (error) throw error;
     return data;

@@ -140,7 +140,7 @@ export const getTemplates = cache(
     const chapterId = await getCurrentChapterId();
 
     let query = supabase
-      .from('announcement_templates')
+      .schema('yi_connect').from('announcement_templates')
       .select(
         `
       id,
@@ -212,7 +212,7 @@ export const getTemplateById = cache(
     const supabase = await createClient();
 
     const { data, error } = await supabase
-      .from('announcement_templates')
+      .schema('yi_connect').from('announcement_templates')
       .select('*')
       .eq('id', id)
       .single();
@@ -256,7 +256,7 @@ export const getNotifications = cache(
     const supabase = await createClient();
 
     let query = supabase
-      .from('notifications')
+      .schema('yi_connect').from('notifications')
       .select('*', { count: 'exact' })
       .eq('member_id', memberId);
 
@@ -287,7 +287,7 @@ export const getNotifications = cache(
 
     // Get unread count
     const { count: unreadCount } = await supabase
-      .from('notifications')
+      .schema('yi_connect').from('notifications')
       .select('*', { count: 'exact', head: true })
       .eq('member_id', memberId)
       .eq('read', false);
@@ -333,7 +333,7 @@ export const getRecentNotifications = cache(
     }
 
     const { data, error } = await supabase
-      .from('notifications')
+      .schema('yi_connect').from('notifications')
       .select(`
         *,
         members!inner (chapter_id)
@@ -359,7 +359,7 @@ export const getUnreadNotificationsCount = cache(
     const supabase = await createClient();
 
     const { count, error } = await supabase
-      .from('notifications')
+      .schema('yi_connect').from('notifications')
       .select('*', { count: 'exact', head: true })
       .eq('member_id', memberId)
       .eq('read', false);
@@ -384,7 +384,7 @@ export const getNotificationSummary = cache(
 
     // Get recent notifications
     const { data: recent } = await supabase
-      .from('notifications')
+      .schema('yi_connect').from('notifications')
       .select('*')
       .eq('member_id', memberId)
       .order('created_at', { ascending: false })
@@ -392,7 +392,7 @@ export const getNotificationSummary = cache(
 
     // Get counts by category
     const { data: allNotifications } = await supabase
-      .from('notifications')
+      .schema('yi_connect').from('notifications')
       .select('category')
       .eq('member_id', memberId);
 
@@ -427,7 +427,7 @@ export const getNewsletters = cache(
     if (!cId) return [];
 
     let query = supabase
-      .from('newsletters')
+      .schema('yi_connect').from('newsletters')
       .select(
         `
       id,
@@ -503,7 +503,7 @@ export const getNewsletterById = cache(
     const supabase = await createClient();
 
     const { data, error } = await supabase
-      .from('newsletters')
+      .schema('yi_connect').from('newsletters')
       .select('*')
       .eq('id', id)
       .single();
@@ -527,7 +527,7 @@ export const getLatestNewsletter = cache(
     if (!cId) return null;
 
     const { data, error } = await supabase
-      .from('newsletters')
+      .schema('yi_connect').from('newsletters')
       .select('*')
       .eq('chapter_id', cId)
       .eq('status', 'published')
@@ -559,7 +559,7 @@ export const getSegments = cache(
     if (!cId) return [];
 
     const { data, error } = await supabase
-      .from('communication_segments')
+      .schema('yi_connect').from('communication_segments')
       .select('*')
       .eq('chapter_id', cId)
       .order('name');
@@ -581,7 +581,7 @@ export const getSegmentById = cache(
     const supabase = await createClient();
 
     const { data: segment, error } = await supabase
-      .from('communication_segments')
+      .schema('yi_connect').from('communication_segments')
       .select(
         `
       *,
@@ -623,7 +623,7 @@ export const getSegmentPreviewCount = cache(
 
     // Base query for members in chapter
     const query = supabase
-      .from('members')
+      .schema('yi_connect').from('members')
       .select('id', { count: 'exact', head: true })
       .eq('chapter_id', chapterId)
       .eq('status', 'active');
@@ -631,7 +631,7 @@ export const getSegmentPreviewCount = cache(
     // If segmentId provided, get the segment's filters
     if (segmentId) {
       const { data: segment } = await supabase
-        .from('communication_segments')
+        .schema('yi_connect').from('communication_segments')
         .select('filters')
         .eq('id', segmentId)
         .single();
@@ -688,7 +688,7 @@ export const getAutomationRules = cache(
     if (!cId) return [];
 
     const { data, error } = await supabase
-      .from('communication_automation_rules')
+      .schema('yi_connect').from('communication_automation_rules')
       .select(
         `
       *,
@@ -727,7 +727,7 @@ export const getAutomationRuleById = cache(
     const supabase = await createClient();
 
     const { data, error } = await supabase
-      .from('communication_automation_rules')
+      .schema('yi_connect').from('communication_automation_rules')
       .select(
         `
       *,
@@ -802,7 +802,7 @@ export async function getSegmentMemberPreview(
   // For MVP, get all active members
   // In production, this should apply the segment filter_rules
   const { data } = await supabase
-    .from('members')
+    .schema('yi_connect').from('members')
     .select(
       `
       id,

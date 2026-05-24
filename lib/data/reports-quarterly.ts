@@ -49,7 +49,7 @@ export async function aggregateQuarterlyReport(
   // Chapter info
   // --------------------------------------------------------------------
   const { data: chapter } = await supabase
-    .from('chapters')
+    .schema('yi_connect').from('chapters')
     .select('id, name, region')
     .eq('id', chapterId)
     .maybeSingle();
@@ -58,7 +58,7 @@ export async function aggregateQuarterlyReport(
   // Events (status=completed AND within window)
   // --------------------------------------------------------------------
   const { data: events } = await supabase
-    .from('events')
+    .schema('yi_connect').from('events')
     .select(
       'id, title, start_date, category, status, vertical_id, current_registrations'
     )
@@ -79,11 +79,11 @@ export async function aggregateQuarterlyReport(
   if (eventIds.length > 0) {
     const [{ data: rsvps }, { data: feedbacks }] = await Promise.all([
       supabase
-        .from('event_rsvps')
+        .schema('yi_connect').from('event_rsvps')
         .select('event_id, status')
         .in('event_id', eventIds),
       supabase
-        .from('event_feedback')
+        .schema('yi_connect').from('event_feedback')
         .select('event_id, rating')
         .in('event_id', eventIds),
     ]);
@@ -143,7 +143,7 @@ export async function aggregateQuarterlyReport(
   // Verticals status
   // --------------------------------------------------------------------
   const { data: verticals } = await supabase
-    .from('verticals')
+    .schema('yi_connect').from('verticals')
     .select('id, name')
     .order('name');
 
@@ -154,7 +154,7 @@ export async function aggregateQuarterlyReport(
     let planned = 0;
     try {
       const { count } = await supabase
-        .from('planned_activities')
+        .schema('yi_connect').from('planned_activities')
         .select('id', { count: 'exact', head: true })
         .eq('chapter_id', chapterId)
         .eq('vertical_id', v.id)
@@ -171,7 +171,7 @@ export async function aggregateQuarterlyReport(
     let nonEcSum = 0;
     try {
       const { data: hc } = await supabase
-        .from('health_card_entries')
+        .schema('yi_connect').from('health_card_entries')
         .select('id, ec_members_count, non_ec_members_count')
         .eq('chapter_id', chapterId)
         .eq('vertical_id', v.id)
@@ -213,7 +213,7 @@ export async function aggregateQuarterlyReport(
   let topMembers: ReportTopMember[] = [];
   try {
     const { data: pts } = await supabase
-      .from('member_points_log')
+      .schema('yi_connect').from('member_points_log')
       .select('member_id, points, action_type')
       .eq('chapter_id', chapterId)
       .gte('awarded_at', startIso)
@@ -237,7 +237,7 @@ export async function aggregateQuarterlyReport(
     if (sorted.length > 0) {
       const ids = sorted.map(([id]) => id);
       const { data: profiles } = await supabase
-        .from('profiles')
+        .schema('yi_connect').from('profiles')
         .select('id, full_name, email')
         .in('id', ids);
       const pmap = new Map(
@@ -270,7 +270,7 @@ export async function aggregateQuarterlyReport(
   };
   try {
     const { data: expenses } = await supabase
-      .from('expenses')
+      .schema('yi_connect').from('expenses')
       .select('amount, status')
       .eq('chapter_id', chapterId)
       .gte('created_at', startIso)
@@ -288,7 +288,7 @@ export async function aggregateQuarterlyReport(
 
   try {
     const { data: sponsors } = await supabase
-      .from('sponsorships')
+      .schema('yi_connect').from('sponsorships')
       .select('amount, status')
       .eq('chapter_id', chapterId)
       .gte('created_at', startIso)
@@ -319,7 +319,7 @@ export async function aggregateQuarterlyReport(
   // Generator info
   // --------------------------------------------------------------------
   const { data: generator } = await supabase
-    .from('profiles')
+    .schema('yi_connect').from('profiles')
     .select('full_name')
     .eq('id', generatedByUserId)
     .maybeSingle();
@@ -368,7 +368,7 @@ export const listChapterReports = cache(
   async (chapterId: string, limit = 25): Promise<ChapterReport[]> => {
     const supabase = await createClient();
     const { data } = await supabase
-      .from('chapter_reports')
+      .schema('yi_connect').from('chapter_reports')
       .select('*')
       .eq('chapter_id', chapterId)
       .order('generated_at', { ascending: false })
@@ -384,7 +384,7 @@ export const getChapterReportById = cache(
   async (id: string): Promise<ChapterReport | null> => {
     const supabase = await createClient();
     const { data } = await supabase
-      .from('chapter_reports')
+      .schema('yi_connect').from('chapter_reports')
       .select('*')
       .eq('id', id)
       .maybeSingle();

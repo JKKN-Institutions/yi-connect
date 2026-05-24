@@ -70,7 +70,7 @@ export const getVerticals = cache(
 
     // Note: chapter_id filtering is handled by RLS policies
     let query = supabase
-      .from('verticals')
+      .schema('yi_connect').from('verticals')
       .select(
         `
         *,
@@ -129,7 +129,7 @@ export const getVerticalById = cache(async (id: string): Promise<VerticalWithCha
   const supabase = await createClient()
 
   const { data, error } = await supabase
-    .from('verticals')
+    .schema('yi_connect').from('verticals')
     .select(
       `
       *,
@@ -174,7 +174,7 @@ export const getVerticalBySlug = cache(async (slug: string): Promise<VerticalWit
 
   // Note: chapter_id filtering is handled by RLS policies
   const { data, error} = await supabase
-    .from('verticals')
+    .schema('yi_connect').from('verticals')
     .select(
       `
       *,
@@ -217,7 +217,7 @@ export const getVerticalPlans = cache(async (verticalId: string): Promise<Vertic
   const supabase = await createClient()
 
   const { data, error } = await supabase
-    .from('vertical_plans')
+    .schema('yi_connect').from('vertical_plans')
     .select(
       `
       *,
@@ -249,7 +249,7 @@ export const getActiveVerticalPlan = cache(
     const supabase = await createClient()
 
     let query = supabase
-      .from('vertical_plans')
+      .schema('yi_connect').from('vertical_plans')
       .select(
         `
         *,
@@ -285,7 +285,7 @@ export const getPlanById = cache(async (id: string): Promise<VerticalPlanWithKPI
   const supabase = await createClient()
 
   const { data, error } = await supabase
-    .from('vertical_plans')
+    .schema('yi_connect').from('vertical_plans')
     .select(
       `
       *,
@@ -322,7 +322,7 @@ export const getPlanKPIs = cache(async (planId: string): Promise<VerticalKPIWith
   const supabase = await createClient()
 
   const { data, error } = await supabase
-    .from('vertical_kpis')
+    .schema('yi_connect').from('vertical_kpis')
     .select(
       `
       *,
@@ -378,7 +378,7 @@ export const getKPIById = cache(async (id: string): Promise<VerticalKPIWithActua
   const supabase = await createClient()
 
   const { data, error } = await supabase
-    .from('vertical_kpis')
+    .schema('yi_connect').from('vertical_kpis')
     .select(
       `
       *,
@@ -434,7 +434,7 @@ export const getVerticalActivities = cache(
     const supabase = await createClient()
 
     let query = supabase
-      .from('vertical_activities')
+      .schema('yi_connect').from('vertical_activities')
       .select(
         `
         *,
@@ -509,7 +509,7 @@ export const getActivityById = cache(async (id: string): Promise<VerticalActivit
   const supabase = await createClient()
 
   const { data, error } = await supabase
-    .from('vertical_activities')
+    .schema('yi_connect').from('vertical_activities')
     .select(
       `
       *,
@@ -545,7 +545,7 @@ export const getVerticalReviews = cache(
     // Route the chairs join through verticals.vertical_chairs (vertical_chairs
     // has vertical_id → verticals.id which the embed already traverses).
     let query = supabase
-      .from('vertical_performance_reviews')
+      .schema('yi_connect').from('vertical_performance_reviews')
       .select(
         `
         *,
@@ -610,7 +610,7 @@ export const getReviewById = cache(async (id: string): Promise<VerticalPerforman
   // vertical_chairs, so `chair:vertical_chairs(...)` returns PGRST200.
   // Route the chairs join through verticals.
   const { data, error } = await supabase
-    .from('vertical_performance_reviews')
+    .schema('yi_connect').from('vertical_performance_reviews')
     .select(
       `
       *,
@@ -653,7 +653,7 @@ export const getVerticalMembers = cache(async (verticalId: string): Promise<Vert
   const supabase = await createClient()
 
   const { data, error } = await supabase
-    .from('vertical_members')
+    .schema('yi_connect').from('vertical_members')
     .select(
       `
       *,
@@ -684,7 +684,7 @@ export const getVerticalAchievements = cache(async (verticalId: string): Promise
   const supabase = await createClient()
 
   const { data, error } = await supabase
-    .from('vertical_achievements')
+    .schema('yi_connect').from('vertical_achievements')
     .select(
       `
       *,
@@ -721,7 +721,7 @@ export const getVerticalDashboard = cache(async (verticalId: string, calendarYea
 
   // Get KPI summary from view
   const { data: kpiProgressData } = await supabase
-    .from('vertical_kpi_progress')
+    .schema('yi_connect').from('vertical_kpi_progress')
     .select('*')
     .eq('vertical_id', verticalId)
     .eq('calendar_year', calendarYear)
@@ -739,7 +739,7 @@ export const getVerticalDashboard = cache(async (verticalId: string, calendarYea
 
   // Get impact metrics from view
   const { data: impactData } = await supabase
-    .from('vertical_impact_metrics')
+    .schema('yi_connect').from('vertical_impact_metrics')
     .select('*')
     .eq('vertical_id', verticalId)
     .eq('calendar_year', calendarYear)
@@ -801,7 +801,7 @@ export const getVerticalDashboard = cache(async (verticalId: string, calendarYea
 export const getVerticalRankings = cache(async (calendarYear: number): Promise<VerticalRanking[]> => {
   const supabase = await createClient()
 
-  const { data, error } = await supabase.rpc('calculate_vertical_ranking', {
+  const { data, error } = await supabase.schema('yi_connect').rpc('calculate_vertical_ranking', {
     p_calendar_year: calendarYear,
   })
 
@@ -822,7 +822,7 @@ export const getVerticalRankings = cache(async (calendarYear: number): Promise<V
 export const getKPIAlerts = cache(async (verticalId: string, quarter: number): Promise<KPIAlert[]> => {
   const supabase = await createClient()
 
-  const { data, error } = await supabase.rpc('check_kpi_alerts', {
+  const { data, error } = await supabase.schema('yi_connect').rpc('check_kpi_alerts', {
     p_vertical_id: verticalId,
     p_quarter: quarter,
   })

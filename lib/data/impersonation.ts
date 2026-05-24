@@ -41,7 +41,7 @@ export const getActiveImpersonationSession = cache(
 
       const supabase = await createServerSupabaseClient()
 
-      const { data, error } = await supabase.rpc('get_active_impersonation', {
+      const { data, error } = await supabase.schema('yi_connect').rpc('get_active_impersonation', {
         p_admin_id: user.id,
       })
 
@@ -75,7 +75,7 @@ export const getRecentImpersonations = cache(
 
     const supabase = await createServerSupabaseClient()
 
-    const { data, error } = await supabase.rpc('get_recent_impersonations', {
+    const { data, error } = await supabase.schema('yi_connect').rpc('get_recent_impersonations', {
       p_admin_id: user.id,
       p_limit: limit,
     })
@@ -114,7 +114,7 @@ export async function getImpersonatableUsers(
 
   // Build query for users with roles below current hierarchy level
   let query = supabase
-    .from('profiles')
+    .schema('yi_connect').from('profiles')
     .select(
       `
       id,
@@ -214,7 +214,7 @@ export const getRoleOptionsForImpersonation = cache(
 
     // Get roles with counts, excluding roles at or above current level
     const { data, error } = await supabase
-      .from('roles')
+      .schema('yi_connect').from('roles')
       .select('name, hierarchy_level')
       .lt('hierarchy_level', hierarchyLevel)
       .order('hierarchy_level', { ascending: false })
@@ -229,7 +229,7 @@ export const getRoleOptionsForImpersonation = cache(
 
     for (const role of data || []) {
       const { count } = await supabase
-        .from('user_roles')
+        .schema('yi_connect').from('user_roles')
         .select('*', { count: 'exact', head: true })
         .eq('role_id', role.name) // This needs role_id, not name
 
@@ -267,7 +267,7 @@ export async function getImpersonationAuditSessions(
   // PostgREST cannot resolve `admin:profiles!...` embed. Drop embeds; hydrate
   // names via a batched members→profiles lookup after the main query.
   let query = supabase
-    .from('impersonation_sessions')
+    .schema('yi_connect').from('impersonation_sessions')
     .select('*', { count: 'exact' })
     .order('started_at', { ascending: false })
 
@@ -313,7 +313,7 @@ export async function getImpersonationAuditSessions(
     try {
       const admin = createAdminSupabaseClient()
       const { data: memberRows } = await admin
-        .from('members')
+        .schema('yi_connect').from('members')
         .select('id, profile:profiles(full_name, email)')
         .in('id', allUserIds)
       for (const row of memberRows || []) {
@@ -376,7 +376,7 @@ export async function getImpersonationActionLog(
   const supabase = await createServerSupabaseClient()
 
   const { data, error } = await supabase
-    .from('impersonation_action_log')
+    .schema('yi_connect').from('impersonation_action_log')
     .select('*')
     .eq('session_id', sessionId)
     .order('executed_at', { ascending: true })
@@ -409,7 +409,7 @@ export async function getUsersForRoleCycling(
 
   // Get all users with this role who have lower hierarchy level than admin
   const { data, error } = await supabase
-    .from('profiles')
+    .schema('yi_connect').from('profiles')
     .select(`
       id,
       full_name,
@@ -468,7 +468,7 @@ export async function getImpersonationTargetDetails(userId: string) {
   const supabase = await createServerSupabaseClient()
 
   const { data: profile, error } = await supabase
-    .from('profiles')
+    .schema('yi_connect').from('profiles')
     .select(
       `
       id,
@@ -541,7 +541,7 @@ export async function getImpersonationAnalytics(): Promise<ImpersonationAnalytic
   // Phase E fix 2026-05-23 (Agent Q): admin_id/target_user_id FK to auth.users(id),
   // not profiles. Drop embeds; hydrate names via a separate members→profiles lookup.
   const { data: allSessions, error: sessionsError } = await supabase
-    .from('impersonation_sessions')
+    .schema('yi_connect').from('impersonation_sessions')
     .select(`
       id,
       admin_id,
@@ -572,7 +572,7 @@ export async function getImpersonationAnalytics(): Promise<ImpersonationAnalytic
     try {
       const adminClient = createAdminSupabaseClient()
       const { data: memberRows } = await adminClient
-        .from('members')
+        .schema('yi_connect').from('members')
         .select('id, profile:profiles(full_name, email)')
         .in('id', allUserIdsForAnalytics)
       for (const row of memberRows || []) {
@@ -637,7 +637,7 @@ export async function getImpersonationAnalytics(): Promise<ImpersonationAnalytic
 
   // Fetch roles for top users
   const { data: userRoles } = await supabase
-    .from('user_roles')
+    .schema('yi_connect').from('user_roles')
     .select(`
       user_id,
       role:roles (name)
@@ -741,7 +741,7 @@ export async function getImpersonationAnalytics(): Promise<ImpersonationAnalytic
   // Get all session target roles
   const allTargetIds = [...uniqueTargetIds]
   const { data: allUserRoles } = await supabase
-    .from('user_roles')
+    .schema('yi_connect').from('user_roles')
     .select(`
       user_id,
       role:roles (name)

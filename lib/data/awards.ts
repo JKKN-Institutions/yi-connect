@@ -39,7 +39,7 @@ export const getAwardCategories = cache(async (filters?: AwardCategoryFilters) =
   const supabase = await createServerSupabaseClient()
 
   let query = supabase
-    .from('award_categories')
+    .schema('yi_connect').from('award_categories')
     .select('*', { count: 'exact' })
     .order('sort_order', { ascending: true })
     .order('name', { ascending: true })
@@ -74,7 +74,7 @@ export const getAwardCategoryById = cache(async (id: string) => {
   const supabase = await createServerSupabaseClient()
 
   const { data, error } = await supabase
-    .from('award_categories')
+    .schema('yi_connect').from('award_categories')
     .select('*')
     .eq('id', id)
     .single()
@@ -95,7 +95,7 @@ export const getAwardCycles = cache(async (filters?: AwardCycleFilters) => {
   const supabase = await createServerSupabaseClient()
 
   let query = supabase
-    .from('award_cycles')
+    .schema('yi_connect').from('award_cycles')
     .select(`
       *,
       category:award_categories(*)
@@ -133,7 +133,7 @@ export const getAwardCycleById = cache(async (id: string) => {
   const supabase = await createServerSupabaseClient()
 
   const { data, error } = await supabase
-    .from('award_cycles')
+    .schema('yi_connect').from('award_cycles')
     .select(`
       *,
       category:award_categories(*)
@@ -153,7 +153,7 @@ export const getActiveCycles = cache(async () => {
   const supabase = await createServerSupabaseClient()
 
   const { data, error } = await supabase
-    .from('award_cycles')
+    .schema('yi_connect').from('award_cycles')
     .select(`
       *,
       category:award_categories(*)
@@ -177,7 +177,7 @@ export const getNominations = cache(async (filters?: NominationFilters) => {
   const supabase = await createServerSupabaseClient()
 
   let query = supabase
-    .from('nominations')
+    .schema('yi_connect').from('nominations')
     .select(`
       *,
       cycle:award_cycles(
@@ -234,7 +234,7 @@ export const getNominationById = cache(async (id: string) => {
   const supabase = await createServerSupabaseClient()
 
   const { data, error } = await supabase
-    .from('nominations')
+    .schema('yi_connect').from('nominations')
     .select(`
       *,
       cycle:award_cycles(
@@ -274,7 +274,7 @@ export const getMyNominations = cache(async (memberId: string) => {
   const supabase = await createServerSupabaseClient()
 
   const { data, error } = await supabase
-    .from('nominations')
+    .schema('yi_connect').from('nominations')
     .select(`
       *,
       cycle:award_cycles(
@@ -309,7 +309,7 @@ export const getJuryMembers = cache(async (cycleId: string) => {
   const supabase = await createServerSupabaseClient()
 
   const { data, error } = await supabase
-    .from('jury_members')
+    .schema('yi_connect').from('jury_members')
     .select(`
       *,
       member:members(
@@ -336,7 +336,7 @@ export const getMyJuryAssignments = cache(async (memberId: string) => {
   const supabase = await createServerSupabaseClient()
 
   const { data, error } = await supabase
-    .from('jury_members')
+    .schema('yi_connect').from('jury_members')
     .select(`
       *,
       cycle:award_cycles(
@@ -361,7 +361,7 @@ export const getJuryScores = cache(async (nominationId: string) => {
   const supabase = await createServerSupabaseClient()
 
   const { data, error } = await supabase
-    .from('jury_scores')
+    .schema('yi_connect').from('jury_scores')
     .select(`
       *,
       juror:profiles(id, full_name, avatar_url)
@@ -383,7 +383,7 @@ export const getNominationsForJury = cache(async (juryMemberId: string) => {
 
   // Get the cycle for this jury member
   const { data: juryMember, error: juryError } = await supabase
-    .from('jury_members')
+    .schema('yi_connect').from('jury_members')
     .select('cycle_id')
     .eq('id', juryMemberId)
     .single()
@@ -392,7 +392,7 @@ export const getNominationsForJury = cache(async (juryMemberId: string) => {
 
   // Get all nominations for this cycle with jury score status
   const { data, error } = await supabase
-    .from('nominations')
+    .schema('yi_connect').from('nominations')
     .select(`
       *,
       nominee:members!nominations_nominee_member_id_fkey(
@@ -428,7 +428,7 @@ export const getWinnersByCycle = cache(async (cycleId: string) => {
   const supabase = await createServerSupabaseClient()
 
   const { data, error } = await supabase
-    .from('award_winners')
+    .schema('yi_connect').from('award_winners')
     .select(`
       *,
       nomination:nominations(
@@ -458,7 +458,7 @@ export const getAnnouncedWinners = cache(async (limit = 20) => {
   const supabase = await createServerSupabaseClient()
 
   const { data, error } = await supabase
-    .from('award_winners')
+    .schema('yi_connect').from('award_winners')
     .select(`
       *,
       cycle:award_cycles(
@@ -497,7 +497,7 @@ export const calculateNominationScore = cache(async (nominationId: string) => {
   const supabase = await createServerSupabaseClient()
 
   const { data, error } = await supabase
-    .rpc('calculate_nomination_score', { p_nomination_id: nominationId })
+    .schema('yi_connect').rpc('calculate_nomination_score', { p_nomination_id: nominationId })
 
   if (error) throw error
 
@@ -512,7 +512,7 @@ export const getRankedNominations = cache(async (cycleId: string) => {
   const supabase = await createServerSupabaseClient()
 
   const { data, error } = await supabase
-    .rpc('rank_nominations_by_cycle', { p_cycle_id: cycleId })
+    .schema('yi_connect').rpc('rank_nominations_by_cycle', { p_cycle_id: cycleId })
 
   if (error) throw error
 
@@ -527,7 +527,7 @@ export const checkEligibility = cache(async (memberId: string, cycleId: string) 
   const supabase = await createServerSupabaseClient()
 
   const { data, error } = await supabase
-    .rpc('check_nomination_eligibility', {
+    .schema('yi_connect').rpc('check_nomination_eligibility', {
       p_member_id: memberId,
       p_cycle_id: cycleId,
     })
@@ -545,7 +545,7 @@ export const getLeaderboard = cache(async (categoryId: string, year?: number) =>
   const supabase = await createServerSupabaseClient()
 
   const { data, error } = await supabase
-    .rpc('get_leaderboard_data', {
+    .schema('yi_connect').rpc('get_leaderboard_data', {
       p_category_id: categoryId,
       p_year: year || null,
     })
@@ -568,19 +568,19 @@ export const getAwardStatistics = cache(async (chapterId: string) => {
 
   // Parallel queries for better performance
   const [categoriesResult, cyclesResult, nominationsResult, winnersResult] = await Promise.all([
-    supabase.from('award_categories').select('id', { count: 'exact', head: true }).eq('chapter_id', chapterId),
-    supabase.from('award_cycles').select('id', { count: 'exact', head: true }),
-    supabase.from('nominations').select('id', { count: 'exact', head: true }),
-    supabase.from('award_winners').select('id', { count: 'exact', head: true }),
+    supabase.schema('yi_connect').from('award_categories').select('id', { count: 'exact', head: true }).eq('chapter_id', chapterId),
+    supabase.schema('yi_connect').from('award_cycles').select('id', { count: 'exact', head: true }),
+    supabase.schema('yi_connect').from('nominations').select('id', { count: 'exact', head: true }),
+    supabase.schema('yi_connect').from('award_winners').select('id', { count: 'exact', head: true }),
   ])
 
   const activeCyclesResult = await supabase
-    .from('award_cycles')
+    .schema('yi_connect').from('award_cycles')
     .select('id', { count: 'exact', head: true })
     .in('status', ['open', 'nominations_closed', 'judging', 'review'])
 
   const pendingNominationsResult = await supabase
-    .from('nominations')
+    .schema('yi_connect').from('nominations')
     .select('id', { count: 'exact', head: true })
     .eq('status', 'submitted')
 
@@ -603,9 +603,9 @@ export const getCycleStatistics = cache(async (cycleId: string) => {
   const supabase = await createServerSupabaseClient()
 
   const [nominationsResult, juryMembersResult, juryScoresResult] = await Promise.all([
-    supabase.from('nominations').select('id', { count: 'exact', head: true }).eq('cycle_id', cycleId),
-    supabase.from('jury_members').select('id', { count: 'exact', head: true }).eq('cycle_id', cycleId),
-    supabase.from('jury_scores').select('weighted_score').eq('nomination_id', cycleId), // Fix: need proper join
+    supabase.schema('yi_connect').from('nominations').select('id', { count: 'exact', head: true }).eq('cycle_id', cycleId),
+    supabase.schema('yi_connect').from('jury_members').select('id', { count: 'exact', head: true }).eq('cycle_id', cycleId),
+    supabase.schema('yi_connect').from('jury_scores').select('weighted_score').eq('nomination_id', cycleId), // Fix: need proper join
   ])
 
   const scores = juryScoresResult.data?.map(s => s.weighted_score) || []

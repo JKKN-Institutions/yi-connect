@@ -36,7 +36,7 @@ async function resolveOrganizer(
   try {
     const admin = createAdminSupabaseClient()
     const { data: row } = await admin
-      .from('members')
+      .schema('yi_connect').from('members')
       .select('id, profile:profiles(full_name, email, avatar_url)')
       .eq('id', organizerId)
       .single()
@@ -147,7 +147,7 @@ export const getServiceEvents = cache(
 
     // Start building query
     let query = supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .select(
         `
         id,
@@ -324,7 +324,7 @@ export const getServiceEventById = cache(
     // embed. See resolveOrganizer note above — events.organizer_id FK targets
     // auth.users, not members, so the embed throws PGRST200.
     const { data, error } = await supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .select(
         `
         *,
@@ -489,7 +489,7 @@ export const getEventSessionReport = cache(
     }
 
     const { data, error } = await supabase
-      .from('event_session_reports')
+      .schema('yi_connect').from('event_session_reports')
       .select('*')
       .eq('event_id', eventId)
       .single()
@@ -519,7 +519,7 @@ export const getUnverifiedSessionReports = cache(
     }
 
     const { data, error } = await supabase
-      .from('event_session_reports')
+      .schema('yi_connect').from('event_session_reports')
       .select(
         `
         *,
@@ -556,7 +556,7 @@ export const getReportsWithPendingFollowUps = cache(
     }
 
     const { data, error } = await supabase
-      .from('event_session_reports')
+      .schema('yi_connect').from('event_session_reports')
       .select(
         `
         *,
@@ -606,7 +606,7 @@ export const getServiceEventAnalytics = cache(
     }
 
     let query = supabase
-      .from('events')
+      .schema('yi_connect').from('events')
       .select(
         `
         id,

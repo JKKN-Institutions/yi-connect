@@ -68,7 +68,7 @@ export const getBudgets = cache(async (
   const supabase = await createServerSupabaseClient()
 
   let query = supabase
-    .from('budgets')
+    .schema('yi_connect').from('budgets')
     .select('*', { count: 'exact' })
 
   // Filter by chapter only if chapterId is provided (regular members)
@@ -164,7 +164,7 @@ export const getBudgetById = cache(async (budgetId: string): Promise<BudgetWithA
   const supabase = await createServerSupabaseClient()
 
   const { data: budget, error: budgetError } = await supabase
-    .from('budgets')
+    .schema('yi_connect').from('budgets')
     .select('*')
     .eq('id', budgetId)
     .single()
@@ -174,7 +174,7 @@ export const getBudgetById = cache(async (budgetId: string): Promise<BudgetWithA
   }
 
   const { data: allocations, error: allocationsError } = await supabase
-    .from('budget_allocations')
+    .schema('yi_connect').from('budget_allocations')
     .select('*')
     .eq('budget_id', budgetId)
     .order('vertical_name')
@@ -198,7 +198,7 @@ export const getBudgetUtilization = cache(async (budgetId: string): Promise<Budg
   const supabase = await createServerSupabaseClient()
 
   const { data, error } = await supabase
-    .rpc('calculate_budget_utilization', { p_budget_id: budgetId })
+    .schema('yi_connect').rpc('calculate_budget_utilization', { p_budget_id: budgetId })
 
   if (error || !data) {
     console.error('Error calculating budget utilization:', error)
@@ -215,7 +215,7 @@ export const getBudgetAnalytics = cache(async (chapterId: string, calendarYear?:
   const supabase = await createServerSupabaseClient()
 
   let query = supabase
-    .from('budgets')
+    .schema('yi_connect').from('budgets')
     .select('*')
     .eq('chapter_id', chapterId)
 
@@ -277,7 +277,7 @@ export const getExpenseCategories = cache(async (chapterId: string): Promise<Exp
   const supabase = await createServerSupabaseClient()
 
   const { data, error } = await supabase
-    .from('expense_categories')
+    .schema('yi_connect').from('expense_categories')
     .select('*')
     .or(`chapter_id.eq.${chapterId},chapter_id.is.null`)
     .eq('is_active', true)
@@ -298,7 +298,7 @@ export const getExpenseCategoryById = cache(async (categoryId: string): Promise<
   const supabase = await createServerSupabaseClient()
 
   const { data, error } = await supabase
-    .from('expense_categories')
+    .schema('yi_connect').from('expense_categories')
     .select('*')
     .eq('id', categoryId)
     .single()
@@ -327,7 +327,7 @@ export const getExpenses = cache(async (
   const supabase = await createServerSupabaseClient()
 
   let query = supabase
-    .from('expenses')
+    .schema('yi_connect').from('expenses')
     .select(`
       *,
       category:expense_categories(*),
@@ -447,7 +447,7 @@ export const getExpenseById = cache(async (expenseId: string): Promise<ExpenseWi
   const supabase = await createServerSupabaseClient()
 
   const { data, error } = await supabase
-    .from('expenses')
+    .schema('yi_connect').from('expenses')
     .select(`
       *,
       category:expense_categories(*),
@@ -472,7 +472,7 @@ export const getExpenseAnalytics = cache(async (chapterId: string, dateFrom?: st
   const supabase = await createServerSupabaseClient()
 
   let query = supabase
-    .from('expenses')
+    .schema('yi_connect').from('expenses')
     .select('*, category:expense_categories(id, name)')
     .eq('chapter_id', chapterId)
 
@@ -555,7 +555,7 @@ export const getSponsors = cache(async (
   const supabase = await createServerSupabaseClient()
 
   let query = supabase
-    .from('sponsors')
+    .schema('yi_connect').from('sponsors')
     .select(`
       *,
       deals:sponsorship_deals(count)
@@ -649,7 +649,7 @@ export const getSponsorById = cache(async (sponsorId: string): Promise<SponsorWi
   const supabase = await createServerSupabaseClient()
 
   const { data: sponsor, error: sponsorError } = await supabase
-    .from('sponsors')
+    .schema('yi_connect').from('sponsors')
     .select('*')
     .eq('id', sponsorId)
     .single()
@@ -659,7 +659,7 @@ export const getSponsorById = cache(async (sponsorId: string): Promise<SponsorWi
   }
 
   const { data: deals, error: dealsError } = await supabase
-    .from('sponsorship_deals')
+    .schema('yi_connect').from('sponsorship_deals')
     .select('*')
     .eq('sponsor_id', sponsorId)
     .order('created_at', { ascending: false })
@@ -696,7 +696,7 @@ export const getSponsorshipTiers = cache(async (
   const supabase = await createServerSupabaseClient()
 
   let query = supabase
-    .from('sponsorship_tiers')
+    .schema('yi_connect').from('sponsorship_tiers')
     .select('*')
     .order('sort_order', { ascending: true })
     .order('min_amount', { ascending: false })
@@ -724,7 +724,7 @@ export const getSponsorsForDropdown = cache(async (
   const supabase = await createServerSupabaseClient()
 
   let query = supabase
-    .from('sponsors')
+    .schema('yi_connect').from('sponsors')
     .select('id, organization_name')
     .eq('is_active', true)
     .order('organization_name')
@@ -760,7 +760,7 @@ export const getSponsorshipDeals = cache(async (
   const supabase = await createServerSupabaseClient()
 
   let query = supabase
-    .from('sponsorship_deals')
+    .schema('yi_connect').from('sponsorship_deals')
     .select(`
       *,
       sponsor:sponsors(id, organization_name),
@@ -863,7 +863,7 @@ export const getSponsorshipDealById = cache(async (dealId: string): Promise<Spon
   const supabase = await createServerSupabaseClient()
 
   const { data, error } = await supabase
-    .from('sponsorship_deals')
+    .schema('yi_connect').from('sponsorship_deals')
     .select(`
       *,
       sponsor:sponsors(*),
@@ -893,7 +893,7 @@ export const getSponsorshipPipelineValue = cache(async (chapterId: string | null
   // For super admins without chapter, aggregate manually instead of using RPC
   if (!chapterId) {
     const { data: deals, error } = await supabase
-      .from('sponsorship_deals')
+      .schema('yi_connect').from('sponsorship_deals')
       .select('*')
 
     if (error || !deals) {
@@ -951,7 +951,7 @@ export const getSponsorshipPipelineValue = cache(async (chapterId: string | null
   }
 
   const { data, error } = await supabase
-    .rpc('calculate_sponsorship_pipeline_value', { p_chapter_id: chapterId })
+    .schema('yi_connect').rpc('calculate_sponsorship_pipeline_value', { p_chapter_id: chapterId })
 
   if (error || !data) {
     console.error('Error calculating pipeline value:', error)
@@ -989,7 +989,7 @@ export const getReimbursementRequests = cache(async (
   const supabase = await createServerSupabaseClient()
 
   let query = supabase
-    .from('reimbursement_requests')
+    .schema('yi_connect').from('reimbursement_requests')
     .select(`
       *,
       event:events(id, title)
@@ -1096,7 +1096,7 @@ export const getReimbursementRequestById = cache(async (requestId: string): Prom
   const supabase = await createServerSupabaseClient()
 
   const { data, error } = await supabase
-    .from('reimbursement_requests')
+    .schema('yi_connect').from('reimbursement_requests')
     .select(`
       *,
       approvals:reimbursement_approvals(*),
@@ -1120,7 +1120,7 @@ export const getPendingApprovals = cache(async (approverId: string): Promise<Pen
   const supabase = await createServerSupabaseClient()
 
   const { data, error } = await supabase
-    .rpc('get_pending_approvals', { p_approver_id: approverId })
+    .schema('yi_connect').rpc('get_pending_approvals', { p_approver_id: approverId })
 
   if (error) {
     console.error('Error fetching pending approvals:', error)
@@ -1138,7 +1138,7 @@ export const getReimbursementAnalytics = cache(async (chapterId: string | null):
   const supabase = await createServerSupabaseClient()
 
   let query = supabase
-    .from('reimbursement_requests')
+    .schema('yi_connect').from('reimbursement_requests')
     .select('*')
 
   // Filter by chapter only if chapterId is provided
@@ -1263,7 +1263,7 @@ export const getSponsorsByEvent = cache(async (
   const supabase = await createServerSupabaseClient()
 
   const { data, error } = await supabase
-    .from('sponsorship_deals')
+    .schema('yi_connect').from('sponsorship_deals')
     .select(`
       id,
       deal_stage,
@@ -1346,7 +1346,7 @@ export const getTierRevenue = cache(async (
   const supabase = await createServerSupabaseClient()
 
   let query = supabase
-    .from('sponsorship_deals')
+    .schema('yi_connect').from('sponsorship_deals')
     .select(`
       received_amount,
       committed_amount,

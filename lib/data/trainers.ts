@@ -29,7 +29,7 @@ export const getTrainerProfile = cache(
     // (member_id and approved_by), so PostgREST returns PGRST201 ambiguous
     // embed without an explicit FK hint.
     const { data, error } = await supabase
-      .from('trainer_profiles')
+      .schema('yi_connect').from('trainer_profiles')
       .select(
         `
         *,
@@ -58,7 +58,7 @@ export const getTrainerProfile = cache(
 
     // Fetch certifications
     const { data: certifications } = await supabase
-      .from('trainer_certifications')
+      .schema('yi_connect').from('trainer_certifications')
       .select('*')
       .eq('trainer_profile_id', data.id)
       .order('issued_date', { ascending: false })
@@ -98,7 +98,7 @@ export const getTrainerProfileById = cache(
     // (member_id and approved_by), so PostgREST returns PGRST201 ambiguous
     // embed without an explicit FK hint.
     const { data, error } = await supabase
-      .from('trainer_profiles')
+      .schema('yi_connect').from('trainer_profiles')
       .select(
         `
         *,
@@ -127,7 +127,7 @@ export const getTrainerProfileById = cache(
 
     // Fetch certifications
     const { data: certifications } = await supabase
-      .from('trainer_certifications')
+      .schema('yi_connect').from('trainer_certifications')
       .select('*')
       .eq('trainer_profile_id', data.id)
       .order('issued_date', { ascending: false })
@@ -166,7 +166,7 @@ export const getChapterTrainers = cache(
     // (member_id and approved_by), so the bare `members!inner` embed is
     // ambiguous (PGRST201) without an explicit FK hint.
     const { data, error } = await supabase
-      .from('trainer_profiles')
+      .schema('yi_connect').from('trainer_profiles')
       .select(
         `
         *,
@@ -197,7 +197,7 @@ export const getChapterTrainers = cache(
       thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30)
 
       const { data: certifications } = await supabase
-        .from('trainer_certifications')
+        .schema('yi_connect').from('trainer_certifications')
         .select('trainer_profile_id, expiry_date')
         .in('trainer_profile_id', trainerIds)
 
@@ -255,7 +255,7 @@ export const getTrainerSessionStats = cache(
 
     // Get the trainer profile
     const { data: trainer, error } = await supabase
-      .from('trainer_profiles')
+      .schema('yi_connect').from('trainer_profiles')
       .select('*')
       .eq('id', trainerProfileId)
       .single()
@@ -269,7 +269,7 @@ export const getTrainerSessionStats = cache(
 
     // Get session bookings for this trainer (for detailed stats)
     const { data: sessions } = await supabase
-      .from('session_bookings')
+      .schema('yi_connect').from('session_bookings')
       .select('session_type_id, attendance_count, feedback_score, status')
       .eq('assigned_trainer_id', trainerProfileId)
       .eq('status', 'completed')
@@ -321,7 +321,7 @@ export const checkIsTrainer = cache(async (memberId: string): Promise<boolean> =
   const supabase = await createServerSupabaseClient()
 
   const { data, error } = await supabase
-    .from('trainer_profiles')
+    .schema('yi_connect').from('trainer_profiles')
     .select('id, is_trainer_eligible')
     .eq('member_id', memberId)
     .single()
@@ -346,7 +346,7 @@ export const getAvailableTrainersForSession = cache(
     const supabase = await createServerSupabaseClient()
 
     // Use the database function to get available trainers
-    const { data, error } = await supabase.rpc('get_available_trainers_for_session', {
+    const { data, error } = await supabase.schema('yi_connect').rpc('get_available_trainers_for_session', {
       p_date: date,
       p_time_slot: timeSlot,
       p_session_type_id: sessionTypeId || null,

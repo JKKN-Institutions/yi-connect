@@ -28,7 +28,7 @@ export const getNotifications = cache(
     const supabase = await createServerSupabaseClient();
 
     let query = supabase
-      .from('notifications')
+      .schema('yi_connect').from('notifications')
       .select('*')
       .eq('member_id', memberId)
       .order('created_at', { ascending: false });
@@ -79,7 +79,7 @@ export const getUnreadCount = cache(async (): Promise<number> => {
   const supabase = await createServerSupabaseClient();
 
   const { count, error } = await supabase
-    .from('notifications')
+    .schema('yi_connect').from('notifications')
     .select('*', { count: 'exact', head: true })
     .eq('member_id', memberId)
     .eq('read', false);

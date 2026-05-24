@@ -32,7 +32,7 @@ export const getSessionTypes = cache(
     const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
-      .from('session_types')
+      .schema('yi_connect').from('session_types')
       .select(`
         *,
         vertical:verticals(
@@ -60,7 +60,7 @@ export const getSessionTypeById = cache(
     const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
-      .from('session_types')
+      .schema('yi_connect').from('session_types')
       .select(`
         *,
         vertical:verticals(
@@ -97,7 +97,7 @@ export const getBookingById = cache(
     // included via select('*'). The previous embed `session_type:session_types(...)`
     // caused PGRST200. (Fixed 2026-05-23 — Agent G.)
     const { data, error } = await supabase
-      .from('session_bookings')
+      .schema('yi_connect').from('session_bookings')
       .select(`
         *,
         coordinator:stakeholder_coordinators(
@@ -148,7 +148,7 @@ export const getBookings = cache(
     // returned via select('*'). Same drop Agent G applied at getBookingById
     // (commit 37de8ce).
     let query = supabase
-      .from('session_bookings')
+      .schema('yi_connect').from('session_bookings')
       .select(`
         *,
         coordinator:stakeholder_coordinators(
@@ -257,7 +257,7 @@ export const getBookingsForDate = cache(
     // embed (table missing — same fix as getBookings above) and disambiguate
     // the members embed via the trainer_profiles_member_id_fkey FK hint.
     const { data, error } = await supabase
-      .from('session_bookings')
+      .schema('yi_connect').from('session_bookings')
       .select(`
         *,
         coordinator:stakeholder_coordinators(
@@ -312,7 +312,7 @@ export const getCoordinatorById = cache(
     const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
-      .from('stakeholder_coordinators')
+      .schema('yi_connect').from('stakeholder_coordinators')
       .select('*')
       .eq('id', id)
       .single()
@@ -334,7 +334,7 @@ export const getCoordinatorByEmail = cache(
     const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
-      .from('stakeholder_coordinators')
+      .schema('yi_connect').from('stakeholder_coordinators')
       .select('*')
       .eq('email', email.toLowerCase())
       .single()
@@ -356,7 +356,7 @@ export const getCoordinators = cache(
     const supabase = await createServerSupabaseClient()
 
     let query = supabase
-      .from('stakeholder_coordinators')
+      .schema('yi_connect').from('stakeholder_coordinators')
       .select('*')
 
     if (filters.stakeholder_type) {
@@ -430,7 +430,7 @@ export const getAvailableTrainersForSession = cache(
     // via explicit FK hint. trainer_profiles has two FKs to members
     // (member_id + approved_by), so PostgREST returns PGRST201 without a hint.
     const { data: trainers, error } = await supabase
-      .from('trainer_profiles')
+      .schema('yi_connect').from('trainer_profiles')
       .select(`
         id,
         member_id,
@@ -456,7 +456,7 @@ export const getAvailableTrainersForSession = cache(
 
     // Check availability for each trainer
     const { data: availability } = await supabase
-      .from('availability')
+      .schema('yi_connect').from('availability')
       .select('member_id, status')
       .eq('date', date)
       .eq('status', 'available')
@@ -465,7 +465,7 @@ export const getAvailableTrainersForSession = cache(
 
     // Check existing bookings for the date
     const { data: existingBookings } = await supabase
-      .from('session_bookings')
+      .schema('yi_connect').from('session_bookings')
       .select('assigned_trainer_id')
       .eq('confirmed_date', date)
       .not('status', 'in', '("cancelled","completed")')
@@ -502,13 +502,13 @@ export const getTrainerAvailabilitySummary = cache(
 
     // Get all eligible trainers count
     const { count: totalTrainers } = await supabase
-      .from('trainer_profiles')
+      .schema('yi_connect').from('trainer_profiles')
       .select('*', { count: 'exact', head: true })
       .eq('is_trainer_eligible', true)
 
     // Get availability records
     const { data: availability } = await supabase
-      .from('availability')
+      .schema('yi_connect').from('availability')
       .select('date, member_id, status')
       .gte('date', startDate)
       .lte('date', endDate)
@@ -554,7 +554,7 @@ export const getBookingStats = cache(
   async (filters: { stakeholder_id?: string; coordinator_id?: string } = {}): Promise<BookingStats> => {
     const supabase = await createServerSupabaseClient()
 
-    let query = supabase.from('session_bookings').select('*')
+    let query = supabase.schema('yi_connect').from('session_bookings').select('*')
 
     if (filters.stakeholder_id) {
       query = query.eq('stakeholder_id', filters.stakeholder_id)
@@ -650,7 +650,7 @@ export const getCoordinatorDashboardStats = cache(
     const supabase = await createServerSupabaseClient()
 
     const { data: bookings, error } = await supabase
-      .from('session_bookings')
+      .schema('yi_connect').from('session_bookings')
       .select('status, attendance_count, expected_participants, feedback_score, preferred_date, confirmed_date')
       .eq('coordinator_id', coordinatorId)
 

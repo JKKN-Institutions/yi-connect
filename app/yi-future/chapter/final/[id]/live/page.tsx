@@ -11,6 +11,7 @@ import {
   CHAPTER_FINAL_SECTION_LABELS,
 } from "@/lib/yi-future/constants";
 import type { Database } from "@/types/yi-future/database";
+import { LiveTeamDashboard } from "./live-team-dashboard";
 
 type CFSection = Database["future"]["Enums"]["chapter_final_section"];
 
@@ -22,17 +23,50 @@ type Section = {
   is_active: boolean | null;
 };
 
+type TeamRow = {
+  id: string;
+  team_name: string;
+  problem_statements: { title: string } | null;
+  team_members: {
+    delegate_id: string;
+    delegates: { full_name: string } | null;
+  }[];
+};
+
+type EvaluationRow = {
+  team_id: string;
+  jury_id: string;
+  total_score: number;
+  status: string | null;
+};
+
+/* ─── Data fetchers ─────────────────────────────────────────────────── */
+
 async function getEventMeta(
   id: string
-): Promise<{ id: string; chapter_id: string | null; name: string } | null> {
+): Promise<{
+  id: string;
+  chapter_id: string | null;
+  edition_id: string;
+  name: string;
+  start_date: string | null;
+} | null> {
   const svc = await createServiceClient();
   const { data } = await svc
     .schema("future")
     .from("events")
-    .select("id, chapter_id, name")
+    .select("id, chapter_id, edition_id, name, start_date")
     .eq("id", id)
     .maybeSingle();
-  return (data as unknown as { id: string; chapter_id: string | null; name: string }) ?? null;
+  return (
+    (data as unknown as {
+      id: string;
+      chapter_id: string | null;
+      edition_id: string;
+      name: string;
+      start_date: string | null;
+    }) ?? null
+  );
 }
 
 async function getSections(eventId: string): Promise<Section[]> {
@@ -44,6 +78,47 @@ async function getSections(eventId: string): Promise<Section[]> {
     .eq("event_id", eventId);
   return (data as unknown as Section[]) ?? [];
 }
+
+async function getTeams(
+  chapterId: string,
+  editionId: string
+): Promise<TeamRow[]> {
+  const svc = await createServiceClient();
+  const { data } = await svc
+    .schema("future")
+    .from("teams")
+    .select(
+      "id, team_name, problem_statement_id, problem_statements(title), team_members(delegate_id, delegates(full_name))"
+    )
+    .eq("chapter_id", chapterId)
+    .eq("edition_id", editionId)
+    .in("status", ["problem_selected", "frozen"])
+    .order("team_name");
+  return (data as unknown as TeamRow[]) ?? [];
+}
+
+async function getEvaluations(eventId: string): Promise<EvaluationRow[]> {
+  const svc = await createServiceClient();
+  const { data } = await svc
+    .schema("future")
+    .from("evaluations")
+    .select("team_id, jury_id, total_score, status")
+    .eq("event_id", eventId);
+  return (data as unknown as EvaluationRow[]) ?? [];
+}
+
+async function getJuryCount(editionId: string): Promise<number> {
+  const svc = await createServiceClient();
+  const { count } = await svc
+    .schema("future")
+    .from("jury_assignments")
+    .select("id", { count: "exact", head: true })
+    .eq("edition_id", editionId)
+    .eq("is_active", true);
+  return count ?? 0;
+}
+
+/* ─── Page ──────────────────────────────────────────────────────────── */
 
 export default async function LiveControlPage({
   params,
@@ -60,10 +135,35 @@ export default async function LiveControlPage({
     redirect("/yi-future/chapter/final");
   }
 
-  const sections = await getSections(id);
+  const [sections, teams, evaluations, juryCount] = await Promise.all([
+    getSections(id),
+    getTeams(ctx.chapterId, ctx.editionId),
+    getEvaluations(id),
+    getJuryCount(ctx.editionId),
+  ]);
+
   const secByKey = new Map<CFSection, Section>();
   for (const s of sections) secByKey.set(s.section, s);
   const active = sections.find((s) => s.is_active);
+
+  // Build evaluation lookup: teamId -> { scored, submitted, scores[] }
+  const evalByTeam = new Map<
+    string,
+    { scoredCount: number; submittedCount: number; scores: number[] }
+  >();
+  for (const ev of evaluations) {
+    const entry = evalByTeam.get(ev.team_id) ?? {
+      scoredCount: 0,
+      submittedCount: 0,
+      scores: [],
+    };
+    entry.scoredCount++;
+    if (ev.status === "submitted" || ev.status === "locked") {
+      entry.submittedCount++;
+    }
+    entry.scores.push(ev.total_score);
+    evalByTeam.set(ev.team_id, entry);
+  }
 
   async function activate(formData: FormData) {
     "use server";
@@ -78,28 +178,38 @@ export default async function LiveControlPage({
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div>
         <Link
           href={`/yi-future/chapter/final/${id}`}
           className="text-xs font-semibold tracking-widest text-navy/50 hover:text-navy uppercase"
         >
-          ← Event
+          &larr; Event
         </Link>
         <div className="mt-2 flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-2xl font-bold text-navy">Live control</h2>
+            <h2 className="text-2xl font-bold text-navy">Live dashboard</h2>
             <p className="mt-1 text-sm text-navy/60">{event.name}</p>
           </div>
-          <Link
-            href={`/event/${id}/display`}
-            target="_blank"
-            className="px-4 py-2 rounded-md bg-navy text-ivory text-sm font-semibold hover:bg-navy-dark"
-          >
-            Open projector view ↗
-          </Link>
+          <div className="flex flex-col items-end gap-2">
+            <Link
+              href={`/event/${id}/display`}
+              target="_blank"
+              className="px-4 py-2 rounded-md bg-navy text-ivory text-sm font-semibold hover:bg-navy-dark"
+            >
+              Open projector view &uarr;
+            </Link>
+            <Link
+              href={`/yi-future/chapter/final/${id}/schedule`}
+              className="text-xs font-semibold text-yi-gold hover:underline"
+            >
+              Presentation schedule &rarr;
+            </Link>
+          </div>
         </div>
       </div>
 
+      {/* Active section banner */}
       {active ? (
         <section className="bg-gradient-to-br from-yi-gold to-yi-saffron text-white rounded-lg p-6 text-center">
           <div className="text-[10px] font-semibold tracking-widest uppercase opacity-80">
@@ -132,7 +242,7 @@ export default async function LiveControlPage({
         </section>
       )}
 
-      {/* Sequence */}
+      {/* Section sequence */}
       <section>
         <h3 className="text-xs font-semibold uppercase tracking-widest text-navy/50 mb-3">
           Sequence
@@ -164,18 +274,18 @@ export default async function LiveControlPage({
                 </div>
                 {s?.is_active ? (
                   <span className="text-[10px] font-semibold text-yi-gold">
-                    ● LIVE
+                    &#9679; LIVE
                   </span>
                 ) : done ? (
                   <span className="text-[10px] font-semibold text-navy/40">
-                    ✓ done
+                    &#10003; done
                   </span>
                 ) : (
                   <button
                     type="submit"
                     className="text-xs font-semibold text-navy hover:text-yi-gold"
                   >
-                    Go live →
+                    Go live &rarr;
                   </button>
                 )}
               </form>
@@ -183,6 +293,25 @@ export default async function LiveControlPage({
           })}
         </div>
       </section>
+
+      {/* Team presentations & scoring — client component for timer */}
+      {teams.length > 0 && (
+        <LiveTeamDashboard
+          teams={teams.map((t) => ({
+            id: t.id,
+            team_name: t.team_name,
+            problem_title: t.problem_statements?.title ?? null,
+            member_names: t.team_members
+              .map((m) => m.delegates?.full_name)
+              .filter(Boolean) as string[],
+          }))}
+          evalByTeam={Object.fromEntries(
+            Array.from(evalByTeam.entries()).map(([k, v]) => [k, v])
+          )}
+          juryCount={juryCount}
+          eventId={id}
+        />
+      )}
     </div>
   );
 }

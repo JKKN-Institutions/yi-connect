@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { createServiceClient } from "@/lib/yip/supabase/server";
-import { listOrganizerProfiles } from "@/app/actions/yip/hierarchy";
+import { listOrganizerProfiles } from "@/app/yip/actions/hierarchy";
 import { YI_ZONES, type YiZone } from "@/lib/yip/hierarchy";
 import { Badge } from "@/components/yip/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/yip/ui/card";

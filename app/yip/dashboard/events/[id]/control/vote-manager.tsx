@@ -25,7 +25,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/yip/utils";
 import { toast } from "sonner";
-import { useVoteSession } from "@/hooks/yip/use-vote-session";
+import { useVoteSession } from "@/lib/yip/hooks/use-vote-session";
 import {
   openVote,
   closeVote,
@@ -33,12 +33,12 @@ import {
   getSpeakerCandidates,
   getEventBills,
   type VoteCandidate,
-} from "@/app/actions/yip/voting";
+} from "@/app/yip/actions/voting";
 import type { Tables } from "@/types/yip/database";
 
 // ─── Types ──────────────────────────────────────────────────────
 
-type AgendaItem = Tables<"agenda_items">;
+type AgendaItem = Tables<"agenda">;
 
 interface VoteManagerProps {
   eventId: string;

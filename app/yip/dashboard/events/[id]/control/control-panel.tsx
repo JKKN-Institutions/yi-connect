@@ -36,12 +36,12 @@ import {
 import { Switch } from "@/components/yip/ui/switch";
 import { cn } from "@/lib/yip/utils";
 import { ROLE_LABELS, ROLE_COLORS, PARTY_COLORS } from "@/lib/yip/constants";
-import { useRealtimeEvent } from "@/hooks/yip/use-realtime-event";
-import { useTimer } from "@/hooks/yip/use-timer";
-import { advanceAgenda, startAgendaItem, skipAgendaItem, updateEventStatus } from "@/app/actions/yip/agenda";
-import { setAllocationLocked, setScoresLocked, setRegistrationsFrozen } from "@/app/actions/yip/events";
-import { startTimer, stopTimer, resetTimer } from "@/app/actions/yip/timer";
-import { advanceSpeaker, skipSpeaker, generateSpeakerQueue, getSpeakerQueue } from "@/app/actions/yip/speakers";
+import { useRealtimeEvent } from "@/lib/yip/hooks/use-realtime-event";
+import { useTimer } from "@/lib/yip/hooks/use-timer";
+import { advanceAgenda, startAgendaItem, skipAgendaItem, updateEventStatus } from "@/app/yip/actions/agenda";
+import { setAllocationLocked, setScoresLocked, setRegistrationsFrozen } from "@/app/yip/actions/events";
+import { startTimer, stopTimer, resetTimer } from "@/app/yip/actions/timer";
+import { advanceSpeaker, skipSpeaker, generateSpeakerQueue, getSpeakerQueue } from "@/app/yip/actions/speakers";
 import { QuestionHourPanel } from "./question-hour";
 import { VoteManager } from "./vote-manager";
 import { BillSession } from "./bill-session";
@@ -51,7 +51,7 @@ import { toast } from "sonner";
 // ─── Types ────────────────────────────────────────────────────────
 
 type Event = Tables<"events">;
-type AgendaItem = Tables<"agenda_items">;
+type AgendaItem = Tables<"agenda">;
 
 interface SpeakerWithParticipant {
   id: string;

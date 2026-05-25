@@ -22,7 +22,7 @@ import {
   adminReactivateChecklistItem,
   adminReseedFromHandbook,
   type AdminChecklistItem,
-} from "@/app/actions/yip/admin-checklist";
+} from "@/app/yip/actions/admin-checklist";
 
 const CATEGORY_ORDER = [
   "Pre-Session Preparation",

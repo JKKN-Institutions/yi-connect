@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { createServiceClient } from "@/lib/yip/supabase/server";
-import { getEventChecklist } from "@/app/actions/yip/checklist";
+import { getEventChecklist } from "@/app/yip/actions/checklist";
 import { ChecklistClient } from "./checklist-client";
 
 export default async function ChecklistPage({

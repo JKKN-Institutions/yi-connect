@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/yip/ui/card";
 import { Input } from "@/components/yip/ui/input";
 import { Search, BookOpen, Globe, MapPin, ExternalLink } from "lucide-react";
 import { YI_ZONES } from "@/lib/yip/hierarchy";
-import type { Topic } from "@/app/actions/yip/topics";
+import type { Topic } from "@/app/yip/actions/topics";
 
 type Filter = "all" | "central" | "ER" | "WR" | "NR" | "NER" | "SRTN" | "SRTKKA";
 

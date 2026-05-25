@@ -20,7 +20,7 @@ import {
   markVolunteerArrived,
   deleteVolunteer,
   type Volunteer,
-} from "@/app/actions/yip/volunteers";
+} from "@/app/yip/actions/volunteers";
 
 const STATION_LABEL: Record<string, string> = Object.fromEntries(
   VOLUNTEER_STATIONS.map((s) => [s.code, s.label])

@@ -12,9 +12,9 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.4"
   }
-  public: {
+  yip: {
     Tables: {
-      agenda_items: {
+      agenda: {
         Row: {
           actual_end: string | null
           actual_start: string | null
@@ -26,10 +26,10 @@ export type Database = {
           duration_minutes: number | null
           event_id: string
           id: string
-          mode: Database["public"]["Enums"]["agenda_mode"]
+          mode: "party" | "committee" | "mixed"
           planned_start: string | null
           sequence_order: number
-          status: Database["public"]["Enums"]["agenda_status"] | null
+          status: "upcoming" | "in_progress" | "completed" | "skipped" | null
           title: string
           updated_at: string | null
         }
@@ -44,10 +44,10 @@ export type Database = {
           duration_minutes?: number | null
           event_id: string
           id?: string
-          mode?: Database["public"]["Enums"]["agenda_mode"]
+          mode?: "party" | "committee" | "mixed"
           planned_start?: string | null
           sequence_order: number
-          status?: Database["public"]["Enums"]["agenda_status"] | null
+          status?: "upcoming" | "in_progress" | "completed" | "skipped" | null
           title: string
           updated_at?: string | null
         }
@@ -62,16 +62,16 @@ export type Database = {
           duration_minutes?: number | null
           event_id?: string
           id?: string
-          mode?: Database["public"]["Enums"]["agenda_mode"]
+          mode?: "party" | "committee" | "mixed"
           planned_start?: string | null
           sequence_order?: number
-          status?: Database["public"]["Enums"]["agenda_status"] | null
+          status?: "upcoming" | "in_progress" | "completed" | "skipped" | null
           title?: string
           updated_at?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "agenda_items_event_id_fkey"
+            foreignKeyName: "yip_agenda_event_fkey"
             columns: ["event_id"]
             isOneToOne: false
             referencedRelation: "events"
@@ -124,7 +124,7 @@ export type Database = {
             foreignKeyName: "agenda_speakers_agenda_item_id_fkey"
             columns: ["agenda_item_id"]
             isOneToOne: false
-            referencedRelation: "agenda_items"
+            referencedRelation: "agenda"
             referencedColumns: ["id"]
           },
           {
@@ -146,7 +146,7 @@ export type Database = {
           is_mock: boolean
           lead_drafter: string | null
           objective: string | null
-          party_side: Database["public"]["Enums"]["party_side"]
+          party_side: "ruling" | "opposition"
           policy_researcher: string | null
           presenter_1: string | null
           presenter_2: string | null
@@ -168,7 +168,7 @@ export type Database = {
           is_mock?: boolean
           lead_drafter?: string | null
           objective?: string | null
-          party_side: Database["public"]["Enums"]["party_side"]
+          party_side: "ruling" | "opposition"
           policy_researcher?: string | null
           presenter_1?: string | null
           presenter_2?: string | null
@@ -190,7 +190,7 @@ export type Database = {
           is_mock?: boolean
           lead_drafter?: string | null
           objective?: string | null
-          party_side?: Database["public"]["Enums"]["party_side"]
+          party_side?: "ruling" | "opposition"
           policy_researcher?: string | null
           presenter_1?: string | null
           presenter_2?: string | null
@@ -204,13 +204,6 @@ export type Database = {
           votes_for?: number | null
         }
         Relationships: [
-          {
-            foreignKeyName: "bills_event_id_fkey"
-            columns: ["event_id"]
-            isOneToOne: false
-            referencedRelation: "events"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "bills_lead_drafter_fkey"
             columns: ["lead_drafter"]
@@ -239,9 +232,16 @@ export type Database = {
             referencedRelation: "participants"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "yip_bills_event_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
         ]
       }
-      branding_compliance_checks: {
+      brand_checks: {
         Row: {
           checked_at: string | null
           checked_by: string | null
@@ -252,7 +252,12 @@ export type Database = {
           is_mock: boolean
           notes: string | null
           rule_key: string
-          status: Database["public"]["Enums"]["compliance_status"]
+          status:
+            | "not_checked"
+            | "pending_evidence"
+            | "verified"
+            | "violation"
+            | "waived"
           updated_at: string | null
           violation_action: string | null
         }
@@ -266,7 +271,12 @@ export type Database = {
           is_mock?: boolean
           notes?: string | null
           rule_key: string
-          status?: Database["public"]["Enums"]["compliance_status"]
+          status?:
+            | "not_checked"
+            | "pending_evidence"
+            | "verified"
+            | "violation"
+            | "waived"
           updated_at?: string | null
           violation_action?: string | null
         }
@@ -280,13 +290,18 @@ export type Database = {
           is_mock?: boolean
           notes?: string | null
           rule_key?: string
-          status?: Database["public"]["Enums"]["compliance_status"]
+          status?:
+            | "not_checked"
+            | "pending_evidence"
+            | "verified"
+            | "violation"
+            | "waived"
           updated_at?: string | null
           violation_action?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "branding_compliance_checks_event_id_fkey"
+            foreignKeyName: "yip_brand_checks_event_fkey"
             columns: ["event_id"]
             isOneToOne: false
             referencedRelation: "events"
@@ -294,583 +309,7 @@ export type Database = {
           },
         ]
       }
-      branding_rules: {
-        Row: {
-          category: string
-          created_at: string | null
-          description: string
-          handbook_page: number | null
-          id: string
-          is_active: boolean
-          requires_evidence: boolean
-          rule_key: string
-          severity: string
-          sort_order: number
-          title: string
-          updated_at: string | null
-        }
-        Insert: {
-          category: string
-          created_at?: string | null
-          description: string
-          handbook_page?: number | null
-          id?: string
-          is_active?: boolean
-          requires_evidence?: boolean
-          rule_key: string
-          severity?: string
-          sort_order?: number
-          title: string
-          updated_at?: string | null
-        }
-        Update: {
-          category?: string
-          created_at?: string | null
-          description?: string
-          handbook_page?: number | null
-          id?: string
-          is_active?: boolean
-          requires_evidence?: boolean
-          rule_key?: string
-          severity?: string
-          sort_order?: number
-          title?: string
-          updated_at?: string | null
-        }
-        Relationships: []
-      }
-      constituencies: {
-        Row: {
-          created_at: string | null
-          id: string
-          name: string
-          state: string
-        }
-        Insert: {
-          created_at?: string | null
-          id?: string
-          name: string
-          state: string
-        }
-        Update: {
-          created_at?: string | null
-          id?: string
-          name?: string
-          state?: string
-        }
-        Relationships: []
-      }
-      default_checklist_items: {
-        Row: {
-          category: string
-          created_at: string | null
-          description: string | null
-          handbook_page: number | null
-          id: string
-          is_active: boolean | null
-          sequence_order: number
-          title: string
-        }
-        Insert: {
-          category: string
-          created_at?: string | null
-          description?: string | null
-          handbook_page?: number | null
-          id?: string
-          is_active?: boolean | null
-          sequence_order: number
-          title: string
-        }
-        Update: {
-          category?: string
-          created_at?: string | null
-          description?: string | null
-          handbook_page?: number | null
-          id?: string
-          is_active?: boolean | null
-          sequence_order?: number
-          title?: string
-        }
-        Relationships: []
-      }
-      event_media: {
-        Row: {
-          caption: string | null
-          created_at: string
-          event_id: string
-          file_name: string
-          height: number | null
-          id: string
-          is_cover: boolean
-          is_mock: boolean
-          kind: Database["public"]["Enums"]["media_kind"]
-          mime_type: string | null
-          photographer_name: string | null
-          public_url: string | null
-          size_bytes: number | null
-          sort_order: number | null
-          storage_path: string
-          tags: string[] | null
-          taken_at: string | null
-          updated_at: string
-          uploaded_at: string
-          uploaded_by: string | null
-          visibility: Database["public"]["Enums"]["media_visibility"]
-          width: number | null
-        }
-        Insert: {
-          caption?: string | null
-          created_at?: string
-          event_id: string
-          file_name: string
-          height?: number | null
-          id?: string
-          is_cover?: boolean
-          is_mock?: boolean
-          kind?: Database["public"]["Enums"]["media_kind"]
-          mime_type?: string | null
-          photographer_name?: string | null
-          public_url?: string | null
-          size_bytes?: number | null
-          sort_order?: number | null
-          storage_path: string
-          tags?: string[] | null
-          taken_at?: string | null
-          updated_at?: string
-          uploaded_at?: string
-          uploaded_by?: string | null
-          visibility?: Database["public"]["Enums"]["media_visibility"]
-          width?: number | null
-        }
-        Update: {
-          caption?: string | null
-          created_at?: string
-          event_id?: string
-          file_name?: string
-          height?: number | null
-          id?: string
-          is_cover?: boolean
-          is_mock?: boolean
-          kind?: Database["public"]["Enums"]["media_kind"]
-          mime_type?: string | null
-          photographer_name?: string | null
-          public_url?: string | null
-          size_bytes?: number | null
-          sort_order?: number | null
-          storage_path?: string
-          tags?: string[] | null
-          taken_at?: string | null
-          updated_at?: string
-          uploaded_at?: string
-          uploaded_by?: string | null
-          visibility?: Database["public"]["Enums"]["media_visibility"]
-          width?: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "event_media_event_id_fkey"
-            columns: ["event_id"]
-            isOneToOne: false
-            referencedRelation: "events"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      event_topic_assignments: {
-        Row: {
-          created_at: string | null
-          event_id: string
-          id: string
-          is_central: boolean | null
-          sequence: number | null
-          topic_id: string
-        }
-        Insert: {
-          created_at?: string | null
-          event_id: string
-          id?: string
-          is_central?: boolean | null
-          sequence?: number | null
-          topic_id: string
-        }
-        Update: {
-          created_at?: string | null
-          event_id?: string
-          id?: string
-          is_central?: boolean | null
-          sequence?: number | null
-          topic_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "event_topic_assignments_event_id_fkey"
-            columns: ["event_id"]
-            isOneToOne: false
-            referencedRelation: "events"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "event_topic_assignments_topic_id_fkey"
-            columns: ["topic_id"]
-            isOneToOne: false
-            referencedRelation: "topics"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      events: {
-        Row: {
-          allocation_locked: boolean | null
-          central_agenda: string | null
-          chapter_em_id: string | null
-          chapter_name: string | null
-          city: string | null
-          committee_topics: Json | null
-          created_at: string | null
-          created_by: string | null
-          current_agenda_item_id: string | null
-          day1_date: string
-          day2_date: string
-          fee_per_participant_inr: number | null
-          id: string
-          ingestion_enabled: boolean
-          is_mock: boolean
-          level: Database["public"]["Enums"]["event_level"]
-          live_timer_end: string | null
-          live_timer_label: string | null
-          live_timer_running: boolean | null
-          max_participants: number | null
-          mycii_event_registered: boolean | null
-          mycii_payment_link: string | null
-          name: string
-          oath_text: string | null
-          questions_close_at: string | null
-          results_published_at: string | null
-          scores_locked: boolean | null
-          season_id: string | null
-          state: string | null
-          status: Database["public"]["Enums"]["event_status"]
-          updated_at: string | null
-          venue_address: string | null
-          venue_name: string | null
-          zone: Database["public"]["Enums"]["yi_zone"] | null
-        }
-        Insert: {
-          allocation_locked?: boolean | null
-          central_agenda?: string | null
-          chapter_em_id?: string | null
-          chapter_name?: string | null
-          city?: string | null
-          committee_topics?: Json | null
-          created_at?: string | null
-          created_by?: string | null
-          current_agenda_item_id?: string | null
-          day1_date: string
-          day2_date: string
-          fee_per_participant_inr?: number | null
-          id?: string
-          ingestion_enabled?: boolean
-          is_mock?: boolean
-          level?: Database["public"]["Enums"]["event_level"]
-          live_timer_end?: string | null
-          live_timer_label?: string | null
-          live_timer_running?: boolean | null
-          max_participants?: number | null
-          mycii_event_registered?: boolean | null
-          mycii_payment_link?: string | null
-          name: string
-          oath_text?: string | null
-          questions_close_at?: string | null
-          results_published_at?: string | null
-          scores_locked?: boolean | null
-          season_id?: string | null
-          state?: string | null
-          status?: Database["public"]["Enums"]["event_status"]
-          updated_at?: string | null
-          venue_address?: string | null
-          venue_name?: string | null
-          zone?: Database["public"]["Enums"]["yi_zone"] | null
-        }
-        Update: {
-          allocation_locked?: boolean | null
-          central_agenda?: string | null
-          chapter_em_id?: string | null
-          chapter_name?: string | null
-          city?: string | null
-          committee_topics?: Json | null
-          created_at?: string | null
-          created_by?: string | null
-          current_agenda_item_id?: string | null
-          day1_date?: string
-          day2_date?: string
-          fee_per_participant_inr?: number | null
-          id?: string
-          ingestion_enabled?: boolean
-          is_mock?: boolean
-          level?: Database["public"]["Enums"]["event_level"]
-          live_timer_end?: string | null
-          live_timer_label?: string | null
-          live_timer_running?: boolean | null
-          max_participants?: number | null
-          mycii_event_registered?: boolean | null
-          mycii_payment_link?: string | null
-          name?: string
-          oath_text?: string | null
-          questions_close_at?: string | null
-          results_published_at?: string | null
-          scores_locked?: boolean | null
-          season_id?: string | null
-          state?: string | null
-          status?: Database["public"]["Enums"]["event_status"]
-          updated_at?: string | null
-          venue_address?: string | null
-          venue_name?: string | null
-          zone?: Database["public"]["Enums"]["yi_zone"] | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "events_chapter_em_id_fkey"
-            columns: ["chapter_em_id"]
-            isOneToOne: false
-            referencedRelation: "organizer_profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "events_season_id_fkey"
-            columns: ["season_id"]
-            isOneToOne: false
-            referencedRelation: "seasons"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_current_agenda"
-            columns: ["current_agenda_item_id"]
-            isOneToOne: false
-            referencedRelation: "agenda_items"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      feedback_responses: {
-        Row: {
-          answers: Json | null
-          biggest_takeaway: string | null
-          content_rating: number | null
-          event_id: string
-          id: string
-          is_mock: boolean
-          learned_something: string | null
-          nps_score: number | null
-          organization_rating: number | null
-          overall_rating: number | null
-          respondent_email: string | null
-          respondent_name: string | null
-          respondent_participant_id: string | null
-          respondent_type: Database["public"]["Enums"]["feedback_respondent"]
-          submitted_at: string | null
-          suggestions: string | null
-          what_didnt_work: string | null
-          what_worked: string | null
-          would_recommend: boolean | null
-        }
-        Insert: {
-          answers?: Json | null
-          biggest_takeaway?: string | null
-          content_rating?: number | null
-          event_id: string
-          id?: string
-          is_mock?: boolean
-          learned_something?: string | null
-          nps_score?: number | null
-          organization_rating?: number | null
-          overall_rating?: number | null
-          respondent_email?: string | null
-          respondent_name?: string | null
-          respondent_participant_id?: string | null
-          respondent_type: Database["public"]["Enums"]["feedback_respondent"]
-          submitted_at?: string | null
-          suggestions?: string | null
-          what_didnt_work?: string | null
-          what_worked?: string | null
-          would_recommend?: boolean | null
-        }
-        Update: {
-          answers?: Json | null
-          biggest_takeaway?: string | null
-          content_rating?: number | null
-          event_id?: string
-          id?: string
-          is_mock?: boolean
-          learned_something?: string | null
-          nps_score?: number | null
-          organization_rating?: number | null
-          overall_rating?: number | null
-          respondent_email?: string | null
-          respondent_name?: string | null
-          respondent_participant_id?: string | null
-          respondent_type?: Database["public"]["Enums"]["feedback_respondent"]
-          submitted_at?: string | null
-          suggestions?: string | null
-          what_didnt_work?: string | null
-          what_worked?: string | null
-          would_recommend?: boolean | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "feedback_responses_event_id_fkey"
-            columns: ["event_id"]
-            isOneToOne: false
-            referencedRelation: "events"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "feedback_responses_respondent_participant_id_fkey"
-            columns: ["respondent_participant_id"]
-            isOneToOne: false
-            referencedRelation: "participants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      invitation_approvals: {
-        Row: {
-          approval_note: string | null
-          approval_status: string
-          approved_at: string | null
-          approved_by: string | null
-          approved_by_national: boolean | null
-          created_at: string | null
-          draft_url: string | null
-          event_id: string
-          id: string
-          invitation_category: string | null
-          invitee_name: string
-          invitee_role: string | null
-          is_mock: boolean
-          submitted_for_approval_at: string | null
-          updated_at: string | null
-        }
-        Insert: {
-          approval_note?: string | null
-          approval_status?: string
-          approved_at?: string | null
-          approved_by?: string | null
-          approved_by_national?: boolean | null
-          created_at?: string | null
-          draft_url?: string | null
-          event_id: string
-          id?: string
-          invitation_category?: string | null
-          invitee_name: string
-          invitee_role?: string | null
-          is_mock?: boolean
-          submitted_for_approval_at?: string | null
-          updated_at?: string | null
-        }
-        Update: {
-          approval_note?: string | null
-          approval_status?: string
-          approved_at?: string | null
-          approved_by?: string | null
-          approved_by_national?: boolean | null
-          created_at?: string | null
-          draft_url?: string | null
-          event_id?: string
-          id?: string
-          invitation_category?: string | null
-          invitee_name?: string
-          invitee_role?: string | null
-          is_mock?: boolean
-          submitted_for_approval_at?: string | null
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "invitation_approvals_event_id_fkey"
-            columns: ["event_id"]
-            isOneToOne: false
-            referencedRelation: "events"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      jury_assignments: {
-        Row: {
-          access_code: string
-          created_at: string | null
-          event_id: string
-          id: string
-          is_active: boolean | null
-          is_mock: boolean
-          jury_name: string
-        }
-        Insert: {
-          access_code: string
-          created_at?: string | null
-          event_id: string
-          id?: string
-          is_active?: boolean | null
-          is_mock?: boolean
-          jury_name: string
-        }
-        Update: {
-          access_code?: string
-          created_at?: string | null
-          event_id?: string
-          id?: string
-          is_active?: boolean | null
-          is_mock?: boolean
-          jury_name?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "jury_assignments_event_id_fkey"
-            columns: ["event_id"]
-            isOneToOne: false
-            referencedRelation: "events"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      notifications: {
-        Row: {
-          config: Json | null
-          event_id: string
-          id: string
-          sent_at: string | null
-          sent_to_count: number | null
-          status: string | null
-          template: string
-        }
-        Insert: {
-          config?: Json | null
-          event_id: string
-          id?: string
-          sent_at?: string | null
-          sent_to_count?: number | null
-          status?: string | null
-          template: string
-        }
-        Update: {
-          config?: Json | null
-          event_id?: string
-          id?: string
-          sent_at?: string | null
-          sent_to_count?: number | null
-          status?: string | null
-          template?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "notifications_event_id_fkey"
-            columns: ["event_id"]
-            isOneToOne: false
-            referencedRelation: "events"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      organizer_checklist: {
+      checklist: {
         Row: {
           category: string | null
           completed_at: string | null
@@ -909,7 +348,7 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "organizer_checklist_event_id_fkey"
+            foreignKeyName: "yip_checklist_event_fkey"
             columns: ["event_id"]
             isOneToOne: false
             referencedRelation: "events"
@@ -917,187 +356,409 @@ export type Database = {
           },
         ]
       }
-      organizer_profiles: {
+      checklist_template: {
         Row: {
-          chapter_name: string | null
+          category: string
           created_at: string | null
-          email: string | null
-          full_name: string
+          description: string | null
+          handbook_page: number | null
           id: string
           is_active: boolean | null
-          is_mock: boolean
-          photo_url: string | null
-          role: Database["public"]["Enums"]["yi_role"]
-          title: string | null
-          updated_at: string | null
-          user_id: string | null
-          zone: Database["public"]["Enums"]["yi_zone"] | null
+          sequence_order: number
+          title: string
         }
         Insert: {
-          chapter_name?: string | null
+          category: string
           created_at?: string | null
-          email?: string | null
-          full_name: string
+          description?: string | null
+          handbook_page?: number | null
           id?: string
           is_active?: boolean | null
-          is_mock?: boolean
-          photo_url?: string | null
-          role?: Database["public"]["Enums"]["yi_role"]
-          title?: string | null
-          updated_at?: string | null
-          user_id?: string | null
-          zone?: Database["public"]["Enums"]["yi_zone"] | null
+          sequence_order: number
+          title: string
         }
         Update: {
-          chapter_name?: string | null
+          category?: string
           created_at?: string | null
-          email?: string | null
-          full_name?: string
+          description?: string | null
+          handbook_page?: number | null
           id?: string
           is_active?: boolean | null
-          is_mock?: boolean
-          photo_url?: string | null
-          role?: Database["public"]["Enums"]["yi_role"]
-          title?: string | null
-          updated_at?: string | null
-          user_id?: string | null
-          zone?: Database["public"]["Enums"]["yi_zone"] | null
+          sequence_order?: number
+          title?: string
         }
         Relationships: []
       }
-      parliamentary_motions: {
+      constituencies: {
         Row: {
-          agenda_item_id: string | null
           created_at: string | null
-          details: string | null
-          directed_to_id: string | null
-          directed_to_ministry:
-            | Database["public"]["Enums"]["ministry_type"]
-            | null
-          event_id: string
           id: string
-          is_mock: boolean
-          minister_response: string | null
-          motion_type: Database["public"]["Enums"]["motion_type"]
-          outcome: string | null
-          raised_at: string | null
-          raised_by_id: string | null
-          raised_by_name: string | null
-          raised_by_party_side: Database["public"]["Enums"]["party_side"] | null
-          raised_by_role: string | null
-          resolution_note: string | null
-          resolved_at: string | null
-          ruled_at: string | null
-          ruled_by: string | null
-          speaker_note: string | null
-          speaker_ruling: string | null
-          status: Database["public"]["Enums"]["motion_status"]
-          subject: string
-          updated_at: string | null
-          votes_abstain: number | null
-          votes_against: number | null
-          votes_for: number | null
+          name: string
+          state: string
         }
         Insert: {
-          agenda_item_id?: string | null
           created_at?: string | null
-          details?: string | null
-          directed_to_id?: string | null
-          directed_to_ministry?:
-            | Database["public"]["Enums"]["ministry_type"]
-            | null
-          event_id: string
           id?: string
-          is_mock?: boolean
-          minister_response?: string | null
-          motion_type: Database["public"]["Enums"]["motion_type"]
-          outcome?: string | null
-          raised_at?: string | null
-          raised_by_id?: string | null
-          raised_by_name?: string | null
-          raised_by_party_side?:
-            | Database["public"]["Enums"]["party_side"]
-            | null
-          raised_by_role?: string | null
-          resolution_note?: string | null
-          resolved_at?: string | null
-          ruled_at?: string | null
-          ruled_by?: string | null
-          speaker_note?: string | null
-          speaker_ruling?: string | null
-          status?: Database["public"]["Enums"]["motion_status"]
-          subject: string
-          updated_at?: string | null
-          votes_abstain?: number | null
-          votes_against?: number | null
-          votes_for?: number | null
+          name: string
+          state: string
         }
         Update: {
-          agenda_item_id?: string | null
           created_at?: string | null
-          details?: string | null
-          directed_to_id?: string | null
-          directed_to_ministry?:
-            | Database["public"]["Enums"]["ministry_type"]
-            | null
+          id?: string
+          name?: string
+          state?: string
+        }
+        Relationships: []
+      }
+      contestants: {
+        Row: {
+          bio: string | null
+          city: string | null
+          class: number | null
+          created_at: string | null
+          email: string | null
+          full_name: string
+          home_state: string | null
+          id: string
+          is_active: boolean | null
+          is_mock: boolean
+          notes: string | null
+          parent_phone: string | null
+          phone: string | null
+          photo_url: string | null
+          school_id: string | null
+          school_name: string | null
+          section: string | null
+          updated_at: string | null
+          yi_institution_id: string | null
+        }
+        Insert: {
+          bio?: string | null
+          city?: string | null
+          class?: number | null
+          created_at?: string | null
+          email?: string | null
+          full_name: string
+          home_state?: string | null
+          id?: string
+          is_active?: boolean | null
+          is_mock?: boolean
+          notes?: string | null
+          parent_phone?: string | null
+          phone?: string | null
+          photo_url?: string | null
+          school_id?: string | null
+          school_name?: string | null
+          section?: string | null
+          updated_at?: string | null
+          yi_institution_id?: string | null
+        }
+        Update: {
+          bio?: string | null
+          city?: string | null
+          class?: number | null
+          created_at?: string | null
+          email?: string | null
+          full_name?: string
+          home_state?: string | null
+          id?: string
+          is_active?: boolean | null
+          is_mock?: boolean
+          notes?: string | null
+          parent_phone?: string | null
+          phone?: string | null
+          photo_url?: string | null
+          school_id?: string | null
+          school_name?: string | null
+          section?: string | null
+          updated_at?: string | null
+          yi_institution_id?: string | null
+        }
+        Relationships: []
+      }
+      event_topics: {
+        Row: {
+          created_at: string | null
+          event_id: string
+          id: string
+          is_central: boolean | null
+          sequence: number | null
+          topic_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          event_id: string
+          id?: string
+          is_central?: boolean | null
+          sequence?: number | null
+          topic_id: string
+        }
+        Update: {
+          created_at?: string | null
           event_id?: string
           id?: string
-          is_mock?: boolean
-          minister_response?: string | null
-          motion_type?: Database["public"]["Enums"]["motion_type"]
-          outcome?: string | null
-          raised_at?: string | null
-          raised_by_id?: string | null
-          raised_by_name?: string | null
-          raised_by_party_side?:
-            | Database["public"]["Enums"]["party_side"]
-            | null
-          raised_by_role?: string | null
-          resolution_note?: string | null
-          resolved_at?: string | null
-          ruled_at?: string | null
-          ruled_by?: string | null
-          speaker_note?: string | null
-          speaker_ruling?: string | null
-          status?: Database["public"]["Enums"]["motion_status"]
-          subject?: string
-          updated_at?: string | null
-          votes_abstain?: number | null
-          votes_against?: number | null
-          votes_for?: number | null
+          is_central?: boolean | null
+          sequence?: number | null
+          topic_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "parliamentary_motions_agenda_item_id_fkey"
-            columns: ["agenda_item_id"]
+            foreignKeyName: "event_topic_assignments_topic_id_fkey"
+            columns: ["topic_id"]
             isOneToOne: false
-            referencedRelation: "agenda_items"
+            referencedRelation: "topics"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "parliamentary_motions_directed_to_id_fkey"
-            columns: ["directed_to_id"]
-            isOneToOne: false
-            referencedRelation: "participants"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "parliamentary_motions_event_id_fkey"
+            foreignKeyName: "yip_event_topics_event_fkey"
             columns: ["event_id"]
             isOneToOne: false
             referencedRelation: "events"
             referencedColumns: ["id"]
           },
+        ]
+      }
+      events: {
+        Row: {
+          allocation_locked: boolean | null
+          central_agenda: string | null
+          chapter_em_id: string | null
+          chapter_name: string | null
+          city: string | null
+          committee_topics: Json | null
+          created_at: string | null
+          created_by: string | null
+          current_agenda_item_id: string | null
+          day1_date: string
+          day2_date: string
+          fee_per_participant_inr: number | null
+          id: string
+          ingestion_enabled: boolean
+          is_mock: boolean
+          level: "chapter" | "regional" | "national"
+          live_timer_end: string | null
+          live_timer_label: string | null
+          live_timer_running: boolean | null
+          max_participants: number | null
+          mycii_event_registered: boolean | null
+          mycii_payment_link: string | null
+          name: string
+          oath_text: string | null
+          questions_close_at: string | null
+          registrations_frozen: boolean | null
+          results_published_at: string | null
+          scores_locked: boolean | null
+          state: string | null
+          status:
+            | "draft"
+            | "registration_open"
+            | "registration_closed"
+            | "day1_live"
+            | "day1_complete"
+            | "day2_live"
+            | "completed"
+            | "results_published"
+          updated_at: string | null
+          venue_address: string | null
+          venue_name: string | null
+          yi_chapter_id: string | null
+          yi_year_id: string | null
+          yi_zone_code: string | null
+          zone: "ER" | "WR" | "NR" | "NER" | "SRTN" | "SRTKKA" | null
+        }
+        Insert: {
+          allocation_locked?: boolean | null
+          central_agenda?: string | null
+          chapter_em_id?: string | null
+          chapter_name?: string | null
+          city?: string | null
+          committee_topics?: Json | null
+          created_at?: string | null
+          created_by?: string | null
+          current_agenda_item_id?: string | null
+          day1_date: string
+          day2_date: string
+          fee_per_participant_inr?: number | null
+          id?: string
+          ingestion_enabled?: boolean
+          is_mock?: boolean
+          level?: "chapter" | "regional" | "national"
+          live_timer_end?: string | null
+          live_timer_label?: string | null
+          live_timer_running?: boolean | null
+          max_participants?: number | null
+          mycii_event_registered?: boolean | null
+          mycii_payment_link?: string | null
+          name: string
+          oath_text?: string | null
+          questions_close_at?: string | null
+          registrations_frozen?: boolean | null
+          results_published_at?: string | null
+          scores_locked?: boolean | null
+          state?: string | null
+          status?:
+            | "draft"
+            | "registration_open"
+            | "registration_closed"
+            | "day1_live"
+            | "day1_complete"
+            | "day2_live"
+            | "completed"
+            | "results_published"
+          updated_at?: string | null
+          venue_address?: string | null
+          venue_name?: string | null
+          yi_chapter_id?: string | null
+          yi_year_id?: string | null
+          yi_zone_code?: string | null
+          zone?: "ER" | "WR" | "NR" | "NER" | "SRTN" | "SRTKKA" | null
+        }
+        Update: {
+          allocation_locked?: boolean | null
+          central_agenda?: string | null
+          chapter_em_id?: string | null
+          chapter_name?: string | null
+          city?: string | null
+          committee_topics?: Json | null
+          created_at?: string | null
+          created_by?: string | null
+          current_agenda_item_id?: string | null
+          day1_date?: string
+          day2_date?: string
+          fee_per_participant_inr?: number | null
+          id?: string
+          ingestion_enabled?: boolean
+          is_mock?: boolean
+          level?: "chapter" | "regional" | "national"
+          live_timer_end?: string | null
+          live_timer_label?: string | null
+          live_timer_running?: boolean | null
+          max_participants?: number | null
+          mycii_event_registered?: boolean | null
+          mycii_payment_link?: string | null
+          name?: string
+          oath_text?: string | null
+          questions_close_at?: string | null
+          registrations_frozen?: boolean | null
+          results_published_at?: string | null
+          scores_locked?: boolean | null
+          state?: string | null
+          status?:
+            | "draft"
+            | "registration_open"
+            | "registration_closed"
+            | "day1_live"
+            | "day1_complete"
+            | "day2_live"
+            | "completed"
+            | "results_published"
+          updated_at?: string | null
+          venue_address?: string | null
+          venue_name?: string | null
+          yi_chapter_id?: string | null
+          yi_year_id?: string | null
+          yi_zone_code?: string | null
+          zone?: "ER" | "WR" | "NR" | "NER" | "SRTN" | "SRTKKA" | null
+        }
+        Relationships: [
           {
-            foreignKeyName: "parliamentary_motions_raised_by_id_fkey"
-            columns: ["raised_by_id"]
+            foreignKeyName: "events_chapter_em_id_fkey"
+            columns: ["chapter_em_id"]
             isOneToOne: false
-            referencedRelation: "participants"
+            referencedRelation: "organizers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "yip_events_current_agenda_fkey"
+            columns: ["current_agenda_item_id"]
+            isOneToOne: false
+            referencedRelation: "agenda"
             referencedColumns: ["id"]
           },
         ]
       }
-      participant_fees: {
+      feedback: {
+        Row: {
+          answers: Json | null
+          biggest_takeaway: string | null
+          content_rating: number | null
+          event_id: string
+          id: string
+          is_mock: boolean
+          learned_something: string | null
+          nps_score: number | null
+          organization_rating: number | null
+          overall_rating: number | null
+          respondent_email: string | null
+          respondent_name: string | null
+          respondent_participant_id: string | null
+          respondent_type: "participant" | "organizer" | "volunteer" | "jury"
+          submitted_at: string | null
+          suggestions: string | null
+          what_didnt_work: string | null
+          what_worked: string | null
+          would_recommend: boolean | null
+        }
+        Insert: {
+          answers?: Json | null
+          biggest_takeaway?: string | null
+          content_rating?: number | null
+          event_id: string
+          id?: string
+          is_mock?: boolean
+          learned_something?: string | null
+          nps_score?: number | null
+          organization_rating?: number | null
+          overall_rating?: number | null
+          respondent_email?: string | null
+          respondent_name?: string | null
+          respondent_participant_id?: string | null
+          respondent_type: "participant" | "organizer" | "volunteer" | "jury"
+          submitted_at?: string | null
+          suggestions?: string | null
+          what_didnt_work?: string | null
+          what_worked?: string | null
+          would_recommend?: boolean | null
+        }
+        Update: {
+          answers?: Json | null
+          biggest_takeaway?: string | null
+          content_rating?: number | null
+          event_id?: string
+          id?: string
+          is_mock?: boolean
+          learned_something?: string | null
+          nps_score?: number | null
+          organization_rating?: number | null
+          overall_rating?: number | null
+          respondent_email?: string | null
+          respondent_name?: string | null
+          respondent_participant_id?: string | null
+          respondent_type?: "participant" | "organizer" | "volunteer" | "jury"
+          submitted_at?: string | null
+          suggestions?: string | null
+          what_didnt_work?: string | null
+          what_worked?: string | null
+          would_recommend?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feedback_responses_respondent_participant_id_fkey"
+            columns: ["respondent_participant_id"]
+            isOneToOne: false
+            referencedRelation: "participants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "yip_feedback_event_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fees: {
         Row: {
           amount_inr: number
           created_at: string | null
@@ -1151,20 +812,448 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "participant_fees_event_id_fkey"
-            columns: ["event_id"]
-            isOneToOne: false
-            referencedRelation: "events"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "participant_fees_participant_id_fkey"
             columns: ["participant_id"]
             isOneToOne: true
             referencedRelation: "participants"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "yip_fees_event_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
         ]
+      }
+      invitations: {
+        Row: {
+          approval_note: string | null
+          approval_status: string
+          approved_at: string | null
+          approved_by: string | null
+          approved_by_national: boolean | null
+          created_at: string | null
+          draft_url: string | null
+          event_id: string
+          id: string
+          invitation_category: string | null
+          invitee_name: string
+          invitee_role: string | null
+          is_mock: boolean
+          submitted_for_approval_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          approval_note?: string | null
+          approval_status?: string
+          approved_at?: string | null
+          approved_by?: string | null
+          approved_by_national?: boolean | null
+          created_at?: string | null
+          draft_url?: string | null
+          event_id: string
+          id?: string
+          invitation_category?: string | null
+          invitee_name: string
+          invitee_role?: string | null
+          is_mock?: boolean
+          submitted_for_approval_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          approval_note?: string | null
+          approval_status?: string
+          approved_at?: string | null
+          approved_by?: string | null
+          approved_by_national?: boolean | null
+          created_at?: string | null
+          draft_url?: string | null
+          event_id?: string
+          id?: string
+          invitation_category?: string | null
+          invitee_name?: string
+          invitee_role?: string | null
+          is_mock?: boolean
+          submitted_for_approval_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "yip_invitations_event_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      jury_assignments: {
+        Row: {
+          access_code: string
+          created_at: string | null
+          event_id: string
+          id: string
+          is_active: boolean | null
+          is_mock: boolean
+          jury_name: string
+        }
+        Insert: {
+          access_code: string
+          created_at?: string | null
+          event_id: string
+          id?: string
+          is_active?: boolean | null
+          is_mock?: boolean
+          jury_name: string
+        }
+        Update: {
+          access_code?: string
+          created_at?: string | null
+          event_id?: string
+          id?: string
+          is_active?: boolean | null
+          is_mock?: boolean
+          jury_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "yip_jury_event_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      media: {
+        Row: {
+          caption: string | null
+          created_at: string
+          event_id: string
+          file_name: string
+          height: number | null
+          id: string
+          is_cover: boolean
+          is_mock: boolean
+          kind: "photo" | "video" | "document"
+          mime_type: string | null
+          photographer_name: string | null
+          public_url: string | null
+          size_bytes: number | null
+          sort_order: number | null
+          storage_path: string
+          tags: string[] | null
+          taken_at: string | null
+          updated_at: string
+          uploaded_at: string
+          uploaded_by: string | null
+          visibility: "public" | "yi_internal" | "organizer_only"
+          width: number | null
+        }
+        Insert: {
+          caption?: string | null
+          created_at?: string
+          event_id: string
+          file_name: string
+          height?: number | null
+          id?: string
+          is_cover?: boolean
+          is_mock?: boolean
+          kind?: "photo" | "video" | "document"
+          mime_type?: string | null
+          photographer_name?: string | null
+          public_url?: string | null
+          size_bytes?: number | null
+          sort_order?: number | null
+          storage_path: string
+          tags?: string[] | null
+          taken_at?: string | null
+          updated_at?: string
+          uploaded_at?: string
+          uploaded_by?: string | null
+          visibility?: "public" | "yi_internal" | "organizer_only"
+          width?: number | null
+        }
+        Update: {
+          caption?: string | null
+          created_at?: string
+          event_id?: string
+          file_name?: string
+          height?: number | null
+          id?: string
+          is_cover?: boolean
+          is_mock?: boolean
+          kind?: "photo" | "video" | "document"
+          mime_type?: string | null
+          photographer_name?: string | null
+          public_url?: string | null
+          size_bytes?: number | null
+          sort_order?: number | null
+          storage_path?: string
+          tags?: string[] | null
+          taken_at?: string | null
+          updated_at?: string
+          uploaded_at?: string
+          uploaded_by?: string | null
+          visibility?: "public" | "yi_internal" | "organizer_only"
+          width?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "yip_media_event_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      motions: {
+        Row: {
+          agenda_item_id: string | null
+          created_at: string | null
+          details: string | null
+          directed_to_id: string | null
+          directed_to_ministry:
+            | "home"
+            | "finance"
+            | "education"
+            | "health"
+            | "women_child"
+            | "disaster_management"
+            | "youth_sports"
+            | "it_digital"
+            | null
+          event_id: string
+          id: string
+          is_mock: boolean
+          minister_response: string | null
+          motion_type:
+            | "adjournment"
+            | "calling_attention"
+            | "breach_of_privilege"
+            | "no_confidence"
+            | "short_duration"
+            | "obituary"
+            | "laying_of_papers"
+          outcome: string | null
+          raised_at: string | null
+          raised_by_id: string | null
+          raised_by_name: string | null
+          raised_by_party_side: "ruling" | "opposition" | null
+          raised_by_role: string | null
+          resolution_note: string | null
+          resolved_at: string | null
+          ruled_at: string | null
+          ruled_by: string | null
+          speaker_note: string | null
+          speaker_ruling: string | null
+          status:
+            | "submitted"
+            | "admitted"
+            | "rejected"
+            | "discussing"
+            | "voting"
+            | "resolved"
+            | "deferred"
+          subject: string
+          updated_at: string | null
+          votes_abstain: number | null
+          votes_against: number | null
+          votes_for: number | null
+        }
+        Insert: {
+          agenda_item_id?: string | null
+          created_at?: string | null
+          details?: string | null
+          directed_to_id?: string | null
+          directed_to_ministry?:
+            | "home"
+            | "finance"
+            | "education"
+            | "health"
+            | "women_child"
+            | "disaster_management"
+            | "youth_sports"
+            | "it_digital"
+            | null
+          event_id: string
+          id?: string
+          is_mock?: boolean
+          minister_response?: string | null
+          motion_type:
+            | "adjournment"
+            | "calling_attention"
+            | "breach_of_privilege"
+            | "no_confidence"
+            | "short_duration"
+            | "obituary"
+            | "laying_of_papers"
+          outcome?: string | null
+          raised_at?: string | null
+          raised_by_id?: string | null
+          raised_by_name?: string | null
+          raised_by_party_side?: "ruling" | "opposition" | null
+          raised_by_role?: string | null
+          resolution_note?: string | null
+          resolved_at?: string | null
+          ruled_at?: string | null
+          ruled_by?: string | null
+          speaker_note?: string | null
+          speaker_ruling?: string | null
+          status?:
+            | "submitted"
+            | "admitted"
+            | "rejected"
+            | "discussing"
+            | "voting"
+            | "resolved"
+            | "deferred"
+          subject: string
+          updated_at?: string | null
+          votes_abstain?: number | null
+          votes_against?: number | null
+          votes_for?: number | null
+        }
+        Update: {
+          agenda_item_id?: string | null
+          created_at?: string | null
+          details?: string | null
+          directed_to_id?: string | null
+          directed_to_ministry?:
+            | "home"
+            | "finance"
+            | "education"
+            | "health"
+            | "women_child"
+            | "disaster_management"
+            | "youth_sports"
+            | "it_digital"
+            | null
+          event_id?: string
+          id?: string
+          is_mock?: boolean
+          minister_response?: string | null
+          motion_type?:
+            | "adjournment"
+            | "calling_attention"
+            | "breach_of_privilege"
+            | "no_confidence"
+            | "short_duration"
+            | "obituary"
+            | "laying_of_papers"
+          outcome?: string | null
+          raised_at?: string | null
+          raised_by_id?: string | null
+          raised_by_name?: string | null
+          raised_by_party_side?: "ruling" | "opposition" | null
+          raised_by_role?: string | null
+          resolution_note?: string | null
+          resolved_at?: string | null
+          ruled_at?: string | null
+          ruled_by?: string | null
+          speaker_note?: string | null
+          speaker_ruling?: string | null
+          status?:
+            | "submitted"
+            | "admitted"
+            | "rejected"
+            | "discussing"
+            | "voting"
+            | "resolved"
+            | "deferred"
+          subject?: string
+          updated_at?: string | null
+          votes_abstain?: number | null
+          votes_against?: number | null
+          votes_for?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "parliamentary_motions_agenda_item_id_fkey"
+            columns: ["agenda_item_id"]
+            isOneToOne: false
+            referencedRelation: "agenda"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "parliamentary_motions_directed_to_id_fkey"
+            columns: ["directed_to_id"]
+            isOneToOne: false
+            referencedRelation: "participants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "parliamentary_motions_raised_by_id_fkey"
+            columns: ["raised_by_id"]
+            isOneToOne: false
+            referencedRelation: "participants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "yip_motions_event_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organizers: {
+        Row: {
+          chapter_name: string | null
+          created_at: string | null
+          email: string | null
+          full_name: string
+          id: string
+          is_active: boolean | null
+          is_mock: boolean
+          person_id: string | null
+          photo_url: string | null
+          role: "national" | "rm" | "chapter_em"
+          title: string | null
+          updated_at: string | null
+          user_id: string | null
+          yi_zone_code: string | null
+          zone: "ER" | "WR" | "NR" | "NER" | "SRTN" | "SRTKKA" | null
+        }
+        Insert: {
+          chapter_name?: string | null
+          created_at?: string | null
+          email?: string | null
+          full_name: string
+          id?: string
+          is_active?: boolean | null
+          is_mock?: boolean
+          person_id?: string | null
+          photo_url?: string | null
+          role?: "national" | "rm" | "chapter_em"
+          title?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+          yi_zone_code?: string | null
+          zone?: "ER" | "WR" | "NR" | "NER" | "SRTN" | "SRTKKA" | null
+        }
+        Update: {
+          chapter_name?: string | null
+          created_at?: string | null
+          email?: string | null
+          full_name?: string
+          id?: string
+          is_active?: boolean | null
+          is_mock?: boolean
+          person_id?: string | null
+          photo_url?: string | null
+          role?: "national" | "rm" | "chapter_em"
+          title?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+          yi_zone_code?: string | null
+          zone?: "ER" | "WR" | "NR" | "NER" | "SRTN" | "SRTKKA" | null
+        }
+        Relationships: []
       }
       participants: {
         Row: {
@@ -1184,12 +1273,33 @@ export type Database = {
           home_state: string | null
           id: string
           is_mock: boolean
-          ministry: Database["public"]["Enums"]["ministry_type"] | null
+          ministry:
+            | "home"
+            | "finance"
+            | "education"
+            | "health"
+            | "women_child"
+            | "disaster_management"
+            | "youth_sports"
+            | "it_digital"
+            | null
           parent_phone: string | null
-          parliament_role: Database["public"]["Enums"]["parliament_role"] | null
+          parliament_role:
+            | "speaker"
+            | "deputy_speaker"
+            | "prime_minister"
+            | "leader_of_opposition"
+            | "cabinet_minister"
+            | "shadow_minister"
+            | "bill_committee"
+            | "mp"
+            | "deputy_prime_minister"
+            | "party_leader"
+            | "independent_mp"
+            | null
           party_id: string | null
           party_number: number | null
-          party_side: Database["public"]["Enums"]["party_side"] | null
+          party_side: "ruling" | "opposition" | null
           person_id: string | null
           phone: string | null
           qualified_for_next: boolean | null
@@ -1198,6 +1308,7 @@ export type Database = {
           section: string | null
           serial_no: number | null
           updated_at: string | null
+          yi_institution_id: string | null
         }
         Insert: {
           access_code: string
@@ -1216,14 +1327,33 @@ export type Database = {
           home_state?: string | null
           id?: string
           is_mock?: boolean
-          ministry?: Database["public"]["Enums"]["ministry_type"] | null
+          ministry?:
+            | "home"
+            | "finance"
+            | "education"
+            | "health"
+            | "women_child"
+            | "disaster_management"
+            | "youth_sports"
+            | "it_digital"
+            | null
           parent_phone?: string | null
           parliament_role?:
-            | Database["public"]["Enums"]["parliament_role"]
+            | "speaker"
+            | "deputy_speaker"
+            | "prime_minister"
+            | "leader_of_opposition"
+            | "cabinet_minister"
+            | "shadow_minister"
+            | "bill_committee"
+            | "mp"
+            | "deputy_prime_minister"
+            | "party_leader"
+            | "independent_mp"
             | null
           party_id?: string | null
           party_number?: number | null
-          party_side?: Database["public"]["Enums"]["party_side"] | null
+          party_side?: "ruling" | "opposition" | null
           person_id?: string | null
           phone?: string | null
           qualified_for_next?: boolean | null
@@ -1232,6 +1362,7 @@ export type Database = {
           section?: string | null
           serial_no?: number | null
           updated_at?: string | null
+          yi_institution_id?: string | null
         }
         Update: {
           access_code?: string
@@ -1250,14 +1381,33 @@ export type Database = {
           home_state?: string | null
           id?: string
           is_mock?: boolean
-          ministry?: Database["public"]["Enums"]["ministry_type"] | null
+          ministry?:
+            | "home"
+            | "finance"
+            | "education"
+            | "health"
+            | "women_child"
+            | "disaster_management"
+            | "youth_sports"
+            | "it_digital"
+            | null
           parent_phone?: string | null
           parliament_role?:
-            | Database["public"]["Enums"]["parliament_role"]
+            | "speaker"
+            | "deputy_speaker"
+            | "prime_minister"
+            | "leader_of_opposition"
+            | "cabinet_minister"
+            | "shadow_minister"
+            | "bill_committee"
+            | "mp"
+            | "deputy_prime_minister"
+            | "party_leader"
+            | "independent_mp"
             | null
           party_id?: string | null
           party_number?: number | null
-          party_side?: Database["public"]["Enums"]["party_side"] | null
+          party_side?: "ruling" | "opposition" | null
           person_id?: string | null
           phone?: string | null
           qualified_for_next?: boolean | null
@@ -1266,15 +1416,9 @@ export type Database = {
           section?: string | null
           serial_no?: number | null
           updated_at?: string | null
+          yi_institution_id?: string | null
         }
         Relationships: [
-          {
-            foreignKeyName: "participants_event_id_fkey"
-            columns: ["event_id"]
-            isOneToOne: false
-            referencedRelation: "events"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "participants_party_id_fkey"
             columns: ["party_id"]
@@ -1286,14 +1430,14 @@ export type Database = {
             foreignKeyName: "participants_person_id_fkey"
             columns: ["person_id"]
             isOneToOne: false
-            referencedRelation: "people"
+            referencedRelation: "contestants"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "participants_school_id_fkey"
-            columns: ["school_id"]
+            foreignKeyName: "yip_participants_event_fkey"
+            columns: ["event_id"]
             isOneToOne: false
-            referencedRelation: "schools"
+            referencedRelation: "events"
             referencedColumns: ["id"]
           },
         ]
@@ -1308,7 +1452,7 @@ export type Database = {
           name: string
           party_leader_id: string | null
           party_number: number
-          side: Database["public"]["Enums"]["party_side"]
+          side: "ruling" | "opposition"
           symbol_url: string | null
           tagline: string | null
           updated_at: string | null
@@ -1322,7 +1466,7 @@ export type Database = {
           name: string
           party_leader_id?: string | null
           party_number: number
-          side: Database["public"]["Enums"]["party_side"]
+          side: "ruling" | "opposition"
           symbol_url?: string | null
           tagline?: string | null
           updated_at?: string | null
@@ -1336,7 +1480,7 @@ export type Database = {
           name?: string
           party_leader_id?: string | null
           party_number?: number
-          side?: Database["public"]["Enums"]["party_side"]
+          side?: "ruling" | "opposition"
           symbol_url?: string | null
           tagline?: string | null
           updated_at?: string | null
@@ -1350,81 +1494,10 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "parties_event_id_fkey"
+            foreignKeyName: "yip_parties_event_fkey"
             columns: ["event_id"]
             isOneToOne: false
             referencedRelation: "events"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      people: {
-        Row: {
-          bio: string | null
-          city: string | null
-          class: number | null
-          created_at: string | null
-          email: string | null
-          full_name: string
-          home_state: string | null
-          id: string
-          is_active: boolean | null
-          is_mock: boolean
-          notes: string | null
-          parent_phone: string | null
-          phone: string | null
-          photo_url: string | null
-          school_id: string | null
-          school_name: string | null
-          section: string | null
-          updated_at: string | null
-        }
-        Insert: {
-          bio?: string | null
-          city?: string | null
-          class?: number | null
-          created_at?: string | null
-          email?: string | null
-          full_name: string
-          home_state?: string | null
-          id?: string
-          is_active?: boolean | null
-          is_mock?: boolean
-          notes?: string | null
-          parent_phone?: string | null
-          phone?: string | null
-          photo_url?: string | null
-          school_id?: string | null
-          school_name?: string | null
-          section?: string | null
-          updated_at?: string | null
-        }
-        Update: {
-          bio?: string | null
-          city?: string | null
-          class?: number | null
-          created_at?: string | null
-          email?: string | null
-          full_name?: string
-          home_state?: string | null
-          id?: string
-          is_active?: boolean | null
-          is_mock?: boolean
-          notes?: string | null
-          parent_phone?: string | null
-          phone?: string | null
-          photo_url?: string | null
-          school_id?: string | null
-          school_name?: string | null
-          section?: string | null
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "people_school_id_fkey"
-            columns: ["school_id"]
-            isOneToOne: false
-            referencedRelation: "schools"
             referencedColumns: ["id"]
           },
         ]
@@ -1483,31 +1556,10 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "promotions_season_id_fkey"
-            columns: ["season_id"]
-            isOneToOne: false
-            referencedRelation: "seasons"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "promotions_source_event_id_fkey"
-            columns: ["source_event_id"]
-            isOneToOne: false
-            referencedRelation: "events"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "promotions_source_participant_id_fkey"
             columns: ["source_participant_id"]
             isOneToOne: false
             referencedRelation: "participants"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "promotions_target_event_id_fkey"
-            columns: ["target_event_id"]
-            isOneToOne: false
-            referencedRelation: "events"
             referencedColumns: ["id"]
           },
           {
@@ -1517,13 +1569,35 @@ export type Database = {
             referencedRelation: "participants"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "yip_promotions_source_event_fkey"
+            columns: ["source_event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "yip_promotions_target_event_fkey"
+            columns: ["target_event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
         ]
       }
       questions: {
         Row: {
           answer_summary: string | null
           created_at: string | null
-          directed_to_ministry: Database["public"]["Enums"]["ministry_type"]
+          directed_to_ministry:
+            | "home"
+            | "finance"
+            | "education"
+            | "health"
+            | "women_child"
+            | "disaster_management"
+            | "youth_sports"
+            | "it_digital"
           event_id: string
           filtered_by: string | null
           id: string
@@ -1538,7 +1612,15 @@ export type Database = {
         Insert: {
           answer_summary?: string | null
           created_at?: string | null
-          directed_to_ministry: Database["public"]["Enums"]["ministry_type"]
+          directed_to_ministry:
+            | "home"
+            | "finance"
+            | "education"
+            | "health"
+            | "women_child"
+            | "disaster_management"
+            | "youth_sports"
+            | "it_digital"
           event_id: string
           filtered_by?: string | null
           id?: string
@@ -1553,7 +1635,15 @@ export type Database = {
         Update: {
           answer_summary?: string | null
           created_at?: string | null
-          directed_to_ministry?: Database["public"]["Enums"]["ministry_type"]
+          directed_to_ministry?:
+            | "home"
+            | "finance"
+            | "education"
+            | "health"
+            | "women_child"
+            | "disaster_management"
+            | "youth_sports"
+            | "it_digital"
           event_id?: string
           filtered_by?: string | null
           id?: string
@@ -1567,17 +1657,17 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "questions_event_id_fkey"
-            columns: ["event_id"]
-            isOneToOne: false
-            referencedRelation: "events"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "questions_submitted_by_fkey"
             columns: ["submitted_by"]
             isOneToOne: false
             referencedRelation: "participants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "yip_questions_event_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
             referencedColumns: ["id"]
           },
         ]
@@ -1602,8 +1692,12 @@ export type Database = {
           reviewed_by: string | null
           school_name: string | null
           section: string | null
-          source: Database["public"]["Enums"]["registration_source"]
-          status: Database["public"]["Enums"]["registration_status"]
+          source:
+            | "microsoft_forms"
+            | "platform_direct"
+            | "csv_upload"
+            | "manual"
+          status: "pending" | "approved" | "rejected" | "duplicate"
           submission_batch: string | null
           updated_at: string
         }
@@ -1626,8 +1720,12 @@ export type Database = {
           reviewed_by?: string | null
           school_name?: string | null
           section?: string | null
-          source?: Database["public"]["Enums"]["registration_source"]
-          status?: Database["public"]["Enums"]["registration_status"]
+          source?:
+            | "microsoft_forms"
+            | "platform_direct"
+            | "csv_upload"
+            | "manual"
+          status?: "pending" | "approved" | "rejected" | "duplicate"
           submission_batch?: string | null
           updated_at?: string
         }
@@ -1650,24 +1748,28 @@ export type Database = {
           reviewed_by?: string | null
           school_name?: string | null
           section?: string | null
-          source?: Database["public"]["Enums"]["registration_source"]
-          status?: Database["public"]["Enums"]["registration_status"]
+          source?:
+            | "microsoft_forms"
+            | "platform_direct"
+            | "csv_upload"
+            | "manual"
+          status?: "pending" | "approved" | "rejected" | "duplicate"
           submission_batch?: string | null
           updated_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: "registrations_event_id_fkey"
-            columns: ["event_id"]
-            isOneToOne: false
-            referencedRelation: "events"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "registrations_participant_id_fkey"
             columns: ["participant_id"]
             isOneToOne: false
             referencedRelation: "participants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "yip_registrations_event_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
             referencedColumns: ["id"]
           },
         ]
@@ -1711,67 +1813,91 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "results_event_id_fkey"
-            columns: ["event_id"]
-            isOneToOne: false
-            referencedRelation: "events"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "results_participant_id_fkey"
             columns: ["participant_id"]
             isOneToOne: false
             referencedRelation: "participants"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "yip_results_event_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
         ]
       }
-      schools: {
+      rubrics: {
         Row: {
-          city: string | null
-          contact_email: string | null
-          contact_person: string | null
-          contact_phone: string | null
           created_at: string | null
+          criteria: Json
           id: string
-          is_mock: boolean
-          is_thalir: boolean | null
+          is_active: boolean | null
+          is_default: boolean | null
           name: string
-          notes: string | null
-          state: string | null
+          target_role:
+            | "speaker"
+            | "deputy_speaker"
+            | "prime_minister"
+            | "leader_of_opposition"
+            | "cabinet_minister"
+            | "shadow_minister"
+            | "bill_committee"
+            | "mp"
+            | "deputy_prime_minister"
+            | "party_leader"
+            | "independent_mp"
+          total_max: number
           updated_at: string | null
         }
         Insert: {
-          city?: string | null
-          contact_email?: string | null
-          contact_person?: string | null
-          contact_phone?: string | null
           created_at?: string | null
+          criteria: Json
           id?: string
-          is_mock?: boolean
-          is_thalir?: boolean | null
+          is_active?: boolean | null
+          is_default?: boolean | null
           name: string
-          notes?: string | null
-          state?: string | null
+          target_role:
+            | "speaker"
+            | "deputy_speaker"
+            | "prime_minister"
+            | "leader_of_opposition"
+            | "cabinet_minister"
+            | "shadow_minister"
+            | "bill_committee"
+            | "mp"
+            | "deputy_prime_minister"
+            | "party_leader"
+            | "independent_mp"
+          total_max?: number
           updated_at?: string | null
         }
         Update: {
-          city?: string | null
-          contact_email?: string | null
-          contact_person?: string | null
-          contact_phone?: string | null
           created_at?: string | null
+          criteria?: Json
           id?: string
-          is_mock?: boolean
-          is_thalir?: boolean | null
+          is_active?: boolean | null
+          is_default?: boolean | null
           name?: string
-          notes?: string | null
-          state?: string | null
+          target_role?:
+            | "speaker"
+            | "deputy_speaker"
+            | "prime_minister"
+            | "leader_of_opposition"
+            | "cabinet_minister"
+            | "shadow_minister"
+            | "bill_committee"
+            | "mp"
+            | "deputy_prime_minister"
+            | "party_leader"
+            | "independent_mp"
+          total_max?: number
           updated_at?: string | null
         }
         Relationships: []
       }
-      score_audit_log: {
+      score_audit: {
         Row: {
           changed_by: string | null
           created_at: string | null
@@ -1827,7 +1953,7 @@ export type Database = {
           jury_assignment_id: string
           participant_id: string
           rubric_id: string
-          status: Database["public"]["Enums"]["score_status"] | null
+          status: "draft" | "submitted" | "locked" | null
           submitted_at: string | null
           total_score: number
           updated_at: string | null
@@ -1843,7 +1969,7 @@ export type Database = {
           jury_assignment_id: string
           participant_id: string
           rubric_id: string
-          status?: Database["public"]["Enums"]["score_status"] | null
+          status?: "draft" | "submitted" | "locked" | null
           submitted_at?: string | null
           total_score: number
           updated_at?: string | null
@@ -1859,7 +1985,7 @@ export type Database = {
           jury_assignment_id?: string
           participant_id?: string
           rubric_id?: string
-          status?: Database["public"]["Enums"]["score_status"] | null
+          status?: "draft" | "submitted" | "locked" | null
           submitted_at?: string | null
           total_score?: number
           updated_at?: string | null
@@ -1869,14 +1995,7 @@ export type Database = {
             foreignKeyName: "scores_agenda_item_id_fkey"
             columns: ["agenda_item_id"]
             isOneToOne: false
-            referencedRelation: "agenda_items"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "scores_event_id_fkey"
-            columns: ["event_id"]
-            isOneToOne: false
-            referencedRelation: "events"
+            referencedRelation: "agenda"
             referencedColumns: ["id"]
           },
           {
@@ -1897,80 +2016,21 @@ export type Database = {
             foreignKeyName: "scores_rubric_id_fkey"
             columns: ["rubric_id"]
             isOneToOne: false
-            referencedRelation: "scoring_rubrics"
+            referencedRelation: "rubrics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "yip_scores_event_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
             referencedColumns: ["id"]
           },
         ]
       }
-      scoring_rubrics: {
-        Row: {
-          created_at: string | null
-          criteria: Json
-          id: string
-          is_active: boolean | null
-          is_default: boolean | null
-          name: string
-          target_role: Database["public"]["Enums"]["parliament_role"]
-          total_max: number
-          updated_at: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          criteria: Json
-          id?: string
-          is_active?: boolean | null
-          is_default?: boolean | null
-          name: string
-          target_role: Database["public"]["Enums"]["parliament_role"]
-          total_max?: number
-          updated_at?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          criteria?: Json
-          id?: string
-          is_active?: boolean | null
-          is_default?: boolean | null
-          name?: string
-          target_role?: Database["public"]["Enums"]["parliament_role"]
-          total_max?: number
-          updated_at?: string | null
-        }
-        Relationships: []
-      }
-      seasons: {
-        Row: {
-          created_at: string | null
-          id: string
-          is_active: boolean | null
-          is_mock: boolean
-          name: string
-          updated_at: string | null
-          year: number
-        }
-        Insert: {
-          created_at?: string | null
-          id?: string
-          is_active?: boolean | null
-          is_mock?: boolean
-          name: string
-          updated_at?: string | null
-          year: number
-        }
-        Update: {
-          created_at?: string | null
-          id?: string
-          is_active?: boolean | null
-          is_mock?: boolean
-          name?: string
-          updated_at?: string | null
-          year?: number
-        }
-        Relationships: []
-      }
       topics: {
         Row: {
-          category: Database["public"]["Enums"]["topic_category"]
+          category: "central" | "regional"
           created_at: string | null
           description: string | null
           handbook_page: number | null
@@ -1979,10 +2039,10 @@ export type Database = {
           sub_points: Json | null
           title: string
           topic_number: number | null
-          zone: Database["public"]["Enums"]["yi_zone"] | null
+          zone: "ER" | "WR" | "NR" | "NER" | "SRTN" | "SRTKKA" | null
         }
         Insert: {
-          category: Database["public"]["Enums"]["topic_category"]
+          category: "central" | "regional"
           created_at?: string | null
           description?: string | null
           handbook_page?: number | null
@@ -1991,10 +2051,10 @@ export type Database = {
           sub_points?: Json | null
           title: string
           topic_number?: number | null
-          zone?: Database["public"]["Enums"]["yi_zone"] | null
+          zone?: "ER" | "WR" | "NR" | "NER" | "SRTN" | "SRTKKA" | null
         }
         Update: {
-          category?: Database["public"]["Enums"]["topic_category"]
+          category?: "central" | "regional"
           created_at?: string | null
           description?: string | null
           handbook_page?: number | null
@@ -2003,7 +2063,7 @@ export type Database = {
           sub_points?: Json | null
           title?: string
           topic_number?: number | null
-          zone?: Database["public"]["Enums"]["yi_zone"] | null
+          zone?: "ER" | "WR" | "NR" | "NER" | "SRTN" | "SRTKKA" | null
         }
         Relationships: []
       }
@@ -2021,7 +2081,19 @@ export type Database = {
           notes: string | null
           phone: string | null
           shift: string | null
-          station: Database["public"]["Enums"]["volunteer_station"] | null
+          station:
+            | "registration"
+            | "help_desk"
+            | "av_tech"
+            | "room_coordinator"
+            | "hospitality"
+            | "stage_manager"
+            | "photographer"
+            | "media"
+            | "runner"
+            | "safety"
+            | "floating"
+            | null
           tshirt_size: string | null
           updated_at: string | null
         }
@@ -2038,7 +2110,19 @@ export type Database = {
           notes?: string | null
           phone?: string | null
           shift?: string | null
-          station?: Database["public"]["Enums"]["volunteer_station"] | null
+          station?:
+            | "registration"
+            | "help_desk"
+            | "av_tech"
+            | "room_coordinator"
+            | "hospitality"
+            | "stage_manager"
+            | "photographer"
+            | "media"
+            | "runner"
+            | "safety"
+            | "floating"
+            | null
           tshirt_size?: string | null
           updated_at?: string | null
         }
@@ -2055,13 +2139,25 @@ export type Database = {
           notes?: string | null
           phone?: string | null
           shift?: string | null
-          station?: Database["public"]["Enums"]["volunteer_station"] | null
+          station?:
+            | "registration"
+            | "help_desk"
+            | "av_tech"
+            | "room_coordinator"
+            | "hospitality"
+            | "stage_manager"
+            | "photographer"
+            | "media"
+            | "runner"
+            | "safety"
+            | "floating"
+            | null
           tshirt_size?: string | null
           updated_at?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "volunteers_event_id_fkey"
+            foreignKeyName: "yip_volunteers_event_fkey"
             columns: ["event_id"]
             isOneToOne: false
             referencedRelation: "events"
@@ -2111,7 +2207,7 @@ export type Database = {
             foreignKeyName: "vote_sessions_agenda_item_id_fkey"
             columns: ["agenda_item_id"]
             isOneToOne: false
-            referencedRelation: "agenda_items"
+            referencedRelation: "agenda"
             referencedColumns: ["id"]
           },
           {
@@ -2122,7 +2218,7 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "vote_sessions_event_id_fkey"
+            foreignKeyName: "yip_vote_sessions_event_fkey"
             columns: ["event_id"]
             isOneToOne: false
             referencedRelation: "events"
@@ -2163,14 +2259,7 @@ export type Database = {
             foreignKeyName: "votes_agenda_item_id_fkey"
             columns: ["agenda_item_id"]
             isOneToOne: false
-            referencedRelation: "agenda_items"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "votes_event_id_fkey"
-            columns: ["event_id"]
-            isOneToOne: false
-            referencedRelation: "events"
+            referencedRelation: "agenda"
             referencedColumns: ["id"]
           },
           {
@@ -2178,6 +2267,13 @@ export type Database = {
             columns: ["participant_id"]
             isOneToOne: false
             referencedRelation: "participants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "yip_votes_event_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
             referencedColumns: ["id"]
           },
         ]
@@ -2190,87 +2286,7 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      agenda_mode: "party" | "committee" | "mixed"
-      agenda_status: "upcoming" | "in_progress" | "completed" | "skipped"
-      compliance_status:
-        | "not_checked"
-        | "pending_evidence"
-        | "verified"
-        | "violation"
-        | "waived"
-      event_level: "chapter" | "regional" | "national"
-      event_status:
-        | "draft"
-        | "registration_open"
-        | "registration_closed"
-        | "day1_live"
-        | "day1_complete"
-        | "day2_live"
-        | "completed"
-        | "results_published"
-      feedback_respondent: "participant" | "organizer" | "volunteer" | "jury"
-      media_kind: "photo" | "video" | "document"
-      media_visibility: "public" | "yi_internal" | "organizer_only"
-      ministry_type:
-        | "home"
-        | "finance"
-        | "education"
-        | "health"
-        | "women_child"
-        | "disaster_management"
-        | "youth_sports"
-        | "it_digital"
-      motion_status:
-        | "submitted"
-        | "admitted"
-        | "rejected"
-        | "discussing"
-        | "voting"
-        | "resolved"
-        | "deferred"
-      motion_type:
-        | "adjournment"
-        | "calling_attention"
-        | "breach_of_privilege"
-        | "no_confidence"
-        | "short_duration"
-        | "obituary"
-        | "laying_of_papers"
-      parliament_role:
-        | "speaker"
-        | "deputy_speaker"
-        | "prime_minister"
-        | "leader_of_opposition"
-        | "cabinet_minister"
-        | "shadow_minister"
-        | "bill_committee"
-        | "mp"
-        | "deputy_prime_minister"
-        | "party_leader"
-        | "independent_mp"
-      party_side: "ruling" | "opposition"
-      registration_source:
-        | "microsoft_forms"
-        | "platform_direct"
-        | "csv_upload"
-        | "manual"
-      registration_status: "pending" | "approved" | "rejected" | "duplicate"
-      score_status: "draft" | "submitted" | "locked"
-      topic_category: "central" | "regional"
-      volunteer_station:
-        | "registration"
-        | "help_desk"
-        | "av_tech"
-        | "room_coordinator"
-        | "hospitality"
-        | "stage_manager"
-        | "photographer"
-        | "media"
-        | "runner"
-        | "safety"
-        | "floating"
-      yi_role: "national" | "rm" | "chapter_em"
-      yi_zone: "ER" | "WR" | "NR" | "NER" | "SRTN" | "SRTKKA"
+      [_ in never]: never
     }
     CompositeTypes: {
       [_ in never]: never
@@ -2396,97 +2412,7 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  public: {
-    Enums: {
-      agenda_mode: ["party", "committee", "mixed"],
-      agenda_status: ["upcoming", "in_progress", "completed", "skipped"],
-      compliance_status: [
-        "not_checked",
-        "pending_evidence",
-        "verified",
-        "violation",
-        "waived",
-      ],
-      event_level: ["chapter", "regional", "national"],
-      event_status: [
-        "draft",
-        "registration_open",
-        "registration_closed",
-        "day1_live",
-        "day1_complete",
-        "day2_live",
-        "completed",
-        "results_published",
-      ],
-      feedback_respondent: ["participant", "organizer", "volunteer", "jury"],
-      media_kind: ["photo", "video", "document"],
-      media_visibility: ["public", "yi_internal", "organizer_only"],
-      ministry_type: [
-        "home",
-        "finance",
-        "education",
-        "health",
-        "women_child",
-        "disaster_management",
-        "youth_sports",
-        "it_digital",
-      ],
-      motion_status: [
-        "submitted",
-        "admitted",
-        "rejected",
-        "discussing",
-        "voting",
-        "resolved",
-        "deferred",
-      ],
-      motion_type: [
-        "adjournment",
-        "calling_attention",
-        "breach_of_privilege",
-        "no_confidence",
-        "short_duration",
-        "obituary",
-        "laying_of_papers",
-      ],
-      parliament_role: [
-        "speaker",
-        "deputy_speaker",
-        "prime_minister",
-        "leader_of_opposition",
-        "cabinet_minister",
-        "shadow_minister",
-        "bill_committee",
-        "mp",
-        "deputy_prime_minister",
-        "party_leader",
-        "independent_mp",
-      ],
-      party_side: ["ruling", "opposition"],
-      registration_source: [
-        "microsoft_forms",
-        "platform_direct",
-        "csv_upload",
-        "manual",
-      ],
-      registration_status: ["pending", "approved", "rejected", "duplicate"],
-      score_status: ["draft", "submitted", "locked"],
-      topic_category: ["central", "regional"],
-      volunteer_station: [
-        "registration",
-        "help_desk",
-        "av_tech",
-        "room_coordinator",
-        "hospitality",
-        "stage_manager",
-        "photographer",
-        "media",
-        "runner",
-        "safety",
-        "floating",
-      ],
-      yi_role: ["national", "rm", "chapter_em"],
-      yi_zone: ["ER", "WR", "NR", "NER", "SRTN", "SRTKKA"],
-    },
+  yip: {
+    Enums: {},
   },
 } as const

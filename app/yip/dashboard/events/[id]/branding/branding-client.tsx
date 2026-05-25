@@ -44,7 +44,7 @@ import {
   type ComplianceScore,
   type ComplianceStatus,
   type InvitationRow,
-} from "@/app/actions/yip/branding";
+} from "@/app/yip/actions/branding";
 
 // ─────────────────────────────────────────────────────────────────────────
 // Display helpers

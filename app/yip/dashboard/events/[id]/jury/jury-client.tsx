@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { addJury, removeJury } from "@/app/actions/yip/jury";
+import { addJury, removeJury } from "@/app/yip/actions/jury";
 import { Button } from "@/components/yip/ui/button";
 import { Input } from "@/components/yip/ui/input";
 import { Label } from "@/components/yip/ui/label";

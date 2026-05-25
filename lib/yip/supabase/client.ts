@@ -1,20 +1,18 @@
 /**
- * YIP Browser Supabase Client (Phase D port — 2026-05-22)
+ * YIP Browser Supabase Client (Phase 2 absorption — 2026-05-25)
  *
- * NOTE: yi-connect's shared client (`@/lib/supabase/client`) hard-sets
- * `db: { schema: 'yi_connect' }`, but YIP's tables live in `public.*` in the
- * same Supabase project. To avoid silently routing YIP queries to the wrong
- * schema, this client constructs its own browser client WITHOUT the schema
- * override — defaulting to `public`.
- *
- * If/when YIP tables move into a dedicated schema, add `db: { schema: 'yip' }`
- * here and migrate the tables.
+ * Schema-pinned to "yip". All YIP tables live in `yip.*` after Agent A's
+ * migration 031. For cross-schema reads, use per-call `.schema("yi")...`.
  */
 import { createBrowserClient } from "@supabase/ssr";
+import type { Database } from "@/types/yip/database";
 
 export function createClient() {
-  return createBrowserClient(
+  return createBrowserClient<Database, "yip">(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      db: { schema: "yip" },
+    }
   );
 }

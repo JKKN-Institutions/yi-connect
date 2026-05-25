@@ -1,4 +1,4 @@
-import { adminListTeam } from "@/app/actions/yip/admin-team";
+import { adminListTeam } from "@/app/yip/actions/admin-team";
 import { TeamAdminClient } from "./team-client";
 
 export const dynamic = "force-dynamic";

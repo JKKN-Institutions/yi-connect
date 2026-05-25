@@ -3,9 +3,9 @@
 import { useEffect, useState, useCallback } from "react";
 import { cn } from "@/lib/yip/utils";
 import { ROLE_LABELS, PARTY_COLORS, MINISTRIES, OATH_TEXT } from "@/lib/yip/constants";
-import { useRealtimeEvent } from "@/hooks/yip/use-realtime-event";
-import { useVoteSession } from "@/hooks/yip/use-vote-session";
-import { useTimer } from "@/hooks/yip/use-timer";
+import { useRealtimeEvent } from "@/lib/yip/hooks/use-realtime-event";
+import { useVoteSession } from "@/lib/yip/hooks/use-vote-session";
+import { useTimer } from "@/lib/yip/hooks/use-timer";
 import { createClient } from "@/lib/yip/supabase/client";
 
 interface SpeakerInfo {
@@ -144,7 +144,7 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
     if (!event?.current_agenda_item_id) return;
 
     const channel = supabase
-      .channel(`display-speakers-${event.current_agenda_item_id}`)
+      .channel(`yip:display-speakers:${event.current_agenda_item_id}`)
       .on(
         "postgres_changes",
         {
@@ -214,7 +214,7 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
     fetchCurrentQuestion();
 
     const channel = supabase
-      .channel(`display-questions-${eventId}`)
+      .channel(`yip:display-questions:${eventId}`)
       .on(
         "postgres_changes",
         {
@@ -282,7 +282,7 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
     fetchPresentedBill();
 
     const channel = supabase
-      .channel(`display-bills-${eventId}`)
+      .channel(`yip:display-bills:${eventId}`)
       .on(
         "postgres_changes",
         {

@@ -44,7 +44,7 @@ import {
   type Rubric,
   type RubricCriterion,
   type SubCriterion,
-} from "@/app/actions/yip/admin-rubrics";
+} from "@/app/yip/actions/admin-rubrics";
 
 type FilterMode = "active" | "inactive" | "all";
 

@@ -80,39 +80,42 @@ export function CodeEntryStep({
 
       <form onSubmit={handleSubmit} className="mt-10">
         {/* Slot display */}
-        <label htmlFor="access-code" className="relative block cursor-text">
-          <div className="flex justify-center gap-1.5 md:gap-3 pointer-events-none">
-            {slots.map((ch, i) => (
-              <div
-                key={i}
-                className={`w-10 h-14 md:w-14 md:h-20 rounded-lg border-2 flex items-center justify-center text-2xl md:text-4xl font-mono font-bold transition-all ${
-                  ch
-                    ? "border-yi-gold bg-yi-gold/5 text-navy scale-[1.02]"
-                    : i === code.length
-                      ? "border-navy/40 bg-white"
-                      : "border-navy/10 bg-white text-navy/20"
-                }`}
-              >
-                {ch || (i === code.length ? <BlinkingCaret /> : "·")}
-              </div>
-            ))}
-          </div>
-          <input
-            ref={inputRef}
-            id="access-code"
-            type="text"
-            autoComplete="one-time-code"
-            autoCapitalize="characters"
-            spellCheck={false}
-            inputMode="text"
-            value={code}
-            onChange={handleChange}
-            maxLength={6}
-            aria-label="Access code"
-            className="absolute inset-0 z-10 w-full h-full opacity-0 cursor-text"
-            style={{ caretColor: "transparent" }}
-          />
-        </label>
+        <div
+          className="flex justify-center gap-1.5 md:gap-3 cursor-text"
+          onClick={() => inputRef.current?.focus()}
+          role="group"
+          aria-label="Access code slots"
+        >
+          {slots.map((ch, i) => (
+            <div
+              key={i}
+              className={`w-10 h-14 md:w-14 md:h-20 rounded-lg border-2 flex items-center justify-center text-2xl md:text-4xl font-mono font-bold transition-all ${
+                ch
+                  ? "border-yi-gold bg-yi-gold/5 text-navy scale-[1.02]"
+                  : i === code.length
+                    ? "border-navy/40 bg-white"
+                    : "border-navy/10 bg-white text-navy/20"
+              }`}
+            >
+              {ch || (i === code.length ? <BlinkingCaret /> : "·")}
+            </div>
+          ))}
+        </div>
+
+        <input
+          ref={inputRef}
+          id="access-code"
+          type="text"
+          autoComplete="one-time-code"
+          autoCapitalize="characters"
+          spellCheck={false}
+          inputMode="text"
+          value={code}
+          onChange={handleChange}
+          maxLength={6}
+          aria-label="Access code"
+          className="sr-only"
+        />
 
         <button
           type="button"

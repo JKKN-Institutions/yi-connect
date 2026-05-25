@@ -30,6 +30,20 @@
  * Cookie collision check: yi-connect uses Supabase SSR default
  * `sb-bkmpbcoxbjyafieabxao-auth-token`; YIP uses `yip_session`; YiFuture
  * uses `yifuture_session`; YiFi uses `yifi_session`. No overlap.
+ *
+ * Cookie path scoping (Agent C, 2026-05-25, yip-absorption shell):
+ *   The yip_session cookie SHOULD be set with `path: "/yip"` (not `/`) so
+ *   it doesn't leak into /yi-future, /yifi, or /dashboard. Audit needed in:
+ *     - app/yip/actions/yip/test-login.ts  (lines 187+ and 221+)
+ *     - app/yip/actions/yip/auth.ts         (lines 59+ and 107+)
+ *     - app/actions/yip/test-login.ts       (legacy; may already be deleted)
+ *     - app/actions/yip/auth.ts             (legacy; may already be deleted)
+ *   All `cookieStore.set("yip_session", ..., { path: "/" })` calls must
+ *   become `{ path: "/yip" }`. The matching delete() calls don't require a
+ *   path arg as long as the original set path was /yip — but if any legacy
+ *   cookie at path=/ exists at rollout, do a one-shot best-effort delete on
+ *   both paths to avoid stale sessions.
+ *   --> VERIFY THIS AFTER AGENT B'S FILE MOVE LANDS.
  */
 
 import { createServerClient } from '@supabase/ssr'

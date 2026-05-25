@@ -15,7 +15,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { toast } from "sonner";
-import { submitOrganizerFeedback } from "@/app/actions/yip/feedback";
+import { submitOrganizerFeedback } from "@/app/yip/actions/feedback";
 import {
   type FeedbackPayload,
   type FeedbackRespondentType,

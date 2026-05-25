@@ -27,7 +27,7 @@ export default async function ControlPage({
 
   // Fetch agenda items
   const { data: agendaItems } = await supabase
-    .from("agenda_items")
+    .from("agenda")
     .select("*")
     .eq("event_id", id)
     .order("day")

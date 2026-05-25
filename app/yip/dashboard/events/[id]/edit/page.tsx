@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { getEvent, updateEvent } from "@/app/actions/yip/events";
+import { getEvent, updateEvent } from "@/app/yip/actions/events";
 import { Button } from "@/components/yip/ui/button";
 import { Input } from "@/components/yip/ui/input";
 import { Label } from "@/components/yip/ui/label";

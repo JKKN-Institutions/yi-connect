@@ -7,7 +7,7 @@ import { Textarea } from "@/components/yip/ui/textarea";
 import { Label } from "@/components/yip/ui/label";
 import { Star, Send, MessageCircleHeart, PartyPopper, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { submitParticipantFeedback } from "@/app/actions/yip/feedback";
+import { submitParticipantFeedback } from "@/app/yip/actions/feedback";
 import { PARTICIPANT_QUESTIONS, type FeedbackPayload } from "@/lib/yip/feedback";
 
 type Props = {

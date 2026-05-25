@@ -5,7 +5,7 @@ import type {
   CertificateData,
   CertificateParticipant,
   CertificateEventData,
-} from "@/app/actions/yip/certificates";
+} from "@/app/yip/actions/certificates";
 import { ROLE_LABELS } from "@/lib/yip/constants";
 import { ParticipationCert } from "@/components/yip/certificates/participation-cert";
 import { AwardCert } from "@/components/yip/certificates/award-cert";

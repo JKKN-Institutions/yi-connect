@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/yip/supabase/server";
-import { getFeedbackStats, listFeedback } from "@/app/actions/yip/feedback";
+import { getFeedbackStats, listFeedback } from "@/app/yip/actions/feedback";
 import { FeedbackDashboardClient } from "./feedback-dashboard-client";
 
 export default async function FeedbackDashboardPage({

@@ -16,7 +16,7 @@ import {
   getPersonIdForParticipant,
   getPerson,
   getPersonJourney,
-} from "@/app/actions/yip/people";
+} from "@/app/yip/actions/people";
 import { ROLE_LABELS } from "@/lib/yip/constants";
 
 interface ParticipantSession {

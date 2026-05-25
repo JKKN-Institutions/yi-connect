@@ -28,7 +28,7 @@ import {
   updateSchool,
   deleteSchool,
   type School as SchoolRow,
-} from "@/app/actions/yip/schools";
+} from "@/app/yip/actions/schools";
 
 type EnrichedSchool = SchoolRow & {
   total_participations: number;

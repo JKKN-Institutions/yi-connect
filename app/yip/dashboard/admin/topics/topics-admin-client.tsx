@@ -30,7 +30,7 @@ import {
   adminDeactivateTopic,
   adminReactivateTopic,
   type AdminTopic,
-} from "@/app/actions/yip/admin-topics";
+} from "@/app/yip/actions/admin-topics";
 
 type FormState = {
   category: "central" | "regional";

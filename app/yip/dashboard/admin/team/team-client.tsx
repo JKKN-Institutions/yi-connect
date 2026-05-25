@@ -25,7 +25,7 @@ import {
   adminLinkUser,
   adminUnlinkUser,
   type TeamMember,
-} from "@/app/actions/yip/admin-team";
+} from "@/app/yip/actions/admin-team";
 
 type FormState = {
   full_name: string;

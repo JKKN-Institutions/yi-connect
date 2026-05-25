@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/yip/supabase/server";
-import { getResults } from "@/app/actions/yip/results";
+import { getResults } from "@/app/yip/actions/results";
 import { ResultsClient } from "./results-client";
 
 export default async function ResultsPage({

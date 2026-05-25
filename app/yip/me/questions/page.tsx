@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useTransition } from "react";
 import { MINISTRIES } from "@/lib/yip/constants";
-import { submitQuestion, getMyQuestions } from "@/app/actions/yip/questions";
+import { submitQuestion, getMyQuestions } from "@/app/yip/actions/questions";
 import { Card, CardContent } from "@/components/yip/ui/card";
 import { Button } from "@/components/yip/ui/button";
 import { Textarea } from "@/components/yip/ui/textarea";
@@ -21,7 +21,7 @@ import { toast } from "sonner";
 import type { Tables, Database } from "@/types/yip/database";
 
 type Question = Tables<"questions">;
-type MinistryType = Database["public"]["Enums"]["ministry_type"];
+type MinistryType = Database["yip"]["Enums"]["ministry_type"];
 
 // ─── Session parsing (client-side) ──────────────────────────────
 

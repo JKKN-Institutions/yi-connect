@@ -33,7 +33,7 @@ import {
   type AdminSeason,
   type SeasonInput,
   type SeasonStats,
-} from "@/app/actions/yip/admin-seasons";
+} from "@/app/yip/actions/admin-seasons";
 
 type StatsMap = Record<string, SeasonStats>;
 

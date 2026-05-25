@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { createServiceClient } from "@/lib/yip/supabase/server";
-import { listMotions } from "@/app/actions/yip/motions";
+import { listMotions } from "@/app/yip/actions/motions";
 import { MotionsClient } from "./motions-client";
 
 export default async function MotionsPage({

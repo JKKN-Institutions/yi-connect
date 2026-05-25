@@ -10,10 +10,10 @@ import {
   getScoreableParticipants,
   submitScore,
   type CurrentSpeakerInfo,
-} from "@/app/actions/yip/scoring";
+} from "@/app/yip/actions/scoring";
 import { ROLE_LABELS, ROLE_COLORS, PARTY_COLORS } from "@/lib/yip/constants";
 import { Loader2, Mic, Users, ChevronDown, ChevronUp, Lock } from "lucide-react";
-import { useOfflineSync } from "@/hooks/yip/use-offline-sync";
+import { useOfflineSync } from "@/lib/yip/hooks/use-offline-sync";
 import { OfflineSyncBadge } from "@/components/yip/scoring/offline-sync-badge";
 import type { RubricCriterionShape } from "@/lib/yip/rubric";
 
@@ -186,7 +186,7 @@ function JuryScoringClientInner({
     }
 
     const channel = supabase
-      .channel(`jury-event-${eventId}`)
+      .channel(`yip:jury-event:${eventId}`)
       .on(
         "postgres_changes",
         {

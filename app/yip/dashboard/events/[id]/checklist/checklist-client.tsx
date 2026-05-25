@@ -9,7 +9,7 @@ import {
   toggleChecklistItem,
   seedChecklistForEvent,
   type ChecklistItem,
-} from "@/app/actions/yip/checklist";
+} from "@/app/yip/actions/checklist";
 
 const CATEGORY_ORDER = [
   "Pre-Session Preparation",

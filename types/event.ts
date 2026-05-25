@@ -476,7 +476,8 @@ export const EVENT_CATEGORIES: Record<EventCategory, string> = {
   conference: 'Conference',
   webinar: 'Webinar',
   other: 'Other',
-  industrial_visit: 'Industrial Visit'
+  industrial_visit: 'Industrial Visit',
+  summit: 'National Summit',
 };
 
 export const RSVP_STATUSES: Record<RSVPStatus, string> = {

@@ -33,8 +33,8 @@ import {
   setQueueOrder,
   bulkApprove,
   bulkReject,
-} from "@/app/actions/yip/questions";
-import type { QuestionWithSubmitter } from "@/app/actions/yip/questions";
+} from "@/app/yip/actions/questions";
+import type { QuestionWithSubmitter } from "@/app/yip/actions/questions";
 import { toast } from "sonner";
 
 // ─── Types & Helpers ────────────────────────────────────────────

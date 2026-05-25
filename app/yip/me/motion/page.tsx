@@ -4,7 +4,7 @@ import { createServiceClient } from "@/lib/yip/supabase/server";
 import {
   getMyMotions,
   getEventMotionCutoff,
-} from "@/app/actions/yip/motions";
+} from "@/app/yip/actions/motions";
 import { MotionClient } from "./motion-client";
 
 interface ParticipantSession {

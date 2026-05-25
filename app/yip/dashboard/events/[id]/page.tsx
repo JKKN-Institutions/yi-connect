@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { getEvent } from "@/app/actions/yip/events";
+import { getEvent } from "@/app/yip/actions/events";
 import { Badge } from "@/components/yip/ui/badge";
 import {
   CalendarDays,

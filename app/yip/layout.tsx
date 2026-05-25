@@ -1,6 +1,9 @@
 import type { Metadata, Viewport } from "next";
+import Script from "next/script";
 import { Playfair_Display, DM_Sans, JetBrains_Mono } from "next/font/google";
 import { PWARegister } from "@/components/yip/pwa-register";
+import { YipBrandHeader } from "@/components/yip/brand/Header";
+import { YipBrandFooter } from "@/components/yip/brand/Footer";
 
 const playfair = Playfair_Display({
   variable: "--font-heading",
@@ -20,31 +23,83 @@ const jetbrainsMono = JetBrains_Mono({
   weight: ["400", "500", "700"],
 });
 
+export const viewport: Viewport = {
+  themeColor: "#FF9933",
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+};
+
 export const metadata: Metadata = {
-  title: "YIP Platform — Young Indians Parliament",
-  description:
-    "Empowering youth through democratic engagement. A mock parliament platform for school students by Young Indians (Yi), CII.",
   manifest: "/yip/manifest.json",
+  icons: {
+    icon: [
+      { url: "/yip/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/yip/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [
+      { url: "/yip/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+    ],
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
     title: "YIP",
   },
-};
-
-export const viewport: Viewport = {
-  width: "device-width",
-  initialScale: 1,
-  viewportFit: "cover",
-  themeColor: "#FF9933",
+  title: {
+    default: "YIP — Young Indians Parliament",
+    template: "%s · YIP",
+  },
+  description:
+    "Empowering youth through democratic engagement. A mock parliament platform for school students (Classes 9-12) by Young Indians (Yi), CII.",
+  keywords: [
+    "Young Indians",
+    "Yi",
+    "CII",
+    "YIP",
+    "Young Indians Parliament",
+    "mock parliament",
+    "school students",
+    "India",
+    "Thalir",
+    "Bharat Rising",
+  ],
+  authors: [{ name: "Young Indians (Yi), CII" }],
+  openGraph: {
+    title: "YIP — Young Indians Parliament",
+    description:
+      "Empowering youth through democratic engagement. A mock parliament platform for school students.",
+    type: "website",
+    locale: "en_IN",
+    siteName: "YIP",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "YIP — Young Indians Parliament",
+    description: "Mock parliament platform for school students by Yi · CII.",
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
+  formatDetection: {
+    telephone: false,
+    email: false,
+    address: false,
+  },
 };
 
 /**
- * YIP nested layout (Phase D port).
+ * YIP nested layout — brand takeover for the /yip module.
  *
  * Root <html>/<body> live in app/layout.tsx (yi-connect's root). This is a
- * route-segment layout — only wraps children and applies YIP-scoped font
- * CSS variables + the PWA registration script.
+ * route-segment layout — wraps children with:
+ *   - YIP-scoped PWA metadata (manifest, theme color, icons)
+ *   - Font CSS variables (Playfair / DM Sans / JetBrains Mono)
+ *   - Brand header + footer (saffron/white/green)
+ *   - Service-worker registration (scoped to /yip/)
+ *
+ * Pattern mirrors app/yi-future/layout.tsx (Phase D nested-mount pattern).
  */
 export default function YipLayout({
   children,
@@ -52,11 +107,29 @@ export default function YipLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <div
-      className={`${playfair.variable} ${dmSans.variable} ${jetbrainsMono.variable} min-h-full flex flex-col`}
-    >
-      {children}
-      <PWARegister />
-    </div>
+    <>
+      {/* React 19 hoists <meta>/<link> into <head> from anywhere */}
+      <meta name="mobile-web-app-capable" content="yes" />
+      <a href="#yip-main" className="skip-link sr-only focus:not-sr-only">
+        Skip to main content
+      </a>
+      <div
+        className={`${playfair.variable} ${dmSans.variable} ${jetbrainsMono.variable} flex min-h-screen flex-col bg-white antialiased`}
+      >
+        <YipBrandHeader />
+        <main id="yip-main" className="flex-1">
+          {children}
+        </main>
+        <YipBrandFooter />
+        <PWARegister />
+      </div>
+      <Script id="yip-sw-reg" strategy="afterInteractive">
+        {`if ('serviceWorker' in navigator) {
+          window.addEventListener('load', function () {
+            navigator.serviceWorker.register('/yip/sw.js', { scope: '/yip/' }).catch(function () {});
+          });
+        }`}
+      </Script>
+    </>
   );
 }

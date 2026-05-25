@@ -29,7 +29,7 @@ import {
   markFeePaid,
   markFeeUnpaid,
   type ParticipantFee,
-} from "@/app/actions/yip/fees";
+} from "@/app/yip/actions/fees";
 
 type Participant = {
   id: string;

@@ -1,4 +1,4 @@
-import { listTopics } from "@/app/actions/yip/topics";
+import { listTopics } from "@/app/yip/actions/topics";
 import { TopicsClient } from "./topics-client";
 
 export default async function TopicsPage() {

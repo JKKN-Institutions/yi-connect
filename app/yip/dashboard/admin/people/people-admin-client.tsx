@@ -33,7 +33,7 @@ import {
   restorePerson,
   mergePeople,
   type Person,
-} from "@/app/actions/yip/people";
+} from "@/app/yip/actions/people";
 
 type FormState = {
   full_name: string;

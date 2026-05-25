@@ -40,7 +40,7 @@ import {
   recordMinisterResponse,
   deleteMotion,
   type Motion,
-} from "@/app/actions/yip/motions";
+} from "@/app/yip/actions/motions";
 
 type Participant = {
   id: string;

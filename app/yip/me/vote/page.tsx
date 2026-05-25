@@ -15,12 +15,12 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/yip/utils";
 import { PARTY_COLORS, ROLE_LABELS } from "@/lib/yip/constants";
-import { useVoteSession } from "@/hooks/yip/use-vote-session";
+import { useVoteSession } from "@/lib/yip/hooks/use-vote-session";
 import {
   castVote,
   getSpeakerCandidates,
   type VoteCandidate,
-} from "@/app/actions/yip/voting";
+} from "@/app/yip/actions/voting";
 import { createClient } from "@/lib/yip/supabase/client";
 
 // ─── Session parsing (client-side) ──────────────────────────────

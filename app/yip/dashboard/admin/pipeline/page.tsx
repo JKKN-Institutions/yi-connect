@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/yip/supabase/server";
-import { getAllSeasons } from "@/app/actions/yip/pipeline";
+import { getAllSeasons } from "@/app/yip/actions/pipeline";
 import { PipelineClient } from "./pipeline-client";
 
 export default async function PipelinePage() {

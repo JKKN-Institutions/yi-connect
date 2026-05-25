@@ -3,7 +3,7 @@ import { createServiceClient } from "@/lib/yip/supabase/server";
 import {
   listRegistrations,
   getRegistrationStats,
-} from "@/app/actions/yip/registrations";
+} from "@/app/yip/actions/registrations";
 import { RegistrationsClient } from "./registrations-client";
 
 export default async function RegistrationsPage({

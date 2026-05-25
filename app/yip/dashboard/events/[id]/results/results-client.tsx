@@ -2,13 +2,13 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { publishResults, unpublishResults } from "@/app/actions/yip/results";
-import type { ResultWithParticipant } from "@/app/actions/yip/results";
+import { publishResults, unpublishResults } from "@/app/yip/actions/results";
+import type { ResultWithParticipant } from "@/app/yip/actions/results";
 import {
   markQualified,
   unmarkQualified,
   getEventQualificationData,
-} from "@/app/actions/yip/pipeline";
+} from "@/app/yip/actions/pipeline";
 import { ROLE_LABELS, PARTY_COLORS, MINISTRIES } from "@/lib/yip/constants";
 import { Badge } from "@/components/yip/ui/badge";
 import { Button } from "@/components/yip/ui/button";
@@ -497,7 +497,7 @@ export function ResultsClient({
             variant="outline"
             size="sm"
             onClick={async () => {
-              const mod = await import("@/app/actions/yip/post-session-report");
+              const mod = await import("@/app/yip/actions/post-session-report");
               const res = await mod.generatePostSessionReport(eventId);
               if (!res.success) {
                 alert(res.error);

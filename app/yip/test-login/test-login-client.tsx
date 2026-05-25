@@ -23,7 +23,7 @@ import {
   loginAsJury,
   loginAsOrganizer,
   type TestAccount,
-} from "@/app/actions/yip/test-login";
+} from "@/app/yip/actions/test-login";
 
 export function TestLoginClient({
   students,

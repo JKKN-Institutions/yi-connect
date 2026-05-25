@@ -25,17 +25,17 @@ import {
   motionMeta,
   type MotionType,
 } from "@/lib/yip/motions";
-import type { Motion } from "@/app/actions/yip/motions";
-import { raiseMotion } from "@/app/actions/yip/motions";
+import type { Motion } from "@/app/yip/actions/motions";
+import { raiseMotion } from "@/app/yip/actions/motions";
 import type { Database } from "@/types/yip/database";
 
-type MinistryType = Database["public"]["Enums"]["ministry_type"];
+type MinistryType = Database["yip"]["Enums"]["ministry_type"];
 
 interface MotionClientProps {
   eventId: string;
   participantId: string;
-  participantRole: Database["public"]["Enums"]["parliament_role"] | null;
-  partySide: Database["public"]["Enums"]["party_side"] | null;
+  participantRole: Database["yip"]["Enums"]["parliament_role"] | null;
+  partySide: Database["yip"]["Enums"]["party_side"] | null;
   myMotions: Motion[];
   cutoffAt: string | null;
 }

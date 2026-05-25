@@ -155,7 +155,7 @@ export default async function ParticipantPage() {
 
   // Fetch agenda items (mode aligned with handbook page 19 — party vs committee)
   const { data: agendaItems } = await supabase
-    .from("agenda_items")
+    .from("agenda")
     .select("day, sequence_order, title, duration_minutes, agenda_type, mode")
     .eq("event_id", event.id)
     .order("day")

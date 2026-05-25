@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createEvent } from "@/app/actions/yip/events";
+import { createEvent } from "@/app/yip/actions/events";
 import { COMMITTEES } from "@/lib/yip/constants";
 import { Button } from "@/components/yip/ui/button";
 import { Input } from "@/components/yip/ui/input";

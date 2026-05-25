@@ -5,8 +5,8 @@ import Link from "next/link";
 import {
   getSeasonPipeline,
   promoteToEvent,
-} from "@/app/actions/yip/pipeline";
-import type { Season, SeasonPipelineData, SeasonEvent } from "@/app/actions/yip/pipeline";
+} from "@/app/yip/actions/pipeline";
+import type { Season, SeasonPipelineData, SeasonEvent } from "@/app/yip/actions/pipeline";
 import { Badge } from "@/components/yip/ui/badge";
 import { Button } from "@/components/yip/ui/button";
 import { Card, CardContent } from "@/components/yip/ui/card";

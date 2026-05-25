@@ -52,7 +52,7 @@ import {
   bulkSetVisibility,
   deleteMedia,
   bulkDeleteMedia,
-} from "@/app/actions/yip/media";
+} from "@/app/yip/actions/media";
 
 type Stats = {
   total: number;

@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/yip/supabase/server";
-import { getBills } from "@/app/actions/yip/bills";
+import { getBills } from "@/app/yip/actions/bills";
 import { BillsClient } from "./bills-client";
 
 export default async function BillsPage({

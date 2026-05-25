@@ -1,7 +1,7 @@
 "use client";
 
 import { Cloud, CloudOff, CheckCircle2, Loader2 } from "lucide-react";
-import type { SyncState } from "@/hooks/yip/use-offline-sync";
+import type { SyncState } from "@/lib/yip/hooks/use-offline-sync";
 
 /**
  * Mobile-first status pill that tells jurors whether their drafts are safe.

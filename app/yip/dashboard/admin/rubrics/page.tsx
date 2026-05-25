@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/yip/supabase/server";
-import { listRubrics } from "@/app/actions/yip/admin-rubrics";
+import { listRubrics } from "@/app/yip/actions/admin-rubrics";
 import { RubricsClient } from "./rubrics-client";
 
 export default async function AdminRubricsPage() {

@@ -27,7 +27,7 @@ import { toast } from "sonner";
 import {
   exportFeedbackCSV,
   type FeedbackStats,
-} from "@/app/actions/yip/feedback";
+} from "@/app/yip/actions/feedback";
 import {
   RESPONDENT_LABELS,
   RESPONDENT_COLORS,

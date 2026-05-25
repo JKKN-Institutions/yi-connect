@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { importParticipants } from "@/app/actions/yip/participants";
+import { importParticipants } from "@/app/yip/actions/participants";
 import { Button } from "@/components/yip/ui/button";
 import {
   Dialog,

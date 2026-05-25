@@ -24,7 +24,7 @@ import {
   wipeMockEvent,
   type MockDataStats,
   type MockEventSummary,
-} from "@/app/actions/yip/mock-data";
+} from "@/app/yip/actions/mock-data";
 import { MOCK_MARKER } from "@/lib/yip/mock-data";
 
 const TABLE_LABELS: Record<string, string> = {

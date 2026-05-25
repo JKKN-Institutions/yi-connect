@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getZoneSummary, listOrganizerProfiles } from "@/app/actions/yip/hierarchy";
+import { getZoneSummary, listOrganizerProfiles } from "@/app/yip/actions/hierarchy";
 import { Badge } from "@/components/yip/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/yip/ui/card";
 import { MapPin, Users, Trophy, ArrowUpRight, Globe, Crown } from "lucide-react";

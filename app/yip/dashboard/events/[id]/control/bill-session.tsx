@@ -27,8 +27,8 @@ import {
   getBills,
   setBillPresented,
   type BillWithMembers,
-} from "@/app/actions/yip/bills";
-import { openVote } from "@/app/actions/yip/voting";
+} from "@/app/yip/actions/bills";
+import { openVote } from "@/app/yip/actions/voting";
 
 // ─── Types ──────────────────────────────────────────────────────
 

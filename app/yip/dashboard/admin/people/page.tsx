@@ -1,4 +1,4 @@
-import { listPeople } from "@/app/actions/yip/people";
+import { listPeople } from "@/app/yip/actions/people";
 import { PeopleAdminClient } from "./people-admin-client";
 
 export default async function AdminPeoplePage() {

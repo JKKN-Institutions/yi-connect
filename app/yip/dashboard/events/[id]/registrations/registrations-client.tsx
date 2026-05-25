@@ -56,7 +56,7 @@ import {
   setIngestionEnabled,
   type Registration,
   type RegistrationStats,
-} from "@/app/actions/yip/registrations";
+} from "@/app/yip/actions/registrations";
 
 const MS_FORMS_LINK = "https://forms.cloud.microsoft/r/LbeKg6k9Jh";
 

@@ -8,7 +8,7 @@ import {
   checkInParticipant,
   checkOutParticipant,
   bulkCheckIn,
-} from "@/app/actions/yip/participants";
+} from "@/app/yip/actions/participants";
 import { ROLE_LABELS, PARTY_COLORS } from "@/lib/yip/constants";
 import { Button } from "@/components/yip/ui/button";
 import { Input } from "@/components/yip/ui/input";

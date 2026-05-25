@@ -9,7 +9,7 @@ import {
   getScoreForParticipant,
   submitScore,
   type ScoreWithParticipant,
-} from "@/app/actions/yip/scoring";
+} from "@/app/yip/actions/scoring";
 import { Loader2, ArrowLeft, ClipboardList } from "lucide-react";
 import { Button } from "@/components/yip/ui/button";
 

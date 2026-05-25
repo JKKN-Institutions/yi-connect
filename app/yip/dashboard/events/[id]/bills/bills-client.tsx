@@ -30,7 +30,7 @@ import {
   approveBill,
   rejectBill,
   type BillWithMembers,
-} from "@/app/actions/yip/bills";
+} from "@/app/yip/actions/bills";
 
 // ─── Status Config ──────────────────────────────────────────────
 

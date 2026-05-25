@@ -7,7 +7,7 @@ import {
   lockAllocation,
   unlockAllocation,
   updateParticipantAssignment,
-} from "@/app/actions/yip/allocation";
+} from "@/app/yip/actions/allocation";
 import {
   MINISTRIES,
   COMMITTEES,

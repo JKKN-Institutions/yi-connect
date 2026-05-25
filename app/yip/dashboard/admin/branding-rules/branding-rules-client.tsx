@@ -38,7 +38,7 @@ import {
   type AdminBrandingRule,
   type AdminBrandingSeverity,
   type BrandingRuleInput,
-} from "@/app/actions/yip/admin-branding-rules";
+} from "@/app/yip/actions/admin-branding-rules";
 
 // ─── Display meta ─────────────────────────────────────────────────
 

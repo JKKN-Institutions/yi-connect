@@ -23,11 +23,11 @@ import {
   getCurrentQuestion,
   getQueuedQuestions,
   getCompletedQuestions,
-} from "@/app/actions/yip/questions";
+} from "@/app/yip/actions/questions";
 import type {
   CurrentQuestionInfo,
   QuestionWithSubmitter,
-} from "@/app/actions/yip/questions";
+} from "@/app/yip/actions/questions";
 import { toast } from "sonner";
 
 function getMinistryLabel(key: string): string {

@@ -25,7 +25,7 @@ import {
   assignParticipantsToParty,
   electPartyLeader,
   type Party,
-} from "@/app/actions/yip/parties";
+} from "@/app/yip/actions/parties";
 
 type Participant = {
   id: string;

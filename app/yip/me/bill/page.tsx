@@ -35,7 +35,7 @@ import {
   getBillForParty,
   getBillCommitteeMembers,
   type BillCommitteeMember,
-} from "@/app/actions/yip/bills";
+} from "@/app/yip/actions/bills";
 import type { Tables } from "@/types/yip/database";
 
 type Bill = Tables<"bills">;

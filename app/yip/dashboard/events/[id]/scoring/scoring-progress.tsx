@@ -6,8 +6,8 @@ import {
   lockScores,
   unlockScores,
   computeResults,
-} from "@/app/actions/yip/results";
-import type { ScoringProgressData } from "@/app/actions/yip/results";
+} from "@/app/yip/actions/results";
+import type { ScoringProgressData } from "@/app/yip/actions/results";
 import { ROLE_LABELS, PARTY_COLORS } from "@/lib/yip/constants";
 import { Badge } from "@/components/yip/ui/badge";
 import { Button } from "@/components/yip/ui/button";

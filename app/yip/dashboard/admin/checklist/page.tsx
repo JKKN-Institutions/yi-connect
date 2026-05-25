@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/yip/supabase/server";
-import { adminListChecklistTemplate } from "@/app/actions/yip/admin-checklist";
+import { adminListChecklistTemplate } from "@/app/yip/actions/admin-checklist";
 import { ChecklistTemplateClient } from "./checklist-template-client";
 
 export const dynamic = "force-dynamic";

@@ -184,6 +184,7 @@ export async function clearProblem(teamId: string): Promise<ActionResult> {
     .eq("id", teamId);
   if (error) return { ok: false, error: error.message };
   revalidatePath(`/yi-future/chapter/teams/${teamId}`);
+  revalidatePath("/yi-future/me/team");
   return { ok: true };
 }
 

@@ -8,6 +8,7 @@ import {
   assignJuryToTeam,
   unassignJuryFromTeam,
   autoAllocateJury,
+  updateJuryTrack,
 } from "@/app/yi-future/actions/jury";
 import {
   JURY_ARCHETYPES,
@@ -16,6 +17,13 @@ import {
 import type { Database } from "@/types/yi-future/database";
 
 type JuryArchetype = Database["future"]["Enums"]["jury_archetype"];
+
+type Track = {
+  id: string;
+  name: string;
+  slug: string;
+  icon: string | null;
+};
 
 type Jury = {
   id: string;
@@ -27,6 +35,8 @@ type Jury = {
   archetype: JuryArchetype;
   access_code: string;
   is_active: boolean | null;
+  track_id: string | null;
+  tracks: Track | null;
   jury_team_assignments: {
     team_id: string;
     teams: { team_name: string; chapter_id: string } | null;
@@ -40,18 +50,11 @@ async function getJury(
   chapterId: string
 ): Promise<Jury[]> {
   const svc = await createServiceClient();
-  // Note: jury_assignments has no chapter_id (jury are edition-scoped), but
-  // teams DO have chapter_id. We must scope the nested teams join to the
-  // current chapter, otherwise a jury_team_assignments row pointing at a
-  // team in a different chapter (cross-chapter mis-assignment, accidental
-  // or not) will surface here as a "REVIEWING" entry. Using !inner on
-  // teams + .eq("...teams.chapter_id") makes PostgREST drop the assignment
-  // row entirely when the joined team is in another chapter.
   const { data } = await svc
     .schema("future")
     .from("jury_assignments")
     .select(
-      "id, jury_name, jury_title, organization, email, phone, archetype, access_code, is_active, jury_team_assignments(team_id, teams!inner(team_name, chapter_id))"
+      "id, jury_name, jury_title, organization, email, phone, archetype, access_code, is_active, track_id, tracks(id, name, slug, icon), jury_team_assignments(team_id, teams!inner(team_name, chapter_id))"
     )
     .eq("edition_id", editionId)
     .eq("jury_team_assignments.teams.chapter_id", chapterId)
@@ -72,6 +75,17 @@ async function getTeams(
     .eq("edition_id", editionId)
     .order("team_name", { ascending: true });
   return (data as unknown as Team[]) ?? [];
+}
+
+async function getTracks(editionId: string): Promise<Track[]> {
+  const svc = await createServiceClient();
+  const { data } = await svc
+    .schema("future")
+    .from("tracks")
+    .select("id, name, slug, icon")
+    .eq("edition_id", editionId)
+    .order("display_order", { ascending: true });
+  return (data as unknown as Track[]) ?? [];
 }
 
 async function removeJury(formData: FormData) {
@@ -100,6 +114,13 @@ async function unassign(formData: FormData) {
   );
 }
 
+async function changeTrack(formData: FormData) {
+  "use server";
+  const juryId = String(formData.get("jury_id") ?? "");
+  const trackId = String(formData.get("track_id") ?? "");
+  await updateJuryTrack(juryId, trackId || null);
+}
+
 const ARCHETYPE_COLOR: Record<JuryArchetype, string> = {
   policy: "bg-yi-gold/10 text-yi-gold",
   industry: "bg-navy/10 text-navy",
@@ -111,9 +132,10 @@ export default async function JuryPage() {
   const ctx = await getChapterContext();
   if (!ctx) redirect("/yi-future/chapter");
 
-  const [jury, teams] = await Promise.all([
+  const [jury, teams, tracks] = await Promise.all([
     getJury(ctx.editionId, ctx.chapterId),
     getTeams(ctx.chapterId, ctx.editionId),
+    getTracks(ctx.editionId),
   ]);
 
   const archCount: Record<JuryArchetype, number> = {
@@ -123,6 +145,17 @@ export default async function JuryPage() {
     academic: 0,
   };
   for (const j of jury) archCount[j.archetype]++;
+
+  // Count jury per track
+  const trackJuryCount = new Map<string, number>();
+  for (const j of jury) {
+    if (j.track_id) {
+      trackJuryCount.set(
+        j.track_id,
+        (trackJuryCount.get(j.track_id) ?? 0) + 1
+      );
+    }
+  }
 
   async function autoAllocate() {
     "use server";
@@ -139,6 +172,12 @@ export default async function JuryPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Link
+            href="/yi-future/chapter/jury/categories"
+            className="px-3 py-2 text-xs font-semibold rounded-md border border-navy/20 text-navy/70 hover:border-navy/40"
+          >
+            Track categories
+          </Link>
           {jury.length >= 3 && teams.length > 0 && (
             <form action={autoAllocate}>
               <button
@@ -175,6 +214,34 @@ export default async function JuryPage() {
         ))}
       </div>
 
+      {/* Track assignment summary */}
+      {tracks.length > 0 && (
+        <div className="bg-white border border-navy/10 rounded-lg p-4">
+          <div className="text-[10px] font-semibold uppercase tracking-widest text-navy/50 mb-2">
+            Jury per track
+          </div>
+          <div className="flex flex-wrap gap-3">
+            {tracks.map((t) => (
+              <div key={t.id} className="flex items-center gap-1.5 text-sm">
+                {t.icon && <span>{t.icon}</span>}
+                <span className="font-medium text-navy">{t.name}</span>
+                <span className="text-navy/50">
+                  ({trackJuryCount.get(t.id) ?? 0})
+                </span>
+              </div>
+            ))}
+            <div className="flex items-center gap-1.5 text-sm text-navy/40">
+              <span>Unassigned</span>
+              <span>
+                (
+                {jury.filter((j) => !j.track_id).length}
+                )
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {jury.length === 0 ? (
         <div className="bg-white border border-navy/10 rounded-lg p-8 text-center text-navy/50 text-sm">
           No jury members yet.
@@ -201,19 +268,58 @@ export default async function JuryPage() {
                     {j.email && j.phone && " · "}
                     {j.phone}
                   </div>
-                  <span
-                    className={`mt-2 inline-block text-[10px] font-semibold uppercase tracking-widest px-2 py-0.5 rounded-full ${ARCHETYPE_COLOR[j.archetype]}`}
-                  >
-                    {JURY_ARCHETYPE_LABELS[j.archetype]}
-                  </span>
+                  <div className="flex items-center gap-2 mt-2">
+                    <span
+                      className={`inline-block text-[10px] font-semibold uppercase tracking-widest px-2 py-0.5 rounded-full ${ARCHETYPE_COLOR[j.archetype]}`}
+                    >
+                      {JURY_ARCHETYPE_LABELS[j.archetype]}
+                    </span>
+                    {j.tracks && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-widest px-2 py-0.5 rounded-full bg-navy/5 text-navy/70">
+                        {j.tracks.icon && <span>{j.tracks.icon}</span>}
+                        {j.tracks.name}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <code className="text-xs font-mono font-bold tracking-wider bg-yi-gold/10 text-yi-gold px-2 py-0.5 rounded">
                   {j.access_code}
                 </code>
               </div>
 
+              {/* Track assignment dropdown */}
+              {tracks.length > 0 && (
+                <div className="mt-3 pt-3 border-t border-navy/10">
+                  <div className="text-[10px] font-semibold uppercase tracking-widest text-navy/40 mb-1.5">
+                    Track / Category
+                  </div>
+                  <form action={changeTrack} className="flex gap-2">
+                    <input type="hidden" name="jury_id" value={j.id} />
+                    <select
+                      name="track_id"
+                      defaultValue={j.track_id ?? ""}
+                      className="flex-1 px-2 py-1 text-xs border border-navy/20 rounded bg-white"
+                    >
+                      <option value="">— no track —</option>
+                      {tracks.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.icon ? `${t.icon} ` : ""}
+                          {t.name}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="submit"
+                      className="px-2 py-1 text-xs font-semibold bg-navy/10 text-navy rounded hover:bg-navy/20"
+                    >
+                      Set
+                    </button>
+                  </form>
+                </div>
+              )}
+
               {/* Team assignments */}
-              <div className="mt-4 pt-3 border-t border-navy/10">
+              <div className="mt-3 pt-3 border-t border-navy/10">
                 <div className="text-[10px] font-semibold uppercase tracking-widest text-navy/40 mb-2">
                   Reviewing ({j.jury_team_assignments.length})
                 </div>

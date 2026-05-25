@@ -86,6 +86,51 @@ export default async function DelegateJourneyPage() {
   const me = await getDelegate(session.id);
   if (!me) redirect("/yi-future/me");
 
+  /* ── Gate: team must have a problem statement ── */
+  const svc = await createServiceClient();
+  const { data: membership } = await svc
+    .schema("future")
+    .from("team_members")
+    .select("team_id, teams(problem_statement_id)")
+    .eq("delegate_id", session.id)
+    .limit(1)
+    .maybeSingle();
+
+  const team = (membership as unknown as { teams: { problem_statement_id: string | null } } | null)?.teams;
+  const hasProblem = !!team?.problem_statement_id;
+
+  if (!hasProblem) {
+    return (
+      <div className="space-y-5">
+        <div>
+          <Link
+            href="/yi-future/me"
+            className="text-xs font-semibold tracking-widest text-navy/50 hover:text-navy uppercase"
+          >
+            &larr; Dashboard
+          </Link>
+          <h2 className="mt-1 text-2xl font-bold text-navy">Your journey</h2>
+        </div>
+        <div className="bg-white border border-navy/10 rounded-lg p-6 text-center">
+          <div className="text-4xl mb-2">🔒</div>
+          <h2 className="text-lg font-bold text-navy">
+            Journey unlocks after problem selection
+          </h2>
+          <p className="mt-2 text-sm text-navy/60">
+            Your team needs to pick a problem statement before the 90-day
+            journey begins.
+          </p>
+          <Link
+            href="/yi-future/me/team"
+            className="mt-4 inline-block text-sm text-navy font-semibold hover:text-yi-gold"
+          >
+            Go to team page &rarr;
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   const [events, attendance] = await Promise.all([
     getEvents(me.chapter_id, me.edition_id),
     getAttendance(session.id),

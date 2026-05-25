@@ -1203,6 +1203,7 @@ export type Database = {
           phone: string | null
           photo_url: string | null
           scope: string
+          track_id: string | null
         }
         Insert: {
           access_code: string
@@ -1220,6 +1221,7 @@ export type Database = {
           phone?: string | null
           photo_url?: string | null
           scope?: string
+          track_id?: string | null
         }
         Update: {
           access_code?: string
@@ -1237,6 +1239,7 @@ export type Database = {
           phone?: string | null
           photo_url?: string | null
           scope?: string
+          track_id?: string | null
         }
         Relationships: [
           {
@@ -1251,6 +1254,13 @@ export type Database = {
             columns: ["event_id"]
             isOneToOne: false
             referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "jury_assignments_track_id_fkey"
+            columns: ["track_id"]
+            isOneToOne: false
+            referencedRelation: "tracks"
             referencedColumns: ["id"]
           },
         ]

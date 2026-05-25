@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { JoinHeader } from "@/components/yi-future/brand/JoinHeader";
+import { createServiceClient } from "@/lib/yi-future/supabase/server";
 
 export const metadata: Metadata = {
   title: "You're in — Future 6.0",
@@ -14,6 +15,49 @@ export default async function ThankYouPage({
   const { email, code } = await searchParams;
   const cleanEmail = email?.trim();
   const accessCode = code?.trim();
+
+  /* ── Look up chapter chair contact from access code ── */
+  let chapterName: string | null = null;
+  let chairName: string | null = null;
+  let chairEmail: string | null = null;
+  let chairMobile: string | null = null;
+
+  if (accessCode) {
+    try {
+      const svc = await createServiceClient();
+      const { data: delegate } = await svc
+        .schema("future")
+        .from("delegates")
+        .select("chapter_id")
+        .eq("access_code", accessCode)
+        .maybeSingle();
+
+      if (delegate) {
+        const chapterId = (delegate as unknown as { chapter_id: string }).chapter_id;
+        const { data: chapter } = await svc
+          .schema("yi")
+          .from("chapters")
+          .select("name, chair_name, chair_email, chair_mobile")
+          .eq("id", chapterId)
+          .maybeSingle();
+
+        if (chapter) {
+          const ch = chapter as unknown as {
+            name: string;
+            chair_name: string | null;
+            chair_email: string | null;
+            chair_mobile: string | null;
+          };
+          chapterName = ch.name;
+          chairName = ch.chair_name;
+          chairEmail = ch.chair_email;
+          chairMobile = ch.chair_mobile;
+        }
+      }
+    } catch {
+      // Silently fail — the contact card will show the generic fallback
+    }
+  }
 
   return (
     <main className="min-h-screen bg-ivory flex flex-col">
@@ -85,13 +129,30 @@ export default async function ThankYouPage({
             </ol>
           </div>
 
-          {/* Contact info */}
+          {/* Chapter chair contact */}
           <div className="bg-white border border-navy/10 rounded-lg p-6 text-center">
-            <p className="text-xs text-navy/50 mb-1">
-              Questions? Reach out to your Yi chapter chair.
+            <p className="text-xs font-semibold uppercase tracking-widest text-navy/50 mb-2">
+              Your chapter contact
             </p>
+            {chapterName && (
+              <p className="font-bold text-navy">{chapterName}</p>
+            )}
+            {chairName && (
+              <p className="text-sm text-navy/70 mt-1">{chairName}</p>
+            )}
+            {chairEmail && (
+              <p className="text-sm text-navy/70">{chairEmail}</p>
+            )}
+            {chairMobile && (
+              <p className="text-sm text-navy/70">{chairMobile}</p>
+            )}
+            {!chairEmail && !chairMobile && (
+              <p className="text-xs text-navy/50 mt-1">
+                Reach out to your Yi chapter chair for any questions.
+              </p>
+            )}
             {cleanEmail && (
-              <p className="text-xs text-navy/50">
+              <p className="text-xs text-navy/50 mt-3 pt-3 border-t border-navy/10">
                 Confirmation will also be sent to{" "}
                 <strong className="text-navy">{cleanEmail}</strong>.
               </p>

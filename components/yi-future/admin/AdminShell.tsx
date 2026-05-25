@@ -8,6 +8,7 @@ import { ProgramWordmark } from "@/components/yi-future/brand/BrandHeader";
 export type NavItem = {
   label: string;
   href: string;
+  isHeader?: boolean;
 };
 
 export function AdminShell({
@@ -76,7 +77,16 @@ export function AdminShell({
 
       <nav className="flex-1 overflow-y-auto py-4">
         <ul className="space-y-0.5">
-          {items.map((item) => {
+          {items.map((item, idx) => {
+            if (item.isHeader) {
+              return (
+                <li key={`header-${idx}`}>
+                  <div className="text-[10px] font-bold uppercase tracking-widest text-ivory/40 pt-4 pb-1 px-4">
+                    {item.label}
+                  </div>
+                </li>
+              );
+            }
             const isActive =
               pathname === item.href ||
               (item.href !== "/" && pathname.startsWith(item.href + "/"));

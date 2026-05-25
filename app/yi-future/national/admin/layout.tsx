@@ -13,6 +13,7 @@ const NAV: NavItem[] = [
   { label: "Chapters", href: "/yi-future/national/admin/chapters" },
   { label: "Chairs", href: "/yi-future/national/admin/chairs" },
   { label: "Teams", href: "/yi-future/national/admin/teams" },
+  { label: "Delegates", href: "/yi-future/national/admin/delegates" },
   { label: "Unteamed Delegates", href: "/yi-future/national/admin/delegates/unteamed" },
   { label: "Metrics", href: "/yi-future/national/admin/metrics" },
   { label: "Whitepapers", href: "/yi-future/national/admin/whitepapers" },

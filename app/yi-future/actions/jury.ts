@@ -192,6 +192,113 @@ export async function unassignJuryFromTeam(
   return { ok: true, message: "Unassigned." };
 }
 
+// ─── UPDATE JURY TRACK (category) ──────────────────────────────────
+export async function updateJuryTrack(
+  juryId: string,
+  trackId: string | null
+): Promise<ActionResult> {
+  await requireAuth();
+  const svc = await createServiceClient();
+  const { error } = await svc
+    .schema("future")
+    .from("jury_assignments")
+    .update({ track_id: trackId || null })
+    .eq("id", juryId);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/yi-future/chapter/jury");
+  revalidatePath("/yi-future/chapter/jury/categories");
+  return { ok: true, message: "Track updated." };
+}
+
+// ─── AUTO-ASSIGN JURY TO TEAMS BY TRACK ────────────────────────────
+// For each track: every jury assigned to that track gets assigned to
+// every team whose problem_statement belongs to that track.
+export async function autoAssignJuryToTeams(
+  chapterId: string,
+  editionId: string
+): Promise<ActionResult> {
+  await requireAuth();
+  const svc = await createServiceClient();
+
+  // 1. Fetch all jury with a track_id set
+  const { data: juryRows } = await svc
+    .schema("future")
+    .from("jury_assignments")
+    .select("id, track_id")
+    .eq("edition_id", editionId)
+    .eq("is_active", true)
+    .not("track_id", "is", null);
+
+  const juryList = (juryRows as unknown as { id: string; track_id: string }[]) ?? [];
+  if (juryList.length === 0)
+    return { ok: false, error: "No jury members have a track assigned." };
+
+  // 2. Fetch teams with their problem_statement → track mapping
+  const { data: teamRows } = await svc
+    .schema("future")
+    .from("teams")
+    .select("id, problem_statement_id, problem_statements(track_id)")
+    .eq("chapter_id", chapterId)
+    .eq("edition_id", editionId)
+    .not("problem_statement_id", "is", null);
+
+  type TeamRow = {
+    id: string;
+    problem_statement_id: string;
+    problem_statements: { track_id: string } | null;
+  };
+  const teamList = (teamRows as unknown as TeamRow[]) ?? [];
+  if (teamList.length === 0)
+    return { ok: false, error: "No teams with problem statements found." };
+
+  // 3. Build jury-by-track and teams-by-track maps
+  const juryByTrack = new Map<string, string[]>();
+  for (const j of juryList) {
+    const arr = juryByTrack.get(j.track_id) ?? [];
+    arr.push(j.id);
+    juryByTrack.set(j.track_id, arr);
+  }
+
+  const teamsByTrack = new Map<string, string[]>();
+  for (const t of teamList) {
+    const trackId = t.problem_statements?.track_id;
+    if (!trackId) continue;
+    const arr = teamsByTrack.get(trackId) ?? [];
+    arr.push(t.id);
+    teamsByTrack.set(trackId, arr);
+  }
+
+  // 4. Create cross-product assignments per track
+  const rows: { jury_id: string; team_id: string }[] = [];
+  for (const [trackId, juryIds] of juryByTrack) {
+    const teamIds = teamsByTrack.get(trackId) ?? [];
+    for (const juryId of juryIds) {
+      for (const teamId of teamIds) {
+        rows.push({ jury_id: juryId, team_id: teamId });
+      }
+    }
+  }
+
+  if (rows.length === 0)
+    return {
+      ok: false,
+      error: "No matching track↔team combinations found.",
+    };
+
+  const { error } = await svc
+    .schema("future")
+    .from("jury_team_assignments")
+    .upsert(rows, { onConflict: "jury_id,team_id" });
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/yi-future/chapter/jury");
+  revalidatePath("/yi-future/chapter/jury/categories");
+  return {
+    ok: true,
+    message: `Created ${rows.length} assignments across ${juryByTrack.size} tracks.`,
+  };
+}
+
 // ─── AUTO ALLOCATE (bipartite with archetype diversity) ──────────
 export async function autoAllocateJury(
   chapterId: string,

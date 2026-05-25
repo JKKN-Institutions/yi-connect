@@ -81,8 +81,43 @@ export default async function MySubmissionsPage() {
           href="/yi-future/me"
           className="mt-4 inline-block text-sm text-navy font-semibold hover:text-yi-gold"
         >
-          ← Back to dashboard
+          &larr; Back to dashboard
         </Link>
+      </div>
+    );
+  }
+
+  /* ── Gate: team must have a problem statement ── */
+  if (!team.problem_statement_id) {
+    return (
+      <div className="space-y-5">
+        <div>
+          <Link
+            href="/yi-future/me"
+            className="text-xs font-semibold tracking-widest text-navy/50 hover:text-navy uppercase"
+          >
+            &larr; Dashboard
+          </Link>
+          <h2 className="mt-1 text-2xl font-bold text-navy">
+            Deliverables &middot; {team.team_name}
+          </h2>
+        </div>
+        <div className="bg-white border border-navy/10 rounded-lg p-6 text-center">
+          <div className="text-4xl mb-2">🔒</div>
+          <h2 className="text-lg font-bold text-navy">
+            Submissions unlock after problem selection
+          </h2>
+          <p className="mt-2 text-sm text-navy/60">
+            Your team needs to pick a problem statement before you can submit
+            deliverables.
+          </p>
+          <Link
+            href="/yi-future/me/team"
+            className="mt-4 inline-block text-sm text-navy font-semibold hover:text-yi-gold"
+          >
+            Go to team page &rarr;
+          </Link>
+        </div>
       </div>
     );
   }

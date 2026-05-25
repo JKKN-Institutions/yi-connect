@@ -4,6 +4,10 @@ import { AdminShell, type NavItem } from "@/components/yi-future/admin/AdminShel
 
 const NAV: NavItem[] = [
   { label: "Overview", href: "/yi-future/host" },
+  { label: "Chapter Prelim", href: "#", isHeader: true },
+  { label: "Prelim Teams", href: "/yi-future/host/prelim/teams" },
+  { label: "Prelim Scoring", href: "/yi-future/host/prelim/scoring" },
+  { label: "Regional Finale", href: "#", isHeader: true },
   { label: "Track", href: "/yi-future/host/track" },
   { label: "Finalists", href: "/yi-future/host/finalists" },
   { label: "Agenda · Day 1", href: "/yi-future/host/agenda/day1" },

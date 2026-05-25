@@ -30,7 +30,13 @@
 -- caller-role-RLS-aware.
 -- ═══════════════════════════════════════════════════════════════════════
 
-CREATE OR REPLACE VIEW yi_connect.chapters
+-- NOTE: CREATE OR REPLACE VIEW cannot drop columns from an existing view
+-- (Postgres error 42P16). We DROP and recreate. No objects depend on
+-- yi_connect.chapters (verified via pg_depend on 2026-05-24), so DROP
+-- without CASCADE is safe.
+DROP VIEW IF EXISTS yi_connect.chapters;
+
+CREATE VIEW yi_connect.chapters
 WITH (security_invoker = on)
 AS
 SELECT

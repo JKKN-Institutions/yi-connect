@@ -294,6 +294,39 @@ export default async function ChapterSetupPage() {
               </>
             )}
           </div>
+          {/* ─── Finale dates ──────────────────────────────────── */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label
+                htmlFor="finale_start_date"
+                className="block text-xs font-semibold uppercase tracking-widest text-navy/70 mb-1.5"
+              >
+                Finale start date
+              </label>
+              <input
+                id="finale_start_date"
+                name="finale_start_date"
+                type="date"
+                defaultValue={chapter?.finale_start_date ?? ""}
+                className="w-full px-3 py-2 border border-navy/20 rounded-md text-sm bg-white"
+              />
+            </div>
+            <div>
+              <label
+                htmlFor="finale_end_date"
+                className="block text-xs font-semibold uppercase tracking-widest text-navy/70 mb-1.5"
+              >
+                Finale end date
+              </label>
+              <input
+                id="finale_end_date"
+                name="finale_end_date"
+                type="date"
+                defaultValue={chapter?.finale_end_date ?? ""}
+                className="w-full px-3 py-2 border border-navy/20 rounded-md text-sm bg-white"
+              />
+            </div>
+          </div>
           <div className="flex justify-end pt-2">
             <button
               type="submit"

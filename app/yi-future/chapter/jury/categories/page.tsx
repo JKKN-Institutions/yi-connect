@@ -118,16 +118,15 @@ export default async function JuryCategoriesPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {canAutoAssign && (
-            <form action={handleAutoAssign}>
-              <button
-                type="submit"
-                className="px-4 py-2 rounded-md bg-yi-gold text-navy text-sm font-semibold hover:bg-yi-gold/90 transition-colors"
-              >
-                Auto-assign all by track
-              </button>
-            </form>
-          )}
+          <form action={handleAutoAssign}>
+            <button
+              type="submit"
+              disabled={!canAutoAssign}
+              className="px-4 py-2 rounded-md bg-[#F5A623] text-navy text-sm font-bold hover:bg-[#F5A623]/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Auto-assign all by track
+            </button>
+          </form>
           <Link
             href="/yi-future/chapter/jury"
             className="px-4 py-2 rounded-md border border-navy/20 text-navy text-sm font-semibold hover:border-navy/40"

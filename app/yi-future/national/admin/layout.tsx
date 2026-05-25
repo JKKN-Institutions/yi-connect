@@ -23,7 +23,6 @@ const NAV: NavItem[] = [
   { label: "Downloads", href: "/yi-future/national/admin/downloads" },
   { label: "Broadcast", href: "/yi-future/national/admin/broadcast" },
   { label: "Admins", href: "/yi-future/national/admin/admins" },
-  { label: "My Bug Reports", href: "/yi-future/my-bug-reports" },
 ];
 
 export default async function NationalAdminLayout({

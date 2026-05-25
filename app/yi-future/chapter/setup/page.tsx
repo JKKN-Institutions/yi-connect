@@ -126,7 +126,7 @@ export default async function ChapterSetupPage() {
 
     // Save programme duration (only if not locked & a valid value)
     const raw = String(formData.get("programme_duration_days") ?? "").trim();
-    const parsed = raw === "60" ? 60 : raw === "90" ? 90 : null;
+    const parsed = raw === "30" ? 30 : raw === "60" ? 60 : raw === "90" ? 90 : null;
     if (parsed !== null) {
       const svc = await createServiceClient();
       // Re-check lock at write time to avoid race with phase-event creation.

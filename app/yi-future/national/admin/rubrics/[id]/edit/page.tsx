@@ -52,7 +52,7 @@ export default async function EditRubricPage({
     <FormLayout
       title={`Edit — ${rubric.name}`}
       subtitle={`Scope: ${rubric.scope} · Current total max: ${rubric.total_max}`}
-      backHref="/national/admin/rubrics"
+      backHref="/yi-future/national/admin/rubrics"
     >
       <form action={action} className="space-y-5">
         <Field label="Name" name="name" required defaultValue={rubric.name} />
@@ -92,7 +92,7 @@ export default async function EditRubricPage({
         </div>
         <SubmitRow
           submitLabel="Save changes"
-          cancelHref="/national/admin/rubrics"
+          cancelHref="/yi-future/national/admin/rubrics"
         />
       </form>
     </FormLayout>

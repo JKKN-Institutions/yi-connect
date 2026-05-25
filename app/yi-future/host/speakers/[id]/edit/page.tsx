@@ -55,7 +55,7 @@ export default async function EditHostSpeakerPage({
     <FormLayout
       title={`Edit — ${speaker.full_name}`}
       subtitle={speaker.organization ?? undefined}
-      backHref="/host/speakers"
+      backHref="/yi-future/host/speakers"
     >
       <form action={action} className="space-y-5">
         <Field
@@ -103,7 +103,7 @@ export default async function EditHostSpeakerPage({
           rows={4}
           defaultValue={speaker.bio ?? ""}
         />
-        <SubmitRow submitLabel="Save changes" cancelHref="/host/speakers" />
+        <SubmitRow submitLabel="Save changes" cancelHref="/yi-future/host/speakers" />
       </form>
     </FormLayout>
   );

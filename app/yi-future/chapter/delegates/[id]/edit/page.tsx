@@ -70,7 +70,7 @@ export default async function EditDelegatePage({
     <FormLayout
       title={`Edit — ${delegate.full_name}`}
       subtitle={`Access code: ${delegate.access_code}`}
-      backHref="/chapter/delegates"
+      backHref="/yi-future/chapter/delegates"
     >
       <form action={action} className="space-y-5">
         <Field
@@ -136,7 +136,7 @@ export default async function EditDelegatePage({
         </div>
         <SubmitRow
           submitLabel="Save changes"
-          cancelHref="/chapter/delegates"
+          cancelHref="/yi-future/chapter/delegates"
         />
       </form>
     </FormLayout>

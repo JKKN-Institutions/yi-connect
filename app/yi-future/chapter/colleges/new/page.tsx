@@ -16,7 +16,7 @@ export default async function NewCollegePage() {
     <FormLayout
       title="Add college"
       subtitle={`For ${ctx.chapterName}`}
-      backHref="/chapter/colleges"
+      backHref="/yi-future/chapter/colleges"
     >
       <form action={action} className="space-y-5">
         <Field
@@ -60,7 +60,7 @@ export default async function NewCollegePage() {
           <span>Yi YUVA partner college</span>
         </label>
 
-        <SubmitRow submitLabel="Add college" cancelHref="/chapter/colleges" />
+        <SubmitRow submitLabel="Add college" cancelHref="/yi-future/chapter/colleges" />
       </form>
     </FormLayout>
   );

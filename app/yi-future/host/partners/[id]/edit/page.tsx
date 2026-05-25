@@ -55,7 +55,7 @@ export default async function EditPartnerPage({
     <FormLayout
       title={`Edit — ${partner.organization}`}
       subtitle={`Access code: ${partner.access_code}`}
-      backHref="/host/partners"
+      backHref="/yi-future/host/partners"
     >
       <form action={action} className="space-y-5">
         <Field
@@ -132,7 +132,7 @@ export default async function EditPartnerPage({
           </label>
         </div>
 
-        <SubmitRow submitLabel="Save" cancelHref="/host/partners" />
+        <SubmitRow submitLabel="Save" cancelHref="/yi-future/host/partners" />
       </form>
     </FormLayout>
   );

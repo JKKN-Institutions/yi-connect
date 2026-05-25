@@ -54,7 +54,7 @@ export default async function EditMentorPage({
     <FormLayout
       title={`Edit — ${mentor.full_name}`}
       subtitle={`Access code: ${mentor.access_code}`}
-      backHref="/chapter/mentors"
+      backHref="/yi-future/chapter/mentors"
     >
       <form action={action} className="space-y-5">
         <Field
@@ -101,7 +101,7 @@ export default async function EditMentorPage({
           rows={3}
           defaultValue={mentor.bio ?? ""}
         />
-        <SubmitRow submitLabel="Save changes" cancelHref="/chapter/mentors" />
+        <SubmitRow submitLabel="Save changes" cancelHref="/yi-future/chapter/mentors" />
       </form>
     </FormLayout>
   );

@@ -59,7 +59,7 @@ export default async function EditInternshipPage({
     <FormLayout
       title={`Edit — ${slot.title}`}
       subtitle={slot.corporate_partners?.organization ?? ""}
-      backHref="/host/internships"
+      backHref="/yi-future/host/internships"
     >
       <form action={action} className="space-y-5">
         <Field label="Title" name="title" required defaultValue={slot.title} />
@@ -122,7 +122,7 @@ export default async function EditInternshipPage({
           type="number"
           defaultValue={String(slot.slots_available ?? "")}
         />
-        <SubmitRow submitLabel="Save" cancelHref="/host/internships" />
+        <SubmitRow submitLabel="Save" cancelHref="/yi-future/host/internships" />
       </form>
     </FormLayout>
   );

@@ -57,7 +57,7 @@ export default async function EditJuryPage({
     <FormLayout
       title={`Edit — ${jury.jury_name}`}
       subtitle={`Access code: ${jury.access_code}`}
-      backHref="/chapter/jury"
+      backHref="/yi-future/chapter/jury"
     >
       <form action={action} className="space-y-5">
         <Field
@@ -116,7 +116,7 @@ export default async function EditJuryPage({
           rows={3}
           defaultValue={jury.bio ?? ""}
         />
-        <SubmitRow submitLabel="Save changes" cancelHref="/chapter/jury" />
+        <SubmitRow submitLabel="Save changes" cancelHref="/yi-future/chapter/jury" />
       </form>
     </FormLayout>
   );

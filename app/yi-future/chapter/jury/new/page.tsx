@@ -27,7 +27,7 @@ export default async function NewJuryPage() {
     <FormLayout
       title="Add jury"
       subtitle="Jury use their 6-character access code to log in. Archetype diversity across a team is encouraged (policy + industry + senior Yi + academic)."
-      backHref="/chapter/jury"
+      backHref="/yi-future/chapter/jury"
     >
       <form action={action} className="space-y-5">
         <Field
@@ -79,7 +79,7 @@ export default async function NewJuryPage() {
           rows={3}
           placeholder="Short bio for delegates to see."
         />
-        <SubmitRow submitLabel="Add jury" cancelHref="/chapter/jury" />
+        <SubmitRow submitLabel="Add jury" cancelHref="/yi-future/chapter/jury" />
       </form>
     </FormLayout>
   );

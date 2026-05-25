@@ -55,7 +55,7 @@ export default async function EditExpertPage({
     <FormLayout
       title={`Edit — ${expert.full_name}`}
       subtitle={expert.organization ?? undefined}
-      backHref="/chapter/experts"
+      backHref="/yi-future/chapter/experts"
     >
       <form action={action} className="space-y-5">
         <Field
@@ -103,7 +103,7 @@ export default async function EditExpertPage({
           rows={3}
           defaultValue={expert.bio ?? ""}
         />
-        <SubmitRow submitLabel="Save changes" cancelHref="/chapter/experts" />
+        <SubmitRow submitLabel="Save changes" cancelHref="/yi-future/chapter/experts" />
       </form>
     </FormLayout>
   );

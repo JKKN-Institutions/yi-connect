@@ -40,7 +40,7 @@ export default async function EditChapterPage({
   return (
     <FormLayout
       title={`Edit — ${chapter.name}`}
-      backHref="/national/admin/chapters"
+      backHref="/yi-future/national/admin/chapters"
     >
       <form action={action} className="space-y-5">
         <Field
@@ -75,7 +75,7 @@ export default async function EditChapterPage({
         />
         <SubmitRow
           submitLabel="Save changes"
-          cancelHref="/national/admin/chapters"
+          cancelHref="/yi-future/national/admin/chapters"
         />
       </form>
     </FormLayout>

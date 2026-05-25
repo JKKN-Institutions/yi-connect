@@ -11,7 +11,7 @@ export default function NewChapterPage() {
     <FormLayout
       title="New Chapter"
       subtitle="Add a Yi chapter. Chapters persist across editions; active flag controls visibility."
-      backHref="/national/admin/chapters"
+      backHref="/yi-future/national/admin/chapters"
     >
       <form action={action} className="space-y-5">
         <Field label="Chapter name" name="name" required placeholder="Bangalore" />
@@ -27,7 +27,7 @@ export default function NewChapterPage() {
         />
         <SubmitRow
           submitLabel="Create chapter"
-          cancelHref="/national/admin/chapters"
+          cancelHref="/yi-future/national/admin/chapters"
         />
       </form>
     </FormLayout>

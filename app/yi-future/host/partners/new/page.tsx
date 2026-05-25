@@ -17,7 +17,7 @@ export default async function NewPartnerPage() {
     <FormLayout
       title="Add partner"
       subtitle={`Adding to ${ctx.nationalEvent.name}. Access code is generated.`}
-      backHref="/host/partners"
+      backHref="/yi-future/host/partners"
     >
       <form action={action} className="space-y-5">
         <Field
@@ -81,7 +81,7 @@ export default async function NewPartnerPage() {
           </label>
         </div>
 
-        <SubmitRow submitLabel="Add partner" cancelHref="/host/partners" />
+        <SubmitRow submitLabel="Add partner" cancelHref="/yi-future/host/partners" />
       </form>
     </FormLayout>
   );

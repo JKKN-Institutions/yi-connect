@@ -30,7 +30,7 @@ export default async function NewJourneyEventPage({
     <FormLayout
       title="Schedule phase event"
       subtitle="One of 9 mandated events across the 90-day journey."
-      backHref="/chapter/journey"
+      backHref="/yi-future/chapter/journey"
     >
       <form action={action} className="space-y-5">
         <div className="grid grid-cols-2 gap-3">
@@ -160,7 +160,7 @@ export default async function NewJourneyEventPage({
 
         <SubmitRow
           submitLabel="Schedule event"
-          cancelHref="/chapter/journey"
+          cancelHref="/yi-future/chapter/journey"
         />
       </form>
     </FormLayout>

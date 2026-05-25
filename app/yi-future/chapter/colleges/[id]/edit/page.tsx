@@ -55,7 +55,7 @@ export default async function EditCollegePage({
   return (
     <FormLayout
       title={`Edit — ${college.name}`}
-      backHref="/chapter/colleges"
+      backHref="/yi-future/chapter/colleges"
     >
       <form action={action} className="space-y-5">
         <Field
@@ -114,7 +114,7 @@ export default async function EditCollegePage({
           <span>Yi YUVA partner college</span>
         </label>
 
-        <SubmitRow submitLabel="Save changes" cancelHref="/chapter/colleges" />
+        <SubmitRow submitLabel="Save changes" cancelHref="/yi-future/chapter/colleges" />
       </form>
     </FormLayout>
   );

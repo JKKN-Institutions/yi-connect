@@ -19,7 +19,7 @@ export default async function NewChapterFinalPage() {
     <FormLayout
       title="New chapter final"
       subtitle="Creates the day-90 event with the 5 handbook-mandated sections pre-seeded."
-      backHref="/chapter/final"
+      backHref="/yi-future/chapter/final"
     >
       <form action={action} className="space-y-5">
         <Field
@@ -59,7 +59,7 @@ export default async function NewChapterFinalPage() {
         />
         <SubmitRow
           submitLabel="Create event"
-          cancelHref="/chapter/final"
+          cancelHref="/yi-future/chapter/final"
         />
       </form>
     </FormLayout>

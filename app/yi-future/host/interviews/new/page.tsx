@@ -91,7 +91,7 @@ export default async function NewInterviewPage() {
     <FormLayout
       title="Schedule interview"
       subtitle="Conflict-check enforced server-side (delegate + partner can't double-book the same time)."
-      backHref="/host/interviews"
+      backHref="/yi-future/host/interviews"
     >
       {delegates.length === 0 || partners.length === 0 ? (
         <div className="text-center text-sm text-navy/50">
@@ -174,7 +174,7 @@ export default async function NewInterviewPage() {
           <Field label="Room" name="room" placeholder="Breakout 1" />
           <SubmitRow
             submitLabel="Schedule"
-            cancelHref="/host/interviews"
+            cancelHref="/yi-future/host/interviews"
           />
         </form>
       )}

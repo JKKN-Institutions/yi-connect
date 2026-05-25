@@ -35,7 +35,7 @@ export default async function NewDelegatePage() {
     <FormLayout
       title="Register delegate"
       subtitle={`Adds a student delegate to ${ctx.chapterName} for ${ctx.editionName}. A 6-character access code is generated automatically.`}
-      backHref="/chapter/delegates"
+      backHref="/yi-future/chapter/delegates"
     >
       <form action={action} className="space-y-5">
         <Field
@@ -99,7 +99,7 @@ export default async function NewDelegatePage() {
         </div>
         <SubmitRow
           submitLabel="Register delegate"
-          cancelHref="/chapter/delegates"
+          cancelHref="/yi-future/chapter/delegates"
         />
       </form>
     </FormLayout>

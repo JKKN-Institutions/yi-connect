@@ -39,7 +39,7 @@ export default async function NewRubricPage() {
     <FormLayout
       title="New rubric"
       subtitle="Criteria are stored as JSON. The sum of 'max' values becomes total_max."
-      backHref="/national/admin/rubrics"
+      backHref="/yi-future/national/admin/rubrics"
     >
       <form action={action} className="space-y-5">
         <Field
@@ -88,7 +88,7 @@ export default async function NewRubricPage() {
         </div>
         <SubmitRow
           submitLabel="Create rubric"
-          cancelHref="/national/admin/rubrics"
+          cancelHref="/yi-future/national/admin/rubrics"
         />
       </form>
     </FormLayout>

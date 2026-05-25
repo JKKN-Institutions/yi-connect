@@ -60,7 +60,7 @@ export default async function EditEditionPage({
     <FormLayout
       title={`Edit — ${edition.name}`}
       subtitle={`Slug: ${edition.slug}`}
-      backHref="/national/admin/editions"
+      backHref="/yi-future/national/admin/editions"
     >
       <form action={action} className="space-y-5">
         <Field label="Name" name="name" required defaultValue={edition.name} />
@@ -131,7 +131,7 @@ export default async function EditEditionPage({
 
         <SubmitRow
           submitLabel="Save changes"
-          cancelHref="/national/admin/editions"
+          cancelHref="/yi-future/national/admin/editions"
         />
       </form>
     </FormLayout>

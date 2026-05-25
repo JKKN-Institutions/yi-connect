@@ -11,7 +11,7 @@ export default function NewEditionPage() {
     <FormLayout
       title="New Edition"
       subtitle="Create a new yearly cycle. The edition starts in the announcement stage and is inactive until you activate it."
-      backHref="/national/admin/editions"
+      backHref="/yi-future/national/admin/editions"
     >
       <form action={action} className="space-y-5">
         <Field
@@ -40,7 +40,7 @@ export default function NewEditionPage() {
         />
         <SubmitRow
           submitLabel="Create edition"
-          cancelHref="/national/admin/editions"
+          cancelHref="/yi-future/national/admin/editions"
         />
       </form>
     </FormLayout>

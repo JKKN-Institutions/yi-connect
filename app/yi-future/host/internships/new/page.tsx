@@ -35,7 +35,7 @@ export default async function NewInternshipPage() {
     <FormLayout
       title="New internship slot"
       subtitle="Only partners flagged 'Internship provider' appear in the picker."
-      backHref="/host/internships"
+      backHref="/yi-future/host/internships"
     >
       {partners.length === 0 ? (
         <div className="text-center p-4 text-sm text-navy/50">
@@ -118,7 +118,7 @@ export default async function NewInternshipPage() {
           />
           <SubmitRow
             submitLabel="Create slot"
-            cancelHref="/host/internships"
+            cancelHref="/yi-future/host/internships"
           />
         </form>
       )}

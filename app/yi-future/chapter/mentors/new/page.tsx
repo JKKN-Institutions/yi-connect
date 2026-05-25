@@ -19,7 +19,7 @@ export default async function NewMentorPage() {
     <FormLayout
       title="Add mentor"
       subtitle={`For ${ctx.chapterName}. A 6-character access code is generated automatically.`}
-      backHref="/chapter/mentors"
+      backHref="/yi-future/chapter/mentors"
     >
       <form action={action} className="space-y-5">
         <Field
@@ -57,7 +57,7 @@ export default async function NewMentorPage() {
           rows={3}
           placeholder="Short bio for delegates to see."
         />
-        <SubmitRow submitLabel="Add mentor" cancelHref="/chapter/mentors" />
+        <SubmitRow submitLabel="Add mentor" cancelHref="/yi-future/chapter/mentors" />
       </form>
     </FormLayout>
   );

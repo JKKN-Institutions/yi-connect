@@ -16,7 +16,7 @@ export default async function NewExpertPage() {
     <FormLayout
       title="Add expert"
       subtitle={`Subject-matter expert for ${ctx.editionName}. Visible across chapters for expert talks and panels.`}
-      backHref="/chapter/experts"
+      backHref="/yi-future/chapter/experts"
     >
       <form action={action} className="space-y-5">
         <Field
@@ -54,7 +54,7 @@ export default async function NewExpertPage() {
           rows={3}
           placeholder="Short bio for programme handouts."
         />
-        <SubmitRow submitLabel="Add expert" cancelHref="/chapter/experts" />
+        <SubmitRow submitLabel="Add expert" cancelHref="/yi-future/chapter/experts" />
       </form>
     </FormLayout>
   );

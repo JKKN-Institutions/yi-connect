@@ -16,7 +16,7 @@ export default async function NewHostSpeakerPage() {
     <FormLayout
       title="Add speaker"
       subtitle={`Speaker for the ${ctx.editionName} National Track Final hosted by ${ctx.chapterName}.`}
-      backHref="/host/speakers"
+      backHref="/yi-future/host/speakers"
     >
       <form action={action} className="space-y-5">
         <Field
@@ -54,7 +54,7 @@ export default async function NewHostSpeakerPage() {
           rows={4}
           placeholder="Short bio for programme handouts and the live display."
         />
-        <SubmitRow submitLabel="Add speaker" cancelHref="/host/speakers" />
+        <SubmitRow submitLabel="Add speaker" cancelHref="/yi-future/host/speakers" />
       </form>
     </FormLayout>
   );

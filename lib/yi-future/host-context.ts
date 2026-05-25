@@ -1,5 +1,4 @@
-import { createServiceClient } from "@/lib/yi-future/supabase/server";
-import { getChapterContext } from "@/lib/yi-future/chapter-context";
+import { createClient, createServiceClient } from "@/lib/yi-future/supabase/server";
 import type { Database } from "@/types/yi-future/database";
 
 type HostEvent = {
@@ -19,49 +18,96 @@ export type HostContext = {
   chapterName: string;
   editionName: string;
   isHost: boolean;
-  nationalEvent: HostEvent | null;
+  nationalEvents: HostEvent[];
+  selectedEvent: HostEvent | null;
   trackId: string | null;
   trackName: string | null;
   trackIcon: string | null;
 };
 
-/**
- * Resolve the Yi chapter that the signed-in admin represents AND check if
- * this chapter is a HOST chapter for the current edition.
- * Returns the chapter's national_track_final event (if any).
- */
-export async function getHostContext(): Promise<HostContext | null> {
-  const ctx = await getChapterContext();
-  if (!ctx) return null;
-
-  const isHost = ctx.trackHostRole === "host";
+export async function getHostContext(
+  selectedTrackId?: string
+): Promise<HostContext | null> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
 
   const svc = await createServiceClient();
-  const { data: ev } = await svc
+
+  const { data: chapter } = await svc
+    .schema("future")
+    .from("chapters" as never)
+    .select("id, name, is_finale_host, finale_region")
+    .eq("is_finale_host", true)
+    .limit(50);
+
+  const { data: membership } = await svc
+    .schema("future")
+    .from("chapter_core_team")
+    .select(
+      "chapter_id, edition_id, chapters(name, is_finale_host), editions!inner(name, is_active)"
+    )
+    .eq("user_id", user.id)
+    .eq("is_active", true)
+    .eq("editions.is_active", true)
+    .limit(1)
+    .maybeSingle();
+
+  if (!membership) return null;
+
+  type Row = {
+    chapter_id: string;
+    edition_id: string;
+    chapters: { name: string; is_finale_host: boolean | null } | null;
+    editions: { name: string };
+  };
+  const m = membership as unknown as Row;
+  const isHost = m.chapters?.is_finale_host === true;
+
+  const { data: events } = await svc
     .schema("future")
     .from("events")
     .select(
       "id, name, start_date, end_date, venue, is_published, track_id, tagline"
     )
-    .eq("chapter_id", ctx.chapterId)
-    .eq("edition_id", ctx.editionId)
+    .eq("chapter_id", m.chapter_id)
+    .eq("edition_id", m.edition_id)
     .eq("type", "national_track_final")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .order("created_at", { ascending: false });
 
-  const nationalEvent = (ev as unknown as HostEvent) ?? null;
+  const nationalEvents = (events as unknown as HostEvent[]) ?? [];
+
+  const selected = selectedTrackId
+    ? nationalEvents.find((e) => e.track_id === selectedTrackId) ?? nationalEvents[0] ?? null
+    : nationalEvents[0] ?? null;
+
+  let trackName: string | null = null;
+  let trackIcon: string | null = null;
+  if (selected?.track_id) {
+    const { data: track } = await svc
+      .schema("future")
+      .from("tracks")
+      .select("name, icon")
+      .eq("id", selected.track_id)
+      .maybeSingle();
+    const t = track as { name: string; icon: string | null } | null;
+    trackName = t?.name ?? null;
+    trackIcon = t?.icon ?? null;
+  }
 
   return {
-    chapterId: ctx.chapterId,
-    editionId: ctx.editionId,
-    chapterName: ctx.chapterName,
-    editionName: ctx.editionName,
+    chapterId: m.chapter_id,
+    editionId: m.edition_id,
+    chapterName: m.chapters?.name ?? "Unknown",
+    editionName: m.editions.name,
     isHost,
-    nationalEvent,
-    trackId: ctx.trackId,
-    trackName: ctx.trackName,
-    trackIcon: ctx.trackIcon,
+    nationalEvents,
+    selectedEvent: selected,
+    trackId: selected?.track_id ?? null,
+    trackName,
+    trackIcon,
   };
 }
 

@@ -5,6 +5,7 @@ import { readSession } from "@/app/yi-future/actions/auth";
 import {
   PHASES,
   PHASE_LABELS,
+  PHASE_MONTHS,
   PHASE_EVENT_LABELS,
   type Phase,
 } from "@/lib/yi-future/constants";
@@ -152,6 +153,29 @@ export default async function DelegateJourneyPage() {
   const now = new Date();
   const upcoming = events.filter((e) => new Date(e.scheduled_at) > now);
 
+  /* ── Journey gamification score ── */
+  const POINTS_PER_PHASE = 5;
+  const phaseScores = PHASES.map((p) => {
+    const phaseEvents = events.filter((e) => e.phase === p);
+    const attended = phaseEvents.filter((e) => attendedSet.has(e.id)).length;
+    const total = phaseEvents.length;
+    const points = total > 0 ? (attended / total) * POINTS_PER_PHASE : 0;
+    return {
+      phase: p,
+      total,
+      attended,
+      points: Number(points.toFixed(1)),
+    };
+  });
+  const totalJourneyPoints = Number(
+    phaseScores.reduce((s, p) => s + p.points, 0).toFixed(1)
+  );
+  const MAX_JOURNEY_POINTS = POINTS_PER_PHASE * PHASES.length; // 15
+  const journeyPct =
+    MAX_JOURNEY_POINTS > 0
+      ? Math.round((totalJourneyPoints / MAX_JOURNEY_POINTS) * 100)
+      : 0;
+
   return (
     <div className="space-y-5">
       <div>
@@ -166,6 +190,67 @@ export default async function DelegateJourneyPage() {
           All 9 phase events for your chapter.
         </p>
       </div>
+
+      {/* ── Journey score card ── */}
+      <section className="bg-gradient-to-br from-navy to-navy-dark rounded-lg p-6 text-ivory">
+        <div className="text-xs font-semibold uppercase tracking-wider text-ivory/70 mb-3">
+          Your Journey Score
+        </div>
+
+        {/* Total progress bar */}
+        <div className="flex items-baseline gap-3 mb-2">
+          <span className="text-2xl font-extrabold text-yi-gold">
+            {totalJourneyPoints}
+          </span>
+          <span className="text-sm text-ivory/60">
+            / {MAX_JOURNEY_POINTS} pts
+          </span>
+          <span className="text-sm font-semibold text-ivory/50">
+            ({journeyPct}%)
+          </span>
+        </div>
+        <div className="h-2 rounded-full bg-white/20 mb-4">
+          <div
+            className="h-2 rounded-full bg-yi-gold transition-all"
+            style={{ width: `${journeyPct}%` }}
+          />
+        </div>
+
+        {/* Per-phase breakdown */}
+        <div className="space-y-2.5">
+          {phaseScores.map((ps) => {
+            const phasePct =
+              POINTS_PER_PHASE > 0
+                ? Math.round((ps.points / POINTS_PER_PHASE) * 100)
+                : 0;
+            return (
+              <div key={ps.phase} className="flex items-center gap-3">
+                <div className="w-16 text-xs font-semibold text-ivory/70 uppercase tracking-wider shrink-0">
+                  {PHASE_MONTHS[ps.phase]}
+                </div>
+                <div className="flex-1 h-1.5 rounded-full bg-white/20">
+                  <div
+                    className="h-1.5 rounded-full bg-yi-gold transition-all"
+                    style={{ width: `${phasePct}%` }}
+                  />
+                </div>
+                <div className="w-24 text-right text-xs text-ivory/80 shrink-0">
+                  <span className="font-bold text-ivory">
+                    {ps.points}/{POINTS_PER_PHASE}
+                  </span>{" "}
+                  <span className="text-ivory/50">
+                    ({ps.attended}/{ps.total})
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="text-[11px] text-ivory/50 mt-3">
+          Journey = 20% of your final composite score
+        </div>
+      </section>
 
       <PhaseTracker statuses={statuses} />
 

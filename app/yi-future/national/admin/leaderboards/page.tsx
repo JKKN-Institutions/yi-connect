@@ -5,18 +5,20 @@ import {
   getChapterLeaderboard,
   getProblemStatementLeaderboard,
   getTrackLeaderboard,
+  getCompositeLeaderboard,
   type LeaderboardRow,
 } from "@/app/yi-future/actions/leaderboards";
 
 type Edition = { id: string; name: string; is_active: boolean | null };
 
-type Tab = "institutions" | "chapters" | "problems" | "tracks";
+type Tab = "institutions" | "chapters" | "problems" | "tracks" | "composite";
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "institutions", label: "Institutions" },
   { key: "chapters", label: "Chapters" },
   { key: "problems", label: "Problem Statements" },
   { key: "tracks", label: "Tracks" },
+  { key: "composite", label: "Composite" },
 ];
 
 async function loadEditions(): Promise<Edition[]> {
@@ -63,7 +65,9 @@ export default async function NationalLeaderboardsPage({
         ? "problems"
         : sp.tab === "tracks"
           ? "tracks"
-          : "institutions";
+          : sp.tab === "composite"
+            ? "composite"
+            : "institutions";
 
   const editions = await loadEditions();
   const selected =
@@ -101,6 +105,10 @@ export default async function NationalLeaderboardsPage({
       rows = await getTrackLeaderboard(selected.id);
       csvName = "tracks.csv";
       break;
+    case "composite":
+      rows = await getCompositeLeaderboard(selected.id);
+      csvName = "composite.csv";
+      break;
   }
 
   return (
@@ -108,7 +116,7 @@ export default async function NationalLeaderboardsPage({
       <div>
         <h2 className="text-2xl font-bold text-navy">Leaderboards</h2>
         <p className="mt-1 text-sm text-navy/60">
-          {selected.name} · 4 levels · CSV export
+          {selected.name} · 5 levels · CSV export
         </p>
       </div>
 
@@ -187,7 +195,9 @@ export default async function NationalLeaderboardsPage({
                     ? "Chapter"
                     : tab === "problems"
                       ? "Problem · Team"
-                      : "Track · Team"}
+                      : tab === "composite"
+                        ? "Team"
+                        : "Track · Team"}
               </th>
               <th className="text-left px-4 py-3 font-semibold">Detail</th>
               <th className="text-right px-4 py-3 font-semibold w-24">Score</th>

@@ -1,6 +1,10 @@
 "use server";
 
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
+import {
+  computeTeamJourneyScore,
+  JOURNEY_MAX,
+} from "@/lib/yi-future/gamification-scoring";
 
 export type LeaderboardRow = {
   rank: number;
@@ -156,4 +160,80 @@ export async function getTrackLeaderboard(
     score: Number((r.avg_score ?? 0).toFixed(2)),
     meta: r.chapter_name ?? "—",
   }));
+}
+
+// ─── Composite leaderboard (jury 80% + journey 20%) ─────────────────────────
+// Formula: composite = jury_avg * 0.8 + (journey_avg / 15) * 20
+// jury_avg is out of 100, journey_avg is out of 15 → composite max = 100.
+
+export async function getCompositeLeaderboard(
+  editionId: string,
+): Promise<LeaderboardRow[]> {
+  const svc = await createServiceClient();
+
+  // 1. Get all teams for this edition with their chapter
+  const { data: teams, error: teamsErr } = await svc
+    .schema("future")
+    .from("teams")
+    .select("id, team_name, chapter_id, chapters(name)")
+    .eq("edition_id", editionId);
+
+  if (teamsErr) throw teamsErr;
+  if (!teams || teams.length === 0) return [];
+
+  // 2. Get all evaluations for this edition's teams in one query
+  const teamIds = (teams as { id: string }[]).map((t) => t.id);
+  const { data: evaluations, error: evalErr } = await svc
+    .schema("future")
+    .from("evaluations")
+    .select("team_id, total_score")
+    .in("team_id", teamIds);
+
+  if (evalErr) throw evalErr;
+
+  // Build jury avg map: team_id → average total_score
+  const juryMap = new Map<string, { sum: number; count: number }>();
+  for (const ev of (evaluations ?? []) as { team_id: string; total_score: number }[]) {
+    const entry = juryMap.get(ev.team_id) ?? { sum: 0, count: 0 };
+    entry.sum += ev.total_score;
+    entry.count += 1;
+    juryMap.set(ev.team_id, entry);
+  }
+
+  // 3. Compute composite for each team
+  const rows: LeaderboardRow[] = [];
+
+  for (const t of teams as unknown as {
+    id: string;
+    team_name: string;
+    chapter_id: string;
+    chapters: { name: string } | null;
+  }[]) {
+    const juryEntry = juryMap.get(t.id);
+    const juryAvg = juryEntry && juryEntry.count > 0
+      ? juryEntry.sum / juryEntry.count
+      : 0;
+
+    // Journey score (team average)
+    const journey = await computeTeamJourneyScore(t.id, t.chapter_id, editionId);
+
+    // composite = jury_avg * 0.8 + (journey_avg / 15) * 20
+    const composite = Number(
+      (juryAvg * 0.8 + (journey.avgPoints / JOURNEY_MAX) * 20).toFixed(2),
+    );
+
+    const juryPart = Number((juryAvg * 0.8).toFixed(1));
+    const journeyPart = Number(((journey.avgPoints / JOURNEY_MAX) * 20).toFixed(1));
+
+    rows.push({
+      rank: 0,
+      label: t.team_name,
+      score: composite,
+      meta: `${t.chapters?.name ?? "—"} · jury ${juryPart} + journey ${journeyPart}`,
+    });
+  }
+
+  // Sort descending by score then assign ranks
+  rows.sort((a, b) => b.score - a.score);
+  return assignRanks(rows);
 }

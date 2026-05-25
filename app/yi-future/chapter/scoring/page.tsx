@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
 import { getChapterContext } from "@/lib/yi-future/chapter-context";
+import { PHASES } from "@/lib/yi-future/constants";
 import {
   aggregateEvaluations,
   meetsThreshold,
@@ -77,15 +78,125 @@ async function getDefaultRubric(editionId: string): Promise<RubricRow | null> {
   return (data as unknown as RubricRow) ?? null;
 }
 
+/* ── Journey gamification data ── */
+
+type PhaseEvent = { id: string; phase: string };
+type TeamMember = { team_id: string; delegate_id: string };
+type AttendanceRow = { delegate_id: string; phase_event_id: string; attended: boolean | null };
+
+async function getPhaseEvents(
+  chapterId: string,
+  editionId: string
+): Promise<PhaseEvent[]> {
+  const svc = await createServiceClient();
+  const { data } = await svc
+    .schema("future")
+    .from("phase_events")
+    .select("id, phase")
+    .eq("chapter_id", chapterId)
+    .eq("edition_id", editionId);
+  return (data as unknown as PhaseEvent[]) ?? [];
+}
+
+async function getTeamMembers(
+  chapterId: string,
+  editionId: string
+): Promise<TeamMember[]> {
+  const svc = await createServiceClient();
+  const { data } = await svc
+    .schema("future")
+    .from("team_members")
+    .select("team_id, delegate_id, teams!inner(chapter_id, edition_id)")
+    .eq("teams.chapter_id", chapterId)
+    .eq("teams.edition_id", editionId);
+  return (data as unknown as TeamMember[]) ?? [];
+}
+
+async function getAllAttendance(
+  delegateIds: string[]
+): Promise<AttendanceRow[]> {
+  if (delegateIds.length === 0) return [];
+  const svc = await createServiceClient();
+  const { data } = await svc
+    .schema("future")
+    .from("phase_event_attendance")
+    .select("delegate_id, phase_event_id, attended")
+    .in("delegate_id", delegateIds);
+  return (data as unknown as AttendanceRow[]) ?? [];
+}
+
+function computeTeamJourneyScores(
+  teamMembers: TeamMember[],
+  phaseEvents: PhaseEvent[],
+  attendance: AttendanceRow[]
+): Map<string, number> {
+  const POINTS_PER_PHASE = 5;
+  // Events by phase
+  const eventsByPhase = new Map<string, string[]>();
+  for (const e of phaseEvents) {
+    if (!eventsByPhase.has(e.phase)) eventsByPhase.set(e.phase, []);
+    eventsByPhase.get(e.phase)!.push(e.id);
+  }
+  // Attended set: delegate_id -> Set<event_id>
+  const attendedByDelegate = new Map<string, Set<string>>();
+  for (const a of attendance) {
+    if (!a.attended) continue;
+    if (!attendedByDelegate.has(a.delegate_id))
+      attendedByDelegate.set(a.delegate_id, new Set());
+    attendedByDelegate.get(a.delegate_id)!.add(a.phase_event_id);
+  }
+  // Group delegates by team
+  const delegatesByTeam = new Map<string, string[]>();
+  for (const tm of teamMembers) {
+    if (!delegatesByTeam.has(tm.team_id))
+      delegatesByTeam.set(tm.team_id, []);
+    delegatesByTeam.get(tm.team_id)!.push(tm.delegate_id);
+  }
+  // Compute average journey points per team
+  const result = new Map<string, number>();
+  for (const [teamId, delegates] of Array.from(delegatesByTeam)) {
+    if (delegates.length === 0) continue;
+    let teamTotal = 0;
+    for (const delId of delegates) {
+      const attended = attendedByDelegate.get(delId) ?? new Set();
+      let delegatePoints = 0;
+      for (const phase of PHASES) {
+        const phaseEventIds = eventsByPhase.get(phase) ?? [];
+        if (phaseEventIds.length === 0) continue;
+        const phaseAttended = phaseEventIds.filter((id) =>
+          attended.has(id)
+        ).length;
+        delegatePoints +=
+          (phaseAttended / phaseEventIds.length) * POINTS_PER_PHASE;
+      }
+      teamTotal += delegatePoints;
+    }
+    result.set(teamId, Number((teamTotal / delegates.length).toFixed(1)));
+  }
+  return result;
+}
+
 export default async function ScoringPage() {
   const ctx = await getChapterContext();
   if (!ctx) redirect("/yi-future/chapter");
 
-  const [teams, evals, rubric] = await Promise.all([
+  const [teams, evals, rubric, phaseEvents, teamMembers] = await Promise.all([
     getTeams(ctx.chapterId, ctx.editionId),
     getEvaluations(ctx.chapterId, ctx.editionId),
     getDefaultRubric(ctx.editionId),
+    getPhaseEvents(ctx.chapterId, ctx.editionId),
+    getTeamMembers(ctx.chapterId, ctx.editionId),
   ]);
+
+  // Journey score computation
+  const allDelegateIds = Array.from(new Set(teamMembers.map((tm) => tm.delegate_id)));
+  const allAttendance = await getAllAttendance(allDelegateIds);
+  const journeyByTeam = computeTeamJourneyScores(
+    teamMembers,
+    phaseEvents,
+    allAttendance
+  );
+  const MAX_JOURNEY = 15;
 
   // Group evals by team
   const byTeam = new Map<string, Evaluation[]>();
@@ -158,6 +269,7 @@ export default async function ScoringPage() {
               <th className="text-left px-4 py-3 font-semibold">Problem</th>
               <th className="text-right px-4 py-3 font-semibold">Jurors</th>
               <th className="text-right px-4 py-3 font-semibold">Average</th>
+              <th className="text-right px-4 py-3 font-semibold">Journey</th>
               <th className="text-right px-4 py-3 font-semibold">Threshold</th>
             </tr>
           </thead>
@@ -165,7 +277,7 @@ export default async function ScoringPage() {
             {teamAggregates.length === 0 ? (
               <tr>
                 <td
-                  colSpan={6}
+                  colSpan={7}
                   className="px-4 py-6 text-center text-navy/40"
                 >
                   No teams.
@@ -194,6 +306,27 @@ export default async function ScoringPage() {
                       ) : (
                         <span className="text-navy/30">—</span>
                       )}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      {(() => {
+                        const jp = journeyByTeam.get(a.team_id);
+                        if (jp === undefined)
+                          return <span className="text-navy/30 text-xs">—</span>;
+                        const pct = Math.round((jp / MAX_JOURNEY) * 100);
+                        return (
+                          <div className="flex items-center justify-end gap-2">
+                            <div className="w-12 h-1.5 rounded-full bg-navy/10">
+                              <div
+                                className="h-1.5 rounded-full bg-yi-gold"
+                                style={{ width: `${pct}%` }}
+                              />
+                            </div>
+                            <span className="font-mono text-xs font-bold">
+                              {jp}/{MAX_JOURNEY}
+                            </span>
+                          </div>
+                        );
+                      })()}
                     </td>
                     <td className="px-4 py-3 text-right">
                       {a.count === 0 ? (

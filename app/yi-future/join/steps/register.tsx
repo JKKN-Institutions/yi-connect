@@ -251,7 +251,7 @@ export function RegisterStep({
               type="button"
               onClick={submit}
               disabled={pending}
-              className="min-h-[44px] px-5 py-2 rounded-md bg-yi-gold text-navy text-sm font-bold hover:bg-yi-gold/90 disabled:opacity-50"
+              className="min-h-[44px] px-5 py-2 rounded-md bg-[#F5A623] text-navy text-sm font-bold hover:bg-[#F5A623]/90 disabled:opacity-50"
             >
               {pending ? "Submitting…" : "Submit registration"}
             </button>
@@ -357,7 +357,7 @@ function Section1({
             type="checkbox"
             checked={form.whatsapp_same}
             onChange={(e) => update("whatsapp_same", e.target.checked)}
-            className="accent-yi-gold"
+            className="accent-[#F5A623]"
           />
           Same as mobile number
         </label>
@@ -385,8 +385,8 @@ function Section1({
               key={g}
               className={`flex-1 cursor-pointer min-h-[44px] inline-flex items-center justify-center px-4 rounded-md border text-sm font-semibold transition-colors ${
                 form.gender === g
-                  ? "bg-yi-gold text-navy border-yi-gold"
-                  : "border-navy/20 text-navy/70 hover:border-yi-gold/60"
+                  ? "bg-[#F5A623] text-navy border-[#F5A623]"
+                  : "border-navy/20 text-navy/70 hover:border-[#F5A623]/60"
               }`}
             >
               <input
@@ -410,8 +410,8 @@ function Section1({
               key={v}
               className={`flex-1 cursor-pointer min-h-[44px] inline-flex items-center justify-center px-4 rounded-md border text-sm font-semibold transition-colors ${
                 form.is_yi_yuva_member === v
-                  ? "bg-yi-gold text-navy border-yi-gold"
-                  : "border-navy/20 text-navy/70 hover:border-yi-gold/60"
+                  ? "bg-[#F5A623] text-navy border-[#F5A623]"
+                  : "border-navy/20 text-navy/70 hover:border-[#F5A623]/60"
               }`}
             >
               <input
@@ -508,8 +508,8 @@ function Section2({
               key={y.v}
               className={`cursor-pointer min-h-[44px] inline-flex items-center justify-center rounded-md border text-sm font-semibold transition-colors ${
                 form.year_of_study === y.v
-                  ? "bg-yi-gold text-navy border-yi-gold"
-                  : "border-navy/20 text-navy/70 hover:border-yi-gold/60"
+                  ? "bg-[#F5A623] text-navy border-[#F5A623]"
+                  : "border-navy/20 text-navy/70 hover:border-[#F5A623]/60"
               }`}
             >
               <input
@@ -602,7 +602,7 @@ function CollegeField({
                 <button
                   type="button"
                   onClick={() => pick(s)}
-                  className="block w-full text-left px-3 py-2 text-sm hover:bg-yi-gold/10"
+                  className="block w-full text-left px-3 py-2 text-sm hover:bg-[#F5A623]/10"
                 >
                   <span className="font-semibold text-navy">{s.name}</span>
                   {s.city && (
@@ -643,8 +643,8 @@ function Section3({
               key={opt.key}
               className={`flex items-center gap-3 p-3 border rounded-md cursor-pointer transition-colors ${
                 form[opt.key as keyof FormState]
-                  ? "bg-yi-gold/10 border-yi-gold"
-                  : "border-navy/20 hover:border-yi-gold/60"
+                  ? "bg-[#F5A623]/10 border-[#F5A623]"
+                  : "border-navy/20 hover:border-[#F5A623]/60"
               }`}
             >
               <input
@@ -653,7 +653,7 @@ function Section3({
                 onChange={(e) =>
                   update(opt.key as keyof FormState, e.target.checked as never)
                 }
-                className="accent-yi-gold h-5 w-5"
+                className="accent-[#F5A623] h-5 w-5"
               />
               <span className="text-sm text-navy">{opt.label}</span>
             </label>
@@ -671,8 +671,8 @@ function Section3({
               key={v}
               className={`flex-1 cursor-pointer min-h-[44px] inline-flex items-center justify-center px-4 rounded-md border text-sm font-semibold transition-colors ${
                 form.travel_commitment === v
-                  ? "bg-yi-gold text-navy border-yi-gold"
-                  : "border-navy/20 text-navy/70 hover:border-yi-gold/60"
+                  ? "bg-[#F5A623] text-navy border-[#F5A623]"
+                  : "border-navy/20 text-navy/70 hover:border-[#F5A623]/60"
               }`}
             >
               <input
@@ -703,21 +703,21 @@ function Section4({
     <div className="space-y-5">
       <SectionHeader n={4} title="Declaration" />
 
-      <div className="bg-yi-gold/10 border border-yi-gold/30 rounded-md p-4 text-sm text-navy">
+      <div className="bg-[#F5A623]/10 border border-[#F5A623]/30 rounded-md p-4 text-sm text-navy">
         Please review your details before submitting. Once submitted, only your
         chapter admin can edit your registration.
       </div>
 
       <label className={`flex items-start gap-3 p-4 border-2 rounded-md cursor-pointer transition-colors ${
         form.declaration_accepted
-          ? "bg-yi-gold/10 border-yi-gold"
-          : "border-navy/20 hover:border-yi-gold/60"
+          ? "bg-[#F5A623]/10 border-[#F5A623]"
+          : "border-navy/20 hover:border-[#F5A623]/60"
       }`}>
         <input
           type="checkbox"
           checked={form.declaration_accepted}
           onChange={(e) => update("declaration_accepted", e.target.checked)}
-          className="accent-yi-gold h-5 w-5 mt-0.5 shrink-0"
+          className="accent-[#F5A623] h-5 w-5 mt-0.5 shrink-0"
         />
         <span className="text-sm text-navy">{DECLARATION_TEXT}</span>
       </label>
@@ -726,7 +726,7 @@ function Section4({
 }
 
 const inputClass =
-  "block w-full min-h-[44px] px-3 py-2 border border-navy/20 rounded-md text-sm text-navy bg-white placeholder:text-navy/30 focus:outline-none focus:border-yi-gold focus:ring-1 focus:ring-yi-gold/40";
+  "block w-full min-h-[44px] px-3 py-2 border border-navy/20 rounded-md text-sm text-navy bg-white placeholder:text-navy/30 focus:outline-none focus:border-[#F5A623] focus:ring-1 focus:ring-[#F5A623]/40";
 
 function Field({
   label,
@@ -754,7 +754,7 @@ function Field({
 function SectionHeader({ n, title }: { n: number; title: string }) {
   return (
     <div className="border-b border-navy/10 pb-3">
-      <p className="text-[10px] font-semibold uppercase tracking-widest text-yi-gold">
+      <p className="text-[10px] font-semibold uppercase tracking-widest text-[#F5A623]">
         Section {n}
       </p>
       <h2 className="mt-1 text-xl font-bold text-navy">{title}</h2>

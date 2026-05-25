@@ -33,7 +33,7 @@ async function getAllDelegates(): Promise<DelegateRow[]> {
     .schema("future")
     .from("delegates")
     .select(
-      "id, full_name, email, phone, access_code, is_active, course, chapter_id, chapters:chapter_id(name), team_members(teams(team_name))"
+      "id, full_name, email, phone, access_code, is_active, course, chapter_id, chapters(name), team_members(teams(team_name))"
     )
     .eq("is_active", true)
     .order("full_name", { ascending: true });

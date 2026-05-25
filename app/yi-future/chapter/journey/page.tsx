@@ -90,9 +90,12 @@ export default async function JourneyPage() {
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-navy">90-Day Journey</h2>
+          <h2 className="text-2xl font-bold text-navy">{plan.label}</h2>
           <p className="mt-1 text-sm text-navy/60">
-            3 mandated events per phase × 3 phases = 9 events total.
+            {plan.description}
+          </p>
+          <p className="mt-1 text-xs text-navy/40">
+            {plan.eventsPerPhase} events per phase × 3 phases = {plan.eventsPerPhase * 3} events total
           </p>
         </div>
         <Link

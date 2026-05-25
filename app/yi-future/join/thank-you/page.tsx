@@ -10,11 +10,12 @@ export const metadata: Metadata = {
 export default async function ThankYouPage({
   searchParams,
 }: {
-  searchParams: Promise<{ email?: string; code?: string }>;
+  searchParams: Promise<{ email?: string; code?: string; returning?: string }>;
 }) {
-  const { email, code } = await searchParams;
+  const { email, code, returning } = await searchParams;
   const cleanEmail = email?.trim();
   const accessCode = code?.trim();
+  const isReturning = returning === "1";
 
   /* ── Look up chapter chair contact from access code ── */
   let chapterName: string | null = null;
@@ -71,14 +72,20 @@ export default async function ThankYouPage({
         <div className="max-w-2xl mx-auto space-y-6">
           {/* Hero card */}
           <div className="bg-white border border-navy/10 rounded-lg p-6 sm:p-10 text-center">
-            <div className="text-5xl mb-3">🎉</div>
+            <div className="text-5xl mb-3">{isReturning ? "🌟" : "🎉"}</div>
+            {isReturning && (
+              <div className="inline-block px-3 py-1 rounded-full bg-yi-gold/15 text-yi-gold text-xs font-bold uppercase tracking-wider mb-3">
+                Welcome back — Future alumni
+              </div>
+            )}
             <h1 className="text-2xl sm:text-3xl font-extrabold text-navy">
-              You&apos;re in!
+              {isReturning ? "Great to see you again!" : "You're in!"}
             </h1>
             <p className="mt-2 text-sm text-navy/70">
-              Welcome to{" "}
-              <strong className="text-navy">Yi YUVA Future 6.0</strong>. Your
-              registration is confirmed.
+              {isReturning
+                ? "You participated in a previous edition. Your experience gives your team an edge this time."
+                : <>Welcome to{" "}<strong className="text-navy">Yi YUVA Future 6.0</strong>. Your registration is confirmed.</>
+              }
             </p>
           </div>
 

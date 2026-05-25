@@ -27,6 +27,6 @@ export const config = {
      * - privacy-policy (Play Store requirement - must be publicly accessible)
      * Feel free to modify this pattern to include more paths.
      */
-    '/((?!_next/static|_next/image|favicon.ico|api/|manifest.json|.well-known/|privacy-policy|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|api/|manifest\\.json|manifest\\.webmanifest|sw\\.js|.well-known/|privacy-policy|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }

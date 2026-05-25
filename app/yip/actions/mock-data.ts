@@ -87,9 +87,9 @@ export type MockDataCounts = {
 export type MockEventSummary = {
   id: string;
   name: string;
-  level: Database["yip"]["Enums"]["event_level"];
+  level: Database["public"]["Enums"]["event_level"];
   chapter_name: string | null;
-  status: Database["yip"]["Enums"]["event_status"];
+  status: Database["public"]["Enums"]["event_status"];
   day1_date: string;
   day2_date: string;
   participants: number;
@@ -503,11 +503,11 @@ export async function seedMockData(): Promise<ActionResult<MockDataStats>> {
     // 1 PM, 1 Dep PM, 3 Cabinet Ministers, 9 Ruling MPs = 16 Ruling
     // 1 LoO, 3 Shadow Ministers, 9 Opposition MPs, 1 Independent MP = 14 Opposition-side(ish)
     type ParticipantPlan = {
-      role: Database["yip"]["Enums"]["parliament_role"];
-      side: Database["yip"]["Enums"]["party_side"] | null;
-      ministry: Database["yip"]["Enums"]["ministry_type"] | null;
+      role: Database["public"]["Enums"]["parliament_role"];
+      side: Database["public"]["Enums"]["party_side"] | null;
+      ministry: Database["public"]["Enums"]["ministry_type"] | null;
     };
-    const MINISTRIES: Database["yip"]["Enums"]["ministry_type"][] = [
+    const MINISTRIES: Database["public"]["Enums"]["ministry_type"][] = [
       "home",
       "finance",
       "education",
@@ -619,9 +619,9 @@ export async function seedMockData(): Promise<ActionResult<MockDataStats>> {
       id: string;
       person_id: string | null;
       full_name: string;
-      parliament_role: Database["yip"]["Enums"]["parliament_role"] | null;
-      party_side: Database["yip"]["Enums"]["party_side"] | null;
-      ministry: Database["yip"]["Enums"]["ministry_type"] | null;
+      parliament_role: Database["public"]["Enums"]["parliament_role"] | null;
+      party_side: Database["public"]["Enums"]["party_side"] | null;
+      ministry: Database["public"]["Enums"]["ministry_type"] | null;
       serial_no: number | null;
       school_name: string;
     };
@@ -693,7 +693,7 @@ export async function seedMockData(): Promise<ActionResult<MockDataStats>> {
     }
     type PartyRow = {
       id: string;
-      side: Database["yip"]["Enums"]["party_side"];
+      side: Database["public"]["Enums"]["party_side"];
       name: string;
     };
     const partyRows: PartyRow[] = parties as PartyRow[];
@@ -738,7 +738,7 @@ export async function seedMockData(): Promise<ActionResult<MockDataStats>> {
       .eq("is_active", true);
     type RubricRow = {
       id: string;
-      target_role: Database["yip"]["Enums"]["parliament_role"];
+      target_role: Database["public"]["Enums"]["parliament_role"];
       total_max: number;
       criteria: Array<{ key: string; label: string; max_score: number }>;
     };
@@ -1039,7 +1039,7 @@ export async function seedMockData(): Promise<ActionResult<MockDataStats>> {
 
     // 14. Questions (10) ────────────────────────────────────────────────
     const questionMinistries: Array<
-      Database["yip"]["Enums"]["ministry_type"]
+      Database["public"]["Enums"]["ministry_type"]
     > = [
       "home",
       "finance",
@@ -1114,7 +1114,7 @@ export async function seedMockData(): Promise<ActionResult<MockDataStats>> {
     await supabase.from("fees").insert(feeInserts);
 
     // 16. Volunteers (10, 8 YUVA + 2 external) ─────────────────────────
-    const stations: Array<Database["yip"]["Enums"]["volunteer_station"]> = [
+    const stations: Array<Database["public"]["Enums"]["volunteer_station"]> = [
       "registration",
       "help_desk",
       "av_tech",

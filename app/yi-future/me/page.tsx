@@ -53,6 +53,32 @@ export default async function DelegateHome() {
   if (!session || session.type !== "delegate") redirect("/yi-future/join");
 
   const me = await getDelegateView(session.id);
+
+  // Check participation history (previous editions)
+  let pastEditions: { year: string; chapter: string; team: string | null; award: string | null }[] = [];
+  if (me?.email) {
+    const svc2 = await createServiceClient();
+    const { data: prev } = await svc2
+      .schema("future")
+      .from("delegates")
+      .select("id, editions(slug), chapters(name), team_members(teams(team_name, awards(category)))")
+      .eq("email", me.email)
+      .neq("id", session.id)
+      .eq("is_active", true);
+    if (prev) {
+      pastEditions = (prev as unknown as {
+        editions: { slug: string } | null;
+        chapters: { name: string } | null;
+        team_members: { teams: { team_name: string; awards: { category: string }[] | null } | null }[];
+      }[]).map((p) => ({
+        year: p.editions?.slug ?? "—",
+        chapter: p.chapters?.name ?? "—",
+        team: p.team_members?.[0]?.teams?.team_name ?? null,
+        award: p.team_members?.[0]?.teams?.awards?.[0]?.category ?? null,
+      }));
+    }
+  }
+
   if (!me) {
     return (
       <div className="bg-white border border-navy/10 rounded-lg p-6 text-center">
@@ -187,6 +213,44 @@ export default async function DelegateHome() {
           </p>
           <div className="mt-4 inline-block bg-yi-gold/10 text-yi-gold px-3 py-1.5 rounded font-mono font-bold tracking-wider">
             {me.access_code}
+          </div>
+        </section>
+      )}
+
+      {/* Participation history */}
+      {pastEditions.length > 0 && (
+        <section className="bg-gradient-to-br from-navy to-navy-dark rounded-lg p-5 text-ivory">
+          <div className="text-[11px] font-semibold uppercase tracking-widest text-yi-gold mb-3">
+            Future alumni
+          </div>
+          <h3 className="font-bold text-lg">
+            You&apos;ve been here before
+          </h3>
+          <p className="mt-1 text-sm text-ivory/60">
+            Your experience gives your team an edge.
+          </p>
+          <div className="mt-4 space-y-2">
+            {pastEditions.map((pe, i) => (
+              <div
+                key={i}
+                className="flex items-center justify-between p-3 rounded-lg bg-white/5 border border-white/10"
+              >
+                <div>
+                  <div className="font-semibold text-ivory">
+                    Future {pe.year}
+                  </div>
+                  <div className="text-xs text-ivory/50">
+                    {pe.chapter}
+                    {pe.team && <> · {pe.team}</>}
+                  </div>
+                </div>
+                {pe.award && (
+                  <span className="px-2 py-0.5 rounded-full bg-yi-gold/20 text-yi-gold text-[10px] font-bold uppercase tracking-wider">
+                    {pe.award.replace(/_/g, " ")}
+                  </span>
+                )}
+              </div>
+            ))}
           </div>
         </section>
       )}

@@ -4,7 +4,7 @@ import { createServiceClient } from "@/lib/yip/supabase/server";
 import type { Tables, Database } from "@/types/yip/database";
 
 type Question = Tables<{ schema: "yip" }, "questions">;
-type MinistryType = Database["yip"]["Enums"]["ministry_type"];
+type MinistryType = Database["public"]["Enums"]["ministry_type"];
 
 type ActionResult<T = null> =
   | { success: true; data: T }

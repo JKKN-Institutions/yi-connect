@@ -230,10 +230,10 @@ export async function promoteToEvent(
     (results ?? []).map((r) => [r.participant_id, r])
   );
 
-  // Source season for audit
+  // Source year for audit
   const { data: seasonRow } = await supabase
     .from("events")
-    .select("season_id")
+    .select("yi_year_id")
     .eq("id", fromEventId)
     .single();
 
@@ -283,7 +283,7 @@ export async function promoteToEvent(
     const targetId = targetByKey.get(key) ?? null;
     const res = resultByParticipant.get(p.id);
     return {
-      season_id: seasonRow?.season_id ?? null,
+      season_id: seasonRow?.yi_year_id ?? null,
       source_event_id: fromEventId,
       target_event_id: toEventId,
       source_participant_id: p.id,
@@ -439,7 +439,7 @@ export async function getSeasonEvents(
   const { data: events, error } = await supabase
     .from("events")
     .select("id, name, level, status, chapter_name, city, state, day1_date, day2_date")
-    .eq("season_id", seasonId)
+    .eq("yi_year_id", seasonId)
     .order("level")
     .order("day1_date", { ascending: true });
 
@@ -502,8 +502,8 @@ export async function getSeasonPipeline(
   const supabase = await createServiceClient();
 
   const { data: season, error: sError } = await supabase
-    .schema("yi").from("years") /* TODO yip-absorption: seasons table dropped — verify yi.years shape + filter on events.yi_year_id */
-    .select("id, name, year")
+    .schema("yi").from("years")
+    .select("id, name:display_name, year")
     .eq("id", seasonId)
     .single();
 
@@ -541,8 +541,8 @@ export async function getAllSeasons(): Promise<Season[]> {
   const supabase = await createServiceClient();
 
   const { data, error } = await supabase
-    .schema("yi").from("years") /* TODO yip-absorption: seasons table dropped — verify yi.years shape + filter on events.yi_year_id */
-    .select("id, name, year, is_active")
+    .schema("yi").from("years")
+    .select("id, name:display_name, year, is_active")
     .order("year", { ascending: false });
 
   if (error || !data) return [];
@@ -585,7 +585,7 @@ export async function createRegionalEvent(
     .insert({
       name: data.name,
       level: "regional" as const,
-      season_id: seasonId,
+      yi_year_id: seasonId,
       city: data.city,
       state: data.state,
       venue_name: data.venue_name ?? null,
@@ -644,7 +644,7 @@ export async function createNationalEvent(
     .insert({
       name: data.name,
       level: "national" as const,
-      season_id: seasonId,
+      yi_year_id: seasonId,
       city: data.city,
       state: data.state,
       venue_name: data.venue_name ?? null,

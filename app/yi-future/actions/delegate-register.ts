@@ -31,7 +31,7 @@ export type RegisterDelegateInput = {
 };
 
 export type RegisterDelegateResult =
-  | { ok: true; redirect: string; access_code: string }
+  | { ok: true; redirect: string; access_code: string; returning: boolean }
   | { ok: false; error: string };
 
 // ─── HELPERS ────────────────────────────────────────────────────────
@@ -183,6 +183,17 @@ export async function registerDelegate(
     };
   }
 
+  // Check for returning delegate (participated in a previous edition)
+  const { data: prevParticipation } = await svc
+    .schema("future")
+    .from("delegates")
+    .select("id, edition_id, editions(slug)")
+    .eq("email", email)
+    .neq("edition_id", editionId)
+    .limit(1)
+    .maybeSingle();
+  const isReturning = !!prevParticipation;
+
   const { data: chapter } = await svc
     .schema("yi")
     .from("chapters")
@@ -250,7 +261,8 @@ export async function registerDelegate(
   return {
     ok: true,
     access_code,
-    redirect: `/yi-future/join/thank-you?email=${encodeURIComponent(email)}&code=${encodeURIComponent(access_code)}`,
+    returning: isReturning,
+    redirect: `/yi-future/join/thank-you?email=${encodeURIComponent(email)}&code=${encodeURIComponent(access_code)}${isReturning ? "&returning=1" : ""}`,
   };
 }
 

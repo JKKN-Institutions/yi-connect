@@ -21,7 +21,7 @@ import { toast } from "sonner";
 import type { Tables, Database } from "@/types/yip/database";
 
 type Question = Tables<{ schema: "yip" }, "questions">;
-type MinistryType = Database["yip"]["Enums"]["ministry_type"];
+type MinistryType = Database["public"]["Enums"]["ministry_type"];
 
 // ─── Session parsing (client-side) ──────────────────────────────
 

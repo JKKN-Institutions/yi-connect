@@ -75,7 +75,22 @@ const nextConfig: NextConfig = {
       {
         source: '/members',
         destination: '/members/table',
-        permanent: false, // Use temporary redirect for flexibility
+        permanent: false,
+      },
+      {
+        source: '/chapter/:path*',
+        destination: '/yi-future/chapter/:path*',
+        permanent: true,
+      },
+      {
+        source: '/national/:path*',
+        destination: '/yi-future/national/:path*',
+        permanent: true,
+      },
+      {
+        source: '/host/:path*',
+        destination: '/yi-future/host/:path*',
+        permanent: true,
       },
     ];
   },

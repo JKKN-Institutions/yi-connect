@@ -1,0 +1,88 @@
+=== chapters (HTTP 200) ===
+[{"id":"ad3458ca-e116-45c3-af9a-01684fcca01a","name":"Bengaluru","location":"Bengaluru, South India","city":"Bengaluru","state":"South India","region":"SRTKKA","logo_url":null,"is_active":false,"chair
+=== profiles (HTTP 200) ===
+[{"id":"46b8d5af-fd55-4fa0-b40e-c19c7775742d","email":"demo-industry@yi-demo.com","full_name":"Demo Industry Coordinator","avatar_url":null,"phone":null,"chapter_id":"fe71c429-2647-4262-b35b-e356c9609
+=== members (HTTP 200) ===
+[{"id":"83fc52d4-ec4b-4482-bbec-c79a1491b3d7","chapter_id":"fe71c429-2647-4262-b35b-e356c960903d","membership_number":null,"member_since":"2026-05-22","membership_status":"active","company":null,"desi
+=== member_requests (HTTP 200) ===
+[]
+
+=== events (HTTP 200) ===
+[{"id":"d69993ea-d661-4b9d-a65d-8bb071049c33","chapter_id":"fe71c429-2647-4262-b35b-e356c960903d","template_id":null,"title":"Diwali Damakka 2025","description":"Annual Diwali celebration with cracker
+=== chapter_invitations (HTTP 200) ===
+[]
+
+=== awards (HTTP 404) ===
+{"code":"PGRST205","details":null,"hint":"Perhaps you meant the table 'yi_connect.award_cycles'","message":"Could not find the table 'yi_connect.awards' in the schema cache"}
+
+=== budgets (HTTP 200) ===
+[]
+
+=== expenses (HTTP 200) ===
+[]
+
+=== communications (HTTP 404) ===
+{"code":"PGRST205","details":null,"hint":"Perhaps you meant the table 'yi_connect.notifications'","message":"Could not find the table 'yi_connect.communications' in the schema cache"}
+
+=== impersonation_audit (HTTP 404) ===
+{"code":"PGRST205","details":null,"hint":"Perhaps you meant the table 'yi_connect.impersonation_sessions'","message":"Could not find the table 'yi_connect.impersonation_audit' in the schema cache"}
+
+=== audit_logs (HTTP 404) ===
+{"code":"PGRST205","details":null,"hint":"Perhaps you meant the table 'yi_connect.financial_audit_logs'","message":"Could not find the table 'yi_connect.audit_logs' in the schema cache"}
+
+=== award_winners (HTTP 404) ===
+{"code":"PGRST205","details":null,"hint":"Perhaps you meant the table 'yi_connect.award_cycles'","message":"Could not find the table 'yi_connect.award_winners' in the schema cache"}
+
+=== best_practices (HTTP 200) ===
+[]
+
+=== stakeholder_contacts (HTTP 200) ===
+[]
+
+=== sponsorships (HTTP 404) ===
+{"code":"PGRST205","details":null,"hint":"Perhaps you meant the table 'yi_connect.sponsorship_tiers'","message":"Could not find the table 'yi_connect.sponsorships' in the schema cache"}
+
+=== expense_reimbursements (HTTP 404) ===
+{"code":"PGRST205","details":null,"hint":"Perhaps you meant the table 'yi_connect.expense_receipts'","message":"Could not find the table 'yi_connect.expense_reimbursements' in the schema cache"}
+
+=== stakeholders (HTTP 404) ===
+{"code":"PGRST205","details":null,"hint":"Perhaps you meant the table 'yi_connect.stakeholder_mous'","message":"Could not find the table 'yi_connect.stakeholders' in the schema cache"}
+
+=== relationships (HTTP 404) ===
+{"code":"PGRST205","details":null,"hint":"Perhaps you meant the table 'yi_connect.relationship_health_scores'","message":"Could not find the table 'yi_connect.relationships' in the schema cache"}
+
+=== notifications (HTTP 200) ===
+[]
+
+=== event_templates (HTTP 200) ===
+[]
+
+=== booking_restrictions (HTTP 200) ===
+[{"id":"027d3c9e-7973-44fc-873f-e8a32b880d73","stakeholder_type":"school","min_advance_days":7,"max_advance_days":90,"max_bookings_per_month":10,"max_concurrent_pending":3,"min_session_duration":60,"m
+=== relationship_health_scores (HTTP 200) ===
+[]
+
+=== session_booking_history (HTTP 200) ===
+[]
+
+=== stakeholder_documents (HTTP 200) ===
+[]
+
+=== announcement_templates (HTTP 404) ===
+{"code":"PGRST205","details":null,"hint":"Perhaps you meant the table 'yi_connect.event_templates'","message":"Could not find the table 'yi_connect.announcement_templates' in the schema cache"}
+
+=== approved_emails (HTTP 200) ===
+[]
+
+=== certifications (HTTP 200) ===
+[]
+
+=== chapter_settings (HTTP 200) ===
+[]
+
+=== chapter_reports (HTTP 200) ===
+[]
+
+=== cmp_progress (HTTP 200) ===
+[]
+

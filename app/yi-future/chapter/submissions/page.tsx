@@ -127,7 +127,7 @@ export default async function SubmissionsMatrixPage() {
                   })}
                   <td className="px-4 py-3 text-right">
                     <Link
-                      href={`/chapter/submissions/${t.id}`}
+                      href={`/yi-future/chapter/submissions/${t.id}`}
                       className="text-xs font-semibold text-navy hover:text-yi-gold"
                     >
                       Open →

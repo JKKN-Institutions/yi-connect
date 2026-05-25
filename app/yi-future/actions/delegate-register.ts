@@ -1,6 +1,7 @@
 "use server";
 
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
+import { generateAccessCode } from "@/lib/yi-future/access-code";
 
 // ─── TYPES ──────────────────────────────────────────────────────────
 
@@ -30,7 +31,7 @@ export type RegisterDelegateInput = {
 };
 
 export type RegisterDelegateResult =
-  | { ok: true; redirect: string }
+  | { ok: true; redirect: string; access_code: string }
   | { ok: false; error: string };
 
 // ─── HELPERS ────────────────────────────────────────────────────────
@@ -80,6 +81,22 @@ async function findOrCreatePendingCollege(
     .maybeSingle();
   if (error || !inserted) return null;
   return (inserted as { id: string }).id;
+}
+
+async function uniqueAccessCode(
+  svc: Awaited<ReturnType<typeof createServiceClient>>
+): Promise<string> {
+  for (let i = 0; i < 25; i++) {
+    const code = generateAccessCode();
+    const { data } = await svc
+      .schema("future")
+      .from("delegates")
+      .select("id")
+      .eq("access_code", code)
+      .maybeSingle();
+    if (!data) return code;
+  }
+  throw new Error("Could not allocate a unique access code after 25 tries.");
 }
 
 // ─── REGISTER ───────────────────────────────────────────────────────
@@ -183,6 +200,7 @@ export async function registerDelegate(
     input.college_city
   );
 
+  const access_code = await uniqueAccessCode(svc);
   const nowIso = new Date().toISOString();
 
   const { error: insertErr } = await svc
@@ -202,6 +220,7 @@ export async function registerDelegate(
       specialization: input.specialization?.trim() || null,
       year_of_study: input.year_of_study,
       college_id,
+      access_code,
       is_active: true,
       registered_at: nowIso,
       interest_internships: input.interest_internships,
@@ -230,7 +249,8 @@ export async function registerDelegate(
 
   return {
     ok: true,
-    redirect: `/yi-future/join/thank-you?email=${encodeURIComponent(email)}`,
+    access_code,
+    redirect: `/yi-future/join/thank-you?email=${encodeURIComponent(email)}&code=${encodeURIComponent(access_code)}`,
   };
 }
 

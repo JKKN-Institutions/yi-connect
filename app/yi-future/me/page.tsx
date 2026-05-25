@@ -123,14 +123,12 @@ export default async function DelegateHome() {
                 )}
               </div>
             </div>
-            {isCaptain && (
-              <Link
-                href="/yi-future/me/team"
-                className="px-3 py-1.5 rounded-md bg-navy text-ivory text-xs font-semibold hover:bg-navy-dark"
-              >
-                Manage team →
-              </Link>
-            )}
+            <Link
+              href="/yi-future/me/team"
+              className="px-3 py-1.5 rounded-md bg-navy text-ivory text-xs font-semibold hover:bg-navy-dark"
+            >
+              {isCaptain ? "Manage team →" : "View team →"}
+            </Link>
           </div>
 
           <div className="mt-4 pt-3 border-t border-navy/10">

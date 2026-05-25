@@ -1,17 +1,19 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { JoinHeader } from "@/components/yi-future/brand/JoinHeader";
 
-export const metadata = {
-  title: "Registration received — Future 6.0",
+export const metadata: Metadata = {
+  title: "You're in — Future 6.0",
 };
 
 export default async function ThankYouPage({
   searchParams,
 }: {
-  searchParams: Promise<{ email?: string }>;
+  searchParams: Promise<{ email?: string; code?: string }>;
 }) {
-  const { email } = await searchParams;
+  const { email, code } = await searchParams;
   const cleanEmail = email?.trim();
+  const accessCode = code?.trim();
 
   return (
     <main className="min-h-screen bg-ivory flex flex-col">
@@ -22,57 +24,87 @@ export default async function ThankYouPage({
       </header>
 
       <section className="flex-1 px-4 py-10 sm:py-16">
-        <div className="max-w-2xl mx-auto bg-white border border-navy/10 rounded-lg p-6 sm:p-10 text-center">
-          <div className="inline-flex items-center justify-center h-16 w-16 rounded-full bg-yi-green/10 text-yi-green text-3xl">
-            ✓
-          </div>
-          <h1 className="mt-5 text-2xl sm:text-3xl font-bold text-navy">
-            Thank you for registering
-          </h1>
-          <p className="mt-3 text-sm text-navy/70">
-            Your details for{" "}
-            <strong className="text-navy">Yi YUVA Future 6.0 — 2026</strong> have
-            been received.
-          </p>
-          {cleanEmail && (
+        <div className="max-w-2xl mx-auto space-y-6">
+          {/* Hero card */}
+          <div className="bg-white border border-navy/10 rounded-lg p-6 sm:p-10 text-center">
+            <div className="text-5xl mb-3">🎉</div>
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-navy">
+              You&apos;re in!
+            </h1>
             <p className="mt-2 text-sm text-navy/70">
-              You'll receive details of the event at{" "}
-              <strong className="text-navy">{cleanEmail}</strong> at a later date.
+              Welcome to{" "}
+              <strong className="text-navy">Yi YUVA Future 6.0</strong>. Your
+              registration is confirmed.
             </p>
+          </div>
+
+          {/* Access code card */}
+          {accessCode && (
+            <div className="bg-gradient-to-br from-navy to-navy-dark rounded-lg p-6 sm:p-8 text-center">
+              <div className="text-[11px] font-semibold tracking-widest text-yi-gold uppercase mb-3">
+                Your access code
+              </div>
+              <div className="inline-block bg-white/10 border-2 border-yi-gold/50 rounded-xl px-6 sm:px-10 py-4">
+                <div className="text-3xl sm:text-5xl font-mono font-extrabold tracking-[0.3em] text-ivory select-all">
+                  {accessCode}
+                </div>
+              </div>
+              <div className="mt-4 space-y-1">
+                <p className="text-sm font-semibold text-yi-gold">
+                  Save this code — you&apos;ll need it to log in
+                </p>
+                <p className="text-xs text-ivory/60">
+                  Screenshot this page or write it down. This is your key to the
+                  Future 6.0 platform.
+                </p>
+              </div>
+            </div>
           )}
 
-          <div className="mt-8 text-left">
-            <h2 className="text-xs font-semibold uppercase tracking-widest text-yi-gold">
+          {/* What happens next */}
+          <div className="bg-white border border-navy/10 rounded-lg p-6 sm:p-8">
+            <h2 className="text-xs font-semibold uppercase tracking-widest text-yi-gold mb-4">
               What happens next
             </h2>
-            <ol className="mt-3 space-y-3">
+            <ol className="space-y-4">
               <Step
                 n={1}
-                title="Chapter admin reviews your registration"
-                body="Your Yi chapter team will review your details and get in touch if anything is missing."
+                title="Log in with your access code"
+                body="Use the 6-character code above to log in at any time. Your chapter admin will assign you to a team."
               />
               <Step
                 n={2}
-                title="You'll get your access code by email"
-                body="When the program is ready to begin, your chapter admin will email you a 6-character access code that unlocks the platform."
+                title="Team formation"
+                body="Your team captain will invite you — or you can invite others from your chapter. Teams are 1–5 members."
               />
               <Step
                 n={3}
-                title="Team formation begins"
-                body="Once you're in, you'll join (or form) a team of 3–5, pick a problem statement from one of the four tracks, and begin the 90-day mentored journey."
+                title="Pick a problem statement"
+                body="Once your team is confirmed, you'll choose a problem statement from one of the four tracks and begin the 90-day journey."
               />
             </ol>
           </div>
 
-          <div className="mt-8 pt-6 border-t border-navy/10">
-            <p className="text-xs text-navy/50">
-              Questions? Reach out to your Yi chapter directly.
+          {/* Contact info */}
+          <div className="bg-white border border-navy/10 rounded-lg p-6 text-center">
+            <p className="text-xs text-navy/50 mb-1">
+              Questions? Reach out to your Yi chapter chair.
             </p>
+            {cleanEmail && (
+              <p className="text-xs text-navy/50">
+                Confirmation will also be sent to{" "}
+                <strong className="text-navy">{cleanEmail}</strong>.
+              </p>
+            )}
+          </div>
+
+          {/* CTA */}
+          <div className="text-center">
             <Link
-              href="/"
-              className="mt-3 inline-block text-sm font-semibold text-navy hover:text-yi-gold"
+              href="/yi-future/login"
+              className="inline-block px-8 py-4 min-h-[44px] rounded-xl bg-[#F5A623] text-navy font-extrabold hover:bg-[#F5A623]/90 transition-all text-base shadow-lg hover:shadow-xl"
             >
-              ← Back to home
+              Log in now →
             </Link>
           </div>
         </div>

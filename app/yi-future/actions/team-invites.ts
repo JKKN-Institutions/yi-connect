@@ -303,6 +303,92 @@ export async function freezeTeam(teamId: string): Promise<ActionResult> {
   return { ok: true, message: "Team frozen." };
 }
 
+// ─── PICK PROBLEM STATEMENT (delegate auth — any team member) ───────
+export async function pickProblemAsDelegate(
+  teamId: string,
+  problemId: string
+): Promise<ActionResult> {
+  const session = await readSession();
+  if (!session || session.type !== "delegate") {
+    return { ok: false, error: "Sign in as a delegate first." };
+  }
+
+  const svc = await createServiceClient();
+  const team = await loadTeam(teamId);
+  if (!team) return { ok: false, error: "Team not found." };
+
+  if (!team.is_frozen) {
+    return {
+      ok: false,
+      error: "Confirm your team first (freeze it) before picking a problem.",
+    };
+  }
+
+  const { data: member } = await svc
+    .schema("future")
+    .from("team_members")
+    .select("delegate_id")
+    .eq("team_id", teamId)
+    .eq("delegate_id", session.id)
+    .maybeSingle();
+  if (!member) {
+    return { ok: false, error: "You must be on this team to pick a problem." };
+  }
+
+  const { error } = await svc
+    .schema("future")
+    .from("teams")
+    .update({
+      problem_statement_id: problemId,
+      status: "problem_selected",
+      updated_at: new Date().toISOString(),
+    } as never)
+    .eq("id", teamId);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/yi-future/me/team");
+  revalidatePath("/yi-future/me");
+  return { ok: true, message: "Problem selected." };
+}
+
+// ─── CLEAR PROBLEM (delegate auth — captain/leader only) ────────────
+export async function clearProblemAsDelegate(
+  teamId: string
+): Promise<ActionResult> {
+  const session = await readSession();
+  if (!session || session.type !== "delegate") {
+    return { ok: false, error: "Sign in as a delegate first." };
+  }
+
+  const svc = await createServiceClient();
+  const team = await loadTeam(teamId);
+  if (!team) return { ok: false, error: "Team not found." };
+
+  const isLeader = team.leader_delegate_id === session.id;
+  const isCaptain = team.captain_id === session.id;
+  if (!isLeader && !isCaptain) {
+    return {
+      ok: false,
+      error: "Only the team leader or captain can re-pick the problem.",
+    };
+  }
+
+  const { error } = await svc
+    .schema("future")
+    .from("teams")
+    .update({
+      problem_statement_id: null,
+      status: "registered",
+      updated_at: new Date().toISOString(),
+    } as never)
+    .eq("id", teamId);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/yi-future/me/team");
+  revalidatePath("/yi-future/me");
+  return { ok: true };
+}
+
 // ─── SET LEADER (captain-only) ──────────────────────────────────────
 export async function setLeader(
   teamId: string,

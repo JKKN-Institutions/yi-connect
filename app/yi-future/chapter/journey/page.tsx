@@ -53,11 +53,29 @@ function fmt(iso: string): string {
   });
 }
 
+async function getChapterDuration(chapterId: string): Promise<ProgrammeDuration> {
+  const svc = await createServiceClient();
+  const { data } = await svc
+    .schema("yi")
+    .from("chapters")
+    .select("programme_duration_days")
+    .eq("id", chapterId)
+    .maybeSingle();
+  const days = (data as { programme_duration_days: number | null } | null)?.programme_duration_days;
+  if (days === 30 || days === 60) return days;
+  return 90;
+}
+
 export default async function JourneyPage() {
   const ctx = await getChapterContext();
   if (!ctx) redirect("/yi-future/chapter");
 
-  const events = await getEvents(ctx.chapterId, ctx.editionId);
+  const [events, duration] = await Promise.all([
+    getEvents(ctx.chapterId, ctx.editionId),
+    getChapterDuration(ctx.chapterId),
+  ]);
+  const plan = PROGRAMME_PLAN_TEMPLATES[duration];
+  const phaseTimeLabels = PHASE_DURATION_LABELS[duration];
 
   const statuses: PhaseEventStatus[] = PHASES.map((p) => {
     const phaseEvents = events.filter((e) => e.phase === p);

@@ -144,6 +144,21 @@ export default async function ChapterSetupPage() {
           .eq("id", ctx!.chapterId);
       }
     }
+
+    // Save finale dates
+    const finaleStart = String(formData.get("finale_start_date") ?? "").trim() || null;
+    const finaleEnd = String(formData.get("finale_end_date") ?? "").trim() || null;
+    {
+      const svc = await createServiceClient();
+      await svc
+        .schema("yi")
+        .from("chapters")
+        .update({
+          finale_start_date: finaleStart,
+          finale_end_date: finaleEnd,
+        } as never)
+        .eq("id", ctx!.chapterId);
+    }
   }
 
   async function addMember(formData: FormData) {

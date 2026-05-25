@@ -148,14 +148,32 @@ export async function resolveRegionalFinaleEventId(
   const finaleHostId = (hostChapterRow as unknown as { id: string } | null)?.id ?? null;
   if (!finaleHostId) return null;
 
-  // Step 3: find the national_track_final event for that chapter + edition
-  const { data: eventRow } = await svc
+  // Step 3: get team's track via its problem_statement
+  const { data: teamPS } = await svc
+    .schema("future")
+    .from("teams")
+    .select("problem_statement_id, problem_statements(track_id)")
+    .eq("id", teamId)
+    .maybeSingle();
+
+  const trackId = (teamPS as unknown as {
+    problem_statements: { track_id: string } | null;
+  } | null)?.problem_statements?.track_id ?? null;
+
+  // Step 4: find the national_track_final event for that host + edition + track
+  let query = svc
     .schema("future")
     .from("events")
     .select("id")
     .eq("chapter_id", finaleHostId)
     .eq("type", "national_track_final" as never)
-    .eq("edition_id", editionId)
+    .eq("edition_id", editionId);
+
+  if (trackId) {
+    query = query.eq("track_id", trackId);
+  }
+
+  const { data: eventRow } = await query
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();

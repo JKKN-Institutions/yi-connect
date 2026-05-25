@@ -24,7 +24,6 @@ const NAV: NavItem[] = [
   { label: "Awards", href: "/yi-future/host/awards" },
   { label: "Deliverables", href: "/yi-future/host/deliverables" },
   { label: "Metrics", href: "/yi-future/host/metrics" },
-  { label: "My Bug Reports", href: "/yi-future/my-bug-reports" },
 ];
 
 export default async function HostLayout({

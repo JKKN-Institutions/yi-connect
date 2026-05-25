@@ -383,7 +383,11 @@ function Section1({
           {(["male", "female"] as const).map((g) => (
             <label
               key={g}
-              className="flex-1 cursor-pointer min-h-[44px] inline-flex items-center justify-center px-4 rounded-md border border-navy/20 text-sm font-semibold text-navy/70 hover:border-yi-gold/60 has-[:checked]:bg-yi-gold has-[:checked]:text-navy has-[:checked]:border-yi-gold"
+              className={`flex-1 cursor-pointer min-h-[44px] inline-flex items-center justify-center px-4 rounded-md border text-sm font-semibold transition-colors ${
+                form.gender === g
+                  ? "bg-yi-gold text-navy border-yi-gold"
+                  : "border-navy/20 text-navy/70 hover:border-yi-gold/60"
+              }`}
             >
               <input
                 type="radio"
@@ -404,7 +408,11 @@ function Section1({
           {(["yes", "no"] as const).map((v) => (
             <label
               key={v}
-              className="flex-1 cursor-pointer min-h-[44px] inline-flex items-center justify-center px-4 rounded-md border border-navy/20 text-sm font-semibold text-navy/70 hover:border-yi-gold/60 has-[:checked]:bg-yi-gold has-[:checked]:text-navy has-[:checked]:border-yi-gold"
+              className={`flex-1 cursor-pointer min-h-[44px] inline-flex items-center justify-center px-4 rounded-md border text-sm font-semibold transition-colors ${
+                form.is_yi_yuva_member === v
+                  ? "bg-yi-gold text-navy border-yi-gold"
+                  : "border-navy/20 text-navy/70 hover:border-yi-gold/60"
+              }`}
             >
               <input
                 type="radio"
@@ -498,7 +506,11 @@ function Section2({
           ].map((y) => (
             <label
               key={y.v}
-              className="cursor-pointer min-h-[44px] inline-flex items-center justify-center rounded-md border border-navy/20 text-sm font-semibold text-navy/70 hover:border-yi-gold/60 has-[:checked]:bg-yi-gold has-[:checked]:text-navy has-[:checked]:border-yi-gold"
+              className={`cursor-pointer min-h-[44px] inline-flex items-center justify-center rounded-md border text-sm font-semibold transition-colors ${
+                form.year_of_study === y.v
+                  ? "bg-yi-gold text-navy border-yi-gold"
+                  : "border-navy/20 text-navy/70 hover:border-yi-gold/60"
+              }`}
             >
               <input
                 type="radio"
@@ -629,7 +641,11 @@ function Section3({
           ].map((opt) => (
             <label
               key={opt.key}
-              className="flex items-center gap-3 p-3 border border-navy/20 rounded-md cursor-pointer hover:border-yi-gold/60 has-[:checked]:bg-yi-gold/10 has-[:checked]:border-yi-gold"
+              className={`flex items-center gap-3 p-3 border rounded-md cursor-pointer transition-colors ${
+                form[opt.key as keyof FormState]
+                  ? "bg-yi-gold/10 border-yi-gold"
+                  : "border-navy/20 hover:border-yi-gold/60"
+              }`}
             >
               <input
                 type="checkbox"
@@ -653,7 +669,11 @@ function Section3({
           {(["yes", "no"] as const).map((v) => (
             <label
               key={v}
-              className="flex-1 cursor-pointer min-h-[44px] inline-flex items-center justify-center px-4 rounded-md border border-navy/20 text-sm font-semibold text-navy/70 hover:border-yi-gold/60 has-[:checked]:bg-yi-gold has-[:checked]:text-navy has-[:checked]:border-yi-gold"
+              className={`flex-1 cursor-pointer min-h-[44px] inline-flex items-center justify-center px-4 rounded-md border text-sm font-semibold transition-colors ${
+                form.travel_commitment === v
+                  ? "bg-yi-gold text-navy border-yi-gold"
+                  : "border-navy/20 text-navy/70 hover:border-yi-gold/60"
+              }`}
             >
               <input
                 type="radio"
@@ -688,7 +708,11 @@ function Section4({
         chapter admin can edit your registration.
       </div>
 
-      <label className="flex items-start gap-3 p-4 border-2 border-navy/20 rounded-md cursor-pointer hover:border-yi-gold/60 has-[:checked]:bg-yi-gold/10 has-[:checked]:border-yi-gold">
+      <label className={`flex items-start gap-3 p-4 border-2 rounded-md cursor-pointer transition-colors ${
+        form.declaration_accepted
+          ? "bg-yi-gold/10 border-yi-gold"
+          : "border-navy/20 hover:border-yi-gold/60"
+      }`}>
         <input
           type="checkbox"
           checked={form.declaration_accepted}

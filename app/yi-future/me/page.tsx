@@ -88,7 +88,6 @@ export default async function DelegateHome() {
           { label: "Feedback", href: "/yi-future/me/feedback" },
           { label: "Resume", href: "/yi-future/me/resume" },
           { label: "Interviews", href: "/yi-future/me/interviews" },
-          { label: "Consent", href: "/yi-future/me/consent" },
           { label: "Results", href: "/yi-future/me/results" },
         ].map((n) => (
           <Link

@@ -74,7 +74,7 @@ async function getChapter(id: string) {
     .schema("yi")
     .from("chapters")
     .select(
-      "id, name, city, state, region, logo_url, programme_duration_days"
+      "id, name, city, state, region, logo_url, programme_duration_days, finale_start_date, finale_end_date"
     )
     .eq("id", id)
     .maybeSingle();

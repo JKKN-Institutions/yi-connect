@@ -10,7 +10,7 @@
  * apps; their original middlewares assumed bare paths (e.g. `/jury`,
  * `/dashboard`), but the routes now live under `/yip/*` and `/yi-future/*`.
  *
- * Three auth surfaces coexist:
+ * Four auth surfaces coexist:
  *   - yi-connect (Supabase OAuth)         → /dashboard, /members, /events, /finance, ...
  *   - YIP (mixed)                          → OAuth for /yip/dashboard/*, access-code
  *                                            cookie (`yip_session`) for /yip/jury,
@@ -22,10 +22,14 @@
  *                                            for /yi-future/me, /yi-future/mentor,
  *                                            /yi-future/jury, /yi-future/partner.
  *                                            Public: most of the rest.
+ *   - YiFi (mixed)                         → OAuth for /yifi/admin/*.
+ *                                            Access-code cookie (`yifi_session`)
+ *                                            for /yifi/me/*. Public: /yifi,
+ *                                            /yifi/join, /yifi/reveal.
  *
  * Cookie collision check: yi-connect uses Supabase SSR default
  * `sb-bkmpbcoxbjyafieabxao-auth-token`; YIP uses `yip_session`; YiFuture
- * uses `yifuture_session`. No overlap — verified 2026-05-22.
+ * uses `yifuture_session`; YiFi uses `yifi_session`. No overlap.
  */
 
 import { createServerClient } from '@supabase/ssr'
@@ -82,6 +86,11 @@ export async function updateSession(request: NextRequest) {
   // ─── YiFuture nested mount (/yi-future/*) ─────────────────────────────
   if (pathname.startsWith('/yi-future')) {
     return handleYiFutureAuth(request, supabaseResponse, user)
+  }
+
+  // ─── YiFi nested mount (/yifi/*) ─────────────────────────────────────
+  if (pathname.startsWith('/yifi')) {
+    return handleYiFiAuth(request, supabaseResponse, user)
   }
 
   // ─── yi-connect main surface ──────────────────────────────────────────
@@ -338,4 +347,69 @@ function requireAccessCodeCookie(
   } catch {
     return redirectToJoin()
   }
+}
+
+/**
+ * YiFi auth gate. Routes are mounted at /yifi/* in yi-connect.
+ *
+ * Public (no auth):
+ *   /yifi                       — landing page
+ *   /yifi/join                  — registration + census capture
+ *   /yifi/reveal                — live reveal screen (projector display)
+ *   /yifi/login                 — admin login
+ *
+ * OAuth-gated (Supabase session required):
+ *   /yifi/admin/*               — architect/national admin
+ *
+ * Access-code-gated (yifi_session cookie required):
+ *   /yifi/me/*                  — member personal dashboard (type=member)
+ */
+function handleYiFiAuth(
+  request: NextRequest,
+  supabaseResponse: NextResponse,
+  user: { id: string } | null
+): NextResponse {
+  const { pathname } = request.nextUrl
+
+  // Always allow YiFi API routes.
+  if (pathname.startsWith('/yifi/api')) {
+    return supabaseResponse
+  }
+
+  // Public routes.
+  const publicYiFiPrefixes = [
+    '/yifi/join',
+    '/yifi/reveal',
+    '/yifi/login',
+  ]
+  if (pathname === '/yifi' || pathname === '/yifi/') {
+    return supabaseResponse
+  }
+  if (publicYiFiPrefixes.some(p => pathname === p || pathname.startsWith(p + '/'))) {
+    return supabaseResponse
+  }
+
+  // /yifi/admin/* — OAuth-gated.
+  if (pathname.startsWith('/yifi/admin')) {
+    if (!user) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/yifi/login'
+      url.searchParams.set('redirectTo', pathname)
+      return NextResponse.redirect(url)
+    }
+    return supabaseResponse
+  }
+
+  // /yifi/me/* — access-code gated (yifi_session cookie, type=member).
+  if (pathname.startsWith('/yifi/me')) {
+    return requireAccessCodeCookie(
+      request,
+      supabaseResponse,
+      'yifi_session',
+      'member',
+      '/yifi/join'
+    )
+  }
+
+  return supabaseResponse
 }

@@ -80,7 +80,11 @@ export function CodeEntryStep({
 
       <form onSubmit={handleSubmit} className="mt-10">
         {/* Slot display */}
-        <div className="flex justify-center gap-1.5 md:gap-3">
+        <div className="relative">
+        <div
+          className="flex justify-center gap-1.5 md:gap-3 cursor-text"
+          onClick={() => inputRef.current?.focus()}
+        >
           {slots.map((ch, i) => (
             <div
               key={i}
@@ -109,8 +113,10 @@ export function CodeEntryStep({
           onChange={handleChange}
           maxLength={6}
           aria-label="Access code"
-          className="sr-only"
+          className="absolute inset-0 w-full h-full opacity-0 cursor-text"
+          style={{ caretColor: "transparent" }}
         />
+        </div>
 
         <button
           type="button"

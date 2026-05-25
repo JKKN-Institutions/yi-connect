@@ -2754,7 +2754,8 @@ export type Database = {
         | 'conference'
         | 'webinar'
         | 'other'
-        | 'industrial_visit';
+        | 'industrial_visit'
+        | 'summit';
       rsvp_status:
         | 'pending'
         | 'confirmed'
@@ -2806,7 +2807,8 @@ export const Constants = {
         'conference',
         'webinar',
         'other',
-        'industrial_visit'
+        'industrial_visit',
+        'summit'
       ] as const,
       event_status: [
         'draft',

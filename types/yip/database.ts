@@ -12,6 +12,539 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.4"
   }
+  yi: {
+    Tables: {
+      brand_rules: {
+        Row: {
+          category: string
+          created_at: string | null
+          description: string | null
+          handbook_page: number | null
+          id: string
+          is_active: boolean | null
+          requires_evidence: boolean | null
+          rule_key: string
+          severity: string | null
+          sort_order: number | null
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          category: string
+          created_at?: string | null
+          description?: string | null
+          handbook_page?: number | null
+          id?: string
+          is_active?: boolean | null
+          requires_evidence?: boolean | null
+          rule_key: string
+          severity?: string | null
+          sort_order?: number | null
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          category?: string
+          created_at?: string | null
+          description?: string | null
+          handbook_page?: number | null
+          id?: string
+          is_active?: boolean | null
+          requires_evidence?: boolean | null
+          rule_key?: string
+          severity?: string | null
+          sort_order?: number | null
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      chapters: {
+        Row: {
+          chair_email: string | null
+          chair_mobile: string | null
+          chair_name: string | null
+          city: string
+          created_at: string | null
+          finale_end_date: string | null
+          finale_region: string | null
+          finale_start_date: string | null
+          id: string
+          is_active: boolean | null
+          is_finale_host: boolean
+          logo_url: string | null
+          name: string
+          programme_duration_days: number
+          region: string | null
+          state: string | null
+          yi_chapter_id: string | null
+        }
+        Insert: {
+          chair_email?: string | null
+          chair_mobile?: string | null
+          chair_name?: string | null
+          city: string
+          created_at?: string | null
+          finale_end_date?: string | null
+          finale_region?: string | null
+          finale_start_date?: string | null
+          id?: string
+          is_active?: boolean | null
+          is_finale_host?: boolean
+          logo_url?: string | null
+          name: string
+          programme_duration_days?: number
+          region?: string | null
+          state?: string | null
+          yi_chapter_id?: string | null
+        }
+        Update: {
+          chair_email?: string | null
+          chair_mobile?: string | null
+          chair_name?: string | null
+          city?: string
+          created_at?: string | null
+          finale_end_date?: string | null
+          finale_region?: string | null
+          finale_start_date?: string | null
+          id?: string
+          is_active?: boolean | null
+          is_finale_host?: boolean
+          logo_url?: string | null
+          name?: string
+          programme_duration_days?: number
+          region?: string | null
+          state?: string | null
+          yi_chapter_id?: string | null
+        }
+        Relationships: []
+      }
+      government_contact_log: {
+        Row: {
+          contact_date: string
+          contact_type: string | null
+          created_at: string | null
+          id: string
+          logged_by: string | null
+          next_step: string | null
+          partnership_id: string
+          summary: string
+        }
+        Insert: {
+          contact_date: string
+          contact_type?: string | null
+          created_at?: string | null
+          id?: string
+          logged_by?: string | null
+          next_step?: string | null
+          partnership_id: string
+          summary: string
+        }
+        Update: {
+          contact_date?: string
+          contact_type?: string | null
+          created_at?: string | null
+          id?: string
+          logged_by?: string | null
+          next_step?: string | null
+          partnership_id?: string
+          summary?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "government_contact_log_partnership_id_fkey"
+            columns: ["partnership_id"]
+            isOneToOne: false
+            referencedRelation: "government_partnerships"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      government_partnerships: {
+        Row: {
+          created_at: string | null
+          id: string
+          mou_signed: boolean | null
+          mou_signed_date: string | null
+          mou_url: string | null
+          notes: string | null
+          official_email: string | null
+          official_name: string | null
+          official_phone: string | null
+          official_title: string | null
+          org_name: string
+          org_type: string | null
+          status: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          mou_signed?: boolean | null
+          mou_signed_date?: string | null
+          mou_url?: string | null
+          notes?: string | null
+          official_email?: string | null
+          official_name?: string | null
+          official_phone?: string | null
+          official_title?: string | null
+          org_name: string
+          org_type?: string | null
+          status?: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          mou_signed?: boolean | null
+          mou_signed_date?: string | null
+          mou_url?: string | null
+          notes?: string | null
+          official_email?: string | null
+          official_name?: string | null
+          official_phone?: string | null
+          official_title?: string | null
+          org_name?: string
+          org_type?: string | null
+          status?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      institutions: {
+        Row: {
+          address: string | null
+          city: string | null
+          created_at: string | null
+          email: string | null
+          has_yuva_chapter: boolean | null
+          id: string
+          is_active: boolean | null
+          is_thalir: boolean | null
+          name: string
+          notes: string | null
+          phone: string | null
+          pincode: string | null
+          source_future_college_id: string | null
+          source_yi_connect_college_id: string | null
+          source_yi_connect_school_id: string | null
+          state: string | null
+          type: Database["yi"]["Enums"]["institution_type"]
+          updated_at: string | null
+          website: string | null
+        }
+        Insert: {
+          address?: string | null
+          city?: string | null
+          created_at?: string | null
+          email?: string | null
+          has_yuva_chapter?: boolean | null
+          id?: string
+          is_active?: boolean | null
+          is_thalir?: boolean | null
+          name: string
+          notes?: string | null
+          phone?: string | null
+          pincode?: string | null
+          source_future_college_id?: string | null
+          source_yi_connect_college_id?: string | null
+          source_yi_connect_school_id?: string | null
+          state?: string | null
+          type: Database["yi"]["Enums"]["institution_type"]
+          updated_at?: string | null
+          website?: string | null
+        }
+        Update: {
+          address?: string | null
+          city?: string | null
+          created_at?: string | null
+          email?: string | null
+          has_yuva_chapter?: boolean | null
+          id?: string
+          is_active?: boolean | null
+          is_thalir?: boolean | null
+          name?: string
+          notes?: string | null
+          phone?: string | null
+          pincode?: string | null
+          source_future_college_id?: string | null
+          source_yi_connect_college_id?: string | null
+          source_yi_connect_school_id?: string | null
+          state?: string | null
+          type?: Database["yi"]["Enums"]["institution_type"]
+          updated_at?: string | null
+          website?: string | null
+        }
+        Relationships: []
+      }
+      national_admins: {
+        Row: {
+          added_at: string
+          added_by: string | null
+          email: string
+          is_platform_admin: boolean
+          is_super_admin: boolean
+          note: string | null
+        }
+        Insert: {
+          added_at?: string
+          added_by?: string | null
+          email: string
+          is_platform_admin?: boolean
+          is_super_admin?: boolean
+          note?: string | null
+        }
+        Update: {
+          added_at?: string
+          added_by?: string | null
+          email?: string
+          is_platform_admin?: boolean
+          is_super_admin?: boolean
+          note?: string | null
+        }
+        Relationships: []
+      }
+      push_subscriptions: {
+        Row: {
+          auth: string
+          created_at: string
+          endpoint: string
+          id: string
+          last_seen_at: string
+          p256dh: string
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          auth: string
+          created_at?: string
+          endpoint: string
+          id?: string
+          last_seen_at?: string
+          p256dh: string
+          user_agent?: string | null
+          user_id: string
+        }
+        Update: {
+          auth?: string
+          created_at?: string
+          endpoint?: string
+          id?: string
+          last_seen_at?: string
+          p256dh?: string
+          user_agent?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      years: {
+        Row: {
+          created_at: string | null
+          display_name: string
+          ended_at: string | null
+          id: string
+          is_active: boolean | null
+          started_at: string | null
+          updated_at: string | null
+          year: number
+        }
+        Insert: {
+          created_at?: string | null
+          display_name: string
+          ended_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          started_at?: string | null
+          updated_at?: string | null
+          year: number
+        }
+        Update: {
+          created_at?: string | null
+          display_name?: string
+          ended_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          started_at?: string | null
+          updated_at?: string | null
+          year?: number
+        }
+        Relationships: []
+      }
+      zones: {
+        Row: {
+          code: string
+          created_at: string | null
+          description: string | null
+          is_active: boolean | null
+          name: string
+          parent_code: string | null
+          sort_order: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          code: string
+          created_at?: string | null
+          description?: string | null
+          is_active?: boolean | null
+          name: string
+          parent_code?: string | null
+          sort_order?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          code?: string
+          created_at?: string | null
+          description?: string | null
+          is_active?: boolean | null
+          name?: string
+          parent_code?: string | null
+          sort_order?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "zones_parent_code_fkey"
+            columns: ["parent_code"]
+            isOneToOne: false
+            referencedRelation: "zones"
+            referencedColumns: ["code"]
+          },
+        ]
+      }
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      [_ in never]: never
+    }
+    Enums: {
+      institution_type: "school" | "higher_secondary" | "college" | "university"
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
+  yi_directory: {
+    Tables: {
+      people: {
+        Row: {
+          created_at: string | null
+          email: string | null
+          full_name: string
+          id: string
+          is_active: boolean | null
+          phone: string | null
+          photo_url: string | null
+          source_future_team_id: string | null
+          source_yip_profile_id: string | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          email?: string | null
+          full_name: string
+          id?: string
+          is_active?: boolean | null
+          phone?: string | null
+          photo_url?: string | null
+          source_future_team_id?: string | null
+          source_yip_profile_id?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          email?: string | null
+          full_name?: string
+          id?: string
+          is_active?: boolean | null
+          phone?: string | null
+          photo_url?: string | null
+          source_future_team_id?: string | null
+          source_yip_profile_id?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      role_assignments: {
+        Row: {
+          app: string
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          is_primary: boolean | null
+          person_id: string
+          role: string
+          source_future_team_id: string | null
+          source_yip_profile_id: string | null
+          title: string | null
+          updated_at: string | null
+          yi_chapter: string | null
+          yi_edition_id: string | null
+          yi_year: number
+          yi_zone: string | null
+        }
+        Insert: {
+          app: string
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          is_primary?: boolean | null
+          person_id: string
+          role: string
+          source_future_team_id?: string | null
+          source_yip_profile_id?: string | null
+          title?: string | null
+          updated_at?: string | null
+          yi_chapter?: string | null
+          yi_edition_id?: string | null
+          yi_year?: number
+          yi_zone?: string | null
+        }
+        Update: {
+          app?: string
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          is_primary?: boolean | null
+          person_id?: string
+          role?: string
+          source_future_team_id?: string | null
+          source_yip_profile_id?: string | null
+          title?: string | null
+          updated_at?: string | null
+          yi_chapter?: string | null
+          yi_edition_id?: string | null
+          yi_year?: number
+          yi_zone?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "role_assignments_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: false
+            referencedRelation: "people"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      [_ in never]: never
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   yip: {
     Tables: {
       agenda: {
@@ -2412,6 +2945,14 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  yi: {
+    Enums: {
+      institution_type: ["school", "higher_secondary", "college", "university"],
+    },
+  },
+  yi_directory: {
+    Enums: {},
+  },
   yip: {
     Enums: {},
   },

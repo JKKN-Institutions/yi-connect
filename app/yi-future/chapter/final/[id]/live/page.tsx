@@ -80,7 +80,7 @@ export default async function LiveControlPage({
     <div className="space-y-6">
       <div>
         <Link
-          href={`/chapter/final/${id}`}
+          href={`/yi-future/chapter/final/${id}`}
           className="text-xs font-semibold tracking-widest text-navy/50 hover:text-navy uppercase"
         >
           ← Event

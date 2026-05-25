@@ -126,7 +126,7 @@ export default async function TeamsPage({
           return (
             <Link
               key={tr.slug}
-              href={`/chapter/teams?track=${tr.slug}`}
+              href={`/yi-future/chapter/teams?track=${tr.slug}`}
               className="min-h-[36px] inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold border-2 transition-all"
               style={
                 active
@@ -154,7 +154,7 @@ export default async function TeamsPage({
             return (
               <Link
                 key={t.id}
-                href={`/chapter/teams/${t.id}`}
+                href={`/yi-future/chapter/teams/${t.id}`}
                 className="bg-white border border-navy/10 rounded-lg p-5 hover:border-yi-gold/50 hover:shadow-sm transition-all"
               >
                 <div className="flex items-start justify-between gap-3">

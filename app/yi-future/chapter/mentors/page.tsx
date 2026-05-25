@@ -180,7 +180,7 @@ export default async function MentorsPage() {
                         className="flex items-center justify-between text-xs"
                       >
                         <Link
-                          href={`/chapter/teams/${a.team_id}`}
+                          href={`/yi-future/chapter/teams/${a.team_id}`}
                           className="font-semibold text-navy hover:text-yi-gold"
                         >
                           {a.teams?.team_name ?? "(unnamed)"}
@@ -237,7 +237,7 @@ export default async function MentorsPage() {
               {/* Actions */}
               <div className="mt-3 pt-3 border-t border-navy/10 flex items-center justify-between">
                 <Link
-                  href={`/chapter/mentors/${m.id}/edit`}
+                  href={`/yi-future/chapter/mentors/${m.id}/edit`}
                   className="text-xs font-semibold text-navy hover:text-yi-gold"
                 >
                   Edit

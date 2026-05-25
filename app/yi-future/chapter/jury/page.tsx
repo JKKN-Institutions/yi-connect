@@ -279,7 +279,7 @@ export default async function JuryPage() {
               {/* Actions */}
               <div className="mt-3 pt-3 border-t border-navy/10 flex items-center justify-between">
                 <Link
-                  href={`/chapter/jury/${j.id}/edit`}
+                  href={`/yi-future/chapter/jury/${j.id}/edit`}
                   className="text-xs font-semibold text-navy hover:text-yi-gold"
                 >
                   Edit

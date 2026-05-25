@@ -146,7 +146,7 @@ export default async function ChapterFinalDetailPage({
               </button>
             </form>
             <Link
-              href={`/chapter/final/${id}/live`}
+              href={`/yi-future/chapter/final/${id}/live`}
               className="text-xs font-semibold text-yi-gold hover:underline"
             >
               Open live panel →

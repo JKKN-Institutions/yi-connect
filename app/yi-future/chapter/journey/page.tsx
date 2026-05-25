@@ -118,7 +118,7 @@ export default async function JourneyPage() {
                   {phaseEvents.map((e) => (
                     <li key={e.id}>
                       <Link
-                        href={`/chapter/journey/${e.id}`}
+                        href={`/yi-future/chapter/journey/${e.id}`}
                         className="flex items-center justify-between px-5 py-3 hover:bg-navy/5 transition-colors"
                       >
                         <div className="flex-1 min-w-0">

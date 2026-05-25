@@ -132,7 +132,7 @@ export default async function ExpertsPage() {
                   </td>
                   <td className="px-4 py-3 text-right space-x-3 whitespace-nowrap">
                     <Link
-                      href={`/chapter/experts/${e.id}/edit`}
+                      href={`/yi-future/chapter/experts/${e.id}/edit`}
                       className="text-xs font-semibold text-navy hover:text-yi-gold"
                     >
                       Edit

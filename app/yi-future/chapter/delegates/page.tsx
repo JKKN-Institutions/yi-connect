@@ -133,7 +133,7 @@ export default async function DelegatesPage() {
                     <td className="px-4 py-3 text-xs">
                       {tm ? (
                         <Link
-                          href={`/chapter/teams/${tm.team_id}`}
+                          href={`/yi-future/chapter/teams/${tm.team_id}`}
                           className="text-navy font-semibold hover:text-yi-gold"
                         >
                           {tm.teams?.team_name ?? "(unnamed)"}
@@ -149,7 +149,7 @@ export default async function DelegatesPage() {
                     </td>
                     <td className="px-4 py-3 text-right space-x-3">
                       <Link
-                        href={`/chapter/delegates/${d.id}/edit`}
+                        href={`/yi-future/chapter/delegates/${d.id}/edit`}
                         className="text-xs font-semibold text-navy hover:text-yi-gold"
                       >
                         Edit

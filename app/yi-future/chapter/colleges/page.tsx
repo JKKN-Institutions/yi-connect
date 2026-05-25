@@ -284,7 +284,7 @@ function ApprovedList({
                 </td>
                 <td className="px-4 py-3 text-right space-x-3">
                   <Link
-                    href={`/chapter/colleges/${c.id}/edit`}
+                    href={`/yi-future/chapter/colleges/${c.id}/edit`}
                     className="text-xs font-semibold text-navy hover:text-yi-gold"
                   >
                     Edit
@@ -406,7 +406,7 @@ function PendingList({
               )}
 
               <Link
-                href={`/chapter/colleges/${p.id}/edit`}
+                href={`/yi-future/chapter/colleges/${p.id}/edit`}
                 className="px-3 py-2 rounded-md border border-navy/20 text-xs font-semibold text-navy hover:bg-navy/5"
               >
                 Edit & approve

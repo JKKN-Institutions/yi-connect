@@ -438,7 +438,7 @@ export default async function ChapterDashboard() {
                       )}
                     </div>
                     <Link
-                      href={`/chapter/teams?track=${track.trackId}`}
+                      href={`/yi-future/chapter/teams?track=${track.trackId}`}
                       className="inline-flex items-center text-xs font-semibold text-navy hover:text-yi-gold transition-colors"
                     >
                       View teams →

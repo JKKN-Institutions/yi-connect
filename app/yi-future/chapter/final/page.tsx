@@ -60,7 +60,7 @@ export default async function ChapterFinalPage() {
           {events.map((e) => (
             <li key={e.id}>
               <Link
-                href={`/chapter/final/${e.id}`}
+                href={`/yi-future/chapter/final/${e.id}`}
                 className="block bg-white border border-navy/10 rounded-lg p-5 hover:border-yi-gold/50 hover:shadow-sm transition-all"
               >
                 <div className="flex items-start justify-between gap-3">

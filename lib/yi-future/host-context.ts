@@ -20,6 +20,8 @@ export type HostContext = {
   isHost: boolean;
   nationalEvents: HostEvent[];
   selectedEvent: HostEvent | null;
+  /** @deprecated Use selectedEvent — kept for backward compatibility */
+  nationalEvent: HostEvent | null;
   trackId: string | null;
   trackName: string | null;
   trackIcon: string | null;
@@ -35,13 +37,6 @@ export async function getHostContext(
   if (!user) return null;
 
   const svc = await createServiceClient();
-
-  const { data: chapter } = await svc
-    .schema("future")
-    .from("chapters" as never)
-    .select("id, name, is_finale_host, finale_region")
-    .eq("is_finale_host", true)
-    .limit(50);
 
   const { data: membership } = await svc
     .schema("future")
@@ -105,6 +100,7 @@ export async function getHostContext(
     isHost,
     nationalEvents,
     selectedEvent: selected,
+    nationalEvent: selected,
     trackId: selected?.track_id ?? null,
     trackName,
     trackIcon,

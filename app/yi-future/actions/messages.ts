@@ -3,19 +3,17 @@
 import { revalidatePath } from "next/cache";
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
 import { readSession } from "./auth";
+import {
+  sendMessageCore,
+  listMessagesCore,
+  type SenderType as SharedSenderType,
+  type Message as SharedMessage,
+} from "@/lib/messaging/actions";
 
 // ─── TYPES ──────────────────────────────────────────────────────────
-export type SenderType = "delegate" | "mentor";
-
-export type Message = {
-  id: string;
-  thread_id: string;
-  sender_type: SenderType;
-  sender_id: string;
-  sender_name: string;
-  body: string;
-  created_at: string;
-};
+// Re-export the shared types so existing consumers keep working unchanged.
+export type SenderType = SharedSenderType;
+export type Message = SharedMessage;
 
 export type Thread = {
   id: string;
@@ -150,48 +148,19 @@ export async function sendMessage(
   threadId: string,
   body: string
 ): Promise<ActionResult<Message>> {
-  const trimmed = body.trim();
-  if (trimmed.length < 1) {
-    return { ok: false, error: "Message can't be empty." };
-  }
-  if (trimmed.length > 2000) {
-    return { ok: false, error: "Message too long (max 2000 characters)." };
-  }
-
   const access = await callerCanAccessThread(threadId);
   if (!access.ok || !access.caller || !access.threadRow) {
     return { ok: false, error: "Not authorized to post on this thread." };
   }
 
+  // Delegate to shared core (handles insert + thread timestamp bump)
+  const coreResult = await sendMessageCore(threadId, access.caller, body);
+  if (!coreResult.ok) return coreResult;
+
+  const trimmed = body.trim();
+
+  // Yi Future-specific: notification log entry — recipient is the OTHER side
   const svc = await createServiceClient();
-
-  const { data: inserted, error } = (await svc
-    .schema("future")
-    .from("messages" as never)
-    .insert({
-      thread_id: threadId,
-      sender_type: access.caller.type,
-      sender_id: access.caller.id,
-      body: trimmed,
-    } as never)
-    .select("id, thread_id, sender_type, sender_id, body, created_at")
-    .maybeSingle()) as unknown as {
-    data: Omit<Message, "sender_name"> | null;
-    error: { message: string } | null;
-  };
-
-  if (error || !inserted) {
-    return { ok: false, error: error?.message ?? "Could not send message." };
-  }
-
-  // Bump thread.last_message_at
-  await svc
-    .schema("future")
-    .from("message_threads" as never)
-    .update({ last_message_at: inserted.created_at } as never)
-    .eq("id", threadId);
-
-  // Notification log entry — recipient is the OTHER side
   const recipientType: SenderType =
     access.caller.type === "mentor" ? "delegate" : "mentor";
 
@@ -257,10 +226,7 @@ export async function sendMessage(
   revalidatePath("/yi-future/mentor/messages");
   revalidatePath("/yi-future/me/messages");
 
-  return {
-    ok: true,
-    data: { ...inserted, sender_name: access.caller.name },
-  };
+  return coreResult;
 }
 
 // ─── LIST MESSAGES ──────────────────────────────────────────────────
@@ -274,66 +240,8 @@ export async function listMessages(
     return { ok: false, error: "Not authorized to read this thread." };
   }
 
-  const svc = await createServiceClient();
-  const cap = Math.max(1, Math.min(limit, 500));
-
-  const { data: rows } = (await svc
-    .schema("future")
-    .from("messages" as never)
-    .select("id, thread_id, sender_type, sender_id, body, created_at")
-    .eq("thread_id", threadId)
-    .order("created_at", { ascending: true })
-    .limit(cap)) as unknown as {
-    data: Omit<Message, "sender_name">[] | null;
-  };
-
-  const list = rows ?? [];
-  if (list.length === 0) return { ok: true, data: [] };
-
-  // Resolve sender display names in two batched lookups
-  const delegateIds = Array.from(
-    new Set(list.filter((r) => r.sender_type === "delegate").map((r) => r.sender_id))
-  );
-  const mentorIds = Array.from(
-    new Set(list.filter((r) => r.sender_type === "mentor").map((r) => r.sender_id))
-  );
-
-  const nameMap = new Map<string, string>();
-
-  if (delegateIds.length) {
-    const { data: ds } = (await svc
-      .schema("future")
-      .from("delegates")
-      .select("id, full_name")
-      .in("id", delegateIds)) as unknown as {
-      data: { id: string; full_name: string | null }[] | null;
-    };
-    for (const d of ds ?? []) {
-      nameMap.set(`delegate:${d.id}`, d.full_name ?? "Delegate");
-    }
-  }
-
-  if (mentorIds.length) {
-    const { data: ms } = (await svc
-      .schema("future")
-      .from("mentors")
-      .select("id, full_name")
-      .in("id", mentorIds)) as unknown as {
-      data: { id: string; full_name: string | null }[] | null;
-    };
-    for (const m of ms ?? []) {
-      nameMap.set(`mentor:${m.id}`, m.full_name ?? "Mentor");
-    }
-  }
-
-  const enriched: Message[] = list.map((r) => ({
-    ...r,
-    sender_name:
-      nameMap.get(`${r.sender_type}:${r.sender_id}`) ??
-      (r.sender_type === "mentor" ? "Mentor" : "Delegate"),
-  }));
-
-  return { ok: true, data: enriched };
+  // Delegate to shared core (handles query + sender name resolution)
+  return listMessagesCore(threadId, limit);
 }
 
 // ─── LIST THREADS (mentor side) ─────────────────────────────────────

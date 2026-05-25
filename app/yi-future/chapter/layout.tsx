@@ -10,6 +10,7 @@ const NAV: NavItem[] = [
   { label: "Delegates", href: "/yi-future/chapter/delegates" },
   { label: "Teams", href: "/yi-future/chapter/teams" },
   { label: "Journey", href: "/yi-future/chapter/journey" },
+  { label: "Messages", href: "/yi-future/chapter/messages" },
   { label: "Mentors", href: "/yi-future/chapter/mentors" },
   { label: "Experts", href: "/yi-future/chapter/experts" },
   { label: "Jury", href: "/yi-future/chapter/jury" },

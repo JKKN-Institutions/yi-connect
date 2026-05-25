@@ -164,10 +164,10 @@ export function AdminShell({
               {title}
             </h1>
           </div>
-          <form action="/api/auth/signout" method="post">
+          <form action="/yi-future/api/auth/signout" method="post">
             <button
               type="submit"
-              formAction="/api/auth/signout"
+              formAction="/yi-future/api/auth/signout"
               className="text-xs text-navy/50 hover:text-navy transition-colors whitespace-nowrap"
             >
               Sign out

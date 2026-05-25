@@ -37,6 +37,52 @@ export const PHASE_MONTHS: Record<Phase, string> = {
   phase_c: "Month 3",
 };
 
+export type ProgrammeDuration = 30 | 60 | 90;
+
+export const PHASE_DURATION_LABELS: Record<ProgrammeDuration, Record<Phase, string>> = {
+  30: { phase_a: "Week 1–2", phase_b: "Week 2–3", phase_c: "Week 3–4" },
+  60: { phase_a: "Month 1", phase_b: "Month 1–2", phase_c: "Month 2" },
+  90: { phase_a: "Month 1", phase_b: "Month 2", phase_c: "Month 3" },
+};
+
+export const PROGRAMME_PLAN_TEMPLATES: Record<ProgrammeDuration, {
+  label: string;
+  description: string;
+  eventsPerPhase: number;
+  suggestedEvents: Record<Phase, string[]>;
+}> = {
+  30: {
+    label: "30-Day Sprint",
+    description: "Compressed 4-week programme — fewer events, faster pace. Best for experienced chapters.",
+    eventsPerPhase: 2,
+    suggestedEvents: {
+      phase_a: ["Orientation + Problem Workshop (combined)", "Expert Talk"],
+      phase_b: ["Mentorship Clinic", "Midpoint Review"],
+      phase_c: ["Mock Jury", "Documentation Support"],
+    },
+  },
+  60: {
+    label: "60-Day Standard",
+    description: "Balanced 2-month programme with 2–3 events per phase.",
+    eventsPerPhase: 2,
+    suggestedEvents: {
+      phase_a: ["Orientation Session", "Policy Workshop + Expert Talk"],
+      phase_b: ["Mentorship Clinic", "Execution Planning + Midpoint Review"],
+      phase_c: ["Refinement Workshop + Mock Jury", "Documentation Support"],
+    },
+  },
+  90: {
+    label: "90-Day Full Journey",
+    description: "Complete 3-month programme — all 9 events, maximum mentorship depth.",
+    eventsPerPhase: 3,
+    suggestedEvents: {
+      phase_a: ["Orientation Session", "Policy / Solution Framework Workshop", "Expert Talk"],
+      phase_b: ["Mentorship Clinic", "Execution Planning Workshop", "Midpoint Review Session"],
+      phase_c: ["Refinement Workshop", "Mock Jury Round", "Documentation Support Session"],
+    },
+  },
+};
+
 // ─── PHASE EVENT TYPES [CPB §4.A, §4.B, §4.C] ──────────────────────
 export const PHASE_EVENT_TYPES_BY_PHASE: Record<
   Phase,

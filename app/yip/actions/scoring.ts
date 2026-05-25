@@ -3,8 +3,8 @@
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import type { Tables } from "@/types/yip/database";
 
-type Score = Tables<"scores">;
-type ScoringRubric = Tables<"rubrics">;
+type Score = Tables<{ schema: "yip" }, "scores">;
+type ScoringRubric = Tables<{ schema: "yip" }, "rubrics">;
 
 type ActionResult<T = null> =
   | { success: true; data: T }

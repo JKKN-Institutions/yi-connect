@@ -3,7 +3,7 @@
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import type { Tables, Json } from "@/types/yip/database";
 
-type Bill = Tables<"bills">;
+type Bill = Tables<{ schema: "yip" }, "bills">;
 
 type ActionResult<T = null> =
   | { success: true; data: T }
@@ -185,12 +185,12 @@ export async function setBillPresented(
 
 // ─── Get Both Bills for Event ──────────────────────────────────
 
-export interface BillWithMembers extends Bill {
+export type BillWithMembers = Bill & {
   lead_drafter_name?: string | null;
   presenter_1_name?: string | null;
   presenter_2_name?: string | null;
   policy_researcher_name?: string | null;
-}
+};
 
 export async function getBills(
   eventId: string

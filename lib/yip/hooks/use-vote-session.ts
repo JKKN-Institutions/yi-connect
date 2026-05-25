@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { createClient } from "@/lib/yip/supabase/client";
 import type { Tables } from "@/types/yip/database";
 
-type VoteSession = Tables<"vote_sessions">;
+type VoteSession = Tables<{ schema: "yip" }, "vote_sessions">;
 
 interface VoteTally {
   vote_value: string;

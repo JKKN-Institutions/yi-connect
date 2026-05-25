@@ -38,7 +38,7 @@ import type { Tables } from "@/types/yip/database";
 
 // ─── Types ──────────────────────────────────────────────────────
 
-type AgendaItem = Tables<"agenda">;
+type AgendaItem = Tables<{ schema: "yip" }, "agenda">;
 
 interface VoteManagerProps {
   eventId: string;

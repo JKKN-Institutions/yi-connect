@@ -117,7 +117,7 @@ async function loadActiveRules(): Promise<readonly BrandingRule[]> {
     description: row.description,
     handbook_page: row.handbook_page ?? 0,
     requires_evidence: !!row.requires_evidence,
-    severity: coerceSeverity(row.severity),
+    severity: coerceSeverity(row.severity ?? "advisory"),
   }));
 }
 

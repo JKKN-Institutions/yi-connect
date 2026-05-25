@@ -3,8 +3,8 @@
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import type { Tables, Json } from "@/types/yip/database";
 
-type VoteSession = Tables<"vote_sessions">;
-type Vote = Tables<"votes">;
+type VoteSession = Tables<{ schema: "yip" }, "vote_sessions">;
+type Vote = Tables<{ schema: "yip" }, "votes">;
 
 type ActionResult<T = null> =
   | { success: true; data: T }

@@ -2756,6 +2756,10 @@ export type Database = {
         | 'other'
         | 'industrial_visit'
         | 'summit';
+      event_scope:
+        | 'chapter'
+        | 'regional'
+        | 'national';
       rsvp_status:
         | 'pending'
         | 'confirmed'
@@ -2816,6 +2820,11 @@ export const Constants = {
         'ongoing',
         'completed',
         'cancelled'
+      ] as const,
+      event_scope: [
+        'chapter',
+        'regional',
+        'national'
       ] as const,
       booking_status: [
         'pending',

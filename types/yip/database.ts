@@ -12,6 +12,210 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.4"
   }
+  public: {
+    Tables: {
+      branding_rules_legacy: {
+        Row: {
+          category: string
+          created_at: string | null
+          description: string
+          handbook_page: number | null
+          id: string
+          is_active: boolean
+          requires_evidence: boolean
+          rule_key: string
+          severity: string
+          sort_order: number
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          category: string
+          created_at?: string | null
+          description: string
+          handbook_page?: number | null
+          id?: string
+          is_active?: boolean
+          requires_evidence?: boolean
+          rule_key: string
+          severity?: string
+          sort_order?: number
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          category?: string
+          created_at?: string | null
+          description?: string
+          handbook_page?: number | null
+          id?: string
+          is_active?: boolean
+          requires_evidence?: boolean
+          rule_key?: string
+          severity?: string
+          sort_order?: number
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      bulk_calculate_cycle_eligibility: {
+        Args: { p_cycle_id: string }
+        Returns: number
+      }
+      calculate_member_eligibility: {
+        Args: { p_member_id: string; p_position_id: string }
+        Returns: {
+          breakdown: Json
+          is_eligible: boolean
+          total_score: number
+        }[]
+      }
+      get_user_roles: {
+        Args: { p_user_id: string }
+        Returns: {
+          hierarchy_level: number
+          permissions: string[]
+          role_id: string
+          role_name: string
+        }[]
+      }
+      yifi_check_organiser: {
+        Args: { p_edition_id: string; p_email: string }
+        Returns: Json
+      }
+      yifi_create_vow: {
+        Args: {
+          p_category: string
+          p_edition_id: string
+          p_registrant_id: string
+          p_vow_text: string
+        }
+        Returns: Json
+      }
+      yifi_current_edition: { Args: never; Returns: Json }
+      yifi_get_dossier: {
+        Args: { p_edition_id: string; p_registrant_id: string }
+        Returns: Json
+      }
+      yifi_get_edition: { Args: { p_slug: string }; Returns: Json }
+      yifi_get_matches: {
+        Args: { p_edition_id: string; p_registrant_id: string }
+        Returns: Json
+      }
+      yifi_get_registrant_by_id: { Args: { p_id: string }; Returns: Json }
+      yifi_get_stats: { Args: { p_edition_id: string }; Returns: Json }
+      yifi_get_vows: {
+        Args: { p_edition_id: string; p_registrant_id: string }
+        Returns: Json
+      }
+      yifi_list_organisers: { Args: { p_edition_id: string }; Returns: Json }
+      yifi_lookup_registrant: { Args: { p_code: string }; Returns: Json }
+      yifi_update_census: {
+        Args: {
+          p_can_offer: Json
+          p_challenges: string[]
+          p_city: string
+          p_designation: string
+          p_organisation: string
+          p_registrant_id: string
+          p_sector: string
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      agenda_mode: "party" | "committee" | "mixed"
+      agenda_status: "upcoming" | "in_progress" | "completed" | "skipped"
+      compliance_status:
+        | "not_checked"
+        | "pending_evidence"
+        | "verified"
+        | "violation"
+        | "waived"
+      event_level: "chapter" | "regional" | "national"
+      event_status:
+        | "draft"
+        | "registration_open"
+        | "registration_closed"
+        | "day1_live"
+        | "day1_complete"
+        | "day2_live"
+        | "completed"
+        | "results_published"
+      feedback_respondent: "participant" | "organizer" | "volunteer" | "jury"
+      media_kind: "photo" | "video" | "document"
+      media_visibility: "public" | "yi_internal" | "organizer_only"
+      ministry_type:
+        | "home"
+        | "finance"
+        | "education"
+        | "health"
+        | "women_child"
+        | "disaster_management"
+        | "youth_sports"
+        | "it_digital"
+      motion_status:
+        | "submitted"
+        | "admitted"
+        | "rejected"
+        | "discussing"
+        | "voting"
+        | "resolved"
+        | "deferred"
+      motion_type:
+        | "adjournment"
+        | "calling_attention"
+        | "breach_of_privilege"
+        | "no_confidence"
+        | "short_duration"
+        | "obituary"
+        | "laying_of_papers"
+      parliament_role:
+        | "speaker"
+        | "deputy_speaker"
+        | "prime_minister"
+        | "leader_of_opposition"
+        | "cabinet_minister"
+        | "shadow_minister"
+        | "bill_committee"
+        | "mp"
+        | "deputy_prime_minister"
+        | "party_leader"
+        | "independent_mp"
+      party_side: "ruling" | "opposition"
+      registration_source:
+        | "microsoft_forms"
+        | "platform_direct"
+        | "csv_upload"
+        | "manual"
+      registration_status: "pending" | "approved" | "rejected" | "duplicate"
+      score_status: "draft" | "submitted" | "locked"
+      topic_category: "central" | "regional"
+      volunteer_station:
+        | "registration"
+        | "help_desk"
+        | "av_tech"
+        | "room_coordinator"
+        | "hospitality"
+        | "stage_manager"
+        | "photographer"
+        | "media"
+        | "runner"
+        | "safety"
+        | "floating"
+      yi_role: "national" | "rm" | "chapter_em"
+      yi_zone: "ER" | "WR" | "NR" | "NER" | "SRTN" | "SRTKKA"
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   yi: {
     Tables: {
       brand_rules: {
@@ -559,10 +763,10 @@ export type Database = {
           duration_minutes: number | null
           event_id: string
           id: string
-          mode: "party" | "committee" | "mixed"
+          mode: Database["public"]["Enums"]["agenda_mode"]
           planned_start: string | null
           sequence_order: number
-          status: "upcoming" | "in_progress" | "completed" | "skipped" | null
+          status: Database["public"]["Enums"]["agenda_status"] | null
           title: string
           updated_at: string | null
         }
@@ -577,10 +781,10 @@ export type Database = {
           duration_minutes?: number | null
           event_id: string
           id?: string
-          mode?: "party" | "committee" | "mixed"
+          mode?: Database["public"]["Enums"]["agenda_mode"]
           planned_start?: string | null
           sequence_order: number
-          status?: "upcoming" | "in_progress" | "completed" | "skipped" | null
+          status?: Database["public"]["Enums"]["agenda_status"] | null
           title: string
           updated_at?: string | null
         }
@@ -595,10 +799,10 @@ export type Database = {
           duration_minutes?: number | null
           event_id?: string
           id?: string
-          mode?: "party" | "committee" | "mixed"
+          mode?: Database["public"]["Enums"]["agenda_mode"]
           planned_start?: string | null
           sequence_order?: number
-          status?: "upcoming" | "in_progress" | "completed" | "skipped" | null
+          status?: Database["public"]["Enums"]["agenda_status"] | null
           title?: string
           updated_at?: string | null
         }
@@ -679,7 +883,7 @@ export type Database = {
           is_mock: boolean
           lead_drafter: string | null
           objective: string | null
-          party_side: "ruling" | "opposition"
+          party_side: Database["public"]["Enums"]["party_side"]
           policy_researcher: string | null
           presenter_1: string | null
           presenter_2: string | null
@@ -701,7 +905,7 @@ export type Database = {
           is_mock?: boolean
           lead_drafter?: string | null
           objective?: string | null
-          party_side: "ruling" | "opposition"
+          party_side: Database["public"]["Enums"]["party_side"]
           policy_researcher?: string | null
           presenter_1?: string | null
           presenter_2?: string | null
@@ -723,7 +927,7 @@ export type Database = {
           is_mock?: boolean
           lead_drafter?: string | null
           objective?: string | null
-          party_side?: "ruling" | "opposition"
+          party_side?: Database["public"]["Enums"]["party_side"]
           policy_researcher?: string | null
           presenter_1?: string | null
           presenter_2?: string | null
@@ -785,12 +989,7 @@ export type Database = {
           is_mock: boolean
           notes: string | null
           rule_key: string
-          status:
-            | "not_checked"
-            | "pending_evidence"
-            | "verified"
-            | "violation"
-            | "waived"
+          status: Database["public"]["Enums"]["compliance_status"]
           updated_at: string | null
           violation_action: string | null
         }
@@ -804,12 +1003,7 @@ export type Database = {
           is_mock?: boolean
           notes?: string | null
           rule_key: string
-          status?:
-            | "not_checked"
-            | "pending_evidence"
-            | "verified"
-            | "violation"
-            | "waived"
+          status?: Database["public"]["Enums"]["compliance_status"]
           updated_at?: string | null
           violation_action?: string | null
         }
@@ -823,12 +1017,7 @@ export type Database = {
           is_mock?: boolean
           notes?: string | null
           rule_key?: string
-          status?:
-            | "not_checked"
-            | "pending_evidence"
-            | "verified"
-            | "violation"
-            | "waived"
+          status?: Database["public"]["Enums"]["compliance_status"]
           updated_at?: string | null
           violation_action?: string | null
         }
@@ -1068,7 +1257,7 @@ export type Database = {
           id: string
           ingestion_enabled: boolean
           is_mock: boolean
-          level: "chapter" | "regional" | "national"
+          level: Database["public"]["Enums"]["event_level"]
           live_timer_end: string | null
           live_timer_label: string | null
           live_timer_running: boolean | null
@@ -1082,22 +1271,14 @@ export type Database = {
           results_published_at: string | null
           scores_locked: boolean | null
           state: string | null
-          status:
-            | "draft"
-            | "registration_open"
-            | "registration_closed"
-            | "day1_live"
-            | "day1_complete"
-            | "day2_live"
-            | "completed"
-            | "results_published"
+          status: Database["public"]["Enums"]["event_status"]
           updated_at: string | null
           venue_address: string | null
           venue_name: string | null
           yi_chapter_id: string | null
           yi_year_id: string | null
           yi_zone_code: string | null
-          zone: "ER" | "WR" | "NR" | "NER" | "SRTN" | "SRTKKA" | null
+          zone: Database["public"]["Enums"]["yi_zone"] | null
         }
         Insert: {
           allocation_locked?: boolean | null
@@ -1115,7 +1296,7 @@ export type Database = {
           id?: string
           ingestion_enabled?: boolean
           is_mock?: boolean
-          level?: "chapter" | "regional" | "national"
+          level?: Database["public"]["Enums"]["event_level"]
           live_timer_end?: string | null
           live_timer_label?: string | null
           live_timer_running?: boolean | null
@@ -1129,22 +1310,14 @@ export type Database = {
           results_published_at?: string | null
           scores_locked?: boolean | null
           state?: string | null
-          status?:
-            | "draft"
-            | "registration_open"
-            | "registration_closed"
-            | "day1_live"
-            | "day1_complete"
-            | "day2_live"
-            | "completed"
-            | "results_published"
+          status?: Database["public"]["Enums"]["event_status"]
           updated_at?: string | null
           venue_address?: string | null
           venue_name?: string | null
           yi_chapter_id?: string | null
           yi_year_id?: string | null
           yi_zone_code?: string | null
-          zone?: "ER" | "WR" | "NR" | "NER" | "SRTN" | "SRTKKA" | null
+          zone?: Database["public"]["Enums"]["yi_zone"] | null
         }
         Update: {
           allocation_locked?: boolean | null
@@ -1162,7 +1335,7 @@ export type Database = {
           id?: string
           ingestion_enabled?: boolean
           is_mock?: boolean
-          level?: "chapter" | "regional" | "national"
+          level?: Database["public"]["Enums"]["event_level"]
           live_timer_end?: string | null
           live_timer_label?: string | null
           live_timer_running?: boolean | null
@@ -1176,22 +1349,14 @@ export type Database = {
           results_published_at?: string | null
           scores_locked?: boolean | null
           state?: string | null
-          status?:
-            | "draft"
-            | "registration_open"
-            | "registration_closed"
-            | "day1_live"
-            | "day1_complete"
-            | "day2_live"
-            | "completed"
-            | "results_published"
+          status?: Database["public"]["Enums"]["event_status"]
           updated_at?: string | null
           venue_address?: string | null
           venue_name?: string | null
           yi_chapter_id?: string | null
           yi_year_id?: string | null
           yi_zone_code?: string | null
-          zone?: "ER" | "WR" | "NR" | "NER" | "SRTN" | "SRTKKA" | null
+          zone?: Database["public"]["Enums"]["yi_zone"] | null
         }
         Relationships: [
           {
@@ -1225,7 +1390,7 @@ export type Database = {
           respondent_email: string | null
           respondent_name: string | null
           respondent_participant_id: string | null
-          respondent_type: "participant" | "organizer" | "volunteer" | "jury"
+          respondent_type: Database["public"]["Enums"]["feedback_respondent"]
           submitted_at: string | null
           suggestions: string | null
           what_didnt_work: string | null
@@ -1246,7 +1411,7 @@ export type Database = {
           respondent_email?: string | null
           respondent_name?: string | null
           respondent_participant_id?: string | null
-          respondent_type: "participant" | "organizer" | "volunteer" | "jury"
+          respondent_type: Database["public"]["Enums"]["feedback_respondent"]
           submitted_at?: string | null
           suggestions?: string | null
           what_didnt_work?: string | null
@@ -1267,7 +1432,7 @@ export type Database = {
           respondent_email?: string | null
           respondent_name?: string | null
           respondent_participant_id?: string | null
-          respondent_type?: "participant" | "organizer" | "volunteer" | "jury"
+          respondent_type?: Database["public"]["Enums"]["feedback_respondent"]
           submitted_at?: string | null
           suggestions?: string | null
           what_didnt_work?: string | null
@@ -1470,7 +1635,7 @@ export type Database = {
           id: string
           is_cover: boolean
           is_mock: boolean
-          kind: "photo" | "video" | "document"
+          kind: Database["public"]["Enums"]["media_kind"]
           mime_type: string | null
           photographer_name: string | null
           public_url: string | null
@@ -1482,7 +1647,7 @@ export type Database = {
           updated_at: string
           uploaded_at: string
           uploaded_by: string | null
-          visibility: "public" | "yi_internal" | "organizer_only"
+          visibility: Database["public"]["Enums"]["media_visibility"]
           width: number | null
         }
         Insert: {
@@ -1494,7 +1659,7 @@ export type Database = {
           id?: string
           is_cover?: boolean
           is_mock?: boolean
-          kind?: "photo" | "video" | "document"
+          kind?: Database["public"]["Enums"]["media_kind"]
           mime_type?: string | null
           photographer_name?: string | null
           public_url?: string | null
@@ -1506,7 +1671,7 @@ export type Database = {
           updated_at?: string
           uploaded_at?: string
           uploaded_by?: string | null
-          visibility?: "public" | "yi_internal" | "organizer_only"
+          visibility?: Database["public"]["Enums"]["media_visibility"]
           width?: number | null
         }
         Update: {
@@ -1518,7 +1683,7 @@ export type Database = {
           id?: string
           is_cover?: boolean
           is_mock?: boolean
-          kind?: "photo" | "video" | "document"
+          kind?: Database["public"]["Enums"]["media_kind"]
           mime_type?: string | null
           photographer_name?: string | null
           public_url?: string | null
@@ -1530,7 +1695,7 @@ export type Database = {
           updated_at?: string
           uploaded_at?: string
           uploaded_by?: string | null
-          visibility?: "public" | "yi_internal" | "organizer_only"
+          visibility?: Database["public"]["Enums"]["media_visibility"]
           width?: number | null
         }
         Relationships: [
@@ -1550,32 +1715,18 @@ export type Database = {
           details: string | null
           directed_to_id: string | null
           directed_to_ministry:
-            | "home"
-            | "finance"
-            | "education"
-            | "health"
-            | "women_child"
-            | "disaster_management"
-            | "youth_sports"
-            | "it_digital"
+            | Database["public"]["Enums"]["ministry_type"]
             | null
           event_id: string
           id: string
           is_mock: boolean
           minister_response: string | null
-          motion_type:
-            | "adjournment"
-            | "calling_attention"
-            | "breach_of_privilege"
-            | "no_confidence"
-            | "short_duration"
-            | "obituary"
-            | "laying_of_papers"
+          motion_type: Database["public"]["Enums"]["motion_type"]
           outcome: string | null
           raised_at: string | null
           raised_by_id: string | null
           raised_by_name: string | null
-          raised_by_party_side: "ruling" | "opposition" | null
+          raised_by_party_side: Database["public"]["Enums"]["party_side"] | null
           raised_by_role: string | null
           resolution_note: string | null
           resolved_at: string | null
@@ -1583,14 +1734,7 @@ export type Database = {
           ruled_by: string | null
           speaker_note: string | null
           speaker_ruling: string | null
-          status:
-            | "submitted"
-            | "admitted"
-            | "rejected"
-            | "discussing"
-            | "voting"
-            | "resolved"
-            | "deferred"
+          status: Database["public"]["Enums"]["motion_status"]
           subject: string
           updated_at: string | null
           votes_abstain: number | null
@@ -1603,32 +1747,20 @@ export type Database = {
           details?: string | null
           directed_to_id?: string | null
           directed_to_ministry?:
-            | "home"
-            | "finance"
-            | "education"
-            | "health"
-            | "women_child"
-            | "disaster_management"
-            | "youth_sports"
-            | "it_digital"
+            | Database["public"]["Enums"]["ministry_type"]
             | null
           event_id: string
           id?: string
           is_mock?: boolean
           minister_response?: string | null
-          motion_type:
-            | "adjournment"
-            | "calling_attention"
-            | "breach_of_privilege"
-            | "no_confidence"
-            | "short_duration"
-            | "obituary"
-            | "laying_of_papers"
+          motion_type: Database["public"]["Enums"]["motion_type"]
           outcome?: string | null
           raised_at?: string | null
           raised_by_id?: string | null
           raised_by_name?: string | null
-          raised_by_party_side?: "ruling" | "opposition" | null
+          raised_by_party_side?:
+            | Database["public"]["Enums"]["party_side"]
+            | null
           raised_by_role?: string | null
           resolution_note?: string | null
           resolved_at?: string | null
@@ -1636,14 +1768,7 @@ export type Database = {
           ruled_by?: string | null
           speaker_note?: string | null
           speaker_ruling?: string | null
-          status?:
-            | "submitted"
-            | "admitted"
-            | "rejected"
-            | "discussing"
-            | "voting"
-            | "resolved"
-            | "deferred"
+          status?: Database["public"]["Enums"]["motion_status"]
           subject: string
           updated_at?: string | null
           votes_abstain?: number | null
@@ -1656,32 +1781,20 @@ export type Database = {
           details?: string | null
           directed_to_id?: string | null
           directed_to_ministry?:
-            | "home"
-            | "finance"
-            | "education"
-            | "health"
-            | "women_child"
-            | "disaster_management"
-            | "youth_sports"
-            | "it_digital"
+            | Database["public"]["Enums"]["ministry_type"]
             | null
           event_id?: string
           id?: string
           is_mock?: boolean
           minister_response?: string | null
-          motion_type?:
-            | "adjournment"
-            | "calling_attention"
-            | "breach_of_privilege"
-            | "no_confidence"
-            | "short_duration"
-            | "obituary"
-            | "laying_of_papers"
+          motion_type?: Database["public"]["Enums"]["motion_type"]
           outcome?: string | null
           raised_at?: string | null
           raised_by_id?: string | null
           raised_by_name?: string | null
-          raised_by_party_side?: "ruling" | "opposition" | null
+          raised_by_party_side?:
+            | Database["public"]["Enums"]["party_side"]
+            | null
           raised_by_role?: string | null
           resolution_note?: string | null
           resolved_at?: string | null
@@ -1689,14 +1802,7 @@ export type Database = {
           ruled_by?: string | null
           speaker_note?: string | null
           speaker_ruling?: string | null
-          status?:
-            | "submitted"
-            | "admitted"
-            | "rejected"
-            | "discussing"
-            | "voting"
-            | "resolved"
-            | "deferred"
+          status?: Database["public"]["Enums"]["motion_status"]
           subject?: string
           updated_at?: string | null
           votes_abstain?: number | null
@@ -1745,12 +1851,12 @@ export type Database = {
           is_mock: boolean
           person_id: string | null
           photo_url: string | null
-          role: "national" | "rm" | "chapter_em"
+          role: Database["public"]["Enums"]["yi_role"]
           title: string | null
           updated_at: string | null
           user_id: string | null
           yi_zone_code: string | null
-          zone: "ER" | "WR" | "NR" | "NER" | "SRTN" | "SRTKKA" | null
+          zone: Database["public"]["Enums"]["yi_zone"] | null
         }
         Insert: {
           chapter_name?: string | null
@@ -1762,12 +1868,12 @@ export type Database = {
           is_mock?: boolean
           person_id?: string | null
           photo_url?: string | null
-          role?: "national" | "rm" | "chapter_em"
+          role?: Database["public"]["Enums"]["yi_role"]
           title?: string | null
           updated_at?: string | null
           user_id?: string | null
           yi_zone_code?: string | null
-          zone?: "ER" | "WR" | "NR" | "NER" | "SRTN" | "SRTKKA" | null
+          zone?: Database["public"]["Enums"]["yi_zone"] | null
         }
         Update: {
           chapter_name?: string | null
@@ -1779,12 +1885,12 @@ export type Database = {
           is_mock?: boolean
           person_id?: string | null
           photo_url?: string | null
-          role?: "national" | "rm" | "chapter_em"
+          role?: Database["public"]["Enums"]["yi_role"]
           title?: string | null
           updated_at?: string | null
           user_id?: string | null
           yi_zone_code?: string | null
-          zone?: "ER" | "WR" | "NR" | "NER" | "SRTN" | "SRTKKA" | null
+          zone?: Database["public"]["Enums"]["yi_zone"] | null
         }
         Relationships: []
       }
@@ -1806,33 +1912,12 @@ export type Database = {
           home_state: string | null
           id: string
           is_mock: boolean
-          ministry:
-            | "home"
-            | "finance"
-            | "education"
-            | "health"
-            | "women_child"
-            | "disaster_management"
-            | "youth_sports"
-            | "it_digital"
-            | null
+          ministry: Database["public"]["Enums"]["ministry_type"] | null
           parent_phone: string | null
-          parliament_role:
-            | "speaker"
-            | "deputy_speaker"
-            | "prime_minister"
-            | "leader_of_opposition"
-            | "cabinet_minister"
-            | "shadow_minister"
-            | "bill_committee"
-            | "mp"
-            | "deputy_prime_minister"
-            | "party_leader"
-            | "independent_mp"
-            | null
+          parliament_role: Database["public"]["Enums"]["parliament_role"] | null
           party_id: string | null
           party_number: number | null
-          party_side: "ruling" | "opposition" | null
+          party_side: Database["public"]["Enums"]["party_side"] | null
           person_id: string | null
           phone: string | null
           qualified_for_next: boolean | null
@@ -1860,33 +1945,14 @@ export type Database = {
           home_state?: string | null
           id?: string
           is_mock?: boolean
-          ministry?:
-            | "home"
-            | "finance"
-            | "education"
-            | "health"
-            | "women_child"
-            | "disaster_management"
-            | "youth_sports"
-            | "it_digital"
-            | null
+          ministry?: Database["public"]["Enums"]["ministry_type"] | null
           parent_phone?: string | null
           parliament_role?:
-            | "speaker"
-            | "deputy_speaker"
-            | "prime_minister"
-            | "leader_of_opposition"
-            | "cabinet_minister"
-            | "shadow_minister"
-            | "bill_committee"
-            | "mp"
-            | "deputy_prime_minister"
-            | "party_leader"
-            | "independent_mp"
+            | Database["public"]["Enums"]["parliament_role"]
             | null
           party_id?: string | null
           party_number?: number | null
-          party_side?: "ruling" | "opposition" | null
+          party_side?: Database["public"]["Enums"]["party_side"] | null
           person_id?: string | null
           phone?: string | null
           qualified_for_next?: boolean | null
@@ -1914,33 +1980,14 @@ export type Database = {
           home_state?: string | null
           id?: string
           is_mock?: boolean
-          ministry?:
-            | "home"
-            | "finance"
-            | "education"
-            | "health"
-            | "women_child"
-            | "disaster_management"
-            | "youth_sports"
-            | "it_digital"
-            | null
+          ministry?: Database["public"]["Enums"]["ministry_type"] | null
           parent_phone?: string | null
           parliament_role?:
-            | "speaker"
-            | "deputy_speaker"
-            | "prime_minister"
-            | "leader_of_opposition"
-            | "cabinet_minister"
-            | "shadow_minister"
-            | "bill_committee"
-            | "mp"
-            | "deputy_prime_minister"
-            | "party_leader"
-            | "independent_mp"
+            | Database["public"]["Enums"]["parliament_role"]
             | null
           party_id?: string | null
           party_number?: number | null
-          party_side?: "ruling" | "opposition" | null
+          party_side?: Database["public"]["Enums"]["party_side"] | null
           person_id?: string | null
           phone?: string | null
           qualified_for_next?: boolean | null
@@ -1985,7 +2032,7 @@ export type Database = {
           name: string
           party_leader_id: string | null
           party_number: number
-          side: "ruling" | "opposition"
+          side: Database["public"]["Enums"]["party_side"]
           symbol_url: string | null
           tagline: string | null
           updated_at: string | null
@@ -1999,7 +2046,7 @@ export type Database = {
           name: string
           party_leader_id?: string | null
           party_number: number
-          side: "ruling" | "opposition"
+          side: Database["public"]["Enums"]["party_side"]
           symbol_url?: string | null
           tagline?: string | null
           updated_at?: string | null
@@ -2013,7 +2060,7 @@ export type Database = {
           name?: string
           party_leader_id?: string | null
           party_number?: number
-          side?: "ruling" | "opposition"
+          side?: Database["public"]["Enums"]["party_side"]
           symbol_url?: string | null
           tagline?: string | null
           updated_at?: string | null
@@ -2122,15 +2169,7 @@ export type Database = {
         Row: {
           answer_summary: string | null
           created_at: string | null
-          directed_to_ministry:
-            | "home"
-            | "finance"
-            | "education"
-            | "health"
-            | "women_child"
-            | "disaster_management"
-            | "youth_sports"
-            | "it_digital"
+          directed_to_ministry: Database["public"]["Enums"]["ministry_type"]
           event_id: string
           filtered_by: string | null
           id: string
@@ -2145,15 +2184,7 @@ export type Database = {
         Insert: {
           answer_summary?: string | null
           created_at?: string | null
-          directed_to_ministry:
-            | "home"
-            | "finance"
-            | "education"
-            | "health"
-            | "women_child"
-            | "disaster_management"
-            | "youth_sports"
-            | "it_digital"
+          directed_to_ministry: Database["public"]["Enums"]["ministry_type"]
           event_id: string
           filtered_by?: string | null
           id?: string
@@ -2168,15 +2199,7 @@ export type Database = {
         Update: {
           answer_summary?: string | null
           created_at?: string | null
-          directed_to_ministry?:
-            | "home"
-            | "finance"
-            | "education"
-            | "health"
-            | "women_child"
-            | "disaster_management"
-            | "youth_sports"
-            | "it_digital"
+          directed_to_ministry?: Database["public"]["Enums"]["ministry_type"]
           event_id?: string
           filtered_by?: string | null
           id?: string
@@ -2225,12 +2248,8 @@ export type Database = {
           reviewed_by: string | null
           school_name: string | null
           section: string | null
-          source:
-            | "microsoft_forms"
-            | "platform_direct"
-            | "csv_upload"
-            | "manual"
-          status: "pending" | "approved" | "rejected" | "duplicate"
+          source: Database["public"]["Enums"]["registration_source"]
+          status: Database["public"]["Enums"]["registration_status"]
           submission_batch: string | null
           updated_at: string
         }
@@ -2253,12 +2272,8 @@ export type Database = {
           reviewed_by?: string | null
           school_name?: string | null
           section?: string | null
-          source?:
-            | "microsoft_forms"
-            | "platform_direct"
-            | "csv_upload"
-            | "manual"
-          status?: "pending" | "approved" | "rejected" | "duplicate"
+          source?: Database["public"]["Enums"]["registration_source"]
+          status?: Database["public"]["Enums"]["registration_status"]
           submission_batch?: string | null
           updated_at?: string
         }
@@ -2281,12 +2296,8 @@ export type Database = {
           reviewed_by?: string | null
           school_name?: string | null
           section?: string | null
-          source?:
-            | "microsoft_forms"
-            | "platform_direct"
-            | "csv_upload"
-            | "manual"
-          status?: "pending" | "approved" | "rejected" | "duplicate"
+          source?: Database["public"]["Enums"]["registration_source"]
+          status?: Database["public"]["Enums"]["registration_status"]
           submission_batch?: string | null
           updated_at?: string
         }
@@ -2369,18 +2380,7 @@ export type Database = {
           is_active: boolean | null
           is_default: boolean | null
           name: string
-          target_role:
-            | "speaker"
-            | "deputy_speaker"
-            | "prime_minister"
-            | "leader_of_opposition"
-            | "cabinet_minister"
-            | "shadow_minister"
-            | "bill_committee"
-            | "mp"
-            | "deputy_prime_minister"
-            | "party_leader"
-            | "independent_mp"
+          target_role: Database["public"]["Enums"]["parliament_role"]
           total_max: number
           updated_at: string | null
         }
@@ -2391,18 +2391,7 @@ export type Database = {
           is_active?: boolean | null
           is_default?: boolean | null
           name: string
-          target_role:
-            | "speaker"
-            | "deputy_speaker"
-            | "prime_minister"
-            | "leader_of_opposition"
-            | "cabinet_minister"
-            | "shadow_minister"
-            | "bill_committee"
-            | "mp"
-            | "deputy_prime_minister"
-            | "party_leader"
-            | "independent_mp"
+          target_role: Database["public"]["Enums"]["parliament_role"]
           total_max?: number
           updated_at?: string | null
         }
@@ -2413,18 +2402,7 @@ export type Database = {
           is_active?: boolean | null
           is_default?: boolean | null
           name?: string
-          target_role?:
-            | "speaker"
-            | "deputy_speaker"
-            | "prime_minister"
-            | "leader_of_opposition"
-            | "cabinet_minister"
-            | "shadow_minister"
-            | "bill_committee"
-            | "mp"
-            | "deputy_prime_minister"
-            | "party_leader"
-            | "independent_mp"
+          target_role?: Database["public"]["Enums"]["parliament_role"]
           total_max?: number
           updated_at?: string | null
         }
@@ -2486,7 +2464,7 @@ export type Database = {
           jury_assignment_id: string
           participant_id: string
           rubric_id: string
-          status: "draft" | "submitted" | "locked" | null
+          status: Database["public"]["Enums"]["score_status"] | null
           submitted_at: string | null
           total_score: number
           updated_at: string | null
@@ -2502,7 +2480,7 @@ export type Database = {
           jury_assignment_id: string
           participant_id: string
           rubric_id: string
-          status?: "draft" | "submitted" | "locked" | null
+          status?: Database["public"]["Enums"]["score_status"] | null
           submitted_at?: string | null
           total_score: number
           updated_at?: string | null
@@ -2518,7 +2496,7 @@ export type Database = {
           jury_assignment_id?: string
           participant_id?: string
           rubric_id?: string
-          status?: "draft" | "submitted" | "locked" | null
+          status?: Database["public"]["Enums"]["score_status"] | null
           submitted_at?: string | null
           total_score?: number
           updated_at?: string | null
@@ -2563,7 +2541,7 @@ export type Database = {
       }
       topics: {
         Row: {
-          category: "central" | "regional"
+          category: Database["public"]["Enums"]["topic_category"]
           created_at: string | null
           description: string | null
           handbook_page: number | null
@@ -2572,10 +2550,10 @@ export type Database = {
           sub_points: Json | null
           title: string
           topic_number: number | null
-          zone: "ER" | "WR" | "NR" | "NER" | "SRTN" | "SRTKKA" | null
+          zone: Database["public"]["Enums"]["yi_zone"] | null
         }
         Insert: {
-          category: "central" | "regional"
+          category: Database["public"]["Enums"]["topic_category"]
           created_at?: string | null
           description?: string | null
           handbook_page?: number | null
@@ -2584,10 +2562,10 @@ export type Database = {
           sub_points?: Json | null
           title: string
           topic_number?: number | null
-          zone?: "ER" | "WR" | "NR" | "NER" | "SRTN" | "SRTKKA" | null
+          zone?: Database["public"]["Enums"]["yi_zone"] | null
         }
         Update: {
-          category?: "central" | "regional"
+          category?: Database["public"]["Enums"]["topic_category"]
           created_at?: string | null
           description?: string | null
           handbook_page?: number | null
@@ -2596,7 +2574,7 @@ export type Database = {
           sub_points?: Json | null
           title?: string
           topic_number?: number | null
-          zone?: "ER" | "WR" | "NR" | "NER" | "SRTN" | "SRTKKA" | null
+          zone?: Database["public"]["Enums"]["yi_zone"] | null
         }
         Relationships: []
       }
@@ -2614,19 +2592,7 @@ export type Database = {
           notes: string | null
           phone: string | null
           shift: string | null
-          station:
-            | "registration"
-            | "help_desk"
-            | "av_tech"
-            | "room_coordinator"
-            | "hospitality"
-            | "stage_manager"
-            | "photographer"
-            | "media"
-            | "runner"
-            | "safety"
-            | "floating"
-            | null
+          station: Database["public"]["Enums"]["volunteer_station"] | null
           tshirt_size: string | null
           updated_at: string | null
         }
@@ -2643,19 +2609,7 @@ export type Database = {
           notes?: string | null
           phone?: string | null
           shift?: string | null
-          station?:
-            | "registration"
-            | "help_desk"
-            | "av_tech"
-            | "room_coordinator"
-            | "hospitality"
-            | "stage_manager"
-            | "photographer"
-            | "media"
-            | "runner"
-            | "safety"
-            | "floating"
-            | null
+          station?: Database["public"]["Enums"]["volunteer_station"] | null
           tshirt_size?: string | null
           updated_at?: string | null
         }
@@ -2672,19 +2626,7 @@ export type Database = {
           notes?: string | null
           phone?: string | null
           shift?: string | null
-          station?:
-            | "registration"
-            | "help_desk"
-            | "av_tech"
-            | "room_coordinator"
-            | "hospitality"
-            | "stage_manager"
-            | "photographer"
-            | "media"
-            | "runner"
-            | "safety"
-            | "floating"
-            | null
+          station?: Database["public"]["Enums"]["volunteer_station"] | null
           tshirt_size?: string | null
           updated_at?: string | null
         }
@@ -2945,6 +2887,99 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  public: {
+    Enums: {
+      agenda_mode: ["party", "committee", "mixed"],
+      agenda_status: ["upcoming", "in_progress", "completed", "skipped"],
+      compliance_status: [
+        "not_checked",
+        "pending_evidence",
+        "verified",
+        "violation",
+        "waived",
+      ],
+      event_level: ["chapter", "regional", "national"],
+      event_status: [
+        "draft",
+        "registration_open",
+        "registration_closed",
+        "day1_live",
+        "day1_complete",
+        "day2_live",
+        "completed",
+        "results_published",
+      ],
+      feedback_respondent: ["participant", "organizer", "volunteer", "jury"],
+      media_kind: ["photo", "video", "document"],
+      media_visibility: ["public", "yi_internal", "organizer_only"],
+      ministry_type: [
+        "home",
+        "finance",
+        "education",
+        "health",
+        "women_child",
+        "disaster_management",
+        "youth_sports",
+        "it_digital",
+      ],
+      motion_status: [
+        "submitted",
+        "admitted",
+        "rejected",
+        "discussing",
+        "voting",
+        "resolved",
+        "deferred",
+      ],
+      motion_type: [
+        "adjournment",
+        "calling_attention",
+        "breach_of_privilege",
+        "no_confidence",
+        "short_duration",
+        "obituary",
+        "laying_of_papers",
+      ],
+      parliament_role: [
+        "speaker",
+        "deputy_speaker",
+        "prime_minister",
+        "leader_of_opposition",
+        "cabinet_minister",
+        "shadow_minister",
+        "bill_committee",
+        "mp",
+        "deputy_prime_minister",
+        "party_leader",
+        "independent_mp",
+      ],
+      party_side: ["ruling", "opposition"],
+      registration_source: [
+        "microsoft_forms",
+        "platform_direct",
+        "csv_upload",
+        "manual",
+      ],
+      registration_status: ["pending", "approved", "rejected", "duplicate"],
+      score_status: ["draft", "submitted", "locked"],
+      topic_category: ["central", "regional"],
+      volunteer_station: [
+        "registration",
+        "help_desk",
+        "av_tech",
+        "room_coordinator",
+        "hospitality",
+        "stage_manager",
+        "photographer",
+        "media",
+        "runner",
+        "safety",
+        "floating",
+      ],
+      yi_role: ["national", "rm", "chapter_em"],
+      yi_zone: ["ER", "WR", "NR", "NER", "SRTN", "SRTKKA"],
+    },
+  },
   yi: {
     Enums: {
       institution_type: ["school", "higher_secondary", "college", "university"],

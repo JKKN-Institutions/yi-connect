@@ -50,8 +50,8 @@ import { toast } from "sonner";
 
 // ─── Types ────────────────────────────────────────────────────────
 
-type Event = Tables<"events">;
-type AgendaItem = Tables<"agenda">;
+type Event = Tables<{ schema: "yip" }, "events">;
+type AgendaItem = Tables<{ schema: "yip" }, "agenda">;
 
 interface SpeakerWithParticipant {
   id: string;

@@ -38,7 +38,7 @@ import {
 } from "@/app/yip/actions/bills";
 import type { Tables } from "@/types/yip/database";
 
-type Bill = Tables<"bills">;
+type Bill = Tables<{ schema: "yip" }, "bills">;
 
 // ─── Session parsing (client-side) ──────────────────────────────
 

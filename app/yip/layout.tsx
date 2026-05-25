@@ -1,7 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import Script from "next/script";
 import { Playfair_Display, DM_Sans, JetBrains_Mono } from "next/font/google";
-import { PWARegister } from "@/components/yip/pwa-register";
 import { YipBrandHeader } from "@/components/yip/brand/Header";
 import { YipBrandFooter } from "@/components/yip/brand/Footer";
 
@@ -31,21 +29,6 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  manifest: "/yip/manifest.json",
-  icons: {
-    icon: [
-      { url: "/yip/icons/icon-192.png", sizes: "192x192", type: "image/png" },
-      { url: "/yip/icons/icon-512.png", sizes: "512x512", type: "image/png" },
-    ],
-    apple: [
-      { url: "/yip/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
-    ],
-  },
-  appleWebApp: {
-    capable: true,
-    statusBarStyle: "default",
-    title: "YIP",
-  },
   title: {
     default: "YIP — Young Indians Parliament",
     template: "%s · YIP",
@@ -121,15 +104,7 @@ export default function YipLayout({
           {children}
         </main>
         <YipBrandFooter />
-        <PWARegister />
       </div>
-      <Script id="yip-sw-reg" strategy="afterInteractive">
-        {`if ('serviceWorker' in navigator) {
-          window.addEventListener('load', function () {
-            navigator.serviceWorker.register('/yip/sw.js', { scope: '/yip/' }).catch(function () {});
-          });
-        }`}
-      </Script>
     </>
   );
 }

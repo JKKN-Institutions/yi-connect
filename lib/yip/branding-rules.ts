@@ -29,7 +29,7 @@ export type BrandingRule = {
   key: string;
   category: BrandingCategory;
   title: string;
-  description: string;
+  description: string | null;
   /** Handbook page where the rule is grounded. */
   handbook_page: number;
   /** Whether a photo / doc URL is expected for verification. */

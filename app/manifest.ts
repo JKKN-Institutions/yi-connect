@@ -9,29 +9,27 @@ import type { MetadataRoute } from 'next';
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'Yi Connect - Chapter Management System',
+    name: 'Yi Connect',
     short_name: 'Yi Connect',
     description:
-      'Comprehensive Yi Chapter Management System for unified member operations, events, finance, communication, and leadership.',
-    start_url: '/m',
+      'Young Indians platform — chapter management, national events, YiFi, YiFuture, YIP. One app for everything Yi.',
+    start_url: '/',
     scope: '/',
     display: 'standalone',
     orientation: 'portrait-primary',
-    theme_color: '#3b82f6',
+    theme_color: '#000066',
     background_color: '#ffffff',
     categories: ['productivity', 'business', 'social'],
     lang: 'en',
     dir: 'ltr',
     prefer_related_applications: false,
     icons: [
-      // SVG icon for modern browsers
       {
         src: '/icons/icon.svg',
         sizes: 'any',
         type: 'image/svg+xml',
         purpose: 'any'
       },
-      // PNG icons for Android TWA and older browsers
       {
         src: '/icons/icon-192x192.png',
         sizes: '192x192',
@@ -44,7 +42,6 @@ export default function manifest(): MetadataRoute.Manifest {
         type: 'image/png',
         purpose: 'any'
       },
-      // Maskable icons for Android adaptive icons (with safe area padding)
       {
         src: '/icons/icon-192x192-maskable.png',
         sizes: '192x192',
@@ -62,26 +59,26 @@ export default function manifest(): MetadataRoute.Manifest {
       {
         name: 'Dashboard',
         short_name: 'Dashboard',
-        description: 'Go to dashboard',
-        url: '/m'
+        description: 'Chapter dashboard',
+        url: '/dashboard'
       },
       {
-        name: 'Events',
-        short_name: 'Events',
-        description: 'View upcoming events',
-        url: '/m/events'
+        name: 'YiFi 2026',
+        short_name: 'YiFi',
+        description: 'YiFi national summit',
+        url: '/yifi'
       },
       {
-        name: 'Check-in',
-        short_name: 'Check-in',
-        description: 'Quick event check-in',
-        url: '/m/checkin'
+        name: 'YiFuture',
+        short_name: 'YiFuture',
+        description: 'Yi YUVA Future 6.0',
+        url: '/yi-future'
       },
       {
-        name: 'Profile',
-        short_name: 'Profile',
-        description: 'View your profile',
-        url: '/m/profile'
+        name: 'YIP',
+        short_name: 'YIP',
+        description: 'Young Indians Parliament',
+        url: '/yip'
       }
     ]
   };

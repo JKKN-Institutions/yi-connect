@@ -4,8 +4,8 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { createClient } from "@/lib/yip/supabase/client";
 import type { Tables } from "@/types/yip/database";
 
-type Event = Tables<"events">;
-type AgendaItem = Tables<"agenda">;
+type Event = Tables<{ schema: "yip" }, "events">;
+type AgendaItem = Tables<{ schema: "yip" }, "agenda">;
 
 interface RealtimeEventState {
   event: Event | null;

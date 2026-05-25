@@ -33,6 +33,7 @@ export type EventImpactMetrics = Tables<'event_impact_metrics'>;
 
 export type EventStatus = Enums<'event_status'>;
 export type EventCategory = Enums<'event_category'>;
+export type EventScope = Enums<'event_scope'>;
 export type RSVPStatus = Enums<'rsvp_status'>;
 export type BookingStatus = Enums<'booking_status'>;
 export type VolunteerStatus = Enums<'volunteer_status'>;
@@ -478,6 +479,12 @@ export const EVENT_CATEGORIES: Record<EventCategory, string> = {
   other: 'Other',
   industrial_visit: 'Industrial Visit',
   summit: 'National Summit',
+};
+
+export const EVENT_SCOPES: Record<EventScope, string> = {
+  chapter: 'Chapter',
+  regional: 'Regional',
+  national: 'National',
 };
 
 export const RSVP_STATUSES: Record<RSVPStatus, string> = {

@@ -100,10 +100,10 @@ export async function adminListSeasons(): Promise<AdminSeason[]> {
   const supabase = await createServiceClient();
   const { data, error } = await supabase
     .schema("yi").from("years") /* TODO yip-absorption: seasons table dropped — verify yi.years shape + filter on events.yi_year_id */
-    .select("id, name, year, is_active, created_at, updated_at")
+    .select("id, name:display_name, year, is_active, created_at, updated_at")
     .order("is_active", { ascending: false })
     .order("year", { ascending: false })
-    .order("name", { ascending: true });
+    .order("display_name", { ascending: true });
 
   if (error || !data) return [];
   return data.map(mapRow);
@@ -128,11 +128,11 @@ export async function adminCreateSeason(
   const { data, error } = await supabase
     .schema("yi").from("years") /* TODO yip-absorption: seasons table dropped — verify yi.years shape + filter on events.yi_year_id */
     .insert({
-      name: clean.name,
+      display_name: clean.name,
       year: clean.year,
       is_active: clean.is_active,
     })
-    .select("id, name, year, is_active, created_at, updated_at")
+    .select("id, name:display_name, year, is_active, created_at, updated_at")
     .single();
 
   if (error || !data) {
@@ -167,13 +167,13 @@ export async function adminUpdateSeason(
   const { data, error } = await supabase
     .schema("yi").from("years") /* TODO yip-absorption: seasons table dropped — verify yi.years shape + filter on events.yi_year_id */
     .update({
-      name: clean.name,
+      display_name: clean.name,
       year: clean.year,
       is_active: clean.is_active,
       updated_at: new Date().toISOString(),
     })
     .eq("id", id)
-    .select("id, name, year, is_active, created_at, updated_at")
+    .select("id, name:display_name, year, is_active, created_at, updated_at")
     .single();
 
   if (error || !data) {
@@ -273,7 +273,7 @@ export async function adminCloneSeason(
   const supabase = await createServiceClient();
   const { data: source, error: srcErr } = await supabase
     .schema("yi").from("years") /* TODO yip-absorption: seasons table dropped — verify yi.years shape + filter on events.yi_year_id */
-    .select("name, year")
+    .select("name:display_name, year")
     .eq("id", id)
     .single();
 
@@ -294,7 +294,7 @@ export async function adminCloneSeason(
   const { data: collision } = await supabase
     .schema("yi").from("years") /* TODO yip-absorption: seasons table dropped — verify yi.years shape + filter on events.yi_year_id */
     .select("id")
-    .eq("name", newName)
+    .eq("display_name", newName)
     .eq("year", year)
     .maybeSingle();
 
@@ -308,11 +308,11 @@ export async function adminCloneSeason(
   const { data, error } = await supabase
     .schema("yi").from("years") /* TODO yip-absorption: seasons table dropped — verify yi.years shape + filter on events.yi_year_id */
     .insert({
-      name: newName,
+      display_name: newName,
       year,
       is_active: false,
     })
-    .select("id, name, year, is_active, created_at, updated_at")
+    .select("id, name:display_name, year, is_active, created_at, updated_at")
     .single();
 
   if (error || !data) {

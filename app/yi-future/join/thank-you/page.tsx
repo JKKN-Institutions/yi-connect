@@ -162,10 +162,10 @@ export default async function ThankYouPage({
           {/* CTA */}
           <div className="text-center">
             <Link
-              href="/yi-future/login"
+              href="/yi-future/access"
               className="inline-block px-8 py-4 min-h-[44px] rounded-xl bg-[#F5A623] text-navy font-extrabold hover:bg-[#F5A623]/90 transition-all text-base shadow-lg hover:shadow-xl"
             >
-              Log in now →
+              Log in with your code →
             </Link>
           </div>
         </div>

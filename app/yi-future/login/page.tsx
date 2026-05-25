@@ -102,7 +102,7 @@ export default function LoginPage() {
             <div className="mt-6 pt-6 border-t border-navy/10 text-center">
               <p className="text-xs text-navy/50">Delegate, mentor, or jury?</p>
               <Link
-                href="/yi-future/join"
+                href="/yi-future/access"
                 className="mt-1 inline-block text-sm text-navy font-semibold hover:text-yi-gold transition-colors"
               >
                 Enter your access code →

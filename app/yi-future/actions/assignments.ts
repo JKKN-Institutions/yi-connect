@@ -59,7 +59,7 @@ export async function assignChapterToTrack(
         track_id: input.trackId,
         role: input.role,
       },
-      { onConflict: "edition_id,chapter_id" }
+      { onConflict: "edition_id,chapter_id,track_id" }
     );
   if (error) return { ok: false, error: error.message };
 
@@ -76,13 +76,14 @@ export async function removeAssignment(input: {
 }): Promise<ActionResult> {
   await requireAdmin();
   const svc = await createServiceClient();
-  // PK is (edition_id, chapter_id), so track_id is implicitly uniquely determined
+  // PK is (edition_id, chapter_id, track_id)
   const { error } = await svc
     .schema("future")
     .from("chapter_track_assignments")
     .delete()
     .eq("edition_id", input.editionId)
-    .eq("chapter_id", input.chapterId);
+    .eq("chapter_id", input.chapterId)
+    .eq("track_id", input.trackId);
   if (error) return { ok: false, error: error.message };
 
   revalidatePath("/national/admin/host-assignments");

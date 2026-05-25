@@ -1,246 +1,177 @@
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
-import {
-  assignChapterToTrack,
-  removeAssignment,
-} from "@/app/yi-future/actions/assignments";
 
-type Edition = {
-  id: string;
-  name: string;
-  is_active: boolean | null;
-};
-
-type Track = {
-  id: string;
-  name: string;
-  icon: string | null;
-  color_hex: string | null;
-  display_order: number | null;
-};
-
-type Chapter = {
+type HostChapter = {
   id: string;
   name: string;
   city: string;
-  state: string | null;
+  finale_region: string | null;
+  finale_start_date: string | null;
+  finale_end_date: string | null;
+  chair_name: string | null;
+  chair_email: string | null;
 };
 
-type Assignment = {
-  chapter_id: string;
-  track_id: string;
-  role: "host" | "participating";
+type RegionStats = {
+  region: string;
+  host: HostChapter | null;
+  chapterCount: number;
 };
 
-async function load(editionId: string | undefined) {
+async function loadData() {
   const svc = await createServiceClient();
-  const { data: editions } = await svc
-    .schema("future")
-    .from("editions")
-    .select("id, name, is_active")
-    .order("kickoff_date", { ascending: false });
-  const eds = (editions as unknown as Edition[]) ?? [];
-  const selected = eds.find((e) => e.id === editionId) ?? eds.find((e) => e.is_active) ?? eds[0];
 
-  if (!selected) {
-    return { editions: eds, selected: null, tracks: [], chapters: [], assignments: [] as Assignment[] };
+  const { data: chapters } = await svc
+    .schema("future")
+    .from("chapters" as never)
+    .select(
+      "id, name, city, finale_region, finale_start_date, finale_end_date, is_finale_host, chair_name, chair_email"
+    )
+    .eq("is_active", true)
+    .order("finale_region")
+    .order("name");
+
+  const all = (chapters as unknown as (HostChapter & { is_finale_host: boolean })[]) ?? [];
+
+  const regionMap: Record<string, RegionStats> = {};
+  for (const ch of all) {
+    const r = ch.finale_region ?? "UNMAPPED";
+    if (!regionMap[r]) regionMap[r] = { region: r, host: null, chapterCount: 0 };
+    regionMap[r].chapterCount++;
+    if (ch.is_finale_host) regionMap[r].host = ch;
   }
 
-  const [{ data: tracks }, { data: chapters }, { data: assignments }] =
-    await Promise.all([
-      svc
-        .schema("future")
-        .from("tracks")
-        .select("id, name, icon, color_hex, display_order")
-        .eq("edition_id", selected.id)
-        .order("display_order", { ascending: true }),
-      svc
-        .schema("yi")
-        .from("chapters")
-        .select("id, name, city, state")
-        .eq("is_active", true)
-        .order("name", { ascending: true }),
-      svc
-        .schema("future")
-        .from("chapter_track_assignments")
-        .select("chapter_id, track_id, role")
-        .eq("edition_id", selected.id),
-    ]);
+  const { data: tracks } = await svc
+    .schema("future")
+    .from("tracks")
+    .select("id, name, icon, color_hex")
+    .order("display_order");
 
   return {
-    editions: eds,
-    selected,
-    tracks: (tracks as unknown as Track[]) ?? [],
-    chapters: (chapters as unknown as Chapter[]) ?? [],
-    assignments: (assignments as unknown as Assignment[]) ?? [],
+    regions: Object.values(regionMap).sort((a, b) => a.region.localeCompare(b.region)),
+    tracks: (tracks as unknown as { id: string; name: string; icon: string | null; color_hex: string | null }[]) ?? [],
   };
 }
 
-async function assignHost(formData: FormData) {
-  "use server";
-  await assignChapterToTrack({
-    editionId: String(formData.get("edition_id") ?? ""),
-    chapterId: String(formData.get("chapter_id") ?? ""),
-    trackId: String(formData.get("track_id") ?? ""),
-    role: "host",
+const REGION_LABELS: Record<string, string> = {
+  ER: "East Region & North East",
+  NR: "North Region",
+  SRTKKA: "South — Kerala, Karnataka, AP",
+  SRTN: "South — Tamil Nadu",
+  WR: "West Region",
+};
+
+function formatDate(d: string | null): string {
+  if (!d) return "TBA";
+  return new Date(d + "T00:00:00").toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
   });
 }
 
-async function unassign(formData: FormData) {
-  "use server";
-  await removeAssignment({
-    editionId: String(formData.get("edition_id") ?? ""),
-    chapterId: String(formData.get("chapter_id") ?? ""),
-    trackId: String(formData.get("track_id") ?? ""),
-  });
-}
-
-export default async function HostAssignmentsPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ edition?: string }>;
-}) {
-  const { edition } = await searchParams;
-  const { editions, selected, tracks, chapters, assignments } = await load(edition);
+export default async function HostAssignmentsPage() {
+  const { regions, tracks } = await loadData();
 
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-navy">Host Assignments</h2>
+        <h2 className="text-2xl font-bold text-navy">
+          Regional Finale Hosts
+        </h2>
         <p className="mt-1 text-sm text-navy/60">
-          Each track gets one host chapter — they run the 2-day National Track
-          Final.
+          5 regional finales — each host chapter runs all 4 tracks over 2 days.
         </p>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        {editions.map((e) => (
-          <a
-            key={e.id}
-            href={`/national/admin/host-assignments?edition=${e.id}`}
-            className={`px-3 py-1.5 rounded-md text-xs font-semibold ${
-              selected?.id === e.id
-                ? "bg-navy text-ivory"
-                : "bg-white text-navy/70 border border-navy/20"
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {regions.map((r) => (
+          <div
+            key={r.region}
+            className={`bg-white border rounded-lg overflow-hidden ${
+              r.host
+                ? "border-yi-gold/30"
+                : "border-red-200 bg-red-50/30"
             }`}
           >
-            {e.name}
-          </a>
+            <div className="px-4 py-3 border-b border-navy/5 bg-navy/5">
+              <div className="font-semibold text-navy">
+                {REGION_LABELS[r.region] ?? r.region}
+              </div>
+              <div className="text-xs text-navy/50 mt-0.5">
+                {r.chapterCount} chapters participating
+              </div>
+            </div>
+
+            <div className="px-4 py-4 space-y-3">
+              {r.host ? (
+                <>
+                  <div>
+                    <div className="text-xs font-semibold text-navy/50 uppercase tracking-wider">
+                      Host City
+                    </div>
+                    <div className="text-lg font-bold text-navy">
+                      {r.host.name}
+                    </div>
+                    <div className="text-xs text-navy/50">{r.host.city}</div>
+                  </div>
+
+                  <div>
+                    <div className="text-xs font-semibold text-navy/50 uppercase tracking-wider">
+                      Dates
+                    </div>
+                    <div className="text-sm font-medium text-navy">
+                      {r.host.finale_start_date
+                        ? `${formatDate(r.host.finale_start_date)} — ${formatDate(r.host.finale_end_date)}`
+                        : "TBA"}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-xs font-semibold text-navy/50 uppercase tracking-wider">
+                      Tracks
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 mt-1">
+                      {tracks.map((t) => (
+                        <span
+                          key={t.id}
+                          className="px-2 py-0.5 text-[11px] font-semibold rounded"
+                          style={{
+                            backgroundColor: t.color_hex
+                              ? `${t.color_hex}15`
+                              : "#f5f5f5",
+                            color: t.color_hex ?? "#333",
+                          }}
+                        >
+                          {t.name}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  {r.host.chair_name && (
+                    <div>
+                      <div className="text-xs font-semibold text-navy/50 uppercase tracking-wider">
+                        Chair
+                      </div>
+                      <div className="text-sm text-navy">
+                        {r.host.chair_name}
+                      </div>
+                      {r.host.chair_email && (
+                        <div className="text-xs text-navy/50">
+                          {r.host.chair_email}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="text-sm text-red-500 font-medium">
+                  No host chapter assigned
+                </div>
+              )}
+            </div>
+          </div>
         ))}
       </div>
-
-      {!selected ? (
-        <div className="bg-white border border-navy/10 rounded-lg p-8 text-center text-navy/50">
-          No edition selected.
-        </div>
-      ) : (
-        <div className="bg-white border border-navy/10 rounded-lg overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-navy/5 text-navy/70">
-              <tr>
-                <th className="text-left px-4 py-3 font-semibold">Track</th>
-                <th className="text-left px-4 py-3 font-semibold">Host chapter</th>
-                <th className="text-right px-4 py-3 font-semibold">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {tracks.length === 0 ? (
-                <tr>
-                  <td colSpan={3} className="px-4 py-6 text-center text-navy/40">
-                    No tracks on this edition.
-                  </td>
-                </tr>
-              ) : (
-                tracks.map((t) => {
-                  const hostAssign = assignments.find(
-                    (a) => a.track_id === t.id && a.role === "host"
-                  );
-                  const hostChapter = hostAssign
-                    ? chapters.find((c) => c.id === hostAssign.chapter_id)
-                    : null;
-
-                  return (
-                    <tr key={t.id} className="border-t border-navy/5">
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xl">{t.icon ?? "•"}</span>
-                          <span
-                            className="font-semibold"
-                            style={{ color: t.color_hex ?? "#1a1a3e" }}
-                          >
-                            {t.name}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        {hostChapter ? (
-                          <div>
-                            <div className="font-semibold text-navy">
-                              {hostChapter.name}
-                            </div>
-                            <div className="text-xs text-navy/50">
-                              {hostChapter.city}
-                              {hostChapter.state && `, ${hostChapter.state}`}
-                            </div>
-                          </div>
-                        ) : (
-                          <form
-                            action={assignHost}
-                            className="flex items-center gap-2"
-                          >
-                            <input type="hidden" name="edition_id" value={selected.id} />
-                            <input type="hidden" name="track_id" value={t.id} />
-                            <select
-                              name="chapter_id"
-                              required
-                              className="flex-1 px-2 py-1.5 text-xs border border-navy/20 rounded"
-                              defaultValue=""
-                            >
-                              <option value="" disabled>
-                                — pick a chapter —
-                              </option>
-                              {chapters.map((c) => (
-                                <option key={c.id} value={c.id}>
-                                  {c.name} ({c.city})
-                                </option>
-                              ))}
-                            </select>
-                            <button
-                              type="submit"
-                              className="px-3 py-1.5 text-xs font-semibold bg-navy text-ivory rounded"
-                            >
-                              Assign host
-                            </button>
-                          </form>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        {hostAssign && (
-                          <form action={unassign}>
-                            <input type="hidden" name="edition_id" value={selected.id} />
-                            <input type="hidden" name="chapter_id" value={hostAssign.chapter_id} />
-                            <input type="hidden" name="track_id" value={hostAssign.track_id} />
-                            <button
-                              type="submit"
-                              className="text-xs text-red-600/70 hover:text-red-600"
-                            >
-                              Remove
-                            </button>
-                          </form>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      <p className="text-xs text-navy/40">
-        Note: a chapter can be either host OR participating for a given edition
-        (not both). Setting a host replaces any prior role.
-      </p>
     </div>
   );
 }

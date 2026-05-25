@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
 import { deleteProblem, toggleProblemActive } from "@/app/yi-future/actions/problems";
 import { isCurrentUserPlatformAdmin } from "@/app/yi-future/actions/national-admins";
+import { TrackIcon } from "@/components/yi-future/TrackIcon";
 
 type Track = {
   id: string;
@@ -116,7 +117,7 @@ export default async function ProblemsPage({
                 : "bg-white text-navy/70 border border-navy/20 hover:border-navy/40"
             }`}
           >
-            <span>{t.icon ?? "•"}</span>
+            <TrackIcon icon={t.icon} name={t.name} size={16} />
             <span>{t.name}</span>
             <span className="text-[10px] opacity-60">
               ({t.editions?.slug})

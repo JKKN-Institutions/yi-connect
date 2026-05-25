@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
 import { readSession } from "@/app/yi-future/actions/auth";
 import { setPreferences, getPreferences } from "@/app/yi-future/actions/preferences";
+import { TrackIcon } from "@/components/yi-future/TrackIcon";
 
 type DelegateTeamRow = {
   team_id: string;
@@ -233,7 +234,7 @@ export default async function PreferencesPage() {
               className="text-base font-bold mb-1 flex items-center gap-2"
               style={{ color: tr.colorHex }}
             >
-              <span className="text-xl">{tr.icon ?? "•"}</span>
+              <span className="text-xl inline-flex"><TrackIcon icon={tr.icon} name={tr.name} size={24} /></span>
               <span>{tr.name}</span>
             </h3>
             <p className="text-xs text-navy/50 mb-4 uppercase tracking-wider font-semibold">

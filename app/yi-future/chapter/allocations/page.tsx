@@ -8,6 +8,7 @@ import {
   type MatrixProblem,
 } from "@/app/yi-future/actions/allocations";
 import { MIN_TEAMS_PER_PROBLEM } from "@/lib/yi-future/constants";
+import { TrackIcon } from "@/components/yi-future/TrackIcon";
 
 // Yi palette per-track color treatment. Cycles in track display order.
 const TRACK_COLORS = [
@@ -157,7 +158,7 @@ export default async function AllocationsPage() {
             return (
               <div key={tid} className="rounded-md overflow-hidden border border-navy/10">
                 <div className={`px-3 py-2 text-xs font-bold uppercase tracking-wider ${colors.band}`}>
-                  <span className="mr-1">{meta.icon ?? "•"}</span>
+                  <span className="mr-1 inline-flex"><TrackIcon icon={meta.icon} name={meta.name} size={16} /></span>
                   {meta.name}
                 </div>
                 <div className="grid grid-cols-3 divide-x divide-navy/10 bg-white">
@@ -229,7 +230,7 @@ export default async function AllocationsPage() {
                         colSpan={meta.problems.length}
                         className={`px-3 py-2 text-center text-xs uppercase tracking-wider font-bold ${colors.band}`}
                       >
-                        <span className="mr-1">{meta.icon ?? "•"}</span>
+                        <span className="mr-1 inline-flex"><TrackIcon icon={meta.icon} name={meta.name} size={16} /></span>
                         {meta.name}
                       </th>
                     );

@@ -12,6 +12,7 @@ import {
 import { validateTeamForSubmission } from "@/lib/yi-future/team-validation";
 import { addMember, removeMember } from "@/app/yi-future/actions/members";
 import { TEAM_SIZE_MAX } from "@/lib/yi-future/constants";
+import { trackIconText } from "@/components/yi-future/TrackIcon";
 
 type TeamDetail = {
   id: string;
@@ -349,7 +350,7 @@ export default async function TeamDetailPage({
               </option>
               {problems.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.tracks?.icon ?? "•"} {p.title}
+                  {trackIconText(p.tracks?.icon)} {p.title}
                 </option>
               ))}
             </select>

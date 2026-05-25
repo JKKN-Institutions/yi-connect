@@ -307,7 +307,7 @@ function TocPage({
               <Text style={styles.tocItemTitle}>{wp.title}</Text>
             </View>
             <Text style={styles.tocItemMeta}>
-              {wp.track_icon ? `${wp.track_icon} ` : ""}
+              {wp.track_icon && !wp.track_icon.startsWith("/") ? `${wp.track_icon} ` : ""}
               {wp.track_name} · {wp.host_chapter_name}
             </Text>
           </View>
@@ -334,7 +334,7 @@ function WhitepaperPage({
         <Text style={styles.wpLabel}>
           Whitepaper {String(index + 1).padStart(2, "0")}
           {"  •  "}
-          {wp.track_icon ? `${wp.track_icon} ` : ""}
+          {wp.track_icon && !wp.track_icon.startsWith("/") ? `${wp.track_icon} ` : ""}
           {wp.track_name}
         </Text>
         <Text style={styles.wpTitle}>{wp.title}</Text>

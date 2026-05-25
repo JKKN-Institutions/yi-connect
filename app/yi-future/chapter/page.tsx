@@ -13,6 +13,7 @@ import {
 import type { Database } from "@/types/yi-future/database";
 import { PhaseTracker, type PhaseEventStatus } from "@/components/yi-future/phase/PhaseTracker";
 import { PushSubscribe } from "@/components/yi-future/pwa/PushSubscribe";
+import { TrackIcon } from "@/components/yi-future/TrackIcon";
 
 type CoreTeamRole = Database["future"]["Enums"]["user_role"];
 
@@ -404,7 +405,7 @@ export default async function ChapterDashboard() {
                   >
                     {track.trackIcon && (
                       <span className="text-base leading-none">
-                        {track.trackIcon}
+                        <TrackIcon icon={track.trackIcon} name={track.trackName} size={20} />
                       </span>
                     )}
                     <span className="text-xs font-bold uppercase tracking-widest text-white truncate">

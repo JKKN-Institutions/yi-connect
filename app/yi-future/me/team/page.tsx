@@ -9,6 +9,7 @@ import {
 } from "@/app/yi-future/actions/teams";
 import { freezeTeam, setLeader } from "@/app/yi-future/actions/team-invites";
 import { TEAM_SIZE_MIN, TEAM_SIZE_MAX } from "@/lib/yi-future/constants";
+import { trackIconText } from "@/components/yi-future/TrackIcon";
 
 type TeamView = {
   id: string;
@@ -242,7 +243,7 @@ export default async function MyTeamPage() {
                   className="mr-2 accent-yi-gold"
                 />
                 <span className="font-semibold text-navy">
-                  {p.tracks?.icon} {p.title}
+                  {trackIconText(p.tracks?.icon)} {p.title}
                 </span>
                 <div className="mt-1 text-xs text-navy/60">
                   {p.short_description}

@@ -246,7 +246,7 @@ function WhitepaperDocument({ data }: { data: WhitepaperPdfData }) {
   const paragraphs = data.executive_summary
     ? splitParagraphs(data.executive_summary)
     : [];
-  const trackLabel = data.track_icon
+  const trackLabel = data.track_icon && !data.track_icon.startsWith("/")
     ? `${data.track_icon} ${data.track_name}`
     : data.track_name;
 

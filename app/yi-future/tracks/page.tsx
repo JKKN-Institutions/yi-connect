@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
 import { BrandStrip, ProgramWordmark } from "@/components/yi-future/brand/BrandHeader";
+import { TrackIcon } from "@/components/yi-future/TrackIcon";
 
 type Track = {
   id: string;
@@ -79,7 +80,9 @@ export default async function PublicTracksPage() {
                 style={{ borderColor: t.color_hex ?? "#1a1a3e" }}
               >
                 <div className="flex items-start gap-4">
-                  <div className="text-5xl">{t.icon ?? "•"}</div>
+                  <div className="text-5xl leading-none">
+                    <TrackIcon icon={t.icon} name={t.name} size={56} />
+                  </div>
                   <div className="flex-1 min-w-0">
                     <h2
                       className="text-2xl font-bold mb-2"

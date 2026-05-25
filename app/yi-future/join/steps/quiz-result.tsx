@@ -3,6 +3,7 @@ import Link from "next/link";
 import type { QuizResult } from "@/lib/yi-future/quiz";
 import { fireConfetti } from "@/components/ui/confetti";
 import { saveQuizResult } from "@/app/yi-future/actions/gamification";
+import { TrackIcon } from "@/components/yi-future/TrackIcon";
 
 type TrackMini = {
   slug: string;
@@ -46,7 +47,6 @@ export function QuizResultStep({
   }, [result.winner, result.scores]);
 
   const color = track?.color_hex ?? "#1a1a3e";
-  const icon = track?.icon ?? "✦";
   const name = track?.name ?? "Climate Change";
 
   // Compute second-place for "or also strong in" line
@@ -72,7 +72,9 @@ export function QuizResultStep({
           style={{ background: `radial-gradient(circle at center, ${color}, transparent 70%)` }}
         />
         <div className="relative">
-          <div className="text-7xl md:text-8xl mb-4">{icon}</div>
+          <div className="text-7xl md:text-8xl mb-4">
+            <TrackIcon icon={track?.icon} name={name} size={96} className="mx-auto" />
+          </div>
           <div
             className="text-xs font-semibold tracking-[0.25em] uppercase mb-2"
             style={{ color }}

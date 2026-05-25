@@ -1,4 +1,5 @@
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
+import { TrackIcon } from "@/components/yi-future/TrackIcon";
 
 type Whitepaper = {
   id: string;
@@ -61,7 +62,7 @@ export default async function NationalWhitepapersPage() {
                 <tr key={w.id} className="border-t border-navy/5">
                   <td className="px-4 py-3">
                     <span className="inline-flex items-center gap-1 font-semibold">
-                      {w.tracks?.icon ?? "•"} {w.tracks?.name ?? "—"}
+                      <TrackIcon icon={w.tracks?.icon} name={w.tracks?.name ?? "—"} size={16} /> {w.tracks?.name ?? "—"}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-navy/70 text-xs">

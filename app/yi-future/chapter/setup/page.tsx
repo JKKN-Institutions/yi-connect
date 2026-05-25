@@ -283,6 +283,7 @@ export default async function ChapterSetupPage() {
                   defaultValue={String(currentDuration)}
                   className="w-full px-3 py-2 border border-navy/20 rounded-md text-sm bg-white"
                 >
+                  <option value="30">30 days</option>
                   <option value="60">60 days</option>
                   <option value="90">90 days</option>
                 </select>

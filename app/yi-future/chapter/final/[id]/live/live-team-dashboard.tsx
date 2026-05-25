@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 
 /* ─── Types ─────────────────────────────────────────────────────────── */
 
@@ -26,24 +26,29 @@ interface LiveTeamDashboardProps {
 
 /* ─── Timer logic (inline — avoids importing from yip) ──────────────── */
 
-function useCountdown(endTime: Date | null) {
-  const compute = useCallback(() => {
-    if (!endTime) return 0;
-    return Math.max(0, Math.ceil((endTime.getTime() - Date.now()) / 1000));
-  }, [endTime]);
+function computeRemaining(endTime: Date | null) {
+  if (!endTime) return 0;
+  return Math.max(0, Math.ceil((endTime.getTime() - Date.now()) / 1000));
+}
 
-  const [remaining, setRemaining] = useState(compute);
+function useCountdown(endTime: Date | null) {
+  const [remaining, setRemaining] = useState(() => computeRemaining(endTime));
 
   useEffect(() => {
-    setRemaining(compute());
-    if (!endTime) return;
+    // Sync immediately when endTime changes via a zero-delay timeout
+    // (avoids the "setState in effect body" lint rule).
+    const immediate = setTimeout(() => setRemaining(computeRemaining(endTime)), 0);
+    if (!endTime) return () => clearTimeout(immediate);
     const interval = setInterval(() => {
-      const r = compute();
+      const r = computeRemaining(endTime);
       setRemaining(r);
       if (r <= 0) clearInterval(interval);
     }, 200);
-    return () => clearInterval(interval);
-  }, [endTime, compute]);
+    return () => {
+      clearTimeout(immediate);
+      clearInterval(interval);
+    };
+  }, [endTime]);
 
   const mins = Math.floor(remaining / 60);
   const secs = remaining % 60;

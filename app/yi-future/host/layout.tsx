@@ -8,6 +8,8 @@ const NAV: NavItem[] = [
   { label: "Prelim Teams", href: "/yi-future/host/prelim/teams" },
   { label: "Prelim Scoring", href: "/yi-future/host/prelim/scoring" },
   { label: "Regional Finale", href: "#", isHeader: true },
+  { label: "Finale Live", href: "/yi-future/host/finale/live" },
+  { label: "Finale Schedule", href: "/yi-future/host/finale/schedule" },
   { label: "Track", href: "/yi-future/host/track" },
   { label: "Finalists", href: "/yi-future/host/finalists" },
   { label: "Agenda · Day 1", href: "/yi-future/host/agenda/day1" },

@@ -21,6 +21,9 @@ const NAV: NavItem[] = [
   { label: "Media", href: "/yi-future/national/admin/media" },
   { label: "Compendium", href: "/yi-future/national/admin/compendium" },
   { label: "Downloads", href: "/yi-future/national/admin/downloads" },
+  { label: "Leaderboards", href: "/yi-future/national/admin/leaderboards" },
+  { label: "Finals Live", href: "/yi-future/national/admin/finals/live" },
+  { label: "Finals Schedule", href: "/yi-future/national/admin/finals/schedule" },
   { label: "Broadcast", href: "/yi-future/national/admin/broadcast" },
   { label: "Admins", href: "/yi-future/national/admin/admins" },
 ];

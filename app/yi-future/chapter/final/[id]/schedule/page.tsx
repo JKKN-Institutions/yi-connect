@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { revalidatePath } from "next/cache";
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
 import { getChapterContext } from "@/lib/yi-future/chapter-context";
 

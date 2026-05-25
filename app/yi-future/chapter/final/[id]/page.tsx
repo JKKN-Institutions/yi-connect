@@ -149,7 +149,13 @@ export default async function ChapterFinalDetailPage({
               href={`/yi-future/chapter/final/${id}/live`}
               className="text-xs font-semibold text-yi-gold hover:underline"
             >
-              Open live panel →
+              Live dashboard →
+            </Link>
+            <Link
+              href={`/yi-future/chapter/final/${id}/schedule`}
+              className="text-xs font-semibold text-yi-gold hover:underline"
+            >
+              Presentation schedule →
             </Link>
             <Link
               href={`/event/${id}/display`}

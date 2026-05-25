@@ -125,11 +125,21 @@ export default async function JourneyPage() {
             >
               <div className="px-5 py-3 bg-navy/5 flex items-center justify-between">
                 <div>
-                  <h3 className="font-bold text-navy">{PHASE_LABELS[p]}</h3>
+                  <h3 className="font-bold text-navy">
+                    {PHASE_LABELS[p]}
+                    <span className="ml-2 text-xs font-normal text-navy/40">
+                      {phaseTimeLabels[p]}
+                    </span>
+                  </h3>
                   <div className="text-xs text-navy/50 mt-0.5">
-                    {phaseEvents.length}/3 events scheduled ·{" "}
-                    {phaseEvents.filter((e) => e.completed).length}/3 completed
+                    {phaseEvents.length}/{plan.eventsPerPhase} events scheduled ·{" "}
+                    {phaseEvents.filter((e) => e.completed).length}/{plan.eventsPerPhase} completed
                   </div>
+                  {phaseEvents.length === 0 && (
+                    <div className="text-[11px] text-yi-gold mt-1">
+                      Suggested: {plan.suggestedEvents[p].join(" → ")}
+                    </div>
+                  )}
                 </div>
               </div>
 

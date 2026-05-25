@@ -86,6 +86,8 @@ async function getChapter(id: string) {
     region: string | null;
     logo_url: string | null;
     programme_duration_days: number | null;
+    finale_start_date: string | null;
+    finale_end_date: string | null;
   } | null;
 }
 

@@ -114,7 +114,11 @@ export default async function ChapterSetupPage() {
   const phaseEventCount = await countPhaseEvents(ctx.chapterId, ctx.editionId);
   const durationLocked = phaseEventCount > 0;
   const currentDuration =
-    chapter?.programme_duration_days === 60 ? 60 : 90;
+    chapter?.programme_duration_days === 30
+      ? 30
+      : chapter?.programme_duration_days === 60
+        ? 60
+        : 90;
 
   async function saveChapter(formData: FormData) {
     "use server";

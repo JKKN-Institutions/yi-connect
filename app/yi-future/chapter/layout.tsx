@@ -18,7 +18,6 @@ const NAV: NavItem[] = [
   { label: "Final Event", href: "/yi-future/chapter/final" },
   { label: "Submissions", href: "/yi-future/chapter/submissions" },
   { label: "Results", href: "/yi-future/chapter/results" },
-  { label: "My Bug Reports", href: "/yi-future/my-bug-reports" },
 ];
 
 export default async function ChapterLayout({

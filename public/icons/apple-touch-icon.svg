@@ -1,13 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180" width="180" height="180">
-  <defs>
-    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#1d4ed8;stop-opacity:1" />
-    </linearGradient>
-  </defs>
-  <rect width="180" height="180" rx="36" fill="url(#bgGradient)"/>
-  <text x="90" y="118" font-family="system-ui, -apple-system, sans-serif" font-size="78" font-weight="700" fill="white" text-anchor="middle">Yi</text>
-  <circle cx="136" cy="48" r="8" fill="white" opacity="0.9"/>
-  <circle cx="150" cy="62" r="5" fill="white" opacity="0.7"/>
-  <line x1="136" y1="48" x2="150" y2="62" stroke="white" stroke-width="2" opacity="0.8"/>
+  <rect width="180" height="180" rx="36" fill="#000066"/>
+  <path d="M50 36 L90 96 L90 140 L80 140 L80 96 L40 36 Z" fill="white"/>
+  <path d="M130 36 L90 96 L90 96 L100 96 L140 36 Z" fill="white"/>
+  <rect x="110" y="72" width="16" height="68" fill="white"/>
+  <rect x="110" y="46" width="16" height="16" rx="2" fill="#FD7215"/>
+  <rect x="110" y="124" width="16" height="16" fill="#229434"/>
+  <text x="90" y="164" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="600" fill="white" text-anchor="middle" opacity="0.5">connect</text>
 </svg>

@@ -6,6 +6,7 @@ import { Analytics } from '@vercel/analytics/next';
 import { ServiceWorkerRegister } from '@/components/pwa/sw-register';
 import { InstallPrompt } from '@/components/pwa/install-prompt';
 import { UpdatePrompt } from '@/components/pwa/update-prompt';
+import { MobileNav } from '@/components/mobile-nav';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -121,6 +122,7 @@ export default function RootLayout({
         suppressHydrationWarning
       >
         {children}
+        <MobileNav />
         <Toaster position='top-right' />
         <ServiceWorkerRegister />
         <InstallPrompt />

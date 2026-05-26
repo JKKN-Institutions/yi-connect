@@ -14,6 +14,7 @@ function parseSession(raw: string | undefined): Record<string, unknown> | null {
 export default async function SmartHomePage() {
   const cookieStore = await cookies();
 
+  // Priority 1: existing module session cookies (set by access code OR by OAuth callback)
   const yifi = parseSession(cookieStore.get("yifi_session")?.value);
   if (yifi?.type === "member") redirect("/yifi/me");
 
@@ -26,9 +27,25 @@ export default async function SmartHomePage() {
   if (yip?.type === "participant") redirect("/yip/me");
   if (yip?.type === "jury") redirect("/yip/jury");
 
+  // Priority 2: OAuth session → check if they're a chapter admin/member
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (user) redirect("/dashboard");
 
+  if (user) {
+    // Check if they have a yi_connect member record (chapter admin/member)
+    const { data: member } = await supabase
+      .schema("yi_connect" as any)
+      .from("members")
+      .select("id")
+      .eq("id", user.id)
+      .single();
+
+    if (member) redirect("/dashboard");
+
+    // Authenticated but not a member of any module — show "not registered" page
+    redirect("/not-registered");
+  }
+
+  // Priority 3: anonymous → show YiFi landing (current flagship)
   redirect("/yifi");
 }

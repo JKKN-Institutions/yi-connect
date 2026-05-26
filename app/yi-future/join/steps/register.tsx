@@ -4,7 +4,9 @@ import { useState, useTransition, useEffect, useRef, useMemo } from "react";
 import {
   registerDelegate,
   searchApprovedColleges,
+  lookupReturningDelegate,
   type CollegeSuggestion,
+  type PreviousProfile,
 } from "@/app/yi-future/actions/delegate-register";
 
 type ChapterMini = {
@@ -83,6 +85,30 @@ export function RegisterStep({
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const hydrated = useRef(false);
+  const [returningProfile, setReturningProfile] = useState<PreviousProfile | null>(null);
+  const [lookupDone, setLookupDone] = useState(false);
+  const lookupRef = useRef(false);
+
+  function applyReturningProfile(p: PreviousProfile) {
+    setForm((prev) => ({
+      ...prev,
+      full_name: p.full_name || prev.full_name,
+      email: p.email || prev.email,
+      mobile: p.phone?.replace(/^91/, "") || prev.mobile,
+      whatsapp: p.whatsapp?.replace(/^91/, "") || prev.mobile,
+      whatsapp_same: p.phone === p.whatsapp || !p.whatsapp,
+      gender: (p.gender as "male" | "female" | "") || prev.gender,
+      is_yi_yuva_member: p.is_yi_yuva_member === true ? "yes" : p.is_yi_yuva_member === false ? "no" : prev.is_yi_yuva_member,
+      chapter_id: prev.chapter_id,
+      college_name: p.college_name || prev.college_name,
+      college_city: p.college_city || prev.college_city,
+      course: p.course || prev.course,
+      specialization: p.specialization || prev.specialization,
+      year_of_study: (p.year_of_study as 1 | 2 | 3 | 4 | 5) || prev.year_of_study,
+      age: p.age ? String(p.age) : prev.age,
+    }));
+    setReturningProfile(null);
+  }
 
   useEffect(() => {
     if (hydrated.current) return;
@@ -158,6 +184,15 @@ export function RegisterStep({
       return;
     }
     setError(null);
+    if (section === 1 && !lookupDone && !lookupRef.current) {
+      lookupRef.current = true;
+      const email = form.email.trim();
+      const phone = form.mobile;
+      lookupReturningDelegate(email, phone).then((p) => {
+        setLookupDone(true);
+        if (p) setReturningProfile(p);
+      }).catch(() => setLookupDone(true));
+    }
     if (section < 4) setSection((section + 1) as 1 | 2 | 3 | 4);
   }
   function back() {
@@ -213,6 +248,38 @@ export function RegisterStep({
       <div className="mt-5 bg-white border border-navy/10 rounded-lg p-5 sm:p-6">
         {section === 1 && (
           <Section1 form={form} update={update} chapters={chapters} />
+        )}
+        {returningProfile && section === 2 && (
+          <div className="mb-4 p-4 rounded-lg bg-[#F5A623]/10 border-2 border-[#F5A623]/30">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-xs font-bold uppercase tracking-widest text-[#F5A623] mb-1">
+                  Welcome back — Future alumni
+                </div>
+                <p className="text-sm text-navy">
+                  We found your <strong>Future {returningProfile.edition_slug}</strong> profile
+                  {returningProfile.chapter_name && <> from <strong>{returningProfile.chapter_name}</strong></>}.
+                  Want to use your previous details?
+                </p>
+              </div>
+              <div className="flex gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => applyReturningProfile(returningProfile)}
+                  className="px-3 py-1.5 rounded-md bg-[#F5A623] text-navy text-xs font-bold hover:bg-[#F5A623]/90"
+                >
+                  Use previous details
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setReturningProfile(null)}
+                  className="px-3 py-1.5 rounded-md border border-navy/20 text-navy text-xs font-semibold hover:bg-navy/5"
+                >
+                  Start fresh
+                </button>
+              </div>
+            </div>
+          </div>
         )}
         {section === 2 && (
           <Section2 form={form} update={update} chapterId={form.chapter_id} />

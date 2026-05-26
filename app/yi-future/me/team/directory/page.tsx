@@ -26,6 +26,7 @@ type Me = {
 type ChapterDelegate = {
   id: string;
   full_name: string;
+  email: string | null;
   team_members: { team_id: string }[];
 };
 
@@ -50,12 +51,31 @@ async function loadChapterDelegates(
   const { data } = await svc
     .schema("future")
     .from("delegates")
-    .select("id, full_name, team_members(team_id)")
+    .select("id, full_name, email, team_members(team_id)")
     .eq("chapter_id", chapterId)
     .eq("edition_id", editionId)
     .eq("is_active", true)
     .order("full_name", { ascending: true });
   return (data as unknown as ChapterDelegate[]) ?? [];
+}
+
+async function loadAlumniEmails(
+  delegates: ChapterDelegate[],
+  editionId: string
+): Promise<Set<string>> {
+  const emails = delegates.map((d) => d.email).filter(Boolean) as string[];
+  if (emails.length === 0) return new Set();
+  const svc = await createServiceClient();
+  const { data } = await svc
+    .schema("future")
+    .from("delegates")
+    .select("email")
+    .in("email", emails)
+    .neq("edition_id", editionId);
+  const alumniEmails = new Set(
+    ((data ?? []) as { email: string }[]).map((r) => r.email)
+  );
+  return alumniEmails;
 }
 
 async function loadPendingInviteeIds(teamId: string): Promise<Set<string>> {
@@ -95,6 +115,8 @@ export default async function TeamDirectoryPage() {
     loadChapterDelegates(me.chapter_id, me.edition_id),
     myTeam ? loadPendingInviteeIds(myTeam.id) : Promise.resolve(new Set<string>()),
   ]);
+
+  const alumniEmails = await loadAlumniEmails(delegates, me.edition_id);
 
   async function inviteAction(formData: FormData) {
     "use server";
@@ -180,6 +202,7 @@ export default async function TeamDirectoryPage() {
               const alreadyInvited = pendingInviteeIds.has(d.id);
               const canSend =
                 canInviteFromMyTeam && !onTeam && !alreadyInvited;
+              const isAlumni = !!(d.email && alumniEmails.has(d.email));
 
               return (
                 <li
@@ -189,6 +212,11 @@ export default async function TeamDirectoryPage() {
                   <div className="min-w-0">
                     <div className="font-semibold text-navy truncate">
                       {d.full_name}
+                      {isAlumni && (
+                        <span className="ml-2 inline-block px-1.5 py-0.5 rounded-full bg-[#F5A623]/15 text-[#F5A623] text-[9px] font-bold uppercase tracking-wider align-middle">
+                          Alumni
+                        </span>
+                      )}
                     </div>
                     <div className="mt-1 flex flex-wrap gap-2 text-[10px] font-semibold uppercase tracking-wider">
                       {onTeam ? (

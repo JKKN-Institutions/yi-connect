@@ -487,6 +487,28 @@ export const EVENT_SCOPES: Record<EventScope, string> = {
   national: 'National',
 };
 
+export interface EventCapabilities {
+  census?: boolean;
+  census_questions?: string[];
+  routing?: boolean;
+  routing_match_count?: number;
+  routing_slot_minutes?: number;
+  vows?: boolean;
+  vow_categories?: string[];
+  vow_wall?: boolean;
+  dossiers?: boolean;
+  reveal?: boolean;
+}
+
+export const DEFAULT_CAPABILITIES: Record<EventScope, Partial<EventCapabilities>> = {
+  chapter: { census: false, routing: false, vows: false, dossiers: false, reveal: false },
+  regional: { census: true, routing: true, vows: true, dossiers: false, reveal: true,
+    census_questions: ['challenges'], routing_match_count: 3, vow_categories: ['yi'] },
+  national: { census: true, routing: true, vows: true, dossiers: true, reveal: true,
+    census_questions: ['sector', 'challenges', 'can_offer'], routing_match_count: 5,
+    routing_slot_minutes: 12, vow_categories: ['business', 'family_health', 'yi'], vow_wall: true },
+};
+
 export const RSVP_STATUSES: Record<RSVPStatus, string> = {
   pending: 'Pending',
   confirmed: 'Confirmed',

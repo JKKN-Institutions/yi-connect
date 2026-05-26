@@ -1,11 +1,23 @@
 "use server";
 
 import { cookies } from "next/headers";
-import { createServiceClient } from "@/lib/yifi/supabase/server";
+import { createServiceClient, createClient } from "@/lib/yifi/supabase/server";
 
 type JoinResult =
   | { type: "member"; registrant: { id: string; full_name: string; edition_id: string } }
   | { type: "error"; message: string };
+
+type LoginResult = { ok: true } | { ok: false; error: string };
+
+export async function loginOrganiser(
+  email: string,
+  password: string
+): Promise<LoginResult> {
+  const supabase = await createClient();
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
 
 export async function validateAccessCode(code: string): Promise<JoinResult> {
   const trimmed = code.trim().toUpperCase();

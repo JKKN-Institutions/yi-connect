@@ -34,6 +34,89 @@ export type RegisterDelegateResult =
   | { ok: true; redirect: string; access_code: string; returning: boolean }
   | { ok: false; error: string };
 
+// ─── RETURNING DELEGATE LOOKUP ─────────────────────────────────────
+
+export type PreviousProfile = {
+  full_name: string;
+  email: string;
+  phone: string | null;
+  whatsapp: string | null;
+  gender: "male" | "female" | null;
+  is_yi_yuva_member: boolean | null;
+  chapter_id: string | null;
+  chapter_name: string | null;
+  college_name: string | null;
+  college_city: string | null;
+  course: string | null;
+  specialization: string | null;
+  year_of_study: number | null;
+  age: number | null;
+  edition_slug: string | null;
+};
+
+export async function lookupReturningDelegate(
+  email: string,
+  phone: string
+): Promise<PreviousProfile | null> {
+  const cleanEmail = email?.trim().toLowerCase();
+  const cleanPhone = phone?.replace(/[^\d]/g, "").replace(/^91(?=\d{10}$)/, "");
+  if (!cleanEmail && !cleanPhone) return null;
+
+  const svc = await createServiceClient();
+
+  const conditions: string[] = [];
+  if (cleanEmail) conditions.push(`email.eq.${cleanEmail}`);
+  if (cleanPhone && cleanPhone.length === 10) conditions.push(`phone.eq.${cleanPhone}`);
+  if (conditions.length === 0) return null;
+
+  const { data } = await svc
+    .schema("future")
+    .from("delegates")
+    .select(
+      "full_name, email, phone, whatsapp, gender, is_yi_yuva_member, chapter_id, chapters(name), course, specialization, year_of_study, age, college_id, colleges(name, city), editions(slug)"
+    )
+    .or(conditions.join(","))
+    .order("registered_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!data) return null;
+  const d = data as unknown as {
+    full_name: string;
+    email: string;
+    phone: string | null;
+    whatsapp: string | null;
+    gender: string | null;
+    is_yi_yuva_member: boolean | null;
+    chapter_id: string | null;
+    chapters: { name: string } | null;
+    course: string | null;
+    specialization: string | null;
+    year_of_study: number | null;
+    age: number | null;
+    colleges: { name: string; city: string | null } | null;
+    editions: { slug: string } | null;
+  };
+
+  return {
+    full_name: d.full_name,
+    email: d.email,
+    phone: d.phone,
+    whatsapp: d.whatsapp,
+    gender: (d.gender === "male" || d.gender === "female") ? d.gender : null,
+    is_yi_yuva_member: d.is_yi_yuva_member,
+    chapter_id: d.chapter_id,
+    chapter_name: d.chapters?.name ?? null,
+    college_name: d.colleges?.name ?? null,
+    college_city: d.colleges?.city ?? null,
+    course: d.course,
+    specialization: d.specialization,
+    year_of_study: d.year_of_study,
+    age: d.age,
+    edition_slug: d.editions?.slug ?? null,
+  };
+}
+
 // ─── HELPERS ────────────────────────────────────────────────────────
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

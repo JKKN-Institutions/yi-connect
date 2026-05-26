@@ -59,8 +59,10 @@ export async function GET(request: NextRequest) {
         await createMemberFromRequest(data.user.id, data.user.email!);
       }
 
-      // Successful authentication - redirect to dashboard or specified page
-      return NextResponse.redirect(new URL(next, requestUrl.origin));
+      // Check if user has registrations in YiFi/YiFuture/YIP and set cookies
+      const response = NextResponse.redirect(new URL(next === '/dashboard' ? '/home' : next, requestUrl.origin));
+      await setModuleCookies(supabase, data.user.email!, response);
+      return response;
     }
 
     // Log exchange error for debugging
@@ -163,4 +165,80 @@ async function createMemberFromRequest(userId: string, email: string) {
   } catch (error) {
     console.error('Error in createMemberFromRequest:', error);
   }
+}
+
+/**
+ * After Google sign-in, check if the user's email exists in YiFi, YiFuture,
+ * or YIP registrant tables and auto-set the appropriate session cookies.
+ * This eliminates the need for separate access code entry.
+ */
+async function setModuleCookies(
+  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
+  email: string,
+  response: NextResponse
+) {
+  const cookieOptions = {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax' as const,
+    maxAge: 60 * 60 * 24 * 7,
+    path: '/',
+  };
+
+  try {
+    // Check YiFi registrants by email
+    const { data: yifiData } = await supabase.rpc('yifi_find_by_email', {
+      p_email: email,
+    });
+    if (yifiData?.id) {
+      response.cookies.set('yifi_session', JSON.stringify({
+        type: 'member',
+        id: yifiData.id,
+        name: yifiData.full_name,
+        editionId: yifiData.edition_id,
+      }), cookieOptions);
+    }
+  } catch {}
+
+  try {
+    // Check YiFuture delegates
+    const { data: futureDelegate } = await supabase
+      .schema('future' as any)
+      .from('delegates')
+      .select('id, full_name, edition_id, access_code')
+      .eq('email', email)
+      .eq('is_active', true)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (futureDelegate) {
+      response.cookies.set('yifuture_session', JSON.stringify({
+        type: 'delegate',
+        id: futureDelegate.id,
+        name: futureDelegate.full_name,
+        accessCode: futureDelegate.access_code,
+      }), cookieOptions);
+    }
+  } catch {}
+
+  try {
+    // Check YIP participants
+    const { data: yipParticipant } = await supabase
+      .from('participants')
+      .select('id, full_name, access_code, event_id')
+      .eq('email', email)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (yipParticipant) {
+      response.cookies.set('yip_session', JSON.stringify({
+        type: 'participant',
+        id: yipParticipant.id,
+        name: yipParticipant.full_name,
+        eventId: yipParticipant.event_id,
+      }), cookieOptions);
+    }
+  } catch {}
 }

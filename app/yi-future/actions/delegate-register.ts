@@ -28,6 +28,8 @@ export type RegisterDelegateInput = {
   travel_commitment: boolean;
   // Section 4 — Declaration
   declaration_accepted: boolean;
+  // Auth
+  password: string;
 };
 
 export type RegisterDelegateResult =
@@ -233,6 +235,9 @@ export async function registerDelegate(
         "National Finals require travel — please confirm you're willing to travel.",
     };
   }
+  if (!input.password || input.password.length < 6) {
+    return { ok: false, error: "Password must be at least 6 characters." };
+  }
   if (input.declaration_accepted !== true) {
     return { ok: false, error: "Please accept the declaration to continue." };
   }
@@ -363,6 +368,19 @@ export async function registerDelegate(
       ok: false,
       error: insertErr.message ?? "Couldn't register you — try again.",
     };
+  }
+
+  // Create Supabase Auth account so delegate can use email+password login
+  const { error: authErr } = await svc.auth.admin.createUser({
+    email,
+    password: input.password,
+    email_confirm: true,
+    user_metadata: { full_name, role: "delegate" },
+  });
+  // If auth account already exists (e.g. returning delegate), ignore the error
+  if (authErr && !authErr.message?.includes("already been registered")) {
+    // Non-critical — delegate can still use access code or Google
+    console.warn("Auth account creation failed:", authErr.message);
   }
 
   return {

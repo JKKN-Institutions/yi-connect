@@ -37,6 +37,7 @@ type FormState = {
   interest_workshops: boolean;
   travel_commitment: "yes" | "no" | "";
   declaration_accepted: boolean;
+  password: string;
 };
 
 const EMPTY: FormState = {
@@ -60,6 +61,7 @@ const EMPTY: FormState = {
   interest_workshops: false,
   travel_commitment: "",
   declaration_accepted: false,
+  password: "",
 };
 
 const STORAGE_KEY = "yifuture_register_draft_2026";
@@ -171,6 +173,8 @@ export function RegisterStep({
       return null;
     }
     if (n === 4) {
+      if (!form.password || form.password.length < 6)
+        return "Create a password (at least 6 characters).";
       if (!form.declaration_accepted) return "Please accept the declaration.";
       return null;
     }
@@ -226,6 +230,7 @@ export function RegisterStep({
         interest_workshops: form.interest_workshops,
         travel_commitment: form.travel_commitment === "yes",
         declaration_accepted: form.declaration_accepted,
+        password: form.password,
       });
       if (res.ok) {
         try {
@@ -769,6 +774,18 @@ function Section4({
   return (
     <div className="space-y-5">
       <SectionHeader n={4} title="Declaration" />
+
+      <Field label="Create a password" hint="At least 6 characters. You'll use this to log in with your email." required>
+        <input
+          type="password"
+          value={form.password}
+          onChange={(e) => update("password", e.target.value)}
+          autoComplete="new-password"
+          minLength={6}
+          placeholder="••••••••"
+          className={inputClass}
+        />
+      </Field>
 
       <div className="bg-[#F5A623]/10 border border-[#F5A623]/30 rounded-md p-4 text-sm text-navy">
         Please review your details before submitting. Once submitted, only your

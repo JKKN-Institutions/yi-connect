@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
 import { getChapterContext } from "@/lib/yi-future/chapter-context";
 import {
@@ -41,24 +42,46 @@ async function getDelegates(
 async function removeDelegate(formData: FormData) {
   "use server";
   const id = String(formData.get("id") ?? "");
-  await deleteDelegate(id);
+  const res = await deleteDelegate(id);
+  if (!res.ok) {
+    redirect(`/yi-future/chapter/delegates?error=${encodeURIComponent(res.error)}`);
+  }
+  revalidatePath("/yi-future/chapter/delegates");
 }
 
 async function regenCode(formData: FormData) {
   "use server";
   const id = String(formData.get("id") ?? "");
-  await regenerateAccessCode(id);
+  const res = await regenerateAccessCode(id);
+  if (res.ok && res.message) {
+    redirect(`/yi-future/chapter/delegates?msg=${encodeURIComponent(res.message)}`);
+  }
 }
 
-export default async function DelegatesPage() {
+export default async function DelegatesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string; msg?: string }>;
+}) {
   const ctx = await getChapterContext();
   if (!ctx) redirect("/yi-future/chapter");
 
+  const sp = await searchParams;
   const delegates = await getDelegates(ctx.chapterId, ctx.editionId);
   const onTeam = delegates.filter((d) => d.team_members.length > 0).length;
 
   return (
     <div className="space-y-6">
+      {sp.error && (
+        <div className="p-3 rounded-md bg-red-50 border border-red-200 text-sm text-red-700">
+          {sp.error}
+        </div>
+      )}
+      {sp.msg && (
+        <div className="p-3 rounded-md bg-yi-green/10 border border-yi-green/30 text-sm text-yi-green">
+          {sp.msg}
+        </div>
+      )}
       <div className="flex items-start justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-navy">Delegates</h2>
@@ -163,7 +186,11 @@ export default async function DelegatesPage() {
                           Regen code
                         </button>
                       </form>
-                      <form action={removeDelegate} className="inline-block">
+                      <form
+                        action={removeDelegate}
+                        className="inline-block"
+                        onSubmit="return confirm('Delete this delegate? This cannot be undone.')"
+                      >
                         <input type="hidden" name="id" value={d.id} />
                         <button
                           type="submit"

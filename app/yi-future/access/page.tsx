@@ -278,10 +278,11 @@ function GoogleLoginTab() {
   );
 }
 
-// ─── Email Login Tab ───────────────────────────────────────────────
+// ─── Email + Password Login Tab ────────────────────────────────────
 function EmailLoginTab() {
   const router = useRouter();
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -289,6 +290,17 @@ function EmailLoginTab() {
     e.preventDefault();
     setError(null);
     startTransition(async () => {
+      const supabase = createClient();
+      const { error: authErr } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      if (authErr) {
+        setError(authErr.message === "Invalid login credentials"
+          ? "Wrong email or password. Check and try again."
+          : authErr.message);
+        return;
+      }
       const res = await loginDelegateByEmail(email);
       if (res.ok) {
         router.push(res.redirect);
@@ -302,24 +314,43 @@ function EmailLoginTab() {
   return (
     <div className="space-y-4">
       <p className="text-sm text-navy/60 text-center">
-        Enter the email you registered with. No password needed.
+        Sign in with your email and password.
       </p>
       <form onSubmit={handleSubmit} className="space-y-3">
-        <input
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="your.email@example.com"
-          required
-          autoComplete="email"
-          className="w-full px-4 py-3 border border-navy/20 rounded-xl text-sm focus:border-[#F5A623] focus:outline-none focus:ring-2 focus:ring-[#F5A623]/20"
-        />
+        <div>
+          <label className="block text-xs font-bold uppercase tracking-widest text-navy/60 mb-1">
+            Email
+          </label>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="your.email@example.com"
+            required
+            autoComplete="email"
+            className="w-full px-4 py-3 border border-navy/20 rounded-xl text-sm focus:border-[#F5A623] focus:outline-none focus:ring-2 focus:ring-[#F5A623]/20"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-bold uppercase tracking-widest text-navy/60 mb-1">
+            Password
+          </label>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="••••••••"
+            required
+            autoComplete="current-password"
+            className="w-full px-4 py-3 border border-navy/20 rounded-xl text-sm focus:border-[#F5A623] focus:outline-none focus:ring-2 focus:ring-[#F5A623]/20"
+          />
+        </div>
         <button
           type="submit"
-          disabled={!email || pending}
+          disabled={!email || !password || pending}
           className="w-full py-3 rounded-xl bg-navy text-ivory font-semibold hover:bg-navy-dark disabled:opacity-40"
         >
-          {pending ? "Checking…" : "Log in with email"}
+          {pending ? "Signing in…" : "Sign in"}
         </button>
       </form>
       {error && (

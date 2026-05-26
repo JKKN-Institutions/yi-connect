@@ -8,6 +8,10 @@ import type { ActionResult } from "./editions";
 import {
   CHAPTER_FINAL_SECTIONS,
   CHAPTER_FINAL_SECTION_LABELS,
+  NATIONAL_DAY1_SECTIONS,
+  NATIONAL_DAY1_SECTION_LABELS,
+  NATIONAL_DAY2_SECTIONS,
+  NATIONAL_DAY2_SECTION_LABELS,
 } from "@/lib/yi-future/constants";
 
 type EventType = Database["future"]["Enums"]["event_type"];
@@ -82,6 +86,120 @@ export async function createChapterFinal(
 
   revalidatePath("/yi-future/chapter/final");
   redirect(`/chapter/final/${eventId}`);
+}
+
+// ─── CREATE REGIONAL FINALE ─────────────────────────────────────────
+export async function createRegionalFinale(
+  input: { chapterId: string; editionId: string },
+  formData: FormData
+): Promise<ActionResult> {
+  const userId = await requireAuth();
+  const name = String(formData.get("name") ?? "").trim();
+  const tagline = String(formData.get("tagline") ?? "").trim() || null;
+  const start_date = String(formData.get("start_date") ?? "").trim() || null;
+  const end_date = String(formData.get("end_date") ?? "").trim() || null;
+  const venue = String(formData.get("venue") ?? "").trim() || null;
+  const venue_address =
+    String(formData.get("venue_address") ?? "").trim() || null;
+  const venue_maps_url =
+    String(formData.get("venue_maps_url") ?? "").trim() || null;
+
+  if (!name) return { ok: false, error: "Name is required." };
+
+  const svc = await createServiceClient();
+  const { data: inserted, error } = await svc
+    .schema("future")
+    .from("events")
+    .insert({
+      chapter_id: input.chapterId,
+      edition_id: input.editionId,
+      type: "regional_finale" as EventType,
+      name,
+      tagline,
+      start_date,
+      end_date,
+      venue,
+      venue_address,
+      venue_maps_url,
+      is_published: false,
+      created_by: userId,
+    })
+    .select("id")
+    .maybeSingle();
+  if (error) return { ok: false, error: error.message };
+
+  const eventId = (inserted as { id: string } | null)?.id;
+  if (!eventId) {
+    return { ok: false, error: "Insert returned no id." };
+  }
+
+  revalidatePath("/yi-future/host");
+  revalidatePath("/yi-future/host/finale/live");
+  redirect("/yi-future/host/finale/live");
+}
+
+// ─── CREATE NATIONAL FINALS ────────────────────────────────────────
+export async function createNationalFinals(
+  input: { editionId: string },
+  formData: FormData
+): Promise<ActionResult> {
+  const userId = await requireAuth();
+  const name = String(formData.get("name") ?? "").trim();
+  const tagline = String(formData.get("tagline") ?? "").trim() || null;
+  const start_date = String(formData.get("start_date") ?? "").trim() || null;
+  const end_date = String(formData.get("end_date") ?? "").trim() || null;
+  const venue = String(formData.get("venue") ?? "").trim() || null;
+  const venue_address = String(formData.get("venue_address") ?? "").trim() || null;
+  const venue_maps_url = String(formData.get("venue_maps_url") ?? "").trim() || null;
+  const capacity_raw = String(formData.get("capacity") ?? "").trim();
+  const capacity = capacity_raw ? Number(capacity_raw) : null;
+
+  if (!name) return { ok: false, error: "Name is required." };
+
+  const svc = await createServiceClient();
+  const { data: inserted, error } = await svc
+    .schema("future")
+    .from("events")
+    .insert({
+      edition_id: input.editionId,
+      chapter_id: null,
+      type: "national_finals" as EventType,
+      name,
+      tagline,
+      start_date,
+      end_date,
+      venue,
+      venue_address,
+      venue_maps_url,
+      capacity,
+      is_published: false,
+      created_by: userId,
+    } as never)
+    .select("id")
+    .maybeSingle();
+  if (error) return { ok: false, error: error.message };
+
+  const eventId = (inserted as { id: string } | null)?.id;
+  if (eventId) {
+    const d1Rows = NATIONAL_DAY1_SECTIONS.map((s) => ({
+      event_id: eventId,
+      section: s,
+      title: NATIONAL_DAY1_SECTION_LABELS[s],
+      is_active: false,
+    }));
+    await svc.schema("future").from("national_day1_sections").insert(d1Rows);
+
+    const d2Rows = NATIONAL_DAY2_SECTIONS.map((s) => ({
+      event_id: eventId,
+      section: s,
+      title: NATIONAL_DAY2_SECTION_LABELS[s],
+      is_active: false,
+    }));
+    await svc.schema("future").from("national_day2_sections").insert(d2Rows);
+  }
+
+  revalidatePath("/yi-future/national/admin/finals");
+  redirect("/yi-future/national/admin/finals/live");
 }
 
 // ─── UPDATE EVENT ───────────────────────────────────────────────────

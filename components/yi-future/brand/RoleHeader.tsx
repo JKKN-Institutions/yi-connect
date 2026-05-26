@@ -1,5 +1,5 @@
-import Link from "next/link";
 import { ProgramWordmark } from "./BrandHeader";
+import { signOutDelegate } from "@/app/yi-future/actions/sign-out";
 
 export function RoleHeader({
   sessionName,
@@ -24,12 +24,14 @@ export function RoleHeader({
               <span className="max-w-[150px] truncate">{sessionName}</span>
             </div>
           )}
-          <Link
-            href="/yi-future/join"
-            className="text-xs text-navy/50 hover:text-navy transition-colors"
-          >
-            Sign out
-          </Link>
+          <form action={signOutDelegate}>
+            <button
+              type="submit"
+              className="text-xs text-navy/50 hover:text-navy transition-colors"
+            >
+              Sign out
+            </button>
+          </form>
         </div>
       </div>
     </header>

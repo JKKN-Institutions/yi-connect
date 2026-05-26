@@ -68,6 +68,22 @@ export async function createMentor(
     });
   if (error) return { ok: false, error: error.message };
 
+  // Upsert yi_directory.people — cross-app identity bridge
+  if (email) {
+    await svc
+      .schema("yi_directory")
+      .from("people")
+      .upsert(
+        {
+          full_name,
+          email,
+          phone: phone || null,
+          is_active: true,
+        } as never,
+        { onConflict: "email" }
+      );
+  }
+
   revalidatePath("/yi-future/chapter/mentors");
   redirect("/yi-future/chapter/mentors");
 }

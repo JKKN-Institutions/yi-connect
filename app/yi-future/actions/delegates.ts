@@ -71,6 +71,31 @@ export async function createDelegate(
     });
   if (error) return { ok: false, error: error.message };
 
+  // Create Supabase Auth account (email-only, no password — admin can set later)
+  if (email) {
+    const { data: authData } = await svc.auth.admin.createUser({
+      email,
+      email_confirm: true,
+      user_metadata: { full_name, role: "delegate" },
+    });
+    // Ignore errors — auth account is optional for admin-created delegates
+
+    // Upsert yi_directory.people — cross-app identity bridge
+    await svc
+      .schema("yi_directory")
+      .from("people")
+      .upsert(
+        {
+          user_id: authData?.user?.id ?? null,
+          full_name,
+          email,
+          phone: phone || null,
+          is_active: true,
+        } as never,
+        { onConflict: "email" }
+      );
+  }
+
   revalidatePath("/yi-future/chapter/delegates");
   revalidatePath("/yi-future/chapter/teams");
   redirect("/yi-future/chapter/delegates");

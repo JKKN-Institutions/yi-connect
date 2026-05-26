@@ -129,7 +129,8 @@ export function RegisterStep({
   useEffect(() => {
     if (!hydrated.current) return;
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(form));
+      const { password: _pw, ...safeForm } = form;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(safeForm));
     } catch {
       /* ignore */
     }

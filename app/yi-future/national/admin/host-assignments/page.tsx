@@ -1,4 +1,6 @@
-import { createServiceClient } from "@/lib/yi-future/supabase/server";
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { createClient, createServiceClient } from "@/lib/yi-future/supabase/server";
 
 type HostChapter = {
   id: string;
@@ -49,6 +51,7 @@ async function loadData() {
   return {
     regions: Object.values(regionMap).sort((a, b) => a.region.localeCompare(b.region)),
     tracks: (tracks as unknown as { id: string; name: string; icon: string | null; color_hex: string | null }[]) ?? [],
+    allChapters: all.map((ch) => ({ id: ch.id, name: ch.name, city: ch.city })),
   };
 }
 
@@ -69,7 +72,47 @@ function formatDate(d: string | null): string {
 }
 
 export default async function HostAssignmentsPage() {
-  const { regions, tracks } = await loadData();
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/yi-future/login");
+
+  const { regions, tracks, allChapters } = await loadData();
+
+  async function updateHost(formData: FormData) {
+    "use server";
+    const chapterId = String(formData.get("chapter_id") ?? "");
+    const city = String(formData.get("city") ?? "").trim();
+    const startDate = String(formData.get("finale_start_date") ?? "").trim() || null;
+    const endDate = String(formData.get("finale_end_date") ?? "").trim() || null;
+    if (!chapterId) return;
+    const svc = await createServiceClient();
+    await svc.schema("yi").from("chapters")
+      .update({
+        city: city || undefined,
+        finale_start_date: startDate,
+        finale_end_date: endDate,
+      } as never)
+      .eq("id", chapterId);
+    revalidatePath("/yi-future/national/admin/host-assignments");
+  }
+
+  async function assignHost(formData: FormData) {
+    "use server";
+    const region = String(formData.get("region") ?? "");
+    const chapterId = String(formData.get("new_host_id") ?? "");
+    if (!region || !chapterId) return;
+    const svc = await createServiceClient();
+    // Unset previous host for this region
+    await svc.schema("future").from("chapters" as never)
+      .update({ is_finale_host: false } as never)
+      .eq("finale_region", region)
+      .eq("is_finale_host", true);
+    // Set new host
+    await svc.schema("future").from("chapters" as never)
+      .update({ is_finale_host: true, finale_region: region } as never)
+      .eq("id", chapterId);
+    revalidatePath("/yi-future/national/admin/host-assignments");
+  }
 
   return (
     <div className="space-y-6">
@@ -78,7 +121,7 @@ export default async function HostAssignmentsPage() {
           Regional Finale Hosts
         </h2>
         <p className="mt-1 text-sm text-navy/60">
-          5 regional finales — each host chapter runs all 4 tracks over 2 days.
+          5 regional finales — each host chapter runs all 4 tracks over 2 days. Edit dates and cities inline.
         </p>
       </div>
 
@@ -103,25 +146,51 @@ export default async function HostAssignmentsPage() {
 
             <div className="px-4 py-4 space-y-3">
               {r.host ? (
-                <>
+                <form action={updateHost} className="space-y-3">
+                  <input type="hidden" name="chapter_id" value={r.host.id} />
+
                   <div>
-                    <div className="text-xs font-semibold text-navy/50 uppercase tracking-wider">
-                      Host City
-                    </div>
+                    <label className="text-xs font-semibold text-navy/50 uppercase tracking-wider block">
+                      Host chapter
+                    </label>
                     <div className="text-lg font-bold text-navy">
                       {r.host.name}
                     </div>
-                    <div className="text-xs text-navy/50">{r.host.city}</div>
                   </div>
 
                   <div>
-                    <div className="text-xs font-semibold text-navy/50 uppercase tracking-wider">
-                      Dates
+                    <label className="text-xs font-semibold text-navy/50 uppercase tracking-wider block mb-1">
+                      City
+                    </label>
+                    <input
+                      name="city"
+                      defaultValue={r.host.city}
+                      className="w-full px-2 py-1.5 border border-navy/20 rounded text-sm"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-xs font-semibold text-navy/50 uppercase tracking-wider block mb-1">
+                        Start date
+                      </label>
+                      <input
+                        name="finale_start_date"
+                        type="date"
+                        defaultValue={r.host.finale_start_date ?? ""}
+                        className="w-full px-2 py-1.5 border border-navy/20 rounded text-sm"
+                      />
                     </div>
-                    <div className="text-sm font-medium text-navy">
-                      {r.host.finale_start_date
-                        ? `${formatDate(r.host.finale_start_date)} — ${formatDate(r.host.finale_end_date)}`
-                        : "TBA"}
+                    <div>
+                      <label className="text-xs font-semibold text-navy/50 uppercase tracking-wider block mb-1">
+                        End date
+                      </label>
+                      <input
+                        name="finale_end_date"
+                        type="date"
+                        defaultValue={r.host.finale_end_date ?? ""}
+                        className="w-full px-2 py-1.5 border border-navy/20 rounded text-sm"
+                      />
                     </div>
                   </div>
 
@@ -162,11 +231,44 @@ export default async function HostAssignmentsPage() {
                       )}
                     </div>
                   )}
-                </>
+
+                  <button
+                    type="submit"
+                    className="w-full py-1.5 rounded-md bg-navy text-ivory text-xs font-semibold hover:bg-navy-dark"
+                  >
+                    Save changes
+                  </button>
+                </form>
               ) : (
-                <div className="text-sm text-red-500 font-medium">
-                  No host chapter assigned
-                </div>
+                <form action={assignHost} className="space-y-3">
+                  <input type="hidden" name="region" value={r.region} />
+                  <div className="text-sm text-red-500 font-medium">
+                    No host chapter assigned
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-navy/50 uppercase tracking-wider block mb-1">
+                      Assign host chapter
+                    </label>
+                    <select
+                      name="new_host_id"
+                      required
+                      className="w-full px-2 py-1.5 border border-navy/20 rounded text-sm bg-white"
+                    >
+                      <option value="">— Pick a chapter —</option>
+                      {allChapters.map((ch) => (
+                        <option key={ch.id} value={ch.id}>
+                          {ch.name} ({ch.city})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <button
+                    type="submit"
+                    className="w-full py-1.5 rounded-md bg-[#F5A623] text-navy text-xs font-bold hover:bg-[#F5A623]/90"
+                  >
+                    Assign as host
+                  </button>
+                </form>
               )}
             </div>
           </div>

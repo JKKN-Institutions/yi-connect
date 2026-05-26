@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/yifi/supabase/server";
+import { LogoutButton } from "./logout-button";
 
 export const metadata = {
   title: "YiFi Admin",
@@ -85,6 +86,7 @@ export default async function YiFiAdminPage() {
           <div className="flex items-center gap-3">
             <span className="text-white/40 text-xs">{userRoles}</span>
             <span className="text-white/70 text-sm">{user.email}</span>
+            <LogoutButton />
           </div>
         </div>
       </header>

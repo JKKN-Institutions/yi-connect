@@ -10,6 +10,7 @@ type DelegateView = {
   id: string;
   full_name: string;
   email: string | null;
+  phone: string | null;
   access_code: string;
   chapter_id: string;
   chapters: { name: string; city: string } | null;
@@ -38,7 +39,7 @@ async function getDelegateView(id: string): Promise<DelegateView | null> {
     .schema("future")
     .from("delegates")
     .select(
-      "id, full_name, email, access_code, chapter_id, chapters(name, city), team_members(team_id, role_in_team, teams(id, team_name, status, captain_id, problem_statement_id, problem_statements(title), team_members(delegate_id, role_in_team, delegates(full_name))))"
+      "id, full_name, email, phone, access_code, chapter_id, chapters(name, city), team_members(team_id, role_in_team, teams(id, team_name, status, captain_id, problem_statement_id, problem_statements(title), team_members(delegate_id, role_in_team, delegates(full_name))))"
     )
     .eq("id", id)
     .maybeSingle();
@@ -54,7 +55,7 @@ export default async function DelegateHome() {
 
   const me = await getDelegateView(session.id);
 
-  // Check participation history (previous editions)
+  // Check participation history (previous editions — match by email OR phone)
   let pastEditions: { year: string; chapter: string; team: string | null; award: string | null }[] = [];
   if (me?.email) {
     const svc2 = await createServiceClient();
@@ -62,7 +63,7 @@ export default async function DelegateHome() {
       .schema("future")
       .from("delegates")
       .select("id, editions(slug), chapters(name), team_members(teams(team_name, awards(category)))")
-      .eq("email", me.email)
+      .or(`email.eq.${me.email}${me.phone ? `,phone.eq.${me.phone}` : ""}`)
       .neq("id", session.id)
       .eq("is_active", true);
     if (prev) {

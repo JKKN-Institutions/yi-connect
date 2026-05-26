@@ -168,14 +168,14 @@ export async function registerDelegate(
   const editionId = (editionRow as { id: string }).id;
 
   // Strict email-unique guard
-  const { data: dup } = await svc
+  const { data: dupEmail } = await svc
     .schema("future")
     .from("delegates")
     .select("id")
     .eq("edition_id", editionId)
     .eq("email", email)
     .maybeSingle();
-  if (dup) {
+  if (dupEmail) {
     return {
       ok: false,
       error:
@@ -183,16 +183,40 @@ export async function registerDelegate(
     };
   }
 
-  // Check for returning delegate (participated in a previous edition)
-  const { data: prevParticipation } = await svc
+  // Mobile-unique guard
+  const { data: dupPhone } = await svc
     .schema("future")
     .from("delegates")
-    .select("id, edition_id, editions(slug)")
+    .select("id")
+    .eq("edition_id", editionId)
+    .eq("phone", mobile)
+    .maybeSingle();
+  if (dupPhone) {
+    return {
+      ok: false,
+      error:
+        "This mobile number is already registered for the 2026 edition. Contact your chapter admin if you need help.",
+    };
+  }
+
+  // Check for returning delegate (participated in a previous edition — match by email OR phone)
+  const { data: prevByEmail } = await svc
+    .schema("future")
+    .from("delegates")
+    .select("id")
     .eq("email", email)
     .neq("edition_id", editionId)
     .limit(1)
     .maybeSingle();
-  const isReturning = !!prevParticipation;
+  const { data: prevByPhone } = await svc
+    .schema("future")
+    .from("delegates")
+    .select("id")
+    .eq("phone", mobile)
+    .neq("edition_id", editionId)
+    .limit(1)
+    .maybeSingle();
+  const isReturning = !!(prevByEmail || prevByPhone);
 
   const { data: chapter } = await svc
     .schema("yi")

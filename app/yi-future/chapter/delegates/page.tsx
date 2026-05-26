@@ -189,7 +189,6 @@ export default async function DelegatesPage({
                       <form
                         action={removeDelegate}
                         className="inline-block"
-                        onSubmit="return confirm('Delete this delegate? This cannot be undone.')"
                       >
                         <input type="hidden" name="id" value={d.id} />
                         <button

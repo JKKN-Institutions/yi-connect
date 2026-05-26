@@ -19,7 +19,7 @@ export default function LoginPage() {
     startTransition(async () => {
       const res = await loginAdmin(email, password);
       if (res.ok) {
-        router.push("/yi-future/chapter");
+        router.push("/yi-future/national/admin");
         router.refresh();
       } else {
         setError(res.error);

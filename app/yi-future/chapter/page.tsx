@@ -179,9 +179,22 @@ export default async function ChapterDashboard() {
           <p className="mt-3 text-sm text-navy/60">
             Signed in as{" "}
             <strong>{user?.email ?? "an admin"}</strong>. Pick a chapter and a
-            core-team role to link yourself. Yi National admins can use this to
-            self-onboard onto any active chapter.
+            core-team role to link yourself, or go to a different admin panel.
           </p>
+          <div className="mt-3 flex justify-center gap-3 text-xs">
+            <Link
+              href="/yi-future/national/admin"
+              className="px-3 py-1.5 rounded-md bg-navy text-ivory font-semibold hover:bg-navy-dark"
+            >
+              National admin →
+            </Link>
+            <Link
+              href="/yi-future/host"
+              className="px-3 py-1.5 rounded-md border border-navy/20 text-navy font-semibold hover:bg-navy/5"
+            >
+              Host admin →
+            </Link>
+          </div>
         </div>
 
         {chapters.length === 0 ? (

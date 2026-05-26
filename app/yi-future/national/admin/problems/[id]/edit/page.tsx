@@ -69,8 +69,9 @@ export default async function EditProblemPage({
           label="Full description"
           name="full_description"
           as="textarea"
-          rows={5}
+          rows={12}
           defaultValue={problem.full_description ?? ""}
+          hint="Paste the full problem statement here — CHALLENGE, YOUR TASK, CONSTRAINTS, EXPECTED OUTCOMES. Line breaks are preserved."
         />
         <Field
           label="National priority context"

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
 import { deleteTrack } from "@/app/yi-future/actions/tracks";
 import { isCurrentUserPlatformAdmin } from "@/app/yi-future/actions/national-admins";
+import { TrackIcon } from "@/components/yi-future/TrackIcon";
 
 type Edition = {
   id: string;
@@ -128,7 +129,7 @@ export default async function TracksPage({
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <span className="text-3xl">{t.icon ?? "•"}</span>
+                  <TrackIcon icon={t.icon} name={t.name} size={40} />
                   <div>
                     <div
                       className="font-bold"

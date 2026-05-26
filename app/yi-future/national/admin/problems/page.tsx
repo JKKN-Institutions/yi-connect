@@ -20,6 +20,7 @@ type Problem = {
   track_id: string;
   title: string;
   short_description: string;
+  full_description: string | null;
   display_order: number | null;
   is_active: boolean | null;
   sdg_alignment: string[] | null;
@@ -42,7 +43,7 @@ async function getProblems(trackId: string): Promise<Problem[]> {
   const { data } = await svc
     .schema("future")
     .from("problem_statements")
-    .select("id, track_id, title, short_description, display_order, is_active, sdg_alignment")
+    .select("id, track_id, title, short_description, full_description, display_order, is_active, sdg_alignment")
     .eq("track_id", trackId)
     .order("display_order", { ascending: true });
   return (data as unknown as Problem[]) ?? [];
@@ -167,6 +168,16 @@ export default async function ProblemsPage({
                       <p className="text-sm text-navy/70">
                         {p.short_description}
                       </p>
+                      {p.full_description && (
+                        <details className="mt-2">
+                          <summary className="text-xs font-semibold text-navy/50 cursor-pointer hover:text-navy">
+                            Full description ▸
+                          </summary>
+                          <div className="mt-2 p-3 rounded bg-navy/5 text-sm text-navy/80 whitespace-pre-wrap leading-relaxed">
+                            {p.full_description}
+                          </div>
+                        </details>
+                      )}
                       {p.sdg_alignment && p.sdg_alignment.length > 0 && (
                         <div className="mt-2 flex flex-wrap gap-1">
                           {p.sdg_alignment.map((sdg) => (

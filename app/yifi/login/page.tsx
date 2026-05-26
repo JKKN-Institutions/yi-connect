@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { Suspense, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { loginOrganiser, requestPasswordReset } from "@/app/yifi/actions/auth";
@@ -8,6 +8,14 @@ import { loginOrganiser, requestPasswordReset } from "@/app/yifi/actions/auth";
 type View = "login" | "forgot" | "reset-sent" | "choose";
 
 export default function YiFiLoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <YiFiLoginPageInner />
+    </Suspense>
+  );
+}
+
+function YiFiLoginPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [view, setView] = useState<View>(

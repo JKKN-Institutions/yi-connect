@@ -151,6 +151,98 @@ export async function validateAccessCode(
   };
 }
 
+// ─── LOGIN DELEGATE BY EMAIL (for Google OAuth / email-password) ────
+export async function loginDelegateByEmail(
+  email: string
+): Promise<AccessCodeResult> {
+  const cleanEmail = email?.trim().toLowerCase();
+  if (!cleanEmail) return { ok: false, error: "Email is required." };
+
+  const svc = await createServiceClient();
+
+  const { data: delegate } = (await svc
+    .schema("future")
+    .from("delegates")
+    .select("id, edition_id, full_name, is_active")
+    .eq("email", cleanEmail)
+    .eq("is_active", true)
+    .order("registered_at", { ascending: false })
+    .limit(1)
+    .maybeSingle()) as unknown as {
+    data: {
+      id: string;
+      edition_id: string;
+      full_name: string | null;
+      is_active: boolean | null;
+    } | null;
+  };
+
+  if (!delegate) {
+    return {
+      ok: false,
+      error: "No delegate found with that email. Register first at /yi-future/join.",
+    };
+  }
+
+  await writeSession({
+    type: "delegate",
+    id: delegate.id,
+    edition_id: delegate.edition_id,
+    name: delegate.full_name ?? undefined,
+  });
+
+  return { ok: true, redirect: "/yi-future/me" };
+}
+
+// ─── LIST DELEGATES FOR CHAPTER (for Google OAuth chapter picker) ───
+export async function listDelegatesForChapter(
+  chapterId: string
+): Promise<{ id: string; full_name: string; email: string | null }[]> {
+  const svc = await createServiceClient();
+  const { data } = await svc
+    .schema("future")
+    .from("delegates")
+    .select("id, full_name, email")
+    .eq("chapter_id", chapterId)
+    .eq("is_active", true)
+    .order("full_name", { ascending: true });
+  return (data as { id: string; full_name: string; email: string | null }[]) ?? [];
+}
+
+// ─── LOGIN DELEGATE BY ID (for Google OAuth after chapter/name pick) ─
+export async function loginDelegateById(
+  delegateId: string
+): Promise<AccessCodeResult> {
+  if (!delegateId) return { ok: false, error: "Select your name." };
+
+  const svc = await createServiceClient();
+  const { data: delegate } = (await svc
+    .schema("future")
+    .from("delegates")
+    .select("id, edition_id, full_name, is_active")
+    .eq("id", delegateId)
+    .eq("is_active", true)
+    .maybeSingle()) as unknown as {
+    data: {
+      id: string;
+      edition_id: string;
+      full_name: string | null;
+      is_active: boolean | null;
+    } | null;
+  };
+
+  if (!delegate) return { ok: false, error: "Delegate not found." };
+
+  await writeSession({
+    type: "delegate",
+    id: delegate.id,
+    edition_id: delegate.edition_id,
+    name: delegate.full_name ?? undefined,
+  });
+
+  return { ok: true, redirect: "/yi-future/me" };
+}
+
 export async function clearAccessCodeSession(): Promise<void> {
   const jar = await cookies();
   jar.delete(SESSION_COOKIE_NAME);

@@ -371,7 +371,7 @@ export async function registerDelegate(
   }
 
   // Create Supabase Auth account so delegate can use email+password login
-  const { error: authErr } = await svc.auth.admin.createUser({
+  const { data: authData, error: authErr } = await svc.auth.admin.createUser({
     email,
     password: input.password,
     email_confirm: true,
@@ -379,9 +379,24 @@ export async function registerDelegate(
   });
   // If auth account already exists (e.g. returning delegate), ignore the error
   if (authErr && !authErr.message?.includes("already been registered")) {
-    // Non-critical — delegate can still use access code or Google
     console.warn("Auth account creation failed:", authErr.message);
   }
+
+  // Upsert into yi_directory.people — cross-app identity bridge
+  const authUserId = authData?.user?.id ?? null;
+  await svc
+    .schema("yi_directory")
+    .from("people")
+    .upsert(
+      {
+        user_id: authUserId,
+        full_name,
+        email,
+        phone: mobile || null,
+        is_active: true,
+      } as never,
+      { onConflict: "email" }
+    );
 
   return {
     ok: true,

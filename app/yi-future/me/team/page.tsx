@@ -7,6 +7,7 @@ import {
   setLeader,
   pickProblemAsDelegate,
   clearProblemAsDelegate,
+  createTeamAsDelegate,
 } from "@/app/yi-future/actions/team-invites";
 import { updateTeamName } from "@/app/yi-future/actions/teams";
 import { TEAM_SIZE_MIN, TEAM_SIZE_MAX } from "@/lib/yi-future/constants";
@@ -97,27 +98,64 @@ export default async function MyTeamPage() {
 
   const team = await getMyTeam(session.id);
   if (!team) {
+    async function createAction(formData: FormData) {
+      "use server";
+      const name = String(formData.get("team_name") ?? "").trim();
+      await createTeamAsDelegate(name);
+    }
+
     return (
-      <div className="bg-white border border-navy/10 rounded-lg p-6 text-center">
-        <div className="text-4xl mb-2">🫂</div>
-        <h2 className="text-lg font-bold text-navy">Not on a team yet</h2>
-        <p className="mt-2 text-sm text-navy/60">
-          Your chapter admin will add you to a team, or another delegate will
-          invite you. Check your{" "}
+      <div className="space-y-5">
+        <div>
           <Link
-            href="/yi-future/me/team/invites"
-            className="text-navy font-semibold hover:text-yi-gold"
+            href="/yi-future/me"
+            className="text-xs font-semibold tracking-widest text-navy/50 hover:text-navy uppercase"
           >
-            invitations
+            ← Dashboard
           </Link>
-          .
-        </p>
-        <Link
-          href="/yi-future/me"
-          className="mt-4 inline-block text-sm text-navy font-semibold hover:text-yi-gold"
-        >
-          ← Back to dashboard
-        </Link>
+          <h2 className="mt-1 text-2xl font-bold text-navy">My team</h2>
+        </div>
+
+        {/* Create team */}
+        <section className="bg-white border border-navy/10 rounded-lg p-6">
+          <div className="text-center mb-5">
+            <div className="text-4xl mb-2">🚀</div>
+            <h3 className="text-lg font-bold text-navy">
+              Start your own team
+            </h3>
+            <p className="mt-1 text-sm text-navy/60">
+              Pick a name, become the captain, then invite up to 4 members from your chapter.
+            </p>
+          </div>
+          <form action={createAction} className="max-w-md mx-auto flex gap-2">
+            <input
+              name="team_name"
+              required
+              placeholder="e.g. Green Innovators"
+              maxLength={80}
+              className="flex-1 px-3 py-2 border border-navy/20 rounded-md text-sm"
+            />
+            <button
+              type="submit"
+              className="px-5 py-2 rounded-md bg-[#F5A623] text-navy text-sm font-bold hover:bg-[#F5A623]/90"
+            >
+              Create team
+            </button>
+          </form>
+        </section>
+
+        {/* Or check invites */}
+        <section className="bg-navy/5 border border-navy/10 rounded-lg p-5 text-center">
+          <p className="text-sm text-navy/60">
+            Already invited by someone?{" "}
+            <Link
+              href="/yi-future/me/team/invites"
+              className="font-semibold text-navy hover:text-yi-gold"
+            >
+              Check your invitations →
+            </Link>
+          </p>
+        </section>
       </div>
     );
   }

@@ -36,6 +36,85 @@ async function loadTeam(teamId: string): Promise<TeamRow | null> {
   return (data as unknown as TeamRow) ?? null;
 }
 
+// ─── CREATE TEAM (delegate self-service) ────────────────────────────
+export async function createTeamAsDelegate(
+  teamName: string
+): Promise<ActionResult & { teamId?: string }> {
+  const session = await readSession();
+  if (!session || session.type !== "delegate") {
+    return { ok: false, error: "Sign in as a delegate first." };
+  }
+
+  const name = teamName.trim();
+  if (!name) return { ok: false, error: "Team name is required." };
+  if (name.length > 80) return { ok: false, error: "Team name must be under 80 characters." };
+
+  const svc = await createServiceClient();
+
+  // Get delegate's chapter + edition
+  const { data: me } = await svc
+    .schema("future")
+    .from("delegates")
+    .select("chapter_id, edition_id")
+    .eq("id", session.id)
+    .maybeSingle();
+  if (!me) return { ok: false, error: "Delegate record not found." };
+  const { chapter_id, edition_id } = me as { chapter_id: string; edition_id: string };
+
+  // Check delegate isn't already on a team
+  const { data: existing } = await svc
+    .schema("future")
+    .from("team_members")
+    .select("team_id")
+    .eq("delegate_id", session.id)
+    .maybeSingle();
+  if (existing) return { ok: false, error: "You're already on a team." };
+
+  // Check name uniqueness in edition
+  const { data: clash } = await svc
+    .schema("future")
+    .from("teams")
+    .select("id")
+    .eq("edition_id", edition_id)
+    .eq("team_name", name)
+    .maybeSingle();
+  if (clash) return { ok: false, error: "Another team already has that name." };
+
+  // Create team with this delegate as captain
+  const { data: inserted, error: insErr } = await svc
+    .schema("future")
+    .from("teams")
+    .insert({
+      chapter_id,
+      edition_id,
+      team_name: name,
+      captain_id: session.id,
+      leader_delegate_id: session.id,
+      status: "registered",
+    } as never)
+    .select("id")
+    .maybeSingle();
+  if (insErr) return { ok: false, error: insErr.message };
+
+  const teamId = (inserted as { id: string } | null)?.id;
+  if (!teamId) return { ok: false, error: "Failed to create team." };
+
+  // Add delegate as first member (captain role)
+  await svc
+    .schema("future")
+    .from("team_members")
+    .insert({
+      team_id: teamId,
+      delegate_id: session.id,
+      role_in_team: "captain",
+    } as never);
+
+  revalidatePath("/yi-future/me");
+  revalidatePath("/yi-future/me/team");
+  revalidatePath("/yi-future/me/team/directory");
+  return { ok: true, message: "Team created! You are the captain.", teamId };
+}
+
 // ─── SEND INVITE ────────────────────────────────────────────────────
 export async function sendInvite(input: {
   teamId: string;

@@ -206,14 +206,27 @@ export default async function DelegateHome() {
         </section>
       ) : (
         <section className="bg-white border border-navy/10 rounded-lg p-6 text-center">
-          <div className="text-4xl mb-2">🫂</div>
-          <h2 className="text-lg font-bold text-navy">Not on a team yet</h2>
+          <div className="text-4xl mb-2">🚀</div>
+          <h2 className="text-lg font-bold text-navy">Start or join a team</h2>
           <p className="mt-2 text-sm text-navy/60">
-            Your chapter admin will add you to a team soon. Your access code is
-            your key — keep it handy.
+            Create your own team and invite members, or check if someone invited you.
           </p>
-          <div className="mt-4 inline-block bg-yi-gold/10 text-yi-gold px-3 py-1.5 rounded font-mono font-bold tracking-wider">
-            {me.access_code}
+          <div className="mt-4 flex justify-center gap-3">
+            <Link
+              href="/yi-future/me/team"
+              className="px-4 py-2 rounded-md bg-[#F5A623] text-navy text-sm font-bold hover:bg-[#F5A623]/90"
+            >
+              Create a team
+            </Link>
+            <Link
+              href="/yi-future/me/team/invites"
+              className="px-4 py-2 rounded-md border border-navy/20 text-navy text-sm font-semibold hover:bg-navy/5"
+            >
+              Check invitations
+            </Link>
+          </div>
+          <div className="mt-4 text-xs text-navy/40">
+            Access code: <span className="font-mono font-bold text-yi-gold">{me.access_code}</span>
           </div>
         </section>
       )}

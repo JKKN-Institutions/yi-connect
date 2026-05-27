@@ -8,6 +8,7 @@ import {
   pickProblemAsDelegate,
   clearProblemAsDelegate,
   createTeamAsDelegate,
+  sendInvite,
 } from "@/app/yi-future/actions/team-invites";
 import { updateTeamName } from "@/app/yi-future/actions/teams";
 import { TEAM_SIZE_MIN, TEAM_SIZE_MAX } from "@/lib/yi-future/constants";
@@ -62,6 +63,55 @@ async function getMyTeam(delegateId: string): Promise<TeamView | null> {
     .eq("id", teamId)
     .maybeSingle();
   return (data as unknown as TeamView) ?? null;
+}
+
+type AvailableDelegate = {
+  id: string;
+  full_name: string;
+  hasPendingInvite: boolean;
+};
+
+async function getAvailableDelegates(
+  chapterId: string,
+  editionId: string,
+  teamId: string,
+  myId: string
+): Promise<AvailableDelegate[]> {
+  const svc = await createServiceClient();
+
+  const { data: allDelegates } = await svc
+    .schema("future")
+    .from("delegates")
+    .select("id, full_name, team_members(team_id)")
+    .eq("chapter_id", chapterId)
+    .eq("edition_id", editionId)
+    .eq("is_active", true)
+    .order("full_name", { ascending: true });
+
+  const delegates = (allDelegates ?? []) as unknown as {
+    id: string;
+    full_name: string;
+    team_members: { team_id: string }[];
+  }[];
+
+  // Get pending invites for this team
+  const { data: pending } = await (svc as any)
+    .schema("future")
+    .from("team_invitations")
+    .select("invited_delegate_id")
+    .eq("team_id", teamId)
+    .eq("status", "pending");
+  const pendingIds = new Set(
+    ((pending ?? []) as { invited_delegate_id: string }[]).map((r) => r.invited_delegate_id)
+  );
+
+  return delegates
+    .filter((d) => d.id !== myId && d.team_members.length === 0)
+    .map((d) => ({
+      id: d.id,
+      full_name: d.full_name,
+      hasPendingInvite: pendingIds.has(d.id),
+    }));
 }
 
 async function getChapterTrackProblems(
@@ -163,10 +213,21 @@ export default async function MyTeamPage() {
   const isCaptain = team.captain_id === session.id;
   const isLeader = team.leader_delegate_id === session.id;
   const isFrozen = team.is_frozen === true;
+  const canInvite = !isFrozen && team.team_members.length < TEAM_SIZE_MAX;
+
+  const availableDelegates = canInvite
+    ? await getAvailableDelegates(team.chapter_id, team.edition_id, team.id, session.id)
+    : [];
 
   const problems = isFrozen
     ? await getChapterTrackProblems(team.chapter_id, team.edition_id)
     : [];
+
+  async function inviteAction(formData: FormData) {
+    "use server";
+    const toDelegateId = String(formData.get("to_delegate_id") ?? "");
+    await sendInvite({ teamId: team!.id, toDelegateId });
+  }
 
   async function renameAction(formData: FormData) {
     "use server";
@@ -306,6 +367,51 @@ export default async function MyTeamPage() {
           ))}
         </ul>
       </section>
+
+      {/* Invite members — inline list of available chapter delegates */}
+      {canInvite && availableDelegates.length > 0 && (
+        <section className="bg-white border border-navy/10 rounded-lg p-5">
+          <h3 className="text-sm font-bold text-navy mb-1">
+            Invite members
+          </h3>
+          <p className="text-xs text-navy/50 mb-3">
+            {availableDelegates.length} delegate{availableDelegates.length !== 1 ? "s" : ""} available in your chapter
+          </p>
+          <ul className="space-y-1">
+            {availableDelegates.map((d) => (
+              <li
+                key={d.id}
+                className="flex items-center justify-between p-2 border border-navy/10 rounded"
+              >
+                <span className="font-semibold text-navy text-sm">
+                  {d.full_name}
+                </span>
+                {d.hasPendingInvite ? (
+                  <span className="text-[10px] font-semibold text-yi-gold uppercase tracking-wider">
+                    Invite sent
+                  </span>
+                ) : (
+                  <form action={inviteAction}>
+                    <input type="hidden" name="to_delegate_id" value={d.id} />
+                    <button
+                      type="submit"
+                      className="px-3 py-1 rounded-md bg-navy text-ivory text-xs font-semibold hover:bg-navy-dark"
+                    >
+                      Invite
+                    </button>
+                  </form>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {canInvite && availableDelegates.length === 0 && !isFrozen && (
+        <section className="bg-navy/5 border border-navy/10 rounded-lg p-4 text-center text-xs text-navy/50">
+          No other delegates available to invite in your chapter yet.
+        </section>
+      )}
 
       {/* Problem statement — ONLY visible after team is frozen */}
       {isFrozen && (

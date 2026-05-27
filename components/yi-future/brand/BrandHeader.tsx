@@ -27,10 +27,10 @@ export function BrandStrip({
   );
 }
 
-export function ProgramWordmark(): React.JSX.Element {
+export function ProgramWordmark({ href = "/" }: { href?: string } = {}): React.JSX.Element {
   return (
     <Link
-      href="/"
+      href={href}
       aria-label="Future 6.0 by Yi YUVA"
       className="inline-flex items-center"
     >

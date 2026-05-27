@@ -46,7 +46,7 @@ export function AdminShell({
     <>
       <div className="px-4 py-5 border-b border-ivory/10 flex items-start justify-between gap-2">
         <div>
-          <ProgramWordmark />
+          <ProgramWordmark href={items.find(i => !i.isHeader)?.href ?? "/"} />
           <div className="mt-2 text-[10px] font-semibold tracking-widest uppercase text-yi-gold">
             {roleLabel}
           </div>

@@ -14,8 +14,7 @@ export default async function RegistrationsPage({
   const { id: eventId } = await params;
   const supabase = await createServiceClient();
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: event } = await (supabase as any)
+  const { data: event } = await supabase
     .from("events")
     .select("id, name, ingestion_enabled")
     .eq("id", eventId)

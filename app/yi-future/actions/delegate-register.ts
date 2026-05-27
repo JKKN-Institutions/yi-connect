@@ -353,8 +353,9 @@ export async function registerDelegate(
       interest_workshops: input.interest_workshops,
       travel_commitment_acknowledged_at: nowIso,
       declaration_accepted_at: nowIso,
-      points: 10,
-      badges: ["joined"],
+      preferred_track_slug: input.preferred_track_slug || null,
+      points: input.preferred_track_slug ? 20 : 10,
+      badges: input.preferred_track_slug ? ["joined", "track_matched"] : ["joined"],
       profile_completion_pct: 100,
     } as never);
 

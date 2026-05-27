@@ -12,7 +12,7 @@ import {
 } from "@/app/yi-future/actions/team-invites";
 import { updateTeamName } from "@/app/yi-future/actions/teams";
 import { TEAM_SIZE_MIN, TEAM_SIZE_MAX } from "@/lib/yi-future/constants";
-import { trackIconText } from "@/components/yi-future/TrackIcon";
+import { TrackIcon, trackIconText } from "@/components/yi-future/TrackIcon";
 
 type TeamView = {
   id: string;
@@ -37,7 +37,8 @@ type Problem = {
   id: string;
   title: string;
   short_description: string;
-  tracks: { name: string; icon: string | null } | null;
+  full_description: string | null;
+  tracks: { name: string; icon: string | null; color_hex: string | null } | null;
 };
 
 async function getMyTeam(delegateId: string): Promise<TeamView | null> {
@@ -133,7 +134,7 @@ async function getChapterTrackProblems(
     .schema("future")
     .from("problem_statements")
     .select(
-      "id, title, short_description, tracks!inner(edition_id, name, icon, id)"
+      "id, title, short_description, full_description, tracks!inner(edition_id, name, icon, color_hex, id)"
     )
     .eq("is_active", true)
     .eq("tracks.edition_id", editionId);
@@ -428,11 +429,14 @@ export default async function MyTeamPage() {
             )}
           </div>
           {team.problem_statements ? (
-            <div className="p-3 rounded border-2 border-yi-gold/30 bg-yi-gold/5">
-              <div className="font-bold text-navy">
+            <div className="p-4 rounded-xl border-2 border-[#F5A623]/40 bg-gradient-to-br from-[#F5A623]/5 to-white">
+              <div className="text-[10px] font-bold uppercase tracking-widest text-[#F5A623] mb-1">
+                Selected
+              </div>
+              <div className="font-bold text-navy text-lg">
                 {team.problem_statements.title}
               </div>
-              <p className="mt-1 text-sm text-navy/70">
+              <p className="mt-1 text-sm text-navy/60">
                 {team.problem_statements.short_description}
               </p>
             </div>
@@ -442,37 +446,66 @@ export default async function MyTeamPage() {
               live.
             </p>
           ) : (
-            <form action={pickProblemAction} className="space-y-3">
-              <p className="text-xs text-navy/60 mb-2">
-                Any team member can pick the problem statement. Choose wisely —
-                this is what you&apos;ll work on for 90 days.
+            <form action={pickProblemAction} className="space-y-4">
+              <p className="text-sm text-navy/60">
+                Choose the problem your team will work on for the next 90 days.
+                Read each one carefully — you can re-pick later if needed.
               </p>
-              {problems.map((p) => (
-                <label
-                  key={p.id}
-                  className="block border border-navy/10 rounded-md p-3 cursor-pointer hover:border-yi-gold/50"
-                >
-                  <input
-                    type="radio"
-                    name="problem_id"
-                    value={p.id}
-                    required
-                    className="mr-2 accent-yi-gold"
-                  />
-                  <span className="font-semibold text-navy">
-                    {trackIconText(p.tracks?.icon)} {p.title}
-                  </span>
-                  <div className="mt-1 text-xs text-navy/60">
-                    {p.short_description}
-                  </div>
-                </label>
-              ))}
-              <div className="flex justify-end">
+              {problems.map((p) => {
+                const color = p.tracks?.color_hex ?? "#1a1a3e";
+                return (
+                  <label
+                    key={p.id}
+                    className="group block border-2 rounded-xl overflow-hidden cursor-pointer transition-all hover:shadow-md has-[:checked]:border-[#F5A623] has-[:checked]:shadow-lg border-navy/10"
+                  >
+                    <input
+                      type="radio"
+                      name="problem_id"
+                      value={p.id}
+                      required
+                      className="sr-only"
+                    />
+                    <div className="p-4">
+                      <div className="flex items-start gap-3">
+                        <TrackIcon icon={p.tracks?.icon} name={p.tracks?.name} size={36} className="shrink-0 mt-0.5" />
+                        <div className="flex-1 min-w-0">
+                          <div
+                            className="text-[10px] font-bold uppercase tracking-widest"
+                            style={{ color }}
+                          >
+                            {p.tracks?.name ?? "—"}
+                          </div>
+                          <h4 className="font-bold text-navy text-base mt-0.5">
+                            {p.title}
+                          </h4>
+                          <p className="mt-1.5 text-sm text-navy/60 leading-relaxed">
+                            {p.short_description}
+                          </p>
+                        </div>
+                        <div className="shrink-0 w-5 h-5 rounded-full border-2 border-navy/20 group-has-[:checked]:border-[#F5A623] group-has-[:checked]:bg-[#F5A623] flex items-center justify-center mt-1">
+                          <div className="w-2 h-2 rounded-full bg-white opacity-0 group-has-[:checked]:opacity-100" />
+                        </div>
+                      </div>
+                      {p.full_description && (
+                        <details className="mt-3" onClick={(e) => e.stopPropagation()}>
+                          <summary className="text-xs font-semibold cursor-pointer hover:text-[#F5A623]" style={{ color }}>
+                            Read full description
+                          </summary>
+                          <div className="mt-2 p-3 rounded-lg bg-navy/5 text-xs text-navy/70 whitespace-pre-wrap leading-relaxed max-h-60 overflow-y-auto">
+                            {p.full_description}
+                          </div>
+                        </details>
+                      )}
+                    </div>
+                  </label>
+                );
+              })}
+              <div className="flex justify-end pt-2">
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-md bg-navy text-ivory text-sm font-semibold hover:bg-navy-dark"
+                  className="px-6 py-2.5 rounded-xl bg-[#F5A623] text-navy text-sm font-bold hover:bg-[#F5A623]/90 shadow-md hover:shadow-lg transition-all"
                 >
-                  Pick problem
+                  Pick this problem
                 </button>
               </div>
             </form>

@@ -129,6 +129,15 @@ export default function JoinPage() {
           </div>
 
           <p className="mt-8 text-center text-sm text-[#1a1a3e]/35">
+            Jury member?{" "}
+            <Link
+              href="/yip/jury/login"
+              className="font-medium text-[#FF9933] hover:underline"
+            >
+              Sign in with email
+            </Link>
+          </p>
+          <p className="mt-2 text-center text-sm text-[#1a1a3e]/35">
             Organizing an event?{" "}
             <Link
               href="/yip/login"

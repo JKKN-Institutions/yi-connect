@@ -133,6 +133,111 @@ export async function validateAccessCode(
   return { type: "error", message: "Code not found" };
 }
 
+// ─── Frictionless Jury Login by Email + Event ──────────────────────
+//
+// Security model (Phase 19 / D):
+//   "Frictionless" cannot mean "anyone with an email can score." Instead,
+//   the organizer pre-creates a jury_assignment row with the juror's email
+//   for a specific event. Login = lookup match. No match → not authorised.
+//
+//   Pros: zero-friction for legit jurors, no password/OTP UI surface, no
+//   open auth hole. Cons: organizer must enter emails in advance (they
+//   already do — they print badges with access codes today).
+
+type JuryLoginResult =
+  | {
+      type: "ok";
+      jury: { id: string; jury_name: string };
+      eventId: string;
+    }
+  | { type: "error"; message: string };
+
+export async function juryLoginByEmail(
+  email: string,
+  eventId: string
+): Promise<JuryLoginResult> {
+  const normalisedEmail = email.trim().toLowerCase();
+  const trimmedEventId = eventId.trim();
+
+  if (!normalisedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalisedEmail)) {
+    return { type: "error", message: "Please enter a valid email address" };
+  }
+
+  if (!trimmedEventId) {
+    return { type: "error", message: "Please select an event" };
+  }
+
+  const supabase = await createServiceClient();
+
+  const { data: jury, error } = await supabase
+    .from("jury_assignments")
+    .select("id, jury_name, event_id, is_active")
+    .eq("email", normalisedEmail)
+    .eq("event_id", trimmedEventId)
+    .maybeSingle();
+
+  if (error || !jury) {
+    return {
+      type: "error",
+      message:
+        "Not authorized for this event. Please contact the event organizer.",
+    };
+  }
+
+  if (jury.is_active === false) {
+    return {
+      type: "error",
+      message: "Your jury access has been deactivated. Contact the organizer.",
+    };
+  }
+
+  // Set the SAME session cookie shape as access-code login so /yip/jury/*
+  // is agnostic to login method.
+  const cookieStore = await cookies();
+  cookieStore.set(
+    "yip_session",
+    JSON.stringify({
+      type: "jury",
+      id: jury.id,
+      name: jury.jury_name,
+      eventId: jury.event_id,
+    }),
+    {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 60 * 60 * 24, // 24 hours
+      path: "/",
+    }
+  );
+
+  return {
+    type: "ok",
+    jury: { id: jury.id, jury_name: jury.jury_name },
+    eventId: jury.event_id,
+  };
+}
+
+// Public list of events for the jury login dropdown.
+// Returns only minimal display info (no payment/admin fields).
+export async function listJuryLoginEvents(): Promise<
+  Array<{
+    id: string;
+    name: string;
+    chapter_name: string | null;
+    level: string;
+    day1_date: string;
+  }>
+> {
+  const supabase = await createServiceClient();
+  const { data } = await supabase
+    .from("events")
+    .select("id, name, chapter_name, level, day1_date")
+    .order("day1_date", { ascending: false });
+
+  return data ?? [];
+}
+
 // ─── Organizer Auth (Supabase Auth) ─────────────────────────────────
 
 type LoginResult =

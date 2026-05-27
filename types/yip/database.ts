@@ -14,51 +14,7 @@ export type Database = {
   }
   public: {
     Tables: {
-      branding_rules_legacy: {
-        Row: {
-          category: string
-          created_at: string | null
-          description: string
-          handbook_page: number | null
-          id: string
-          is_active: boolean
-          requires_evidence: boolean
-          rule_key: string
-          severity: string
-          sort_order: number
-          title: string
-          updated_at: string | null
-        }
-        Insert: {
-          category: string
-          created_at?: string | null
-          description: string
-          handbook_page?: number | null
-          id?: string
-          is_active?: boolean
-          requires_evidence?: boolean
-          rule_key: string
-          severity?: string
-          sort_order?: number
-          title: string
-          updated_at?: string | null
-        }
-        Update: {
-          category?: string
-          created_at?: string | null
-          description?: string
-          handbook_page?: number | null
-          id?: string
-          is_active?: boolean
-          requires_evidence?: boolean
-          rule_key?: string
-          severity?: string
-          sort_order?: number
-          title?: string
-          updated_at?: string | null
-        }
-        Relationships: []
-      }
+      [_ in never]: never
     }
     Views: {
       [_ in never]: never
@@ -99,6 +55,7 @@ export type Database = {
         Returns: Json
       }
       yifi_current_edition: { Args: never; Returns: Json }
+      yifi_find_by_email: { Args: { p_email: string }; Returns: Json }
       yifi_get_dossier: {
         Args: { p_edition_id: string; p_registrant_id: string }
         Returns: Json
@@ -1600,6 +1557,7 @@ export type Database = {
         Row: {
           access_code: string
           created_at: string | null
+          email: string | null
           event_id: string
           id: string
           is_active: boolean | null
@@ -1609,6 +1567,7 @@ export type Database = {
         Insert: {
           access_code: string
           created_at?: string | null
+          email?: string | null
           event_id: string
           id?: string
           is_active?: boolean | null
@@ -1618,6 +1577,7 @@ export type Database = {
         Update: {
           access_code?: string
           created_at?: string | null
+          email?: string | null
           event_id?: string
           id?: string
           is_active?: boolean | null
@@ -2482,24 +2442,6 @@ export type Database = {
           },
         ]
       }
-      scoring_flags_config: {
-        Row: {
-          deltas: Json
-          id: boolean
-          updated_at: string
-        }
-        Insert: {
-          deltas: Json
-          id?: boolean
-          updated_at?: string
-        }
-        Update: {
-          deltas?: Json
-          id?: boolean
-          updated_at?: string
-        }
-        Relationships: []
-      }
       scores: {
         Row: {
           agenda_item_id: string | null
@@ -2601,6 +2543,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      scoring_flags_config: {
+        Row: {
+          deltas: Json
+          id: boolean
+          updated_at: string
+        }
+        Insert: {
+          deltas: Json
+          id?: boolean
+          updated_at?: string
+        }
+        Update: {
+          deltas?: Json
+          id?: boolean
+          updated_at?: string
+        }
+        Relationships: []
       }
       topics: {
         Row: {

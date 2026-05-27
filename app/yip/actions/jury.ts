@@ -12,7 +12,8 @@ type ActionResult<T = unknown> =
 
 export async function addJury(
   eventId: string,
-  name: string
+  name: string,
+  email?: string | null
 ): Promise<ActionResult<{ id: string; access_code: string }>> {
   const supabase = await createClient();
   const {
@@ -36,6 +37,31 @@ export async function addJury(
 
   if (!name || name.trim().length === 0) {
     return { success: false, error: "Jury name is required" };
+  }
+
+  // Optional email for frictionless login (Phase 19 / D)
+  const normalisedEmail = email ? email.trim().toLowerCase() : null;
+  if (
+    normalisedEmail &&
+    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalisedEmail)
+  ) {
+    return { success: false, error: "Invalid email address" };
+  }
+
+  // Reject duplicate email within the same event
+  if (normalisedEmail) {
+    const { data: dup } = await supabase
+      .from("jury_assignments")
+      .select("id")
+      .eq("event_id", eventId)
+      .eq("email", normalisedEmail)
+      .maybeSingle();
+    if (dup) {
+      return {
+        success: false,
+        error: "A jury member with this email is already added to this event",
+      };
+    }
   }
 
   // Generate unique code
@@ -74,6 +100,7 @@ export async function addJury(
       jury_name: name.trim(),
       access_code: accessCode,
       is_active: true,
+      email: normalisedEmail,
     })
     .select("id, access_code")
     .single();

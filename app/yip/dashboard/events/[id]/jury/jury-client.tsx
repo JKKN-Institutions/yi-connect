@@ -40,6 +40,7 @@ type JuryAssignment = {
   access_code: string;
   is_active: boolean | null;
   created_at: string | null;
+  email?: string | null;
 };
 
 export function JuryClient({
@@ -52,6 +53,7 @@ export function JuryClient({
   const router = useRouter();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [juryName, setJuryName] = useState("");
+  const [juryEmail, setJuryEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -65,11 +67,16 @@ export function JuryClient({
     setLoading(true);
     setError("");
 
-    const result = await addJury(eventId, juryName.trim());
+    const result = await addJury(
+      eventId,
+      juryName.trim(),
+      juryEmail.trim() || null
+    );
 
     if (result.success) {
       setDialogOpen(false);
       setJuryName("");
+      setJuryEmail("");
       router.refresh();
     } else {
       setError(result.error);
@@ -139,6 +146,22 @@ export function JuryClient({
                 }}
               />
             </div>
+            <div>
+              <Label htmlFor="jury-email">Email (optional)</Label>
+              <Input
+                id="jury-email"
+                type="email"
+                value={juryEmail}
+                onChange={(e) => {
+                  setJuryEmail(e.target.value);
+                  setError("");
+                }}
+                placeholder="rajesh@example.com — enables /yip/jury/login"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleAddJury();
+                }}
+              />
+            </div>
 
             <DialogFooter>
               <DialogClose render={<Button variant="outline" />}>
@@ -168,6 +191,7 @@ export function JuryClient({
             <TableHeader>
               <TableRow>
                 <TableHead>Name</TableHead>
+                <TableHead>Email</TableHead>
                 <TableHead>Access Code</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="w-10" />
@@ -177,6 +201,9 @@ export function JuryClient({
               {initialJury.map((j) => (
                 <TableRow key={j.id}>
                   <TableCell className="font-medium">{j.jury_name}</TableCell>
+                  <TableCell className="text-xs text-gray-600">
+                    {j.email ?? <span className="text-gray-300">—</span>}
+                  </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">
                       <code className="rounded bg-gray-100 px-1.5 py-0.5 text-xs font-mono">

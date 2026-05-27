@@ -31,7 +31,18 @@ interface CsvRow {
   phone?: string;
   email?: string;
   city?: string;
-  state?: string;
+  // Roster home state. Spreadsheets that only have a `state` column get it
+  // routed to constituency_state (YIP-handbook canonical meaning); a `state`
+  // column is interpreted as home_state ONLY when no explicit `home_state`
+  // column is present AND no allocation columns (party/constituency/committee)
+  // are present. See `normalizeXlsxRow` for the full decision.
+  home_state?: string;
+  // NEW — allocation columns
+  party_letter?: string;
+  constituency_name?: string;
+  constituency_state?: string;
+  committee_number?: number;
+  committee_name?: string;
 }
 
 interface ParsedRow extends CsvRow {
@@ -39,15 +50,26 @@ interface ParsedRow extends CsvRow {
   errors: string[];
 }
 
-// Column header aliases — case-insensitive match
-const COL_ALIASES: Record<keyof CsvRow, string[]> = {
+// Column header aliases — case-insensitive match.
+// Note: `state` is intentionally NOT in any alias list — it is handled with
+// special context-aware logic in normalizeXlsxRow (and the CSV path) because
+// the meaning of bare "state" depends on what other columns are present.
+const COL_ALIASES: Record<
+  Exclude<keyof CsvRow, "home_state" | "constituency_state"> | "home_state_explicit" | "constituency_state_explicit",
+  string[]
+> = {
   name: ["name", "full_name", "fullname", "student_name", "student name"],
   school: ["school", "school_name", "schoolname", "school name"],
   class: ["class", "grade", "std"],
   phone: ["phone", "mobile", "phone_number", "phone number"],
   email: ["email", "email_address", "email address"],
   city: ["city", "town"],
-  state: ["state", "home_state", "home state"],
+  home_state_explicit: ["home_state", "home state"],
+  constituency_state_explicit: ["constituency_state", "state_constituency"],
+  party_letter: ["party", "party_letter"],
+  constituency_name: ["constituency", "constituency_name"],
+  committee_number: ["committee", "committee_number", "committee_no"],
+  committee_name: ["committee_name"],
 };
 
 function findColIdx(headers: string[], aliases: string[]): number {
@@ -67,10 +89,35 @@ function normalizePhone(raw: unknown): string | undefined {
   return str.replace(/\D/g, "") || undefined;
 }
 
+/** Resolve where a bare `state` column should route, given the columns present.
+ *
+ * Decision rule:
+ *   - If file has an explicit `home_state` (or `home state`) column → that's home_state;
+ *     bare `state` (if any) → constituency_state.
+ *   - Else if file has any allocation columns (party / constituency / committee)
+ *     OR an explicit `constituency_state` / `state_constituency` column → bare `state` → constituency_state.
+ *   - Else (legacy roster-only file) → bare `state` → home_state.
+ */
+function resolveStateRouting(presentKeys: string[]): "home_state" | "constituency_state" {
+  const hasExplicitHomeState = COL_ALIASES.home_state_explicit.some((a) =>
+    presentKeys.includes(a)
+  );
+  if (hasExplicitHomeState) return "constituency_state";
+
+  const hasAllocationCols =
+    COL_ALIASES.constituency_state_explicit.some((a) => presentKeys.includes(a)) ||
+    COL_ALIASES.party_letter.some((a) => presentKeys.includes(a)) ||
+    COL_ALIASES.constituency_name.some((a) => presentKeys.includes(a)) ||
+    COL_ALIASES.committee_number.some((a) => presentKeys.includes(a));
+
+  return hasAllocationCols ? "constituency_state" : "home_state";
+}
+
 /** Validate and map a plain JS object (from xlsx) to ParsedRow */
 function normalizeXlsxRow(
   rawRow: Record<string, unknown>,
-  rowNumber: number
+  rowNumber: number,
+  bareStateRoutes: "home_state" | "constituency_state"
 ): ParsedRow {
   // Build a lowercase-keyed version for easy lookup
   const lc: Record<string, unknown> = {};
@@ -91,7 +138,30 @@ function normalizeXlsxRow(
   const phoneRaw = pick(COL_ALIASES.phone);
   const emailRaw = pick(COL_ALIASES.email);
   const cityRaw = pick(COL_ALIASES.city);
-  const stateRaw = pick(COL_ALIASES.state);
+
+  // State routing (see resolveStateRouting above)
+  const homeStateExplicit = pick(COL_ALIASES.home_state_explicit);
+  const constituencyStateExplicit = pick(COL_ALIASES.constituency_state_explicit);
+  const bareState = lc["state"];
+
+  let homeStateRaw: unknown = homeStateExplicit;
+  let constituencyStateRaw: unknown = constituencyStateExplicit;
+  if (bareState !== undefined && bareState !== "") {
+    if (bareStateRoutes === "home_state" && homeStateRaw === undefined) {
+      homeStateRaw = bareState;
+    } else if (
+      bareStateRoutes === "constituency_state" &&
+      constituencyStateRaw === undefined
+    ) {
+      constituencyStateRaw = bareState;
+    }
+  }
+
+  // Allocation columns
+  const partyRaw = pick(COL_ALIASES.party_letter);
+  const constituencyNameRaw = pick(COL_ALIASES.constituency_name);
+  const committeeNumberRaw = pick(COL_ALIASES.committee_number);
+  const committeeNameRaw = pick(COL_ALIASES.committee_name);
 
   const name = nameRaw !== undefined ? String(nameRaw).trim() : "";
   const school = schoolRaw !== undefined ? String(schoolRaw).trim() : "";
@@ -99,13 +169,44 @@ function normalizeXlsxRow(
   const phone = normalizePhone(phoneRaw);
   const email = emailRaw !== undefined ? String(emailRaw).trim() || undefined : undefined;
   const city = cityRaw !== undefined ? String(cityRaw).trim() || undefined : undefined;
-  const state = stateRaw !== undefined ? String(stateRaw).trim() || undefined : undefined;
+  const home_state =
+    homeStateRaw !== undefined ? String(homeStateRaw).trim() || undefined : undefined;
+  const constituency_state =
+    constituencyStateRaw !== undefined
+      ? String(constituencyStateRaw).trim() || undefined
+      : undefined;
+
+  let party_letter: string | undefined;
+  if (partyRaw !== undefined && partyRaw !== "") {
+    party_letter = String(partyRaw).trim().toUpperCase();
+  }
+  const constituency_name =
+    constituencyNameRaw !== undefined
+      ? String(constituencyNameRaw).trim() || undefined
+      : undefined;
+
+  let committee_number: number | undefined;
+  if (committeeNumberRaw !== undefined && committeeNumberRaw !== "") {
+    const n = Number(committeeNumberRaw);
+    if (!isNaN(n)) committee_number = n;
+  }
+  const committee_name =
+    committeeNameRaw !== undefined
+      ? String(committeeNameRaw).trim() || undefined
+      : undefined;
 
   const errors: string[] = [];
   if (!name) errors.push("Name is required");
   if (!school) errors.push("School is required");
   if (classRaw !== undefined && (classNum < 9 || classNum > 12))
     errors.push("Class must be 9-12");
+  if (party_letter !== undefined && !/^[A-Z]$/.test(party_letter))
+    errors.push(`Party must be a single letter A-Z (got "${party_letter}")`);
+  if (
+    committee_number !== undefined &&
+    (!Number.isInteger(committee_number) || committee_number <= 0)
+  )
+    errors.push("Committee must be a positive integer");
 
   return {
     rowNumber,
@@ -115,7 +216,12 @@ function normalizeXlsxRow(
     phone,
     email,
     city,
-    state,
+    home_state,
+    constituency_state,
+    party_letter,
+    constituency_name,
+    committee_number,
+    committee_name,
     errors,
   };
 }
@@ -196,23 +302,7 @@ export function CsvImport({
             return;
           }
 
-          // Skip entirely-blank rows
-          const rows: ParsedRow[] = [];
-          for (let i = 0; i < jsonRows.length; i++) {
-            const raw = jsonRows[i];
-            const allEmpty = Object.values(raw).every(
-              (v) => v === "" || v === null || v === undefined
-            );
-            if (allEmpty) continue;
-            rows.push(normalizeXlsxRow(raw, i + 2)); // +2 because row 1 = header
-          }
-
-          if (rows.length === 0) {
-            setParseError("No data rows found after skipping blank rows.");
-            return;
-          }
-
-          // Check that at least name/school columns are present
+          // Resolve column presence ONCE, off the first row's keys
           const firstRaw = jsonRows[0];
           const keys = Object.keys(firstRaw).map((k) => k.trim().toLowerCase());
           const hasName = COL_ALIASES.name.some((a) => keys.includes(a));
@@ -221,6 +311,23 @@ export function CsvImport({
             setParseError(
               `Excel must have "name" and "school" columns. Found: ${keys.join(", ")}`
             );
+            return;
+          }
+          const bareStateRoutes = resolveStateRouting(keys);
+
+          // Skip entirely-blank rows
+          const rows: ParsedRow[] = [];
+          for (let i = 0; i < jsonRows.length; i++) {
+            const raw = jsonRows[i];
+            const allEmpty = Object.values(raw).every(
+              (v) => v === "" || v === null || v === undefined
+            );
+            if (allEmpty) continue;
+            rows.push(normalizeXlsxRow(raw, i + 2, bareStateRoutes)); // +2 because row 1 = header
+          }
+
+          if (rows.length === 0) {
+            setParseError("No data rows found after skipping blank rows.");
             return;
           }
 
@@ -258,7 +365,16 @@ export function CsvImport({
           const phoneIdx = findColIdx(headers, COL_ALIASES.phone);
           const emailIdx = findColIdx(headers, COL_ALIASES.email);
           const cityIdx = findColIdx(headers, COL_ALIASES.city);
-          const stateIdx = findColIdx(headers, COL_ALIASES.state);
+          const homeStateExplicitIdx = findColIdx(headers, COL_ALIASES.home_state_explicit);
+          const constStateExplicitIdx = findColIdx(
+            headers,
+            COL_ALIASES.constituency_state_explicit
+          );
+          const bareStateIdx = headers.findIndex((h) => h === "state");
+          const partyIdx = findColIdx(headers, COL_ALIASES.party_letter);
+          const constNameIdx = findColIdx(headers, COL_ALIASES.constituency_name);
+          const committeeNumIdx = findColIdx(headers, COL_ALIASES.committee_number);
+          const committeeNameIdx = findColIdx(headers, COL_ALIASES.committee_name);
 
           if (nameIdx === -1) {
             setParseError(
@@ -272,6 +388,8 @@ export function CsvImport({
             );
             return;
           }
+
+          const bareStateRoutes = resolveStateRouting(headers);
 
           // Parse rows
           const rows: ParsedRow[] = [];
@@ -289,6 +407,52 @@ export function CsvImport({
             if (classIdx >= 0 && (classVal < 9 || classVal > 12))
               errors.push("Class must be 9-12");
 
+            // State routing
+            const homeStateExplicit =
+              homeStateExplicitIdx >= 0 ? cols[homeStateExplicitIdx]?.trim() : undefined;
+            const constStateExplicit =
+              constStateExplicitIdx >= 0 ? cols[constStateExplicitIdx]?.trim() : undefined;
+            const bareState =
+              bareStateIdx >= 0 ? cols[bareStateIdx]?.trim() : undefined;
+
+            let home_state: string | undefined = homeStateExplicit || undefined;
+            let constituency_state: string | undefined = constStateExplicit || undefined;
+            if (bareState) {
+              if (bareStateRoutes === "home_state" && !home_state) home_state = bareState;
+              else if (bareStateRoutes === "constituency_state" && !constituency_state)
+                constituency_state = bareState;
+            }
+
+            // Allocation cols
+            let party_letter: string | undefined;
+            if (partyIdx >= 0) {
+              const raw = cols[partyIdx]?.trim();
+              if (raw) {
+                party_letter = raw.toUpperCase();
+                if (!/^[A-Z]$/.test(party_letter))
+                  errors.push(`Party must be a single letter A-Z (got "${party_letter}")`);
+              }
+            }
+            const constituency_name =
+              constNameIdx >= 0 ? cols[constNameIdx]?.trim() || undefined : undefined;
+            let committee_number: number | undefined;
+            if (committeeNumIdx >= 0) {
+              const raw = cols[committeeNumIdx]?.trim();
+              if (raw) {
+                const n = Number(raw);
+                if (!isNaN(n)) committee_number = n;
+                if (
+                  committee_number !== undefined &&
+                  (!Number.isInteger(committee_number) || committee_number <= 0)
+                )
+                  errors.push("Committee must be a positive integer");
+              }
+            }
+            const committee_name =
+              committeeNameIdx >= 0
+                ? cols[committeeNameIdx]?.trim() || undefined
+                : undefined;
+
             rows.push({
               rowNumber: i + 1,
               name,
@@ -300,7 +464,12 @@ export function CsvImport({
                   : undefined,
               email: emailIdx >= 0 ? cols[emailIdx]?.trim() : undefined,
               city: cityIdx >= 0 ? cols[cityIdx]?.trim() : undefined,
-              state: stateIdx >= 0 ? cols[stateIdx]?.trim() : undefined,
+              home_state,
+              constituency_state,
+              party_letter,
+              constituency_name,
+              committee_number,
+              committee_name,
               errors,
             });
           }
@@ -353,7 +522,12 @@ export function CsvImport({
       phone: r.phone,
       email: r.email,
       city: r.city,
-      state: r.state,
+      home_state: r.home_state,
+      party_letter: r.party_letter,
+      constituency_name: r.constituency_name,
+      constituency_state: r.constituency_state,
+      committee_number: r.committee_number,
+      committee_name: r.committee_name,
     }));
 
     const res = await importParticipants(eventId, importData);
@@ -383,8 +557,7 @@ export function CsvImport({
         <DialogHeader>
           <DialogTitle>Import Participants</DialogTitle>
           <DialogDescription>
-            Upload a CSV or Excel (.xlsx / .xls) file with columns: name,
-            school, class, phone, email, city, state
+            Upload a CSV or Excel (.xlsx / .xls) file. Required columns: name, school. Optional: class, phone, email, city, home_state, party (A-Z), constituency, state (constituency state), committee.
           </DialogDescription>
         </DialogHeader>
 
@@ -480,51 +653,87 @@ export function CsvImport({
                   </span>
                 </div>
 
-                <div className="max-h-60 overflow-auto rounded-lg border">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-10">#</TableHead>
-                        <TableHead>Name</TableHead>
-                        <TableHead>School</TableHead>
-                        <TableHead>Class</TableHead>
-                        <TableHead>Status</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {parsedRows.map((row) => (
-                        <TableRow
-                          key={row.rowNumber}
-                          className={
-                            row.errors.length > 0 ? "bg-red-50" : undefined
-                          }
-                        >
-                          <TableCell className="text-xs text-gray-400">
-                            {row.rowNumber}
-                          </TableCell>
-                          <TableCell className="text-xs">
-                            {row.name || "--"}
-                          </TableCell>
-                          <TableCell className="text-xs">
-                            {row.school || "--"}
-                          </TableCell>
-                          <TableCell className="text-xs">
-                            {row.class || "--"}
-                          </TableCell>
-                          <TableCell>
-                            {row.errors.length > 0 ? (
-                              <span className="text-xs text-red-600">
-                                {row.errors.join(", ")}
-                              </span>
-                            ) : (
-                              <Check className="size-4 text-green-500" />
+                {(() => {
+                  const showAllocCols = parsedRows.some(
+                    (r) =>
+                      r.party_letter ||
+                      r.constituency_name ||
+                      r.committee_number !== undefined
+                  );
+                  return (
+                    <div className="max-h-60 overflow-auto rounded-lg border">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-10">#</TableHead>
+                            <TableHead>Name</TableHead>
+                            <TableHead>School</TableHead>
+                            <TableHead>Class</TableHead>
+                            {showAllocCols && (
+                              <>
+                                <TableHead>Party</TableHead>
+                                <TableHead>Constituency</TableHead>
+                                <TableHead>Committee</TableHead>
+                              </>
                             )}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
+                            <TableHead>Status</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {parsedRows.map((row) => (
+                            <TableRow
+                              key={row.rowNumber}
+                              className={
+                                row.errors.length > 0 ? "bg-red-50" : undefined
+                              }
+                            >
+                              <TableCell className="text-xs text-gray-400">
+                                {row.rowNumber}
+                              </TableCell>
+                              <TableCell className="text-xs">
+                                {row.name || "--"}
+                              </TableCell>
+                              <TableCell className="text-xs">
+                                {row.school || "--"}
+                              </TableCell>
+                              <TableCell className="text-xs">
+                                {row.class || "--"}
+                              </TableCell>
+                              {showAllocCols && (
+                                <>
+                                  <TableCell className="text-xs">
+                                    {row.party_letter || "--"}
+                                  </TableCell>
+                                  <TableCell className="text-xs">
+                                    {row.constituency_name
+                                      ? row.constituency_state
+                                        ? `${row.constituency_name} (${row.constituency_state})`
+                                        : row.constituency_name
+                                      : "--"}
+                                  </TableCell>
+                                  <TableCell className="text-xs">
+                                    {row.committee_number !== undefined
+                                      ? row.committee_number
+                                      : "--"}
+                                  </TableCell>
+                                </>
+                              )}
+                              <TableCell>
+                                {row.errors.length > 0 ? (
+                                  <span className="text-xs text-red-600">
+                                    {row.errors.join(", ")}
+                                  </span>
+                                ) : (
+                                  <Check className="size-4 text-green-500" />
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  );
+                })()}
 
                 <DialogFooter className="mt-4">
                   <DialogClose render={<Button variant="outline" />}>

@@ -26,7 +26,23 @@ interface ImportRow {
   phone?: string;
   email?: string;
   city?: string;
-  state?: string;
+  // Roster home state (legacy alias `state` still accepted on the client; the
+  // client decides whether the spreadsheet's `state` column means home_state
+  // or constituency_state and forwards the correct field below).
+  home_state?: string;
+  // NEW — allocation columns (all optional, back-compat)
+  party_letter?: string;        // "A".."Z" — case-insensitive
+  constituency_name?: string;
+  constituency_state?: string;
+  committee_number?: number;
+  committee_name?: string;
+}
+
+type PartySide = Database["public"]["Enums"]["party_side"];
+
+/** Letter -> 1-based index. "A" -> 1, "B" -> 2, ... */
+function letterToIndex(letter: string): number {
+  return letter.toUpperCase().charCodeAt(0) - 64;
 }
 
 type ActionResult<T = unknown> =
@@ -165,6 +181,95 @@ export async function importParticipants(
 
   const existingCodes = new Set<string>();
   const errors: string[] = [];
+
+  // ── Pre-pass: validate party_letter values & collect unique letters ──
+  const uniqueLetters = new Set<string>();
+  const validRowIdx: number[] = [];
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+
+    if (!row.name || !row.school) {
+      errors.push(`Row ${i + 1}: Name and school are required`);
+      continue;
+    }
+    if (!row.class || row.class < 9 || row.class > 12) {
+      errors.push(`Row ${i + 1}: Class must be between 9 and 12`);
+      continue;
+    }
+    if (row.party_letter !== undefined && row.party_letter !== "") {
+      const letter = row.party_letter.trim().toUpperCase();
+      if (!/^[A-Z]$/.test(letter)) {
+        errors.push(`Row ${i + 1}: party must be a single letter A-Z (got "${row.party_letter}")`);
+        continue;
+      }
+      uniqueLetters.add(letter);
+    }
+    if (
+      row.committee_number !== undefined &&
+      row.committee_number !== null &&
+      (!Number.isInteger(row.committee_number) || row.committee_number <= 0)
+    ) {
+      errors.push(`Row ${i + 1}: committee must be a positive integer`);
+      continue;
+    }
+    validRowIdx.push(i);
+  }
+
+  // ── Create-or-find parties for this event ──
+  // First letter alphabetically -> ruling, rest -> opposition (organizer can flip later).
+  const sortedLetters = [...uniqueLetters].sort();
+  const partyMap = new Map<string, { id: string; side: PartySide; number: number }>();
+
+  if (sortedLetters.length > 0) {
+    // Fetch existing parties for the event in one round-trip
+    const { data: existingParties, error: partyFetchErr } = await supabase
+      .from("parties")
+      .select("id, name, party_number, side")
+      .eq("event_id", eventId);
+
+    if (partyFetchErr) {
+      return { success: false, error: `Failed to read parties: ${partyFetchErr.message}` };
+    }
+
+    const byName = new Map<string, { id: string; side: PartySide; number: number }>();
+    for (const p of existingParties ?? []) {
+      byName.set(p.name, { id: p.id, side: p.side, number: p.party_number });
+    }
+
+    for (const letter of sortedLetters) {
+      const name = `Party ${letter}`;
+      const found = byName.get(name);
+      if (found) {
+        partyMap.set(letter, found);
+        continue;
+      }
+      // Side default: only assign 'ruling' if NO ruling party exists yet for the event
+      // (covers re-import + multi-batch scenarios cleanly).
+      const hasRuling =
+        [...byName.values()].some((p) => p.side === "ruling") ||
+        [...partyMap.values()].some((p) => p.side === "ruling");
+      const side: PartySide = hasRuling ? "opposition" : "ruling";
+      const number = letterToIndex(letter);
+
+      const { data: inserted, error: insErr } = await supabase
+        .from("parties")
+        .insert({ event_id: eventId, name, party_number: number, side })
+        .select("id, side, party_number")
+        .single();
+
+      if (insErr || !inserted) {
+        return {
+          success: false,
+          error: `Failed to create party ${name}: ${insErr?.message ?? "unknown"}`,
+        };
+      }
+      const rec = { id: inserted.id, side: inserted.side, number: inserted.party_number };
+      partyMap.set(letter, rec);
+      byName.set(name, rec);
+    }
+  }
+
+  // ── Build participant inserts ──
   const inserts: Array<{
     event_id: string;
     full_name: string;
@@ -175,20 +280,38 @@ export async function importParticipants(
     city: string | null;
     home_state: string | null;
     access_code: string;
+    party_id: string | null;
+    party_number: number | null;
+    party_side: PartySide | null;
+    constituency_name: string | null;
+    constituency_state: string | null;
+    committee_number: number | null;
+    committee_name: string | null;
   }> = [];
 
-  for (let i = 0; i < rows.length; i++) {
+  for (const i of validRowIdx) {
     const row = rows[i];
 
-    // Validate
-    if (!row.name || !row.school) {
-      errors.push(`Row ${i + 1}: Name and school are required`);
-      continue;
+    let party_id: string | null = null;
+    let party_number: number | null = null;
+    let party_side: PartySide | null = null;
+    if (row.party_letter) {
+      const letter = row.party_letter.trim().toUpperCase();
+      const rec = partyMap.get(letter);
+      if (rec) {
+        party_id = rec.id;
+        party_number = rec.number;
+        party_side = rec.side;
+      }
     }
-    if (!row.class || row.class < 9 || row.class > 12) {
-      errors.push(`Row ${i + 1}: Class must be between 9 and 12`);
-      continue;
-    }
+
+    const committee_number =
+      row.committee_number !== undefined && row.committee_number !== null
+        ? row.committee_number
+        : null;
+    const committee_name =
+      row.committee_name?.trim() ||
+      (committee_number !== null ? `Committee ${committee_number}` : null);
 
     try {
       const code = await generateUniqueCode(supabase, eventId, existingCodes);
@@ -200,8 +323,15 @@ export async function importParticipants(
         phone: row.phone?.trim() || null,
         email: row.email?.trim() || null,
         city: row.city?.trim() || null,
-        home_state: row.state?.trim() || null,
+        home_state: row.home_state?.trim() || null,
         access_code: code,
+        party_id,
+        party_number,
+        party_side,
+        constituency_name: row.constituency_name?.trim() || null,
+        constituency_state: row.constituency_state?.trim() || null,
+        committee_number,
+        committee_name,
       });
     } catch {
       errors.push(`Row ${i + 1}: Failed to generate access code`);

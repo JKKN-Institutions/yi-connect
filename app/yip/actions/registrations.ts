@@ -52,17 +52,11 @@ export type RegistrationStats = {
   participants_count: number;
 };
 
-// The `registrations` table was introduced in migration 012 which is not yet
-// reflected in src/types/database.ts (regenerated centrally). We narrow the
-// supabase client to `any` for just the registrations table access. This is
-// scoped — everything else uses the typed client.
 type AnyClient = ReturnType<typeof createServiceClient> extends Promise<infer C>
   ? C
   : never;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function regs(client: AnyClient): any {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (client as any).from("registrations");
+function regs(client: AnyClient) {
+  return client.from("registrations");
 }
 
 // ── Access code generation (copy of participants.ts helper) ──────
@@ -159,8 +153,7 @@ export async function ingestCSV(
   const supabase = await createServiceClient();
 
   // Verify event exists + ingestion enabled
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: event } = await (supabase as any)
+  const { data: event } = await supabase
     .from("events")
     .select("id, ingestion_enabled")
     .eq("id", eventId)
@@ -298,8 +291,7 @@ export async function getRegistrationStats(
   const supabase = await createServiceClient();
   const [regsRes, partsRes] = await Promise.all([
     regs(supabase).select("status").eq("event_id", eventId),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (supabase as any)
+    supabase
       .from("participants")
       .select("id", { count: "exact", head: true })
       .eq("event_id", eventId),
@@ -362,8 +354,7 @@ export async function approveRegistration(
     });
     const personId = personRes.success ? personRes.data.id : null;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: participant, error: partErr } = await (supabase as any)
+    const { data: participant, error: partErr } = await supabase
       .from("participants")
       .insert({
         event_id: reg.event_id,
@@ -533,8 +524,7 @@ export async function setIngestionEnabled(
   enabled: boolean
 ): Promise<ActionResult> {
   const supabase = await createServiceClient();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (supabase as any)
+  const { error } = await supabase
     .from("events")
     .update({ ingestion_enabled: enabled })
     .eq("id", eventId);

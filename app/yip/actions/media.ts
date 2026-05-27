@@ -14,13 +14,7 @@ type ActionResult<T = null> =
   | { success: true; data: T }
   | { success: false; error: string };
 
-// Cast helper: event_media is not in the generated Database type yet.
-// Types are regenerated centrally after migration 013 is pushed.
 type AnySupabase = Awaited<ReturnType<typeof createServiceClient>>;
-function t(c: AnySupabase) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return c as any;
-}
 
 // Resolve a public URL for a storage_path via Supabase Storage.
 async function resolvePublicUrl(
@@ -37,7 +31,7 @@ export async function listMedia(
   filter?: { kind?: MediaKind; visibility?: MediaVisibility }
 ): Promise<EventMedia[]> {
   const supabase = await createServiceClient();
-  let q = t(supabase)
+  let q = supabase
     .from("media")
     .select("*")
     .eq("event_id", eventId)
@@ -79,7 +73,7 @@ export async function registerUploadedMedia(input: {
   const kind = mimeToKind(input.mime_type);
   const public_url = await resolvePublicUrl(supabase, input.storage_path);
 
-  const { data, error } = await t(supabase)
+  const { data, error } = await supabase
     .from("media")
     .insert({
       event_id: input.event_id,
@@ -114,7 +108,7 @@ export async function updateMediaCaption(
   }
 ): Promise<ActionResult<EventMedia>> {
   const supabase = await createServiceClient();
-  const { data, error } = await t(supabase)
+  const { data, error } = await supabase
     .from("media")
     .update(updates)
     .eq("id", id)
@@ -135,7 +129,7 @@ export async function setCoverImage(
   const supabase = await createServiceClient();
 
   // Clear any existing cover first
-  const { error: clearErr } = await t(supabase)
+  const { error: clearErr } = await supabase
     .from("media")
     .update({ is_cover: false })
     .eq("event_id", eventId)
@@ -143,7 +137,7 @@ export async function setCoverImage(
 
   if (clearErr) return { success: false, error: clearErr.message };
 
-  const { data, error } = await t(supabase)
+  const { data, error } = await supabase
     .from("media")
     .update({ is_cover: true })
     .eq("id", mediaId)
@@ -160,7 +154,7 @@ export async function clearCoverImage(
   eventId: string
 ): Promise<ActionResult> {
   const supabase = await createServiceClient();
-  const { error } = await t(supabase)
+  const { error } = await supabase
     .from("media")
     .update({ is_cover: false })
     .eq("event_id", eventId)
@@ -176,7 +170,7 @@ export async function setVisibility(
   visibility: MediaVisibility
 ): Promise<ActionResult<EventMedia>> {
   const supabase = await createServiceClient();
-  const { data, error } = await t(supabase)
+  const { data, error } = await supabase
     .from("media")
     .update({ visibility })
     .eq("id", id)
@@ -197,7 +191,7 @@ export async function bulkSetVisibility(
 ): Promise<ActionResult<number>> {
   if (ids.length === 0) return { success: true, data: 0 };
   const supabase = await createServiceClient();
-  const { data, error } = await t(supabase)
+  const { data, error } = await supabase
     .from("media")
     .update({ visibility })
     .in("id", ids)
@@ -212,7 +206,7 @@ export async function bulkSetVisibility(
 export async function deleteMedia(id: string): Promise<ActionResult> {
   const supabase = await createServiceClient();
 
-  const { data: row, error: fetchErr } = await t(supabase)
+  const { data: row, error: fetchErr } = await supabase
     .from("media")
     .select("id, event_id, storage_path")
     .eq("id", id)
@@ -225,7 +219,7 @@ export async function deleteMedia(id: string): Promise<ActionResult> {
   // Delete from Storage first (best effort — even if it fails we still remove DB row)
   await supabase.storage.from(STORAGE_BUCKET).remove([row.storage_path]);
 
-  const { error: delErr } = await t(supabase)
+  const { error: delErr } = await supabase
     .from("media")
     .delete()
     .eq("id", id);
@@ -243,7 +237,7 @@ export async function bulkDeleteMedia(
   if (ids.length === 0) return { success: true, data: 0 };
   const supabase = await createServiceClient();
 
-  const { data: rows } = await t(supabase)
+  const { data: rows } = await supabase
     .from("media")
     .select("id, storage_path")
     .in("id", ids);
@@ -253,7 +247,7 @@ export async function bulkDeleteMedia(
     await supabase.storage.from(STORAGE_BUCKET).remove(paths);
   }
 
-  const { data, error } = await t(supabase)
+  const { data, error } = await supabase
     .from("media")
     .delete()
     .in("id", ids)
@@ -272,7 +266,7 @@ export async function reorderMedia(
   const supabase = await createServiceClient();
   // Update sort_order for each id in the given sequence.
   const updates = ids.map((id, idx) =>
-    t(supabase).from("media").update({ sort_order: idx }).eq("id", id)
+    supabase.from("media").update({ sort_order: idx }).eq("id", id)
   );
   const results = await Promise.all(updates);
   const firstErr = results.find((r) => r.error);
@@ -293,7 +287,7 @@ export async function getMediaStats(eventId: string): Promise<{
   organizer_only: number;
 }> {
   const supabase = await createServiceClient();
-  const { data } = await t(supabase)
+  const { data } = await supabase
     .from("media")
     .select("kind, visibility, size_bytes")
     .eq("event_id", eventId);

@@ -1,6 +1,7 @@
 "use server";
 
 import { createServiceClient } from "@/lib/yip/supabase/server";
+import type { Json } from "@/types/yip/database";
 import {
   computeNps,
   npsBucket,
@@ -43,7 +44,7 @@ function cleanPayload(payload: FeedbackPayload) {
     what_worked: trim(payload.what_worked),
     what_didnt_work: trim(payload.what_didnt_work),
     suggestions: trim(payload.suggestions),
-    answers: (payload.answers ?? {}) as Record<string, unknown>,
+    answers: (payload.answers ?? {}) as Json,
   };
 }
 
@@ -74,8 +75,7 @@ export async function submitParticipantFeedback(
   }
 
   // Check for existing submission
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const existing = await (supabase as any)
+  const existing = await supabase
     .from("feedback")
     .select("id")
     .eq("event_id", eventId)
@@ -90,8 +90,7 @@ export async function submitParticipantFeedback(
     };
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase as any)
+  const { data, error } = await supabase
     .from("feedback")
     .insert({
       event_id: eventId,
@@ -163,8 +162,7 @@ export async function submitOrganizerFeedback(
 
   // App-level duplicate check for non-participant rows (DB unique doesn't
   // apply because participant_id is NULL and NULLs are distinct).
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const existing = await (supabase as any)
+  const existing = await supabase
     .from("feedback")
     .select("id")
     .eq("event_id", eventId)
@@ -179,8 +177,7 @@ export async function submitOrganizerFeedback(
     };
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase as any)
+  const { data, error } = await supabase
     .from("feedback")
     .insert({
       event_id: eventId,
@@ -209,8 +206,7 @@ export async function getMyFeedback(
   participantId: string
 ): Promise<FeedbackResponseRow | null> {
   const supabase = await createServiceClient();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data } = await (supabase as any)
+  const { data } = await supabase
     .from("feedback")
     .select("*")
     .eq("event_id", eventId)
@@ -226,8 +222,7 @@ export async function listFeedback(
   respondentType?: FeedbackRespondentType
 ): Promise<FeedbackResponseRow[]> {
   const supabase = await createServiceClient();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let q = (supabase as any)
+  let q = supabase
     .from("feedback")
     .select("*")
     .eq("event_id", eventId)

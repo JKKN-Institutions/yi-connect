@@ -246,9 +246,7 @@ export async function loginAsOrganizer(): Promise<
   // admin.listUsers is the way to check — but the API is paginated. Simpler:
   // try create. If it errors "User already registered" that's fine.
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const anyAdmin = admin as any;
-    const { error: createErr } = await anyAdmin.auth.admin.createUser({
+    const { error: createErr } = await admin.auth.admin.createUser({
       email: DEMO_ORG_EMAIL,
       password: DEMO_ORG_PASSWORD,
       email_confirm: true,

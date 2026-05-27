@@ -259,13 +259,10 @@ async function setEventLock(
     return { success: false, error: "Event not found or not authorized" };
   }
 
-  // registrations_frozen exists in DB (migration 022) but may not be in
-  // generated types yet — cast through Record to satisfy TS.
-  const patch = { [field]: value } as unknown as Record<string, boolean>;
+  const patch = { [field]: value };
   const { error } = await supabase
     .from("events")
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .update(patch as any)
+    .update(patch)
     .eq("id", eventId);
 
   if (error) {

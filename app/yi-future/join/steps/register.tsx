@@ -83,6 +83,7 @@ export function RegisterStep({
   chapters: ChapterMini[];
   onSuccess?: (redirect: string) => void;
 }) {
+  const searchParams = useSearchParams();
   const [section, setSection] = useState<1 | 2 | 3 | 4>(1);
   const [form, setForm] = useState<FormState>(EMPTY);
   const [error, setError] = useState<string | null>(null);
@@ -91,6 +92,12 @@ export function RegisterStep({
   const [returningProfile, setReturningProfile] = useState<PreviousProfile | null>(null);
   const [lookupDone, setLookupDone] = useState(false);
   const lookupRef = useRef(false);
+
+  const preferredTrack = useMemo(() => {
+    const fromUrl = searchParams.get("track");
+    if (fromUrl) return fromUrl;
+    try { return localStorage.getItem("yifuture_quiz_track"); } catch { return null; }
+  }, [searchParams]);
 
   function applyReturningProfile(p: PreviousProfile) {
     setForm((prev) => ({

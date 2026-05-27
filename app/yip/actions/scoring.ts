@@ -64,6 +64,16 @@ interface SubmitScoreInput {
   totalScore: number;
   comments: string;
   status: "draft" | "submitted";
+  // Special Remarks (Phase 18 / F4). All optional — existing callers (offline
+  // sync, history client) keep working unchanged. Each flag defaults to false
+  // on the row; the per-flag point delta is applied at result-computation
+  // time using yip.scoring_flags_config.
+  flags?: {
+    no_confidence_brought?: boolean;
+    walkout?: boolean;
+    ruckus?: boolean;
+    suspension?: boolean;
+  };
 }
 
 export async function submitScore(
@@ -108,6 +118,12 @@ export async function submitScore(
     status: input.status,
     submitted_at: input.status === "submitted" ? new Date().toISOString() : null,
     updated_at: new Date().toISOString(),
+    // Special Remarks flags — default false to keep backward-compat with
+    // existing callers (offline sync, history client) that don't pass them.
+    flag_no_confidence_brought: input.flags?.no_confidence_brought ?? false,
+    flag_walkout: input.flags?.walkout ?? false,
+    flag_ruckus: input.flags?.ruckus ?? false,
+    flag_suspension: input.flags?.suspension ?? false,
   };
 
   let scoreId: string;

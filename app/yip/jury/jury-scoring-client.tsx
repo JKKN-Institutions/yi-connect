@@ -11,8 +11,21 @@ import {
   submitScore,
   type CurrentSpeakerInfo,
 } from "@/app/yip/actions/scoring";
+import {
+  getScoringFlagsConfig,
+  type FlagDeltas,
+  type FlagKey,
+} from "@/app/yip/actions/scoring-flags";
 import { ROLE_LABELS, ROLE_COLORS, PARTY_COLORS } from "@/lib/yip/constants";
-import { Loader2, Mic, Users, ChevronDown, ChevronUp, Lock } from "lucide-react";
+import {
+  Loader2,
+  Mic,
+  Users,
+  ChevronDown,
+  ChevronUp,
+  Lock,
+  AlertTriangle,
+} from "lucide-react";
 import { useOfflineSync } from "@/lib/yip/hooks/use-offline-sync";
 import { OfflineSyncBadge } from "@/components/yip/scoring/offline-sync-badge";
 import type { RubricCriterionShape } from "@/lib/yip/rubric";

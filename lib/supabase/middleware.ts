@@ -258,11 +258,13 @@ function handleYiFutureAuth(
     '/yi-future/chapters',
     '/yi-future/join',
     '/yi-future/login',
+    '/yi-future/access',
     '/yi-future/consent',
     '/yi-future/event',
     '/yi-future/offline',
     '/yi-future/dev',
     '/yi-future/my-bug-reports',
+    '/yi-future/quiz',
   ]
   if (pathname === '/yi-future' || pathname === '/yi-future/') {
     return supabaseResponse

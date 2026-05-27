@@ -31,6 +31,7 @@ import {
   adminReactivateTopic,
   type AdminTopic,
 } from "@/app/yip/actions/admin-topics";
+import { PushCentralTopicsButton } from "@/components/yip/push-central-topics-button";
 
 type FormState = {
   category: "central" | "regional";
@@ -179,12 +180,23 @@ export function TopicsAdminClient({
             {counts.central} central
           </p>
         </div>
-        <Button
-          onClick={openCreate}
-          className="bg-[#FF9933] hover:bg-[#FF9933]/90 text-white"
-        >
-          <Plus className="size-4 mr-2" /> New Topic
-        </Button>
+        <div className="flex items-center gap-2">
+          <PushCentralTopicsButton
+            centralTopicIds={topics
+              .filter((t) => t.category === "central" && t.is_active)
+              .map((t) => t.id)}
+            centralCount={
+              topics.filter((t) => t.category === "central" && t.is_active)
+                .length
+            }
+          />
+          <Button
+            onClick={openCreate}
+            className="bg-[#FF9933] hover:bg-[#FF9933]/90 text-white"
+          >
+            <Plus className="size-4 mr-2" /> New Topic
+          </Button>
+        </div>
       </div>
 
       {flash && (

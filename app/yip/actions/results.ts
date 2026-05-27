@@ -3,6 +3,7 @@
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { revalidatePath } from "next/cache";
 import { parentScoreByKey } from "@/lib/yip/rubric";
+import { getScoringFlagsConfig, type FlagDeltas } from "./scoring-flags";
 
 type ActionResult<T = null> =
   | { success: true; data: T }
@@ -63,7 +64,20 @@ type RawScore = {
   jury_assignment_id: string;
   total_score: number;
   criteria_scores: Record<string, number>;
+  flag_no_confidence_brought: boolean;
+  flag_walkout: boolean;
+  flag_ruckus: boolean;
+  flag_suspension: boolean;
 };
+
+function flagDeltaForScore(s: RawScore, deltas: FlagDeltas): number {
+  let d = 0;
+  if (s.flag_no_confidence_brought) d += deltas.no_confidence_brought;
+  if (s.flag_walkout) d += deltas.walkout;
+  if (s.flag_ruckus) d += deltas.ruckus;
+  if (s.flag_suspension) d += deltas.suspension;
+  return d;
+}
 
 type ResultRow = {
   event_id: string;
@@ -118,10 +132,12 @@ export async function computeResults(
 ): Promise<ActionResult<{ computed: number; awards_assigned: number }>> {
   const supabase = await createServiceClient();
 
-  // 1. Submitted scores
+  // 1. Submitted scores (including Special-Remarks flag columns — F4)
   const { data: scores, error: scoresError } = await supabase
     .from("scores")
-    .select("participant_id, jury_assignment_id, total_score, criteria_scores, status")
+    .select(
+      "participant_id, jury_assignment_id, total_score, criteria_scores, status, flag_no_confidence_brought, flag_walkout, flag_ruckus, flag_suspension"
+    )
     .eq("event_id", eventId)
     .eq("status", "submitted");
 
@@ -131,6 +147,12 @@ export async function computeResults(
   if (!scores || scores.length === 0) {
     return { success: false, error: "No submitted scores found for this event" };
   }
+
+  // 1b. Flag deltas config — applied per juror row, before averaging.
+  const flagsConfig = await getScoringFlagsConfig();
+  const flagDeltas: FlagDeltas = flagsConfig.success
+    ? flagsConfig.data.deltas
+    : { no_confidence_brought: 3, walkout: -5, ruckus: -3, suspension: -10 };
 
   // 2. Participants (with constituency for Best Constituency Rep / Community Impact)
   const { data: participants, error: pError } = await supabase
@@ -151,6 +173,10 @@ export async function computeResults(
       jury_assignment_id: s.jury_assignment_id,
       total_score: s.total_score,
       criteria_scores: s.criteria_scores as Record<string, number>,
+      flag_no_confidence_brought: Boolean(s.flag_no_confidence_brought),
+      flag_walkout: Boolean(s.flag_walkout),
+      flag_ruckus: Boolean(s.flag_ruckus),
+      flag_suspension: Boolean(s.flag_suspension),
     });
     scoresByParticipant.set(s.participant_id, arr);
   }
@@ -163,10 +189,16 @@ export async function computeResults(
     if (!pScores || pScores.length === 0) continue;
 
     const juryCount = pScores.length;
-    const avgScore =
-      pScores.reduce((sum, s) => sum + s.total_score, 0) / juryCount;
-    const minJurorScore = pScores.reduce(
-      (min, s) => (s.total_score < min ? s.total_score : min),
+    // F4: each juror's contribution includes Special-Remarks flag deltas
+    // applied at that juror's row. The deltas come from
+    // yip.scoring_flags_config; min/avg use the flag-adjusted value so
+    // both the leaderboard and the MVP award reflect remarks consistently.
+    const adjusted = pScores.map(
+      (s) => s.total_score + flagDeltaForScore(s, flagDeltas)
+    );
+    const avgScore = adjusted.reduce((sum, v) => sum + v, 0) / juryCount;
+    const minJurorScore = adjusted.reduce(
+      (min, v) => (v < min ? v : min),
       Infinity
     );
 

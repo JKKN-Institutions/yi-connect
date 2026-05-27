@@ -4,8 +4,11 @@
 
 export const MOCK_MARKER = "[MOCK]";
 
-export const MOCK_SEASON_NAME = "YIP Mock Season 2026";
-export const MOCK_SEASON_YEAR = 2026;
+// Sentinel year (9999) — picked to never collide with any real Yi season
+// row in yi.years (unique constraint on year). Display name carries the
+// [MOCK] marker so it can never be mistaken for a real season.
+export const MOCK_SEASON_NAME = "YIP Mock Season [MOCK]";
+export const MOCK_SEASON_YEAR = 9999;
 
 export const MOCK_CHAPTER_EVENT_NAME = "MOCK Chapter Round — Erode";
 export const MOCK_REGIONAL_EVENT_NAME = "MOCK Regional — South";

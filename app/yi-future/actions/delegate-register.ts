@@ -30,6 +30,8 @@ export type RegisterDelegateInput = {
   declaration_accepted: boolean;
   // Auth
   password: string;
+  // Quiz pre-select (optional — set when user took quiz before registering)
+  preferred_track_slug?: string;
 };
 
 export type RegisterDelegateResult =

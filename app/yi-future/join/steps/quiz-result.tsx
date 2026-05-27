@@ -18,13 +18,11 @@ export function QuizResultStep({
   track,
   tracks,
   onRetake,
-  onHaveCode,
 }: {
   result: QuizResult;
   track: TrackMini | null;
   tracks: TrackMini[];
   onRetake: () => void;
-  onHaveCode: () => void;
 }) {
   useEffect(() => {
     fireConfetti({ intensity: "normal" });

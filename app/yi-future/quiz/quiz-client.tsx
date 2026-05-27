@@ -84,7 +84,6 @@ export function QuizClient({ tracks }: { tracks: TrackMini[] }) {
               setMatchedTrack(null);
               setStep("quiz");
             }}
-            onHaveCode={() => router.push("/yi-future/access")}
           />
         )}
       </section>

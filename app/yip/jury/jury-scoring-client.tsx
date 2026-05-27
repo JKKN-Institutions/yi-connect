@@ -50,6 +50,34 @@ interface ExistingScoreData {
   status: string | null;
 }
 
+// Special Remarks (Phase 18 / F4) — checkbox state for the active participant.
+type FlagsState = Record<FlagKey, boolean>;
+
+const EMPTY_FLAGS: FlagsState = {
+  no_confidence_brought: false,
+  walkout: false,
+  ruckus: false,
+  suspension: false,
+};
+
+const FLAG_LABELS: Record<FlagKey, string> = {
+  no_confidence_brought: "No Confidence Motion Brought",
+  walkout: "Walkout",
+  ruckus: "Ruckus",
+  suspension: "Suspension",
+};
+
+const FLAG_ORDER: FlagKey[] = [
+  "no_confidence_brought",
+  "walkout",
+  "ruckus",
+  "suspension",
+];
+
+function formatDelta(d: number): string {
+  return d >= 0 ? `+${d}` : `${d}`;
+}
+
 type Participant = {
   id: string;
   full_name: string;
@@ -112,6 +140,10 @@ function JuryScoringClientInner({
   const [manualParticipant, setManualParticipant] =
     useState<Participant | null>(null);
   const [loadingPicker, setLoadingPicker] = useState(false);
+
+  // Special Remarks (Phase 18 / F4) — flag checkboxes + delta config
+  const [flagDeltas, setFlagDeltas] = useState<FlagDeltas | null>(null);
+  const [flags, setFlags] = useState<FlagsState>(EMPTY_FLAGS);
 
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
@@ -190,6 +222,68 @@ function JuryScoringClientInner({
     loadCurrentSpeaker();
     loadEventLock();
   }, [loadCurrentSpeaker, loadEventLock]);
+
+  // Load Special-Remarks delta config once. Falls back to the migration's
+  // seeded defaults if the row is missing or the call fails.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const res = await getScoringFlagsConfig();
+      if (cancelled) return;
+      setFlagDeltas(
+        res.success
+          ? res.data.deltas
+          : {
+              no_confidence_brought: 3,
+              walkout: -5,
+              ruckus: -3,
+              suspension: -10,
+            }
+      );
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Hydrate flag checkboxes whenever the active participant changes.
+  // We pull straight from the scores row via a typed cast — the columns
+  // were added in migration 20260527200000 and exist in the generated
+  // Database type already.
+  useEffect(() => {
+    if (!activeParticipant) {
+      setFlags(EMPTY_FLAGS);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const fresh = await getScoreForParticipant(
+        juryAssignmentId,
+        activeParticipant.id,
+        eventId
+      );
+      if (cancelled) return;
+      if (!fresh) {
+        setFlags(EMPTY_FLAGS);
+        return;
+      }
+      const row = fresh as unknown as {
+        flag_no_confidence_brought?: boolean | null;
+        flag_walkout?: boolean | null;
+        flag_ruckus?: boolean | null;
+        flag_suspension?: boolean | null;
+      };
+      setFlags({
+        no_confidence_brought: Boolean(row.flag_no_confidence_brought),
+        walkout: Boolean(row.flag_walkout),
+        ruckus: Boolean(row.flag_ruckus),
+        suspension: Boolean(row.flag_suspension),
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeParticipant, juryAssignmentId, eventId]);
 
   // ─── Realtime: watch events table for current_agenda_item_id ────
 
@@ -313,6 +407,7 @@ function JuryScoringClientInner({
       totalScore: data.totalScore,
       comments: data.comments,
       status: data.status,
+      flags,
     });
 
     if (result.success) {
@@ -401,6 +496,70 @@ function JuryScoringClientInner({
             >
               Back to live
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Special Remarks (Phase 18 / F4) — visible whenever a participant
+          is loaded. Deltas come from yip.scoring_flags_config and are
+          applied at result-computation time, not added to the live total. */}
+      {activeParticipant && rubric && (
+        <div className="mx-4 rounded-xl border-2 border-amber-200 bg-amber-50/60 px-4 py-3">
+          <div className="flex items-center gap-2 text-sm font-semibold text-amber-900">
+            <AlertTriangle className="size-4 shrink-0" />
+            <span>Special Remarks</span>
+          </div>
+          <p className="text-xs text-amber-800/80 mt-0.5">
+            Tick only if observed. Applied at results time.
+          </p>
+          <div className="mt-3 grid grid-cols-1 gap-2">
+            {FLAG_ORDER.map((k) => {
+              const delta = flagDeltas?.[k];
+              const checked = flags[k];
+              return (
+                <label
+                  key={k}
+                  className={`flex items-center justify-between gap-3 rounded-lg border bg-white px-3 py-2 touch-manipulation cursor-pointer transition-colors
+                    ${
+                      checked
+                        ? "border-amber-400 ring-1 ring-amber-300"
+                        : "border-gray-200 hover:bg-gray-50"
+                    }
+                    ${eventLocked ? "opacity-60 cursor-not-allowed" : ""}
+                  `}
+                  style={{ minHeight: "48px" }}
+                >
+                  <span className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      className="size-5 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                      checked={checked}
+                      disabled={eventLocked}
+                      onChange={(e) =>
+                        setFlags((prev) => ({
+                          ...prev,
+                          [k]: e.target.checked,
+                        }))
+                      }
+                    />
+                    <span className="text-sm font-medium text-gray-900">
+                      {FLAG_LABELS[k]}
+                    </span>
+                  </span>
+                  <span
+                    className={`text-sm font-bold tabular-nums ${
+                      delta === undefined
+                        ? "text-gray-400"
+                        : delta >= 0
+                          ? "text-emerald-700"
+                          : "text-rose-700"
+                    }`}
+                  >
+                    {delta === undefined ? "…" : formatDelta(delta)}
+                  </span>
+                </label>
+              );
+            })}
           </div>
         </div>
       )}

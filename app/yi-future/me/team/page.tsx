@@ -313,12 +313,12 @@ export default async function MyTeamPage() {
               defaultValue={team.team_name}
               className="flex-1 px-3 py-2 border border-navy/20 rounded-md text-sm"
             />
-            <button
-              type="submit"
+            <SubmitButton
+              pendingText="Saving..."
               className="px-4 py-2 rounded-md bg-navy text-ivory text-sm font-semibold hover:bg-navy-dark"
             >
               Save
-            </button>
+            </SubmitButton>
           </form>
         </section>
       )}

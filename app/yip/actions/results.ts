@@ -4,6 +4,7 @@ import { createServiceClient } from "@/lib/yip/supabase/server";
 import { revalidatePath } from "next/cache";
 import { parentScoreByKey } from "@/lib/yip/rubric";
 import { getScoringFlagsConfig, type FlagDeltas } from "./scoring-flags";
+import { getPositionBonusConfig } from "./positions";
 
 type ActionResult<T = null> =
   | { success: true; data: T }
@@ -154,6 +155,11 @@ export async function computeResults(
     ? flagsConfig.data.deltas
     : { no_confidence_brought: 3, walkout: -5, ruckus: -3, suspension: -10 };
 
+  // 1c. Position bonuses (F3) — applied ONCE per participant to avg/min, NOT
+  // per juror (bonus is a role attribute, not a per-juror judgement).
+  const positionConfig = await getPositionBonusConfig();
+  const positionBonuses = positionConfig.bonuses;
+
   // 2. Participants (with constituency for Best Constituency Rep / Community Impact)
   const { data: participants, error: pError } = await supabase
     .from("participants")
@@ -196,11 +202,13 @@ export async function computeResults(
     const adjusted = pScores.map(
       (s) => s.total_score + flagDeltaForScore(s, flagDeltas)
     );
-    const avgScore = adjusted.reduce((sum, v) => sum + v, 0) / juryCount;
-    const minJurorScore = adjusted.reduce(
-      (min, v) => (v < min ? v : min),
-      Infinity
-    );
+    // F3: role-based position bonus applied once per participant.
+    const roleBonus =
+      (participant.parliament_role && positionBonuses[participant.parliament_role]) || 0;
+    const avgScore =
+      adjusted.reduce((sum, v) => sum + v, 0) / juryCount + roleBonus;
+    const minJurorScore =
+      adjusted.reduce((min, v) => (v < min ? v : min), Infinity) + roleBonus;
 
     const criteriaSum: Record<string, number> = {};
     const criteriaCount: Record<string, number> = {};

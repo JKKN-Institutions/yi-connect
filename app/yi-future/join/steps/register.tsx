@@ -245,6 +245,7 @@ export function RegisterStep({
       if (res.ok) {
         try {
           localStorage.removeItem(STORAGE_KEY);
+          localStorage.removeItem("yifuture_quiz_track");
         } catch {
           /* ignore */
         }

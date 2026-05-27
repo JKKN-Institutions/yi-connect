@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition, useEffect, useRef, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   registerDelegate,
   searchApprovedColleges,

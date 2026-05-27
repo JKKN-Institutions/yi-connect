@@ -219,9 +219,7 @@ export default async function MyTeamPage() {
     ? await getAvailableDelegates(team.chapter_id, team.edition_id, team.id, session.id)
     : [];
 
-  const problems = isFrozen
-    ? await getChapterTrackProblems(team.chapter_id, team.edition_id)
-    : [];
+  const problems = await getChapterTrackProblems(team.chapter_id, team.edition_id);
 
   async function inviteAction(formData: FormData) {
     "use server";
@@ -413,8 +411,8 @@ export default async function MyTeamPage() {
         </section>
       )}
 
-      {/* Problem statement — ONLY visible after team is frozen */}
-      {isFrozen && (
+      {/* Problem statement — always visible */}
+      {!isFrozen && (
         <section className="bg-white border border-navy/10 rounded-lg p-5">
           <div className="flex items-start justify-between mb-3">
             <h3 className="text-sm font-bold text-navy">Problem statement</h3>
@@ -482,18 +480,15 @@ export default async function MyTeamPage() {
         </section>
       )}
 
-      {/* Pre-freeze: explain why PS is locked */}
-      {!isFrozen && (
-        <section className="bg-navy/5 border border-navy/10 rounded-lg p-5 text-center">
-          <div className="text-2xl mb-2">🔒</div>
-          <h3 className="text-sm font-bold text-navy">
-            Problem statements unlock after team confirmation
-          </h3>
-          <p className="mt-1 text-xs text-navy/60">
-            {isCaptain
-              ? 'Once all members are in, click "Confirm team" below to unlock problem selection.'
-              : "Your captain needs to confirm the team before you can pick a problem statement."}
-          </p>
+      {/* PS shown when frozen (read-only) */}
+      {isFrozen && team.problem_statements && (
+        <section className="bg-white border border-navy/10 rounded-lg p-5">
+          <h3 className="text-sm font-bold text-navy mb-2">Problem statement</h3>
+          <div className="p-3 rounded border-2 border-yi-gold/30 bg-yi-gold/5">
+            <div className="font-bold text-navy">{team.problem_statements.title}</div>
+            <p className="mt-1 text-sm text-navy/70">{team.problem_statements.short_description}</p>
+          </div>
+          <p className="mt-2 text-xs text-navy/50">Team is submitted — problem statement is locked.</p>
         </section>
       )}
 
@@ -542,7 +537,7 @@ export default async function MyTeamPage() {
       {/* Freeze team (captain/leader only) */}
       {(isCaptain || isLeader) && (
         <section className="bg-white border border-navy/10 rounded-lg p-5">
-          <h3 className="text-sm font-bold text-navy mb-1">Confirm team</h3>
+          <h3 className="text-sm font-bold text-navy mb-1">Submit &amp; lock team</h3>
           {isFrozen ? (
             <p className="text-xs text-navy/60">
               This team was confirmed
@@ -561,27 +556,41 @@ export default async function MyTeamPage() {
           ) : (
             <>
               <p className="text-xs text-navy/60 mb-3">
-                Once your team is final, confirm it. After confirmation, no
-                members can be added or removed, and problem statements become
-                available.
+                When you&apos;re done adding members and have picked a problem
+                statement, submit to lock your team. After submission, nothing
+                can be changed.
               </p>
+              {!team.problem_statement_id && (
+                <p className="text-xs text-yi-saffron font-semibold mb-3">
+                  Pick a problem statement above before submitting.
+                </p>
+              )}
               <details className="group">
-                <summary className="cursor-pointer list-none inline-block px-4 py-2 rounded-md bg-[#F5A623] text-navy text-sm font-bold hover:opacity-90 select-none">
-                  Confirm team…
+                <summary
+                  className={`cursor-pointer list-none inline-block px-4 py-2 rounded-md text-sm font-bold select-none ${
+                    team.problem_statement_id
+                      ? "bg-[#F5A623] text-navy hover:opacity-90"
+                      : "bg-navy/20 text-navy/40 cursor-not-allowed"
+                  }`}
+                >
+                  Submit &amp; lock team…
                 </summary>
-                <div className="mt-3 p-3 rounded-md bg-yi-saffron/10 border border-yi-saffron/30 space-y-2">
-                  <p className="text-sm font-semibold text-navy">
-                    Once confirmed, no members can be added or removed. Continue?
-                  </p>
-                  <form action={freezeAction} className="flex gap-2">
-                    <button
-                      type="submit"
-                      className="px-4 py-2 rounded-md bg-[#F5A623] text-navy text-sm font-bold hover:opacity-90"
-                    >
-                      Yes, confirm the team
-                    </button>
-                  </form>
-                </div>
+                {team.problem_statement_id && (
+                  <div className="mt-3 p-3 rounded-md bg-red-50 border border-red-200 space-y-2">
+                    <p className="text-sm font-semibold text-navy">
+                      This is final. Team members, captain, and problem statement
+                      will all be locked. Continue?
+                    </p>
+                    <form action={freezeAction} className="flex gap-2">
+                      <button
+                        type="submit"
+                        className="px-4 py-2 rounded-md bg-red-600 text-white text-sm font-bold hover:bg-red-700"
+                      >
+                        Yes, submit and lock
+                      </button>
+                    </form>
+                  </div>
+                )}
               </details>
             </>
           )}

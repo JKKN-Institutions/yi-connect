@@ -396,12 +396,7 @@ export async function pickProblemAsDelegate(
   const team = await loadTeam(teamId);
   if (!team) return { ok: false, error: "Team not found." };
 
-  if (!team.is_frozen) {
-    return {
-      ok: false,
-      error: "Confirm your team first (freeze it) before picking a problem.",
-    };
-  }
+  // PS can be picked anytime (no freeze required)
 
   const { data: member } = await svc
     .schema("future")

@@ -36,10 +36,10 @@ export default function AccessCodePage() {
         <div className="max-w-lg mx-auto">
           <div className="text-center mb-6">
             <h1 className="text-2xl md:text-3xl font-bold text-navy">
-              Delegate Login
+              Sign in to Future 6.0
             </h1>
             <p className="mt-1 text-sm text-navy/60">
-              Choose how you want to sign in
+              Already registered? Choose how to sign in.
             </p>
           </div>
 

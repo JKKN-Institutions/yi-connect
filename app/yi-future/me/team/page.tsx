@@ -13,6 +13,7 @@ import {
 import { updateTeamName } from "@/app/yi-future/actions/teams";
 import { TEAM_SIZE_MIN, TEAM_SIZE_MAX } from "@/lib/yi-future/constants";
 import { TrackIcon, trackIconText } from "@/components/yi-future/TrackIcon";
+import { SubmitButton } from "@/components/yi-future/SubmitButton";
 
 type TeamView = {
   id: string;

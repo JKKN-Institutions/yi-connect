@@ -12,7 +12,7 @@ export function RoleHeader({
     <header className="bg-white border-b border-navy/10 sticky top-0 z-20 safe-top">
       <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <ProgramWordmark />
+          <ProgramWordmark href="/yi-future/me" />
         </div>
         <div className="flex items-center gap-3">
           <span className="hidden sm:inline text-[10px] font-semibold tracking-widest text-navy/50 uppercase">

@@ -365,9 +365,9 @@ export async function seedMockData(): Promise<ActionResult<MockDataStats>> {
   try {
     // 1. Mock season ─────────────────────────────────────────────────────
     const { data: season, error: seasonErr } = await supabase
-      .schema("yi").from("years") /* TODO yip-absorption: seasons table dropped — verify yi.years shape + filter on events.yi_year_id */
+      .schema("yi").from("years")
       .insert({
-        name: MOCK_SEASON_NAME,
+        display_name: MOCK_SEASON_NAME,
         year: MOCK_SEASON_YEAR,
         is_active: false,
         is_mock: true,

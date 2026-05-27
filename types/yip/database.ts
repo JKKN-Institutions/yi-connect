@@ -548,6 +548,7 @@ export type Database = {
           ended_at: string | null
           id: string
           is_active: boolean | null
+          is_mock: boolean
           started_at: string | null
           updated_at: string | null
           year: number
@@ -558,6 +559,7 @@ export type Database = {
           ended_at?: string | null
           id?: string
           is_active?: boolean | null
+          is_mock?: boolean
           started_at?: string | null
           updated_at?: string | null
           year: number
@@ -568,6 +570,7 @@ export type Database = {
           ended_at?: string | null
           id?: string
           is_active?: boolean | null
+          is_mock?: boolean
           started_at?: string | null
           updated_at?: string | null
           year?: number

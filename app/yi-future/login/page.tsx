@@ -99,28 +99,13 @@ export default function LoginPage() {
               </button>
             </form>
 
-            <div className="mt-4 flex justify-center gap-4 text-xs">
-              <Link
-                href="/yi-future/national/admin"
-                className="text-navy/50 hover:text-navy font-medium"
-              >
-                National admin →
-              </Link>
-              <Link
-                href="/yi-future/host"
-                className="text-navy/50 hover:text-navy font-medium"
-              >
-                Host admin →
-              </Link>
-            </div>
-
-            <div className="mt-4 pt-4 border-t border-navy/10 text-center">
-              <p className="text-xs text-navy/50">Delegate, mentor, or jury?</p>
+            <div className="mt-6 pt-6 border-t border-navy/10 text-center">
+              <p className="text-xs text-navy/50">Student, mentor, or jury?</p>
               <Link
                 href="/yi-future/access"
                 className="mt-1 inline-block text-sm text-navy font-semibold hover:text-yi-gold transition-colors"
               >
-                Enter your access code →
+                Sign in with code / Google / email →
               </Link>
             </div>
           </div>

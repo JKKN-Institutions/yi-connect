@@ -32,10 +32,10 @@ export default async function JoinPage() {
           <JoinHeader />
         </div>
         <Link
-          href="/yi-future/login"
+          href="/yi-future/access"
           className="absolute top-3 right-4 text-xs text-navy/60 hover:text-navy font-medium"
         >
-          Chapter admin? Sign in
+          Already registered? Sign in
         </Link>
       </header>
 

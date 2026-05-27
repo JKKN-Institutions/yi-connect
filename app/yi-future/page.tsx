@@ -66,10 +66,10 @@ export default async function YiFuturePage() {
             </Link>
 
             <Link
-              href="/yi-future/login"
-              className="block w-full py-3 rounded-xl border-2 border-navy/20 text-navy font-semibold text-sm hover:border-navy/40 transition-all"
+              href="/yi-future/quiz"
+              className="block w-full py-3 rounded-xl border-2 border-[#F5A623]/40 text-navy font-semibold text-sm hover:border-[#F5A623] hover:bg-[#F5A623]/5 transition-all"
             >
-              Chapter / Host / National admin
+              Not sure which track? Take the quiz
             </Link>
           </div>
 

@@ -142,14 +142,13 @@ export function CodeEntryStep({
 
       <div className="mt-6 text-center">
         <p className="text-xs text-navy/50">
-          Don&apos;t have a code yet?{" "}
-          <button
-            type="button"
-            onClick={onBack}
+          Not sure which track?{" "}
+          <a
+            href="/yi-future/quiz"
             className="font-semibold text-navy hover:text-yi-gold"
           >
             Take the track quiz →
-          </button>
+          </a>
         </p>
       </div>
     </div>

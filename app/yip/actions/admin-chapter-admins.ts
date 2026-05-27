@@ -76,8 +76,6 @@ async function requireYipSuperAdmin(): Promise<string> {
   // Look up yi_directory.role_assignments where app='yip' AND title ILIKE '%super%'
   const svc = await createServiceClient();
   const { data, error } = await svc
-    // @ts-expect-error — yi_directory.role_assignments is in generated types but
-    // the schema-pin to "yip" doesn't auto-expose other-schema tables for typing.
     .schema("yi_directory")
     .from("role_assignments")
     .select("id, app, title, role, person:people!inner(email)")

@@ -393,12 +393,12 @@ export default async function MyTeamPage() {
                 ) : (
                   <form action={inviteAction}>
                     <input type="hidden" name="to_delegate_id" value={d.id} />
-                    <button
-                      type="submit"
+                    <SubmitButton
+                      pendingText="Sending..."
                       className="px-3 py-1 rounded-md bg-navy text-ivory text-xs font-semibold hover:bg-navy-dark"
                     >
                       Invite
-                    </button>
+                    </SubmitButton>
                   </form>
                 )}
               </li>

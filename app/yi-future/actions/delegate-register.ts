@@ -370,20 +370,29 @@ export async function registerDelegate(
     };
   }
 
-  // Create Supabase Auth account so delegate can use email+password login
+  // Create or update Supabase Auth account for email+password login
+  let authUserId: string | null = null;
   const { data: authData, error: authErr } = await svc.auth.admin.createUser({
     email,
     password: input.password,
     email_confirm: true,
     user_metadata: { full_name, role: "delegate" },
   });
-  // If auth account already exists (e.g. returning delegate), ignore the error
-  if (authErr && !authErr.message?.includes("already been registered")) {
+  if (authErr?.message?.includes("already been registered")) {
+    // Account exists — update password to the one they just set
+    const { data: existing } = await svc.auth.admin.listUsers();
+    const match = existing?.users?.find((u) => u.email === email);
+    if (match) {
+      await svc.auth.admin.updateUserById(match.id, { password: input.password });
+      authUserId = match.id;
+    }
+  } else if (authErr) {
     console.warn("Auth account creation failed:", authErr.message);
+  } else {
+    authUserId = authData?.user?.id ?? null;
   }
 
   // Upsert into yi_directory.people — cross-app identity bridge
-  const authUserId = authData?.user?.id ?? null;
   await svc
     .schema("yi_directory" as "public")
     .from("people")

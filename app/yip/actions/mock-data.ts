@@ -164,7 +164,9 @@ export async function getMockDataStats(): Promise<MockDataStats> {
   ] = await Promise.all([
     supabase.schema("yi").from("years") /* TODO yip-absorption: seasons table dropped — verify yi.years shape + filter on events.yi_year_id */.select("id", { count: "exact", head: true }).eq("is_mock", true),
     supabase.from("events").select("id", { count: "exact", head: true }).eq("is_mock", true),
-    supabase.from("schools").select("id", { count: "exact", head: true }).eq("is_mock", true),
+    // Post-absorption: schools live in yi.institutions, no is_mock column.
+    // Seeder no longer inserts mock institutions; report 0 for stats.
+    Promise.resolve({ count: 0 }),
     supabase.from("contestants").select("id", { count: "exact", head: true }).eq("is_mock", true),
     supabase.from("participants").select("id", { count: "exact", head: true }).eq("is_mock", true),
     supabase.from("parties").select("id", { count: "exact", head: true }).eq("is_mock", true),
@@ -395,24 +397,27 @@ export async function seedMockData(): Promise<ActionResult<MockDataStats>> {
       .single();
 
     // 3. Schools ────────────────────────────────────────────────────────
-    const schoolInserts = MOCK_SCHOOLS.map((s) => ({
-      name: `${MOCK_MARKER} ${s.name}`,
-      city: s.city,
-      state: "Tamil Nadu",
-      is_thalir: s.is_thalir,
-      contact_person: s.contact_person,
-      contact_phone: s.contact_phone,
-      contact_email: `contact.mock@${s.name.toLowerCase().replace(/[^a-z]+/g, "-").slice(0, 20)}.example`,
-      notes: mockNote(`Sample school #${MOCK_SCHOOLS.indexOf(s) + 1} for demo event`),
-      is_mock: true,
-    }));
-    const { data: schools, error: schoolsErr } = await supabase
-      .from("schools")
-      .insert(schoolInserts)
-      .select("id, name, city, is_thalir");
-    if (schoolsErr || !schools) {
-      return { success: false, error: schoolsErr?.message ?? "Schools insert failed" };
+    // Post-absorption: schools live in yi.institutions (canonical Yi-wide
+    // institution registry). Use existing thalir-affiliated rows for the
+    // mock event's city rather than inserting more — yi.institutions has
+    // no is_mock column and we don't want mock rows polluting the shared
+    // cross-app table.
+    const { data: schoolsRaw, error: schoolsErr } = await supabase
+      .schema("yi")
+      .from("institutions")
+      .select("id, name, city, is_thalir")
+      .eq("city", MOCK_CHAPTER_VENUE.city)
+      .order("name")
+      .limit(MOCK_SCHOOLS.length);
+    if (schoolsErr || !schoolsRaw || schoolsRaw.length === 0) {
+      return {
+        success: false,
+        error:
+          schoolsErr?.message ??
+          `No institutions found in yi.institutions for city ${MOCK_CHAPTER_VENUE.city}. Seed yi.institutions first or change MOCK_CHAPTER_VENUE.city.`,
+      };
     }
+    const schools = schoolsRaw;
 
     // 4. Chapter event ──────────────────────────────────────────────────
     const chapterDay1 = daysFromToday(-1);
@@ -421,7 +426,7 @@ export async function seedMockData(): Promise<ActionResult<MockDataStats>> {
     const { data: chapterEvent, error: chapterEventErr } = await supabase
       .from("events")
       .insert({
-        season_id: season.id,
+        yi_year_id: season.id,
         name: MOCK_CHAPTER_EVENT_NAME,
         level: "chapter",
         status: "day2_live",
@@ -1320,7 +1325,7 @@ export async function seedMockData(): Promise<ActionResult<MockDataStats>> {
     const { data: regionalEvent } = await supabase
       .from("events")
       .insert({
-        season_id: season.id,
+        yi_year_id: season.id,
         name: MOCK_REGIONAL_EVENT_NAME,
         level: "regional",
         status: "results_published",
@@ -1384,7 +1389,7 @@ export async function seedMockData(): Promise<ActionResult<MockDataStats>> {
         target_event_id: regionalEvent.id,
         source_participant_id: top1.id,
         target_participant_id: rParts?.id ?? null,
-        season_id: season.id,
+        yi_year_id: season.id,
         full_name: top1.full_name,
         school_name: top1.school_name,
         source_rank: 1,
@@ -1442,7 +1447,7 @@ export async function seedMockData(): Promise<ActionResult<MockDataStats>> {
       const { data: nationalEvent } = await supabase
         .from("events")
         .insert({
-          season_id: season.id,
+          yi_year_id: season.id,
           name: MOCK_NATIONAL_EVENT_NAME,
           level: "national",
           status: "registration_closed",
@@ -1498,7 +1503,7 @@ export async function seedMockData(): Promise<ActionResult<MockDataStats>> {
           target_event_id: nationalEvent.id,
           source_participant_id: rParts.id,
           target_participant_id: nPart?.id ?? null,
-          season_id: season.id,
+          yi_year_id: season.id,
           full_name: top1.full_name,
           school_name: top1.school_name,
           source_rank: 1,
@@ -1779,9 +1784,10 @@ export async function wipeMockData(): Promise<
     await wipe("events", async () =>
       supabase.from("events").delete({ count: "exact" }).eq("is_mock", true)
     );
-    await wipe("schools", async () =>
-      supabase.from("schools").delete({ count: "exact" }).eq("is_mock", true)
-    );
+    // Post-absorption: schools live in yi.institutions (shared, no is_mock).
+    // Seeder no longer inserts there, so nothing to wipe. Keeping the named
+    // step in the report for traceability.
+    await wipe("schools", async () => ({ count: 0, error: null }));
     await wipe("contestants", async () =>
       supabase.from("contestants").delete({ count: "exact" }).eq("is_mock", true)
     );

@@ -28,7 +28,10 @@ export function QuizResultStep({
 }) {
   useEffect(() => {
     fireConfetti({ intensity: "normal" });
-  }, []);
+    try {
+      localStorage.setItem("yifuture_quiz_track", result.winner);
+    } catch { /* ignore */ }
+  }, [result.winner]);
 
   // Persist quiz result if the user already has a delegate session.
   // The server action returns { ok: false, error: "no session" } for

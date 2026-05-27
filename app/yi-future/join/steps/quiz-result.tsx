@@ -126,13 +126,12 @@ export function QuizResultStep({
         >
           Find my chapter →
         </Link>
-        <button
-          type="button"
-          onClick={onHaveCode}
-          className="flex-1 py-3 px-5 rounded-xl bg-white border-2 border-navy text-navy font-semibold hover:bg-navy hover:text-ivory transition-all"
+        <Link
+          href={`/yi-future/join?track=${encodeURIComponent(result.winner)}`}
+          className="flex-1 py-3 px-5 rounded-xl bg-white border-2 border-navy text-navy font-semibold hover:bg-navy hover:text-ivory transition-all text-center"
         >
           Register as delegate →
-        </button>
+        </Link>
       </div>
 
       <button

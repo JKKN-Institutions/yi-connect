@@ -71,7 +71,7 @@ export async function createMentor(
   // Upsert yi_directory.people — cross-app identity bridge
   if (email) {
     await svc
-      .schema("yi_directory")
+      .schema("yi_directory" as "public")
       .from("people")
       .upsert(
         {

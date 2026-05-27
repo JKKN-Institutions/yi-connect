@@ -82,7 +82,7 @@ export async function createDelegate(
 
     // Upsert yi_directory.people — cross-app identity bridge
     await svc
-      .schema("yi_directory")
+      .schema("yi_directory" as "public")
       .from("people")
       .upsert(
         {

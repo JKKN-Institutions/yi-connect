@@ -23,6 +23,7 @@ import {
   ClipboardPaste,
   Images,
   MessageCircleHeart,
+  Megaphone,
 } from "lucide-react";
 
 const TABS = [
@@ -36,6 +37,7 @@ const TABS = [
   { label: "Jury", href: "/jury", icon: Scale },
   { label: "Volunteers", href: "/volunteers", icon: Shield },
   { label: "Branding", href: "/branding", icon: ShieldCheck },
+  { label: "Topics", href: "/topics", icon: Megaphone },
   { label: "Questions", href: "/questions", icon: MessageSquare },
   { label: "Motions", href: "/motions", icon: Gavel },
   { label: "Bills", href: "/bills", icon: FileText },

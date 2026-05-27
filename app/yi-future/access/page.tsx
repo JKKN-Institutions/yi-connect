@@ -353,6 +353,14 @@ function EmailLoginTab() {
           {pending ? "Signing in…" : "Sign in"}
         </button>
       </form>
+      <div className="text-center">
+        <Link
+          href="/yi-future/access/forgot-password"
+          className="text-xs text-navy/50 hover:text-navy underline"
+        >
+          Forgot your password?
+        </Link>
+      </div>
       {error && (
         <div className="p-3 rounded-md bg-red-50 border border-red-200 text-sm text-red-700">
           {error}

@@ -3,6 +3,9 @@
 import { createClient } from "@/lib/yip/supabase/server";
 import { generateAccessCode } from "@/lib/yip/access-code";
 import { revalidatePath } from "next/cache";
+import type { Database } from "@/types/yip/database";
+
+type ParliamentRole = Database["public"]["Enums"]["parliament_role"];
 
 // ─── Types ─────────────────────────────────────────────────────────
 
@@ -426,3 +429,53 @@ export async function getParticipants(eventId: string) {
 
   return data ?? [];
 }
+export async function setParliamentRole(
+  participantId: string,
+  role: ParliamentRole | null
+): Promise<ActionResult<null>> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { success: false, error: "Not authenticated" };
+  }
+
+  // Look up the participant + event in one round-trip
+  const { data: participant } = await supabase
+    .from("participants")
+    .select("id, event_id")
+    .eq("id", participantId)
+    .single();
+
+  if (!participant) {
+    return { success: false, error: "Participant not found" };
+  }
+
+  // Verify event ownership
+  const { data: event } = await supabase
+    .from("events")
+    .select("id, created_by")
+    .eq("id", participant.event_id)
+    .single();
+
+  if (!event || event.created_by !== user.id) {
+    return { success: false, error: "Not authorized for this event" };
+  }
+
+  const { error } = await supabase
+    .from("participants")
+    .update({ parliament_role: role })
+    .eq("id", participantId);
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  revalidatePath(`/dashboard/events/${participant.event_id}/control`);
+  revalidatePath(`/dashboard/events/${participant.event_id}/participants`);
+  return { success: true, data: null };
+}
+
+

@@ -52,10 +52,49 @@ export async function assignTopicsToEvent(
 ): Promise<ActionResult<{ assigned: number }>> {
   const supabase = await createServiceClient();
 
+  // F2: For chapter-level events, enforce exactly-5 non-central
+  // (regional/committee) topics. Other levels (regional, national) are
+  // unconstrained. When setCentralFlag === true, this call is exclusively
+  // writing central topics (batch push); skip the count check.
+  if (!setCentralFlag) {
+    const { data: eventRow } = await supabase
+      .from("events")
+      .select("level")
+      .eq("id", eventId)
+      .single();
+
+    if (eventRow?.level === "chapter") {
+      const { data: topicRows } = await supabase
+        .from("topics")
+        .select("id, category")
+        .in("id", topicIds);
+
+      const nonCentralCount =
+        topicRows?.filter((t) => t.category !== "central").length ?? 0;
+
+      if (nonCentralCount !== 5) {
+        return {
+          success: false,
+          error: "Chapter events must have exactly 5 committee topics",
+        };
+      }
+    }
+  }
+
+  // Per-row is_central derivation: so the per-event save (which mixes
+  // central + regional in one call) tags rows correctly.
+  const { data: topicCategoryRows } = await supabase
+    .from("topics")
+    .select("id, category")
+    .in("id", topicIds);
+  const categoryById = new Map(
+    (topicCategoryRows ?? []).map((t) => [t.id, t.category])
+  );
+
   const rows = topicIds.map((tid, i) => ({
     event_id: eventId,
     topic_id: tid,
-    is_central: setCentralFlag,
+    is_central: setCentralFlag || categoryById.get(tid) === "central",
     sequence: i,
   }));
 
@@ -64,6 +103,18 @@ export async function assignTopicsToEvent(
     .upsert(rows, { onConflict: "event_id,topic_id" });
 
   if (error) return { success: false, error: error.message };
+
+  // F2: when per-event UI submits the full set (setCentralFlag=false),
+  // prune assignments not in the submitted list so removals work.
+  // Batch-push callers (setCentralFlag=true) only add.
+  if (!setCentralFlag && topicIds.length > 0) {
+    await supabase
+      .from("event_topics")
+      .delete()
+      .eq("event_id", eventId)
+      .not("topic_id", "in", `(${topicIds.join(",")})`);
+  }
+
   revalidatePath(`/dashboard/events/${eventId}`);
   revalidatePath(`/dashboard/events/${eventId}/topics`);
   return { success: true, data: { assigned: topicIds.length } };

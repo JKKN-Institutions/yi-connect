@@ -348,3 +348,135 @@ export async function getEventWithDetails(eventId: string) {
     juryCount: juryRes.data?.length ?? 0,
   };
 }
+// ─── Live Banner (F5) ──────────────────────────────────────────────
+// Push / clear a breaking-news banner that appears on the projector
+// display. Persisted on the events row AND broadcast over Realtime so
+// connected projector clients update without a postgres_changes round-trip.
+
+const LIVE_BANNER_MAX_LEN = 280;
+
+export async function pushLiveBanner(
+  eventId: string,
+  text: string
+): Promise<ActionResult<null>> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { success: false, error: "Not authenticated" };
+  }
+
+  const trimmed = (text ?? "").trim();
+  if (trimmed.length === 0) {
+    return { success: false, error: "Banner text is required" };
+  }
+  if (trimmed.length > LIVE_BANNER_MAX_LEN) {
+    return {
+      success: false,
+      error: `Banner text must be ${LIVE_BANNER_MAX_LEN} characters or fewer (got ${trimmed.length})`,
+    };
+  }
+
+  const { data: existing } = await supabase
+    .from("events")
+    .select("created_by")
+    .eq("id", eventId)
+    .single();
+
+  if (!existing || existing.created_by !== user.id) {
+    return { success: false, error: "Event not found or not authorized" };
+  }
+
+  // live_banner_* columns exist in DB (migration adding live_banner_text
+  // + live_banner_active) but may not be in generated types yet.
+  const patch = {
+    live_banner_text: trimmed,
+    live_banner_active: true,
+  } ;
+
+  const { error } = await supabase
+    .from("events")
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .update(patch)
+    .eq("id", eventId);
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  // Broadcast to connected projector clients on a dedicated channel.
+  const channel = supabase.channel(`yip:live-banner:${eventId}`);
+  await new Promise<void>((resolve) => {
+    channel.subscribe((status) => {
+      if (status === "SUBSCRIBED") resolve();
+    });
+    // Safety timeout so we never hang the server action.
+    setTimeout(resolve, 1500);
+  });
+  await channel.send({
+    type: "broadcast",
+    event: "update",
+    payload: { active: true, text: trimmed },
+  });
+  await supabase.removeChannel(channel);
+
+  revalidatePath(`/dashboard/events/${eventId}/control`);
+  return { success: true, data: null };
+}
+
+export async function clearLiveBanner(
+  eventId: string
+): Promise<ActionResult<null>> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { success: false, error: "Not authenticated" };
+  }
+
+  const { data: existing } = await supabase
+    .from("events")
+    .select("created_by")
+    .eq("id", eventId)
+    .single();
+
+  if (!existing || existing.created_by !== user.id) {
+    return { success: false, error: "Event not found or not authorized" };
+  }
+
+  const patch = {
+    live_banner_active: false,
+  } ;
+
+  const { error } = await supabase
+    .from("events")
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .update(patch)
+    .eq("id", eventId);
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  const channel = supabase.channel(`yip:live-banner:${eventId}`);
+  await new Promise<void>((resolve) => {
+    channel.subscribe((status) => {
+      if (status === "SUBSCRIBED") resolve();
+    });
+    setTimeout(resolve, 1500);
+  });
+  await channel.send({
+    type: "broadcast",
+    event: "update",
+    payload: { active: false, text: null },
+  });
+  await supabase.removeChannel(channel);
+
+  revalidatePath(`/dashboard/events/${eventId}/control`);
+  return { success: true, data: null };
+}
+

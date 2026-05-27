@@ -411,3 +411,71 @@ export async function adminBulkImport(
   revalidatePath("/dashboard/topics");
   return { success: true, data: { inserted: toInsert.length, skipped } };
 }
+
+// ─── F7: Batch push central topics to all chapter events ─────────────
+
+export async function pushCentralTopicsToAllChapterEvents(
+  yearId: string | null,
+  topicIds: string[]
+): Promise<ActionResult<{ events_updated: number; rows_upserted: number }>> {
+  if (topicIds.length === 0) {
+    return { success: false, error: "No topic IDs provided" };
+  }
+
+  const supabase = await createServiceClient();
+
+  // Find all chapter events. If a yearId is provided, scope to that year;
+  // otherwise scope to all chapter events.
+  let q = supabase.from("events").select("id").eq("level", "chapter");
+  if (yearId) q = q.eq("yi_year_id", yearId);
+
+  const { data: events, error: eventsError } = await q;
+  if (eventsError) return { success: false, error: eventsError.message };
+  if (!events || events.length === 0) {
+    return { success: true, data: { events_updated: 0, rows_upserted: 0 } };
+  }
+
+  const rows: Array<{
+    event_id: string;
+    topic_id: string;
+    is_central: boolean;
+  }> = [];
+  for (const ev of events) {
+    for (const tid of topicIds) {
+      rows.push({ event_id: ev.id, topic_id: tid, is_central: true });
+    }
+  }
+
+  const { error } = await supabase
+    .from("event_topics")
+    .upsert(rows, { onConflict: "event_id,topic_id" });
+
+  if (error) return { success: false, error: error.message };
+
+  for (const ev of events) {
+    revalidatePath(`/dashboard/events/${ev.id}/topics`);
+  }
+  revalidatePath("/dashboard/admin/topics");
+
+  return {
+    success: true,
+    data: { events_updated: events.length, rows_upserted: rows.length },
+  };
+}
+
+/**
+ * Get the yi.years id for a given calendar year (e.g. 2026). Used by the
+ * batch-push UI to scope to the active season's chapter events.
+ */
+export async function getYiYearIdForYear(year: number): Promise<string | null> {
+  const supabase = await createServiceClient();
+  const { data } = await supabase
+    .schema("yi")
+    .from("years")
+    .select("id")
+    .eq("year", year)
+    .eq("is_active", true)
+    .limit(1)
+    .maybeSingle();
+  return data?.id ?? null;
+}

@@ -6,6 +6,7 @@ import { ROLE_LABELS, PARTY_COLORS, MINISTRIES, OATH_TEXT } from "@/lib/yip/cons
 import { useRealtimeEvent } from "@/lib/yip/hooks/use-realtime-event";
 import { useVoteSession } from "@/lib/yip/hooks/use-vote-session";
 import { useTimer } from "@/lib/yip/hooks/use-timer";
+import { useLiveBanner } from "@/lib/yip/hooks/use-live-banner";
 import { createClient } from "@/lib/yip/supabase/client";
 
 interface SpeakerInfo {
@@ -67,6 +68,13 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
   const timer = useTimer(
     event?.live_timer_end ?? null,
     event?.live_timer_running ?? false
+  );
+
+  // F5 — live banner (breaking-news strip)
+  const liveBanner = useLiveBanner(
+    eventId,
+    (event?.live_banner_active ?? false) === true,
+    event?.live_banner_text ?? null
   );
 
   // Fetch vote candidates/bill info when vote session changes
@@ -323,6 +331,18 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
 
   return (
     <div className="flex min-h-screen flex-col bg-gray-950 text-white">
+      {/* F5 — Live banner (fixed at top, above everything) */}
+      {liveBanner.active && liveBanner.text && (
+        <div
+          className="fixed inset-x-0 top-0 z-50 flex w-full items-center justify-center gap-4 bg-[#dc2626] px-8 py-4 text-3xl font-bold text-white shadow-lg animate-pulse"
+          role="status"
+          aria-live="polite"
+        >
+          <span className="inline-block size-4 shrink-0 rounded-full bg-white" />
+          <span className="break-words text-center">{liveBanner.text}</span>
+        </div>
+      )}
+
       {/* Indian tricolor accent bar */}
       <div className="flex h-2 w-full">
         <div className="flex-1 bg-[#FF9933]" />

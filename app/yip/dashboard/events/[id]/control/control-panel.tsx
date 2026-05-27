@@ -32,14 +32,16 @@ import {
   Monitor,
   ListOrdered,
   Lock,
+  Megaphone,
 } from "lucide-react";
 import { Switch } from "@/components/yip/ui/switch";
+import { Textarea } from "@/components/yip/ui/textarea";
 import { cn } from "@/lib/yip/utils";
 import { ROLE_LABELS, ROLE_COLORS, PARTY_COLORS } from "@/lib/yip/constants";
 import { useRealtimeEvent } from "@/lib/yip/hooks/use-realtime-event";
 import { useTimer } from "@/lib/yip/hooks/use-timer";
 import { advanceAgenda, startAgendaItem, skipAgendaItem, updateEventStatus } from "@/app/yip/actions/agenda";
-import { setAllocationLocked, setScoresLocked, setRegistrationsFrozen } from "@/app/yip/actions/events";
+import { setAllocationLocked, setScoresLocked, setRegistrationsFrozen, pushLiveBanner, clearLiveBanner } from "@/app/yip/actions/events";
 import { startTimer, stopTimer, resetTimer } from "@/app/yip/actions/timer";
 import { advanceSpeaker, skipSpeaker, generateSpeakerQueue, getSpeakerQueue } from "@/app/yip/actions/speakers";
 import { QuestionHourPanel } from "./question-hour";
@@ -1035,6 +1037,116 @@ export function ControlPanel({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* === F5: Live Banner (broadcast to projector) === */}
+      <LiveBannerBroadcastSection
+        eventId={eventId}
+        initialActive={(event.live_banner_active ?? false) === true}
+        initialText={event.live_banner_text ?? null}
+      />
     </div>
+  );
+}
+
+// ─── F5 Live Banner Broadcast Section ──────────────────────────────
+function LiveBannerBroadcastSection({
+  eventId,
+  initialActive,
+  initialText,
+}: {
+  eventId: string;
+  initialActive: boolean;
+  initialText: string | null;
+}) {
+  const [text, setText] = useState(initialText ?? "");
+  const [active, setActive] = useState(initialActive);
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  const MAX = 280;
+  const trimmed = text.trim();
+  const remaining = MAX - trimmed.length;
+  const canPush = trimmed.length > 0 && trimmed.length <= MAX && !pending;
+
+  function onPush() {
+    if (!canPush) return;
+    setError(null);
+    startTransition(async () => {
+      const result = await pushLiveBanner(eventId, trimmed);
+      if (result.success) {
+        setActive(true);
+      } else {
+        setError(result.error);
+      }
+    });
+  }
+
+  function onClear() {
+    setError(null);
+    startTransition(async () => {
+      const result = await clearLiveBanner(eventId);
+      if (result.success) {
+        setActive(false);
+        setText("");
+      } else {
+        setError(result.error);
+      }
+    });
+  }
+
+  return (
+    <Card className="border-red-200/60">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center gap-2">
+          <Megaphone className="size-4" />
+          Broadcast (Projector Banner)
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="space-y-2">
+          <Textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            maxLength={MAX}
+            placeholder="Breaking news — appears on projector screen"
+            className="min-h-[80px]"
+            disabled={pending}
+          />
+          <div className="flex items-center justify-between text-xs text-[#1a1a3e]/60">
+            <span>{remaining} chars remaining</span>
+            {active ? (
+              <span className="font-medium text-red-700 flex items-center gap-1">
+                <span className="inline-block size-2 rounded-full bg-red-600 animate-pulse" />
+                LIVE
+              </span>
+            ) : (
+              <span>Not broadcasting</span>
+            )}
+          </div>
+        </div>
+        {error && (
+          <div className="rounded border border-red-200 bg-red-50 text-red-700 text-xs p-2">
+            {error}
+          </div>
+        )}
+        <div className="flex gap-2">
+          <Button
+            onClick={onPush}
+            disabled={!canPush}
+            className="flex-1 gap-1.5"
+          >
+            <Megaphone className="size-3.5" />
+            {active ? "Update banner" : "Push to projector"}
+          </Button>
+          <Button
+            onClick={onClear}
+            disabled={pending || !active}
+            variant="outline"
+          >
+            Clear
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

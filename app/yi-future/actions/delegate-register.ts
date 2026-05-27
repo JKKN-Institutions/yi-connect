@@ -385,7 +385,7 @@ export async function registerDelegate(
   // Upsert into yi_directory.people — cross-app identity bridge
   const authUserId = authData?.user?.id ?? null;
   await svc
-    .schema("yi_directory")
+    .schema("yi_directory" as "public")
     .from("people")
     .upsert(
       {

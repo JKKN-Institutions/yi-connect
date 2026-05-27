@@ -1261,6 +1261,8 @@ export type Database = {
           ingestion_enabled: boolean
           is_mock: boolean
           level: Database["public"]["Enums"]["event_level"]
+          live_banner_active: boolean
+          live_banner_text: string | null
           live_timer_end: string | null
           live_timer_label: string | null
           live_timer_running: boolean | null
@@ -1300,6 +1302,8 @@ export type Database = {
           ingestion_enabled?: boolean
           is_mock?: boolean
           level?: Database["public"]["Enums"]["event_level"]
+          live_banner_active?: boolean
+          live_banner_text?: string | null
           live_timer_end?: string | null
           live_timer_label?: string | null
           live_timer_running?: boolean | null
@@ -1339,6 +1343,8 @@ export type Database = {
           ingestion_enabled?: boolean
           is_mock?: boolean
           level?: Database["public"]["Enums"]["event_level"]
+          live_banner_active?: boolean
+          live_banner_text?: string | null
           live_timer_end?: string | null
           live_timer_label?: string | null
           live_timer_running?: boolean | null
@@ -1852,6 +1858,7 @@ export type Database = {
           id: string
           is_active: boolean | null
           is_mock: boolean
+          login_slug: string | null
           person_id: string | null
           photo_url: string | null
           role: Database["public"]["Enums"]["yi_role"]
@@ -1869,6 +1876,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           is_mock?: boolean
+          login_slug?: string | null
           person_id?: string | null
           photo_url?: string | null
           role?: Database["public"]["Enums"]["yi_role"]
@@ -1886,6 +1894,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           is_mock?: boolean
+          login_slug?: string | null
           person_id?: string | null
           photo_url?: string | null
           role?: Database["public"]["Enums"]["yi_role"]
@@ -2084,6 +2093,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      position_bonus_config: {
+        Row: {
+          bonuses: Json
+          id: boolean
+          updated_at: string
+        }
+        Insert: {
+          bonuses: Json
+          id?: boolean
+          updated_at?: string
+        }
+        Update: {
+          bonuses?: Json
+          id?: boolean
+          updated_at?: string
+        }
+        Relationships: []
       }
       promotions: {
         Row: {
@@ -2455,6 +2482,24 @@ export type Database = {
           },
         ]
       }
+      scoring_flags_config: {
+        Row: {
+          deltas: Json
+          id: boolean
+          updated_at: string
+        }
+        Insert: {
+          deltas: Json
+          id?: boolean
+          updated_at?: string
+        }
+        Update: {
+          deltas?: Json
+          id?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
       scores: {
         Row: {
           agenda_item_id: string | null
@@ -2462,10 +2507,15 @@ export type Database = {
           created_at: string | null
           criteria_scores: Json
           event_id: string
+          flag_no_confidence_brought: boolean
+          flag_ruckus: boolean
+          flag_suspension: boolean
+          flag_walkout: boolean
           id: string
           is_mock: boolean
           jury_assignment_id: string
           participant_id: string
+          position_bonus: number
           rubric_id: string
           status: Database["public"]["Enums"]["score_status"] | null
           submitted_at: string | null
@@ -2478,10 +2528,15 @@ export type Database = {
           created_at?: string | null
           criteria_scores: Json
           event_id: string
+          flag_no_confidence_brought?: boolean
+          flag_ruckus?: boolean
+          flag_suspension?: boolean
+          flag_walkout?: boolean
           id?: string
           is_mock?: boolean
           jury_assignment_id: string
           participant_id: string
+          position_bonus?: number
           rubric_id: string
           status?: Database["public"]["Enums"]["score_status"] | null
           submitted_at?: string | null
@@ -2494,10 +2549,15 @@ export type Database = {
           created_at?: string | null
           criteria_scores?: Json
           event_id?: string
+          flag_no_confidence_brought?: boolean
+          flag_ruckus?: boolean
+          flag_suspension?: boolean
+          flag_walkout?: boolean
           id?: string
           is_mock?: boolean
           jury_assignment_id?: string
           participant_id?: string
+          position_bonus?: number
           rubric_id?: string
           status?: Database["public"]["Enums"]["score_status"] | null
           submitted_at?: string | null

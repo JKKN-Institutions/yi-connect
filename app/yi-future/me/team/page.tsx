@@ -487,7 +487,7 @@ export default async function MyTeamPage() {
                         </div>
                       </div>
                       {p.full_description && (
-                        <details className="mt-3" onClick={(e) => e.stopPropagation()}>
+                        <details className="mt-3">
                           <summary className="text-xs font-semibold cursor-pointer hover:text-[#F5A623]" style={{ color }}>
                             Read full description
                           </summary>

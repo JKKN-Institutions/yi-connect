@@ -240,6 +240,7 @@ export function RegisterStep({
         travel_commitment: form.travel_commitment === "yes",
         declaration_accepted: form.declaration_accepted,
         password: form.password,
+        preferred_track_slug: preferredTrack || undefined,
       });
       if (res.ok) {
         try {

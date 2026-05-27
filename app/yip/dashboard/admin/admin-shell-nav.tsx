@@ -13,6 +13,7 @@ import {
   ShieldCheck,
   UserCircle,
   Database,
+  KeyRound,
 } from "lucide-react";
 
 const NAV = [
@@ -22,6 +23,7 @@ const NAV = [
   { label: "Topics", href: "/dashboard/admin/topics", icon: BookOpen },
   { label: "Checklist Template", href: "/dashboard/admin/checklist", icon: ListChecks },
   { label: "National Team", href: "/dashboard/admin/team", icon: Users },
+  { label: "Chapter Admins", href: "/dashboard/admin/chapter-admins", icon: KeyRound },
   { label: "Seasons", href: "/dashboard/admin/seasons", icon: CalendarRange },
   { label: "Branding Rules", href: "/dashboard/admin/branding-rules", icon: ShieldCheck },
   { label: "Mock Data", href: "/dashboard/admin/mock-data", icon: Database },

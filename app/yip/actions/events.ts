@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/yip/supabase/server";
 import { DEFAULT_AGENDA_TEMPLATE } from "@/lib/yip/constants";
 import { revalidatePath } from "next/cache";
+import { attachCentralTopicsToEvent } from "./admin-topics";
 
 // ─── Types ─────────────────────────────────────────────────────────
 
@@ -146,6 +147,20 @@ export async function createEvent(
       .insert(checklistRows);
     if (checklistError) {
       console.error("Failed to seed checklist:", checklistError.message);
+    }
+  }
+
+  // Auto-inherit active central topics for chapter-level events. Chapter
+  // organizers can then remove ones they don't want and pick their 5.
+  // Failure here MUST NOT roll back the event — the event should exist
+  // even if no central topics are active or the upsert fails.
+  if (data.level === "chapter") {
+    const attachResult = await attachCentralTopicsToEvent(event.id);
+    if (!attachResult.success) {
+      console.error(
+        "Failed to auto-attach central topics to chapter event:",
+        attachResult.error
+      );
     }
   }
 

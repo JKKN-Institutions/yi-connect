@@ -412,6 +412,50 @@ export async function adminBulkImport(
   return { success: true, data: { inserted: toInsert.length, skipped } };
 }
 
+// ─── Shared helper: attach central topics to a single event ──────────
+// Used by both pushCentralTopicsToAllChapterEvents (F7 batch re-sync) and
+// createEvent (auto-inherit on chapter event creation).
+//
+// Idempotent: relies on the (event_id, topic_id) unique constraint via
+// onConflict upsert. Topics are NOT year-scoped, so yearId is unused
+// for filtering topics — kept in the signature only as documentation.
+//
+// Returns the number of rows upserted, or 0 if no active central topics
+// exist (which is a legitimate no-op, not an error).
+
+export async function attachCentralTopicsToEvent(
+  eventId: string,
+  _yearId: string | null = null
+): Promise<ActionResult<{ rows_upserted: number }>> {
+  const supabase = await createServiceClient();
+
+  // Read all active central topic IDs.
+  const { data: topics, error: topicsError } = await supabase
+    .from("topics")
+    .select("id")
+    .eq("category", "central")
+    .eq("is_active", true);
+
+  if (topicsError) return { success: false, error: topicsError.message };
+  if (!topics || topics.length === 0) {
+    return { success: true, data: { rows_upserted: 0 } };
+  }
+
+  const rows = topics.map((t) => ({
+    event_id: eventId,
+    topic_id: t.id,
+    is_central: true,
+  }));
+
+  const { error } = await supabase
+    .from("event_topics")
+    .upsert(rows, { onConflict: "event_id,topic_id" });
+
+  if (error) return { success: false, error: error.message };
+
+  return { success: true, data: { rows_upserted: rows.length } };
+}
+
 // ─── F7: Batch push central topics to all chapter events ─────────────
 
 export async function pushCentralTopicsToAllChapterEvents(
@@ -435,6 +479,9 @@ export async function pushCentralTopicsToAllChapterEvents(
     return { success: true, data: { events_updated: 0, rows_upserted: 0 } };
   }
 
+  // NOTE: F7 still uses the caller-supplied topicIds (not all active
+  // centrals) so admins can selectively re-sync a subset. Behavior is
+  // preserved exactly — we do not route F7 through the new helper.
   const rows: Array<{
     event_id: string;
     topic_id: string;

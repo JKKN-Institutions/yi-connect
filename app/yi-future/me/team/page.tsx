@@ -502,12 +502,12 @@ export default async function MyTeamPage() {
                 );
               })}
               <div className="flex justify-end pt-2">
-                <button
-                  type="submit"
+                <SubmitButton
+                  pendingText="Saving..."
                   className="px-6 py-2.5 rounded-xl bg-[#F5A623] text-navy text-sm font-bold hover:bg-[#F5A623]/90 shadow-md hover:shadow-lg transition-all"
                 >
                   Pick this problem
-                </button>
+                </SubmitButton>
               </div>
             </form>
           )}
@@ -552,12 +552,12 @@ export default async function MyTeamPage() {
                   </option>
                 ))}
               </select>
-              <button
-                type="submit"
+              <SubmitButton
+                pendingText="Updating..."
                 className="px-4 py-2 rounded-md bg-navy text-ivory text-sm font-semibold hover:bg-navy-dark"
               >
                 Change leader
-              </button>
+              </SubmitButton>
             </form>
           )}
           {isFrozen && (
@@ -616,12 +616,12 @@ export default async function MyTeamPage() {
                       will all be locked. Continue?
                     </p>
                     <form action={freezeAction} className="flex gap-2">
-                      <button
-                        type="submit"
+                      <SubmitButton
+                        pendingText="Locking..."
                         className="px-4 py-2 rounded-md bg-red-600 text-white text-sm font-bold hover:bg-red-700"
                       >
                         Yes, submit and lock
-                      </button>
+                      </SubmitButton>
                     </form>
                   </div>
                 )}

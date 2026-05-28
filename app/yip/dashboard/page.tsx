@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/yip/supabase/server";
 import { isCurrentUserSuperAdmin } from "@/lib/yip/auth/require-super-admin";
+import { getRegionalAdminZones } from "@/lib/yi/auth/yi-directory-roles";
 import { Badge } from "@/components/yip/ui/badge";
 import { Plus, CalendarDays, Users, MapPin } from "lucide-react";
 
@@ -75,10 +76,24 @@ export default async function DashboardPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Fetch events — super-admin sees all, others see their own.
+  // Three-tier event visibility (2026-05-28):
+  //  - Super-admin (national)  → ALL events
+  //  - Regional admin          → events in their assigned zone(s) + their own
+  //  - Everyone else           → only events they created
   const isSuper = await isCurrentUserSuperAdmin();
+  const regionalZones = isSuper ? [] : await getRegionalAdminZones("yip");
   let eventsQuery = supabase.from("events").select("*");
-  if (!isSuper) eventsQuery = eventsQuery.eq("created_by", user!.id);
+  if (!isSuper) {
+    if (regionalZones.length > 0) {
+      // Postgrest "or" filter: own events OR events in any of my zones.
+      const zoneCsv = regionalZones.map((z) => `"${z}"`).join(",");
+      eventsQuery = eventsQuery.or(
+        `created_by.eq.${user!.id},yi_zone_code.in.(${zoneCsv})`
+      );
+    } else {
+      eventsQuery = eventsQuery.eq("created_by", user!.id);
+    }
+  }
   const { data: events } = await eventsQuery.order("created_at", { ascending: false });
 
   // Fetch participant counts for each event

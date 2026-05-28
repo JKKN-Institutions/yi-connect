@@ -23,6 +23,7 @@ export type RoleAssignment = {
   role: string;
   yi_year: number;
   yi_chapter: string | null;
+  yi_zone: string | null;
   is_active: boolean;
 };
 
@@ -64,7 +65,7 @@ export async function getCurrentPersonRoles(): Promise<PersonRoles | null> {
   const { data: rows, error: rowsErr } = await svc
     .schema("yi_directory")
     .from("role_assignments")
-    .select("app, role, yi_year, yi_chapter, is_active")
+    .select("app, role, yi_year, yi_chapter, yi_zone, is_active")
     .eq("person_id", person.id);
 
   if (rowsErr) return null;
@@ -74,6 +75,7 @@ export async function getCurrentPersonRoles(): Promise<PersonRoles | null> {
     role: r.role,
     yi_year: r.yi_year,
     yi_chapter: r.yi_chapter,
+    yi_zone: r.yi_zone,
     is_active: r.is_active ?? false,
   }));
 
@@ -126,4 +128,46 @@ export async function isPlatformSuperAdmin(): Promise<boolean> {
   return me.assignments.some(
     (a) => a.is_active && a.role === "super_admin"
   );
+}
+
+/**
+ * Regional admin zones for the current user, within a given app.
+ *
+ * Returns the list of `yi_zone` codes (e.g. ['ER', 'NER']) where this user
+ * has an active `role='regional_admin'` assignment for the given app. Empty
+ * array if the user is not a regional admin anywhere (or not signed in).
+ *
+ * Provisioned 2026-05-28: 6 YIP RMs hold one zone each (ER, NER, NR, WR,
+ * SRTN, SRTKKA). National admins (role='national') are NOT regional admins —
+ * they're scoped wider via requireSuperAdmin/isCurrentUserSuperAdmin.
+ */
+export async function getRegionalAdminZones(
+  app: string,
+  yi_year?: number
+): Promise<string[]> {
+  const me = await getCurrentPersonRoles();
+  if (!me) return [];
+
+  const zones = new Set<string>();
+  for (const a of me.assignments) {
+    if (!a.is_active) continue;
+    if (a.app !== app) continue;
+    if (a.role !== "regional_admin") continue;
+    if (yi_year !== undefined && a.yi_year !== yi_year) continue;
+    if (a.yi_zone) zones.add(a.yi_zone);
+  }
+  return Array.from(zones);
+}
+
+/**
+ * Convenience predicate — true if the current user is an active regional
+ * admin for the given app + zone. Used by event-level read gates.
+ */
+export async function isRegionalAdminForZone(
+  app: string,
+  zoneCode: string,
+  yi_year?: number
+): Promise<boolean> {
+  const zones = await getRegionalAdminZones(app, yi_year);
+  return zones.includes(zoneCode);
 }

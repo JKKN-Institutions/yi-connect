@@ -4,8 +4,12 @@ import { createClient } from "@/lib/yip/supabase/server";
 import { DEFAULT_AGENDA_TEMPLATE } from "@/lib/yip/constants";
 import { logAuditAction } from "@/lib/yip/audit/log-action";
 import { isCurrentUserSuperAdmin } from "@/lib/yip/auth/require-super-admin";
+import { getRegionalAdminZones } from "@/lib/yi/auth/yi-directory-roles";
 import { revalidatePath } from "next/cache";
 import { attachCentralTopicsToEvent } from "./admin-topics";
+import type { Database } from "@/types/yip/database";
+
+type EventRow = Database["yip"]["Tables"]["events"]["Row"];
 
 // ─── Types ─────────────────────────────────────────────────────────
 
@@ -235,11 +239,32 @@ export async function getEvent(eventId: string) {
     return null;
   }
 
-  // Super-admin (role='national') can read any event; others scoped to their own.
+  // Three-tier access (2026-05-28 regional-admin gate):
+  // 1. Super-admin (role='national') — read ANY event
+  // 2. Regional admin (role='regional_admin' for app='yip') — read events whose
+  //    yi_zone_code matches one of their assigned zones
+  // 3. Everyone else — only events they created
   const isSuper = await isCurrentUserSuperAdmin();
-  let query = supabase.from("events").select("*").eq("id", eventId);
-  if (!isSuper) query = query.eq("created_by", user.id);
-  const { data: event } = await query.single();
+  let event: EventRow | null = null;
+  if (isSuper) {
+    const { data } = await supabase.from("events").select("*").eq("id", eventId).single();
+    event = data;
+  } else {
+    // Fetch unfiltered first so we can check yi_zone_code against the user's
+    // regional-admin zones before deciding visibility.
+    const { data } = await supabase.from("events").select("*").eq("id", eventId).single();
+    if (data) {
+      const isOwner = data.created_by === user.id;
+      if (isOwner) {
+        event = data;
+      } else {
+        const regionalZones = await getRegionalAdminZones("yip");
+        if (data.yi_zone_code && regionalZones.includes(data.yi_zone_code)) {
+          event = data;
+        }
+      }
+    }
+  }
 
   if (!event) return null;
 
@@ -343,10 +368,24 @@ export async function getEventWithDetails(eventId: string) {
     return null;
   }
 
+  // Three-tier access — super-admin, regional admin, or owner. Same gate as
+  // getEvent above. Duplicated for now since getEventWithDetails has its own
+  // join shape; factor out if we add a fourth gate site.
   const isSuper = await isCurrentUserSuperAdmin();
-  let query = supabase.from("events").select("*").eq("id", eventId);
-  if (!isSuper) query = query.eq("created_by", user.id);
-  const { data: event } = await query.single();
+  let event: EventRow | null = null;
+  {
+    const { data } = await supabase.from("events").select("*").eq("id", eventId).single();
+    if (data) {
+      if (isSuper || data.created_by === user.id) {
+        event = data;
+      } else {
+        const regionalZones = await getRegionalAdminZones("yip");
+        if (data.yi_zone_code && regionalZones.includes(data.yi_zone_code)) {
+          event = data;
+        }
+      }
+    }
+  }
 
   if (!event) return null;
 

@@ -1,7 +1,8 @@
 /**
- * New Event Page
+ * New Event Form (client component)
  *
- * Create a new sub-chapter event.
+ * Receives sub_chapter_id as a prop from the server page wrapper
+ * so it no longer depends on the legacy chapter-lead cookie.
  */
 
 'use client'
@@ -42,7 +43,11 @@ const eventTypes = Object.entries(SUB_CHAPTER_EVENT_TYPE_INFO).map(([value, info
   description: info.description,
 }))
 
-export default function NewEventPage() {
+interface NewEventFormProps {
+  subChapterId: string
+}
+
+export function NewEventForm({ subChapterId }: NewEventFormProps) {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -56,18 +61,6 @@ export default function NewEventPage() {
 
     const formData = new FormData(e.currentTarget)
     const submitAction = (e.nativeEvent as SubmitEvent).submitter?.getAttribute('data-action')
-
-    // Get sub_chapter_id from cookie (will be read server-side)
-    const subChapterId = document.cookie
-      .split('; ')
-      .find((row) => row.startsWith('sub_chapter_id='))
-      ?.split('=')[1]
-
-    if (!subChapterId) {
-      setError('Session expired. Please login again.')
-      setIsLoading(false)
-      return
-    }
 
     const result = await createSubChapterEvent({
       sub_chapter_id: subChapterId,
@@ -103,7 +96,7 @@ export default function NewEventPage() {
       }
     }
 
-    router.push('/chapter-lead/events')
+    router.push('/sub-chapter/events')
     router.refresh()
   }
 
@@ -115,7 +108,7 @@ export default function NewEventPage() {
       {/* Header */}
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" asChild>
-          <Link href="/chapter-lead/events">
+          <Link href="/sub-chapter/events">
             <ArrowLeft className="h-5 w-5" />
           </Link>
         </Button>

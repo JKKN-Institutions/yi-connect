@@ -5,9 +5,9 @@
  */
 
 import { Suspense } from 'react'
-import { cookies } from 'next/headers'
-import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import { requireRole } from '@/lib/auth'
+import { createServerSupabaseClient } from '@/lib/supabase/server'
 import {
   Card,
   CardContent,
@@ -38,30 +38,39 @@ import { getSubChapterMembers } from '@/lib/data/sub-chapters'
 import { updateMemberStatus } from '@/app/actions/sub-chapters'
 
 export const metadata = {
-  title: 'Members | Chapter Lead Portal',
+  title: 'Sub-Chapter Members | Yi Connect',
   description: 'Manage your chapter members',
 }
 
-async function getSession() {
-  const cookieStore = await cookies()
-  const leadId = cookieStore.get('chapter_lead_id')?.value
-  const subChapterId = cookieStore.get('sub_chapter_id')?.value
-
-  if (!leadId || !subChapterId) {
-    return null
-  }
-
-  return { leadId, subChapterId }
+async function getSubChapterIdForUser(userId: string): Promise<string | null> {
+  const supabase = await createServerSupabaseClient()
+  const { data } = await supabase
+    .schema('yi_connect')
+    .from('sub_chapter_leads')
+    .select('sub_chapter_id')
+    .eq('member_id', userId)
+    .eq('is_active', true)
+    .maybeSingle()
+  return data?.sub_chapter_id ?? null
 }
 
 async function MembersContent() {
-  const session = await getSession()
+  const { user } = await requireRole(['Sub-Chapter Lead', 'Super Admin', 'National Admin'])
 
-  if (!session) {
-    redirect('/chapter-lead/login')
+  const subChapterId = await getSubChapterIdForUser(user.id)
+  if (!subChapterId) {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center">
+          <p className="text-muted-foreground">
+            No active sub-chapter is linked to your account.
+          </p>
+        </CardContent>
+      </Card>
+    )
   }
 
-  const members = await getSubChapterMembers(session.subChapterId)
+  const members = await getSubChapterMembers(subChapterId)
 
   const activeMembers = members.filter((m) => m.is_active)
   const inactiveMembers = members.filter((m) => !m.is_active)
@@ -77,7 +86,7 @@ async function MembersContent() {
           </p>
         </div>
         <Button asChild className="gap-2">
-          <Link href="/chapter-lead/members/add">
+          <Link href="/sub-chapter/members/add">
             <Plus className="h-4 w-4" />
             Add Members
           </Link>
@@ -187,7 +196,7 @@ async function MembersContent() {
               <Users className="mx-auto h-12 w-12 text-muted-foreground opacity-50" />
               <p className="mt-4 text-muted-foreground">No members yet</p>
               <Button asChild className="mt-4">
-                <Link href="/chapter-lead/members/add">Add Members</Link>
+                <Link href="/sub-chapter/members/add">Add Members</Link>
               </Button>
             </div>
           )}

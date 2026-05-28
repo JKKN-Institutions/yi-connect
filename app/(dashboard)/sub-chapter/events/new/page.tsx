@@ -1,8 +1,8 @@
 /**
- * Add Sub-Chapter Members Page (server shell)
+ * New Sub-Chapter Event Page (server shell)
  *
- * Resolves the user's sub_chapter_id server-side and passes it
- * to the client form. Replaces the legacy chapter-lead cookie flow.
+ * Resolves the user's sub_chapter_id server-side via Supabase auth
+ * and passes it to the client form. Replaces the legacy cookie flow.
  */
 
 import Link from 'next/link'
@@ -10,11 +10,11 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { requireRole } from '@/lib/auth'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
-import { AddMembersForm } from './add-members-form'
+import { NewEventForm } from './new-event-form'
 
 export const metadata = {
-  title: 'Add Sub-Chapter Members | Yi Connect',
-  description: 'Add new students to your sub-chapter',
+  title: 'Create Sub-Chapter Event | Yi Connect',
+  description: 'Create a new sub-chapter event',
 }
 
 async function getSubChapterIdForUser(userId: string): Promise<string | null> {
@@ -29,7 +29,7 @@ async function getSubChapterIdForUser(userId: string): Promise<string | null> {
   return data?.sub_chapter_id ?? null
 }
 
-export default async function AddSubChapterMembersPage() {
+export default async function NewSubChapterEventPage() {
   const { user } = await requireRole(['Sub-Chapter Lead', 'Super Admin', 'National Admin'])
   const subChapterId = await getSubChapterIdForUser(user.id)
 
@@ -49,5 +49,5 @@ export default async function AddSubChapterMembersPage() {
     )
   }
 
-  return <AddMembersForm subChapterId={subChapterId} />
+  return <NewEventForm subChapterId={subChapterId} />
 }

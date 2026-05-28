@@ -19,11 +19,11 @@ import {
 import { cn } from "@/lib/yip/utils";
 
 const navItems = [
-  { label: "My Events", href: "/dashboard", icon: CalendarDays },
-  { label: "Topics", href: "/dashboard/topics", icon: BookOpen },
-  { label: "Schools", href: "/dashboard/schools", icon: School },
-  { label: "Zones", href: "/dashboard/zones", icon: Globe },
-  { label: "Admin", href: "/dashboard/admin", icon: LayoutGrid },
+  { label: "My Events", href: "/yip/dashboard", icon: CalendarDays },
+  { label: "Topics", href: "/yip/dashboard/topics", icon: BookOpen },
+  { label: "Schools", href: "/yip/dashboard/schools", icon: School },
+  { label: "Zones", href: "/yip/dashboard/zones", icon: Globe },
+  { label: "Admin", href: "/yip/dashboard/admin", icon: LayoutGrid },
 ];
 
 export function DashboardShell({
@@ -107,8 +107,8 @@ export function DashboardShell({
             <div className="space-y-1">
               {navItems.map((item) => {
                 const isActive =
-                  item.href === "/dashboard"
-                    ? pathname === "/dashboard" || pathname.startsWith("/dashboard/events")
+                  item.href === "/yip/dashboard"
+                    ? pathname === "/yip/dashboard" || pathname.startsWith("/yip/dashboard/events")
                     : pathname.startsWith(item.href);
                 return (
                   <Link

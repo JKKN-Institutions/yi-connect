@@ -98,7 +98,7 @@ export default async function EventOverviewPage({
       title: "Add Participants",
       description:
         "Add students individually or import from CSV to get started",
-      href: `/dashboard/events/${id}/participants`,
+      href: `/yip/dashboard/events/${id}/participants`,
       icon: UserPlus,
       iconBg: "bg-[#FF9933]/10 text-[#FF9933]",
     });
@@ -106,7 +106,7 @@ export default async function EventOverviewPage({
       title: "Run Allocation",
       description:
         "Assign parties, roles, and ministries to all participants",
-      href: `/dashboard/events/${id}/allocation`,
+      href: `/yip/dashboard/events/${id}/allocation`,
       icon: Shuffle,
       iconBg: "bg-[#1a1a3e]/5 text-[#1a1a3e]",
     });
@@ -116,7 +116,7 @@ export default async function EventOverviewPage({
     actionCards.push({
       title: "Import Students",
       description: "Bulk import students from a CSV file",
-      href: `/dashboard/events/${id}/participants`,
+      href: `/yip/dashboard/events/${id}/participants`,
       icon: Upload,
       iconBg: "bg-[#FF9933]/10 text-[#FF9933]",
     });
@@ -129,7 +129,7 @@ export default async function EventOverviewPage({
     actionCards.push({
       title: "Go Live",
       description: "Start Day 1 of the parliament session",
-      href: `/dashboard/events/${id}/control`,
+      href: `/yip/dashboard/events/${id}/control`,
       icon: Radio,
       iconBg: "bg-[#138808]/10 text-[#138808]",
     });
@@ -139,7 +139,7 @@ export default async function EventOverviewPage({
     actionCards.push({
       title: "Open Control Panel",
       description: "Manage the live session agenda and timers",
-      href: `/dashboard/events/${id}/control`,
+      href: `/yip/dashboard/events/${id}/control`,
       icon: Radio,
       iconBg: "bg-[#138808]/10 text-[#138808]",
     });

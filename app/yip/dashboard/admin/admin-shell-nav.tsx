@@ -18,17 +18,17 @@ import {
 } from "lucide-react";
 
 const NAV = [
-  { label: "Pipeline", href: "/dashboard/admin", icon: GitBranch, exact: true },
-  { label: "People", href: "/dashboard/admin/people", icon: UserCircle },
-  { label: "Rubrics", href: "/dashboard/admin/rubrics", icon: Ruler },
-  { label: "Topics", href: "/dashboard/admin/topics", icon: BookOpen },
-  { label: "Checklist Template", href: "/dashboard/admin/checklist", icon: ListChecks },
-  { label: "National Team", href: "/dashboard/admin/team", icon: Users },
-  { label: "Chapter Admins", href: "/dashboard/admin/chapter-admins", icon: KeyRound },
-  { label: "Seasons", href: "/dashboard/admin/seasons", icon: CalendarRange },
-  { label: "Branding Rules", href: "/dashboard/admin/branding-rules", icon: ShieldCheck },
-  { label: "Mock Data", href: "/dashboard/admin/mock-data", icon: Database },
-  { label: "Audit Log", href: "/dashboard/admin/audit-log", icon: ScrollText },
+  { label: "Pipeline", href: "/yip/dashboard/admin", icon: GitBranch, exact: true },
+  { label: "People", href: "/yip/dashboard/admin/people", icon: UserCircle },
+  { label: "Rubrics", href: "/yip/dashboard/admin/rubrics", icon: Ruler },
+  { label: "Topics", href: "/yip/dashboard/admin/topics", icon: BookOpen },
+  { label: "Checklist Template", href: "/yip/dashboard/admin/checklist", icon: ListChecks },
+  { label: "National Team", href: "/yip/dashboard/admin/team", icon: Users },
+  { label: "Chapter Admins", href: "/yip/dashboard/admin/chapter-admins", icon: KeyRound },
+  { label: "Seasons", href: "/yip/dashboard/admin/seasons", icon: CalendarRange },
+  { label: "Branding Rules", href: "/yip/dashboard/admin/branding-rules", icon: ShieldCheck },
+  { label: "Mock Data", href: "/yip/dashboard/admin/mock-data", icon: Database },
+  { label: "Audit Log", href: "/yip/dashboard/admin/audit-log", icon: ScrollText },
 ];
 
 export function AdminShellNav() {

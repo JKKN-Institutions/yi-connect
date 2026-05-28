@@ -57,7 +57,7 @@ export function EventTabNav({
   eventStatus?: string;
 }) {
   const pathname = usePathname();
-  const basePath = `/dashboard/events/${eventId}`;
+  const basePath = `/yip/dashboard/events/${eventId}`;
 
   const visibleTabs = TABS.filter((tab) => {
     if (tab.label === "Certificates") {

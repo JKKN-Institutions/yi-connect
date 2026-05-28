@@ -15,6 +15,8 @@ import {
   CardTitle,
 } from "@/components/yip/ui/card";
 import { LogIn, Loader2 } from "lucide-react";
+import { GoogleOAuthButton } from "@/lib/auth/google-oauth-button";
+import { MagicLinkForm } from "@/lib/auth/magic-link-form";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -113,6 +115,26 @@ export default function LoginPage() {
               {loading ? "Signing in..." : "Sign in"}
             </Button>
           </form>
+
+          {/* Alternative auth methods — Google OAuth + magic-link.
+              All three (password / Google / magic-link) produce the same
+              Supabase session cookie. Per CLAUDE.md auth-UI rule we share
+              these from lib/auth/. */}
+          <div className="mt-6 space-y-4">
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t border-[#1a1a3e]/10" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-white px-2 text-[#1a1a3e]/50">Or continue with</span>
+              </div>
+            </div>
+            <GoogleOAuthButton
+              redirectTo="/yip/dashboard"
+              className="h-10 w-full justify-center"
+            />
+            <MagicLinkForm redirectTo="/yip/dashboard" />
+          </div>
         </CardContent>
       </Card>
 

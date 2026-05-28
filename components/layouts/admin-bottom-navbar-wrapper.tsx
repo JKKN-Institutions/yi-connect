@@ -22,9 +22,7 @@ export function AdminBottomNavbarWrapper({ userRoles }: AdminBottomNavbarWrapper
     '/forgot-password',
     '/auth',
     '/m/', // Mobile-specific route group has its own navbar
-    '/industry-portal',
-    '/coordinator',
-    '/chapter-lead'
+    '/industry-portal'
   ];
 
   // Check if current pathname should exclude the navbar

@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/yip/supabase/server";
+import { getEvent } from "@/app/yip/actions/events";
+import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
 import { AllocationClient } from "./allocation-client";
 
 export default async function AllocationPage({
@@ -15,15 +17,13 @@ export default async function AllocationPage({
 
   if (!user) redirect("/yip/login");
 
-  // Verify event ownership
-  const { data: event } = await supabase
-    .from("events")
-    .select("id, created_by, allocation_locked, committee_topics")
-    .eq("id", id)
-    .eq("created_by", user.id)
-    .single();
+  const event = await getEvent(id);
 
-  if (!event) redirect("/yip/dashboard");
+  if (!event) {
+    return (
+      <Forbidden403 reason="You don't have access to this event's allocation. The event may have been deleted, or your role may not include this event's chapter or zone." />
+    );
+  }
 
   // Fetch participants with all allocation fields
   const { data: participants } = await supabase

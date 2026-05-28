@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/yip/supabase/server";
+import { getEvent } from "@/app/yip/actions/events";
 import { getScoringProgress } from "@/app/yip/actions/results";
 import { ScoringProgress } from "./scoring-progress";
 import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
@@ -17,13 +18,7 @@ export default async function ScoringPage({
 
   if (!user) redirect("/yip/login");
 
-  // Verify event ownership
-  const { data: event } = await supabase
-    .from("events")
-    .select("id, created_by")
-    .eq("id", id)
-    .eq("created_by", user.id)
-    .single();
+  const event = await getEvent(id);
 
   if (!event) {
     return (

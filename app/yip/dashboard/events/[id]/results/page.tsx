@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/yip/supabase/server";
+import { getEvent } from "@/app/yip/actions/events";
 import { getResults } from "@/app/yip/actions/results";
 import { ResultsClient } from "./results-client";
 import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
@@ -17,13 +18,7 @@ export default async function ResultsPage({
 
   if (!user) redirect("/yip/login");
 
-  // Verify event ownership and get event details
-  const { data: event } = await supabase
-    .from("events")
-    .select("id, name, created_by, results_published_at, scores_locked")
-    .eq("id", id)
-    .eq("created_by", user.id)
-    .single();
+  const event = await getEvent(id);
 
   if (!event) {
     return (

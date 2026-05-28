@@ -128,7 +128,7 @@ export default function EditEventPage() {
 
     if (result.success) {
       toast.success("Event updated successfully");
-      router.push(`/dashboard/events/${eventId}`);
+      router.push(`/yip/dashboard/events/${eventId}`);
     } else {
       setError(result.error);
       toast.error(result.error);

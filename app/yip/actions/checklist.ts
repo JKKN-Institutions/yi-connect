@@ -47,8 +47,8 @@ export async function toggleChecklistItem(
     .eq("id", itemId);
 
   if (error) return { success: false, error: error.message };
-  revalidatePath(`/dashboard/events/${eventId}`);
-  revalidatePath(`/dashboard/events/${eventId}/checklist`);
+  revalidatePath(`/yip/dashboard/events/${eventId}`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/checklist`);
   return { success: true, data: null };
 }
 
@@ -89,6 +89,6 @@ export async function seedChecklistForEvent(
   const { error } = await supabase.from("checklist").insert(rows);
   if (error) return { success: false, error: error.message };
 
-  revalidatePath(`/dashboard/events/${eventId}/checklist`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/checklist`);
   return { success: true, data: { inserted: rows.length } };
 }

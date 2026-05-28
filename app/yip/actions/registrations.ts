@@ -252,7 +252,7 @@ export async function ingestCSV(
   const { error: insertErr } = await regs(supabase).insert(inserts);
   if (insertErr) return { success: false, error: insertErr.message };
 
-  revalidatePath(`/dashboard/events/${eventId}/registrations`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/registrations`);
 
   return {
     success: true,
@@ -395,8 +395,8 @@ export async function approveRegistration(
       return { success: false, error: updateErr.message };
     }
 
-    revalidatePath(`/dashboard/events/${reg.event_id}/registrations`);
-    revalidatePath(`/dashboard/events/${reg.event_id}/participants`);
+    revalidatePath(`/yip/dashboard/events/${reg.event_id}/registrations`);
+    revalidatePath(`/yip/dashboard/events/${reg.event_id}/participants`);
 
     return {
       success: true,
@@ -443,7 +443,7 @@ export async function rejectRegistration(
     .eq("id", regId);
 
   if (error) return { success: false, error: error.message };
-  if (reg) revalidatePath(`/dashboard/events/${reg.event_id}/registrations`);
+  if (reg) revalidatePath(`/yip/dashboard/events/${reg.event_id}/registrations`);
   return { success: true, data: null };
 }
 
@@ -470,7 +470,7 @@ export async function markAsDuplicate(regId: string): Promise<ActionResult> {
     .eq("id", regId);
 
   if (error) return { success: false, error: error.message };
-  if (reg) revalidatePath(`/dashboard/events/${reg.event_id}/registrations`);
+  if (reg) revalidatePath(`/yip/dashboard/events/${reg.event_id}/registrations`);
   return { success: true, data: null };
 }
 
@@ -519,7 +519,7 @@ export async function deleteRegistration(
     target_id: regId,
     target_event_id: reg?.event_id ?? null,
   });
-  if (reg) revalidatePath(`/dashboard/events/${reg.event_id}/registrations`);
+  if (reg) revalidatePath(`/yip/dashboard/events/${reg.event_id}/registrations`);
   return { success: true, data: null };
 }
 
@@ -536,6 +536,6 @@ export async function setIngestionEnabled(
     .update({ ingestion_enabled: enabled })
     .eq("id", eventId);
   if (error) return { success: false, error: error.message };
-  revalidatePath(`/dashboard/events/${eventId}/registrations`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/registrations`);
   return { success: true, data: null };
 }

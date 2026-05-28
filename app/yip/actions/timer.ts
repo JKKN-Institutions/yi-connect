@@ -36,7 +36,7 @@ export async function startTimer(
 
   if (error) return { success: false, error: error.message };
 
-  revalidatePath(`/dashboard/events/${eventId}/control`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/control`);
   return { success: true, data: null };
 }
 
@@ -61,7 +61,7 @@ export async function stopTimer(
 
   if (error) return { success: false, error: error.message };
 
-  revalidatePath(`/dashboard/events/${eventId}/control`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/control`);
   return { success: true, data: null };
 }
 
@@ -90,6 +90,6 @@ export async function resetTimer(
 
   if (error) return { success: false, error: error.message };
 
-  revalidatePath(`/dashboard/events/${eventId}/control`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/control`);
   return { success: true, data: null };
 }

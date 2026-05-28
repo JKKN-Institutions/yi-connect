@@ -177,7 +177,7 @@ export async function createEvent(
       chapter_name: data.chapter_name,
     },
   });
-  revalidatePath("/dashboard");
+  revalidatePath("/yip/dashboard");
   return { success: true, data: { id: event.id } };
 }
 
@@ -219,7 +219,7 @@ export async function updateEvent(
     return { success: false, error: error.message };
   }
 
-  revalidatePath(`/dashboard/events/${eventId}`);
+  revalidatePath(`/yip/dashboard/events/${eventId}`);
   return { success: true, data: null };
 }
 
@@ -302,10 +302,10 @@ async function setEventLock(
     return { success: false, error: error.message };
   }
 
-  revalidatePath(`/dashboard/events/${eventId}/control`);
-  revalidatePath(`/dashboard/events/${eventId}/scoring`);
-  revalidatePath(`/dashboard/events/${eventId}/participants`);
-  revalidatePath(`/dashboard/events/${eventId}/allocation`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/control`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/scoring`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/participants`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/allocation`);
   revalidatePath(`/jury`);
   return { success: true, data: null };
 }
@@ -456,7 +456,7 @@ export async function pushLiveBanner(
   });
   await supabase.removeChannel(channel);
 
-  revalidatePath(`/dashboard/events/${eventId}/control`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/control`);
   return { success: true, data: null };
 }
 
@@ -513,7 +513,7 @@ export async function clearLiveBanner(
   });
   await supabase.removeChannel(channel);
 
-  revalidatePath(`/dashboard/events/${eventId}/control`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/control`);
   return { success: true, data: null };
 }
 

@@ -68,7 +68,7 @@ export async function addVolunteer(input: {
     .single();
 
   if (error) return { success: false, error: error.message };
-  revalidatePath(`/dashboard/events/${input.event_id}/volunteers`);
+  revalidatePath(`/yip/dashboard/events/${input.event_id}/volunteers`);
   return { success: true, data: data as Volunteer };
 }
 
@@ -80,7 +80,7 @@ export async function updateVolunteer(
   const supabase = await createServiceClient();
   const { error } = await supabase.from("volunteers").update(updates).eq("id", id);
   if (error) return { success: false, error: error.message };
-  revalidatePath(`/dashboard/events/${eventId}/volunteers`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/volunteers`);
   return { success: true, data: null };
 }
 
@@ -99,7 +99,7 @@ export async function markVolunteerArrived(
     .eq("id", id);
 
   if (error) return { success: false, error: error.message };
-  revalidatePath(`/dashboard/events/${eventId}/volunteers`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/volunteers`);
   return { success: true, data: null };
 }
 
@@ -116,6 +116,6 @@ export async function deleteVolunteer(
     target_id: id,
     target_event_id: eventId,
   });
-  revalidatePath(`/dashboard/events/${eventId}/volunteers`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/volunteers`);
   return { success: true, data: null };
 }

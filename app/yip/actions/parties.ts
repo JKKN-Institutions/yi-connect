@@ -63,7 +63,7 @@ export async function createParty(input: {
     .single();
 
   if (error) return { success: false, error: error.message };
-  revalidatePath(`/dashboard/events/${input.event_id}/parties`);
+  revalidatePath(`/yip/dashboard/events/${input.event_id}/parties`);
   return { success: true, data: data as Party };
 }
 
@@ -80,7 +80,7 @@ export async function updateParty(
     .single();
 
   if (error) return { success: false, error: error.message };
-  if (data) revalidatePath(`/dashboard/events/${data.event_id}/parties`);
+  if (data) revalidatePath(`/yip/dashboard/events/${data.event_id}/parties`);
   return { success: true, data: data as Party };
 }
 
@@ -94,7 +94,7 @@ export async function deleteParty(id: string, eventId: string): Promise<ActionRe
     target_id: id,
     target_event_id: eventId,
   });
-  revalidatePath(`/dashboard/events/${eventId}/parties`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/parties`);
   return { success: true, data: null };
 }
 
@@ -129,8 +129,8 @@ export async function assignParticipantsToParty(
 
   if (error) return { success: false, error: error.message };
 
-  revalidatePath(`/dashboard/events/${party.event_id}/parties`);
-  revalidatePath(`/dashboard/events/${party.event_id}/participants`);
+  revalidatePath(`/yip/dashboard/events/${party.event_id}/parties`);
+  revalidatePath(`/yip/dashboard/events/${party.event_id}/participants`);
   return { success: true, data: { assigned: participantIds.length } };
 }
 
@@ -158,7 +158,7 @@ export async function electPartyLeader(
     .update({ parliament_role: "party_leader" })
     .eq("id", participantId);
 
-  revalidatePath(`/dashboard/events/${updated.event_id}/parties`);
-  revalidatePath(`/dashboard/events/${updated.event_id}/participants`);
+  revalidatePath(`/yip/dashboard/events/${updated.event_id}/parties`);
+  revalidatePath(`/yip/dashboard/events/${updated.event_id}/participants`);
   return { success: true, data: null };
 }

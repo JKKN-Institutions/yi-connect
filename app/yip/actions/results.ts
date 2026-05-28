@@ -335,8 +335,8 @@ export async function computeResults(
 
   const awardsAssigned = resultRows.filter((r) => r.award_category !== null).length;
 
-  revalidatePath(`/dashboard/events/${eventId}/results`);
-  revalidatePath(`/dashboard/events/${eventId}/scoring`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/results`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/scoring`);
 
   return {
     success: true,
@@ -360,7 +360,7 @@ export async function publishResults(
     return { success: false, error: error.message };
   }
 
-  revalidatePath(`/dashboard/events/${eventId}/results`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/results`);
   revalidatePath(`/me`);
   return { success: true, data: null };
 }
@@ -381,7 +381,7 @@ export async function unpublishResults(
     return { success: false, error: error.message };
   }
 
-  revalidatePath(`/dashboard/events/${eventId}/results`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/results`);
   revalidatePath(`/me`);
   return { success: true, data: null };
 }
@@ -402,7 +402,7 @@ export async function lockScores(
     return { success: false, error: error.message };
   }
 
-  revalidatePath(`/dashboard/events/${eventId}/scoring`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/scoring`);
   return { success: true, data: null };
 }
 
@@ -422,7 +422,7 @@ export async function unlockScores(
     return { success: false, error: error.message };
   }
 
-  revalidatePath(`/dashboard/events/${eventId}/scoring`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/scoring`);
   return { success: true, data: null };
 }
 

@@ -127,7 +127,7 @@ export default function NewEventPage() {
     const result = await createEvent(form);
 
     if (result.success) {
-      router.push(`/dashboard/events/${result.data.id}`);
+      router.push(`/yip/dashboard/events/${result.data.id}`);
     } else {
       setError(result.error);
       setLoading(false);

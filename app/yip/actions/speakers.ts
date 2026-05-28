@@ -142,7 +142,7 @@ export async function advanceSpeaker(
       .eq("id", eventId);
   }
 
-  revalidatePath(`/dashboard/events/${eventId}/control`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/control`);
   return { success: true, data: null };
 }
 
@@ -182,7 +182,7 @@ export async function skipSpeaker(
     return advanceSpeaker(agendaItemId, eventId);
   }
 
-  revalidatePath(`/dashboard/events/${eventId}/control`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/control`);
   return { success: true, data: null };
 }
 
@@ -285,6 +285,6 @@ export async function generateSpeakerQueue(
 
   if (error) return { success: false, error: error.message };
 
-  revalidatePath(`/dashboard/events/${eventId}/control`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/control`);
   return { success: true, data: { count: speakerEntries.length } };
 }

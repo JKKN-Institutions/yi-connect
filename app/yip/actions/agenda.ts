@@ -103,7 +103,7 @@ export async function advanceAgenda(
       .eq("id", eventId);
   }
 
-  revalidatePath(`/dashboard/events/${eventId}/control`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/control`);
   return { success: true, data: { nextItemId: nextItem?.id ?? null } };
 }
 
@@ -156,7 +156,7 @@ export async function startAgendaItem(
     .update({ current_agenda_item_id: agendaItemId })
     .eq("id", eventId);
 
-  revalidatePath(`/dashboard/events/${eventId}/control`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/control`);
   return { success: true, data: null };
 }
 
@@ -192,7 +192,7 @@ export async function skipAgendaItem(
     return advanceAgenda(eventId) as unknown as Promise<ActionResult>;
   }
 
-  revalidatePath(`/dashboard/events/${eventId}/control`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/control`);
   return { success: true, data: null };
 }
 
@@ -278,7 +278,7 @@ export async function updateEventStatus(
 
   if (error) return { success: false, error: error.message };
 
-  revalidatePath(`/dashboard/events/${eventId}`);
-  revalidatePath(`/dashboard/events/${eventId}/control`);
+  revalidatePath(`/yip/dashboard/events/${eventId}`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/control`);
   return { success: true, data: null };
 }

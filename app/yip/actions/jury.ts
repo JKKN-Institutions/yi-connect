@@ -110,7 +110,7 @@ export async function addJury(
     return { success: false, error: error?.message ?? "Failed to add jury" };
   }
 
-  revalidatePath(`/dashboard/events/${eventId}/jury`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/jury`);
   return { success: true, data: { id: jury.id, access_code: jury.access_code } };
 }
 
@@ -156,7 +156,7 @@ export async function removeJury(
     target_id: juryId,
     target_event_id: eventId,
   });
-  revalidatePath(`/dashboard/events/${eventId}/jury`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/jury`);
   return { success: true, data: null };
 }
 

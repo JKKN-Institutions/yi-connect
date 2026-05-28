@@ -479,7 +479,7 @@ export function PeopleAdminClient({
                 <TableRow key={p.id} className={p.is_active ? "" : "opacity-60"}>
                   <TableCell>
                     <Link
-                      href={`/dashboard/admin/people/${p.id}`}
+                      href={`/yip/dashboard/admin/people/${p.id}`}
                       className="font-medium text-[#1a1a3e] hover:text-[#FF9933] inline-flex items-center gap-1"
                     >
                       {p.full_name}

@@ -184,8 +184,8 @@ export async function adminCreateTopic(
     };
   }
 
-  revalidatePath("/dashboard/admin/topics");
-  revalidatePath("/dashboard/topics");
+  revalidatePath("/yip/dashboard/admin/topics");
+  revalidatePath("/yip/dashboard/topics");
   return { success: true, data: mapRow(data) };
 }
 
@@ -224,8 +224,8 @@ export async function adminUpdateTopic(
     };
   }
 
-  revalidatePath("/dashboard/admin/topics");
-  revalidatePath("/dashboard/topics");
+  revalidatePath("/yip/dashboard/admin/topics");
+  revalidatePath("/yip/dashboard/topics");
   return { success: true, data: mapRow(data) };
 }
 
@@ -242,8 +242,8 @@ export async function adminDeactivateTopic(
 
   if (error) return { success: false, error: error.message };
 
-  revalidatePath("/dashboard/admin/topics");
-  revalidatePath("/dashboard/topics");
+  revalidatePath("/yip/dashboard/admin/topics");
+  revalidatePath("/yip/dashboard/topics");
   return { success: true, data: null };
 }
 
@@ -260,8 +260,8 @@ export async function adminReactivateTopic(
 
   if (error) return { success: false, error: error.message };
 
-  revalidatePath("/dashboard/admin/topics");
-  revalidatePath("/dashboard/topics");
+  revalidatePath("/yip/dashboard/admin/topics");
+  revalidatePath("/yip/dashboard/topics");
   return { success: true, data: null };
 }
 
@@ -304,8 +304,8 @@ export async function adminReorderTopics(
     if (error) return { success: false, error: error.message };
   }
 
-  revalidatePath("/dashboard/admin/topics");
-  revalidatePath("/dashboard/topics");
+  revalidatePath("/yip/dashboard/admin/topics");
+  revalidatePath("/yip/dashboard/topics");
   return { success: true, data: { reordered: orderedIds.length } };
 }
 
@@ -407,8 +407,8 @@ export async function adminBulkImport(
   const { error } = await supabase.from("topics").insert(toInsert);
   if (error) return { success: false, error: error.message };
 
-  revalidatePath("/dashboard/admin/topics");
-  revalidatePath("/dashboard/topics");
+  revalidatePath("/yip/dashboard/admin/topics");
+  revalidatePath("/yip/dashboard/topics");
   return { success: true, data: { inserted: toInsert.length, skipped } };
 }
 
@@ -500,9 +500,9 @@ export async function pushCentralTopicsToAllChapterEvents(
   if (error) return { success: false, error: error.message };
 
   for (const ev of events) {
-    revalidatePath(`/dashboard/events/${ev.id}/topics`);
+    revalidatePath(`/yip/dashboard/events/${ev.id}/topics`);
   }
-  revalidatePath("/dashboard/admin/topics");
+  revalidatePath("/yip/dashboard/admin/topics");
 
   return {
     success: true,

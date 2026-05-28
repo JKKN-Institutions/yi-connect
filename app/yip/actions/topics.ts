@@ -116,8 +116,8 @@ export async function assignTopicsToEvent(
       .not("topic_id", "in", `(${topicIds.join(",")})`);
   }
 
-  revalidatePath(`/dashboard/events/${eventId}`);
-  revalidatePath(`/dashboard/events/${eventId}/topics`);
+  revalidatePath(`/yip/dashboard/events/${eventId}`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/topics`);
   return { success: true, data: { assigned: topicIds.length } };
 }
 
@@ -139,7 +139,7 @@ export async function removeTopicFromEvent(
     target_id: topicId,
     target_event_id: eventId,
   });
-  revalidatePath(`/dashboard/events/${eventId}/topics`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/topics`);
   return { success: true, data: null };
 }
 

@@ -215,8 +215,8 @@ export async function setComplianceStatus(
     );
 
   if (error) return { success: false, error: error.message };
-  revalidatePath(`/dashboard/events/${eventId}/branding`);
-  revalidatePath(`/dashboard/events/${eventId}`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/branding`);
+  revalidatePath(`/yip/dashboard/events/${eventId}`);
   return { success: true, data: null };
 }
 
@@ -353,7 +353,7 @@ export async function recordInvitation(
   if (error || !data) {
     return { success: false, error: error?.message ?? "Failed to record invitation" };
   }
-  revalidatePath(`/dashboard/events/${eventId}/branding`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/branding`);
   return { success: true, data: toInvitationRow(data) };
 }
 
@@ -386,7 +386,7 @@ export async function approveInvitation(
 
   if (error) return { success: false, error: error.message };
   const eventId = current?.event_id;
-  if (eventId) revalidatePath(`/dashboard/events/${eventId}/branding`);
+  if (eventId) revalidatePath(`/yip/dashboard/events/${eventId}/branding`);
   return { success: true, data: null };
 }
 
@@ -419,7 +419,7 @@ export async function rejectInvitation(
 
   if (error) return { success: false, error: error.message };
   const eventId = current?.event_id;
-  if (eventId) revalidatePath(`/dashboard/events/${eventId}/branding`);
+  if (eventId) revalidatePath(`/yip/dashboard/events/${eventId}/branding`);
   return { success: true, data: null };
 }
 
@@ -439,6 +439,6 @@ export async function deleteInvitation(
     target_id: id,
     target_event_id: eventId,
   });
-  revalidatePath(`/dashboard/events/${eventId}/branding`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/branding`);
   return { success: true, data: null };
 }

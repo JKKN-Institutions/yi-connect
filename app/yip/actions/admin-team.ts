@@ -187,7 +187,7 @@ export async function adminCreateMember(
     .single();
 
   if (error) return { success: false, error: error.message };
-  revalidatePath("/dashboard/admin/team");
+  revalidatePath("/yip/dashboard/admin/team");
   return {
     success: true,
     data: { ...(data as Omit<TeamMember, "yi_year">), yi_year: null },
@@ -220,7 +220,7 @@ export async function adminUpdateMember(
     .single();
 
   if (error) return { success: false, error: error.message };
-  revalidatePath("/dashboard/admin/team");
+  revalidatePath("/yip/dashboard/admin/team");
   return {
     success: true,
     data: { ...(data as Omit<TeamMember, "yi_year">), yi_year: null },
@@ -237,7 +237,7 @@ export async function adminArchiveMember(
     .eq("id", id);
 
   if (error) return { success: false, error: error.message };
-  revalidatePath("/dashboard/admin/team");
+  revalidatePath("/yip/dashboard/admin/team");
   return { success: true, data: null };
 }
 
@@ -251,7 +251,7 @@ export async function adminRestoreMember(
     .eq("id", id);
 
   if (error) return { success: false, error: error.message };
-  revalidatePath("/dashboard/admin/team");
+  revalidatePath("/yip/dashboard/admin/team");
   return { success: true, data: null };
 }
 
@@ -327,7 +327,7 @@ export async function adminLinkUser(
     .eq("id", memberId);
 
   if (updErr) return { success: false, error: updErr.message };
-  revalidatePath("/dashboard/admin/team");
+  revalidatePath("/yip/dashboard/admin/team");
   return { success: true, data: { user_id: userId!, email: userEmail } };
 }
 
@@ -341,6 +341,6 @@ export async function adminUnlinkUser(
     .eq("id", memberId);
 
   if (error) return { success: false, error: error.message };
-  revalidatePath("/dashboard/admin/team");
+  revalidatePath("/yip/dashboard/admin/team");
   return { success: true, data: null };
 }

@@ -70,7 +70,7 @@ export default async function ZonesNationalPage() {
       {/* Zone cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {summary.map((z) => (
-          <Link key={z.zone} href={`/dashboard/zones/${z.zone.toLowerCase()}`}>
+          <Link key={z.zone} href={`/yip/dashboard/zones/${z.zone.toLowerCase()}`}>
             <Card className="hover:border-[#FF9933]/40 hover:shadow-md transition-all cursor-pointer h-full">
               <CardContent className="pt-5 space-y-3">
                 <div className="flex items-start justify-between">

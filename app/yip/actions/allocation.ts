@@ -131,8 +131,8 @@ export async function runAllocationAction(
     };
   }
 
-  revalidatePath(`/dashboard/events/${eventId}/allocation`);
-  revalidatePath(`/dashboard/events/${eventId}/participants`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/allocation`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/participants`);
   return { success: true, data: result };
 }
 
@@ -169,8 +169,8 @@ export async function lockAllocation(
     return { success: false, error: error.message };
   }
 
-  revalidatePath(`/dashboard/events/${eventId}/allocation`);
-  revalidatePath(`/dashboard/events/${eventId}/participants`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/allocation`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/participants`);
   return { success: true, data: null };
 }
 
@@ -207,8 +207,8 @@ export async function unlockAllocation(
     return { success: false, error: error.message };
   }
 
-  revalidatePath(`/dashboard/events/${eventId}/allocation`);
-  revalidatePath(`/dashboard/events/${eventId}/participants`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/allocation`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/participants`);
   return { success: true, data: null };
 }
 
@@ -292,7 +292,7 @@ export async function updateParticipantAssignment(
     return { success: false, error: error.message };
   }
 
-  revalidatePath(`/dashboard/events/${eventId}/allocation`);
-  revalidatePath(`/dashboard/events/${eventId}/participants`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/allocation`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/participants`);
   return { success: true, data: null };
 }

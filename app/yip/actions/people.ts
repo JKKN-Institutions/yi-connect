@@ -142,7 +142,7 @@ export async function createPerson(
     .select()
     .single();
   if (error) return { success: false, error: error.message };
-  revalidatePath("/dashboard/admin/people");
+  revalidatePath("/yip/dashboard/admin/people");
   return {
     success: true,
     data: { ...data, is_active: data.is_active ?? true } as Person,
@@ -170,8 +170,8 @@ export async function updatePerson(
     .select()
     .single();
   if (error) return { success: false, error: error.message };
-  revalidatePath("/dashboard/admin/people");
-  revalidatePath(`/dashboard/admin/people/${id}`);
+  revalidatePath("/yip/dashboard/admin/people");
+  revalidatePath(`/yip/dashboard/admin/people/${id}`);
   return {
     success: true,
     data: { ...data, is_active: data.is_active ?? true } as Person,
@@ -185,7 +185,7 @@ export async function archivePerson(id: string): Promise<ActionResult> {
     .update({ is_active: false })
     .eq("id", id);
   if (error) return { success: false, error: error.message };
-  revalidatePath("/dashboard/admin/people");
+  revalidatePath("/yip/dashboard/admin/people");
   return { success: true, data: null };
 }
 
@@ -196,7 +196,7 @@ export async function restorePerson(id: string): Promise<ActionResult> {
     .update({ is_active: true })
     .eq("id", id);
   if (error) return { success: false, error: error.message };
-  revalidatePath("/dashboard/admin/people");
+  revalidatePath("/yip/dashboard/admin/people");
   return { success: true, data: null };
 }
 
@@ -375,7 +375,7 @@ export async function mergePeople(
   // Soft-delete the merged person
   await supabase.from("contestants").update({ is_active: false, notes: `Merged into ${keepId}` }).eq("id", mergeId);
 
-  revalidatePath("/dashboard/admin/people");
+  revalidatePath("/yip/dashboard/admin/people");
   return {
     success: true,
     data: { moved_participants: moved?.length ?? 0 },

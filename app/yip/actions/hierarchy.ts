@@ -65,7 +65,7 @@ export async function linkCurrentUserToProfile(
     .eq("id", profileId);
 
   if (error) return { success: false, error: error.message };
-  revalidatePath("/dashboard");
+  revalidatePath("/yip/dashboard");
   return { success: true, data: null };
 }
 
@@ -81,8 +81,8 @@ export async function setEventZone(
   const { error } = await supabase.from("events").update(update).eq("id", eventId);
   if (error) return { success: false, error: error.message };
 
-  revalidatePath(`/dashboard/events/${eventId}`);
-  revalidatePath("/dashboard");
+  revalidatePath(`/yip/dashboard/events/${eventId}`);
+  revalidatePath("/yip/dashboard");
   return { success: true, data: null };
 }
 

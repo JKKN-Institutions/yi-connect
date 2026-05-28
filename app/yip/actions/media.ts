@@ -94,7 +94,7 @@ export async function registerUploadedMedia(input: {
     .single();
 
   if (error) return { success: false, error: error.message };
-  revalidatePath(`/dashboard/events/${input.event_id}/media`);
+  revalidatePath(`/yip/dashboard/events/${input.event_id}/media`);
   return { success: true, data: data as EventMedia };
 }
 
@@ -118,7 +118,7 @@ export async function updateMediaCaption(
 
   if (error) return { success: false, error: error.message };
   const row = data as EventMedia;
-  revalidatePath(`/dashboard/events/${row.event_id}/media`);
+  revalidatePath(`/yip/dashboard/events/${row.event_id}/media`);
   return { success: true, data: row };
 }
 
@@ -146,7 +146,7 @@ export async function setCoverImage(
     .single();
 
   if (error) return { success: false, error: error.message };
-  revalidatePath(`/dashboard/events/${eventId}/media`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/media`);
   return { success: true, data: data as EventMedia };
 }
 
@@ -161,7 +161,7 @@ export async function clearCoverImage(
     .eq("event_id", eventId)
     .eq("is_cover", true);
   if (error) return { success: false, error: error.message };
-  revalidatePath(`/dashboard/events/${eventId}/media`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/media`);
   return { success: true, data: null };
 }
 
@@ -180,7 +180,7 @@ export async function setVisibility(
 
   if (error) return { success: false, error: error.message };
   const row = data as EventMedia;
-  revalidatePath(`/dashboard/events/${row.event_id}/media`);
+  revalidatePath(`/yip/dashboard/events/${row.event_id}/media`);
   return { success: true, data: row };
 }
 
@@ -199,7 +199,7 @@ export async function bulkSetVisibility(
     .select("id");
 
   if (error) return { success: false, error: error.message };
-  revalidatePath(`/dashboard/events/${eventId}/media`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/media`);
   return { success: true, data: (data ?? []).length };
 }
 
@@ -233,7 +233,7 @@ export async function deleteMedia(id: string): Promise<ActionResult> {
     target_event_id: row.event_id,
     metadata: { storage_path: row.storage_path },
   });
-  revalidatePath(`/dashboard/events/${row.event_id}/media`);
+  revalidatePath(`/yip/dashboard/events/${row.event_id}/media`);
   return { success: true, data: null };
 }
 
@@ -262,7 +262,7 @@ export async function bulkDeleteMedia(
     .select("id");
 
   if (error) return { success: false, error: error.message };
-  revalidatePath(`/dashboard/events/${eventId}/media`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/media`);
   return { success: true, data: (data ?? []).length };
 }
 
@@ -279,7 +279,7 @@ export async function reorderMedia(
   const results = await Promise.all(updates);
   const firstErr = results.find((r) => r.error);
   if (firstErr?.error) return { success: false, error: firstErr.error.message };
-  revalidatePath(`/dashboard/events/${eventId}/media`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/media`);
   return { success: true, data: null };
 }
 

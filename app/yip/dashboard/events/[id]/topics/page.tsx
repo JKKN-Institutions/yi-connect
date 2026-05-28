@@ -16,10 +16,10 @@ export default async function EventTopicsPage({
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  if (!user) redirect("/yip/login");
 
   const event = await getEvent(id);
-  if (!event) redirect("/dashboard");
+  if (!event) redirect("/yip/dashboard");
 
   // Central pool — national agenda, applies to every event.
   const centralTopics = await listTopics({ category: "central" });

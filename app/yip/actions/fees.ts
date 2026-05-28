@@ -34,7 +34,7 @@ export async function setEventPaymentConfig(
     .eq("id", eventId);
 
   if (error) return { success: false, error: error.message };
-  revalidatePath(`/dashboard/events/${eventId}`);
+  revalidatePath(`/yip/dashboard/events/${eventId}`);
   return { success: true, data: null };
 }
 
@@ -83,8 +83,8 @@ export async function markFeePaid(
     .single();
 
   if (error) return { success: false, error: error.message };
-  revalidatePath(`/dashboard/events/${eventId}/fees`);
-  revalidatePath(`/dashboard/events/${eventId}/participants`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/fees`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/participants`);
   return { success: true, data: data as ParticipantFee };
 }
 
@@ -99,7 +99,7 @@ export async function markFeeUnpaid(
     .eq("participant_id", participantId);
 
   if (error) return { success: false, error: error.message };
-  revalidatePath(`/dashboard/events/${eventId}/fees`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/fees`);
   return { success: true, data: null };
 }
 

@@ -103,7 +103,7 @@ export async function createMotion(input: {
     .single();
 
   if (error) return { success: false, error: error.message };
-  revalidatePath(`/dashboard/events/${input.event_id}/motions`);
+  revalidatePath(`/yip/dashboard/events/${input.event_id}/motions`);
   return { success: true, data: data as Motion };
 }
 
@@ -134,7 +134,7 @@ export async function admitMotion(
     .eq("id", motionId);
 
   if (error) return { success: false, error: error.message };
-  if (motion) revalidatePath(`/dashboard/events/${motion.event_id}/motions`);
+  if (motion) revalidatePath(`/yip/dashboard/events/${motion.event_id}/motions`);
   return { success: true, data: null };
 }
 
@@ -166,7 +166,7 @@ export async function rejectMotion(
     .eq("id", motionId);
 
   if (error) return { success: false, error: error.message };
-  if (motion) revalidatePath(`/dashboard/events/${motion.event_id}/motions`);
+  if (motion) revalidatePath(`/yip/dashboard/events/${motion.event_id}/motions`);
   return { success: true, data: null };
 }
 
@@ -200,7 +200,7 @@ export async function recordMotionVote(
     .eq("id", motionId);
 
   if (error) return { success: false, error: error.message };
-  revalidatePath(`/dashboard/events/${motion.event_id}/motions`);
+  revalidatePath(`/yip/dashboard/events/${motion.event_id}/motions`);
   return { success: true, data: { outcome } };
 }
 
@@ -233,7 +233,7 @@ export async function recordMinisterResponse(
     .eq("id", motionId);
 
   if (error) return { success: false, error: error.message };
-  if (motion) revalidatePath(`/dashboard/events/${motion.event_id}/motions`);
+  if (motion) revalidatePath(`/yip/dashboard/events/${motion.event_id}/motions`);
   return { success: true, data: null };
 }
 
@@ -250,7 +250,7 @@ export async function deleteMotion(
     target_id: motionId,
     target_event_id: eventId,
   });
-  revalidatePath(`/dashboard/events/${eventId}/motions`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/motions`);
   return { success: true, data: null };
 }
 

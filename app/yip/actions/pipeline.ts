@@ -67,9 +67,9 @@ export async function markQualified(
     return { success: false, error: error.message };
   }
 
-  revalidatePath(`/dashboard/events/${eventId}/results`);
-  revalidatePath(`/dashboard/admin`);
-  revalidatePath(`/dashboard/admin/pipeline`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/results`);
+  revalidatePath(`/yip/dashboard/admin`);
+  revalidatePath(`/yip/dashboard/admin/pipeline`);
   return { success: true, data: null };
 }
 
@@ -95,9 +95,9 @@ export async function unmarkQualified(
     return { success: false, error: error.message };
   }
 
-  revalidatePath(`/dashboard/events/${eventId}/results`);
-  revalidatePath(`/dashboard/admin`);
-  revalidatePath(`/dashboard/admin/pipeline`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/results`);
+  revalidatePath(`/yip/dashboard/admin`);
+  revalidatePath(`/yip/dashboard/admin/pipeline`);
   return { success: true, data: null };
 }
 
@@ -304,9 +304,9 @@ export async function promoteToEvent(
     console.error("Promotion audit write failed:", auditError.message);
   }
 
-  revalidatePath(`/dashboard/events/${toEventId}`);
-  revalidatePath(`/dashboard/admin`);
-  revalidatePath(`/dashboard/admin/pipeline`);
+  revalidatePath(`/yip/dashboard/events/${toEventId}`);
+  revalidatePath(`/yip/dashboard/admin`);
+  revalidatePath(`/yip/dashboard/admin/pipeline`);
 
   return { success: true, data: { promoted: toPromote.length } };
 }
@@ -603,8 +603,8 @@ export async function createRegionalEvent(
     return { success: false, error: error?.message ?? "Failed to create event" };
   }
 
-  revalidatePath(`/dashboard/admin`);
-  revalidatePath(`/dashboard/admin/pipeline`);
+  revalidatePath(`/yip/dashboard/admin`);
+  revalidatePath(`/yip/dashboard/admin/pipeline`);
   return { success: true, data: { id: event.id } };
 }
 
@@ -662,7 +662,7 @@ export async function createNationalEvent(
     return { success: false, error: error?.message ?? "Failed to create event" };
   }
 
-  revalidatePath(`/dashboard/admin`);
-  revalidatePath(`/dashboard/admin/pipeline`);
+  revalidatePath(`/yip/dashboard/admin`);
+  revalidatePath(`/yip/dashboard/admin/pipeline`);
   return { success: true, data: { id: event.id } };
 }

@@ -141,7 +141,7 @@ export async function addParticipant(
       return { success: false, error: error?.message ?? "Failed to add participant" };
     }
 
-    revalidatePath(`/dashboard/events/${eventId}/participants`);
+    revalidatePath(`/yip/dashboard/events/${eventId}/participants`);
     return {
       success: true,
       data: { id: participant.id, access_code: participant.access_code },
@@ -365,7 +365,7 @@ export async function importParticipants(
       errors_count: errors.length,
     },
   });
-  revalidatePath(`/dashboard/events/${eventId}/participants`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/participants`);
   return {
     success: true,
     data: { imported: inserts.length, errors },
@@ -418,7 +418,7 @@ export async function deleteParticipant(
     target_id: participantId,
     target_event_id: eventId,
   });
-  revalidatePath(`/dashboard/events/${eventId}/participants`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/participants`);
   return { success: true, data: null };
 }
 
@@ -461,8 +461,8 @@ export async function checkInParticipant(
     return { success: false, error: error.message };
   }
 
-  revalidatePath(`/dashboard/events/${eventId}/participants`);
-  revalidatePath(`/dashboard/events/${eventId}/control`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/participants`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/control`);
   return { success: true, data: null };
 }
 
@@ -505,8 +505,8 @@ export async function checkOutParticipant(
     return { success: false, error: error.message };
   }
 
-  revalidatePath(`/dashboard/events/${eventId}/participants`);
-  revalidatePath(`/dashboard/events/${eventId}/control`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/participants`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/control`);
   return { success: true, data: null };
 }
 
@@ -553,8 +553,8 @@ export async function bulkCheckIn(
     return { success: false, error: error.message };
   }
 
-  revalidatePath(`/dashboard/events/${eventId}/participants`);
-  revalidatePath(`/dashboard/events/${eventId}/control`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/participants`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/control`);
   return { success: true, data: { checkedIn: participantIds.length } };
 }
 
@@ -620,8 +620,8 @@ export async function setParliamentRole(
     return { success: false, error: error.message };
   }
 
-  revalidatePath(`/dashboard/events/${participant.event_id}/control`);
-  revalidatePath(`/dashboard/events/${participant.event_id}/participants`);
+  revalidatePath(`/yip/dashboard/events/${participant.event_id}/control`);
+  revalidatePath(`/yip/dashboard/events/${participant.event_id}/participants`);
   return { success: true, data: null };
 }
 

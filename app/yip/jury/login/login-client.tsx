@@ -112,7 +112,7 @@ export function JuryLoginClient({ events }: { events: EventOption[] }) {
 
           <div className="overflow-hidden rounded-2xl border border-[#1a1a3e]/5 bg-white shadow-xl shadow-[#1a1a3e]/5">
             <div className="p-6 sm:p-8">
-              <form onSubmit={handleSubmit} className="space-y-5">
+              <form method="post" action="#" onSubmit={handleSubmit} className="space-y-5">
                 {/* Email */}
                 <div>
                   <label

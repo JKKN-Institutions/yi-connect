@@ -211,6 +211,18 @@ export function DashboardShell({
               <div className="h-1.5 w-1.5 rounded-full bg-white border border-[#1a1a3e]/10" />
               <div className="h-1.5 w-1.5 rounded-full bg-[#138808]" />
             </div>
+            {/* Visible Sign Out — universal pattern. The sidebar account
+                panel keeps a logout button too, but this is the discoverable one. */}
+            <form action={logoutOrganizer}>
+              <button
+                type="submit"
+                className="flex items-center gap-1.5 rounded-lg border border-[#1a1a3e]/10 px-3 py-1.5 text-xs font-medium text-[#1a1a3e]/70 transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+                title="Sign out"
+              >
+                <LogOut className="size-3.5" />
+                <span className="hidden sm:inline">Sign out</span>
+              </button>
+            </form>
           </div>
         </header>
 

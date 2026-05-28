@@ -25,7 +25,17 @@ export default function DirectoryAdminLayout({
               Yi Directory · Admin
             </span>
           </Link>
-          <div className="text-xs text-slate-500">Cross-vertical · read-only</div>
+          <div className="flex items-center gap-4">
+            <Link
+              href="/admin/directory/sync-status"
+              className="text-xs font-medium text-slate-700 hover:text-slate-900"
+            >
+              Sync Status
+            </Link>
+            <span className="text-xs text-slate-500">
+              Cross-vertical · read-only
+            </span>
+          </div>
         </div>
       </header>
       <main className="mx-auto max-w-7xl px-6 py-8">{children}</main>

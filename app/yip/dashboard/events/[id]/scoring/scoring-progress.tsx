@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   lockScores,
@@ -47,7 +47,22 @@ function formatRelative(dateStr: string | null): string {
     month: "short",
     hour: "2-digit",
     minute: "2-digit",
+    timeZone: "Asia/Kolkata",
   });
+}
+
+/**
+ * Renders a relative timestamp that is hydration-safe. The first server render
+ * outputs a stable placeholder; the client effect swaps in the locale/now-based
+ * string. This avoids React #418 (text content mismatch) caused by SSR (UTC)
+ * vs client (local) differences in `new Date()` and locale formatting.
+ */
+function RelativeTime({ dateStr }: { dateStr: string | null }) {
+  const [label, setLabel] = useState<string>(dateStr ? "—" : "Never");
+  useEffect(() => {
+    setLabel(formatRelative(dateStr));
+  }, [dateStr]);
+  return <span suppressHydrationWarning>{label}</span>;
 }
 
 function statusColor(
@@ -297,7 +312,7 @@ export function ScoringProgress({
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right text-sm text-gray-500">
-                        {formatRelative(j.lastActivity)}
+                        <RelativeTime dateStr={j.lastActivity} />
                       </TableCell>
                     </TableRow>
                   ))}

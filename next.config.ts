@@ -92,6 +92,20 @@ const nextConfig: NextConfig = {
         destination: '/yi-future/host/:path*',
         permanent: true,
       },
+      // YIP convenience redirects (2026-05-28) — users typing/bookmarking the
+      // bare /dashboard/admin/* paths get sent to /yip/dashboard/admin/*. The
+      // yi-connect top-level (dashboard) route group has no /dashboard/admin
+      // tree of its own; the YIP admin is the only sensible destination.
+      {
+        source: '/dashboard/admin/:path*',
+        destination: '/yip/dashboard/admin/:path*',
+        permanent: true,
+      },
+      {
+        source: '/dashboard/admin',
+        destination: '/yip/dashboard/admin',
+        permanent: true,
+      },
     ];
   },
 

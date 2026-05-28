@@ -8,10 +8,12 @@
 import { Suspense } from 'react'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
-import { requireRole } from '@/lib/auth'
+import { requireRole, getCurrentChapterId } from '@/lib/auth'
+import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { ArrowLeft, FileSpreadsheet, CheckCircle, AlertCircle } from 'lucide-react'
 import { getCurrentUser } from '@/lib/data/auth'
 import { getServiceEventById, getEventSessionReport } from '@/lib/data/service-events'
+import { Forbidden } from '@/components/forbidden'
 import { SessionReportForm } from '@/components/events/session-report-form'
 import { Button } from '@/components/ui/button'
 import {
@@ -64,6 +66,34 @@ async function ReportPageContent({ params }: PageProps) {
 
   if (!event) {
     notFound()
+  }
+
+  // CHAPTER SCOPING (BUG-leak-fix 2026-05-28): block cross-chapter reads.
+  // Super Admin / National Admin bypass the chapter check.
+  const currentChapterId = await getCurrentChapterId()
+  const supabaseForRoles = await createServerSupabaseClient()
+  const { data: roleRows } = await supabaseForRoles
+    .schema('yi_connect')
+    .rpc('get_user_roles_detailed', { p_user_id: user.id })
+  const roleNames = (roleRows || []).map(
+    (r: { role_name: string }) => r.role_name
+  )
+  const isSuperAdmin =
+    roleNames.includes('Super Admin') || roleNames.includes('National Admin')
+
+  const eventChapterId =
+    (event as { chapter_id?: string | null; chapter?: { id?: string } | null })
+      .chapter_id ?? (event as { chapter?: { id?: string } | null }).chapter?.id ?? null
+
+  if (
+    !isSuperAdmin &&
+    eventChapterId &&
+    currentChapterId &&
+    eventChapterId !== currentChapterId
+  ) {
+    return (
+      <Forbidden reason="This session report belongs to another chapter and is not visible to you." />
+    )
   }
 
   // Check if this is a service event

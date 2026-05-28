@@ -7,12 +7,13 @@
 
 import { Suspense } from 'react'
 import Link from 'next/link'
-import { notFound, redirect } from 'next/navigation'
+import { notFound } from 'next/navigation'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 
-import { requireAuth } from '@/lib/auth'
+import { requireAuth, getCurrentChapterId } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { getEventById, getSessions } from '@/lib/data/events'
+import { Forbidden } from '@/components/forbidden'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -39,8 +40,35 @@ export default async function EventSessionsPage({ params }: PageProps) {
   const event = await getEventById(id)
   if (!event) notFound()
 
-  // Authorization: organizer OR hierarchy >= 4 (Co-Chair+)
+  // CHAPTER SCOPING (BUG-leak-fix 2026-05-28): block cross-chapter access.
+  // Super Admin / National Admin bypass the chapter check.
   const supabase = await createClient()
+  const currentChapterId = await getCurrentChapterId()
+  const { data: roleRows } = await supabase
+    .schema('yi_connect')
+    .rpc('get_user_roles_detailed', { p_user_id: user.id })
+  const roleNames = (roleRows || []).map(
+    (r: { role_name: string }) => r.role_name
+  )
+  const isSuperAdmin =
+    roleNames.includes('Super Admin') || roleNames.includes('National Admin')
+
+  const eventChapterId =
+    (event as { chapter_id?: string | null; chapter?: { id?: string } | null })
+      .chapter_id ?? (event as { chapter?: { id?: string } | null }).chapter?.id ?? null
+
+  if (
+    !isSuperAdmin &&
+    eventChapterId &&
+    currentChapterId &&
+    eventChapterId !== currentChapterId
+  ) {
+    return (
+      <Forbidden reason="This event's sessions belong to another chapter and are not visible to you." />
+    )
+  }
+
+  // Authorization: organizer OR hierarchy >= 4 (Co-Chair+)
   const { data: hierarchyLevel } = await supabase.rpc(
     'get_user_hierarchy_level',
     { p_user_id: user.id }
@@ -50,7 +78,9 @@ export default async function EventSessionsPage({ params }: PageProps) {
   const canManage = isOrganizer || level >= 4
 
   if (!canManage) {
-    redirect(`/events/${id}`)
+    return (
+      <Forbidden reason="You don't have permission to manage this event's sessions. Only the organizer or Co-Chair+ can edit the agenda." />
+    )
   }
 
   return (

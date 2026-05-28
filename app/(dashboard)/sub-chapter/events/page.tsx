@@ -5,9 +5,9 @@
  */
 
 import { Suspense } from 'react'
-import { cookies } from 'next/headers'
-import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import { requireRole } from '@/lib/auth'
+import { createServerSupabaseClient } from '@/lib/supabase/server'
 import {
   Card,
   CardContent,
@@ -37,20 +37,20 @@ import {
 } from '@/types/sub-chapter'
 
 export const metadata = {
-  title: 'Events | Chapter Lead Portal',
+  title: 'Sub-Chapter Events | Yi Connect',
   description: 'Manage your chapter events',
 }
 
-async function getSession() {
-  const cookieStore = await cookies()
-  const leadId = cookieStore.get('chapter_lead_id')?.value
-  const subChapterId = cookieStore.get('sub_chapter_id')?.value
-
-  if (!leadId || !subChapterId) {
-    return null
-  }
-
-  return { leadId, subChapterId }
+async function getSubChapterIdForUser(userId: string): Promise<string | null> {
+  const supabase = await createServerSupabaseClient()
+  const { data } = await supabase
+    .schema('yi_connect')
+    .from('sub_chapter_leads')
+    .select('sub_chapter_id')
+    .eq('member_id', userId)
+    .eq('is_active', true)
+    .maybeSingle()
+  return data?.sub_chapter_id ?? null
 }
 
 function EventCard({ event }: { event: SubChapterEventFull }) {
@@ -148,18 +148,18 @@ function EventCard({ event }: { event: SubChapterEventFull }) {
 
         <div className="flex gap-2 pt-2">
           <Button asChild variant="outline" size="sm">
-            <Link href={`/chapter-lead/events/${event.id}`}>View Details</Link>
+            <Link href={`/sub-chapter/events/${event.id}`}>View Details</Link>
           </Button>
 
           {event.status === 'draft' && (
             <Button asChild size="sm">
-              <Link href={`/chapter-lead/events/${event.id}/edit`}>Edit</Link>
+              <Link href={`/sub-chapter/events/${event.id}/edit`}>Edit</Link>
             </Button>
           )}
 
           {event.status === 'completed' && !event.actual_participants && (
             <Button asChild size="sm" variant="secondary">
-              <Link href={`/chapter-lead/events/${event.id}/complete`}>
+              <Link href={`/sub-chapter/events/${event.id}/complete`}>
                 Submit Report
               </Link>
             </Button>
@@ -171,13 +171,22 @@ function EventCard({ event }: { event: SubChapterEventFull }) {
 }
 
 async function EventsContent() {
-  const session = await getSession()
+  const { user } = await requireRole(['Sub-Chapter Lead', 'Super Admin', 'National Admin'])
 
-  if (!session) {
-    redirect('/chapter-lead/login')
+  const subChapterId = await getSubChapterIdForUser(user.id)
+  if (!subChapterId) {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center">
+          <p className="text-muted-foreground">
+            No active sub-chapter is linked to your account.
+          </p>
+        </CardContent>
+      </Card>
+    )
   }
 
-  const events = await getSubChapterEvents({ sub_chapter_id: session.subChapterId })
+  const events = await getSubChapterEvents({ sub_chapter_id: subChapterId })
 
   const draftEvents = events.filter((e) => e.status === 'draft')
   const pendingEvents = events.filter((e) => e.status === 'pending_approval')
@@ -199,7 +208,7 @@ async function EventsContent() {
           </p>
         </div>
         <Button asChild className="gap-2">
-          <Link href="/chapter-lead/events/new">
+          <Link href="/sub-chapter/events/new">
             <Plus className="h-4 w-4" />
             Create Event
           </Link>
@@ -269,7 +278,7 @@ function EventsList({
           <Calendar className="mx-auto h-12 w-12 text-muted-foreground opacity-50" />
           <p className="mt-4 text-muted-foreground">{emptyMessage}</p>
           <Button asChild className="mt-4">
-            <Link href="/chapter-lead/events/new">Create Event</Link>
+            <Link href="/sub-chapter/events/new">Create Event</Link>
           </Button>
         </CardContent>
       </Card>

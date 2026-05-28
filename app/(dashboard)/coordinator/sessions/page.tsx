@@ -5,8 +5,6 @@
  */
 
 import { Suspense } from 'react'
-import { cookies } from 'next/headers'
-import { redirect } from 'next/navigation'
 import {
   Card,
   CardContent,
@@ -17,23 +15,16 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Clock, Users, BookOpen } from 'lucide-react'
+import { requireRole } from '@/lib/auth'
 import { getSessionTypes } from '@/lib/data/session-bookings'
 
 export const metadata = {
-  title: 'Session Types | Coordinator Portal',
+  title: 'Session Types | Yi Connect',
   description: 'View available session types',
 }
 
-async function requireCoordinator() {
-  const cookieStore = await cookies()
-  const coordinatorId = cookieStore.get('coordinator_id')?.value
-  if (!coordinatorId) {
-    redirect('/coordinator/login')
-  }
-}
-
 async function SessionTypesContent() {
-  await requireCoordinator()
+  await requireRole(['Coordinator', 'Super Admin', 'National Admin'])
   const sessionTypes = await getSessionTypes()
 
   const activeTypes = sessionTypes.filter((t) => t.is_active)

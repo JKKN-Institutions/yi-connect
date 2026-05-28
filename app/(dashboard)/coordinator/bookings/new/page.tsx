@@ -6,44 +6,59 @@
 
 import { Suspense } from 'react'
 import Link from 'next/link'
-import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { ArrowLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { requireRole } from '@/lib/auth'
+import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { getSessionTypes, getCoordinatorById } from '@/lib/data/session-bookings'
 import { BookingForm } from '@/components/session-bookings'
 
 export const metadata = {
-  title: 'Book New Session | Coordinator Portal',
+  title: 'Book New Session | Yi Connect',
   description: 'Create a new session booking',
 }
 
-async function getCoordinatorSession() {
-  const cookieStore = await cookies()
-  const coordinatorId = cookieStore.get('coordinator_id')?.value
-
-  if (!coordinatorId) {
-    return null
-  }
-
-  return { id: coordinatorId }
+async function getCoordinatorIdForUser(userId: string): Promise<string | null> {
+  const supabase = await createServerSupabaseClient()
+  const { data } = await supabase
+    .schema('yi_connect')
+    .from('stakeholder_coordinators')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('status', 'active')
+    .maybeSingle()
+  return data?.id ?? null
 }
 
 async function NewBookingContent() {
-  const session = await getCoordinatorSession()
+  const { user } = await requireRole(['Coordinator', 'Super Admin', 'National Admin'])
 
-  if (!session) {
-    redirect('/coordinator/login')
+  const coordinatorId = await getCoordinatorIdForUser(user.id)
+  if (!coordinatorId) {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center">
+          <p className="text-muted-foreground">
+            No active coordinator profile is linked to your account.
+          </p>
+          <Button asChild className="mt-4">
+            <Link href="/coordinator">Back to Coordinator Dashboard</Link>
+          </Button>
+        </CardContent>
+      </Card>
+    )
   }
 
   const [sessionTypes, coordinator] = await Promise.all([
     getSessionTypes(),
-    getCoordinatorById(session.id),
+    getCoordinatorById(coordinatorId),
   ])
 
   if (!coordinator) {
-    redirect('/coordinator/login')
+    redirect('/coordinator')
   }
 
   return (

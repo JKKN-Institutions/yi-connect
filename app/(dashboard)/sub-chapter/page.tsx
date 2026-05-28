@@ -5,9 +5,10 @@
  */
 
 import { Suspense } from 'react'
-import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import { requireRole } from '@/lib/auth'
+import { createServerSupabaseClient } from '@/lib/supabase/server'
 import {
   Card,
   CardContent,
@@ -38,37 +39,57 @@ import {
 } from '@/types/sub-chapter'
 
 export const metadata = {
-  title: 'Dashboard | Chapter Lead Portal',
+  title: 'Sub-Chapter Dashboard | Yi Connect',
   description: 'Manage your Yuva/Thalir chapter',
 }
 
-async function getSession() {
-  const cookieStore = await cookies()
-  const leadId = cookieStore.get('chapter_lead_id')?.value
-  const subChapterId = cookieStore.get('sub_chapter_id')?.value
-
-  if (!leadId || !subChapterId) {
-    return null
-  }
-
-  return { leadId, subChapterId }
+/**
+ * Resolve the active sub_chapter_id led by the current user.
+ * Returns null when the user has no active lead assignment yet.
+ */
+async function getSubChapterIdForUser(userId: string): Promise<string | null> {
+  const supabase = await createServerSupabaseClient()
+  const { data } = await supabase
+    .schema('yi_connect')
+    .from('sub_chapter_leads')
+    .select('sub_chapter_id')
+    .eq('member_id', userId)
+    .eq('is_active', true)
+    .maybeSingle()
+  return data?.sub_chapter_id ?? null
 }
 
 async function DashboardContent() {
-  const session = await getSession()
+  const { user } = await requireRole(['Sub-Chapter Lead', 'Super Admin', 'National Admin'])
 
-  if (!session) {
-    redirect('/chapter-lead/login')
+  const subChapterId = await getSubChapterIdForUser(user.id)
+  if (!subChapterId) {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-3xl font-bold tracking-tight text-gray-900">Sub-Chapter Dashboard</h1>
+        <Card>
+          <CardContent className="py-12 text-center">
+            <p className="text-muted-foreground">
+              No active sub-chapter is linked to your account. Sub-chapter
+              assignments are managed by your Chapter Chair.
+            </p>
+            <Button asChild className="mt-4">
+              <Link href="/dashboard">Back to Dashboard</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   const [subChapter, stats, upcomingEvents] = await Promise.all([
-    getSubChapterById(session.subChapterId),
-    getSubChapterDashboardStats(session.subChapterId),
-    getUpcomingSubChapterEvents(session.subChapterId, 5),
+    getSubChapterById(subChapterId),
+    getSubChapterDashboardStats(subChapterId),
+    getUpcomingSubChapterEvents(subChapterId, 5),
   ])
 
   if (!subChapter) {
-    redirect('/chapter-lead/login')
+    redirect('/dashboard')
   }
 
   const typeInfo = SUB_CHAPTER_TYPE_INFO[subChapter.type]
@@ -98,7 +119,7 @@ async function DashboardContent() {
           </p>
         </div>
         <Button asChild className="gap-2">
-          <Link href="/chapter-lead/events/new">
+          <Link href="/sub-chapter/events/new">
             <Plus className="h-4 w-4" />
             Create Event
           </Link>
@@ -164,7 +185,7 @@ async function DashboardContent() {
               <CardDescription>Your scheduled events</CardDescription>
             </div>
             <Button variant="ghost" size="sm" asChild>
-              <Link href="/chapter-lead/events" className="gap-1">
+              <Link href="/sub-chapter/events" className="gap-1">
                 View All
                 <ArrowRight className="h-4 w-4" />
               </Link>
@@ -211,7 +232,7 @@ async function DashboardContent() {
                 <Calendar className="mx-auto h-12 w-12 text-muted-foreground opacity-50" />
                 <p className="mt-4 text-muted-foreground">No upcoming events</p>
                 <Button asChild className="mt-4" size="sm">
-                  <Link href="/chapter-lead/events/new">Create Event</Link>
+                  <Link href="/sub-chapter/events/new">Create Event</Link>
                 </Button>
               </div>
             )}
@@ -226,7 +247,7 @@ async function DashboardContent() {
           </CardHeader>
           <CardContent className="grid gap-3">
             <Button asChild variant="outline" className="justify-start gap-2 h-auto py-3">
-              <Link href="/chapter-lead/events/new">
+              <Link href="/sub-chapter/events/new">
                 <Calendar className="h-5 w-5 text-primary" />
                 <div className="text-left">
                   <p className="font-medium">Create New Event</p>
@@ -238,7 +259,7 @@ async function DashboardContent() {
             </Button>
 
             <Button asChild variant="outline" className="justify-start gap-2 h-auto py-3">
-              <Link href="/chapter-lead/members/add">
+              <Link href="/sub-chapter/members/add">
                 <Users className="h-5 w-5 text-primary" />
                 <div className="text-left">
                   <p className="font-medium">Add Members</p>
@@ -250,7 +271,7 @@ async function DashboardContent() {
             </Button>
 
             <Button asChild variant="outline" className="justify-start gap-2 h-auto py-3">
-              <Link href="/chapter-lead/events?status=completed">
+              <Link href="/sub-chapter/events?status=completed">
                 <CheckCircle2 className="h-5 w-5 text-primary" />
                 <div className="text-left">
                   <p className="font-medium">Submit Event Report</p>

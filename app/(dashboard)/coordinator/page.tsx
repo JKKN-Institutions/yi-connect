@@ -1,12 +1,13 @@
 /**
  * Coordinator Dashboard Page
  *
- * Main dashboard showing booking stats and upcoming sessions.
+ * Main dashboard showing booking stats and upcoming sessions for the
+ * authenticated coordinator. Folded into the main Yi Connect dashboard
+ * (lives under the (dashboard) route group, served at /coordinator).
  */
 
 import { Suspense } from 'react'
 import Link from 'next/link'
-import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import {
   Card,
@@ -21,45 +22,72 @@ import {
   Calendar,
   Clock,
   CheckCircle2,
-  AlertCircle,
   Plus,
   ArrowRight,
 } from 'lucide-react'
-import { getCoordinatorDashboardStats, getCoordinatorBookings, getCoordinatorById } from '@/lib/data/session-bookings'
+import { requireRole } from '@/lib/auth'
+import { createServerSupabaseClient } from '@/lib/supabase/server'
+import {
+  getCoordinatorDashboardStats,
+  getCoordinatorBookings,
+  getCoordinatorById,
+} from '@/lib/data/session-bookings'
 import { BookingsList } from '@/components/session-bookings'
-import { format } from 'date-fns'
 
 export const metadata = {
-  title: 'Dashboard | Coordinator Portal',
+  title: 'Coordinator Dashboard | Yi Connect',
   description: 'View your session bookings and stats',
 }
 
-async function getCoordinatorSession() {
-  const cookieStore = await cookies()
-  const coordinatorId = cookieStore.get('coordinator_id')?.value
-
-  if (!coordinatorId) {
-    return null
-  }
-
-  return { id: coordinatorId }
+/**
+ * Resolve the active coordinator row for the current user.
+ * Returns the coordinator id (stakeholder_coordinators.id) or null
+ * if no coordinator profile exists for this user yet.
+ */
+async function getCoordinatorIdForUser(userId: string): Promise<string | null> {
+  const supabase = await createServerSupabaseClient()
+  const { data } = await supabase
+    .schema('yi_connect')
+    .from('stakeholder_coordinators')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('status', 'active')
+    .maybeSingle()
+  return data?.id ?? null
 }
 
 async function DashboardContent() {
-  const session = await getCoordinatorSession()
+  const { user } = await requireRole(['Coordinator', 'Super Admin', 'National Admin'])
 
-  if (!session) {
-    redirect('/coordinator/login')
+  const coordinatorId = await getCoordinatorIdForUser(user.id)
+  if (!coordinatorId) {
+    // Super Admin previewing without a coordinator profile — show empty state link.
+    return (
+      <div className="space-y-6">
+        <h1 className="text-3xl font-bold tracking-tight text-gray-900">Coordinator Dashboard</h1>
+        <Card>
+          <CardContent className="py-12 text-center">
+            <p className="text-muted-foreground">
+              No active coordinator profile is linked to your account. Coordinator
+              profiles are managed under Stakeholders.
+            </p>
+            <Button asChild className="mt-4">
+              <Link href="/stakeholders">Go to Stakeholders</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   const [stats, recentBookings, coordinator] = await Promise.all([
-    getCoordinatorDashboardStats(session.id),
-    getCoordinatorBookings(session.id, { limit: 5 }),
-    getCoordinatorById(session.id),
+    getCoordinatorDashboardStats(coordinatorId),
+    getCoordinatorBookings(coordinatorId, { limit: 5 }),
+    getCoordinatorById(coordinatorId),
   ])
 
   if (!coordinator) {
-    redirect('/coordinator/login')
+    redirect('/dashboard')
   }
 
   const upcomingBookings = recentBookings.filter(

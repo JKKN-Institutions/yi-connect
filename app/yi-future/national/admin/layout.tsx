@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/yi-future/supabase/server";
 import { AdminShell, type NavItem } from "@/components/yi-future/admin/AdminShell";
+import { isCurrentUserPlatformAdmin } from "@/app/yi-future/actions/national-admins";
 
 const NAV: NavItem[] = [
   { label: "Dashboard", href: "/yi-future/national/admin" },
@@ -39,6 +40,12 @@ export default async function NationalAdminLayout({
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/yi-future/login");
+
+  // SECURITY: only platform-admin / super-admin / national_admin (per yi_directory
+  // via BB refactor) may view national admin surfaces. CFT 2026-05-28 found
+  // demo-organizer could see 22 delegates + 65 chapters without this gate.
+  const isPlatformAdmin = await isCurrentUserPlatformAdmin();
+  if (!isPlatformAdmin) redirect("/yi-future/chapter");
 
   return (
     <AdminShell title="Yi National Admin" roleLabel="National" items={NAV}>

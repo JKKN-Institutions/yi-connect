@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/yip/supabase/server";
 import { getResults } from "@/app/yip/actions/results";
 import { ResultsClient } from "./results-client";
+import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
 
 export default async function ResultsPage({
   params,
@@ -24,7 +25,11 @@ export default async function ResultsPage({
     .eq("created_by", user.id)
     .single();
 
-  if (!event) redirect("/yip/dashboard");
+  if (!event) {
+    return (
+      <Forbidden403 reason="You don't have access to this event's results. The event may have been deleted, or your role may not include this event's chapter or zone." />
+    );
+  }
 
   const results = await getResults(id);
 

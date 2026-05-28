@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/yip/supabase/server";
 import { getFeedbackStats, listFeedback } from "@/app/yip/actions/feedback";
 import { FeedbackDashboardClient } from "./feedback-dashboard-client";
+import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
 
 export default async function FeedbackDashboardPage({
   params,
@@ -23,7 +24,11 @@ export default async function FeedbackDashboardPage({
     .eq("id", id)
     .eq("created_by", user.id)
     .single();
-  if (!event) redirect("/yip/dashboard");
+  if (!event) {
+    return (
+      <Forbidden403 reason="You don't have access to this event's feedback. The event may have been deleted, or your role may not include this event's chapter or zone." />
+    );
+  }
 
   // Actions use createServiceClient internally to bypass RLS for full slice.
   const [stats, responses] = await Promise.all([

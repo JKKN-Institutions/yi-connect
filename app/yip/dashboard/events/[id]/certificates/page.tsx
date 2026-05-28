@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/yip/supabase/server";
 import { getCertificateData } from "@/app/yip/actions/certificates";
 import { CertificatesClient } from "./certificates-client";
+import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
 
 export default async function CertificatesPage({
   params,
@@ -24,7 +25,11 @@ export default async function CertificatesPage({
     .eq("created_by", user.id)
     .single();
 
-  if (!event) redirect("/yip/dashboard");
+  if (!event) {
+    return (
+      <Forbidden403 reason="You don't have access to this event's certificates. The event may have been deleted, or your role may not include this event's chapter or zone." />
+    );
+  }
 
   const certData = await getCertificateData(id);
 

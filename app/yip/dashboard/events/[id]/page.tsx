@@ -1,6 +1,6 @@
-import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getEvent } from "@/app/yip/actions/events";
+import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
 import { Badge } from "@/components/yip/ui/badge";
 import {
   CalendarDays,
@@ -79,7 +79,9 @@ export default async function EventOverviewPage({
   const event = await getEvent(id);
 
   if (!event) {
-    redirect("/yip/dashboard");
+    return (
+      <Forbidden403 reason="You don't have access to this event. It may have been deleted, or you may not be the organizer, zone regional admin, or super-admin for it." />
+    );
   }
 
   const status = statusBadge(event.status);

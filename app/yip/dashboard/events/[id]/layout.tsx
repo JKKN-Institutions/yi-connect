@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/yip/supabase/server";
 import { EventTabNav } from "./event-tab-nav";
+import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
 
 export default async function EventLayout({
   children,
@@ -28,7 +29,9 @@ export default async function EventLayout({
     .single();
 
   if (!event) {
-    redirect("/yip/dashboard");
+    return (
+      <Forbidden403 reason="You don't have access to this event. It may have been deleted, or you may not be the organizer, zone regional admin, or super-admin for it." />
+    );
   }
 
   return (

@@ -2,6 +2,25 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## 🔴 CANONICAL IDENTITY & ROLES — yi_directory IS THE MOTHER SOURCE
+
+**Rule (effective 2026-05-28):** Every Yi person and every role they hold MUST be tracked in `yi_directory.people` and `yi_directory.role_assignments`. Per-vertical authorization tables (`yip.organizers`, `yi.national_admins`, `future.chapter_core_team`, future `yuva.*`, future `thalir.*`) are CACHES or VIEWS over `yi_directory`, not independent sources of truth.
+
+**Why:** Pre-2026-05-28, each vertical (YIP, Yi-Future, Yuva, Thalir, Masoom, …) reinvented its own auth table. Result: the same person had to be added in N places, super-admin gates differed across modules, and no single query could answer "who is a national admin of vertical X?". yi_directory was created in Phase 15 to fix this but the sync was only partially wired — chapter chairs synced, vertical chairs did not.
+
+**Shape (canonical):**
+- `yi_directory.people` — one row per human (`id`, `user_id` → `auth.users.id`, `full_name`, `email`, `phone`, `photo_url`, `is_active`).
+- `yi_directory.role_assignments` — one row per (person, app, role, year, optional chapter/zone). Key columns: `person_id`, `app` ('yip' | 'future' | 'yuva' | 'thalir' | 'masoom' | …), `role` ('national' | 'rm' | 'chapter_em' | 'chapter_chair' | 'national_admin' | …), `yi_year`, `yi_chapter`, `yi_zone`, `yi_edition_id`, `title`, `is_active`, `is_primary`.
+
+**How to apply when building/modifying any feature that involves people or roles:**
+1. **Read path:** Auth gates (e.g. `requireSuperAdmin()`, `isChapterAdmin()`, `isNationalChair()`) MUST query `yi_directory.role_assignments` joined to `yi_directory.people.user_id`. Do NOT query `yip.organizers`, `yi.national_admins`, or `future.chapter_core_team` directly for authorization decisions.
+2. **Write path:** Onboarding (invites, promotions, role grants) MUST INSERT into `yi_directory` first. Per-vertical tables sync FROM yi_directory via triggers or scheduled sync, never the reverse.
+3. **New vertical (e.g. Yuva, Masoom):** Do NOT create a `yuva.organizers` or `masoom.admins` table. Read from `yi_directory.role_assignments WHERE app='yuva'`. If a derived/cached view is genuinely needed for performance, create it as a materialized view, not as a parallel source.
+4. **Migrations that touch role data:** Always show SQL first (per project rule). Migration name must include `yi_directory_sync_` or `yi_directory_seed_` so the pattern is greppable.
+5. **Cleanup debt (open):** `yi.national_admins` and `yip.organizers` exist today and still gate live code. They will be deprecated by moving `requireSuperAdmin()` and friends to query yi_directory. Do not add new rows to those legacy tables — add to yi_directory and let the sync handle it.
+
+**If unsure whether a new table belongs:** It probably doesn't. Reuse `yi_directory.role_assignments` with a new `app` value or `role` value. The table is intentionally generic for this reason.
+
 ## Project Overview
 
 yi-connect is a Next.js 16 application using React 19, TypeScript, and Tailwind CSS 4. The project integrates shadcn/ui components (New York style) with extensive Radix UI primitives for building a modern, accessible user interface.

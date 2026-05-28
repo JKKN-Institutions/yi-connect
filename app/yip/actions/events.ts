@@ -25,6 +25,11 @@ interface CreateEventData {
   venue_address: string;
   central_agenda: string;
   committee_topics: Record<string, string>;
+  // Optional: when provided, server derives yi_zone_code + zone from
+  // yi.chapters.region so the 3-tier regional-admin gate works correctly.
+  // The DB trigger in 20260528160000_yip_events_autoderive_zone_and_topics
+  // is the defense-in-depth backstop for any caller that omits this.
+  yi_chapter_id?: string;
 }
 
 interface UpdateEventData {
@@ -60,6 +65,25 @@ export async function createEvent(
     return { success: false, error: "Not authenticated" };
   }
 
+  // When a yi_chapter_id is supplied, derive zone fields up-front so the
+  // 3-tier regional-admin visibility gate (yi_zone_code) is correct from
+  // first INSERT. The DB trigger added in
+  // 20260528160000_yip_events_autoderive_zone_and_topics provides the
+  // same guarantee for any caller that bypasses this code path (direct
+  // SQL, Management API inserts, seed scripts).
+  let derivedZoneCode: string | null = null;
+  if (data.yi_chapter_id) {
+    const { data: chapter } = await supabase
+      .schema("yi")
+      .from("chapters")
+      .select("region")
+      .eq("id", data.yi_chapter_id)
+      .maybeSingle();
+    if (chapter?.region) {
+      derivedZoneCode = chapter.region;
+    }
+  }
+
   // Insert the event
   const { data: event, error: eventError } = await supabase
     .from("events")
@@ -77,6 +101,13 @@ export async function createEvent(
       committee_topics: data.committee_topics,
       status: "draft",
       created_by: user.id,
+      ...(data.yi_chapter_id ? { yi_chapter_id: data.yi_chapter_id } : {}),
+      ...(derivedZoneCode
+        ? {
+            yi_zone_code: derivedZoneCode,
+            zone: derivedZoneCode as Database["public"]["Enums"]["yi_zone"],
+          }
+        : {}),
     })
     .select("id")
     .single();

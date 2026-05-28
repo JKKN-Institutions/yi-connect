@@ -49,13 +49,27 @@ export function JuryLoginClient({ events }: { events: EventOption[] }) {
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!email.trim() || !eventId) return;
+
+    // Defensive DOM read: automation tools (e.g. chrome-extension form_input) set
+    // the native .value directly without firing React's onChange, leaving controlled
+    // state empty. Fall back to the DOM's current value so both paths work.
+    const form = e.currentTarget;
+    const resolvedEmail =
+      email.trim() ||
+      (form.elements.namedItem("jury-email") as HTMLInputElement | null)?.value?.trim() ||
+      "";
+    const resolvedEventId =
+      eventId ||
+      (form.elements.namedItem("jury-event") as HTMLSelectElement | null)?.value ||
+      "";
+
+    if (!resolvedEmail || !resolvedEventId) return;
 
     setError(null);
     setLoading(true);
 
     try {
-      const result = await juryLoginByEmail(email, eventId);
+      const result = await juryLoginByEmail(resolvedEmail, resolvedEventId);
       if (result.type === "ok") {
         router.push("/yip/jury");
       } else {
@@ -109,6 +123,7 @@ export function JuryLoginClient({ events }: { events: EventOption[] }) {
                   </label>
                   <input
                     id="jury-email"
+                    name="jury-email"
                     type="email"
                     inputMode="email"
                     autoComplete="email"
@@ -151,6 +166,7 @@ export function JuryLoginClient({ events }: { events: EventOption[] }) {
                   </label>
                   <select
                     id="jury-event"
+                    name="jury-event"
                     value={eventId}
                     onChange={(e) => {
                       setEventId(e.target.value);

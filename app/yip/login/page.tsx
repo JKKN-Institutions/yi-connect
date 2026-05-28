@@ -30,8 +30,21 @@ export default function LoginPage() {
     setError(null);
     setLoading(true);
 
+    // Defensive DOM read: automation tools (e.g. chrome-extension form_input) set
+    // the native .value directly without firing React's onChange, leaving controlled
+    // state empty. Fall back to the DOM's current value so both paths work.
+    const form = e.currentTarget;
+    const resolvedEmail =
+      email.trim() ||
+      (form.elements.namedItem("email") as HTMLInputElement | null)?.value?.trim() ||
+      "";
+    const resolvedPassword =
+      password ||
+      (form.elements.namedItem("password") as HTMLInputElement | null)?.value ||
+      "";
+
     try {
-      const result = await loginOrganizer(email, password);
+      const result = await loginOrganizer(resolvedEmail, resolvedPassword);
       if (result.success) {
         router.push("/yip/dashboard");
         router.refresh();
@@ -71,6 +84,7 @@ export default function LoginPage() {
               <Label htmlFor="email">Email</Label>
               <Input
                 id="email"
+                name="email"
                 type="email"
                 placeholder="organizer@example.com"
                 value={email}
@@ -86,6 +100,7 @@ export default function LoginPage() {
               <Label htmlFor="password">Password</Label>
               <Input
                 id="password"
+                name="password"
                 type="password"
                 placeholder="Enter your password"
                 value={password}

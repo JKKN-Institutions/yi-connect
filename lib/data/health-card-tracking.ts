@@ -105,7 +105,7 @@ export const getPendingSubmissions = cache(
       .schema('yi_connect').from('vertical_activities')
       .select(`
         id,
-        title,
+        activity_title,
         activity_date,
         vertical_id,
         activity_type,
@@ -180,7 +180,7 @@ export const getPendingSubmissions = cache(
 
       pending.push({
         event_id: activity.id,
-        event_name: activity.title,
+        event_name: (activity as any).activity_title,
         event_date: activity.activity_date,
         vertical_id: activity.vertical_id,
         vertical_name: (activity.vertical as any)?.name || 'Unknown',

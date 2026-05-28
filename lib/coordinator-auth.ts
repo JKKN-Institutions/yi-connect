@@ -99,10 +99,10 @@ export const getCoordinatorProfile = cache(
       const { data: industry } = await supabase
         .schema('yi_connect')
         .from('industries')
-        .select('name')
+        .select('company_name')
         .eq('id', coordinator.stakeholder_id)
         .single()
-      stakeholderName = industry?.name || 'Unknown Industry'
+      stakeholderName = industry?.company_name || 'Unknown Industry'
     } else {
       // School or College - from stakeholders table
       const { data: stakeholder } = await supabase

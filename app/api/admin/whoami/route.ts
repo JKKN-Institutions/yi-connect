@@ -26,8 +26,7 @@ export async function GET() {
     const svc = await createServiceClient();
 
     const { data: person, error: personErr } = await svc
-      .schema("yi_directory" as never)
-      .from("people")
+      .schema("yi_directory" as never).from("people")
       .select("id, email")
       .eq("user_id", user.id)
       .maybeSingle();
@@ -43,8 +42,7 @@ export async function GET() {
     }
 
     const { data: rows, error: rowsErr } = await svc
-      .schema("yi_directory" as never)
-      .from("role_assignments")
+      .schema("yi_directory" as never).from("role_assignments")
       .select("app, role, yi_year, yi_chapter, yi_zone, is_active")
       .eq("person_id", (person as { id: string }).id);
 

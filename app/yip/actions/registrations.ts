@@ -2,6 +2,7 @@
 
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { generateAccessCode } from "@/lib/yip/access-code";
+import { logAuditAction } from "@/lib/yip/audit/log-action";
 import { revalidatePath } from "next/cache";
 import {
   parseCSV,
@@ -512,6 +513,12 @@ export async function deleteRegistration(
 
   const { error } = await regs(supabase).delete().eq("id", regId);
   if (error) return { success: false, error: error.message };
+  await logAuditAction({
+    action_type: "delete",
+    target_table: "registrations",
+    target_id: regId,
+    target_event_id: reg?.event_id ?? null,
+  });
   if (reg) revalidatePath(`/dashboard/events/${reg.event_id}/registrations`);
   return { success: true, data: null };
 }

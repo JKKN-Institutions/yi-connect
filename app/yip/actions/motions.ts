@@ -1,6 +1,7 @@
 "use server";
 
 import { createServiceClient } from "@/lib/yip/supabase/server";
+import { logAuditAction } from "@/lib/yip/audit/log-action";
 import { revalidatePath } from "next/cache";
 import type { MotionType, MotionStatus } from "@/lib/yip/motions";
 
@@ -243,6 +244,12 @@ export async function deleteMotion(
   const supabase = await createServiceClient();
   const { error } = await supabase.from("motions").delete().eq("id", motionId);
   if (error) return { success: false, error: error.message };
+  await logAuditAction({
+    action_type: "delete",
+    target_table: "motions",
+    target_id: motionId,
+    target_event_id: eventId,
+  });
   revalidatePath(`/dashboard/events/${eventId}/motions`);
   return { success: true, data: null };
 }

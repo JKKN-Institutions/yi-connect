@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/yip/supabase/server";
 import { DEFAULT_AGENDA_TEMPLATE } from "@/lib/yip/constants";
+import { logAuditAction } from "@/lib/yip/audit/log-action";
 import { revalidatePath } from "next/cache";
 import { attachCentralTopicsToEvent } from "./admin-topics";
 
@@ -164,6 +165,17 @@ export async function createEvent(
     }
   }
 
+  await logAuditAction({
+    action_type: "create",
+    target_table: "events",
+    target_id: event.id,
+    target_event_id: event.id,
+    metadata: {
+      name: data.name,
+      level: data.level,
+      chapter_name: data.chapter_name,
+    },
+  });
   revalidatePath("/dashboard");
   return { success: true, data: { id: event.id } };
 }

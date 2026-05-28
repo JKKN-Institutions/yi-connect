@@ -1,6 +1,7 @@
 "use server";
 
 import { createServiceClient } from "@/lib/yip/supabase/server";
+import { logAuditAction } from "@/lib/yip/audit/log-action";
 import { revalidatePath } from "next/cache";
 import type { PartySide } from "@/lib/yip/constants";
 
@@ -87,6 +88,12 @@ export async function deleteParty(id: string, eventId: string): Promise<ActionRe
   const supabase = await createServiceClient();
   const { error } = await supabase.from("parties").delete().eq("id", id);
   if (error) return { success: false, error: error.message };
+  await logAuditAction({
+    action_type: "delete",
+    target_table: "parties",
+    target_id: id,
+    target_event_id: eventId,
+  });
   revalidatePath(`/dashboard/events/${eventId}/parties`);
   return { success: true, data: null };
 }

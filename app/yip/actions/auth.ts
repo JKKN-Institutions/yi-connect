@@ -3,6 +3,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient, createServiceClient } from "@/lib/yip/supabase/server";
+import { logAuditAction } from "@/lib/yip/audit/log-action";
 
 // ─── Access Code Validation (unauthenticated) ──────────────────────
 
@@ -211,6 +212,15 @@ export async function juryLoginByEmail(
     }
   );
 
+  await logAuditAction({
+    action_type: "login",
+    target_table: "auth",
+    target_id: jury.id,
+    target_event_id: jury.event_id,
+    performed_by: { email: normalisedEmail },
+    metadata: { method: "jury-email", jury_name: jury.jury_name },
+  });
+
   return {
     type: "ok",
     jury: { id: jury.id, jury_name: jury.jury_name },
@@ -258,6 +268,13 @@ export async function loginOrganizer(
   if (error) {
     return { success: false, error: error.message };
   }
+
+  await logAuditAction({
+    action_type: "login",
+    target_table: "auth",
+    performed_by: { email: email.trim().toLowerCase() },
+    metadata: { method: "organizer-password" },
+  });
 
   return { success: true };
 }

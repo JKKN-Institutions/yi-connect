@@ -1,6 +1,7 @@
 "use server";
 
 import { createServiceClient } from "@/lib/yip/supabase/server";
+import { logAuditAction } from "@/lib/yip/audit/log-action";
 import { revalidatePath } from "next/cache";
 import {
   FEMALE_NAMES,
@@ -1581,6 +1582,11 @@ export async function seedMockData(): Promise<ActionResult<MockDataStats>> {
     void nationalParticipant;
 
     const stats = await getMockDataStats();
+    await logAuditAction({
+      action_type: "create",
+      target_table: "mock_data",
+      metadata: { stats, op: "seedMockData" },
+    });
     revalidatePath(ADMIN_PATH);
     return { success: true, data: stats };
   } catch (err) {
@@ -1802,6 +1808,11 @@ export async function wipeMockData(): Promise<
       supabase.schema("yi").from("years") /* TODO yip-absorption: seasons table dropped — verify yi.years shape + filter on events.yi_year_id */.delete({ count: "exact" }).eq("is_mock", true)
     );
 
+    await logAuditAction({
+      action_type: "wipe",
+      target_table: "mock_data",
+      metadata: { deleted, op: "wipeMockData" },
+    });
     revalidatePath(ADMIN_PATH);
     return { success: true, data: { deleted } };
   } catch (err) {
@@ -2001,6 +2012,12 @@ export async function wipeMockEvent(
       supabase.from("events").delete({ count: "exact" }).eq("id", eventId)
     );
 
+    await logAuditAction({
+      action_type: "wipe",
+      target_table: "events",
+      target_id: eventId,
+      metadata: { deleted, op: "wipeMockEvent" },
+    });
     revalidatePath(ADMIN_PATH);
     return { success: true, data: { deleted } };
   } catch (err) {

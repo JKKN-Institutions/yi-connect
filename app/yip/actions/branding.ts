@@ -1,6 +1,7 @@
 "use server";
 
 import { createServiceClient } from "@/lib/yip/supabase/server";
+import { logAuditAction } from "@/lib/yip/audit/log-action";
 import { revalidatePath } from "next/cache";
 import {
   BRANDING_RULES,
@@ -432,6 +433,12 @@ export async function deleteInvitation(
     .delete()
     .eq("id", id);
   if (error) return { success: false, error: error.message };
+  await logAuditAction({
+    action_type: "delete",
+    target_table: "invitations",
+    target_id: id,
+    target_event_id: eventId,
+  });
   revalidatePath(`/dashboard/events/${eventId}/branding`);
   return { success: true, data: null };
 }

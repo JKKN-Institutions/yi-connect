@@ -1,6 +1,7 @@
 "use server";
 
 import { createServiceClient } from "@/lib/yip/supabase/server";
+import { logAuditAction } from "@/lib/yip/audit/log-action";
 import { revalidatePath } from "next/cache";
 import type { YiZone } from "@/lib/yip/hierarchy";
 
@@ -132,6 +133,12 @@ export async function removeTopicFromEvent(
     .eq("topic_id", topicId);
 
   if (error) return { success: false, error: error.message };
+  await logAuditAction({
+    action_type: "delete",
+    target_table: "event_topics",
+    target_id: topicId,
+    target_event_id: eventId,
+  });
   revalidatePath(`/dashboard/events/${eventId}/topics`);
   return { success: true, data: null };
 }

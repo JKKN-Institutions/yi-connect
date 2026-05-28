@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/yip/supabase/server";
 import { generateAccessCode } from "@/lib/yip/access-code";
+import { logAuditAction } from "@/lib/yip/audit/log-action";
 import { revalidatePath } from "next/cache";
 import type { Database } from "@/types/yip/database";
 
@@ -354,6 +355,16 @@ export async function importParticipants(
     return { success: false, error: insertError.message };
   }
 
+  await logAuditAction({
+    action_type: "import",
+    target_table: "participants",
+    target_event_id: eventId,
+    metadata: {
+      imported: inserts.length,
+      attempted: rows.length,
+      errors_count: errors.length,
+    },
+  });
   revalidatePath(`/dashboard/events/${eventId}/participants`);
   return {
     success: true,
@@ -401,6 +412,12 @@ export async function deleteParticipant(
     return { success: false, error: error.message };
   }
 
+  await logAuditAction({
+    action_type: "delete",
+    target_table: "participants",
+    target_id: participantId,
+    target_event_id: eventId,
+  });
   revalidatePath(`/dashboard/events/${eventId}/participants`);
   return { success: true, data: null };
 }

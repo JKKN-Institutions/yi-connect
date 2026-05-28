@@ -14,6 +14,7 @@ import {
   UserCircle,
   Database,
   KeyRound,
+  ScrollText,
 } from "lucide-react";
 
 const NAV = [
@@ -27,6 +28,7 @@ const NAV = [
   { label: "Seasons", href: "/dashboard/admin/seasons", icon: CalendarRange },
   { label: "Branding Rules", href: "/dashboard/admin/branding-rules", icon: ShieldCheck },
   { label: "Mock Data", href: "/dashboard/admin/mock-data", icon: Database },
+  { label: "Audit Log", href: "/dashboard/admin/audit-log", icon: ScrollText },
 ];
 
 export function AdminShellNav() {

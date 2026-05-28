@@ -1,6 +1,7 @@
 "use server";
 
 import { createServiceClient } from "@/lib/yip/supabase/server";
+import { logAuditAction } from "@/lib/yip/audit/log-action";
 import { revalidatePath } from "next/cache";
 
 // Post-absorption note: YIP's old `schools` table was migrated into the
@@ -176,6 +177,11 @@ export async function deleteSchool(id: string): Promise<ActionResult> {
     .delete()
     .eq("id", id);
   if (error) return { success: false, error: error.message };
+  await logAuditAction({
+    action_type: "delete",
+    target_table: "schools",
+    target_id: id,
+  });
   revalidatePath("/yip/dashboard/schools");
   return { success: true, data: null };
 }

@@ -1,6 +1,7 @@
 "use server";
 
 import { createServiceClient } from "@/lib/yip/supabase/server";
+import { logAuditAction } from "@/lib/yip/audit/log-action";
 import { revalidatePath } from "next/cache";
 import type { VolunteerStation } from "@/lib/yip/volunteers";
 
@@ -109,6 +110,12 @@ export async function deleteVolunteer(
   const supabase = await createServiceClient();
   const { error } = await supabase.from("volunteers").delete().eq("id", id);
   if (error) return { success: false, error: error.message };
+  await logAuditAction({
+    action_type: "delete",
+    target_table: "volunteers",
+    target_id: id,
+    target_event_id: eventId,
+  });
   revalidatePath(`/dashboard/events/${eventId}/volunteers`);
   return { success: true, data: null };
 }

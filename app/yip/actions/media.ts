@@ -1,6 +1,7 @@
 "use server";
 
 import { createServiceClient } from "@/lib/yip/supabase/server";
+import { logAuditAction } from "@/lib/yip/audit/log-action";
 import { revalidatePath } from "next/cache";
 import {
   mimeToKind,
@@ -225,6 +226,13 @@ export async function deleteMedia(id: string): Promise<ActionResult> {
     .eq("id", id);
 
   if (delErr) return { success: false, error: delErr.message };
+  await logAuditAction({
+    action_type: "delete",
+    target_table: "media",
+    target_id: id,
+    target_event_id: row.event_id,
+    metadata: { storage_path: row.storage_path },
+  });
   revalidatePath(`/dashboard/events/${row.event_id}/media`);
   return { success: true, data: null };
 }

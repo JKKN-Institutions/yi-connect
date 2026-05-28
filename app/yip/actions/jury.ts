@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/yip/supabase/server";
 import { generateAccessCode } from "@/lib/yip/access-code";
+import { logAuditAction } from "@/lib/yip/audit/log-action";
 import { revalidatePath } from "next/cache";
 
 type ActionResult<T = unknown> =
@@ -149,6 +150,12 @@ export async function removeJury(
     return { success: false, error: error.message };
   }
 
+  await logAuditAction({
+    action_type: "delete",
+    target_table: "jury_assignments",
+    target_id: juryId,
+    target_event_id: eventId,
+  });
   revalidatePath(`/dashboard/events/${eventId}/jury`);
   return { success: true, data: null };
 }

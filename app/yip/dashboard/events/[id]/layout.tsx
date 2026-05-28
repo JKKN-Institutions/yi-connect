@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/yip/supabase/server";
+import { getEvent } from "@/app/yip/actions/events";
 import { EventTabNav } from "./event-tab-nav";
 import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
 
@@ -20,13 +21,9 @@ export default async function EventLayout({
     redirect("/yip/login");
   }
 
-  // Fetch event name for the header
-  const { data: event } = await supabase
-    .from("events")
-    .select("id, name, status")
-    .eq("id", id)
-    .eq("created_by", user.id)
-    .single();
+  // 3-tier visibility (super-admin / regional-admin / creator) — share the
+  // single source of truth in getEvent so layout and page stay consistent.
+  const event = await getEvent(id);
 
   if (!event) {
     return (

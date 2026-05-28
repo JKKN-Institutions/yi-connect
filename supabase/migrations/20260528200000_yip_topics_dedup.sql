@@ -1,0 +1,58 @@
+-- Migration: yip_topics_dedup
+-- Date: 2026-05-28
+-- Purpose: Audit and document yip.topics deduplication findings.
+--
+-- AUDIT RESULT: NO TRUE DUPLICATES EXIST
+-- ----------------------------------------
+-- The reported "duplicates" (11 topic pairs sharing identical titles) are
+-- ZONE-PARTITIONED rows, not content duplicates. Each pair consists of:
+--   - One row with zone = 'SRTN'  (South Region Tamil Nadu)
+--   - One row with zone = 'SRTKKA' (South Region TK/KA)
+--
+-- These rows have the same title, topic_number, handbook_page, and sub_points
+-- because both SR sub-zones share the same 11 topic subjects. However, the
+-- zone column correctly distinguishes them — they are separate valid rows
+-- serving zone-based event assignment.
+--
+-- Dedup key used by original task spec was (title, category) — which collapses
+-- across zones. Correct dedup key is (title, category, zone). When zone is
+-- included, COUNT(*)>1 returns ZERO rows.
+--
+-- Affected topic pairs (SRTN vs SRTKKA, not merged, correctly distinct):
+--   1.  AI, Deep Tech & Startup Ecosystem   (2d63e7b8 SRTN, 4fd883f6 SRTKKA)
+--   2.  Centre-State Relations              (429748ae SRTN, b0150417 SRTKKA)
+--   3.  Coastal & Blue Economy              (f4ab040d SRTN, d42b0de4 SRTKKA)
+--   4.  Data Privacy & Cybersecurity        (a38704c8 SRTN, 0be98953 SRTKKA)
+--   5.  EV Ecosystem & Auto Transition      (488c8679 SRTN, 0367c67b SRTKKA)
+--   6.  Healthcare & Social Development     (39a20d66 SRTN, 3925edcb SRTKKA)
+--   7.  IT Economy vs Traditional Employment(2357df92 SRTN, 008e01cb SRTKKA)
+--   8.  Manufacturing & Semiconductor Eco.  (e27c615a SRTN, 114cae33 SRTKKA)
+--   9.  Renewable Energy Leadership         (3de2e1a7 SRTN, 3e78716b SRTKKA)
+--  10.  Urban Infrastructure Crisis         (be1fbc18 SRTN, 9b726503 SRTKKA)
+--  11.  Water Disputes & Resource Sharing   (e2257ab8 SRTN, 63c28420 SRTKKA)
+--
+-- No event_topics rows reference any of these 22 topic IDs (event_topics had
+-- 21 total rows, all pointing at other topics). No FK repointing needed.
+--
+-- DECISION: No deactivations, no event_topics updates. Data is correct as-is.
+--
+-- VALIDATION QUERIES (expected results documented):
+--
+--   -- True dedup check (including zone) — must return 0 rows:
+--   SELECT title, category, zone, COUNT(*)
+--   FROM yip.topics
+--   WHERE is_active = true
+--   GROUP BY title, category, zone
+--   HAVING COUNT(*) > 1;
+--   -- Expected: (0 rows)
+--
+--   -- No orphan event_topics FKs:
+--   SELECT COUNT(*) FROM yip.event_topics
+--   WHERE topic_id NOT IN (SELECT id FROM yip.topics WHERE is_active = true);
+--   -- Expected: 0
+--
+-- This migration contains no DDL changes — it is an audit record only.
+-- The original dedup task is a no-op: the data is already correct.
+
+-- No-op statement to satisfy migration runner:
+SELECT 1;

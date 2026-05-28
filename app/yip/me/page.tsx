@@ -29,6 +29,8 @@ import {
   Megaphone,
 } from "lucide-react";
 import { VoteNowCard } from "./vote-now-card";
+import { SkillProfileCard } from "@/components/yip/skill-profile-card";
+import { getSkillProfile } from "@/app/yip/actions/skill-profile";
 
 // ─── Session parsing ─────────────────────────────────────────────
 
@@ -219,6 +221,10 @@ export default async function ParticipantPage() {
 
   const day1Items = (agendaItems ?? []).filter((a) => a.day === 1);
   const day2Items = (agendaItems ?? []).filter((a) => a.day === 2);
+
+  // Phase 19 / F — Skill profile derived from sub-criteria scores across
+  // this person's YIP journey (all events they've participated in).
+  const skillProfile = await getSkillProfile(participant.id);
 
   const role = participant.parliament_role;
   const side = participant.party_side as "ruling" | "opposition" | null;
@@ -602,6 +608,9 @@ export default async function ParticipantPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* ─── SKILL PROFILE (Phase 19/F) ──────────────────────────── */}
+      <SkillProfileCard profile={skillProfile} />
 
       {/* ─── RESULTS (if published) ─────────────────────────────── */}
       {event.results_published_at ? (

@@ -290,9 +290,23 @@ export async function unsubscribeFromPush(
 }
 
 /**
- * Inline guard: returns true iff signed-in user is super OR platform
- * admin in yi.national_admins. Non-redirecting (broadcast action returns
- * a typed error rather than a redirect mid-form-submit).
+ * Inline guard: returns true iff signed-in user has an active
+ * yi_directory.role_assignments row for app='future' with role in
+ * (super_admin, platform_admin, national_admin). Non-redirecting
+ * (broadcast action returns a typed error rather than a redirect
+ * mid-form-submit).
+ *
+ * Source-of-truth migration (2026-05-28): replaces the previous
+ * yi.national_admins.is_super_admin/is_platform_admin flag check.
+ * yi.national_admins is kept for back-compat reads from un-migrated
+ * paths but is no longer consulted here.
+ *
+ * Two-step lookup (people.id by email, then role_assignments) mirrors
+ * hasYiFuturePlatformRole() in app/yi-future/actions/national-admins.ts
+ * — kept inline here to avoid cross-action-file import (push.ts is a
+ * "use server" boundary). Casts via `unknown` mirror the existing
+ * chapter-chairs.ts pattern: yi_directory isn't in the future-pinned
+ * Database type.
  */
 async function isSuperOrPlatform(): Promise<boolean> {
   const supabase = await createClient();
@@ -303,14 +317,54 @@ async function isSuperOrPlatform(): Promise<boolean> {
 
   const email = user.email.trim().toLowerCase();
   const svc = await createServiceClient();
-  const { data } = await svc
-    .schema("yi")
-    .from("national_admins")
-    .select("is_super_admin, is_platform_admin" as never)
-    .eq("email", email)
-    .maybeSingle<{ is_super_admin: boolean; is_platform_admin: boolean }>();
 
-  return Boolean(data?.is_super_admin || data?.is_platform_admin);
+  const svcDir = (svc as unknown as {
+    schema: (s: string) => {
+      from: (t: string) => {
+        select: (c: string) => {
+          eq: (k: string, v: string) => {
+            maybeSingle: () => Promise<{ data: { id: string } | null }>;
+          };
+        };
+      };
+    };
+  }).schema("yi_directory");
+
+  const { data: person } = await svcDir
+    .from("people")
+    .select("id")
+    .eq("email", email)
+    .maybeSingle();
+  if (!person) return false;
+
+  const svcDirRoles = (svc as unknown as {
+    schema: (s: string) => {
+      from: (t: string) => {
+        select: (c: string) => {
+          eq: (k: string, v: string) => {
+            eq: (k: string, v: string) => {
+              eq: (k: string, v: boolean) => {
+                in: (
+                  k: string,
+                  v: string[]
+                ) => Promise<{ data: Array<{ role: string }> | null }>;
+              };
+            };
+          };
+        };
+      };
+    };
+  }).schema("yi_directory");
+
+  const { data: rows } = await svcDirRoles
+    .from("role_assignments")
+    .select("role")
+    .eq("person_id", person.id)
+    .eq("app", "future")
+    .eq("is_active", true)
+    .in("role", ["super_admin", "platform_admin", "national_admin"]);
+
+  return (rows ?? []).length > 0;
 }
 
 /**

@@ -22,14 +22,59 @@ export default async function BroadcastPage(): Promise<React.JSX.Element> {
 
   const email = user.email.trim().toLowerCase();
   const svc = await createServiceClient();
-  const { data } = await svc
-    .schema("yi")
-    .from("national_admins")
-    .select("is_super_admin, is_platform_admin" as never)
-    .eq("email", email)
-    .maybeSingle<{ is_super_admin: boolean; is_platform_admin: boolean }>();
 
-  const allowed = Boolean(data?.is_super_admin || data?.is_platform_admin);
+  // Source-of-truth gate (2026-05-28): yi_directory.role_assignments
+  // replaces the legacy yi.national_admins flag check. Two-step lookup
+  // (people.id by email, then role_assignments) mirrors the inline
+  // guard in app/yi-future/actions/push.ts#isSuperOrPlatform. Casts via
+  // `unknown` because yi_directory isn't in the future-pinned types.
+  const svcDir = (svc as unknown as {
+    schema: (s: string) => {
+      from: (t: string) => {
+        select: (c: string) => {
+          eq: (k: string, v: string) => {
+            maybeSingle: () => Promise<{ data: { id: string } | null }>;
+          };
+        };
+      };
+    };
+  }).schema("yi_directory");
+  const { data: person } = await svcDir
+    .from("people")
+    .select("id")
+    .eq("email", email)
+    .maybeSingle();
+
+  let allowed = false;
+  if (person) {
+    const svcDirRoles = (svc as unknown as {
+      schema: (s: string) => {
+        from: (t: string) => {
+          select: (c: string) => {
+            eq: (k: string, v: string) => {
+              eq: (k: string, v: string) => {
+                eq: (k: string, v: boolean) => {
+                  in: (
+                    k: string,
+                    v: string[]
+                  ) => Promise<{ data: Array<{ role: string }> | null }>;
+                };
+              };
+            };
+          };
+        };
+      };
+    }).schema("yi_directory");
+    const { data: rows } = await svcDirRoles
+      .from("role_assignments")
+      .select("role")
+      .eq("person_id", person.id)
+      .eq("app", "future")
+      .eq("is_active", true)
+      .in("role", ["super_admin", "platform_admin", "national_admin"]);
+    allowed = (rows ?? []).length > 0;
+  }
+
   if (!allowed) {
     redirect("/yi-future/national/admin?error=not_super_or_platform");
   }

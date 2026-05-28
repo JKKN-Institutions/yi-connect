@@ -131,13 +131,85 @@ export async function isCurrentUserSuperAdmin(): Promise<{
 }
 
 /**
+ * Internal: returns true iff `email` has an active yi_directory
+ * role_assignment for app='future' with role in
+ * (super_admin, platform_admin, national_admin).
+ *
+ * Two-step lookup because yi_directory.role_assignments keys on
+ * person_id, not email: (1) resolve people.id by email, (2) probe
+ * role_assignments for the required role. Service client is used so
+ * cross-schema reads bypass RLS.
+ *
+ * Casts via `unknown` mirror the existing pattern in chapter-chairs.ts
+ * — the generated Database type for yi-future pins schema='future', so
+ * yi_directory tables aren't in the typed surface area. Re-generating
+ * types with `supabase gen types --schema yi_directory` would remove
+ * the casts.
+ *
+ * Source-of-truth migration (2026-05-28): replaces the previous
+ * yi.national_admins.is_platform_admin flag check. yi.national_admins
+ * is kept for back-compat reads from un-migrated paths.
+ */
+async function hasYiFuturePlatformRole(email: string): Promise<boolean> {
+  const svc = await createServiceClient();
+  const svcDir = (svc as unknown as {
+    schema: (s: string) => {
+      from: (t: string) => {
+        select: (c: string) => {
+          eq: (k: string, v: string) => {
+            maybeSingle: () => Promise<{ data: { id: string } | null }>;
+          };
+        };
+      };
+    };
+  }).schema("yi_directory");
+
+  const { data: person } = await svcDir
+    .from("people")
+    .select("id")
+    .eq("email", email)
+    .maybeSingle();
+  if (!person) return false;
+
+  const svcDirRoles = (svc as unknown as {
+    schema: (s: string) => {
+      from: (t: string) => {
+        select: (c: string) => {
+          eq: (k: string, v: string) => {
+            eq: (k: string, v: string) => {
+              eq: (k: string, v: boolean) => {
+                in: (
+                  k: string,
+                  v: string[]
+                ) => Promise<{ data: Array<{ role: string }> | null }>;
+              };
+            };
+          };
+        };
+      };
+    };
+  }).schema("yi_directory");
+
+  const { data: rows } = await svcDirRoles
+    .from("role_assignments")
+    .select("role")
+    .eq("person_id", person.id)
+    .eq("app", "future")
+    .eq("is_active", true)
+    .in("role", ["super_admin", "platform_admin", "national_admin"]);
+
+  return (rows ?? []).length > 0;
+}
+
+/**
  * Returns the signed-in user's email if and only if they are a platform
  * admin. Otherwise redirects: unauthenticated → /login, authenticated
  * but not platform → /national/admin?error=not_platform_admin.
  *
  * Gates structural-config mutations (editions/tracks/problems/rubrics).
- * Independent of super-admin status — a user may be either, both, or
- * neither. Mirror of requireSuperAdmin() in every other respect.
+ * Source of truth: yi_directory.role_assignments (app='future', role in
+ * super_admin/platform_admin/national_admin, is_active=true). Replaces
+ * the legacy yi.national_admins.is_platform_admin check (2026-05-28).
  */
 export async function requirePlatformAdmin(): Promise<string> {
   const supabase = await createClient();
@@ -147,18 +219,8 @@ export async function requirePlatformAdmin(): Promise<string> {
   if (!user || !user.email) redirect("/yi-future/login");
 
   const email = normalizeEmail(user.email);
-  const svc = await createServiceClient();
-  const { data, error } = await svc
-    .schema("yi")
-    .from("national_admins")
-    // Cast as never for the same reason requireSuperAdmin does: the
-    // is_platform_admin column is added by migration 134 and the
-    // generated types may not yet reflect it at compile time.
-    .select("email, is_platform_admin" as never)
-    .eq("email", email)
-    .maybeSingle<{ email: string; is_platform_admin: boolean }>();
-
-  if (error || !data || !data.is_platform_admin) {
+  const allowed = await hasYiFuturePlatformRole(email);
+  if (!allowed) {
     redirect("/yi-future/national/admin?error=not_platform_admin");
   }
   return email;
@@ -181,14 +243,11 @@ export async function isCurrentUserPlatformAdmin(): Promise<{
   if (!user || !user.email) return { email: null, isPlatform: false };
 
   const email = normalizeEmail(user.email);
-  const svc = await createServiceClient();
-  const { data } = await svc
-    .schema("yi")
-    .from("national_admins")
-    .select("is_platform_admin" as never)
-    .eq("email", email)
-    .maybeSingle<{ is_platform_admin: boolean }>();
-  return { email, isPlatform: Boolean(data?.is_platform_admin) };
+  // Source-of-truth migration (2026-05-28): use the same yi_directory
+  // predicate as requirePlatformAdmin so UI button visibility never
+  // diverges from gate behavior.
+  const isPlatform = await hasYiFuturePlatformRole(email);
+  return { email, isPlatform };
 }
 
 // ─── Reads ──────────────────────────────────────────────────────────

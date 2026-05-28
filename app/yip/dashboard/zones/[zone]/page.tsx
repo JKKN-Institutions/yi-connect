@@ -162,7 +162,7 @@ export default async function ZoneDashboardPage({
                   </TableCell>
                   <TableCell>
                     <Link
-                      href={`/dashboard/events/${e.id}`}
+                      href={`/yip/dashboard/events/${e.id}`}
                       className="text-xs text-[#FF9933] hover:underline"
                     >
                       Open →

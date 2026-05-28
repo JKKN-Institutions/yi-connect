@@ -512,7 +512,7 @@ export function AdminDashboardClient({ seasons }: { seasons: Season[] }) {
                           <TableRow key={event.id}>
                             <TableCell>
                               <Link
-                                href={`/dashboard/events/${event.id}`}
+                                href={`/yip/dashboard/events/${event.id}`}
                                 className="font-medium text-sm text-blue-600 hover:underline"
                               >
                                 {event.name}

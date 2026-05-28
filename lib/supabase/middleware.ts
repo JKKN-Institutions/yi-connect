@@ -175,6 +175,7 @@ function handleYipAuth(
     '/yip/login',
     '/yip/event',
     '/yip/test-login',
+    '/yip/jury/login',
   ]
   // Exact match for the landing page.
   if (pathname === '/yip' || pathname === '/yip/') {

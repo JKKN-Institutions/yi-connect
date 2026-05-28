@@ -90,7 +90,7 @@ function EventCard({
           <div className={`mt-1.5 size-2.5 shrink-0 rounded-full ${statusDot(event.status)}`} />
           <div className="min-w-0 flex-1">
             <Link
-              href={`/dashboard/events/${event.id}`}
+              href={`/yip/dashboard/events/${event.id}`}
               className="text-sm font-semibold text-gray-900 hover:text-blue-600 leading-tight line-clamp-2"
             >
               {event.name}

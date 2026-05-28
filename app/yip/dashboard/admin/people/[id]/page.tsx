@@ -166,7 +166,7 @@ export default async function AdminPersonPage({
                       )}
                     </div>
                     <Link
-                      href={`/dashboard/events/${step.event_id}`}
+                      href={`/yip/dashboard/events/${step.event_id}`}
                       className="block text-base font-semibold text-[#1a1a3e] hover:text-[#FF9933] mt-1"
                     >
                       {step.event_name}

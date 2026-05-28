@@ -154,7 +154,7 @@ export default async function EventOverviewPage({
             Event Details
           </h2>
           <div className="flex items-center gap-2">
-            <Link href={`/dashboard/events/${id}/edit`}>
+            <Link href={`/yip/dashboard/events/${id}/edit`}>
               <button className="inline-flex items-center gap-1.5 rounded-lg border border-[#1a1a3e]/5 px-3 py-1.5 text-xs font-medium text-[#1a1a3e]/60 transition-colors hover:border-[#1a1a3e]/10 hover:text-[#1a1a3e]">
                 <Pencil className="size-3" />
                 Edit

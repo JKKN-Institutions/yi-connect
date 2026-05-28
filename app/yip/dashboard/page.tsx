@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/yip/supabase/server";
+import { isCurrentUserSuperAdmin } from "@/lib/yip/auth/require-super-admin";
 import { Badge } from "@/components/yip/ui/badge";
 import { Plus, CalendarDays, Users, MapPin } from "lucide-react";
 
@@ -74,12 +75,11 @@ export default async function DashboardPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Fetch events created by this organizer
-  const { data: events } = await supabase
-    .from("events")
-    .select("*")
-    .eq("created_by", user!.id)
-    .order("created_at", { ascending: false });
+  // Fetch events — super-admin sees all, others see their own.
+  const isSuper = await isCurrentUserSuperAdmin();
+  let eventsQuery = supabase.from("events").select("*");
+  if (!isSuper) eventsQuery = eventsQuery.eq("created_by", user!.id);
+  const { data: events } = await eventsQuery.order("created_at", { ascending: false });
 
   // Fetch participant counts for each event
   const eventIds = (events ?? []).map((e) => e.id);
@@ -131,7 +131,7 @@ export default async function DashboardPage() {
             const count = participantCounts[event.id] || 0;
 
             return (
-              <Link key={event.id} href={`/dashboard/events/${event.id}`}>
+              <Link key={event.id} href={`/yip/dashboard/events/${event.id}`}>
                 <div className="cursor-pointer overflow-hidden rounded-xl border border-[#1a1a3e]/5 bg-white shadow-sm transition-all hover:border-[#1a1a3e]/10 hover:shadow-md">
                   <div className="p-5">
                     <div className="flex items-start justify-between gap-2">

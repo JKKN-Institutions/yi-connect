@@ -240,7 +240,7 @@ export function PartiesClient({
       <div className="flex items-start justify-between gap-6">
         <div>
           <Link
-            href={`/dashboard/events/${eventId}`}
+            href={`/yip/dashboard/events/${eventId}`}
             className="inline-flex items-center gap-1 text-xs text-[#1a1a3e]/60 hover:text-[#1a1a3e] mb-2"
           >
             <ArrowLeft className="size-3" /> {eventName}

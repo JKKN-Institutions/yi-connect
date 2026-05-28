@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/yip/supabase/server";
 import { DEFAULT_AGENDA_TEMPLATE } from "@/lib/yip/constants";
 import { logAuditAction } from "@/lib/yip/audit/log-action";
+import { isCurrentUserSuperAdmin } from "@/lib/yip/auth/require-super-admin";
 import { revalidatePath } from "next/cache";
 import { attachCentralTopicsToEvent } from "./admin-topics";
 
@@ -202,8 +203,11 @@ export async function updateEvent(
     .eq("id", eventId)
     .single();
 
-  if (!existing || existing.created_by !== user.id) {
-    return { success: false, error: "Event not found or not authorized" };
+  if (!existing) {
+    return { success: false, error: "Event not found" };
+  }
+  if (existing.created_by !== user.id && !(await isCurrentUserSuperAdmin())) {
+    return { success: false, error: "Event not authorized" };
   }
 
   const { error } = await supabase
@@ -231,12 +235,11 @@ export async function getEvent(eventId: string) {
     return null;
   }
 
-  const { data: event } = await supabase
-    .from("events")
-    .select("*")
-    .eq("id", eventId)
-    .eq("created_by", user.id)
-    .single();
+  // Super-admin (role='national') can read any event; others scoped to their own.
+  const isSuper = await isCurrentUserSuperAdmin();
+  let query = supabase.from("events").select("*").eq("id", eventId);
+  if (!isSuper) query = query.eq("created_by", user.id);
+  const { data: event } = await query.single();
 
   if (!event) return null;
 
@@ -282,8 +285,11 @@ async function setEventLock(
     .eq("id", eventId)
     .single();
 
-  if (!existing || existing.created_by !== user.id) {
-    return { success: false, error: "Event not found or not authorized" };
+  if (!existing) {
+    return { success: false, error: "Event not found" };
+  }
+  if (existing.created_by !== user.id && !(await isCurrentUserSuperAdmin())) {
+    return { success: false, error: "Event not authorized" };
   }
 
   const patch = { [field]: value };
@@ -337,12 +343,10 @@ export async function getEventWithDetails(eventId: string) {
     return null;
   }
 
-  const { data: event } = await supabase
-    .from("events")
-    .select("*")
-    .eq("id", eventId)
-    .eq("created_by", user.id)
-    .single();
+  const isSuper = await isCurrentUserSuperAdmin();
+  let query = supabase.from("events").select("*").eq("id", eventId);
+  if (!isSuper) query = query.eq("created_by", user.id);
+  const { data: event } = await query.single();
 
   if (!event) return null;
 
@@ -412,8 +416,11 @@ export async function pushLiveBanner(
     .eq("id", eventId)
     .single();
 
-  if (!existing || existing.created_by !== user.id) {
-    return { success: false, error: "Event not found or not authorized" };
+  if (!existing) {
+    return { success: false, error: "Event not found" };
+  }
+  if (existing.created_by !== user.id && !(await isCurrentUserSuperAdmin())) {
+    return { success: false, error: "Event not authorized" };
   }
 
   // live_banner_* columns exist in DB (migration adding live_banner_text
@@ -471,8 +478,11 @@ export async function clearLiveBanner(
     .eq("id", eventId)
     .single();
 
-  if (!existing || existing.created_by !== user.id) {
-    return { success: false, error: "Event not found or not authorized" };
+  if (!existing) {
+    return { success: false, error: "Event not found" };
+  }
+  if (existing.created_by !== user.id && !(await isCurrentUserSuperAdmin())) {
+    return { success: false, error: "Event not authorized" };
   }
 
   const patch = {

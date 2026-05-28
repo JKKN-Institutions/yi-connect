@@ -155,7 +155,7 @@ export default function EditEventPage() {
             Update basic event information
           </p>
         </div>
-        <Link href={`/dashboard/events/${eventId}`}>
+        <Link href={`/yip/dashboard/events/${eventId}`}>
           <Button variant="outline" size="sm">
             <ArrowLeft className="size-4" />
             Back to Overview
@@ -295,7 +295,7 @@ export default function EditEventPage() {
 
       {/* Save Button */}
       <div className="flex justify-end gap-3">
-        <Link href={`/dashboard/events/${eventId}`}>
+        <Link href={`/yip/dashboard/events/${eventId}`}>
           <Button variant="outline">Cancel</Button>
         </Link>
         <Button

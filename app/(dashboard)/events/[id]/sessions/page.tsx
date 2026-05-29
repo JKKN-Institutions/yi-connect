@@ -57,11 +57,11 @@ export default async function EventSessionsPage({ params }: PageProps) {
     (event as { chapter_id?: string | null; chapter?: { id?: string } | null })
       .chapter_id ?? (event as { chapter?: { id?: string } | null }).chapter?.id ?? null
 
+  // Fail CLOSED on a null currentChapterId (no members row / unassigned).
   if (
     !isSuperAdmin &&
     eventChapterId &&
-    currentChapterId &&
-    eventChapterId !== currentChapterId
+    (currentChapterId === null || eventChapterId !== currentChapterId)
   ) {
     return (
       <Forbidden reason="This event's sessions belong to another chapter and are not visible to you." />

@@ -85,11 +85,14 @@ async function ReportPageContent({ params }: PageProps) {
     (event as { chapter_id?: string | null; chapter?: { id?: string } | null })
       .chapter_id ?? (event as { chapter?: { id?: string } | null }).chapter?.id ?? null
 
+  // Fail CLOSED: a non-super user is blocked if the event has a chapter and
+  // we cannot confirm they belong to it — including when their own chapter is
+  // null (no members row / unassigned). Previously this short-circuited on a
+  // null currentChapterId, letting chapter-less users bypass the scope check.
   if (
     !isSuperAdmin &&
     eventChapterId &&
-    currentChapterId &&
-    eventChapterId !== currentChapterId
+    (currentChapterId === null || eventChapterId !== currentChapterId)
   ) {
     return (
       <Forbidden reason="This session report belongs to another chapter and is not visible to you." />

@@ -131,6 +131,8 @@ export async function updateSession(request: NextRequest) {
     '/events',
     '/finance',
     '/stakeholders',
+    '/coordinator',  // Coordinator pages (folded into main dashboard)
+    '/sub-chapter',  // Sub-chapter lead pages (folded into main dashboard)
     '/m', // Mobile/TWA routes - all require authentication
   ]
   const isProtectedPath = protectedPaths.some(path =>

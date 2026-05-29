@@ -29,12 +29,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: 'yearly' as const,
       priority: 0.3,
     },
-    {
-      url: `${baseUrl}/chapter-lead/login`,
-      lastModified: new Date(),
-      changeFrequency: 'monthly' as const,
-      priority: 0.5,
-    },
   ];
 
   return publicRoutes;

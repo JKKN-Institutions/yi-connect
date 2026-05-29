@@ -684,6 +684,44 @@ const navigation: NavItem[] = [
     ]
   },
   {
+    name: 'Coordinator',
+    icon: Handshake,
+    requiredRoles: ['Super Admin', 'National Admin', 'Coordinator'],
+    items: [
+      {
+        name: 'Bookings',
+        href: '/coordinator/bookings',
+        icon: CalendarDays,
+        requiredRoles: ['Super Admin', 'National Admin', 'Coordinator']
+      },
+      {
+        name: 'Sessions',
+        href: '/coordinator/sessions',
+        icon: Mic,
+        requiredRoles: ['Super Admin', 'National Admin', 'Coordinator']
+      }
+    ]
+  },
+  {
+    name: 'Sub-Chapter',
+    icon: GraduationCap,
+    requiredRoles: ['Super Admin', 'National Admin', 'Sub-Chapter Lead'],
+    items: [
+      {
+        name: 'Events',
+        href: '/sub-chapter/events',
+        icon: Calendar,
+        requiredRoles: ['Super Admin', 'National Admin', 'Sub-Chapter Lead']
+      },
+      {
+        name: 'Members',
+        href: '/sub-chapter/members',
+        icon: Users2,
+        requiredRoles: ['Super Admin', 'National Admin', 'Sub-Chapter Lead']
+      }
+    ]
+  },
+  {
     name: 'Settings',
     icon: Settings,
     items: [

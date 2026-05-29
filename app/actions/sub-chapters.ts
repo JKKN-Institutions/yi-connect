@@ -224,7 +224,7 @@ export async function createSubChapterLead(
 
   // Send welcome email with temporary password
   const subChapterName = subChapter?.name || 'Sub-Chapter'
-  const loginLink = `${process.env.NEXT_PUBLIC_APP_URL || 'https://yi-connect-app.vercel.app'}/chapter-lead/login`
+  const loginLink = `${process.env.NEXT_PUBLIC_APP_URL || 'https://yi-connect-app.vercel.app'}/login`
 
   const emailTemplate = subChapterLeadWelcomeEmail({
     leadName: input.full_name,
@@ -271,7 +271,7 @@ export async function updateLeadStatus(
   }
 
   revalidatePath('/sub-chapters')
-  revalidatePath('/chapter-lead')
+  revalidatePath('/sub-chapter')
 
   return { success: true }
 }
@@ -356,7 +356,7 @@ export async function addSubChapterMember(
   }
 
   revalidatePath(`/sub-chapters/${input.sub_chapter_id}`)
-  revalidatePath('/chapter-lead/members')
+  revalidatePath('/sub-chapter/members')
 
   return { success: true, data: { id: data.id } }
 }
@@ -392,7 +392,7 @@ export async function bulkAddSubChapterMembers(
   }
 
   revalidatePath(`/sub-chapters/${subChapterId}`)
-  revalidatePath('/chapter-lead/members')
+  revalidatePath('/sub-chapter/members')
 
   return { success: true, data: { addedCount: data?.length || 0 } }
 }
@@ -426,7 +426,7 @@ export async function updateMemberStatus(
   }
 
   revalidatePath('/sub-chapters')
-  revalidatePath('/chapter-lead/members')
+  revalidatePath('/sub-chapter/members')
 
   return { success: true }
 }
@@ -474,7 +474,7 @@ export async function createSubChapterEvent(
   }
 
   revalidatePath(`/sub-chapters/${input.sub_chapter_id}`)
-  revalidatePath('/chapter-lead/events')
+  revalidatePath('/sub-chapter/events')
 
   return { success: true, data: { id: data.id } }
 }
@@ -500,7 +500,7 @@ export async function updateSubChapterEvent(
   }
 
   revalidatePath('/sub-chapters')
-  revalidatePath('/chapter-lead/events')
+  revalidatePath('/sub-chapter/events')
 
   return { success: true }
 }
@@ -527,7 +527,7 @@ export async function submitEventForApproval(id: string): Promise<ActionResult> 
   }
 
   revalidatePath('/sub-chapters')
-  revalidatePath('/chapter-lead/events')
+  revalidatePath('/sub-chapter/events')
   revalidatePath('/speaker-requests')
 
   return { success: true }
@@ -559,7 +559,7 @@ export async function approveEvent(
   }
 
   revalidatePath('/sub-chapters')
-  revalidatePath('/chapter-lead/events')
+  revalidatePath('/sub-chapter/events')
   revalidatePath('/speaker-requests')
 
   return { success: true }
@@ -592,7 +592,7 @@ export async function rejectEvent(
   }
 
   revalidatePath('/sub-chapters')
-  revalidatePath('/chapter-lead/events')
+  revalidatePath('/sub-chapter/events')
   revalidatePath('/speaker-requests')
 
   return { success: true }
@@ -621,7 +621,7 @@ export async function confirmSpeaker(id: string): Promise<ActionResult> {
   }
 
   revalidatePath('/sub-chapters')
-  revalidatePath('/chapter-lead/events')
+  revalidatePath('/sub-chapter/events')
   revalidatePath('/speaker-requests')
 
   return { success: true }
@@ -658,7 +658,7 @@ export async function updateEventStatus(
   }
 
   revalidatePath('/sub-chapters')
-  revalidatePath('/chapter-lead/events')
+  revalidatePath('/sub-chapter/events')
 
   return { success: true }
 }
@@ -692,7 +692,7 @@ export async function completeSubChapterEvent(
   }
 
   revalidatePath('/sub-chapters')
-  revalidatePath('/chapter-lead/events')
+  revalidatePath('/sub-chapter/events')
 
   return { success: true }
 }

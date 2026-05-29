@@ -6,39 +6,50 @@
 
 import { Suspense } from 'react'
 import Link from 'next/link'
-import { cookies } from 'next/headers'
-import { redirect } from 'next/navigation'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
 import { Plus, Calendar, Clock, CheckCircle2, XCircle } from 'lucide-react'
+import { requireRole } from '@/lib/auth'
+import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { getCoordinatorBookings } from '@/lib/data/session-bookings'
 import { BookingsList } from '@/components/session-bookings'
 
 export const metadata = {
-  title: 'Bookings | Coordinator Portal',
+  title: 'Bookings | Yi Connect',
   description: 'View and manage your session bookings',
 }
 
-async function getCoordinatorSession() {
-  const cookieStore = await cookies()
-  const coordinatorId = cookieStore.get('coordinator_id')?.value
-
-  if (!coordinatorId) {
-    return null
-  }
-
-  return { id: coordinatorId }
+async function getCoordinatorIdForUser(userId: string): Promise<string | null> {
+  const supabase = await createServerSupabaseClient()
+  const { data } = await supabase
+    .schema('yi_connect')
+    .from('stakeholder_coordinators')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('status', 'active')
+    .maybeSingle()
+  return data?.id ?? null
 }
 
 async function BookingsContent() {
-  const session = await getCoordinatorSession()
+  const { user } = await requireRole(['Coordinator', 'Super Admin', 'National Admin'])
 
-  if (!session) {
-    redirect('/coordinator/login')
+  const coordinatorId = await getCoordinatorIdForUser(user.id)
+  if (!coordinatorId) {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center">
+          <p className="text-muted-foreground">
+            No active coordinator profile is linked to your account.
+          </p>
+        </CardContent>
+      </Card>
+    )
   }
 
-  const bookings = await getCoordinatorBookings(session.id)
+  const bookings = await getCoordinatorBookings(coordinatorId)
 
   const pendingBookings = bookings.filter((b) =>
     ['pending', 'pending_trainer'].includes(b.status)

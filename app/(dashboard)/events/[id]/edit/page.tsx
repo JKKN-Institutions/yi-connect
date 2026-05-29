@@ -10,10 +10,11 @@ import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { getCurrentUser } from '@/lib/data/auth';
 import { createClient } from '@/lib/supabase/server';
-import { requireRole } from '@/lib/auth';
+import { requireRole, getCurrentChapterId } from '@/lib/auth';
 import { getEventFull } from '@/lib/data/events';
 import { EventForm } from '@/components/events';
 import { Button } from '@/components/ui/button';
+import { Forbidden } from '@/components/forbidden';
 import type { Venue, EventTemplate } from '@/types/event';
 import {
   Breadcrumb,
@@ -69,6 +70,33 @@ async function EventEditContent({ params }: PageProps) {
     notFound();
   }
 
+  // CHAPTER SCOPING (BUG-leak-fix 2026-05-28): block cross-chapter edits.
+  // Super Admin / National Admin bypass the chapter check.
+  const currentChapterId = await getCurrentChapterId();
+  const { data: roleRows } = await supabase
+    .schema('yi_connect')
+    .rpc('get_user_roles_detailed', { p_user_id: user.id });
+  const roleNames = (roleRows || []).map(
+    (r: { role_name: string }) => r.role_name
+  );
+  const isSuperAdmin =
+    roleNames.includes('Super Admin') || roleNames.includes('National Admin');
+
+  const eventChapterId =
+    (event as { chapter_id?: string | null; chapter?: { id?: string } | null })
+      .chapter_id ?? (event as { chapter?: { id?: string } | null }).chapter?.id ?? null;
+
+  if (
+    !isSuperAdmin &&
+    eventChapterId &&
+    currentChapterId &&
+    eventChapterId !== currentChapterId
+  ) {
+    return (
+      <Forbidden reason="This event belongs to another chapter and cannot be edited from your account." />
+    );
+  }
+
   // Check permissions - only organizer or admin can edit
   // Higher hierarchy_level = more authority (Super Admin=7, National Admin=6, etc.)
   const isOrganizer = event.organizer?.id === user.id;
@@ -76,7 +104,11 @@ async function EventEditContent({ params }: PageProps) {
   const canEdit = isOrganizer || isAdmin;
 
   if (!canEdit) {
-    redirect(`/events/${id}`);
+    // BUG-leak-fix 2026-05-28: was `redirect(`/events/${id}`)` — silent
+    // redirect created a confusing bounce-loop. Surface the reason instead.
+    return (
+      <Forbidden reason="You don't have edit access to this event. Only the event organizer or Chapter Chair+ can edit." />
+    );
   }
 
   // Fetch venues for the form

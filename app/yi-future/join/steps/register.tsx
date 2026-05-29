@@ -41,6 +41,8 @@ type FormState = {
   password: string;
 };
 
+type FieldErrors = Partial<Record<keyof FormState, string>>;
+
 const EMPTY: FormState = {
   full_name: "",
   email: "",
@@ -87,6 +89,7 @@ export function RegisterStep({
   const [section, setSection] = useState<1 | 2 | 3 | 4>(1);
   const [form, setForm] = useState<FormState>(EMPTY);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [pending, startTransition] = useTransition();
   const hydrated = useRef(false);
   const [returningProfile, setReturningProfile] = useState<PreviousProfile | null>(null);
@@ -147,56 +150,125 @@ export function RegisterStep({
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
     setError(null);
+    setFieldErrors((prev) => {
+      if (!prev[key] && !prev.whatsapp) return prev;
+      const next = { ...prev };
+      delete next[key];
+      // also clear whatsapp error when user toggles whatsapp_same on
+      if (key === "whatsapp_same" && value === true) delete next.whatsapp;
+      if (key === "mobile" && prev.whatsapp_same) delete next.whatsapp;
+      return next;
+    });
   }
 
-  function validateSection(n: 1 | 2 | 3 | 4): string | null {
+  function validateSection(
+    n: 1 | 2 | 3 | 4
+  ): { ok: true } | { ok: false; banner: string; fields: FieldErrors } {
     if (n === 1) {
-      if (!form.full_name.trim()) return "Please enter your full name.";
-      if (!EMAIL_RE.test(form.email.trim())) return "Please enter a valid email.";
+      const fields: FieldErrors = {};
+      if (!form.full_name.trim()) fields.full_name = "Please enter your full name.";
+      if (!EMAIL_RE.test(form.email.trim()))
+        fields.email = "Please enter a valid email address.";
       if (!INDIA_MOBILE_RE.test(form.mobile))
-        return "Mobile must be 10 digits, starting 6-9.";
+        fields.mobile = "10 digits, starting with 6, 7, 8 or 9.";
       const wa = form.whatsapp_same ? form.mobile : form.whatsapp;
-      if (!INDIA_MOBILE_RE.test(wa))
-        return "WhatsApp must be 10 digits, starting 6-9.";
-      if (!form.gender) return "Please pick your gender.";
-      if (!form.is_yi_yuva_member) return "Please answer the Yi YUVA question.";
-      if (!form.chapter_id) return "Please pick your Yi chapter.";
-      return null;
+      if (!INDIA_MOBILE_RE.test(wa)) {
+        if (form.whatsapp_same) {
+          // Already flagged on mobile; don't double-flag.
+          if (!fields.mobile)
+            fields.mobile = "10 digits, starting with 6, 7, 8 or 9.";
+        } else {
+          fields.whatsapp = "10 digits, starting with 6, 7, 8 or 9.";
+        }
+      }
+      if (!form.gender) fields.gender = "Please pick your gender.";
+      if (!form.is_yi_yuva_member)
+        fields.is_yi_yuva_member = "Please answer this question.";
+      if (!form.chapter_id) fields.chapter_id = "Please pick your Yi chapter.";
+      if (Object.keys(fields).length > 0) {
+        return {
+          ok: false,
+          banner:
+            "Please fix the highlighted fields before continuing.",
+          fields,
+        };
+      }
+      return { ok: true };
     }
     if (n === 2) {
-      if (!form.college_name.trim()) return "Please enter your college.";
-      if (!form.college_city.trim()) return "Please enter the college city.";
-      if (!form.course.trim()) return "Please enter your course.";
+      const fields: FieldErrors = {};
+      if (!form.college_name.trim())
+        fields.college_name = "Please enter your college.";
+      if (!form.college_city.trim())
+        fields.college_city = "Please enter the college city.";
+      if (!form.course.trim()) fields.course = "Please enter your course.";
       if (![1, 2, 3, 4, 5].includes(form.year_of_study))
-        return "Please pick your year of study.";
+        fields.year_of_study = "Please pick your year of study.";
       const ageNum = Number(form.age);
       if (!Number.isFinite(ageNum) || ageNum < 18 || ageNum > 25)
-        return "Age must be 18 to 25.";
-      return null;
+        fields.age = "Age must be between 18 and 25.";
+      if (Object.keys(fields).length > 0) {
+        return {
+          ok: false,
+          banner: "Please fix the highlighted fields before continuing.",
+          fields,
+        };
+      }
+      return { ok: true };
     }
     if (n === 3) {
       if (!form.travel_commitment)
-        return "Please answer the National Finals travel question.";
+        return {
+          ok: false,
+          banner: "Please answer the National Finals travel question.",
+          fields: {
+            travel_commitment:
+              "Please answer the National Finals travel question.",
+          },
+        };
       if (form.travel_commitment === "no")
-        return "Sorry — National Finals require willingness to travel.";
-      return null;
+        return {
+          ok: false,
+          banner:
+            "Sorry — National Finals require willingness to travel.",
+          fields: {
+            travel_commitment:
+              "National Finals require willingness to travel.",
+          },
+        };
+      return { ok: true };
     }
     if (n === 4) {
+      const fields: FieldErrors = {};
       if (!form.password || form.password.length < 6)
-        return "Create a password (at least 6 characters).";
-      if (!form.declaration_accepted) return "Please accept the declaration.";
-      return null;
+        fields.password = "At least 6 characters.";
+      if (!form.declaration_accepted)
+        fields.declaration_accepted = "Please accept the declaration.";
+      if (Object.keys(fields).length > 0) {
+        return {
+          ok: false,
+          banner: "Please fix the highlighted fields before continuing.",
+          fields,
+        };
+      }
+      return { ok: true };
     }
-    return null;
+    return { ok: true };
   }
 
   function next() {
-    const err = validateSection(section);
-    if (err) {
-      setError(err);
+    const result = validateSection(section);
+    if (!result.ok) {
+      setError(result.banner);
+      setFieldErrors(result.fields);
+      // Scroll to top of section so the banner is visible
+      if (typeof window !== "undefined") {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
       return;
     }
     setError(null);
+    setFieldErrors({});
     if (section === 1 && !lookupDone && !lookupRef.current) {
       lookupRef.current = true;
       const email = form.email.trim();
@@ -210,13 +282,15 @@ export function RegisterStep({
   }
   function back() {
     setError(null);
+    setFieldErrors({});
     if (section > 1) setSection((section - 1) as 1 | 2 | 3 | 4);
   }
 
   function submit() {
-    const err = validateSection(4);
-    if (err) {
-      setError(err);
+    const result = validateSection(4);
+    if (!result.ok) {
+      setError(result.banner);
+      setFieldErrors(result.fields);
       return;
     }
     startTransition(async () => {
@@ -262,8 +336,23 @@ export function RegisterStep({
       <ProgressDots current={section} />
 
       <div className="mt-5 bg-white border border-navy/10 rounded-lg p-5 sm:p-6">
+        {error && (
+          <div
+            role="alert"
+            aria-live="polite"
+            className="mb-4 text-sm text-red-700 bg-red-50 border-2 border-red-300 rounded-md p-3 font-semibold"
+          >
+            {error}
+          </div>
+        )}
+
         {section === 1 && (
-          <Section1 form={form} update={update} chapters={chapters} />
+          <Section1
+            form={form}
+            update={update}
+            chapters={chapters}
+            errors={fieldErrors}
+          />
         )}
         {returningProfile && section === 2 && (
           <div className="mb-4 p-4 rounded-lg bg-[#F5A623]/10 border-2 border-[#F5A623]/30">
@@ -302,12 +391,6 @@ export function RegisterStep({
         )}
         {section === 3 && <Section3 form={form} update={update} />}
         {section === 4 && <Section4 form={form} update={update} />}
-
-        {error && (
-          <div className="mt-4 text-sm text-red-600 bg-red-50 border border-red-200 rounded p-3">
-            {error}
-          </div>
-        )}
 
         <div className="mt-6 flex items-center justify-between">
           {section > 1 ? (
@@ -384,32 +467,45 @@ function Section1({
   form,
   update,
   chapters,
+  errors,
 }: {
   form: FormState;
   update: <K extends keyof FormState>(key: K, value: FormState[K]) => void;
   chapters: ChapterMini[];
+  errors: FieldErrors;
 }) {
   return (
     <div className="space-y-4">
       <SectionHeader n={1} title="Details" />
 
-      <Field label="Full Name (as per college ID)" required>
+      <Field
+        label="Full Name (as per college ID)"
+        required
+        error={errors.full_name}
+      >
         <input
           type="text"
           value={form.full_name}
           onChange={(e) => update("full_name", e.target.value)}
           autoComplete="name"
-          className={inputClass}
+          aria-invalid={!!errors.full_name}
+          className={errorInputClass(!!errors.full_name)}
         />
       </Field>
 
-      <Field label="Email Address" hint="For all official communication" required>
+      <Field
+        label="Email Address"
+        hint="For all official communication"
+        required
+        error={errors.email}
+      >
         <input
           type="email"
           value={form.email}
           onChange={(e) => update("email", e.target.value)}
           autoComplete="email"
-          className={inputClass}
+          aria-invalid={!!errors.email}
+          className={errorInputClass(!!errors.email)}
         />
       </Field>
 
@@ -417,6 +513,7 @@ function Section1({
         label="Mobile Number (primary)"
         hint="10-digit Indian mobile, +91 assumed"
         required
+        error={errors.mobile}
       >
         <div className="flex">
           <span className="inline-flex items-center px-3 text-sm text-navy/60 bg-navy/5 border border-navy/20 border-r-0 rounded-l-md">
@@ -429,12 +526,13 @@ function Section1({
             inputMode="numeric"
             autoComplete="tel-national"
             placeholder="9876543210"
-            className={`${inputClass} rounded-l-none`}
+            aria-invalid={!!errors.mobile}
+            className={`${errorInputClass(!!errors.mobile)} rounded-l-none`}
           />
         </div>
       </Field>
 
-      <Field label="WhatsApp Number" required>
+      <Field label="WhatsApp Number" required error={errors.whatsapp}>
         <label className="flex items-center gap-2 text-sm text-navy/70 mb-2">
           <input
             type="checkbox"
@@ -455,20 +553,27 @@ function Section1({
               onChange={(e) => update("whatsapp", digitsOnly(e.target.value))}
               inputMode="numeric"
               placeholder="9876543210"
-              className={`${inputClass} rounded-l-none`}
+              aria-invalid={!!errors.whatsapp}
+              className={`${errorInputClass(!!errors.whatsapp)} rounded-l-none`}
             />
           </div>
         )}
       </Field>
 
-      <Field label="Gender" required>
-        <div className="flex gap-3">
+      <Field label="Gender" required error={errors.gender}>
+        <div
+          className={`flex gap-3 ${
+            errors.gender ? "rounded-md ring-2 ring-red-300 p-1 -m-1" : ""
+          }`}
+        >
           {(["male", "female"] as const).map((g) => (
             <label
               key={g}
               className={`flex-1 cursor-pointer min-h-[44px] inline-flex items-center justify-center px-4 rounded-md border text-sm font-semibold transition-colors ${
                 form.gender === g
                   ? "bg-[#F5A623] text-navy border-[#F5A623]"
+                  : errors.gender
+                  ? "border-red-400 text-navy/80 hover:border-[#F5A623]/60"
                   : "border-navy/20 text-navy/70 hover:border-[#F5A623]/60"
               }`}
             >
@@ -486,14 +591,26 @@ function Section1({
         </div>
       </Field>
 
-      <Field label="Are you a member of Yi YUVA?" required>
-        <div className="flex gap-3">
+      <Field
+        label="Are you a member of Yi YUVA?"
+        required
+        error={errors.is_yi_yuva_member}
+      >
+        <div
+          className={`flex gap-3 ${
+            errors.is_yi_yuva_member
+              ? "rounded-md ring-2 ring-red-300 p-1 -m-1"
+              : ""
+          }`}
+        >
           {(["yes", "no"] as const).map((v) => (
             <label
               key={v}
               className={`flex-1 cursor-pointer min-h-[44px] inline-flex items-center justify-center px-4 rounded-md border text-sm font-semibold transition-colors ${
                 form.is_yi_yuva_member === v
                   ? "bg-[#F5A623] text-navy border-[#F5A623]"
+                  : errors.is_yi_yuva_member
+                  ? "border-red-400 text-navy/80 hover:border-[#F5A623]/60"
                   : "border-navy/20 text-navy/70 hover:border-[#F5A623]/60"
               }`}
             >
@@ -511,11 +628,16 @@ function Section1({
         </div>
       </Field>
 
-      <Field label="Yi Chapter you'll participate under" required>
+      <Field
+        label="Yi Chapter you'll participate under"
+        required
+        error={errors.chapter_id}
+      >
         <select
           value={form.chapter_id}
           onChange={(e) => update("chapter_id", e.target.value)}
-          className={inputClass}
+          aria-invalid={!!errors.chapter_id}
+          className={errorInputClass(!!errors.chapter_id)}
         >
           <option value="">Pick your chapter…</option>
           {chapters.map((c) => (
@@ -823,15 +945,24 @@ function Section4({
 const inputClass =
   "block w-full min-h-[44px] px-3 py-2 border border-navy/20 rounded-md text-sm text-navy bg-white placeholder:text-navy/30 focus:outline-none focus:border-[#F5A623] focus:ring-1 focus:ring-[#F5A623]/40";
 
+const inputClassError =
+  "block w-full min-h-[44px] px-3 py-2 border-2 border-red-400 rounded-md text-sm text-navy bg-red-50/30 placeholder:text-navy/30 focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-300";
+
+function errorInputClass(hasError: boolean): string {
+  return hasError ? inputClassError : inputClass;
+}
+
 function Field({
   label,
   hint,
   required,
+  error,
   children,
 }: {
   label: string;
   hint?: string;
   required?: boolean;
+  error?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -841,7 +972,16 @@ function Field({
         {required && <span className="ml-1 text-yi-saffron">*</span>}
       </label>
       {children}
-      {hint && <p className="mt-1 text-[11px] text-navy/50">{hint}</p>}
+      {error ? (
+        <p
+          className="mt-1 text-xs font-semibold text-red-600"
+          role="alert"
+        >
+          {error}
+        </p>
+      ) : (
+        hint && <p className="mt-1 text-[11px] text-navy/50">{hint}</p>
+      )}
     </div>
   );
 }

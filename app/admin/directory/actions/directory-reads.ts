@@ -177,7 +177,7 @@ export async function listDirectoryPeople(
 
   // Step 1a: load ALL active role_assignments first so we can apply
   // role-level filters (app, role, year, chapter) by intersecting person_ids.
-  let roleQuery = dirAny.from("role_assignments").select(
+  let roleQuery = (svc.schema("yi_directory" as "public") as unknown as typeof dirAny).from("role_assignments").select(
     "id, person_id, app, role, yi_year, yi_chapter, yi_zone, yi_edition_id, title, is_active, is_primary, created_at, updated_at"
   );
 
@@ -233,8 +233,7 @@ export async function listDirectoryPeople(
     };
   }
 
-  let peopleQuery = dirAny
-    .from("people")
+  let peopleQuery = (svc.schema("yi_directory" as "public") as unknown as typeof dirAny).from("people")
     .select(
       "id, full_name, email, phone, photo_url, is_active, user_id, source_yip_profile_id, source_future_team_id, created_at, updated_at",
       { count: "exact" }
@@ -330,7 +329,7 @@ async function fetchAvailableYears(
       }>;
     };
   };
-  const res = await dirAny.from("role_assignments").select("yi_year");
+  const res = await (svc.schema("yi_directory" as "public") as unknown as typeof dirAny).from("role_assignments").select("yi_year");
   const years = new Set<number>();
   for (const r of res.data ?? []) {
     if (typeof r.yi_year === "number") years.add(r.yi_year);
@@ -370,8 +369,7 @@ export async function getPersonDetail(
     };
   };
 
-  const personRes = await dirAny
-    .from("people")
+  const personRes = await (svc.schema("yi_directory" as "public") as unknown as typeof dirAny).from("people")
     .select(
       "id, full_name, email, phone, photo_url, is_active, user_id, source_yip_profile_id, source_future_team_id, created_at, updated_at"
     )
@@ -381,8 +379,7 @@ export async function getPersonDetail(
   if (!personRes.data) return null;
   const p = personRes.data;
 
-  const rolesRes = await dirAny
-    .from("role_assignments")
+  const rolesRes = await (svc.schema("yi_directory" as "public") as unknown as typeof dirAny).from("role_assignments")
     .select(
       "id, person_id, app, role, yi_year, yi_chapter, yi_zone, yi_edition_id, title, is_active, is_primary, created_at, updated_at"
     )

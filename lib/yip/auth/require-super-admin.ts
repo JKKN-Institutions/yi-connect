@@ -35,9 +35,34 @@ const UNAUTH_MESSAGE = "Not authenticated";
 // Roles that count as YIP super-admin in yi_directory.role_assignments.
 const YIP_SUPER_ROLES = new Set(["national", "super_admin"]);
 
+/**
+ * Structured audit line for the super-admin gate. Emitted on EVERY verdict
+ * (allow + both deny paths) so a 403 is never silent — Vercel logs will show
+ * exactly which user hit the gate, what roles they held, and which path (if
+ * any) matched.
+ *
+ * Why this exists: on 2026-05-28 a 403 on /admin/directory was misattributed
+ * to director@ when the session was actually a regional_admin (punitknsinghal@).
+ * The gate was correct; the diagnosis was wrong because the denial was silent.
+ * Grep Vercel logs for `super_admin_gate` to see verdicts.
+ */
+function logGateVerdict(payload: Record<string, unknown>): void {
+  // Single-line JSON so Vercel log search can filter on the `tag` field.
+  console.log(JSON.stringify({ tag: "super_admin_gate", ...payload }));
+}
+
 export async function requireSuperAdmin(): Promise<SuperAdminGate> {
   const me = await getCurrentPersonRoles();
-  if (!me) return { ok: false, error: UNAUTH_MESSAGE };
+  if (!me) {
+    logGateVerdict({ verdict: "deny", reason: "unauthenticated_or_no_person_row" });
+    return { ok: false, error: UNAUTH_MESSAGE };
+  }
+
+  // Compact summary of the user's active assignments — the single most useful
+  // field when triaging an unexpected 403 ("what did they actually have?").
+  const activeRoles = me.assignments
+    .filter((a) => a.is_active)
+    .map((a) => `${a.app}:${a.role}`);
 
   // Path 1: explicit YIP super-admin assignment.
   const yipSuper = me.assignments.some(
@@ -48,8 +73,25 @@ export async function requireSuperAdmin(): Promise<SuperAdminGate> {
   const platformSuper = yipSuper ? true : await isPlatformSuperAdmin();
 
   if (!yipSuper && !platformSuper) {
+    logGateVerdict({
+      verdict: "deny",
+      reason: "no_super_role",
+      user_id: me.user_id,
+      email: me.email,
+      yip_super: false,
+      platform_super: false,
+      active_roles: activeRoles,
+    });
     return { ok: false, error: DENY_MESSAGE };
   }
+
+  logGateVerdict({
+    verdict: "allow",
+    user_id: me.user_id,
+    email: me.email,
+    matched_path: yipSuper ? "yip_super" : "platform_super",
+    active_roles: activeRoles,
+  });
 
   // Backward-compat: callers expect a string `organizerId` field. The field
   // is currently unread (no caller dereferences gate.organizerId), but the

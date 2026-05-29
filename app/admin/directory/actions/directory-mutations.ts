@@ -155,10 +155,6 @@ type DirClient = {
   };
 };
 
-async function dirClient(): Promise<DirClient> {
-  const svc = await createServiceClient();
-  return svc.schema("yi_directory" as "public") as unknown as DirClient;
-}
 
 // ─── addRoleAssignment ──────────────────────────────────────────────────
 
@@ -173,13 +169,12 @@ export async function addRoleAssignment(
   const vErr = validateRoleInput(input);
   if (vErr) return { success: false, error: vErr };
 
-  const dir = await dirClient();
+  const svc = await createServiceClient();
 
   // Conflict policy: refuse if an ACTIVE row already matches
   // (person_id, app, role, yi_year). Surface the existing id so the caller
   // can offer an "edit" path.
-  const existing = await dir
-    .from("role_assignments")
+  const existing = await (svc.schema("yi_directory" as "public") as unknown as DirClient).from("role_assignments")
     .select("id, is_active")
     .eq("person_id", personId)
     .eq("app", input.app.trim().toLowerCase())
@@ -210,8 +205,7 @@ export async function addRoleAssignment(
     is_active: true,
   };
 
-  const ins = await dir
-    .from("role_assignments")
+  const ins = await (svc.schema("yi_directory" as "public") as unknown as DirClient).from("role_assignments")
     .insert(row)
     .select("id")
     .single();
@@ -269,11 +263,10 @@ export async function updateRoleAssignment(
     if (aErr) return { success: false, error: aErr };
   }
 
-  const dir = await dirClient();
+  const svc = await createServiceClient();
 
   // Look up the existing row so we can record what was actually changed.
-  const before = await dir
-    .from("role_assignments")
+  const before = await (svc.schema("yi_directory" as "public") as unknown as DirClient).from("role_assignments")
     .select(
       "id, person_id, app, role, yi_year, yi_chapter, yi_zone, title, is_active, is_primary"
     )
@@ -299,8 +292,7 @@ export async function updateRoleAssignment(
   if (patch.is_active !== undefined) update.is_active = patch.is_active;
   update.updated_at = new Date().toISOString();
 
-  const upd = await dir
-    .from("role_assignments")
+  const upd = await (svc.schema("yi_directory" as "public") as unknown as DirClient).from("role_assignments")
     .update(update)
     .eq("id", assignmentId);
 
@@ -352,10 +344,9 @@ export async function deactivateRoleAssignment(
   if (!assignmentId)
     return { success: false, error: "assignmentId is required" };
 
-  const dir = await dirClient();
+  const svc = await createServiceClient();
 
-  const before = await dir
-    .from("role_assignments")
+  const before = await (svc.schema("yi_directory" as "public") as unknown as DirClient).from("role_assignments")
     .select("id, person_id, app, role, yi_year, is_active")
     .eq("id", assignmentId)
     .maybeSingle();
@@ -370,8 +361,7 @@ export async function deactivateRoleAssignment(
     return { success: true, data: { id: assignmentId }, message: "Already inactive" };
   }
 
-  const upd = await dir
-    .from("role_assignments")
+  const upd = await (svc.schema("yi_directory" as "public") as unknown as DirClient).from("role_assignments")
     .update({ is_active: false, updated_at: new Date().toISOString() })
     .eq("id", assignmentId);
 
@@ -430,10 +420,9 @@ export async function updatePerson(
     }
   }
 
-  const dir = await dirClient();
+  const svc = await createServiceClient();
 
-  const before = await dir
-    .from("people")
+  const before = await (svc.schema("yi_directory" as "public") as unknown as DirClient).from("people")
     .select("id, full_name, email, phone")
     .eq("id", personId)
     .maybeSingle();
@@ -450,7 +439,7 @@ export async function updatePerson(
   if (patch.phone !== undefined) update.phone = patch.phone?.trim() || null;
   update.updated_at = new Date().toISOString();
 
-  const upd = await dir.from("people").update(update).eq("id", personId);
+  const upd = await (svc.schema("yi_directory" as "public") as unknown as DirClient).from("people").update(update).eq("id", personId);
 
   if (upd.error) {
     return {
@@ -510,7 +499,6 @@ export async function invitePersonAndAssignRole(
   if (roleErr) return { success: false, error: roleErr };
 
   const svc = await createServiceClient();
-  const dir = await dirClient();
 
   // Step 1: Auth user — try invite first, then fall back to createUser +
   // generateLink so we always have an auth.users.id committed.
@@ -595,8 +583,7 @@ export async function invitePersonAndAssignRole(
 
   // Step 2: yi_directory.people — upsert by email (UNIQUE) so we don't dup.
   const phone = input.phone?.trim() || null;
-  const existingPerson = await dir
-    .from("people")
+  const existingPerson = await (svc.schema("yi_directory" as "public") as unknown as DirClient).from("people")
     .select("id, user_id")
     .eq("email", email)
     .maybeSingle();
@@ -605,8 +592,7 @@ export async function invitePersonAndAssignRole(
   if (existingPerson.data && (existingPerson.data as { id?: string }).id) {
     personId = (existingPerson.data as { id: string }).id;
     // Bind the user_id if it wasn't set, and refresh basic fields.
-    const upd = await dir
-      .from("people")
+    const upd = await (svc.schema("yi_directory" as "public") as unknown as DirClient).from("people")
       .update({
         user_id: userId,
         full_name: input.full_name.trim(),
@@ -624,8 +610,7 @@ export async function invitePersonAndAssignRole(
       };
     }
   } else {
-    const ins = await dir
-      .from("people")
+    const ins = await (svc.schema("yi_directory" as "public") as unknown as DirClient).from("people")
       .insert({
         full_name: input.full_name.trim(),
         email,
@@ -647,8 +632,7 @@ export async function invitePersonAndAssignRole(
   }
 
   // Step 3: role assignment — refuse on active duplicate.
-  const dupe = await dir
-    .from("role_assignments")
+  const dupe = await (svc.schema("yi_directory" as "public") as unknown as DirClient).from("role_assignments")
     .select("id")
     .eq("person_id", personId)
     .eq("app", input.app.trim().toLowerCase())
@@ -661,8 +645,7 @@ export async function invitePersonAndAssignRole(
   if (dupe.data && (dupe.data as { id?: string }).id) {
     roleAssignmentId = (dupe.data as { id: string }).id;
   } else {
-    const ins = await dir
-      .from("role_assignments")
+    const ins = await (svc.schema("yi_directory" as "public") as unknown as DirClient).from("role_assignments")
       .insert({
         person_id: personId,
         app: input.app.trim().toLowerCase(),

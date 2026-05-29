@@ -812,7 +812,7 @@ export async function createIndustryPortalUser(formData: FormData): Promise<IVAc
     // Get industry name for the invitation email
     const { data: industry } = await supabase
       .schema('yi_connect').from('industries')
-      .select('name')
+      .select('company_name')
       .eq('id', validatedData.industry_id)
       .single();
 
@@ -820,7 +820,7 @@ export async function createIndustryPortalUser(formData: FormData): Promise<IVAc
     const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://yi-connect-app.vercel.app';
     const emailTemplate = industryPortalInviteEmail({
       userName: validatedData.full_name,
-      industryName: industry?.name || 'Your Organization',
+      industryName: industry?.company_name || 'Your Organization',
       role: validatedData.role || 'Portal User',
       inviteLink: `${APP_URL}/industry-portal`,
     });
@@ -968,10 +968,10 @@ export async function memberRequestIV(formData: FormData): Promise<IVActionResul
     if (validatedData.industry_id) {
       const { data: industry } = await supabase
         .schema('yi_connect').from('industries')
-        .select('name')
+        .select('company_name')
         .eq('id', validatedData.industry_id)
         .single();
-      industryName = industry?.name || industryName;
+      industryName = industry?.company_name || industryName;
     }
 
     // Get chapter admin emails

@@ -108,6 +108,22 @@ export async function updateSession(request: NextRequest) {
   }
 
   // ─── yi-connect main surface ──────────────────────────────────────────
+
+  // Public auth-recovery routes (the (auth) route group). These must stay
+  // reachable without a session, and a mid-recovery user (who holds a
+  // short-lived recovery session after clicking the email link) must NOT be
+  // bounced to /dashboard before they finish setting a new password.
+  //   /forgot-password  — request a reset email
+  //   /reset-password   — set a new password from the emailed PKCE link
+  const publicAuthPrefixes = ['/forgot-password', '/reset-password']
+  if (
+    publicAuthPrefixes.some(
+      path => pathname === path || pathname.startsWith(path + '/')
+    )
+  ) {
+    return supabaseResponse
+  }
+
   const protectedPaths = [
     '/dashboard',
     '/members',

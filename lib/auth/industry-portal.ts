@@ -71,14 +71,14 @@ export async function checkIndustryPortalAccess(): Promise<{
     const { data: industry } = await supabase
       .schema('yi_connect')
       .from('industries')
-      .select('id, name')
+      .select('id, company_name')
       .eq('id', industryId)
       .single();
 
     return {
       hasAccess: !!industry,
       industryId: industry?.id || null,
-      industryName: industry?.name || null
+      industryName: industry?.company_name || null
     };
   } catch (error) {
     console.error('Error checking industry portal access:', error);

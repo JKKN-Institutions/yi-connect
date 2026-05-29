@@ -72,7 +72,7 @@ export async function createFeedback(
       (svc as any)
         .schema("future")
         .from("mentors")
-        .select("name")
+        .select("full_name")
         .eq("id", input.mentorId)
         .maybeSingle(),
       (svc as any)
@@ -82,7 +82,7 @@ export async function createFeedback(
         .eq("team_id", input.teamId),
     ]);
     const mentorName =
-      (mentor as { name: string | null } | null)?.name ?? "Your mentor";
+      (mentor as { full_name: string | null } | null)?.full_name ?? "Your mentor";
     const rows =
       (members as { delegate_id: string | null }[] | null) ?? [];
     await Promise.all(

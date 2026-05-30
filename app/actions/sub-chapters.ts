@@ -8,12 +8,8 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
-import bcrypt from 'bcryptjs'
-import { sendEmail } from '@/lib/email'
-import { subChapterLeadWelcomeEmail } from '@/lib/email/templates'
 import type {
   CreateSubChapterInput,
-  CreateSubChapterLeadInput,
   CreateSubChapterMemberInput,
   CreateSubChapterEventInput,
   UpdateSubChapterEventInput,
@@ -155,103 +151,6 @@ export async function updateSubChapter(
 // ============================================================================
 
 /**
- * Generate a random password
- */
-function generatePassword(length: number = 12): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%'
-  let password = ''
-  for (let i = 0; i < length; i++) {
-    password += chars.charAt(Math.floor(Math.random() * chars.length))
-  }
-  return password
-}
-
-/**
- * Create a new sub-chapter lead
- */
-export async function createSubChapterLead(
-  input: CreateSubChapterLeadInput
-): Promise<ActionResult<{ id: string; temporaryPassword: string }>> {
-  const supabase = await createClient()
-
-  // Check if email already exists
-  const { data: existing } = await supabase
-    .schema('yi_connect').from('sub_chapter_leads')
-    .select('id')
-    .eq('email', input.email)
-    .single()
-
-  if (existing) {
-    return { success: false, error: 'A lead with this email already exists' }
-  }
-
-  // Fetch sub-chapter name for the email
-  const { data: subChapter } = await supabase
-    .schema('yi_connect').from('sub_chapters')
-    .select('name')
-    .eq('id', input.sub_chapter_id)
-    .single()
-
-  // Generate temporary password
-  const temporaryPassword = generatePassword()
-  const passwordHash = await bcrypt.hash(temporaryPassword, 10)
-
-  const { data, error } = await supabase
-    .schema('yi_connect').from('sub_chapter_leads')
-    .insert({
-      sub_chapter_id: input.sub_chapter_id,
-      full_name: input.full_name,
-      email: input.email,
-      phone: input.phone || null,
-      student_id: input.student_id || null,
-      department: input.department || null,
-      year_of_study: input.year_of_study || null,
-      password_hash: passwordHash,
-      role: input.role || 'lead',
-      is_primary_lead: input.is_primary_lead ?? false,
-      status: 'pending',
-      requires_password_change: true,
-    })
-    .select('id')
-    .single()
-
-  if (error) {
-    console.error('Error creating sub-chapter lead:', error)
-    return { success: false, error: error.message }
-  }
-
-  revalidatePath(`/sub-chapters/${input.sub_chapter_id}`)
-
-  // Send welcome email with temporary password
-  const subChapterName = subChapter?.name || 'Sub-Chapter'
-  const loginLink = `${process.env.NEXT_PUBLIC_APP_URL || 'https://yi-connect-app.vercel.app'}/login`
-
-  const emailTemplate = subChapterLeadWelcomeEmail({
-    leadName: input.full_name,
-    subChapterName,
-    email: input.email,
-    temporaryPassword,
-    loginLink,
-  })
-
-  const emailResult = await sendEmail({
-    to: input.email,
-    subject: emailTemplate.subject,
-    html: emailTemplate.html,
-  })
-
-  if (!emailResult.success) {
-    console.warn('[SubChapters] Failed to send welcome email:', emailResult.error)
-    // Still return success since lead was created - email is secondary
-  }
-
-  return {
-    success: true,
-    data: { id: data.id, temporaryPassword },
-  }
-}
-
-/**
  * Update lead status
  */
 export async function updateLeadStatus(
@@ -272,53 +171,6 @@ export async function updateLeadStatus(
 
   revalidatePath('/sub-chapters')
   revalidatePath('/sub-chapter')
-
-  return { success: true }
-}
-
-/**
- * Change lead password
- */
-export async function changeLeadPassword(
-  leadId: string,
-  currentPassword: string,
-  newPassword: string
-): Promise<ActionResult> {
-  const supabase = await createClient()
-
-  // Get current password hash
-  const { data: lead, error: fetchError } = await supabase
-    .schema('yi_connect').from('sub_chapter_leads')
-    .select('password_hash')
-    .eq('id', leadId)
-    .single()
-
-  if (fetchError || !lead) {
-    return { success: false, error: 'Lead not found' }
-  }
-
-  // Verify current password
-  const isValid = await bcrypt.compare(currentPassword, lead.password_hash)
-  if (!isValid) {
-    return { success: false, error: 'Current password is incorrect' }
-  }
-
-  // Hash and update new password
-  const newPasswordHash = await bcrypt.hash(newPassword, 10)
-
-  const { error } = await supabase
-    .schema('yi_connect').from('sub_chapter_leads')
-    .update({
-      password_hash: newPasswordHash,
-      requires_password_change: false,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', leadId)
-
-  if (error) {
-    console.error('Error changing password:', error)
-    return { success: false, error: error.message }
-  }
 
   return { success: true }
 }

@@ -98,25 +98,11 @@ export async function addParticipant(
   eventId: string,
   data: AddParticipantData
 ): Promise<ActionResult<{ id: string; access_code: string }>> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: "Not authenticated" };
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
   }
-
-  // Verify event ownership
-  const { data: event } = await supabase
-    .from("events")
-    .select("id, created_by, allocation_locked")
-    .eq("id", eventId)
-    .single();
-
-  if (!event || event.created_by !== user.id) {
-    return { success: false, error: "Event not found or not authorized" };
-  }
+  const supabase = await createServiceClient();
 
   try {
     const accessCode = await generateUniqueCode(supabase, eventId, new Set());
@@ -160,25 +146,11 @@ export async function importParticipants(
   eventId: string,
   rows: ImportRow[]
 ): Promise<ActionResult<{ imported: number; errors: string[] }>> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: "Not authenticated" };
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
   }
-
-  // Verify event ownership
-  const { data: event } = await supabase
-    .from("events")
-    .select("id, created_by")
-    .eq("id", eventId)
-    .single();
-
-  if (!event || event.created_by !== user.id) {
-    return { success: false, error: "Event not found or not authorized" };
-  }
+  const supabase = await createServiceClient();
 
   const existingCodes = new Set<string>();
   const errors: string[] = [];
@@ -378,24 +350,21 @@ export async function deleteParticipant(
   participantId: string,
   eventId: string
 ): Promise<ActionResult<null>> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: "Not authenticated" };
+  const access = await getYipEventAccess(eventId);
+  if (!access.canDelete) {
+    return { success: false, error: "Only the chapter chair can delete participants" };
   }
+  const supabase = await createServiceClient();
 
-  // Verify event ownership and allocation lock
+  // Allocation lock still blocks deletion even for the chair (data integrity).
   const { data: event } = await supabase
     .from("events")
-    .select("id, created_by, allocation_locked")
+    .select("id, allocation_locked")
     .eq("id", eventId)
     .single();
 
-  if (!event || event.created_by !== user.id) {
-    return { success: false, error: "Event not found or not authorized" };
+  if (!event) {
+    return { success: false, error: "Event not found" };
   }
 
   if (event.allocation_locked) {
@@ -428,25 +397,11 @@ export async function checkInParticipant(
   participantId: string,
   eventId: string
 ): Promise<ActionResult<null>> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: "Not authenticated" };
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
   }
-
-  // Verify event ownership
-  const { data: event } = await supabase
-    .from("events")
-    .select("id, created_by")
-    .eq("id", eventId)
-    .single();
-
-  if (!event || event.created_by !== user.id) {
-    return { success: false, error: "Event not found or not authorized" };
-  }
+  const supabase = await createServiceClient();
 
   const { error } = await supabase
     .from("participants")
@@ -472,25 +427,11 @@ export async function checkOutParticipant(
   participantId: string,
   eventId: string
 ): Promise<ActionResult<null>> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: "Not authenticated" };
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
   }
-
-  // Verify event ownership
-  const { data: event } = await supabase
-    .from("events")
-    .select("id, created_by")
-    .eq("id", eventId)
-    .single();
-
-  if (!event || event.created_by !== user.id) {
-    return { success: false, error: "Event not found or not authorized" };
-  }
+  const supabase = await createServiceClient();
 
   const { error } = await supabase
     .from("participants")
@@ -516,29 +457,15 @@ export async function bulkCheckIn(
   participantIds: string[],
   eventId: string
 ): Promise<ActionResult<{ checkedIn: number }>> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: "Not authenticated" };
-  }
-
   if (participantIds.length === 0) {
     return { success: false, error: "No participants selected" };
   }
 
-  // Verify event ownership
-  const { data: event } = await supabase
-    .from("events")
-    .select("id, created_by")
-    .eq("id", eventId)
-    .single();
-
-  if (!event || event.created_by !== user.id) {
-    return { success: false, error: "Event not found or not authorized" };
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
   }
+  const supabase = await createServiceClient();
 
   const { error } = await supabase
     .from("participants")
@@ -580,14 +507,7 @@ export async function setParliamentRole(
   participantId: string,
   role: ParliamentRole | null
 ): Promise<ActionResult<null>> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: "Not authenticated" };
-  }
+  const supabase = await createServiceClient();
 
   // Look up the participant + event in one round-trip
   const { data: participant } = await supabase
@@ -600,15 +520,9 @@ export async function setParliamentRole(
     return { success: false, error: "Participant not found" };
   }
 
-  // Verify event ownership
-  const { data: event } = await supabase
-    .from("events")
-    .select("id, created_by")
-    .eq("id", participant.event_id)
-    .single();
-
-  if (!event || event.created_by !== user.id) {
-    return { success: false, error: "Not authorized for this event" };
+  const access = await getYipEventAccess(participant.event_id);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
   }
 
   const { error } = await supabase

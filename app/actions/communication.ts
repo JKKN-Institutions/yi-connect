@@ -85,7 +85,66 @@ async function getFilteredMemberIds(
     filter = segment?.filter_rules as AudienceFilter | undefined;
   }
 
-  // Start with base query for active members in chapter
+  // ── Pre-filter: engagement_score ─────────────────────────────────────────
+  // engagement_score does NOT exist on yi_connect.members.
+  // Real source: yi_connect.member_activity_data.engagement_score (member_id FK).
+  // Strategy: fetch qualifying member_ids first, then .in() on the main query.
+  let engagementAllowedIds: string[] | null = null;
+  if (filter?.engagement && (filter.engagement.min !== undefined || filter.engagement.max !== undefined)) {
+    let engQuery = supabase
+      .schema('yi_connect').from('member_activity_data')
+      .select('member_id');
+    if (filter.engagement.min !== undefined) {
+      engQuery = engQuery.gte('engagement_score', filter.engagement.min);
+    }
+    if (filter.engagement.max !== undefined) {
+      engQuery = engQuery.lte('engagement_score', filter.engagement.max);
+    }
+    const { data: engRows } = await engQuery;
+    // If the filter is active but no rows match, the result must be empty.
+    engagementAllowedIds = engRows?.map((r: { member_id: string }) => r.member_id) ?? [];
+  }
+
+  // ── Pre-filter: leadership_readiness_score ────────────────────────────────
+  // leadership_readiness_score does NOT exist on yi_connect.members.
+  // Real source: yi_connect.leadership_assessments.readiness_score (member_id FK).
+  // A member may have multiple assessment rows; we take the most recent one
+  // per member (assessed_at DESC) and filter on that row's readiness_score.
+  let leadershipAllowedIds: string[] | null = null;
+  if (filter?.leadership_readiness && (filter.leadership_readiness.min !== undefined || filter.leadership_readiness.max !== undefined)) {
+    // Fetch latest readiness_score per member via a raw-SQL approach is not
+    // available through the PostgREST client, so we fetch all rows and
+    // compute the latest per-member value in JS.
+    const { data: laRows } = await supabase
+      .schema('yi_connect').from('leadership_assessments')
+      .select('member_id, readiness_score, assessed_at')
+      .order('assessed_at', { ascending: false });
+
+    if (laRows) {
+      // Deduplicate: keep the most-recent row per member_id.
+      const latestByMember = new Map<string, number>();
+      for (const row of laRows) {
+        if (!latestByMember.has(row.member_id)) {
+          latestByMember.set(row.member_id, row.readiness_score as number);
+        }
+      }
+      leadershipAllowedIds = [];
+      for (const [memberId, score] of latestByMember.entries()) {
+        const min = filter.leadership_readiness.min;
+        const max = filter.leadership_readiness.max;
+        if (min !== undefined && score < min) continue;
+        if (max !== undefined && score > max) continue;
+        leadershipAllowedIds.push(memberId);
+      }
+    } else {
+      leadershipAllowedIds = [];
+    }
+  }
+
+  // Start with base query for members in chapter.
+  // Columns selected are only those that actually exist on yi_connect.members.
+  // Removed: joined_at (→ member_since), engagement_score, leadership_readiness_score
+  // (those live on other tables and are handled via pre-filter above).
   let query = supabase
     .schema('yi_connect').from('members')
     .select(`
@@ -94,9 +153,7 @@ async function getFilteredMemberIds(
       membership_type,
       city,
       state,
-      joined_at,
-      engagement_score,
-      leadership_readiness_score,
+      member_since,
       profile:profiles!members_id_fkey(
         email,
         roles:user_roles(role:roles(name))
@@ -105,6 +162,24 @@ async function getFilteredMemberIds(
       verticals:vertical_members(vertical_id)
     `)
     .eq('chapter_id', chapterId);
+
+  // Apply engagement pre-filter if active
+  if (engagementAllowedIds !== null) {
+    if (engagementAllowedIds.length === 0) {
+      // No members pass the engagement filter — short-circuit.
+      return [];
+    }
+    query = query.in('id', engagementAllowedIds);
+  }
+
+  // Apply leadership pre-filter if active
+  if (leadershipAllowedIds !== null) {
+    if (leadershipAllowedIds.length === 0) {
+      // No members pass the leadership filter — short-circuit.
+      return [];
+    }
+    query = query.in('id', leadershipAllowedIds);
+  }
 
   // If no filter, return all active members
   if (!filter) {
@@ -132,30 +207,6 @@ async function getFilteredMemberIds(
     query = query.in('membership_type', filter.membership_type);
   }
 
-  // TODO drift: engagement_score does not exist on yi_connect.members.
-  // It lives on member_activity_data (member_id FK). Filtering by engagement
-  // range requires a subquery or join to that table. These .gte/.lte calls
-  // will silently return wrong results (PostgREST ignores unknown columns).
-  // Fix: join member_activity_data or pre-filter IDs via a separate query.
-  if (filter.engagement) {
-    if (filter.engagement.min !== undefined) {
-      query = query.gte('engagement_score', filter.engagement.min);
-    }
-    if (filter.engagement.max !== undefined) {
-      query = query.lte('engagement_score', filter.engagement.max);
-    }
-  }
-
-  // Apply leadership readiness filter
-  if (filter.leadership_readiness) {
-    if (filter.leadership_readiness.min !== undefined) {
-      query = query.gte('leadership_readiness_score', filter.leadership_readiness.min);
-    }
-    if (filter.leadership_readiness.max !== undefined) {
-      query = query.lte('leadership_readiness_score', filter.leadership_readiness.max);
-    }
-  }
-
   // Apply location filters
   if (filter.cities && filter.cities.length > 0) {
     query = query.in('city', filter.cities);
@@ -164,12 +215,13 @@ async function getFilteredMemberIds(
     query = query.in('state', filter.states);
   }
 
-  // Apply join date filters
+  // Apply join date filters.
+  // joined_at does not exist on members; the real column is member_since (type: date).
   if (filter.joined_after) {
-    query = query.gte('joined_at', filter.joined_after);
+    query = query.gte('member_since', filter.joined_after);
   }
   if (filter.joined_before) {
-    query = query.lte('joined_at', filter.joined_before);
+    query = query.lte('member_since', filter.joined_before);
   }
 
   // Fetch all matching members

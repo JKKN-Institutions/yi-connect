@@ -29,12 +29,12 @@ const ROLE_LABEL: Record<ChapterRoleKind, string> = {
 
 export function TeamClient({
   eventId,
-  canManage,
+  canEditTeam,
   myRole,
   initialRoles,
 }: {
   eventId: string;
-  canManage: boolean;
+  canEditTeam: boolean;
   myRole: string;
   initialRoles: ChapterRoleRow[];
 }) {
@@ -126,7 +126,7 @@ export function TeamClient({
           {roles.length === 0 ? (
             <p className="text-sm text-[#1a1a3e]/40">
               No chapter chair or organiser assigned yet
-              {canManage ? " — add one below." : "."}
+              {canEditTeam ? " — add one below." : "."}
             </p>
           ) : (
             roles.map((r) => (
@@ -149,7 +149,7 @@ export function TeamClient({
                   <Badge variant={r.role === "chapter_admin" ? "default" : "secondary"}>
                     {ROLE_LABEL[r.role]}
                   </Badge>
-                  {canManage && (
+                  {canEditTeam && (
                     <Button
                       variant="ghost"
                       size="sm"
@@ -191,7 +191,7 @@ export function TeamClient({
       )}
 
       {/* Add form — only for chair / national / regional */}
-      {canManage ? (
+      {canEditTeam ? (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">

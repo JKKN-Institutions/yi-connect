@@ -74,9 +74,14 @@ type Svc = Awaited<ReturnType<typeof createServiceClient>>;
 async function authorizeAssigner(
   eventId: string
 ): Promise<{ ok: true; chapterName: string; zone: string | null } | { ok: false; error: string }> {
+  // Team management is chair-level (canDelete): chair / national / regional /
+  // super. Organisers have canManage but must NOT assign or revoke roles —
+  // otherwise an organiser could self-promote to chapter_admin (gaining delete)
+  // and demote the sitting chair. Per the Director interview, only the chair or
+  // national assigns. canDelete is exactly that set.
   const access = await getYipEventAccess(eventId);
-  if (!access.canManage) {
-    return { ok: false, error: "Not authorized to assign roles for this event's chapter" };
+  if (!access.canDelete) {
+    return { ok: false, error: "Only the chapter chair or national team can manage the team" };
   }
   const svc = await createServiceClient();
   const { data: event } = await svc
@@ -255,16 +260,26 @@ export async function assignChapterRole(input: {
 export async function listChapterRoles(
   eventId: string
 ): Promise<{ ok: true; data: ChapterRoleRow[] } | { ok: false; error: string }> {
-  const auth = await authorizeAssigner(eventId);
-  if (!auth.ok) return { ok: false, error: auth.error };
-
+  // Viewing the team only needs canView (organisers may see who's on the team);
+  // assigning/revoking is gated separately by authorizeAssigner (canDelete).
+  const access = await getYipEventAccess(eventId);
+  if (!access.canView) return { ok: false, error: "Not authorized to view this event's team" };
   const svc = await createServiceClient();
+
+  const { data: event } = await svc
+    .from("events")
+    .select("chapter_name")
+    .eq("id", eventId)
+    .maybeSingle();
+  if (!event?.chapter_name) return { ok: true, data: [] };
+  const chapterName = event.chapter_name;
+
   const { data, error } = await svc
     .schema("yi_directory")
     .from("role_assignments")
     .select("id, person_id, role, is_active, person:people!inner(full_name, email)")
     .eq("app", "yip")
-    .eq("yi_chapter", auth.chapterName)
+    .eq("yi_chapter", chapterName)
     .in("role", ["chapter_admin", "chapter_organizer"])
     .eq("is_active", true);
 

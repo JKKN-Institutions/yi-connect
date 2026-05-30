@@ -32,7 +32,7 @@ export default async function TeamPage({
   return (
     <TeamClient
       eventId={id}
-      canManage={access.canManage}
+      canEditTeam={access.canDelete}
       myRole={access.role}
       initialRoles={roles}
     />

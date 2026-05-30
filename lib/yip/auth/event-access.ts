@@ -70,6 +70,10 @@ const FULL = (role: YipRole, reason: string): YipEventAccess => ({
 });
 
 const norm = (s: string | null | undefined) => (s ?? "").trim().toLowerCase();
+// Note: norm(null) === norm("") === norm("   ") === "". Callers that use norm()
+// for an identity/equality match MUST also require the result be non-empty
+// (e.g. `const x = norm(a); if (x && x === norm(b))`), or two independently
+// missing values would compare equal and grant access. See chair_email match.
 
 /**
  * Resolve the current user's capabilities on a specific YIP event.
@@ -132,7 +136,12 @@ export async function getYipEventAccess(eventId: string): Promise<YipEventAccess
       .select("chair_email")
       .eq("name", event.chapter_name)
       .maybeSingle();
-    if (chapter?.chair_email && norm(chapter.chair_email) === norm(roles.email)) {
+    // Compare on the NORMALISED value, and require it non-empty, so a null /
+    // empty / whitespace-only chair_email can never match a null/empty user
+    // email ("" === "" would otherwise grant chair). Fail-closed.
+    const chairEmail = norm(chapter?.chair_email);
+    const myEmail = norm(roles.email);
+    if (chairEmail && myEmail && chairEmail === myEmail) {
       return FULL("chapter_admin", "chapter_admin_email");
     }
 

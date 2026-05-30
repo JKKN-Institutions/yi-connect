@@ -132,7 +132,11 @@ async function getFilteredMemberIds(
     query = query.in('membership_type', filter.membership_type);
   }
 
-  // Apply engagement score filter
+  // TODO drift: engagement_score does not exist on yi_connect.members.
+  // It lives on member_activity_data (member_id FK). Filtering by engagement
+  // range requires a subquery or join to that table. These .gte/.lte calls
+  // will silently return wrong results (PostgREST ignores unknown columns).
+  // Fix: join member_activity_data or pre-filter IDs via a separate query.
   if (filter.engagement) {
     if (filter.engagement.min !== undefined) {
       query = query.gte('engagement_score', filter.engagement.min);

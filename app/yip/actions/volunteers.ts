@@ -1,6 +1,6 @@
 "use server";
 
-import { createServiceClient } from "@/lib/yip/supabase/server";
+import { createClient, createServiceClient } from "@/lib/yip/supabase/server";
 import { logAuditAction } from "@/lib/yip/audit/log-action";
 import { revalidatePath } from "next/cache";
 import type { VolunteerStation } from "@/lib/yip/volunteers";
@@ -109,11 +109,14 @@ export async function deleteVolunteer(
 ): Promise<ActionResult> {
   const supabase = await createServiceClient();
 
-  // Gate: caller must be authenticated and own the event
-  const { data: { user } } = await supabase.auth.getUser();
+  // Gate: caller must be authenticated and own the event. Auth goes through the
+  // cookie-bound client — the service client carries no session, so
+  // createServiceClient().auth.getUser() always returns null (would deny owner).
+  const auth = await createClient();
+  const { data: { user } } = await auth.auth.getUser();
   if (!user) return { success: false, error: "Not authenticated" };
 
-  const { data: event } = await supabase
+  const { data: event } = await auth
     .from("events")
     .select("created_by")
     .eq("id", eventId)

@@ -21,10 +21,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { QRScanner } from '@/components/mobile/qr-scanner';
-import {
-  checkInByTicketToken,
-  type TicketAttendeeProfile
-} from '@/app/actions/events';
+import { checkInByTicketToken } from '@/app/actions/events';
+import type { TicketAttendeeProfile } from '@/types/event';
 import type { QRScanResult } from '@/types/mobile';
 import toast from 'react-hot-toast';
 

@@ -409,11 +409,84 @@ export async function assignJuryMember(data: {
   }
 
   const supabase = await createServerSupabaseClient()
+  const { cycle_id: cycleId, member_id: memberId, assigned_by: assignedBy } = validation.data
 
-  // TODO drift: jury_members removed — replaced by jury_panel_members (requires panel_id).
-  // This action only has cycle_id + member_id; no panel_id is available.
-  // Callers must be updated to select a panel within the cycle and supply panel_id.
-  return { message: 'assignJuryMember requires a panelId (jury_members replaced by jury_panel_members)' }
+  // Step 1: Fetch the cycle to get its chapter_id
+  const { data: cycle, error: cycleErr } = await supabase
+    .schema('yi_connect').from('award_cycles')
+    .select('id, chapter_id')
+    .eq('id', cycleId)
+    .single()
+
+  if (cycleErr) {
+    return { message: `Database error: ${cycleErr.message}` }
+  }
+
+  // Step 2: Resolve or create the default panel for this cycle
+  const { data: existingPanel, error: panelFetchErr } = await supabase
+    .schema('yi_connect').from('jury_panels')
+    .select('id')
+    .eq('cycle_id', cycleId)
+    .eq('is_active', true)
+    .maybeSingle()
+
+  if (panelFetchErr) {
+    return { message: `Database error: ${panelFetchErr.message}` }
+  }
+
+  let panelId: string
+
+  if (existingPanel) {
+    panelId = existingPanel.id
+  } else {
+    const { data: newPanel, error: panelInsertErr } = await supabase
+      .schema('yi_connect').from('jury_panels')
+      .insert({
+        cycle_id: cycleId,
+        chapter_id: cycle.chapter_id ?? null,
+        panel_name: 'Default Panel',
+        is_active: true,
+        created_by: assignedBy ?? null,
+      })
+      .select('id')
+      .single()
+
+    if (panelInsertErr) {
+      return { message: `Database error: ${panelInsertErr.message}` }
+    }
+    panelId = newPanel.id
+  }
+
+  // Step 3: Guard duplicate
+  const { data: existingMember } = await supabase
+    .schema('yi_connect').from('jury_panel_members')
+    .select('id')
+    .eq('panel_id', panelId)
+    .eq('juror_id', memberId)
+    .maybeSingle()
+
+  if (existingMember) {
+    return { message: 'Member is already assigned to the jury panel for this cycle' }
+  }
+
+  // Step 4: Insert the panel member
+  const { error: insertErr } = await supabase
+    .schema('yi_connect').from('jury_panel_members')
+    .insert({
+      panel_id: panelId,
+      juror_id: memberId,
+      role: 'juror',
+      is_active: true,
+    })
+
+  if (insertErr) {
+    return { message: `Database error: ${insertErr.message}` }
+  }
+
+  updateTag('jury-members')
+  updateTag(`jury-cycle-${cycleId}`)
+
+  return { success: true, message: 'Jury member assigned successfully' }
 }
 
 export async function removeJuryMember(juryMemberId: string): Promise<FormState> {

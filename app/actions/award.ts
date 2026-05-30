@@ -404,11 +404,75 @@ export async function assignJuryMember(
   try {
     const supabase = await createClient()
 
-    // jury_members removed. Assignment now requires a panel_id (jury_panel_members.panel_id).
-    // This action receives only cycleId + memberId — no panel_id available.
-    // TODO drift: jury_members removed. assignJuryMember in award.ts needs a panelId
-    // parameter to insert into jury_panel_members. Callers must be updated to supply panelId.
-    return { success: false, error: 'assignJuryMember requires a panelId (schema updated — jury_members replaced by jury_panel_members)' }
+    // Step 1: Fetch the cycle to get its chapter_id
+    const { data: cycle, error: cycleErr } = await supabase
+      .schema('yi_connect').from('award_cycles')
+      .select('id, chapter_id')
+      .eq('id', cycleId)
+      .single()
+
+    if (cycleErr) throw cycleErr
+
+    // Step 2: Resolve or create the default panel for this cycle
+    const { data: existingPanel, error: panelFetchErr } = await supabase
+      .schema('yi_connect').from('jury_panels')
+      .select('id')
+      .eq('cycle_id', cycleId)
+      .eq('is_active', true)
+      .maybeSingle()
+
+    if (panelFetchErr) throw panelFetchErr
+
+    let panelId: string
+
+    if (existingPanel) {
+      panelId = existingPanel.id
+    } else {
+      // Create the default panel using the cycle's chapter_id
+      const { data: newPanel, error: panelInsertErr } = await supabase
+        .schema('yi_connect').from('jury_panels')
+        .insert({
+          cycle_id: cycleId,
+          chapter_id: cycle.chapter_id ?? null,
+          panel_name: 'Default Panel',
+          is_active: true,
+          created_by: assignedById,
+        })
+        .select('id')
+        .single()
+
+      if (panelInsertErr) throw panelInsertErr
+      panelId = newPanel.id
+    }
+
+    // Step 3: Guard duplicate — check if member is already on this panel
+    const { data: existingMember } = await supabase
+      .schema('yi_connect').from('jury_panel_members')
+      .select('id')
+      .eq('panel_id', panelId)
+      .eq('juror_id', memberId)
+      .maybeSingle()
+
+    if (existingMember) {
+      return { success: false, error: 'Member is already assigned to the jury panel for this cycle' }
+    }
+
+    // Step 4: Insert the panel member
+    const { data: panelMember, error: insertErr } = await supabase
+      .schema('yi_connect').from('jury_panel_members')
+      .insert({
+        panel_id: panelId,
+        juror_id: memberId,
+        role: 'juror',
+        is_active: true,
+      })
+      .select()
+      .single()
+
+    if (insertErr) throw insertErr
+
+    revalidatePath('/awards/admin/jury')
+    return { success: true, data: panelMember }
   } catch (error) {
     return { success: false, error: 'Failed to assign jury member' }
   }
@@ -445,8 +509,7 @@ export async function submitJuryScores(
 
     if (error) throw error
 
-    // TODO drift: jury_members removed — scored_nominations counter no longer exists on jury_panel_members.
-    // Skipping the progress increment until a scored_nominations column is added to jury_panel_members.
+    // Progress is derived on read via COUNT(*) FROM jury_scores WHERE juror_id = X — no write needed here.
 
     revalidatePath('/awards/jury')
     revalidatePath(`/awards/jury/${validated.nomination_id}`)

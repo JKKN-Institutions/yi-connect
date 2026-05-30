@@ -86,18 +86,44 @@ export async function createBooking(
       },
     ]
 
+    // Live yi_connect.session_bookings has NOT-NULL columns the original insert
+    // omitted: chapter_id, session_type (text), expected_students, contact_name,
+    // contact_phone. Derive them from the coordinator row so the insert doesn't
+    // violate NOT NULL. Fixed 2026-05-30 — Agent A (coordinator drift sweep).
+    const { data: coordinator, error: coordError } = await supabase
+      .schema('yi_connect').from('stakeholder_coordinators')
+      .select('chapter_id, full_name, phone')
+      .eq('id', input.coordinator_id)
+      .single()
+
+    if (coordError || !coordinator) {
+      throw new Error('Coordinator profile not found for this booking')
+    }
+
+    // session_type is a denormalized NOT-NULL text column (session_types table
+    // does not exist). Fall back to the first requested topic or a generic label.
+    const sessionTypeText =
+      input.topics_requested && input.topics_requested.length > 0
+        ? input.topics_requested[0]
+        : 'General Session'
+
     const { data, error } = await supabase
       .schema('yi_connect').from('session_bookings')
       .insert({
+        chapter_id: coordinator.chapter_id,
         coordinator_id: input.coordinator_id,
         stakeholder_type: input.stakeholder_type,
         stakeholder_id: input.stakeholder_id,
-        session_type_id: input.session_type_id,
+        session_type: sessionTypeText,
+        session_type_id: input.session_type_id || null,
         preferred_date: input.preferred_date,
         preferred_time_slot: input.preferred_time_slot || null,
         alternate_date: input.alternate_date || null,
         alternate_time_slot: input.alternate_time_slot || null,
+        expected_students: input.expected_participants,
         expected_participants: input.expected_participants,
+        contact_name: coordinator.full_name,
+        contact_phone: coordinator.phone || 'N/A',
         participant_details: input.participant_details || null,
         topics_requested: input.topics_requested || null,
         custom_requirements: input.custom_requirements || null,

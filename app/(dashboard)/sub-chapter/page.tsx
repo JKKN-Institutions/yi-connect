@@ -195,7 +195,9 @@ async function DashboardContent() {
             {upcomingEvents.length > 0 ? (
               <div className="space-y-4">
                 {upcomingEvents.map((event) => {
-                  const statusInfo = SUB_CHAPTER_EVENT_STATUS_INFO[event.status]
+                  const statusInfo =
+                    SUB_CHAPTER_EVENT_STATUS_INFO[event.status] ??
+                    SUB_CHAPTER_EVENT_STATUS_INFO.pending_approval
                   return (
                     <div
                       key={event.id}

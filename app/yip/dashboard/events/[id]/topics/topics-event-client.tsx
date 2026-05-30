@@ -281,9 +281,9 @@ function TopicRow({
             </p>
           )}
           {topic.sub_points.length > 0 && (
-            <p className="text-xs text-[#1a1a3e]/40 mt-1">
-              {topic.sub_points.length} sub-point
-              {topic.sub_points.length === 1 ? "" : "s"}
+            <p className="text-xs text-[#138808] mt-1">
+              <span className="text-[#1a1a3e]/40">Linked: </span>
+              {topic.sub_points.join(" · ")}
             </p>
           )}
         </div>

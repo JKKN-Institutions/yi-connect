@@ -54,8 +54,15 @@ async function getSubChapterIdForUser(userId: string): Promise<string | null> {
 }
 
 function EventCard({ event }: { event: SubChapterEventFull }) {
-  const typeInfo = SUB_CHAPTER_EVENT_TYPE_INFO[event.event_type]
-  const statusInfo = SUB_CHAPTER_EVENT_STATUS_INFO[event.status]
+  // Live yi_connect.sub_chapter_events uses event_type / status enums that
+  // don't fully overlap the *_INFO maps (e.g. meeting, planned, confirmed).
+  // Fall back to a generic entry so an unmapped value never crashes the card.
+  const typeInfo =
+    SUB_CHAPTER_EVENT_TYPE_INFO[event.event_type] ??
+    SUB_CHAPTER_EVENT_TYPE_INFO.other
+  const statusInfo =
+    SUB_CHAPTER_EVENT_STATUS_INFO[event.status] ??
+    SUB_CHAPTER_EVENT_STATUS_INFO.pending_approval
 
   const eventDate = new Date(event.event_date)
   const isPast = eventDate < new Date()

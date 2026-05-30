@@ -31,6 +31,11 @@ export const getSessionTypes = cache(
   async (): Promise<SessionTypeWithVertical[]> => {
     const supabase = await createServerSupabaseClient()
 
+    // NOTE: yi_connect.session_types does NOT exist in the live schema.
+    // session_bookings.session_type is a denormalized text column instead.
+    // The /coordinator/sessions page only needs a list to render an
+    // empty-state, so fail soft (return []) rather than throw and crash the
+    // page. Fixed 2026-05-30 — Agent A (coordinator/sub-chapter drift sweep).
     const { data, error } = await supabase
       .schema('yi_connect').from('session_types')
       .select(`
@@ -45,7 +50,8 @@ export const getSessionTypes = cache(
       .order('display_name')
 
     if (error) {
-      throw new Error(`Failed to fetch session types: ${error.message}`)
+      console.warn('getSessionTypes: session_types unavailable —', error.message)
+      return []
     }
 
     return (data || []) as SessionTypeWithVertical[]
@@ -59,6 +65,7 @@ export const getSessionTypeById = cache(
   async (id: string): Promise<SessionTypeWithVertical | null> => {
     const supabase = await createServerSupabaseClient()
 
+    // yi_connect.session_types does not exist in the live schema — fail soft.
     const { data, error } = await supabase
       .schema('yi_connect').from('session_types')
       .select(`
@@ -73,8 +80,10 @@ export const getSessionTypeById = cache(
       .single()
 
     if (error) {
-      if (error.code === 'PGRST116') return null
-      throw new Error(`Failed to fetch session type: ${error.message}`)
+      if (error.code !== 'PGRST116') {
+        console.warn('getSessionTypeById: session_types unavailable —', error.message)
+      }
+      return null
     }
 
     return data as SessionTypeWithVertical
@@ -429,6 +438,8 @@ export const getAvailableTrainersForSession = cache(
     // Phase E fix 2026-05-23 (Agent re-audit): disambiguate the members embed
     // via explicit FK hint. trainer_profiles has two FKs to members
     // (member_id + approved_by), so PostgREST returns PGRST201 without a hint.
+    // Live yi_connect.trainer_profiles uses is_active (not is_trainer_eligible)
+    // and service_types (not eligible_session_types). Fixed 2026-05-30 — Agent A.
     const { data: trainers, error } = await supabase
       .schema('yi_connect').from('trainer_profiles')
       .select(`
@@ -437,7 +448,7 @@ export const getAvailableTrainersForSession = cache(
         total_sessions,
         average_rating,
         sessions_this_month,
-        eligible_session_types,
+        service_types,
         member:members!trainer_profiles_member_id_fkey(
           id,
           profile:profiles(
@@ -447,8 +458,8 @@ export const getAvailableTrainersForSession = cache(
           )
         )
       `)
-      .eq('is_trainer_eligible', true)
-      .contains('eligible_session_types', [sessionType?.name || ''])
+      .eq('is_active', true)
+      .contains('service_types', [sessionType?.name || ''])
 
     if (error) {
       throw new Error(`Failed to fetch trainers: ${error.message}`)
@@ -501,10 +512,11 @@ export const getTrainerAvailabilitySummary = cache(
     const supabase = await createServerSupabaseClient()
 
     // Get all eligible trainers count
+    // Live trainer_profiles uses is_active (not is_trainer_eligible).
     const { count: totalTrainers } = await supabase
       .schema('yi_connect').from('trainer_profiles')
       .select('*', { count: 'exact', head: true })
-      .eq('is_trainer_eligible', true)
+      .eq('is_active', true)
 
     // Get availability records
     const { data: availability } = await supabase

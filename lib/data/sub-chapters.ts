@@ -30,10 +30,13 @@ export const getSubChapters = cache(
   async (filters?: SubChapterFilters): Promise<SubChapterFull[]> => {
     const supabase = await createClient()
 
+    // Alias chapter_type -> type so callers/types that read `.type` keep
+    // working (live column is chapter_type). Fixed 2026-05-30 — Agent A.
     let query = supabase
       .schema('yi_connect').from('sub_chapters')
       .select(`
         *,
+        type:chapter_type,
         leads:sub_chapter_leads(*)
       `)
       .order('created_at', { ascending: false })
@@ -78,10 +81,12 @@ export const getSubChapterById = cache(
   async (id: string): Promise<SubChapterFull | null> => {
     const supabase = await createClient()
 
+    // Alias chapter_type -> type (live column is chapter_type).
     const { data, error } = await supabase
       .schema('yi_connect').from('sub_chapters')
       .select(`
         *,
+        type:chapter_type,
         leads:sub_chapter_leads(*)
       `)
       .eq('id', id)
@@ -209,14 +214,25 @@ export const getSubChapterMembers = cache(
   ): Promise<SubChapterMember[]> => {
     const supabase = await createClient()
 
+    // Live yi_connect.sub_chapter_members uses: status (not is_active),
+    // joined_date (not joined_at), events_attended (not events_participated),
+    // class_year (not year_of_study), roll_number (not student_id).
+    // Alias them to the field names the rest of the app + types expect.
+    // Fixed 2026-05-30 — Agent A (coordinator/sub-chapter drift sweep).
     let query = supabase
       .schema('yi_connect').from('sub_chapter_members')
-      .select('*')
+      .select(
+        'id, sub_chapter_id, full_name, email, phone, department, ' +
+        'student_id:roll_number, year_of_study:class_year, ' +
+        'events_participated:events_attended, volunteer_hours, ' +
+        'status, joined_at:joined_date, left_at:left_date, ' +
+        'created_at, updated_at'
+      )
       .eq('sub_chapter_id', subChapterId)
-      .order('joined_at', { ascending: false })
+      .order('joined_date', { ascending: false })
 
     if (options?.activeOnly) {
-      query = query.eq('is_active', true)
+      query = query.eq('status', 'active')
     }
 
     const { data, error } = await query
@@ -226,7 +242,12 @@ export const getSubChapterMembers = cache(
       return []
     }
 
-    return data || []
+    // Derive is_active from live status text so callers reading member.is_active
+    // keep working (the column itself doesn't exist on the live table).
+    return (data || []).map((m: any) => ({
+      ...m,
+      is_active: m.status === 'active',
+    })) as SubChapterMember[]
   }
 )
 
@@ -237,11 +258,12 @@ export const getSubChapterMemberCount = cache(
   async (subChapterId: string): Promise<number> => {
     const supabase = await createClient()
 
+    // Live sub_chapter_members uses status text, not an is_active boolean.
     const { count, error } = await supabase
       .schema('yi_connect').from('sub_chapter_members')
       .select('*', { count: 'exact', head: true })
       .eq('sub_chapter_id', subChapterId)
-      .eq('is_active', true)
+      .eq('status', 'active')
 
     if (error) {
       console.error('Error counting sub-chapter members:', error)
@@ -267,6 +289,8 @@ export const getSubChapterEvents = cache(
       .schema('yi_connect').from('sub_chapter_events')
       .select(`
         *,
+        expected_participants:expected_attendance,
+        actual_participants:actual_attendance,
         sub_chapter:sub_chapters(*)
       `)
       .order('event_date', { ascending: true })
@@ -316,6 +340,8 @@ export const getSubChapterEventById = cache(
       .schema('yi_connect').from('sub_chapter_events')
       .select(`
         *,
+        expected_participants:expected_attendance,
+        actual_participants:actual_attendance,
         sub_chapter:sub_chapters(*)
       `)
       .eq('id', id)
@@ -354,11 +380,13 @@ export const getUpcomingSubChapterEvents = cache(
       .schema('yi_connect').from('sub_chapter_events')
       .select(`
         *,
+        expected_participants:expected_attendance,
+        actual_participants:actual_attendance,
         sub_chapter:sub_chapters(*)
       `)
       .eq('sub_chapter_id', subChapterId)
       .gte('event_date', today)
-      .in('status', ['approved', 'scheduled', 'in_progress'])
+      .in('status', ['planned', 'confirmed'])
       .order('event_date', { ascending: true })
       .limit(limit)
 
@@ -404,18 +432,21 @@ export const getSubChapterStats = cache(
 
     const subChapters = data || []
 
+    // Live yi_connect.sub_chapters uses member_count / events_count /
+    // total_impact / chapter_type (not total_members / total_events /
+    // total_students_reached / type). Fixed 2026-05-30 — Agent A.
     return {
       total_sub_chapters: subChapters.length,
-      active_sub_chapters: subChapters.filter((s) => s.status === 'active').length,
-      total_members: subChapters.reduce((sum, s) => sum + (s.total_members || 0), 0),
-      total_events: subChapters.reduce((sum, s) => sum + (s.total_events || 0), 0),
+      active_sub_chapters: subChapters.filter((s: any) => s.status === 'active').length,
+      total_members: subChapters.reduce((sum, s: any) => sum + (s.member_count || 0), 0),
+      total_events: subChapters.reduce((sum, s: any) => sum + (s.events_count || 0), 0),
       total_students_reached: subChapters.reduce(
-        (sum, s) => sum + (s.total_students_reached || 0),
+        (sum, s: any) => sum + (s.total_impact || 0),
         0
       ),
       by_type: {
-        yuva: subChapters.filter((s) => s.type === 'yuva').length,
-        thalir: subChapters.filter((s) => s.type === 'thalir').length,
+        yuva: subChapters.filter((s: any) => s.chapter_type === 'yuva').length,
+        thalir: subChapters.filter((s: any) => s.chapter_type === 'thalir').length,
       },
     }
   }
@@ -429,32 +460,37 @@ export const getSubChapterDashboardStats = cache(
     const supabase = await createClient()
     const today = new Date().toISOString().split('T')[0]
 
-    // Get sub-chapter data
+    // Get sub-chapter data.
+    // Live yi_connect.sub_chapters columns are events_count / member_count /
+    // total_impact (the *_this_year / total_* columns the types claim do not
+    // exist). Fixed 2026-05-30 — Agent A (coordinator/sub-chapter drift sweep).
     const { data: subChapter } = await supabase
       .schema('yi_connect').from('sub_chapters')
-      .select('total_events, total_members, students_reached_this_year')
+      .select('events_count, member_count, total_impact')
       .eq('id', subChapterId)
       .single()
 
-    // Get pending events count
+    // Get pending events count.
+    // Live sub_chapter_events.status enum is planned/confirmed/completed/cancelled
+    // (no draft/pending_approval/approved/scheduled). "Pending" == planned.
     const { count: pendingCount } = await supabase
       .schema('yi_connect').from('sub_chapter_events')
       .select('*', { count: 'exact', head: true })
       .eq('sub_chapter_id', subChapterId)
-      .in('status', ['pending_approval', 'draft'])
+      .eq('status', 'planned')
 
-    // Get upcoming events count
+    // Get upcoming events count (confirmed + future-dated).
     const { count: upcomingCount } = await supabase
       .schema('yi_connect').from('sub_chapter_events')
       .select('*', { count: 'exact', head: true })
       .eq('sub_chapter_id', subChapterId)
       .gte('event_date', today)
-      .in('status', ['approved', 'scheduled'])
+      .in('status', ['planned', 'confirmed'])
 
     return {
-      total_events: subChapter?.total_events || 0,
-      students_reached: subChapter?.students_reached_this_year || 0,
-      total_members: subChapter?.total_members || 0,
+      total_events: subChapter?.events_count || 0,
+      students_reached: subChapter?.total_impact || 0,
+      total_members: subChapter?.member_count || 0,
       pending_events: pendingCount || 0,
       upcoming_events: upcomingCount || 0,
     }

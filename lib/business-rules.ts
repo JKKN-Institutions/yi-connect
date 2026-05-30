@@ -6,7 +6,7 @@
  * - Rule 2: Trainer max 6 sessions/month
  * - Rule 3: Materials approval 3 days before session
  * - Rule 4: Booking restrictions
- * - Rule 5: MoU requirements (handled in coordinator-auth.ts)
+ * - Rule 5: MoU requirements (coordinator auth now goes through the main dashboard Supabase auth)
  * - Rule 6: Privacy rules (handled via RLS)
  *
  * Business rules are now chapter-configurable via the chapter_settings table.

@@ -1310,3 +1310,31 @@ export function hasRequiredCustomFields(
   if (!fields || !Array.isArray(fields)) return false;
   return fields.some((f) => f && f.required === true);
 }
+
+// ============================================================================
+// Ticket check-in
+// ============================================================================
+
+/**
+ * Display profile returned when an attendee is checked in by scanning their
+ * personal ticket QR token. Defined here (not in the 'use server' actions
+ * file) because a 'use server' file may only export async functions —
+ * exporting a type from it makes every action in the file throw
+ * "A use server file can only export async functions" at action-invocation
+ * time (verified in production 2026-05-30: POST /events/[id] 500'd across
+ * three deployments until this type was moved out).
+ */
+export type TicketAttendeeProfile = {
+  attendeeType: 'member' | 'guest';
+  attendeeId: string;
+  eventId: string;
+  eventTitle: string;
+  fullName: string;
+  email: string | null;
+  avatarUrl: string | null;
+  company: string | null;
+  designation: string | null;
+  rsvpStatus: string;
+  alreadyCheckedIn: boolean;
+  checkedInAt: string;
+};

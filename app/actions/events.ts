@@ -16,6 +16,7 @@ import { sendEmail, sendBatchEmails } from '@/lib/email';
 import { eventCancellationEmail, volunteerAssignmentEmail } from '@/lib/email/templates';
 import { syncEventByIdToYiStudio, syncEventToYiStudio } from '@/lib/webhooks/yi-studio-sync';
 import { generateEventSlug, rotateSlugSuffix } from '@/lib/utils/slug';
+import type { TicketAttendeeProfile } from '@/types/event';
 import {
   createEventSchema,
   updateEventSchema,
@@ -2398,21 +2399,6 @@ export async function toggleSessionInterest(
 // ============================================================================
 // STUTZEE FEATURE 2A: Per-Attendee QR Ticket Check-in
 // ============================================================================
-
-export type TicketAttendeeProfile = {
-  attendeeType: 'member' | 'guest';
-  attendeeId: string;
-  eventId: string;
-  eventTitle: string;
-  fullName: string;
-  email: string | null;
-  avatarUrl: string | null;
-  company: string | null;
-  designation: string | null;
-  rsvpStatus: string;
-  alreadyCheckedIn: boolean;
-  checkedInAt: string;
-};
 
 /**
  * Check in an attendee by scanning their personal ticket QR token.

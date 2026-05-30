@@ -213,7 +213,7 @@ export async function getScoresForJury(
         party_side,
         school_name
       ),
-      rubric:scoring_rubrics(total_max)
+      rubric:rubrics(total_max)
     `
     )
     .eq("jury_assignment_id", juryAssignmentId)

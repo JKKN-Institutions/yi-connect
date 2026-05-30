@@ -108,7 +108,21 @@ export async function deleteVolunteer(
   eventId: string
 ): Promise<ActionResult> {
   const supabase = await createServiceClient();
-  const { error } = await supabase.from("volunteers").delete().eq("id", id);
+
+  // Gate: caller must be authenticated and own the event
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "Not authenticated" };
+
+  const { data: event } = await supabase
+    .from("events")
+    .select("created_by")
+    .eq("id", eventId)
+    .single();
+  if (!event || event.created_by !== user.id) {
+    return { success: false, error: "Event not found or not authorized" };
+  }
+
+  const { error } = await supabase.from("volunteers").delete().eq("id", id).eq("event_id", eventId);
   if (error) return { success: false, error: error.message };
   await logAuditAction({
     action_type: "delete",

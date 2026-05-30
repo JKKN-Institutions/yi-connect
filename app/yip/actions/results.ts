@@ -326,6 +326,11 @@ export async function computeResults(
       rank: r.rank,
       award_category: r.award_category,
       computed_at: r.computed_at,
+      // qualifies_next intentionally left null here — promotion logic is
+      // handled by the separate promotions workflow (app/yip/actions/pipeline.ts).
+      // If you need to auto-set top-N qualification at compute time, derive it
+      // from r.rank here and add qualifies_next to the ResultRow type.
+      qualifies_next: null,
     }))
   );
 

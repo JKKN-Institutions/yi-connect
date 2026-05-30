@@ -1,7 +1,9 @@
-import { notFound } from "next/navigation";
-import { createServiceClient } from "@/lib/yip/supabase/server";
+import { redirect } from "next/navigation";
+import { createClient, createServiceClient } from "@/lib/yip/supabase/server";
+import { getEvent } from "@/app/yip/actions/events";
 import { listFees, getFeeStats } from "@/app/yip/actions/fees";
 import { FeesClient } from "./fees-client";
+import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
 
 export default async function FeesPage({
   params,
@@ -9,15 +11,20 @@ export default async function FeesPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  const authClient = await createClient();
+  const {
+    data: { user },
+  } = await authClient.auth.getUser();
+  if (!user) redirect("/yip/login");
+
+  const event = await getEvent(id);
+  if (!event) {
+    return (
+      <Forbidden403 reason="You don't have access to this event's fees. The event may have been deleted, or your role may not include this event's chapter or zone." />
+    );
+  }
+
   const supabase = await createServiceClient();
-
-  const { data: event } = await supabase
-    .from("events")
-    .select("id, name, mycii_payment_link, mycii_event_registered, fee_per_participant_inr")
-    .eq("id", id)
-    .single();
-
-  if (!event) notFound();
 
   const { data: participants } = await supabase
     .from("participants")

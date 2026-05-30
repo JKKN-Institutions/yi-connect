@@ -582,7 +582,7 @@ export const getTrainerDistributionStats = cache(
           )
         )
       `)
-      .eq('is_trainer_eligible', true)
+      .eq('is_active', true)
       .order('sessions_this_month', { ascending: true })
       .order('days_since_last_session', { ascending: false, nullsFirst: true })
 

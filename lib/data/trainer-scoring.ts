@@ -216,13 +216,14 @@ export const getEligibleTrainersForEvent = cache(
     // via explicit FK hint. trainer_profiles has two FKs to members
     // (member_id + approved_by), so PostgREST returns PGRST201 without a hint.
     // Same fix Agent G applied in session-bookings getBookingById (commit 37de8ce).
+    // trainer_profiles columns: service_types (not eligible_session_types),
+    // is_active (not is_trainer_eligible), city lives on members table
     const { data: trainers, error } = await supabase
       .schema('yi_connect').from('trainer_profiles')
       .select(`
         id,
         member_id,
-        city,
-        eligible_session_types,
+        service_types,
         total_sessions,
         average_rating,
         last_session_date,
@@ -230,6 +231,7 @@ export const getEligibleTrainersForEvent = cache(
         days_since_last_session,
         member:members!trainer_profiles_member_id_fkey(
           id,
+          city,
           profile:profiles(
             full_name,
             email,
@@ -237,8 +239,8 @@ export const getEligibleTrainersForEvent = cache(
           )
         )
       `)
-      .eq('is_trainer_eligible', true)
-      .contains('eligible_session_types', [params.serviceType])
+      .eq('is_active', true)
+      .contains('service_types', [params.serviceType])
 
     if (error) {
       console.error('Error fetching eligible trainers:', error)
@@ -284,8 +286,8 @@ export const getEligibleTrainersForEvent = cache(
           full_name: (trainer.member as any)?.profile?.full_name || 'Unknown',
           email: (trainer.member as any)?.profile?.email || '',
           avatar_url: (trainer.member as any)?.profile?.avatar_url || null,
-          city: trainer.city,
-          eligible_session_types: trainer.eligible_session_types || [],
+          city: (trainer.member as any)?.city || null,
+          eligible_session_types: (trainer as any).service_types || [],
           total_sessions: trainer.total_sessions || 0,
           average_rating: trainer.average_rating,
           last_session_date: trainer.last_session_date,
@@ -315,7 +317,7 @@ export const getEligibleTrainersForEvent = cache(
             total_sessions: candidate.total_sessions,
             sessions_this_month: candidate.sessions_this_month,
           },
-          eligible_session_types: candidate.eligible_session_types,
+          eligible_session_types: candidate.eligible_session_types, // mapped from service_types
           certifications_count: candidate.certifications_count,
           is_available: true, // Default to available; detailed availability check done during assignment
         }

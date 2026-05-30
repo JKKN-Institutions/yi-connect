@@ -75,13 +75,8 @@ async function EngagementSection() {
 
   const supabase = await createServerSupabaseClient()
 
-  // Get member engagement score
-  const { data: member } = await supabase
-    .schema('yi_connect')
-    .from('members')
-    .select('engagement_score, yi_activity_score')
-    .eq('id', user.id)
-    .single()
+  // engagement_score / yi_activity_score columns were removed from members.
+  // Score is computed client-side from events attended below.
 
   // Count events attended (event_registrations table renamed to event_rsvps)
   const { count: eventsAttended } = await supabase
@@ -117,7 +112,8 @@ async function EngagementSection() {
     return acc + hours
   }, 0) || 0
 
-  const engagementScore = member?.engagement_score || 0
+  // Derive a simple engagement percentage from attended events (capped at 100)
+  const engagementScore = Math.min(100, Math.round((eventsAttended || 0) * 5))
 
   return (
     <Card className='mx-4 mb-4'>

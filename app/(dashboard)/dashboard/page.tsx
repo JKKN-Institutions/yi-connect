@@ -256,11 +256,11 @@ async function BudgetUtilizationCard() {
 
   const { data: budgetData } = await supabase
     .schema('yi_connect').from('budgets')
-    .select('amount, spent_amount')
+    .select('allocated_amount, spent_amount')
     .eq('chapter_id', profile.chapter_id)
-    .gte('calendar_year', new Date().getFullYear());
+    .gte('fiscal_year', new Date().getFullYear().toString());
 
-  const totalBudget = budgetData?.reduce((sum, b) => sum + Number(b.amount), 0) || 0;
+  const totalBudget = budgetData?.reduce((sum, b) => sum + Number(b.allocated_amount), 0) || 0;
   const totalSpent = budgetData?.reduce((sum, b) => sum + Number(b.spent_amount || 0), 0) || 0;
   const utilization = totalBudget > 0 ? Math.round((totalSpent / totalBudget) * 100) : 0;
 

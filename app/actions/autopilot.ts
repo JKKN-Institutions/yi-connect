@@ -151,7 +151,7 @@ export async function triggerEventAutoPilot(
     const { data: event, error: eventError } = await supabase
       .schema('yi_connect').from('events')
       .select(
-        'id, title, start_date, end_date, venue, chapter_id, vertical_id, organizer_id, status'
+        'id, title, start_date, end_date, venue_address, chapter_id, vertical_id, organizer_id, status'
       )
       .eq('id', validated.event_id)
       .single();
@@ -236,7 +236,7 @@ export async function triggerEventAutoPilot(
           hour: '2-digit',
           minute: '2-digit',
         }),
-        venue: event.venue || 'TBD',
+        venue: event.venue_address || 'TBD',
         eventUrl: feedbackUrl,
       };
 
@@ -575,7 +575,7 @@ export async function triggerEventAutoPilot(
               title: event.title,
               start_date: event.start_date,
               end_date: event.end_date,
-              venue: event.venue,
+              venue: event.venue_address,
             },
             stats: {
               total_rsvps: stats.total_rsvps,

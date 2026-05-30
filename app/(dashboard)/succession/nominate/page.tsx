@@ -64,12 +64,24 @@ async function NominateContent() {
 
   const positions = await getSuccessionPositions(activeCycle.id)
 
-  // Get all members for the dropdown
-  const { data: members } = await supabase
+  // Get all members for the dropdown — members.id is FK to profiles.id
+  // members has full_name (not first_name/last_name); email lives on profiles
+  const { data: rawMembers } = await supabase
     .schema('yi_connect').from('members')
-    .select('id, first_name, last_name, email')
-    .is('deleted_at', null)
-    .order('first_name')
+    .select('id, full_name, profile:profiles(email)')
+    .eq('is_active', true)
+    .order('full_name')
+
+  // Normalise to the shape NominationForm expects
+  const members = (rawMembers ?? []).map((m: any) => {
+    const nameParts = (m.full_name ?? '').split(' ')
+    return {
+      id: m.id,
+      first_name: nameParts.slice(0, -1).join(' ') || m.full_name,
+      last_name: nameParts.length > 1 ? nameParts[nameParts.length - 1] : '',
+      email: (Array.isArray(m.profile) ? m.profile[0]?.email : m.profile?.email) ?? '',
+    }
+  })
 
   return (
     <div className="space-y-6">

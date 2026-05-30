@@ -572,7 +572,7 @@ export async function checkSessionReadiness(
   const { data: booking } = await supabase
     .schema('yi_connect')
     .from('session_bookings')
-    .select('status, session_date')
+    .select('status, actual_date')
     .eq('id', bookingId)
     .single()
 

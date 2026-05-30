@@ -45,12 +45,23 @@ async function EvaluatorsContent() {
   const evaluators = await getEvaluators(activeCycle.id)
 
   // Get all members for assignment
+  // members table uses full_name (single column); split client-side for child component
   const supabase = await createClient()
-  const { data: members } = await supabase
+  const { data: rawMembers } = await supabase
     .schema('yi_connect').from('members')
-    .select('id, first_name, last_name, email')
-    .is('deleted_at', null)
-    .order('first_name')
+    .select('id, full_name, email')
+    .is('is_active', true)
+    .order('full_name')
+
+  const members = rawMembers?.map((m: { id: string; full_name: string | null; email: string }) => {
+    const spaceIdx = (m.full_name ?? '').indexOf(' ')
+    return {
+      id: m.id,
+      email: m.email,
+      first_name: spaceIdx > 0 ? m.full_name!.slice(0, spaceIdx) : (m.full_name ?? ''),
+      last_name: spaceIdx > 0 ? m.full_name!.slice(spaceIdx + 1) : '',
+    }
+  }) ?? []
 
   const existingEvaluatorIds = evaluators.map((e: any) => e.evaluator.id)
 
@@ -104,7 +115,7 @@ async function EvaluatorsContent() {
                 </DialogHeader>
                 <EvaluatorAssignmentForm
                   cycleId={activeCycle.id}
-                  members={members || []}
+                  members={members}
                   existingEvaluatorIds={existingEvaluatorIds}
                 />
               </DialogContent>

@@ -39,7 +39,6 @@ import type {
   EventStats,
   TriggerAutopilotResult,
 } from '@/types/autopilot';
-import { DEFAULT_AUTOPILOT_SETTINGS } from '@/types/autopilot';
 
 type ActionResponse<T = void> = {
   success: boolean;
@@ -731,6 +730,3 @@ export async function completeEventAndTriggerAutopilot(
     };
   }
 }
-
-// Silence unused import warnings (DEFAULT_AUTOPILOT_SETTINGS is used transitively)
-export const _internal = { DEFAULT_AUTOPILOT_SETTINGS };

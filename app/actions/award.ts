@@ -404,47 +404,11 @@ export async function assignJuryMember(
   try {
     const supabase = await createClient()
 
-    // Check if already assigned
-    const { data: existing } = await supabase
-      .schema('yi_connect').from('jury_members')
-      .select('id')
-      .eq('cycle_id', cycleId)
-      .eq('member_id', memberId)
-      .single()
-
-    if (existing) {
-      return { success: false, error: 'Member already assigned as jury' }
-    }
-
-    // Count nominations for this cycle
-    const { count } = await supabase
-      .schema('yi_connect').from('nominations')
-      .select('id', { count: 'exact', head: true })
-      .eq('cycle_id', cycleId)
-      .eq('status', 'approved')
-
-    const { data, error } = await supabase
-      .schema('yi_connect').from('jury_members')
-      .insert({
-        cycle_id: cycleId,
-        member_id: memberId,
-        assigned_by_id: assignedById,
-        total_nominations: count || 0,
-      })
-      .select(`
-        *,
-        member:members (
-          full_name,
-          email
-        )
-      `)
-      .single()
-
-    if (error) throw error
-
-    revalidatePath('/awards/admin/cycles')
-    revalidatePath(`/awards/admin/cycles/${cycleId}`)
-    return { success: true, data }
+    // jury_members removed. Assignment now requires a panel_id (jury_panel_members.panel_id).
+    // This action receives only cycleId + memberId — no panel_id available.
+    // TODO drift: jury_members removed. assignJuryMember in award.ts needs a panelId
+    // parameter to insert into jury_panel_members. Callers must be updated to supply panelId.
+    return { success: false, error: 'assignJuryMember requires a panelId (schema updated — jury_members replaced by jury_panel_members)' }
   } catch (error) {
     return { success: false, error: 'Failed to assign jury member' }
   }
@@ -458,12 +422,12 @@ export async function submitJuryScores(
     const data = Object.fromEntries(formData)
     const validated = CreateJuryScoreSchema.parse(data)
 
-    // Check if already scored
+    // jury_scores.jury_member_id renamed to juror_id in current schema
     const { data: existing } = await supabase
       .schema('yi_connect').from('jury_scores')
       .select('id')
       .eq('nomination_id', validated.nomination_id)
-      .eq('jury_member_id', validated.jury_member_id)
+      .eq('juror_id', validated.jury_member_id)
       .single()
 
     if (existing) {
@@ -481,11 +445,8 @@ export async function submitJuryScores(
 
     if (error) throw error
 
-    // Update jury member progress
-    await supabase
-      .schema('yi_connect').from('jury_members')
-      .update({ scored_nominations: supabase.rpc('increment', { x: 1 }) })
-      .eq('id', validated.jury_member_id)
+    // TODO drift: jury_members removed — scored_nominations counter no longer exists on jury_panel_members.
+    // Skipping the progress increment until a scored_nominations column is added to jury_panel_members.
 
     revalidatePath('/awards/jury')
     revalidatePath(`/awards/jury/${validated.nomination_id}`)

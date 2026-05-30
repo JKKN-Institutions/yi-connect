@@ -308,24 +308,28 @@ export const getJuryMembers = cache(async (cycleId: string) => {
 
   const supabase = await createServerSupabaseClient()
 
+  // jury_members removed — query via jury_panel_members joined through jury_panels for cycle
   const { data, error } = await supabase
-    .schema('yi_connect').from('jury_members')
+    .schema('yi_connect').from('jury_panel_members')
     .select(`
       *,
-      member:members(
+      panel:jury_panels!inner(
+        id,
+        cycle_id
+      ),
+      member:profiles(
         id,
         full_name,
-        avatar_url,
-        company,
-        designation
+        avatar_url
       )
     `)
-    .eq('cycle_id', cycleId)
-    .order('assigned_at', { ascending: true })
+    .eq('jury_panels.cycle_id', cycleId)
+    .eq('is_active', true)
+    .order('added_at', { ascending: true })
 
   if (error) throw error
 
-  return (data || []) as JuryMemberWithDetails[]
+  return (data || []) as unknown as JuryMemberWithDetails[]
 })
 
 /**
@@ -335,22 +339,26 @@ export const getMyJuryAssignments = cache(async (memberId: string) => {
 
   const supabase = await createServerSupabaseClient()
 
+  // jury_members removed — query via jury_panel_members joined through jury_panels for cycle
   const { data, error } = await supabase
-    .schema('yi_connect').from('jury_members')
+    .schema('yi_connect').from('jury_panel_members')
     .select(`
       *,
-      cycle:award_cycles(
+      panel:jury_panels!inner(
         *,
-        category:award_categories(*)
+        cycle:award_cycles(
+          *,
+          category:award_categories(*)
+        )
       )
     `)
-    .eq('member_id', memberId)
-    .is('completed_at', null)
-    .order('assigned_at', { ascending: false })
+    .eq('juror_id', memberId)
+    .eq('is_active', true)
+    .order('added_at', { ascending: false })
 
   if (error) throw error
 
-  return (data || []) as JuryMemberWithDetails[]
+  return (data || []) as unknown as JuryMemberWithDetails[]
 })
 
 /**
@@ -381,14 +389,17 @@ export const getNominationsForJury = cache(async (juryMemberId: string) => {
 
   const supabase = await createServerSupabaseClient()
 
-  // Get the cycle for this jury member
-  const { data: juryMember, error: juryError } = await supabase
-    .schema('yi_connect').from('jury_members')
-    .select('cycle_id')
+  // jury_members removed — resolve cycle_id via jury_panel_members.panel_id -> jury_panels.cycle_id
+  const { data: panelMember, error: juryError } = await supabase
+    .schema('yi_connect').from('jury_panel_members')
+    .select('panel:jury_panels!inner(cycle_id)')
     .eq('id', juryMemberId)
     .single()
 
   if (juryError) throw juryError
+
+  const panelData = panelMember?.panel as unknown as { cycle_id: string } | null
+  const juryMember = { cycle_id: panelData?.cycle_id }
 
   // Get all nominations for this cycle with jury score status
   const { data, error } = await supabase

@@ -54,12 +54,13 @@ async function PageContent({
     notFound();
   }
 
-  // Check if user is a jury member for this cycle
+  // jury_members removed — check via jury_panel_members joined through jury_panels for cycle
   const { data: juryMember } = await supabase
-    .schema('yi_connect').from('jury_members')
-    .select('id')
-    .eq('cycle_id', nomination.cycle_id)
-    .eq('member_id', user.id)
+    .schema('yi_connect').from('jury_panel_members')
+    .select('id, panel:jury_panels!inner(cycle_id)')
+    .eq('jury_panels.cycle_id', nomination.cycle_id)
+    .eq('juror_id', user.id)
+    .eq('is_active', true)
     .single();
 
   if (!juryMember) {
@@ -87,12 +88,12 @@ async function PageContent({
     );
   }
 
-  // Check if user already scored this nomination
+  // jury_scores.jury_member_id renamed to juror_id; filter by user's profile id directly
   const { data: existingScore } = await supabase
     .schema('yi_connect').from('jury_scores')
     .select('*')
     .eq('nomination_id', nominationId)
-    .eq('jury_member_id', juryMember.id)
+    .eq('juror_id', user.id)
     .single();
 
   return (

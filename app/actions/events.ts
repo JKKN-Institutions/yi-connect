@@ -1517,7 +1517,7 @@ export async function selfCheckIn(
     // Get event details
     const { data: event } = await supabase
       .schema('yi_connect').from('events')
-      .select('id, title, status, venue, start_date, end_date')
+      .select('id, title, status, venue_address, start_date, end_date')
       .eq('id', eventId)
       .single();
 
@@ -1580,7 +1580,7 @@ export async function selfCheckIn(
       data: {
         eventId: event.id,
         eventTitle: event.title,
-        venue: event.venue,
+        venue: event.venue_address,
         checkInTime: new Date(checkInTime).toLocaleTimeString()
       }
     };

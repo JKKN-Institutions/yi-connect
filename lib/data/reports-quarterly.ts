@@ -84,7 +84,7 @@ export async function aggregateQuarterlyReport(
         .in('event_id', eventIds),
       supabase
         .schema('yi_connect').from('event_feedback')
-        .select('event_id, rating')
+        .select('event_id, overall_rating')
         .in('event_id', eventIds),
     ]);
 
@@ -105,7 +105,7 @@ export async function aggregateQuarterlyReport(
     const ratingsByEvent = new Map<string, number[]>();
     for (const f of feedbacks ?? []) {
       const ratings = ratingsByEvent.get(f.event_id as string) ?? [];
-      if (typeof f.rating === 'number') ratings.push(f.rating);
+      if (typeof f.overall_rating === 'number') ratings.push(f.overall_rating);
       ratingsByEvent.set(f.event_id as string, ratings);
     }
 

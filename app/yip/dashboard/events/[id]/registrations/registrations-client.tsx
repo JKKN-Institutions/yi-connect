@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Badge } from "@/components/yip/ui/badge";
 import { Button } from "@/components/yip/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/yip/ui/card";
@@ -73,9 +74,23 @@ export function RegistrationsClient({
   initialRegistrations: Registration[];
   initialStats: RegistrationStats;
 }) {
+  const router = useRouter();
   const [regs, setRegs] = useState(initialRegistrations);
   const [stats, setStats] = useState(initialStats);
   const [enabled, setEnabled] = useState(ingestionEnabled);
+
+  // After a bulk op we call router.refresh(), which re-runs the server
+  // component and streams fresh `initialRegistrations` / `initialStats` props
+  // down. useState only reads its initializer once, so sync local state when
+  // the server sends new truth — this is what makes the list reflect reality
+  // (vs. the prior stub that returned stale state). Object identity changes on
+  // every refresh, so this fires exactly when the server data is replaced.
+  useEffect(() => {
+    setRegs(initialRegistrations);
+  }, [initialRegistrations]);
+  useEffect(() => {
+    setStats(initialStats);
+  }, [initialStats]);
 
   // CSV staging state
   const [csvText, setCsvText] = useState("");
@@ -210,10 +225,8 @@ export function RegistrationsClient({
       }`;
       flashOk(msg);
       clearStaging();
-      // Optimistic refresh
-      const { newRegs, newStats } = await refetch();
-      setRegs(newRegs);
-      setStats(newStats);
+      // Pull server truth so newly-ingested rows + stats appear immediately.
+      refetch();
     });
   }
 
@@ -335,9 +348,8 @@ export function RegistrationsClient({
         }`
       );
       setSelectedIds(new Set());
-      const { newRegs, newStats } = await refetch();
-      setRegs(newRegs);
-      setStats(newStats);
+      // Pull server truth so the just-approved rows + counts reflect at once.
+      refetch();
     });
   }
 
@@ -383,28 +395,15 @@ export function RegistrationsClient({
     });
   }
 
-  // ── Refetch helper via server ────────────────────────────────────
-  async function refetch(): Promise<{ newRegs: Registration[]; newStats: RegistrationStats }> {
-    // Simple page reload would also work, but we re-request data via the
-    // list/stats server actions to keep the UI responsive.
-    const [r, s] = await Promise.all([
-      fetchRegistrations(),
-      fetchStats(),
-    ]);
-    return { newRegs: r, newStats: s };
-  }
-
-  async function fetchRegistrations(): Promise<Registration[]> {
-    // Re-use the server action via a POST-less RSC call isn't simple client-side;
-    // we fetch a /api endpoint? We don't have one. Simplest correct approach:
-    // just reload the page. Instead, we return the current optimistic list
-    // augmented by a window reload on the next tick as a safety net.
-    // For now, surface current state; ingestCSV already updated server-side.
-    // On real-world use, the user can refresh if needed.
-    return regs;
-  }
-  async function fetchStats(): Promise<RegistrationStats> {
-    return stats;
+  // ── Refetch via server component re-run ──────────────────────────
+  // The page is an RSC that re-queries listRegistrations + getRegistrationStats
+  // on every render and passes them down as props. router.refresh() re-runs it
+  // server-side and streams the fresh props in; the useEffect prop-sync above
+  // then replaces local state with server truth. This is the real refresh that
+  // makes bulk operations (ingest, bulk-approve) reflect without a manual
+  // page reload.
+  function refetch() {
+    router.refresh();
   }
 
   // ── Preview rows before ingestion (first 10) ─────────────────────

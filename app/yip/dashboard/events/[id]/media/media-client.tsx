@@ -80,11 +80,14 @@ export function MediaClient({
   eventName,
   initialMedia,
   initialStats,
+  canDelete = true,
 }: {
   eventId: string;
   eventName: string;
   initialMedia: EventMedia[];
   initialStats: Stats;
+  /** Chair/national/regional only. Organisers cannot delete records. */
+  canDelete?: boolean;
 }) {
   const [media, setMedia] = useState<EventMedia[]>(initialMedia);
   const [stats, setStats] = useState<Stats>(initialStats);
@@ -811,16 +814,20 @@ export function MediaClient({
           >
             <Lock className="size-3 mr-1" /> Organizer
           </Button>
-          <div className="h-5 w-px bg-white/20 mx-1" />
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={handleBulkDelete}
-            className="h-7 text-xs bg-transparent border-red-300/60 text-red-200 hover:bg-red-500/20"
-            disabled={pending}
-          >
-            <Trash2 className="size-3 mr-1" /> Delete
-          </Button>
+          {canDelete && (
+            <>
+              <div className="h-5 w-px bg-white/20 mx-1" />
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleBulkDelete}
+                className="h-7 text-xs bg-transparent border-red-300/60 text-red-200 hover:bg-red-500/20"
+                disabled={pending}
+              >
+                <Trash2 className="size-3 mr-1" /> Delete
+              </Button>
+            </>
+          )}
           <Button
             size="sm"
             variant="ghost"
@@ -862,6 +869,7 @@ export function MediaClient({
               onSetCover={() => handleSetCover(m.id)}
               onDelete={() => handleDeleteOne(m.id)}
               onSetVisibility={(v) => handleSetVisibility(m.id, v)}
+              canDelete={canDelete}
               pending={pending}
             />
           ))}
@@ -889,6 +897,7 @@ function MediaCard({
   onSetCover,
   onDelete,
   onSetVisibility,
+  canDelete = true,
   pending,
 }: {
   media: EventMedia;
@@ -904,6 +913,7 @@ function MediaCard({
   onSetCover: () => void;
   onDelete: () => void;
   onSetVisibility: (v: MediaVisibility) => void;
+  canDelete?: boolean;
   pending: boolean;
 }) {
   const KindIcon =
@@ -1089,16 +1099,18 @@ function MediaCard({
                   <Download className="size-3.5" />
                 </a>
               )}
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={onDelete}
-                className="size-7 text-red-600 hover:bg-red-50 ml-auto"
-                title="Delete"
-                disabled={pending}
-              >
-                <Trash2 className="size-3.5" />
-              </Button>
+              {canDelete && (
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  onClick={onDelete}
+                  className="size-7 text-red-600 hover:bg-red-50 ml-auto"
+                  title="Delete"
+                  disabled={pending}
+                >
+                  <Trash2 className="size-3.5" />
+                </Button>
+              )}
             </div>
           </>
         )}

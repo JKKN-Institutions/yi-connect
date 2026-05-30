@@ -152,12 +152,15 @@ export function BrandingClient({
   initialChecks,
   initialInvitations,
   initialScore,
+  canDelete = true,
 }: {
   eventId: string;
   eventName: string;
   initialChecks: BrandingCheckRow[];
   initialInvitations: InvitationRow[];
   initialScore: ComplianceScore;
+  /** Chair/national/regional only. Organisers cannot delete records. */
+  canDelete?: boolean;
 }) {
   const [checks, setChecks] = useState<BrandingCheckRow[]>(initialChecks);
   const [invitations, setInvitations] =
@@ -687,6 +690,7 @@ export function BrandingClient({
                   onApprove={(note) => decideInvitation(inv.id, "approve", note)}
                   onReject={(note) => decideInvitation(inv.id, "reject", note)}
                   onDelete={() => removeInvitation(inv.id)}
+                  canDelete={canDelete}
                   pending={pending}
                 />
               ))}
@@ -923,12 +927,14 @@ function InvitationItem({
   onApprove,
   onReject,
   onDelete,
+  canDelete = true,
   pending,
 }: {
   invitation: InvitationRow;
   onApprove: (note?: string) => void;
   onReject: (note?: string) => void;
   onDelete: () => void;
+  canDelete?: boolean;
   pending: boolean;
 }) {
   const [note, setNote] = useState("");
@@ -1023,15 +1029,17 @@ function InvitationItem({
               </Button>
             </>
           )}
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={onDelete}
-            disabled={pending}
-            className="h-7 w-7 p-0 text-[#1a1a3e]/40 hover:text-red-600"
-          >
-            <Trash2 className="size-3.5" />
-          </Button>
+          {canDelete && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={onDelete}
+              disabled={pending}
+              className="h-7 w-7 p-0 text-[#1a1a3e]/40 hover:text-red-600"
+            >
+              <Trash2 className="size-3.5" />
+            </Button>
+          )}
         </div>
       </div>
       {showNoteInput && invitation.approval_status === "pending" && (

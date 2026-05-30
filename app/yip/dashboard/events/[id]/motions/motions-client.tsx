@@ -70,11 +70,14 @@ export function MotionsClient({
   eventName,
   initialMotions,
   participants,
+  canDelete = true,
 }: {
   eventId: string;
   eventName: string;
   initialMotions: Motion[];
   participants: Participant[];
+  /** Chair/national/regional only. Organisers cannot delete records. */
+  canDelete?: boolean;
 }) {
   const [motions, setMotions] = useState(initialMotions);
   const [creating, setCreating] = useState(false);
@@ -618,14 +621,16 @@ export function MotionsClient({
                             <MessageSquare className="size-3 mr-1" /> Respond
                           </Button>
                         )}
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => handleDelete(m)}
-                          className="text-red-600 hover:bg-red-50"
-                        >
-                          <Trash2 className="size-4" />
-                        </Button>
+                        {canDelete && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => handleDelete(m)}
+                            className="text-red-600 hover:bg-red-50"
+                          >
+                            <Trash2 className="size-4" />
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>

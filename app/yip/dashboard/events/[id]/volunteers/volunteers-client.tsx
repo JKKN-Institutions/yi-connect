@@ -66,10 +66,13 @@ export function VolunteersClient({
   eventId,
   eventName,
   initialVolunteers,
+  canDelete = true,
 }: {
   eventId: string;
   eventName: string;
   initialVolunteers: Volunteer[];
+  /** Chair/national/regional only. Organisers cannot delete records. */
+  canDelete?: boolean;
 }) {
   const [volunteers, setVolunteers] = useState(initialVolunteers);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
@@ -394,15 +397,17 @@ export function VolunteersClient({
                       >
                         <UserCheck className="size-4" />
                       </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => handleDelete(v)}
-                        disabled={pending}
-                        className="text-red-500 hover:bg-red-50"
-                      >
-                        <Trash2 className="size-4" />
-                      </Button>
+                      {canDelete && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => handleDelete(v)}
+                          disabled={pending}
+                          className="text-red-500 hover:bg-red-50"
+                        >
+                          <Trash2 className="size-4" />
+                        </Button>
+                      )}
                     </div>
                   </div>
                 ))}

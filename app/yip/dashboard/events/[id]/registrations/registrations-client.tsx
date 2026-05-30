@@ -67,12 +67,15 @@ export function RegistrationsClient({
   ingestionEnabled,
   initialRegistrations,
   initialStats,
+  canDelete = true,
 }: {
   eventId: string;
   eventName: string;
   ingestionEnabled: boolean;
   initialRegistrations: Registration[];
   initialStats: RegistrationStats;
+  /** Chair/national/regional only. Organisers cannot delete records. */
+  canDelete?: boolean;
 }) {
   const router = useRouter();
   const [regs, setRegs] = useState(initialRegistrations);
@@ -897,16 +900,18 @@ export function RegistrationsClient({
                             </Button>
                           </>
                         )}
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => doDelete(r)}
-                          disabled={pending}
-                          className="text-red-600 hover:bg-red-50"
-                          title="Delete registration"
-                        >
-                          <Trash2 className="size-4" />
-                        </Button>
+                        {canDelete && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => doDelete(r)}
+                            disabled={pending}
+                            className="text-red-600 hover:bg-red-50"
+                            title="Delete registration"
+                          >
+                            <Trash2 className="size-4" />
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>

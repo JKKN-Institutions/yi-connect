@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/yip/supabase/server";
 import { getEvent } from "@/app/yip/actions/events";
+import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import {
   listRegistrations,
   getRegistrationStats,
@@ -32,6 +33,8 @@ export default async function RegistrationsPage({
     getRegistrationStats(eventId),
   ]);
 
+  const access = await getYipEventAccess(eventId);
+
   return (
     <RegistrationsClient
       eventId={eventId}
@@ -39,6 +42,7 @@ export default async function RegistrationsPage({
       ingestionEnabled={event.ingestion_enabled ?? true}
       initialRegistrations={registrations}
       initialStats={stats}
+      canDelete={access.canDelete}
     />
   );
 }

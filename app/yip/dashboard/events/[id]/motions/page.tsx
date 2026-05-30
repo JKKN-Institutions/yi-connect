@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient, createServiceClient } from "@/lib/yip/supabase/server";
 import { getEvent } from "@/app/yip/actions/events";
+import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { listMotions } from "@/app/yip/actions/motions";
 import { MotionsClient } from "./motions-client";
 import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
@@ -34,12 +35,15 @@ export default async function MotionsPage({
     .eq("event_id", eventId)
     .order("full_name");
 
+  const access = await getYipEventAccess(eventId);
+
   return (
     <MotionsClient
       eventId={eventId}
       eventName={event.name}
       initialMotions={motions}
       participants={participants ?? []}
+      canDelete={access.canDelete}
     />
   );
 }

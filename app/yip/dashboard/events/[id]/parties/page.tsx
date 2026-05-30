@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient, createServiceClient } from "@/lib/yip/supabase/server";
 import { getEvent } from "@/app/yip/actions/events";
+import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { listParties } from "@/app/yip/actions/parties";
 import { PartiesClient } from "./parties-client";
 import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
@@ -34,12 +35,15 @@ export default async function PartiesPage({
 
   const parties = await listParties(eventId);
 
+  const access = await getYipEventAccess(eventId);
+
   return (
     <PartiesClient
       eventId={eventId}
       eventName={event.name}
       initialParties={parties}
       participants={participants ?? []}
+      canDelete={access.canDelete}
     />
   );
 }

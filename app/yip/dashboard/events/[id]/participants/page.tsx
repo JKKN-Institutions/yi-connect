@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/yip/supabase/server";
 import { getEvent } from "@/app/yip/actions/events";
+import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { ParticipantsClient } from "./participants-client";
 import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
 
@@ -32,11 +33,14 @@ export default async function ParticipantsPage({
     .eq("event_id", id)
     .order("full_name");
 
+  const access = await getYipEventAccess(id);
+
   return (
     <ParticipantsClient
       eventId={id}
       participants={participants ?? []}
       allocationLocked={event.allocation_locked ?? false}
+      canDelete={access.canDelete}
     />
   );
 }

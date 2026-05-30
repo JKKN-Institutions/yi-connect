@@ -59,11 +59,14 @@ export function PartiesClient({
   eventName,
   initialParties,
   participants,
+  canDelete = true,
 }: {
   eventId: string;
   eventName: string;
   initialParties: Party[];
   participants: Participant[];
+  /** Chair/national/regional only. Organisers cannot delete records. */
+  canDelete?: boolean;
 }) {
   const [parties, setParties] = useState(initialParties);
   const [editing, setEditing] = useState<Party | null>(null);
@@ -449,6 +452,7 @@ export function PartiesClient({
           onDelete={handleDelete}
           onAssign={openAssign}
           onElect={handleElectLeader}
+          canDelete={canDelete}
         />
         <PartyBench
           title="Opposition Bench"
@@ -460,6 +464,7 @@ export function PartiesClient({
           onDelete={handleDelete}
           onAssign={openAssign}
           onElect={handleElectLeader}
+          canDelete={canDelete}
         />
       </div>
     </div>
@@ -476,6 +481,7 @@ function PartyBench({
   onDelete,
   onAssign,
   onElect,
+  canDelete = true,
 }: {
   title: string;
   color: "blue" | "red";
@@ -486,6 +492,7 @@ function PartyBench({
   onDelete: (p: Party) => void;
   onAssign: (partyId: string) => void;
   onElect: (partyId: string, participantId: string) => void;
+  canDelete?: boolean;
 }) {
   const accentBg = color === "blue" ? "bg-blue-50" : "bg-red-50";
   const accentBorder = color === "blue" ? "border-blue-200" : "border-red-200";
@@ -549,14 +556,16 @@ function PartyBench({
                   <Button size="icon" variant="ghost" onClick={() => onEdit(p)}>
                     <Pencil className="size-4" />
                   </Button>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    onClick={() => onDelete(p)}
-                    className="text-red-600 hover:bg-red-50"
-                  >
-                    <Trash2 className="size-4" />
-                  </Button>
+                  {canDelete && (
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => onDelete(p)}
+                      className="text-red-600 hover:bg-red-50"
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
+                  )}
                 </div>
               </div>
 

@@ -1,6 +1,7 @@
 "use server";
 
 import { createServiceClient } from "@/lib/yip/supabase/server";
+import { requireParticipantSession } from "@/lib/yip/auth/yip-session";
 import type { Json } from "@/types/yip/database";
 import {
   computeNps,
@@ -57,6 +58,10 @@ export async function submitParticipantFeedback(
   if (!eventId || !participantId) {
     return { success: false, error: "Missing event or participant" };
   }
+  // Participant self-service: verify the session owns participantId.
+  const sess = await requireParticipantSession(participantId, eventId);
+  if (!sess.ok) return { success: false, error: sess.error };
+
   const cleaned = cleanPayload(payload);
   if (cleaned.overall_rating === null) {
     return { success: false, error: "Overall rating is required" };

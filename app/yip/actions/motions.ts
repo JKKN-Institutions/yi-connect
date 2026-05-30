@@ -3,6 +3,7 @@
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { logAuditAction } from "@/lib/yip/audit/log-action";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
+import { requireParticipantSession } from "@/lib/yip/auth/yip-session";
 import { revalidatePath } from "next/cache";
 import type { MotionType, MotionStatus } from "@/lib/yip/motions";
 
@@ -65,6 +66,9 @@ export async function createMotion(input: {
   details?: string | null;
   agenda_item_id?: string | null;
 }): Promise<ActionResult<Motion>> {
+  const access = await getYipEventAccess(input.event_id);
+  if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
+
   const supabase = await createServiceClient();
 
   // Denormalize raiser info for audit survival
@@ -113,15 +117,20 @@ export async function admitMotion(
   speakerNote?: string
 ): Promise<ActionResult> {
   const supabase = await createServiceClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
 
   const { data: motion } = await supabase
     .from("motions")
     .select("event_id, motion_type")
     .eq("id", motionId)
     .single();
+
+  if (!motion) return { success: false, error: "Motion not found" };
+  const access = await getYipEventAccess(motion.event_id);
+  if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   const { error } = await supabase
     .from("motions")
@@ -144,15 +153,20 @@ export async function rejectMotion(
   speakerNote: string
 ): Promise<ActionResult> {
   const supabase = await createServiceClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
 
   const { data: motion } = await supabase
     .from("motions")
     .select("event_id")
     .eq("id", motionId)
     .single();
+
+  if (!motion) return { success: false, error: "Motion not found" };
+  const access = await getYipEventAccess(motion.event_id);
+  if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   const { error } = await supabase
     .from("motions")
@@ -184,6 +198,8 @@ export async function recordMotionVote(
     .single();
 
   if (!motion) return { success: false, error: "Motion not found" };
+  const access = await getYipEventAccess(motion.event_id);
+  if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
 
   // Majority decides. Ties count as rejected (Speaker's casting vote convention).
   const outcome = votes.for > votes.against ? "passed" : "rejected";
@@ -217,6 +233,10 @@ export async function recordMinisterResponse(
     .select("event_id")
     .eq("id", motionId)
     .single();
+
+  if (!motion) return { success: false, error: "Motion not found" };
+  const access = await getYipEventAccess(motion.event_id);
+  if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
 
   const update: {
     minister_response: string;
@@ -279,6 +299,12 @@ export async function raiseMotion(input: {
     | "it_digital"
     | null;
 }): Promise<ActionResult<{ id: string }>> {
+  // Participant self-service (a student raises a motion). Verify the session
+  // owns participantId — NOT canManage (that's the organiser gate and would
+  // wrongly block the very participant this action is for).
+  const sess = await requireParticipantSession(input.participantId, input.eventId);
+  if (!sess.ok) return { success: false, error: sess.error };
+
   const supabase = await createServiceClient();
 
   if (!input.subject || input.subject.trim().length < 5) {

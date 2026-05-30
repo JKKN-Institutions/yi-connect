@@ -1,6 +1,8 @@
 "use server";
 
 import { createServiceClient } from "@/lib/yip/supabase/server";
+import { getYipEventAccess } from "@/lib/yip/auth/event-access";
+import { requireParticipantSession } from "@/lib/yip/auth/yip-session";
 import type { Tables, Database } from "@/types/yip/database";
 
 type Question = Tables<{ schema: "yip" }, "questions">;
@@ -9,6 +11,24 @@ type MinistryType = Database["public"]["Enums"]["ministry_type"];
 type ActionResult<T = null> =
   | { success: true; data: T }
   | { success: false; error: string };
+
+// Resolve a question's event then require organiser (canManage) on it. Used by
+// the organiser Question-Hour controls that take only a questionId. yip.questions
+// has an INSERT/UPDATE-to-public RLS policy, so this app gate is the ONLY guard.
+async function requireQuestionManage(
+  questionId: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const supabase = await createServiceClient();
+  const { data: q } = await supabase
+    .from("questions")
+    .select("event_id")
+    .eq("id", questionId)
+    .maybeSingle();
+  if (!q) return { ok: false, error: "Question not found" };
+  const access = await getYipEventAccess(q.event_id);
+  if (!access.canManage) return { ok: false, error: "Not authorized to manage this event" };
+  return { ok: true };
+}
 
 // ─── Submit Question ─────────────────────────────────────────────
 // Max 3 questions per student per event
@@ -19,6 +39,10 @@ export async function submitQuestion(
   ministryKey: MinistryType,
   questionText: string
 ): Promise<ActionResult<{ id: string }>> {
+  // Participant self-service: verify the caller's session owns participantId.
+  const sess = await requireParticipantSession(participantId, eventId);
+  if (!sess.ok) return { success: false, error: sess.error };
+
   const supabase = await createServiceClient();
 
   // Validate text length
@@ -142,6 +166,8 @@ export async function filterQuestion(
   questionId: string,
   type: "starred" | "unstarred"
 ): Promise<ActionResult> {
+  const gate = await requireQuestionManage(questionId);
+  if (!gate.ok) return { success: false, error: gate.error };
   const supabase = await createServiceClient();
 
   const { error } = await supabase
@@ -161,6 +187,8 @@ export async function filterQuestion(
 export async function approveQuestion(
   questionId: string
 ): Promise<ActionResult> {
+  const gate = await requireQuestionManage(questionId);
+  if (!gate.ok) return { success: false, error: gate.error };
   const supabase = await createServiceClient();
 
   const { error } = await supabase
@@ -180,6 +208,8 @@ export async function approveQuestion(
 export async function rejectQuestion(
   questionId: string
 ): Promise<ActionResult> {
+  const gate = await requireQuestionManage(questionId);
+  if (!gate.ok) return { success: false, error: gate.error };
   const supabase = await createServiceClient();
 
   const { error } = await supabase
@@ -200,6 +230,8 @@ export async function setQueueOrder(
   questionId: string,
   order: number
 ): Promise<ActionResult> {
+  const gate = await requireQuestionManage(questionId);
+  if (!gate.ok) return { success: false, error: gate.error };
   const supabase = await createServiceClient();
 
   const { error } = await supabase
@@ -219,6 +251,9 @@ export async function setQueueOrder(
 export async function bulkApprove(
   questionIds: string[]
 ): Promise<ActionResult> {
+  if (questionIds.length === 0) return { success: true, data: null };
+  const gate = await requireQuestionManage(questionIds[0]);
+  if (!gate.ok) return { success: false, error: gate.error };
   const supabase = await createServiceClient();
 
   const { error } = await supabase
@@ -238,6 +273,9 @@ export async function bulkApprove(
 export async function bulkReject(
   questionIds: string[]
 ): Promise<ActionResult> {
+  if (questionIds.length === 0) return { success: true, data: null };
+  const gate = await requireQuestionManage(questionIds[0]);
+  if (!gate.ok) return { success: false, error: gate.error };
   const supabase = await createServiceClient();
 
   const { error } = await supabase
@@ -259,6 +297,8 @@ export async function bulkReject(
 export async function advanceQuestion(
   eventId: string
 ): Promise<ActionResult<{ nextQuestionId: string | null }>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
   const supabase = await createServiceClient();
 
   // Find the currently asked question
@@ -312,6 +352,8 @@ export async function markAnswered(
   questionId: string,
   answerSummary?: string
 ): Promise<ActionResult> {
+  const gate = await requireQuestionManage(questionId);
+  if (!gate.ok) return { success: false, error: gate.error };
   const supabase = await createServiceClient();
 
   const { error } = await supabase
@@ -332,6 +374,8 @@ export async function markAnswered(
 export async function skipQuestion(
   questionId: string
 ): Promise<ActionResult> {
+  const gate = await requireQuestionManage(questionId);
+  if (!gate.ok) return { success: false, error: gate.error };
   const supabase = await createServiceClient();
 
   const { error } = await supabase

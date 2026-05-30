@@ -184,6 +184,9 @@ export async function setComplianceStatus(
     violationAction?: string | null;
   }
 ): Promise<ActionResult> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
+
   // Validate rule_key against the active catalogue (DB-driven, with static
   // fallback) so admin-added rules are accepted but typos still fail loud.
   const activeRules = await loadActiveRules();
@@ -332,6 +335,9 @@ export async function recordInvitation(
   category: string,
   draftUrl?: string | null
 ): Promise<ActionResult<InvitationRow>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
+
   if (!invitee.name?.trim()) {
     return { success: false, error: "Invitee name is required" };
   }
@@ -363,9 +369,6 @@ export async function approveInvitation(
   note?: string
 ): Promise<ActionResult> {
   const supabase = await createServiceClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
 
   const { data: current, error: fetchErr } = await supabase
     .from("invitations")
@@ -373,6 +376,13 @@ export async function approveInvitation(
     .eq("id", id)
     .single();
   if (fetchErr) return { success: false, error: fetchErr.message };
+
+  const access = await getYipEventAccess(current.event_id);
+  if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   const { error } = await supabase
     .from("invitations")
@@ -396,9 +406,6 @@ export async function rejectInvitation(
   note?: string
 ): Promise<ActionResult> {
   const supabase = await createServiceClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
 
   const { data: current, error: fetchErr } = await supabase
     .from("invitations")
@@ -406,6 +413,13 @@ export async function rejectInvitation(
     .eq("id", id)
     .single();
   if (fetchErr) return { success: false, error: fetchErr.message };
+
+  const access = await getYipEventAccess(current.event_id);
+  if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   const { error } = await supabase
     .from("invitations")

@@ -1,8 +1,13 @@
 "use server";
 
-import { createClient } from "@/lib/yip/supabase/server";
+import { createClient, createServiceClient } from "@/lib/yip/supabase/server";
+import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { revalidatePath } from "next/cache";
 
+// Live-session speaker control. Organiser writes gated on canManage + run on
+// the service client (yip.* RLS read-only for authenticated). Previously
+// getUser()-only with no event gate — any logged-in user could drive any
+// event's speaker queue. (2026-05-30 chapter-roles migration.)
 type ActionResult<T = null> =
   | { success: true; data: T }
   | { success: false; error: string };
@@ -43,12 +48,9 @@ export async function advanceSpeaker(
   agendaItemId: string,
   eventId: string
 ): Promise<ActionResult> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) return { success: false, error: "Not authenticated" };
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
+  const supabase = await createServiceClient();
 
   // Get all speakers ordered
   const { data: speakers } = await supabase
@@ -153,12 +155,9 @@ export async function skipSpeaker(
   speakerId: string,
   eventId: string
 ): Promise<ActionResult> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) return { success: false, error: "Not authenticated" };
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
+  const supabase = await createServiceClient();
 
   // Get the speaker to check if it's the current one
   const { data: speaker } = await supabase
@@ -195,12 +194,9 @@ export async function generateSpeakerQueue(
   agendaItemId: string,
   allottedSeconds: number = 90
 ): Promise<ActionResult<{ count: number }>> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) return { success: false, error: "Not authenticated" };
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
+  const supabase = await createServiceClient();
 
   // Check if speakers already exist for this item
   const { count: existingCount } = await supabase

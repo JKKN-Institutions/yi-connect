@@ -1,10 +1,18 @@
 "use server";
 
-import { createClient } from "@/lib/yip/supabase/server";
+import { createClient, createServiceClient } from "@/lib/yip/supabase/server";
 import { generateAccessCode } from "@/lib/yip/access-code";
 import { logAuditAction } from "@/lib/yip/audit/log-action";
+import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { revalidatePath } from "next/cache";
 import type { Database } from "@/types/yip/database";
+
+// Why service client for gated writes: yip.* tables have RLS enabled with
+// read-only policies for `authenticated` (no write policy), so session-client
+// inserts/updates fail ("new row violates row-level security policy"). The
+// getYipEventAccess() capability check IS the authorization gate; the
+// privileged write then runs on the service client. (2026-05-30 — fixes the
+// UI import RLS write-block.)
 
 type ParliamentRole = Database["public"]["Enums"]["parliament_role"];
 

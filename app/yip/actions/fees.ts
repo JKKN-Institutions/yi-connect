@@ -1,6 +1,7 @@
 "use server";
 
 import { createServiceClient } from "@/lib/yip/supabase/server";
+import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { revalidatePath } from "next/cache";
 
 type ActionResult<T = null> =
@@ -27,6 +28,11 @@ export async function setEventPaymentConfig(
   mycii_event_registered: boolean,
   fee_per_participant_inr: number = 399
 ): Promise<ActionResult> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
+
   const supabase = await createServiceClient();
   const { error } = await supabase
     .from("events")
@@ -58,6 +64,11 @@ export async function markFeePaid(
     note?: string;
   }
 ): Promise<ActionResult<ParticipantFee>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
+
   const supabase = await createServiceClient();
   const {
     data: { user },
@@ -92,6 +103,11 @@ export async function markFeeUnpaid(
   participantId: string,
   eventId: string
 ): Promise<ActionResult> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
+
   const supabase = await createServiceClient();
   const { error } = await supabase
     .from("fees")

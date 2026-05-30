@@ -67,6 +67,9 @@ export async function registerUploadedMedia(input: {
   width?: number | null;
   height?: number | null;
 }): Promise<ActionResult<EventMedia>> {
+  const access = await getYipEventAccess(input.event_id);
+  if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
+
   const supabase = await createServiceClient();
   const {
     data: { user },
@@ -110,6 +113,16 @@ export async function updateMediaCaption(
   }
 ): Promise<ActionResult<EventMedia>> {
   const supabase = await createServiceClient();
+
+  const { data: mediaRow } = await supabase
+    .from("media")
+    .select("event_id")
+    .eq("id", id)
+    .single();
+  if (!mediaRow) return { success: false, error: "Media not found" };
+  const access = await getYipEventAccess(mediaRow.event_id);
+  if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
+
   const { data, error } = await supabase
     .from("media")
     .update(updates)
@@ -128,6 +141,9 @@ export async function setCoverImage(
   mediaId: string,
   eventId: string
 ): Promise<ActionResult<EventMedia>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
+
   const supabase = await createServiceClient();
 
   // Clear any existing cover first
@@ -155,6 +171,9 @@ export async function setCoverImage(
 export async function clearCoverImage(
   eventId: string
 ): Promise<ActionResult> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
+
   const supabase = await createServiceClient();
   const { error } = await supabase
     .from("media")
@@ -172,6 +191,16 @@ export async function setVisibility(
   visibility: MediaVisibility
 ): Promise<ActionResult<EventMedia>> {
   const supabase = await createServiceClient();
+
+  const { data: mediaRow } = await supabase
+    .from("media")
+    .select("event_id")
+    .eq("id", id)
+    .single();
+  if (!mediaRow) return { success: false, error: "Media not found" };
+  const access = await getYipEventAccess(mediaRow.event_id);
+  if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
+
   const { data, error } = await supabase
     .from("media")
     .update({ visibility })
@@ -191,6 +220,9 @@ export async function bulkSetVisibility(
   visibility: MediaVisibility,
   eventId: string
 ): Promise<ActionResult<number>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
+
   if (ids.length === 0) return { success: true, data: 0 };
   const supabase = await createServiceClient();
   const { data, error } = await supabase
@@ -286,6 +318,9 @@ export async function reorderMedia(
   ids: string[],
   eventId: string
 ): Promise<ActionResult> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
+
   const supabase = await createServiceClient();
   // Update sort_order for each id in the given sequence.
   const updates = ids.map((id, idx) =>

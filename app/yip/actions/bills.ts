@@ -1,6 +1,7 @@
 "use server";
 
 import { createServiceClient } from "@/lib/yip/supabase/server";
+import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import type { Tables, Json } from "@/types/yip/database";
 
 type Bill = Tables<{ schema: "yip" }, "bills">;
@@ -23,6 +24,14 @@ export async function saveBillDraft(
     implementation?: string;
   }
 ): Promise<ActionResult<{ billId: string }>> {
+  // TODO(self-service): saveBillDraft may be participant-authored (a student
+  // drafting their party's bill). It takes no participantId actor, so gate on
+  // canManage as the safe baseline for now; verify participant session later.
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
+
   const supabase = await createServiceClient();
 
   // Check if bill already exists for this party + event
@@ -90,12 +99,19 @@ export async function submitBill(
   // Get the bill to validate
   const { data: bill } = await supabase
     .from("bills")
-    .select("id, status, title, objective, provisions")
+    .select("id, event_id, status, title, objective, provisions")
     .eq("id", billId)
     .single();
 
   if (!bill) {
     return { success: false, error: "Bill not found" };
+  }
+
+  // TODO(self-service): submitBill may be participant-authored. It takes only a
+  // billId (no participantId actor), so gate on canManage as the safe baseline.
+  const access = await getYipEventAccess(bill.event_id);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
   }
 
   if (bill.status !== "drafting") {
@@ -130,6 +146,21 @@ export async function approveBill(
 ): Promise<ActionResult> {
   const supabase = await createServiceClient();
 
+  const { data: bill } = await supabase
+    .from("bills")
+    .select("event_id")
+    .eq("id", billId)
+    .single();
+
+  if (!bill) {
+    return { success: false, error: "Bill not found" };
+  }
+
+  const access = await getYipEventAccess(bill.event_id);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
+
   const { error } = await supabase
     .from("bills")
     .update({
@@ -150,6 +181,21 @@ export async function rejectBill(
 ): Promise<ActionResult> {
   const supabase = await createServiceClient();
 
+  const { data: bill } = await supabase
+    .from("bills")
+    .select("event_id")
+    .eq("id", billId)
+    .single();
+
+  if (!bill) {
+    return { success: false, error: "Bill not found" };
+  }
+
+  const access = await getYipEventAccess(bill.event_id);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
+
   const { error } = await supabase
     .from("bills")
     .update({
@@ -169,6 +215,21 @@ export async function setBillPresented(
   billId: string
 ): Promise<ActionResult> {
   const supabase = await createServiceClient();
+
+  const { data: bill } = await supabase
+    .from("bills")
+    .select("event_id")
+    .eq("id", billId)
+    .single();
+
+  if (!bill) {
+    return { success: false, error: "Bill not found" };
+  }
+
+  const access = await getYipEventAccess(bill.event_id);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
 
   const { error } = await supabase
     .from("bills")
@@ -293,6 +354,21 @@ export async function assignBillCommitteeRoles(
   }
 ): Promise<ActionResult> {
   const supabase = await createServiceClient();
+
+  const { data: bill } = await supabase
+    .from("bills")
+    .select("event_id")
+    .eq("id", billId)
+    .single();
+
+  if (!bill) {
+    return { success: false, error: "Bill not found" };
+  }
+
+  const access = await getYipEventAccess(bill.event_id);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
 
   const { error } = await supabase
     .from("bills")

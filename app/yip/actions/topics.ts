@@ -2,6 +2,7 @@
 
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { logAuditAction } from "@/lib/yip/audit/log-action";
+import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { revalidatePath } from "next/cache";
 import type { YiZone } from "@/lib/yip/hierarchy";
 
@@ -51,6 +52,9 @@ export async function assignTopicsToEvent(
   topicIds: string[],
   setCentralFlag: boolean = false
 ): Promise<ActionResult<{ assigned: number }>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
+
   const supabase = await createServiceClient();
 
   // F2: For chapter-level events, enforce exactly-5 non-central
@@ -125,6 +129,9 @@ export async function removeTopicFromEvent(
   eventId: string,
   topicId: string
 ): Promise<ActionResult> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
+
   const supabase = await createServiceClient();
   const { error } = await supabase
     .from("event_topics")

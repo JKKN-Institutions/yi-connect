@@ -50,6 +50,9 @@ export async function addVolunteer(input: {
   tshirt_size?: string | null;
   is_yuva?: boolean;
 }): Promise<ActionResult<Volunteer>> {
+  const access = await getYipEventAccess(input.event_id);
+  if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
+
   if (!input.full_name.trim()) return { success: false, error: "Name required" };
 
   const supabase = await createServiceClient();
@@ -78,6 +81,9 @@ export async function updateVolunteer(
   eventId: string,
   updates: Partial<Omit<Volunteer, "id" | "event_id">>
 ): Promise<ActionResult> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
+
   const supabase = await createServiceClient();
   const { error } = await supabase.from("volunteers").update(updates).eq("id", id);
   if (error) return { success: false, error: error.message };
@@ -90,6 +96,9 @@ export async function markVolunteerArrived(
   eventId: string,
   arrived: boolean
 ): Promise<ActionResult> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
+
   const supabase = await createServiceClient();
   const { error } = await supabase
     .from("volunteers")

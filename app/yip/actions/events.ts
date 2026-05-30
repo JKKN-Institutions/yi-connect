@@ -4,6 +4,8 @@ import { createClient, createServiceClient } from "@/lib/yip/supabase/server";
 import { DEFAULT_AGENDA_TEMPLATE } from "@/lib/yip/constants";
 import { logAuditAction } from "@/lib/yip/audit/log-action";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
+import { isCurrentUserSuperAdmin } from "@/lib/yip/auth/require-super-admin";
+import { getRegionalAdminZones } from "@/lib/yi/auth/yi-directory-roles";
 import { revalidatePath } from "next/cache";
 import { attachCentralTopicsToEvent } from "./admin-topics";
 import type { Database } from "@/types/yip/database";
@@ -53,14 +55,20 @@ type ActionResult<T = unknown> =
 export async function createEvent(
   data: CreateEventData
 ): Promise<ActionResult<{ id: string }>> {
-  const supabase = await createClient();
+  // Identify the caller (need user.id for created_by audit) via the cookie
+  // client; all WRITES below run on the service client because yip.events /
+  // agenda / checklist are RLS read-only for `authenticated` (session-client
+  // INSERTs are rejected — this was a latent createEvent runtime failure).
+  const authClient = await createClient();
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await authClient.auth.getUser();
 
   if (!user) {
     return { success: false, error: "Not authenticated" };
   }
+
+  const supabase = await createServiceClient();
 
   // When a yi_chapter_id is supplied, derive zone fields up-front so the
   // 3-tier regional-admin visibility gate (yi_zone_code) is correct from
@@ -78,6 +86,24 @@ export async function createEvent(
       .maybeSingle();
     if (chapter?.region) {
       derivedZoneCode = chapter.region;
+    }
+  }
+
+  // Create-permission gate (no event exists yet, so getYipEventAccess can't
+  // apply). Event creation is a super-admin action, or a regional admin
+  // creating an event in a zone they administer. Chapter chairs/organisers run
+  // events that national/regional provision for them.
+  const isSuper = await isCurrentUserSuperAdmin();
+  if (!isSuper) {
+    const zones = await getRegionalAdminZones("yip");
+    const allowed = derivedZoneCode
+      ? zones.includes(derivedZoneCode)
+      : zones.length > 0;
+    if (!allowed) {
+      return {
+        success: false,
+        error: "Only national admins, or regional admins for this zone, can create events",
+      };
     }
   }
 

@@ -1,6 +1,8 @@
 "use server";
 
 import { createServiceClient } from "@/lib/yip/supabase/server";
+import { getYipEventAccess } from "@/lib/yip/auth/event-access";
+import { requireParticipantSession } from "@/lib/yip/auth/yip-session";
 import type { Tables, Json } from "@/types/yip/database";
 
 type VoteSession = Tables<{ schema: "yip" }, "vote_sessions">;
@@ -50,6 +52,9 @@ export async function openVote(
   voteType: "speaker_election" | "bill_vote",
   config?: { candidateIds?: string[]; billId?: string }
 ): Promise<ActionResult<{ sessionId: string }>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
+
   const supabase = await createServiceClient();
 
   // Check for existing active session
@@ -108,6 +113,18 @@ export async function closeVote(
 ): Promise<ActionResult> {
   const supabase = await createServiceClient();
 
+  // Resolve event_id from the session, then gate (organiser-control).
+  const { data: voteSession } = await supabase
+    .from("vote_sessions")
+    .select("event_id")
+    .eq("id", sessionId)
+    .single();
+
+  if (!voteSession) return { success: false, error: "Vote session not found" };
+
+  const access = await getYipEventAccess(voteSession.event_id);
+  if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
+
   const { error } = await supabase
     .from("vote_sessions")
     .update({
@@ -138,6 +155,10 @@ export async function revealResults(
   if (sessionError || !session) {
     return { success: false, error: "Vote session not found" };
   }
+
+  // Gate organiser-control BEFORE mutating the session status.
+  const access = await getYipEventAccess(session.event_id);
+  if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
 
   // Update status to revealed
   await supabase
@@ -224,6 +245,10 @@ export async function castVote(
   if (!session) {
     return { success: false, error: "Vote session not found" };
   }
+
+  // Participant self-service: verify the voter owns this participantId for this event.
+  const sess = await requireParticipantSession(participantId, session.event_id);
+  if (!sess.ok) return { success: false, error: sess.error };
 
   if (session.status !== "open") {
     return {

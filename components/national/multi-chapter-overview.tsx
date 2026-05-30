@@ -86,7 +86,7 @@ export function ChaptersStatusGrid() {
             id,
             name,
             location,
-            status,
+            is_active,
             member_count,
             created_at,
             chair_name
@@ -99,6 +99,7 @@ export function ChaptersStatusGrid() {
         setChapters(
           data?.map((ch: any) => ({
             ...ch,
+            status: ch.is_active ? 'active' : 'inactive',
             chair_name: ch.chair_name || null,
           })) || []
         )

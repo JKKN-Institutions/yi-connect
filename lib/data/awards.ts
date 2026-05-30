@@ -604,7 +604,8 @@ export const getCycleStatistics = cache(async (cycleId: string) => {
 
   const [nominationsResult, juryMembersResult, juryScoresResult] = await Promise.all([
     supabase.schema('yi_connect').from('nominations').select('id', { count: 'exact', head: true }).eq('cycle_id', cycleId),
-    supabase.schema('yi_connect').from('jury_members').select('id', { count: 'exact', head: true }).eq('cycle_id', cycleId),
+    // jury_members table was renamed to jury_panel_members; filter by cycle via jury_panels join
+    supabase.schema('yi_connect').from('jury_panel_members').select('id, panel:jury_panels!inner(cycle_id)', { count: 'exact', head: true }).eq('jury_panels.cycle_id', cycleId),
     supabase.schema('yi_connect').from('jury_scores').select('weighted_score').eq('nomination_id', cycleId), // Fix: need proper join
   ])
 

@@ -80,7 +80,7 @@ export default function JoinPage() {
                 </p>
               </div>
 
-              <form onSubmit={handleSubmit} className="space-y-5">
+              <form method="post" action="#" onSubmit={handleSubmit} className="space-y-5">
                 <div>
                   <input
                     ref={inputRef}

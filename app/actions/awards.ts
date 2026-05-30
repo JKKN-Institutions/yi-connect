@@ -410,35 +410,36 @@ export async function assignJuryMember(data: {
 
   const supabase = await createServerSupabaseClient()
 
-  const { error } = await supabase
-    .schema('yi_connect').from('jury_members')
-    .insert([validation.data])
-
-  if (error) {
-    return { message: `Database error: ${error.message}` }
-  }
-
-  updateTag('jury-members')
-  updateTag(`jury-cycle-${validation.data.cycle_id}`)
-
-  return { success: true, message: 'Jury member assigned successfully' }
+  // TODO drift: jury_members removed — replaced by jury_panel_members (requires panel_id).
+  // This action only has cycle_id + member_id; no panel_id is available.
+  // Callers must be updated to select a panel within the cycle and supply panel_id.
+  return { message: 'assignJuryMember requires a panelId (jury_members replaced by jury_panel_members)' }
 }
 
 export async function removeJuryMember(juryMemberId: string): Promise<FormState> {
   const supabase = await createServerSupabaseClient()
 
-  // Check if jury member has submitted any scores
-  const { count } = await supabase
-    .schema('yi_connect').from('jury_scores')
-    .select('id', { count: 'exact', head: true })
-    .eq('jury_member_id', juryMemberId)
+  // jury_scores.jury_member_id renamed to juror_id; resolve via jury_panel_members.juror_id
+  const panelMemberRow = await supabase
+    .schema('yi_connect').from('jury_panel_members')
+    .select('juror_id')
+    .eq('id', juryMemberId)
+    .single()
 
-  if (count && count > 0) {
-    return { message: 'Cannot remove jury member who has submitted scores' }
+  if (panelMemberRow.data?.juror_id) {
+    const { count } = await supabase
+      .schema('yi_connect').from('jury_scores')
+      .select('id', { count: 'exact', head: true })
+      .eq('juror_id', panelMemberRow.data.juror_id)
+
+    if (count && count > 0) {
+      return { message: 'Cannot remove jury member who has submitted scores' }
+    }
   }
 
+  // jury_members replaced by jury_panel_members
   const { error } = await supabase
-    .schema('yi_connect').from('jury_members')
+    .schema('yi_connect').from('jury_panel_members')
     .delete()
     .eq('id', juryMemberId)
 

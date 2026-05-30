@@ -1,9 +1,13 @@
 "use server";
 
-import { createClient } from "@/lib/yip/supabase/server";
+import { createClient, createServiceClient } from "@/lib/yip/supabase/server";
 import { generateAccessCode } from "@/lib/yip/access-code";
 import { logAuditAction } from "@/lib/yip/audit/log-action";
+import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { revalidatePath } from "next/cache";
+
+// Gated writes run on the service client AFTER getYipEventAccess() (yip.* tables
+// have RLS read-only for `authenticated`; the capability check is the gate).
 
 type ActionResult<T = unknown> =
   | { success: true; data: T }
@@ -16,25 +20,11 @@ export async function addJury(
   name: string,
   email?: string | null
 ): Promise<ActionResult<{ id: string; access_code: string }>> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: "Not authenticated" };
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
   }
-
-  // Verify event ownership
-  const { data: event } = await supabase
-    .from("events")
-    .select("id, created_by")
-    .eq("id", eventId)
-    .single();
-
-  if (!event || event.created_by !== user.id) {
-    return { success: false, error: "Event not found or not authorized" };
-  }
+  const supabase = await createServiceClient();
 
   if (!name || name.trim().length === 0) {
     return { success: false, error: "Jury name is required" };
@@ -120,25 +110,11 @@ export async function removeJury(
   juryId: string,
   eventId: string
 ): Promise<ActionResult<null>> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: "Not authenticated" };
+  const access = await getYipEventAccess(eventId);
+  if (!access.canDelete) {
+    return { success: false, error: "Only the chapter chair can remove jury members" };
   }
-
-  // Verify event ownership
-  const { data: event } = await supabase
-    .from("events")
-    .select("id, created_by")
-    .eq("id", eventId)
-    .single();
-
-  if (!event || event.created_by !== user.id) {
-    return { success: false, error: "Event not found or not authorized" };
-  }
+  const supabase = await createServiceClient();
 
   const { error } = await supabase
     .from("jury_assignments")
@@ -163,13 +139,12 @@ export async function removeJury(
 // ─── Get Jury ──────────────────────────────────────────────────────
 
 export async function getJury(eventId: string) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Read gated by canView (the jury page is itself behind getYipEventAccess);
+  // service client avoids the RLS read-policy edge for chapter roles.
+  const access = await getYipEventAccess(eventId);
+  if (!access.canView) return [];
 
-  if (!user) return [];
-
+  const supabase = await createServiceClient();
   const { data } = await supabase
     .from("jury_assignments")
     .select("*")

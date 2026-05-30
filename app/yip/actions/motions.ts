@@ -1,7 +1,8 @@
 "use server";
 
-import { createClient, createServiceClient } from "@/lib/yip/supabase/server";
+import { createServiceClient } from "@/lib/yip/supabase/server";
 import { logAuditAction } from "@/lib/yip/audit/log-action";
+import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { revalidatePath } from "next/cache";
 import type { MotionType, MotionStatus } from "@/lib/yip/motions";
 
@@ -241,23 +242,11 @@ export async function deleteMotion(
   motionId: string,
   eventId: string
 ): Promise<ActionResult> {
-  const supabase = await createServiceClient();
-
-  // Gate: caller must be authenticated and own the event. Auth goes through the
-  // cookie-bound client — the service client carries no session, so
-  // createServiceClient().auth.getUser() always returns null (would deny owner).
-  const auth = await createClient();
-  const { data: { user } } = await auth.auth.getUser();
-  if (!user) return { success: false, error: "Not authenticated" };
-
-  const { data: event } = await auth
-    .from("events")
-    .select("created_by")
-    .eq("id", eventId)
-    .single();
-  if (!event || event.created_by !== user.id) {
-    return { success: false, error: "Event not found or not authorized" };
+  const access = await getYipEventAccess(eventId);
+  if (!access.canDelete) {
+    return { success: false, error: "Only the chapter chair can delete motions" };
   }
+  const supabase = await createServiceClient();
 
   const { error } = await supabase.from("motions").delete().eq("id", motionId).eq("event_id", eventId);
   if (error) return { success: false, error: error.message };

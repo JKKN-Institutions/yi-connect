@@ -1,8 +1,11 @@
 "use server";
 
-import { createClient } from "@/lib/yip/supabase/server";
+import { createServiceClient } from "@/lib/yip/supabase/server";
+import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { revalidatePath } from "next/cache";
 
+// Gated writes run on the service client AFTER getYipEventAccess() (yip.* tables
+// have RLS read-only for `authenticated`; the capability check is the gate).
 type ActionResult<T = null> =
   | { success: true; data: T }
   | { success: false; error: string };
@@ -14,19 +17,15 @@ type ActionResult<T = null> =
 export async function advanceAgenda(
   eventId: string
 ): Promise<ActionResult<{ nextItemId: string | null }>> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) return { success: false, error: "Not authenticated" };
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
+  const supabase = await createServiceClient();
 
   // Get current event
   const { data: event, error: eventErr } = await supabase
     .from("events")
     .select("id, current_agenda_item_id, status")
     .eq("id", eventId)
-    .eq("created_by", user.id)
     .single();
 
   if (eventErr || !event) {
@@ -113,19 +112,14 @@ export async function startAgendaItem(
   eventId: string,
   agendaItemId: string
 ): Promise<ActionResult> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
+  const supabase = await createServiceClient();
 
-  if (!user) return { success: false, error: "Not authenticated" };
-
-  // Verify ownership
   const { data: event } = await supabase
     .from("events")
     .select("id, current_agenda_item_id")
     .eq("id", eventId)
-    .eq("created_by", user.id)
     .single();
 
   if (!event) return { success: false, error: "Event not found" };
@@ -166,12 +160,9 @@ export async function skipAgendaItem(
   eventId: string,
   agendaItemId: string
 ): Promise<ActionResult> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) return { success: false, error: "Not authenticated" };
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
+  const supabase = await createServiceClient();
 
   // Mark as skipped
   await supabase
@@ -184,7 +175,6 @@ export async function skipAgendaItem(
     .from("events")
     .select("current_agenda_item_id")
     .eq("id", eventId)
-    .eq("created_by", user.id)
     .single();
 
   if (event?.current_agenda_item_id === agendaItemId) {
@@ -202,12 +192,9 @@ export async function updateEventStatus(
   eventId: string,
   newStatus: string
 ): Promise<ActionResult> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) return { success: false, error: "Not authenticated" };
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
+  const supabase = await createServiceClient();
 
   // Validate transition
   const validTransitions: Record<string, string[]> = {
@@ -224,7 +211,6 @@ export async function updateEventStatus(
     .from("events")
     .select("status")
     .eq("id", eventId)
-    .eq("created_by", user.id)
     .single();
 
   if (!event) return { success: false, error: "Event not found" };

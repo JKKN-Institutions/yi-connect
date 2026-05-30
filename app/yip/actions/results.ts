@@ -1,6 +1,7 @@
 "use server";
 
-import { createClient, createServiceClient } from "@/lib/yip/supabase/server";
+import { createServiceClient } from "@/lib/yip/supabase/server";
+import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { revalidatePath } from "next/cache";
 import { parentScoreByKey } from "@/lib/yip/rubric";
 import { getScoringFlagsConfig, type FlagDeltas } from "./scoring-flags";
@@ -131,24 +132,13 @@ function assignAward(
 export async function computeResults(
   eventId: string
 ): Promise<ActionResult<{ computed: number; awards_assigned: number }>> {
-  const supabase = await createServiceClient();
-
-  // Gate: computeResults wipes and rebuilds this event's results table, so it
-  // is owner-only. Auth goes through the cookie-bound client (the service
-  // client carries no session).
-  const auth = await createClient();
-  const {
-    data: { user },
-  } = await auth.auth.getUser();
-  if (!user) return { success: false, error: "Not authenticated" };
-  const { data: ownerEvent } = await auth
-    .from("events")
-    .select("created_by")
-    .eq("id", eventId)
-    .single();
-  if (!ownerEvent || ownerEvent.created_by !== user.id) {
-    return { success: false, error: "Event not found or not authorized" };
+  // Organisers may compute + publish results (per the 2026-05-30 role model);
+  // canManage is the gate. computeResults wipes + rebuilds this event's results.
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
   }
+  const supabase = await createServiceClient();
 
   // 1. Submitted scores (including Special-Remarks flag columns — F4)
   const { data: scores, error: scoresError } = await supabase
@@ -371,6 +361,10 @@ export async function computeResults(
 export async function publishResults(
   eventId: string
 ): Promise<ActionResult> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
   const supabase = await createServiceClient();
 
   const { error } = await supabase
@@ -392,6 +386,10 @@ export async function publishResults(
 export async function unpublishResults(
   eventId: string
 ): Promise<ActionResult> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
   const supabase = await createServiceClient();
 
   const { error } = await supabase
@@ -413,6 +411,10 @@ export async function unpublishResults(
 export async function lockScores(
   eventId: string
 ): Promise<ActionResult> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
   const supabase = await createServiceClient();
 
   const { error } = await supabase
@@ -433,6 +435,10 @@ export async function lockScores(
 export async function unlockScores(
   eventId: string
 ): Promise<ActionResult> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
   const supabase = await createServiceClient();
 
   const { error } = await supabase

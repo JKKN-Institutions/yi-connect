@@ -1,12 +1,16 @@
 "use server";
 
-import { createClient } from "@/lib/yip/supabase/server";
+import { createServiceClient } from "@/lib/yip/supabase/server";
+import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { revalidatePath } from "next/cache";
 import {
   runAllocation,
   type AllocationResult,
   type AllocationParticipant,
 } from "@/lib/yip/allocation-engine";
+
+// Gated writes run on the service client AFTER getYipEventAccess() (yip.* tables
+// have RLS read-only for `authenticated`; the capability check is the gate).
 
 // ─── Types ─────────────────────────────────────────────────────────
 
@@ -19,24 +23,21 @@ type ActionResult<T = unknown> =
 export async function runAllocationAction(
   eventId: string
 ): Promise<ActionResult<AllocationResult>> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: "Not authenticated" };
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
   }
+  const supabase = await createServiceClient();
 
-  // Fetch event — verify ownership, check lock
+  // Fetch event — check lock
   const { data: event } = await supabase
     .from("events")
-    .select("id, created_by, allocation_locked, committee_topics")
+    .select("id, allocation_locked, committee_topics")
     .eq("id", eventId)
     .single();
 
-  if (!event || event.created_by !== user.id) {
-    return { success: false, error: "Event not found or not authorized" };
+  if (!event) {
+    return { success: false, error: "Event not found" };
   }
 
   if (event.allocation_locked) {
@@ -141,24 +142,11 @@ export async function runAllocationAction(
 export async function lockAllocation(
   eventId: string
 ): Promise<ActionResult<null>> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: "Not authenticated" };
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
   }
-
-  const { data: event } = await supabase
-    .from("events")
-    .select("id, created_by")
-    .eq("id", eventId)
-    .single();
-
-  if (!event || event.created_by !== user.id) {
-    return { success: false, error: "Event not found or not authorized" };
-  }
+  const supabase = await createServiceClient();
 
   const { error } = await supabase
     .from("events")
@@ -179,24 +167,11 @@ export async function lockAllocation(
 export async function unlockAllocation(
   eventId: string
 ): Promise<ActionResult<null>> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: "Not authenticated" };
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
   }
-
-  const { data: event } = await supabase
-    .from("events")
-    .select("id, created_by")
-    .eq("id", eventId)
-    .single();
-
-  if (!event || event.created_by !== user.id) {
-    return { success: false, error: "Event not found or not authorized" };
-  }
+  const supabase = await createServiceClient();
 
   const { error } = await supabase
     .from("events")
@@ -228,24 +203,21 @@ export async function updateParticipantAssignment(
     | "constituency_name",
   value: string | null
 ): Promise<ActionResult<null>> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: "Not authenticated" };
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
   }
+  const supabase = await createServiceClient();
 
-  // Verify event ownership and that allocation is NOT locked
+  // Check that allocation is NOT locked
   const { data: event } = await supabase
     .from("events")
-    .select("id, created_by, allocation_locked")
+    .select("id, allocation_locked")
     .eq("id", eventId)
     .single();
 
-  if (!event || event.created_by !== user.id) {
-    return { success: false, error: "Event not found or not authorized" };
+  if (!event) {
+    return { success: false, error: "Event not found" };
   }
 
   if (event.allocation_locked) {

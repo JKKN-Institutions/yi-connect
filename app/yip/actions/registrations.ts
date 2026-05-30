@@ -1,8 +1,9 @@
 "use server";
 
-import { createClient, createServiceClient } from "@/lib/yip/supabase/server";
+import { createServiceClient } from "@/lib/yip/supabase/server";
 import { generateAccessCode } from "@/lib/yip/access-code";
 import { logAuditAction } from "@/lib/yip/audit/log-action";
+import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { revalidatePath } from "next/cache";
 import {
   parseCSV,
@@ -513,22 +514,10 @@ export async function deleteRegistration(
 
   if (!reg) return { success: false, error: "Registration not found" };
 
-  // Gate: caller must be authenticated and own the event. Registrations carry
-  // student PII; without this any organizer could delete another event's row.
-  // The service client carries NO session, so auth.getUser() must go through
-  // the cookie-bound createClient() (lib/yip/supabase/server.ts).
-  const auth = await createClient();
-  const {
-    data: { user },
-  } = await auth.auth.getUser();
-  if (!user) return { success: false, error: "Not authenticated" };
-  const { data: ownerEvent } = await auth
-    .from("events")
-    .select("created_by")
-    .eq("id", reg.event_id)
-    .single();
-  if (!ownerEvent || ownerEvent.created_by !== user.id) {
-    return { success: false, error: "Event not found or not authorized" };
+  // Registrations carry student PII — deletion is chair-only.
+  const access = await getYipEventAccess(reg.event_id);
+  if (!access.canDelete) {
+    return { success: false, error: "Only the chapter chair can delete registrations" };
   }
 
   const { error } = await regs(supabase)

@@ -1,7 +1,8 @@
 "use server";
 
-import { createClient, createServiceClient } from "@/lib/yip/supabase/server";
+import { createServiceClient } from "@/lib/yip/supabase/server";
 import { logAuditAction } from "@/lib/yip/audit/log-action";
+import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { revalidatePath } from "next/cache";
 import {
   BRANDING_RULES,
@@ -427,23 +428,11 @@ export async function deleteInvitation(
   id: string,
   eventId: string
 ): Promise<ActionResult> {
-  const supabase = await createServiceClient();
-
-  // Gate: caller must be authenticated and own the event (auth via the
-  // cookie-bound client; the service client carries no session).
-  const auth = await createClient();
-  const {
-    data: { user },
-  } = await auth.auth.getUser();
-  if (!user) return { success: false, error: "Not authenticated" };
-  const { data: ownerEvent } = await auth
-    .from("events")
-    .select("created_by")
-    .eq("id", eventId)
-    .single();
-  if (!ownerEvent || ownerEvent.created_by !== user.id) {
-    return { success: false, error: "Event not found or not authorized" };
+  const access = await getYipEventAccess(eventId);
+  if (!access.canDelete) {
+    return { success: false, error: "Only the chapter chair can delete invitations" };
   }
+  const supabase = await createServiceClient();
 
   const { error } = await supabase
     .from("invitations")

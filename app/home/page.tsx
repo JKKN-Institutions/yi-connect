@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { isPlatformSuperAdmin } from "@/lib/yi/auth/yi-directory-roles";
 
 function parseSession(raw: string | undefined): Record<string, unknown> | null {
   if (!raw) return null;
@@ -13,6 +14,12 @@ function parseSession(raw: string | undefined): Record<string, unknown> | null {
 
 export default async function SmartHomePage() {
   const cookieStore = await cookies();
+
+  // Priority 0: platform super-admins land on the super-admin hub — even if
+  // they also hold a module session cookie (e.g. they're registered as a
+  // YiFuture delegate). The hub links every module's admin, so nothing is
+  // lost and they never get dumped into a single module view.
+  if (await isPlatformSuperAdmin()) redirect("/super-admin");
 
   // Priority 1: existing module session cookies (set by access code OR by OAuth callback)
   const yifi = parseSession(cookieStore.get("yifi_session")?.value);

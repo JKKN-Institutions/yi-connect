@@ -133,6 +133,7 @@ export async function updateSession(request: NextRequest) {
     '/stakeholders',
     '/coordinator',  // Coordinator pages (folded into main dashboard)
     '/sub-chapter',  // Sub-chapter lead pages (folded into main dashboard)
+    '/super-admin',  // Platform super-admin hub (page re-checks super_admin role)
     '/m', // Mobile/TWA routes - all require authentication
   ]
   const isProtectedPath = protectedPaths.some(path =>

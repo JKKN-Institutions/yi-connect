@@ -43,6 +43,16 @@ async function getDossier(registrantId: string, editionId: string) {
   return data;
 }
 
+async function isOrganiser(email: string | null, editionId: string) {
+  if (!email) return false;
+  const supabase = await createServiceClient();
+  const { data } = await supabase.rpc("yifi_check_organiser", {
+    p_email: email,
+    p_edition_id: editionId,
+  });
+  return Array.isArray(data) && data.length > 0;
+}
+
 export default async function MyYiFiPage() {
   const cookieStore = await cookies();
   const raw = cookieStore.get("yifi_session")?.value;
@@ -58,10 +68,11 @@ export default async function MyYiFiPage() {
   const registrant = await getRegistrant(session.id);
   if (!registrant) redirect("/yifi/join");
 
-  const [matches, vows, dossier] = await Promise.all([
+  const [matches, vows, dossier, organiser] = await Promise.all([
     getMatches(session.id, registrant.edition_id),
     getVows(session.id, registrant.edition_id),
     getDossier(session.id, registrant.edition_id),
+    isOrganiser(registrant.email, registrant.edition_id),
   ]);
 
   const scheduledSlots = (Array.isArray(matches) ? matches : [])
@@ -78,6 +89,14 @@ export default async function MyYiFiPage() {
         <div className="max-w-2xl mx-auto flex items-center justify-between">
           <Link href="/yifi" className="text-[#FD7215] font-bold text-lg">YiFi</Link>
           <div className="flex items-center gap-3">
+            {organiser && (
+              <Link
+                href="/yifi/admin"
+                className="text-xs text-[#FD7215] border border-[#FD7215]/30 hover:border-[#FD7215]/60 px-2.5 py-1 rounded-md transition-colors"
+              >
+                Event Admin
+              </Link>
+            )}
             <span className="text-white/70 text-sm">{registrant.full_name}</span>
             {registrant.cluster_colour && (
               <span className="w-3 h-3 rounded-full" style={{ backgroundColor: registrant.cluster_colour }} />

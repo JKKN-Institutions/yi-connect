@@ -70,10 +70,27 @@ export async function addParticipant(input: {
   edition_id?: string;
   event_id?: string;
   team?: string;
+  chapter?: string;
 }): Promise<{ ok: true; participationId: string; personId: string } | { ok: false; error: string }> {
   const fullName = input.full_name.trim();
   if (fullName.length < 2) {
     return { ok: false, error: "Enter the participant's full name." };
+  }
+
+  // Decision 2026-05-31 (fail-closed): the FIRST real consumer of the scoped
+  // permission gate. national/super_admin ('*'@global) or the chapter's
+  // chapter_chair/chapter_em ('participant.manage'@chapter) may add; everyone
+  // else is denied. Wiring a NEW action first means no existing user can be
+  // locked out while we prove the layer end-to-end.
+  const allowed = await can("participant.manage", {
+    app: "yip",
+    chapter: input.chapter ?? null,
+  });
+  if (!allowed) {
+    return {
+      ok: false,
+      error: "You don't have permission to add participants for this chapter.",
+    };
   }
 
   let personId: string;

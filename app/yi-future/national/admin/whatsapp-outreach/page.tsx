@@ -128,7 +128,7 @@ export default async function WhatsAppOutreachPage() {
               : "No active WhatsApp session. Scan the QR code at the connect page to bind the sending number."}
           </p>
           <Link
-            href="/settings/whatsapp"
+            href="/yi-future/national/admin/whatsapp-connect"
             className="mt-2 inline-flex items-center text-xs font-semibold text-amber-900 underline hover:text-amber-700"
           >
             Open WhatsApp connect page →

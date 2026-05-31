@@ -27,6 +27,7 @@ const NAV: NavItem[] = [
   { label: "Finals Schedule", href: "/yi-future/national/admin/finals/schedule" },
   { label: "Create Finals", href: "/yi-future/national/admin/finals/new" },
   { label: "Broadcast", href: "/yi-future/national/admin/broadcast" },
+  { label: "Connect WhatsApp", href: "/yi-future/national/admin/whatsapp-connect" },
   { label: "WhatsApp Outreach", href: "/yi-future/national/admin/whatsapp-outreach" },
   { label: "Admins", href: "/yi-future/national/admin/admins" },
   { label: "My Bug Reports", href: "/yi-future/my-bug-reports" },

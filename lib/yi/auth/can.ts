@@ -23,7 +23,10 @@
  * Created 2026-05-31 — consolidation plan §4, §6 (Phase 7).
  */
 import { createServiceClient } from "@/lib/yip/supabase/server";
-import { getCurrentPersonRoles } from "@/lib/yi/auth/yi-directory-roles";
+import {
+  getCurrentPersonRoles,
+  type RoleAssignment,
+} from "@/lib/yi/auth/yi-directory-roles";
 
 type PermissionRow = {
   capability: string;

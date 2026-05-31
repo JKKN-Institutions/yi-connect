@@ -84,12 +84,12 @@ export async function GET(req: Request) {
     cap: string;
     target: { app: string; chapter?: string | null; zone?: string | null };
   }> = [
-    { label: "event.delete (global WRITE)", cap: "event.delete", target: { app: "yip" } },
     { label: `event.read @ OWN zone (${myZone ?? "—"})`, cap: "event.read", target: { app: "yip", zone: myZone } },
-    { label: "event.read @ FOREIGN zone (ZZ)", cap: "event.read", target: { app: "yip", zone: "ZZ" } },
+    { label: `event.DELETE @ OWN zone (${myZone ?? "—"}) [RM edit?]`, cap: "event.delete", target: { app: "yip", zone: myZone } },
+    { label: `event.DELETE @ OWN chapter (${myChapter ?? "—"}) [chapter delete?]`, cap: "event.delete", target: { app: "yip", chapter: myChapter } },
     { label: `participant.manage @ OWN chapter (${myChapter ?? "—"})`, cap: "participant.manage", target: { app: "yip", chapter: myChapter } },
-    { label: "participant.manage @ FOREIGN chapter", cap: "participant.manage", target: { app: "yip", chapter: "Nowhere-Chapter" } },
-    { label: "CROSS-APP: event.delete @ app=future", cap: "event.delete", target: { app: "future" } },
+    { label: "event.read @ FOREIGN zone (ZZ)", cap: "event.read", target: { app: "yip", zone: "ZZ" } },
+    { label: "CROSS-APP: event.delete @ app=future [super-admin only]", cap: "event.delete", target: { app: "future" } },
   ];
 
   const verdicts: Array<{ test: string; allowed: boolean }> = [];

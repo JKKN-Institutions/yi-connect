@@ -15,6 +15,7 @@
 
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { resolvePerson } from "@/lib/yi/directory/resolve-person";
+import { can } from "@/lib/yi/auth/can";
 
 export type ParticipationRow = {
   id: string;

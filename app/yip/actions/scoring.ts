@@ -1,6 +1,7 @@
 "use server";
 
 import { createServiceClient } from "@/lib/yip/supabase/server";
+import { requireJurySession } from "@/lib/yip/auth/yip-session";
 import type { Tables } from "@/types/yip/database";
 
 type Score = Tables<{ schema: "yip" }, "scores">;
@@ -79,6 +80,13 @@ interface SubmitScoreInput {
 export async function submitScore(
   input: SubmitScoreInput
 ): Promise<ActionResult<{ id: string }>> {
+  // Jury self-service: the score is written under the caller's jury identity.
+  // Verify the yip_session cookie owns input.juryAssignmentId for this event —
+  // yip.scores has INSERT/UPDATE-to-public RLS, so without this anyone could
+  // write or overwrite any participant's score by passing a foreign id.
+  const sess = await requireJurySession(input.juryAssignmentId, input.eventId);
+  if (!sess.ok) return { success: false, error: sess.error };
+
   const supabase = await createServiceClient();
 
   // Check if scores are locked for this event

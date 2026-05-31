@@ -1,8 +1,15 @@
 "use server";
 
-import { createClient } from "@/lib/yip/supabase/server";
+import { createServiceClient } from "@/lib/yip/supabase/server";
+import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { revalidatePath } from "next/cache";
 
+// Live-session timer control. Gated on canManage (organiser + chair + national
+// + regional may run the live event). Writes via the service client AFTER the
+// capability check — yip.events is RLS read-only for `authenticated`, and the
+// old `.eq("created_by", user.id)` gate silently no-op'd for any non-creator
+// (returned 0-row success), locking out chairs/organisers who didn't create
+// the event. (2026-05-30 chapter-roles migration.)
 type ActionResult<T = null> =
   | { success: true; data: T }
   | { success: false; error: string };
@@ -15,12 +22,9 @@ export async function startTimer(
   durationSeconds: number,
   label?: string
 ): Promise<ActionResult> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) return { success: false, error: "Not authenticated" };
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
+  const supabase = await createServiceClient();
 
   const timerEnd = new Date(Date.now() + durationSeconds * 1000).toISOString();
 
@@ -31,8 +35,7 @@ export async function startTimer(
       live_timer_running: true,
       live_timer_label: label ?? null,
     })
-    .eq("id", eventId)
-    .eq("created_by", user.id);
+    .eq("id", eventId);
 
   if (error) return { success: false, error: error.message };
 
@@ -46,18 +49,14 @@ export async function startTimer(
 export async function stopTimer(
   eventId: string
 ): Promise<ActionResult> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) return { success: false, error: "Not authenticated" };
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
+  const supabase = await createServiceClient();
 
   const { error } = await supabase
     .from("events")
     .update({ live_timer_running: false })
-    .eq("id", eventId)
-    .eq("created_by", user.id);
+    .eq("id", eventId);
 
   if (error) return { success: false, error: error.message };
 
@@ -71,12 +70,9 @@ export async function stopTimer(
 export async function resetTimer(
   eventId: string
 ): Promise<ActionResult> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) return { success: false, error: "Not authenticated" };
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
+  const supabase = await createServiceClient();
 
   const { error } = await supabase
     .from("events")
@@ -85,8 +81,7 @@ export async function resetTimer(
       live_timer_running: false,
       live_timer_label: null,
     })
-    .eq("id", eventId)
-    .eq("created_by", user.id);
+    .eq("id", eventId);
 
   if (error) return { success: false, error: error.message };
 

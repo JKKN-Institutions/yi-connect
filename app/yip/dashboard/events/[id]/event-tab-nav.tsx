@@ -24,10 +24,12 @@ import {
   Images,
   MessageCircleHeart,
   Megaphone,
+  UserCog,
 } from "lucide-react";
 
 const TABS = [
   { label: "Overview", href: "", icon: LayoutDashboard },
+  { label: "Team", href: "/team", icon: UserCog },
   { label: "Checklist", href: "/checklist", icon: ListChecks },
   { label: "Registrations", href: "/registrations", icon: ClipboardPaste },
   { label: "Participants", href: "/participants", icon: Users },

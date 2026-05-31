@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/yip/supabase/server";
 import { getEvent } from "@/app/yip/actions/events";
+import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { listVolunteers } from "@/app/yip/actions/volunteers";
 import { VolunteersClient } from "./volunteers-client";
 import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
@@ -26,11 +27,14 @@ export default async function VolunteersPage({
 
   const volunteers = await listVolunteers(id);
 
+  const access = await getYipEventAccess(id);
+
   return (
     <VolunteersClient
       eventId={id}
       eventName={event.name}
       initialVolunteers={volunteers}
+      canDelete={access.canDelete}
     />
   );
 }

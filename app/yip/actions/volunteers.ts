@@ -1,7 +1,8 @@
 "use server";
 
-import { createClient, createServiceClient } from "@/lib/yip/supabase/server";
+import { createServiceClient } from "@/lib/yip/supabase/server";
 import { logAuditAction } from "@/lib/yip/audit/log-action";
+import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { revalidatePath } from "next/cache";
 import type { VolunteerStation } from "@/lib/yip/volunteers";
 
@@ -49,6 +50,9 @@ export async function addVolunteer(input: {
   tshirt_size?: string | null;
   is_yuva?: boolean;
 }): Promise<ActionResult<Volunteer>> {
+  const access = await getYipEventAccess(input.event_id);
+  if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
+
   if (!input.full_name.trim()) return { success: false, error: "Name required" };
 
   const supabase = await createServiceClient();
@@ -77,6 +81,9 @@ export async function updateVolunteer(
   eventId: string,
   updates: Partial<Omit<Volunteer, "id" | "event_id">>
 ): Promise<ActionResult> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
+
   const supabase = await createServiceClient();
   const { error } = await supabase.from("volunteers").update(updates).eq("id", id);
   if (error) return { success: false, error: error.message };
@@ -89,6 +96,9 @@ export async function markVolunteerArrived(
   eventId: string,
   arrived: boolean
 ): Promise<ActionResult> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
+
   const supabase = await createServiceClient();
   const { error } = await supabase
     .from("volunteers")
@@ -107,23 +117,11 @@ export async function deleteVolunteer(
   id: string,
   eventId: string
 ): Promise<ActionResult> {
-  const supabase = await createServiceClient();
-
-  // Gate: caller must be authenticated and own the event. Auth goes through the
-  // cookie-bound client — the service client carries no session, so
-  // createServiceClient().auth.getUser() always returns null (would deny owner).
-  const auth = await createClient();
-  const { data: { user } } = await auth.auth.getUser();
-  if (!user) return { success: false, error: "Not authenticated" };
-
-  const { data: event } = await auth
-    .from("events")
-    .select("created_by")
-    .eq("id", eventId)
-    .single();
-  if (!event || event.created_by !== user.id) {
-    return { success: false, error: "Event not found or not authorized" };
+  const access = await getYipEventAccess(eventId);
+  if (!access.canDelete) {
+    return { success: false, error: "Only the chapter chair can delete volunteers" };
   }
+  const supabase = await createServiceClient();
 
   const { error } = await supabase.from("volunteers").delete().eq("id", id).eq("event_id", eventId);
   if (error) return { success: false, error: error.message };

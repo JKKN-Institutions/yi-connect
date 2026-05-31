@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/yip/supabase/server";
 import { getEvent } from "@/app/yip/actions/events";
+import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import {
   listComplianceChecks,
   listInvitations,
@@ -34,6 +35,8 @@ export default async function BrandingPage({
     getComplianceScore(id),
   ]);
 
+  const access = await getYipEventAccess(id);
+
   return (
     <BrandingClient
       eventId={id}
@@ -41,6 +44,7 @@ export default async function BrandingPage({
       initialChecks={checks}
       initialInvitations={invitations}
       initialScore={score}
+      canDelete={access.canDelete}
     />
   );
 }

@@ -1,6 +1,7 @@
 "use server";
 
 import { createServiceClient } from "@/lib/yip/supabase/server";
+import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { revalidatePath } from "next/cache";
 
 type ActionResult<T = null> =
@@ -37,6 +38,11 @@ export async function toggleChecklistItem(
   eventId: string,
   done: boolean
 ): Promise<ActionResult> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
+
   const supabase = await createServiceClient();
   const { error } = await supabase
     .from("checklist")
@@ -55,6 +61,11 @@ export async function toggleChecklistItem(
 export async function seedChecklistForEvent(
   eventId: string
 ): Promise<ActionResult<{ inserted: number }>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
+
   // Safety net: for events that existed before the auto-seed in createEvent.
   const supabase = await createServiceClient();
 

@@ -1,7 +1,8 @@
 "use server";
 
-import { createClient, createServiceClient } from "@/lib/yip/supabase/server";
+import { createServiceClient } from "@/lib/yip/supabase/server";
 import { logAuditAction } from "@/lib/yip/audit/log-action";
+import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { revalidatePath } from "next/cache";
 import type { PartySide } from "@/lib/yip/constants";
 
@@ -47,6 +48,10 @@ export async function createParty(input: {
   manifesto?: string[];
   tagline?: string | null;
 }): Promise<ActionResult<Party>> {
+  const access = await getYipEventAccess(input.event_id);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
   const supabase = await createServiceClient();
   const { data, error } = await supabase
     .from("parties")
@@ -72,6 +77,20 @@ export async function updateParty(
   input: Partial<Omit<Party, "id" | "created_at" | "event_id">>
 ): Promise<ActionResult<Party>> {
   const supabase = await createServiceClient();
+
+  // Resolve the party's event to authorize, then gate on canManage.
+  const { data: existing } = await supabase
+    .from("parties")
+    .select("event_id")
+    .eq("id", id)
+    .single();
+  if (!existing) return { success: false, error: "Party not found" };
+
+  const access = await getYipEventAccess(existing.event_id);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
+
   const { data, error } = await supabase
     .from("parties")
     .update(input)
@@ -85,23 +104,11 @@ export async function updateParty(
 }
 
 export async function deleteParty(id: string, eventId: string): Promise<ActionResult> {
-  const supabase = await createServiceClient();
-
-  // Gate: caller must be authenticated and own the event. Auth goes through the
-  // cookie-bound client — the service client carries no session, so
-  // createServiceClient().auth.getUser() always returns null (would deny owner).
-  const auth = await createClient();
-  const { data: { user } } = await auth.auth.getUser();
-  if (!user) return { success: false, error: "Not authenticated" };
-
-  const { data: event } = await auth
-    .from("events")
-    .select("created_by")
-    .eq("id", eventId)
-    .single();
-  if (!event || event.created_by !== user.id) {
-    return { success: false, error: "Event not found or not authorized" };
+  const access = await getYipEventAccess(eventId);
+  if (!access.canDelete) {
+    return { success: false, error: "Only the chapter chair can delete parties" };
   }
+  const supabase = await createServiceClient();
 
   const { error } = await supabase.from("parties").delete().eq("id", id).eq("event_id", eventId);
   if (error) return { success: false, error: error.message };
@@ -135,6 +142,11 @@ export async function assignParticipantsToParty(
     return { success: false, error: partyError?.message ?? "Party not found" };
   }
 
+  const access = await getYipEventAccess(party.event_id);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
+
   const { error } = await supabase
     .from("participants")
     .update({
@@ -156,6 +168,19 @@ export async function electPartyLeader(
   participantId: string
 ): Promise<ActionResult> {
   const supabase = await createServiceClient();
+
+  // Resolve event to authorize before mutating.
+  const { data: party } = await supabase
+    .from("parties")
+    .select("event_id")
+    .eq("id", partyId)
+    .single();
+  if (!party) return { success: false, error: "Party not found" };
+
+  const access = await getYipEventAccess(party.event_id);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
 
   // Set leader on party
   const { data: updated, error } = await supabase

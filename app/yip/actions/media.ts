@@ -1,7 +1,8 @@
 "use server";
 
-import { createClient, createServiceClient } from "@/lib/yip/supabase/server";
+import { createServiceClient } from "@/lib/yip/supabase/server";
 import { logAuditAction } from "@/lib/yip/audit/log-action";
+import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { revalidatePath } from "next/cache";
 import {
   mimeToKind,
@@ -66,6 +67,9 @@ export async function registerUploadedMedia(input: {
   width?: number | null;
   height?: number | null;
 }): Promise<ActionResult<EventMedia>> {
+  const access = await getYipEventAccess(input.event_id);
+  if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
+
   const supabase = await createServiceClient();
   const {
     data: { user },
@@ -109,6 +113,16 @@ export async function updateMediaCaption(
   }
 ): Promise<ActionResult<EventMedia>> {
   const supabase = await createServiceClient();
+
+  const { data: mediaRow } = await supabase
+    .from("media")
+    .select("event_id")
+    .eq("id", id)
+    .single();
+  if (!mediaRow) return { success: false, error: "Media not found" };
+  const access = await getYipEventAccess(mediaRow.event_id);
+  if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
+
   const { data, error } = await supabase
     .from("media")
     .update(updates)
@@ -127,6 +141,9 @@ export async function setCoverImage(
   mediaId: string,
   eventId: string
 ): Promise<ActionResult<EventMedia>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
+
   const supabase = await createServiceClient();
 
   // Clear any existing cover first
@@ -154,6 +171,9 @@ export async function setCoverImage(
 export async function clearCoverImage(
   eventId: string
 ): Promise<ActionResult> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
+
   const supabase = await createServiceClient();
   const { error } = await supabase
     .from("media")
@@ -171,6 +191,16 @@ export async function setVisibility(
   visibility: MediaVisibility
 ): Promise<ActionResult<EventMedia>> {
   const supabase = await createServiceClient();
+
+  const { data: mediaRow } = await supabase
+    .from("media")
+    .select("event_id")
+    .eq("id", id)
+    .single();
+  if (!mediaRow) return { success: false, error: "Media not found" };
+  const access = await getYipEventAccess(mediaRow.event_id);
+  if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
+
   const { data, error } = await supabase
     .from("media")
     .update({ visibility })
@@ -190,6 +220,9 @@ export async function bulkSetVisibility(
   visibility: MediaVisibility,
   eventId: string
 ): Promise<ActionResult<number>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
+
   if (ids.length === 0) return { success: true, data: 0 };
   const supabase = await createServiceClient();
   const { data, error } = await supabase
@@ -217,20 +250,9 @@ export async function deleteMedia(id: string): Promise<ActionResult> {
     return { success: false, error: fetchErr?.message ?? "Media not found" };
   }
 
-  // Gate: caller must be authenticated and own the event. The service client
-  // carries NO session — use the cookie-bound createClient() for auth.getUser().
-  const auth = await createClient();
-  const {
-    data: { user },
-  } = await auth.auth.getUser();
-  if (!user) return { success: false, error: "Not authenticated" };
-  const { data: ownerEvent } = await auth
-    .from("events")
-    .select("created_by")
-    .eq("id", row.event_id)
-    .single();
-  if (!ownerEvent || ownerEvent.created_by !== user.id) {
-    return { success: false, error: "Event not found or not authorized" };
+  const access = await getYipEventAccess(row.event_id);
+  if (!access.canDelete) {
+    return { success: false, error: "Only the chapter chair can delete media" };
   }
 
   // Delete from Storage first (best effort — even if it fails we still remove DB row)
@@ -260,23 +282,12 @@ export async function bulkDeleteMedia(
   eventId: string
 ): Promise<ActionResult<number>> {
   if (ids.length === 0) return { success: true, data: 0 };
-  const supabase = await createServiceClient();
 
-  // Gate: caller must be authenticated and own the event (auth via the
-  // cookie-bound client; the service client carries no session).
-  const auth = await createClient();
-  const {
-    data: { user },
-  } = await auth.auth.getUser();
-  if (!user) return { success: false, error: "Not authenticated" };
-  const { data: ownerEvent } = await auth
-    .from("events")
-    .select("created_by")
-    .eq("id", eventId)
-    .single();
-  if (!ownerEvent || ownerEvent.created_by !== user.id) {
-    return { success: false, error: "Event not found or not authorized" };
+  const access = await getYipEventAccess(eventId);
+  if (!access.canDelete) {
+    return { success: false, error: "Only the chapter chair can delete media" };
   }
+  const supabase = await createServiceClient();
 
   // Scope to this event's rows so foreign ids can't erase another event's media.
   const { data: rows } = await supabase
@@ -307,6 +318,9 @@ export async function reorderMedia(
   ids: string[],
   eventId: string
 ): Promise<ActionResult> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
+
   const supabase = await createServiceClient();
   // Update sort_order for each id in the given sequence.
   const updates = ids.map((id, idx) =>

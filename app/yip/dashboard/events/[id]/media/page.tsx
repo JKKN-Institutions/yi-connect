@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/yip/supabase/server";
 import { getEvent } from "@/app/yip/actions/events";
+import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { listMedia, getMediaStats } from "@/app/yip/actions/media";
 import { MediaClient } from "./media-client";
 import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
@@ -29,12 +30,15 @@ export default async function MediaPage({
     getMediaStats(eventId),
   ]);
 
+  const access = await getYipEventAccess(eventId);
+
   return (
     <MediaClient
       eventId={eventId}
       eventName={event.name}
       initialMedia={media}
       initialStats={stats}
+      canDelete={access.canDelete}
     />
   );
 }

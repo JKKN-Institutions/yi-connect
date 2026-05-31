@@ -1,15 +1,14 @@
 "use server";
 
-import { createClient } from "@/lib/yip/supabase/server";
+import { createClient, createServiceClient } from "@/lib/yip/supabase/server";
 import { DEFAULT_AGENDA_TEMPLATE } from "@/lib/yip/constants";
 import { logAuditAction } from "@/lib/yip/audit/log-action";
+import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { isCurrentUserSuperAdmin } from "@/lib/yip/auth/require-super-admin";
 import { getRegionalAdminZones } from "@/lib/yi/auth/yi-directory-roles";
 import { revalidatePath } from "next/cache";
 import { attachCentralTopicsToEvent } from "./admin-topics";
 import type { Database } from "@/types/yip/database";
-
-type EventRow = Database["yip"]["Tables"]["events"]["Row"];
 
 // ─── Types ─────────────────────────────────────────────────────────
 
@@ -56,14 +55,20 @@ type ActionResult<T = unknown> =
 export async function createEvent(
   data: CreateEventData
 ): Promise<ActionResult<{ id: string }>> {
-  const supabase = await createClient();
+  // Identify the caller (need user.id for created_by audit) via the cookie
+  // client; all WRITES below run on the service client because yip.events /
+  // agenda / checklist are RLS read-only for `authenticated` (session-client
+  // INSERTs are rejected — this was a latent createEvent runtime failure).
+  const authClient = await createClient();
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await authClient.auth.getUser();
 
   if (!user) {
     return { success: false, error: "Not authenticated" };
   }
+
+  const supabase = await createServiceClient();
 
   // When a yi_chapter_id is supplied, derive zone fields up-front so the
   // 3-tier regional-admin visibility gate (yi_zone_code) is correct from
@@ -81,6 +86,24 @@ export async function createEvent(
       .maybeSingle();
     if (chapter?.region) {
       derivedZoneCode = chapter.region;
+    }
+  }
+
+  // Create-permission gate (no event exists yet, so getYipEventAccess can't
+  // apply). Event creation is a super-admin action, or a regional admin
+  // creating an event in a zone they administer. Chapter chairs/organisers run
+  // events that national/regional provision for them.
+  const isSuper = await isCurrentUserSuperAdmin();
+  if (!isSuper) {
+    const zones = await getRegionalAdminZones("yip");
+    const allowed = derivedZoneCode
+      ? zones.includes(derivedZoneCode)
+      : zones.length > 0;
+    if (!allowed) {
+      return {
+        success: false,
+        error: "Only national admins, or regional admins for this zone, can create events",
+      };
     }
   }
 
@@ -222,28 +245,11 @@ export async function updateEvent(
   eventId: string,
   data: UpdateEventData
 ): Promise<ActionResult<null>> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: "Not authenticated" };
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
   }
-
-  // Validate ownership
-  const { data: existing } = await supabase
-    .from("events")
-    .select("created_by")
-    .eq("id", eventId)
-    .single();
-
-  if (!existing) {
-    return { success: false, error: "Event not found" };
-  }
-  if (existing.created_by !== user.id && !(await isCurrentUserSuperAdmin())) {
-    return { success: false, error: "Event not authorized" };
-  }
+  const supabase = await createServiceClient();
 
   const { error } = await supabase
     .from("events")
@@ -261,41 +267,16 @@ export async function updateEvent(
 // ─── Get Event ─────────────────────────────────────────────────────
 
 export async function getEvent(eventId: string) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Visibility gate: super_admin / regional_admin / chapter_admin / organiser.
+  const access = await getYipEventAccess(eventId);
+  if (!access.canView) return null;
 
-  if (!user) {
-    return null;
-  }
-
-  // Three-tier access (2026-05-28 regional-admin gate):
-  // 1. Super-admin (role='national') — read ANY event
-  // 2. Regional admin (role='regional_admin' for app='yip') — read events whose
-  //    yi_zone_code matches one of their assigned zones
-  // 3. Everyone else — only events they created
-  const isSuper = await isCurrentUserSuperAdmin();
-  let event: EventRow | null = null;
-  if (isSuper) {
-    const { data } = await supabase.from("events").select("*").eq("id", eventId).single();
-    event = data;
-  } else {
-    // Fetch unfiltered first so we can check yi_zone_code against the user's
-    // regional-admin zones before deciding visibility.
-    const { data } = await supabase.from("events").select("*").eq("id", eventId).single();
-    if (data) {
-      const isOwner = data.created_by === user.id;
-      if (isOwner) {
-        event = data;
-      } else {
-        const regionalZones = await getRegionalAdminZones("yip");
-        if (data.yi_zone_code && regionalZones.includes(data.yi_zone_code)) {
-          event = data;
-        }
-      }
-    }
-  }
+  const supabase = await createServiceClient();
+  const { data: event } = await supabase
+    .from("events")
+    .select("*")
+    .eq("id", eventId)
+    .single();
 
   if (!event) return null;
 
@@ -326,27 +307,11 @@ async function setEventLock(
   field: "allocation_locked" | "scores_locked" | "registrations_frozen",
   value: boolean
 ): Promise<ActionResult<null>> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: "Not authenticated" };
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
   }
-
-  const { data: existing } = await supabase
-    .from("events")
-    .select("created_by")
-    .eq("id", eventId)
-    .single();
-
-  if (!existing) {
-    return { success: false, error: "Event not found" };
-  }
-  if (existing.created_by !== user.id && !(await isCurrentUserSuperAdmin())) {
-    return { success: false, error: "Event not authorized" };
-  }
+  const supabase = await createServiceClient();
 
   const patch = { [field]: value };
   const { error } = await supabase
@@ -390,33 +355,16 @@ export async function setRegistrationsFrozen(
 // ─── Get Event With Details ────────────────────────────────────────
 
 export async function getEventWithDetails(eventId: string) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Visibility gate: super_admin / regional_admin / chapter_admin / organiser.
+  const access = await getYipEventAccess(eventId);
+  if (!access.canView) return null;
 
-  if (!user) {
-    return null;
-  }
-
-  // Three-tier access — super-admin, regional admin, or owner. Same gate as
-  // getEvent above. Duplicated for now since getEventWithDetails has its own
-  // join shape; factor out if we add a fourth gate site.
-  const isSuper = await isCurrentUserSuperAdmin();
-  let event: EventRow | null = null;
-  {
-    const { data } = await supabase.from("events").select("*").eq("id", eventId).single();
-    if (data) {
-      if (isSuper || data.created_by === user.id) {
-        event = data;
-      } else {
-        const regionalZones = await getRegionalAdminZones("yip");
-        if (data.yi_zone_code && regionalZones.includes(data.yi_zone_code)) {
-          event = data;
-        }
-      }
-    }
-  }
+  const supabase = await createServiceClient();
+  const { data: event } = await supabase
+    .from("events")
+    .select("*")
+    .eq("id", eventId)
+    .single();
 
   if (!event) return null;
 
@@ -460,14 +408,11 @@ export async function pushLiveBanner(
   eventId: string,
   text: string
 ): Promise<ActionResult<null>> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: "Not authenticated" };
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
   }
+  const supabase = await createServiceClient();
 
   const trimmed = (text ?? "").trim();
   if (trimmed.length === 0) {
@@ -478,19 +423,6 @@ export async function pushLiveBanner(
       success: false,
       error: `Banner text must be ${LIVE_BANNER_MAX_LEN} characters or fewer (got ${trimmed.length})`,
     };
-  }
-
-  const { data: existing } = await supabase
-    .from("events")
-    .select("created_by")
-    .eq("id", eventId)
-    .single();
-
-  if (!existing) {
-    return { success: false, error: "Event not found" };
-  }
-  if (existing.created_by !== user.id && !(await isCurrentUserSuperAdmin())) {
-    return { success: false, error: "Event not authorized" };
   }
 
   // live_banner_* columns exist in DB (migration adding live_banner_text
@@ -533,27 +465,11 @@ export async function pushLiveBanner(
 export async function clearLiveBanner(
   eventId: string
 ): Promise<ActionResult<null>> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: "Not authenticated" };
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
   }
-
-  const { data: existing } = await supabase
-    .from("events")
-    .select("created_by")
-    .eq("id", eventId)
-    .single();
-
-  if (!existing) {
-    return { success: false, error: "Event not found" };
-  }
-  if (existing.created_by !== user.id && !(await isCurrentUserSuperAdmin())) {
-    return { success: false, error: "Event not authorized" };
-  }
+  const supabase = await createServiceClient();
 
   const patch = {
     live_banner_active: false,

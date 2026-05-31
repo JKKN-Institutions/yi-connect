@@ -1,7 +1,8 @@
 "use server";
 
-import { createClient, createServiceClient } from "@/lib/yip/supabase/server";
+import { createServiceClient } from "@/lib/yip/supabase/server";
 import { logAuditAction } from "@/lib/yip/audit/log-action";
+import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { revalidatePath } from "next/cache";
 import {
   BRANDING_RULES,
@@ -183,6 +184,9 @@ export async function setComplianceStatus(
     violationAction?: string | null;
   }
 ): Promise<ActionResult> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
+
   // Validate rule_key against the active catalogue (DB-driven, with static
   // fallback) so admin-added rules are accepted but typos still fail loud.
   const activeRules = await loadActiveRules();
@@ -331,6 +335,9 @@ export async function recordInvitation(
   category: string,
   draftUrl?: string | null
 ): Promise<ActionResult<InvitationRow>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
+
   if (!invitee.name?.trim()) {
     return { success: false, error: "Invitee name is required" };
   }
@@ -362,9 +369,6 @@ export async function approveInvitation(
   note?: string
 ): Promise<ActionResult> {
   const supabase = await createServiceClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
 
   const { data: current, error: fetchErr } = await supabase
     .from("invitations")
@@ -372,6 +376,13 @@ export async function approveInvitation(
     .eq("id", id)
     .single();
   if (fetchErr) return { success: false, error: fetchErr.message };
+
+  const access = await getYipEventAccess(current.event_id);
+  if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   const { error } = await supabase
     .from("invitations")
@@ -395,9 +406,6 @@ export async function rejectInvitation(
   note?: string
 ): Promise<ActionResult> {
   const supabase = await createServiceClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
 
   const { data: current, error: fetchErr } = await supabase
     .from("invitations")
@@ -405,6 +413,13 @@ export async function rejectInvitation(
     .eq("id", id)
     .single();
   if (fetchErr) return { success: false, error: fetchErr.message };
+
+  const access = await getYipEventAccess(current.event_id);
+  if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   const { error } = await supabase
     .from("invitations")
@@ -427,23 +442,11 @@ export async function deleteInvitation(
   id: string,
   eventId: string
 ): Promise<ActionResult> {
-  const supabase = await createServiceClient();
-
-  // Gate: caller must be authenticated and own the event (auth via the
-  // cookie-bound client; the service client carries no session).
-  const auth = await createClient();
-  const {
-    data: { user },
-  } = await auth.auth.getUser();
-  if (!user) return { success: false, error: "Not authenticated" };
-  const { data: ownerEvent } = await auth
-    .from("events")
-    .select("created_by")
-    .eq("id", eventId)
-    .single();
-  if (!ownerEvent || ownerEvent.created_by !== user.id) {
-    return { success: false, error: "Event not found or not authorized" };
+  const access = await getYipEventAccess(eventId);
+  if (!access.canDelete) {
+    return { success: false, error: "Only the chapter chair can delete invitations" };
   }
+  const supabase = await createServiceClient();
 
   const { error } = await supabase
     .from("invitations")

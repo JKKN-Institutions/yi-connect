@@ -69,10 +69,13 @@ export function ParticipantsClient({
   eventId,
   participants: initialParticipants,
   allocationLocked,
+  canDelete = true,
 }: {
   eventId: string;
   participants: Participant[];
   allocationLocked: boolean;
+  /** Chair/national/regional only. Organisers cannot delete records. */
+  canDelete?: boolean;
 }) {
   const router = useRouter();
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -585,7 +588,7 @@ export function ParticipantsClient({
                     </div>
                   </TableCell>
                   <TableCell>
-                    {!allocationLocked && (
+                    {!allocationLocked && canDelete && (
                       <button
                         onClick={() => handleDelete(p.id)}
                         className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600"

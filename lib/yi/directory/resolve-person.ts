@@ -16,6 +16,16 @@ import { createServiceClient } from "@/lib/yip/supabase/server";
 
 const norm = (s: string) => s.trim().toLowerCase();
 
+// Normalize a phone to its last 10 digits (drops +91 / leading 0 / spaces /
+// dashes) so "+91 97910 05881", "097910-05881" and "9791005881" all match.
+// Stored normalized so future matches are consistent. Returns null if too short
+// to be a usable dedupe key. NOTE: tuned for India (10-digit mobiles); revisit
+// for international numbers when a delegate UI needs them.
+function normPhone(s: string): string | null {
+  const d = s.replace(/\D/g, "");
+  return d.length >= 10 ? d.slice(-10) : null;
+}
+
 type Svc = Awaited<ReturnType<typeof createServiceClient>>;
 
 // yi_directory is not in the generated YIP Database types, so we cast the

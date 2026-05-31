@@ -1,6 +1,7 @@
 "use server";
 
 import { createServiceClient } from "@/lib/yip/supabase/server";
+import { isCurrentUserSuperAdmin } from "@/lib/yip/auth/require-super-admin";
 import { logAuditAction } from "@/lib/yip/audit/log-action";
 import { revalidatePath } from "next/cache";
 
@@ -170,6 +171,11 @@ export async function updateSchool(
 }
 
 export async function deleteSchool(id: string): Promise<ActionResult> {
+  // schools/institutions are shared platform master data (not event-scoped) —
+  // restrict deletion to super-admins.
+  if (!(await isCurrentUserSuperAdmin())) {
+    return { success: false, error: "Forbidden: super admin only" };
+  }
   const supabase = await createServiceClient();
   const { error } = await supabase
     .schema("yi")

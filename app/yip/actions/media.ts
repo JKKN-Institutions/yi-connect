@@ -1,6 +1,6 @@
 "use server";
 
-import { createServiceClient } from "@/lib/yip/supabase/server";
+import { createClient, createServiceClient } from "@/lib/yip/supabase/server";
 import { logAuditAction } from "@/lib/yip/audit/log-action";
 import { revalidatePath } from "next/cache";
 import {
@@ -217,13 +217,30 @@ export async function deleteMedia(id: string): Promise<ActionResult> {
     return { success: false, error: fetchErr?.message ?? "Media not found" };
   }
 
+  // Gate: caller must be authenticated and own the event. The service client
+  // carries NO session — use the cookie-bound createClient() for auth.getUser().
+  const auth = await createClient();
+  const {
+    data: { user },
+  } = await auth.auth.getUser();
+  if (!user) return { success: false, error: "Not authenticated" };
+  const { data: ownerEvent } = await auth
+    .from("events")
+    .select("created_by")
+    .eq("id", row.event_id)
+    .single();
+  if (!ownerEvent || ownerEvent.created_by !== user.id) {
+    return { success: false, error: "Event not found or not authorized" };
+  }
+
   // Delete from Storage first (best effort — even if it fails we still remove DB row)
   await supabase.storage.from(STORAGE_BUCKET).remove([row.storage_path]);
 
   const { error: delErr } = await supabase
     .from("media")
     .delete()
-    .eq("id", id);
+    .eq("id", id)
+    .eq("event_id", row.event_id);
 
   if (delErr) return { success: false, error: delErr.message };
   await logAuditAction({
@@ -245,10 +262,28 @@ export async function bulkDeleteMedia(
   if (ids.length === 0) return { success: true, data: 0 };
   const supabase = await createServiceClient();
 
+  // Gate: caller must be authenticated and own the event (auth via the
+  // cookie-bound client; the service client carries no session).
+  const auth = await createClient();
+  const {
+    data: { user },
+  } = await auth.auth.getUser();
+  if (!user) return { success: false, error: "Not authenticated" };
+  const { data: ownerEvent } = await auth
+    .from("events")
+    .select("created_by")
+    .eq("id", eventId)
+    .single();
+  if (!ownerEvent || ownerEvent.created_by !== user.id) {
+    return { success: false, error: "Event not found or not authorized" };
+  }
+
+  // Scope to this event's rows so foreign ids can't erase another event's media.
   const { data: rows } = await supabase
     .from("media")
     .select("id, storage_path")
-    .in("id", ids);
+    .in("id", ids)
+    .eq("event_id", eventId);
 
   const paths = ((rows ?? []) as { storage_path: string }[]).map((r) => r.storage_path);
   if (paths.length > 0) {
@@ -259,6 +294,7 @@ export async function bulkDeleteMedia(
     .from("media")
     .delete()
     .in("id", ids)
+    .eq("event_id", eventId)
     .select("id");
 
   if (error) return { success: false, error: error.message };

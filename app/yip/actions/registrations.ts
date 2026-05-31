@@ -1,6 +1,6 @@
 "use server";
 
-import { createServiceClient } from "@/lib/yip/supabase/server";
+import { createClient, createServiceClient } from "@/lib/yip/supabase/server";
 import { generateAccessCode } from "@/lib/yip/access-code";
 import { logAuditAction } from "@/lib/yip/audit/log-action";
 import { revalidatePath } from "next/cache";
@@ -511,7 +511,30 @@ export async function deleteRegistration(
     .eq("id", regId)
     .single();
 
-  const { error } = await regs(supabase).delete().eq("id", regId);
+  if (!reg) return { success: false, error: "Registration not found" };
+
+  // Gate: caller must be authenticated and own the event. Registrations carry
+  // student PII; without this any organizer could delete another event's row.
+  // The service client carries NO session, so auth.getUser() must go through
+  // the cookie-bound createClient() (lib/yip/supabase/server.ts).
+  const auth = await createClient();
+  const {
+    data: { user },
+  } = await auth.auth.getUser();
+  if (!user) return { success: false, error: "Not authenticated" };
+  const { data: ownerEvent } = await auth
+    .from("events")
+    .select("created_by")
+    .eq("id", reg.event_id)
+    .single();
+  if (!ownerEvent || ownerEvent.created_by !== user.id) {
+    return { success: false, error: "Event not found or not authorized" };
+  }
+
+  const { error } = await regs(supabase)
+    .delete()
+    .eq("id", regId)
+    .eq("event_id", reg.event_id);
   if (error) return { success: false, error: error.message };
   await logAuditAction({
     action_type: "delete",

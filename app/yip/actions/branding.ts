@@ -1,6 +1,6 @@
 "use server";
 
-import { createServiceClient } from "@/lib/yip/supabase/server";
+import { createClient, createServiceClient } from "@/lib/yip/supabase/server";
 import { logAuditAction } from "@/lib/yip/audit/log-action";
 import { revalidatePath } from "next/cache";
 import {
@@ -428,10 +428,28 @@ export async function deleteInvitation(
   eventId: string
 ): Promise<ActionResult> {
   const supabase = await createServiceClient();
+
+  // Gate: caller must be authenticated and own the event (auth via the
+  // cookie-bound client; the service client carries no session).
+  const auth = await createClient();
+  const {
+    data: { user },
+  } = await auth.auth.getUser();
+  if (!user) return { success: false, error: "Not authenticated" };
+  const { data: ownerEvent } = await auth
+    .from("events")
+    .select("created_by")
+    .eq("id", eventId)
+    .single();
+  if (!ownerEvent || ownerEvent.created_by !== user.id) {
+    return { success: false, error: "Event not found or not authorized" };
+  }
+
   const { error } = await supabase
     .from("invitations")
     .delete()
-    .eq("id", id);
+    .eq("id", id)
+    .eq("event_id", eventId);
   if (error) return { success: false, error: error.message };
   await logAuditAction({
     action_type: "delete",

@@ -89,6 +89,7 @@ export async function GET(req: Request) {
     { label: "event.read @ FOREIGN zone (ZZ)", cap: "event.read", target: { app: "yip", zone: "ZZ" } },
     { label: `participant.manage @ OWN chapter (${myChapter ?? "—"})`, cap: "participant.manage", target: { app: "yip", chapter: myChapter } },
     { label: "participant.manage @ FOREIGN chapter", cap: "participant.manage", target: { app: "yip", chapter: "Nowhere-Chapter" } },
+    { label: "CROSS-APP: event.delete @ app=future", cap: "event.delete", target: { app: "future" } },
   ];
 
   const verdicts: Array<{ test: string; allowed: boolean }> = [];

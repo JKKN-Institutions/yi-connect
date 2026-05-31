@@ -75,7 +75,16 @@ export async function canForAssignments(
   capability: string,
   target: { app: string; chapter?: string | null; zone?: string | null; year?: number }
 ): Promise<boolean> {
-  // Only assignments that are active AND for the target app can ever grant access.
+  // Root super-admin (decision 2026-05-31): a 'super_admin' assignment grants
+  // everything in EVERY app — the yi-connect-level super-admin is cross-app and
+  // can never be locked out by the capability map. (platform_admin / national
+  // stay PER-APP and flow through the map below.) Kept in code, not just data,
+  // so a map mistake can never lock out the platform owner.
+  if (assignments.some((a) => a.is_active && a.role === "super_admin")) {
+    return true;
+  }
+
+  // Everyone else: only assignments that are active AND for the target app can grant access.
   const relevant = assignments.filter(
     (a) => a.is_active && a.app === target.app
   );

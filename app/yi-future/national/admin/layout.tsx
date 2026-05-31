@@ -27,7 +27,9 @@ const NAV: NavItem[] = [
   { label: "Finals Schedule", href: "/yi-future/national/admin/finals/schedule" },
   { label: "Create Finals", href: "/yi-future/national/admin/finals/new" },
   { label: "Broadcast", href: "/yi-future/national/admin/broadcast" },
+  { label: "WhatsApp Outreach", href: "/yi-future/national/admin/whatsapp-outreach" },
   { label: "Admins", href: "/yi-future/national/admin/admins" },
+  { label: "My Bug Reports", href: "/yi-future/my-bug-reports" },
 ];
 
 export default async function NationalAdminLayout({
@@ -44,8 +46,8 @@ export default async function NationalAdminLayout({
   // SECURITY: only platform-admin / super-admin / national_admin (per yi_directory
   // via BB refactor) may view national admin surfaces. CFT 2026-05-28 found
   // demo-organizer could see 22 delegates + 65 chapters without this gate.
-  const isPlatformAdmin = await isCurrentUserPlatformAdmin();
-  if (!isPlatformAdmin) redirect("/yi-future/chapter");
+  const { isPlatform } = await isCurrentUserPlatformAdmin();
+  if (!isPlatform) redirect("/yi-future/chapter");
 
   return (
     <AdminShell title="Yi National Admin" roleLabel="National" items={NAV}>

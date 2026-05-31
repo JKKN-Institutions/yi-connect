@@ -110,7 +110,10 @@ export async function computeChapterResults(
  * Steps:
  * 1. Look up the team's chapter_id → chapters.finale_region
  * 2. Find the finale-host chapter for that region (is_finale_host = true)
- * 3. Find the national_track_final event owned by that finale chapter for this edition
+ * 3. Find the finale event owned by that finale chapter for this edition.
+ *    Prefer the all-4-tracks regional_finale; fall back to the legacy
+ *    per-track national_track_final (matched on track_id) so existing data
+ *    still routes correctly.
  * 4. Return the event id, or null if the host chapter hasn't created the event yet
  */
 export async function resolveRegionalFinaleEventId(
@@ -160,7 +163,31 @@ export async function resolveRegionalFinaleEventId(
     problem_statements: { track_id: string } | null;
   } | null)?.problem_statements?.track_id ?? null;
 
-  // Step 4: find the national_track_final event for that host + edition + track
+  // Step 4: find the finale event for that host + edition.
+  //
+  // Prefer the all-4-tracks regional_finale (no per-track filter — a single
+  // regional event hosts every track). This keeps to_event_id pointing at
+  // the SAME event the host dashboard / metrics now read via getHostContext.
+  // Fall back to the legacy per-track national_track_final, matched on the
+  // team's track_id, so already-created legacy events still route.
+  //
+  // (Live future.event_type enum includes "regional_finale" though the
+  // generated types are stale — hence the `as never` cast.)
+  const { data: regionalRow } = await svc
+    .schema("future")
+    .from("events")
+    .select("id")
+    .eq("chapter_id", finaleHostId)
+    .eq("type", "regional_finale" as never)
+    .eq("edition_id", editionId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const regionalId =
+    (regionalRow as unknown as { id: string } | null)?.id ?? null;
+  if (regionalId) return regionalId;
+
   let query = svc
     .schema("future")
     .from("events")

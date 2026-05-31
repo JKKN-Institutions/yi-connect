@@ -13,14 +13,29 @@ type GovRow = { id: string };
 async function getMetrics(chapterId: string, editionId: string) {
   const svc = await createServiceClient();
 
-  // 1. Find host's national_track_final event(s) for this edition
-  const { data: eventsData } = await svc
+  // 1. Find host's finale event(s) for this edition. Prefer the all-4-tracks
+  // regional_finale; fall back to legacy per-track national_track_final so
+  // existing data still renders. (Live future.event_type enum includes
+  // "regional_finale" though the generated types are stale — hence the
+  // `as never` cast.)
+  const { data: regionalData } = await svc
     .schema("future")
     .from("events")
     .select("id")
     .eq("chapter_id", chapterId)
     .eq("edition_id", editionId)
-    .eq("type", "national_track_final");
+    .eq("type", "regional_finale" as never);
+  let eventsData = regionalData;
+  if (!eventsData || eventsData.length === 0) {
+    const { data: legacyData } = await svc
+      .schema("future")
+      .from("events")
+      .select("id")
+      .eq("chapter_id", chapterId)
+      .eq("edition_id", editionId)
+      .eq("type", "national_track_final");
+    eventsData = legacyData;
+  }
   const events = (eventsData as unknown as EventRow[]) ?? [];
   const eventIds = events.map((e) => e.id);
 

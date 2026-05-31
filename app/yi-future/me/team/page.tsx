@@ -39,7 +39,23 @@ type Problem = {
   title: string;
   short_description: string;
   full_description: string | null;
-  tracks: { name: string; icon: string | null; color_hex: string | null } | null;
+  display_order: number | null;
+  tracks: {
+    id: string;
+    name: string;
+    icon: string | null;
+    color_hex: string | null;
+    display_order: number | null;
+  } | null;
+};
+
+type TrackBucket = {
+  id: string;
+  name: string;
+  icon: string | null;
+  colorHex: string;
+  displayOrder: number;
+  items: Problem[];
 };
 
 async function getMyTeam(delegateId: string): Promise<TeamView | null> {
@@ -116,32 +132,49 @@ async function getAvailableDelegates(
     }));
 }
 
-async function getChapterTrackProblems(
-  chapterId: string,
-  editionId: string
-): Promise<Problem[]> {
+// Future 6.0 runs all 4 tracks at every chapter, so the captain picks from the
+// full edition catalog (12 problems) — NOT a chapter-scoped single-track subset.
+async function getEditionProblems(editionId: string): Promise<Problem[]> {
   const svc = await createServiceClient();
 
-  const { data: assign } = await svc
-    .schema("future")
-    .from("chapter_track_assignments")
-    .select("track_id")
-    .eq("chapter_id", chapterId)
-    .eq("edition_id", editionId)
-    .maybeSingle();
-  const trackId = (assign as { track_id: string } | null)?.track_id ?? null;
-
-  let q = svc
+  const { data } = await svc
     .schema("future")
     .from("problem_statements")
     .select(
-      "id, title, short_description, full_description, tracks!inner(edition_id, name, icon, color_hex, id)"
+      "id, title, short_description, full_description, display_order, tracks!inner(id, name, icon, color_hex, display_order, edition_id)"
     )
     .eq("is_active", true)
-    .eq("tracks.edition_id", editionId);
-  if (trackId) q = q.eq("tracks.id", trackId);
-  const { data } = await q.order("display_order", { ascending: true });
+    .eq("tracks.edition_id", editionId)
+    .order("display_order", { ascending: true });
   return (data as unknown as Problem[]) ?? [];
+}
+
+// Group the flat problem list into track buckets ordered by track display_order,
+// with problems inside each bucket ordered by their own display_order.
+function bucketByTrack(problems: Problem[]): TrackBucket[] {
+  const tracksMap = new Map<string, TrackBucket>();
+  for (const p of problems) {
+    if (!p.tracks) continue;
+    const key = p.tracks.id;
+    if (!tracksMap.has(key)) {
+      tracksMap.set(key, {
+        id: p.tracks.id,
+        name: p.tracks.name,
+        icon: p.tracks.icon,
+        colorHex: p.tracks.color_hex ?? "#1a1a3e",
+        displayOrder: p.tracks.display_order ?? 0,
+        items: [],
+      });
+    }
+    tracksMap.get(key)!.items.push(p);
+  }
+  const buckets = Array.from(tracksMap.values()).sort(
+    (a, b) => a.displayOrder - b.displayOrder
+  );
+  for (const tr of buckets) {
+    tr.items.sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0));
+  }
+  return buckets;
 }
 
 export default async function MyTeamPage() {
@@ -221,7 +254,8 @@ export default async function MyTeamPage() {
     ? await getAvailableDelegates(team.chapter_id, team.edition_id, team.id, session.id)
     : [];
 
-  const problems = await getChapterTrackProblems(team.chapter_id, team.edition_id);
+  const problems = await getEditionProblems(team.edition_id);
+  const trackBuckets = bucketByTrack(problems);
 
   async function inviteAction(formData: FormData) {
     "use server";
@@ -447,60 +481,76 @@ export default async function MyTeamPage() {
               live.
             </p>
           ) : (
-            <form action={pickProblemAction} className="space-y-4">
+            <form action={pickProblemAction} className="space-y-6">
               <p className="text-sm text-navy/60">
-                Choose the problem your team will work on for the next 90 days.
-                Read each one carefully — you can re-pick later if needed.
+                Future 6.0 runs all 4 tracks at every chapter. Choose the one
+                problem your team will work on for the next 90 days from the full
+                catalog below — read each carefully; you can re-pick later if
+                needed.
               </p>
-              {problems.map((p) => {
-                const color = p.tracks?.color_hex ?? "#1a1a3e";
-                return (
-                  <label
-                    key={p.id}
-                    className="group block border-2 rounded-xl overflow-hidden cursor-pointer transition-all hover:shadow-md has-[:checked]:border-[#F5A623] has-[:checked]:shadow-lg border-navy/10"
+              {trackBuckets.map((tr) => (
+                <div key={tr.id} className="space-y-3">
+                  <div
+                    className="flex items-center gap-2 border-l-4 pl-3 py-1"
+                    style={{ borderLeftColor: tr.colorHex }}
                   >
-                    <input
-                      type="radio"
-                      name="problem_id"
-                      value={p.id}
-                      required
-                      className="sr-only"
+                    <TrackIcon
+                      icon={tr.icon}
+                      name={tr.name}
+                      size={28}
+                      className="shrink-0"
                     />
-                    <div className="p-4">
-                      <div className="flex items-start gap-3">
-                        <TrackIcon icon={p.tracks?.icon} name={p.tracks?.name} size={36} className="shrink-0 mt-0.5" />
-                        <div className="flex-1 min-w-0">
-                          <div
-                            className="text-[10px] font-bold uppercase tracking-widest"
-                            style={{ color }}
-                          >
-                            {p.tracks?.name ?? "—"}
+                    <h4
+                      className="text-sm font-bold uppercase tracking-widest"
+                      style={{ color: tr.colorHex }}
+                    >
+                      {tr.name}
+                    </h4>
+                  </div>
+                  {tr.items.map((p) => {
+                    const color = tr.colorHex;
+                    return (
+                      <label
+                        key={p.id}
+                        className="group block border-2 rounded-xl overflow-hidden cursor-pointer transition-all hover:shadow-md has-[:checked]:border-[#F5A623] has-[:checked]:shadow-lg border-navy/10"
+                      >
+                        <input
+                          type="radio"
+                          name="problem_id"
+                          value={p.id}
+                          required
+                          className="sr-only"
+                        />
+                        <div className="p-4">
+                          <div className="flex items-start gap-3">
+                            <div className="flex-1 min-w-0">
+                              <h5 className="font-bold text-navy text-base">
+                                {p.title}
+                              </h5>
+                              <p className="mt-1.5 text-sm text-navy/60 leading-relaxed">
+                                {p.short_description}
+                              </p>
+                            </div>
+                            <div className="shrink-0 w-5 h-5 rounded-full border-2 border-navy/20 group-has-[:checked]:border-[#F5A623] group-has-[:checked]:bg-[#F5A623] flex items-center justify-center mt-1">
+                              <div className="w-2 h-2 rounded-full bg-white opacity-0 group-has-[:checked]:opacity-100" />
+                            </div>
                           </div>
-                          <h4 className="font-bold text-navy text-base mt-0.5">
-                            {p.title}
-                          </h4>
-                          <p className="mt-1.5 text-sm text-navy/60 leading-relaxed">
-                            {p.short_description}
-                          </p>
+                          {p.full_description && (
+                            <details className="mt-3">
+                              <summary className="text-xs font-semibold cursor-pointer hover:text-[#F5A623]" style={{ color }}>
+                                Read full description
+                              </summary>
+                              <div className="mt-2 p-3 rounded-lg bg-navy/5 text-xs text-navy/70 whitespace-pre-wrap leading-relaxed max-h-60 overflow-y-auto">
+                                {p.full_description}
+                              </div>
+                            </details>
+                          )}
                         </div>
-                        <div className="shrink-0 w-5 h-5 rounded-full border-2 border-navy/20 group-has-[:checked]:border-[#F5A623] group-has-[:checked]:bg-[#F5A623] flex items-center justify-center mt-1">
-                          <div className="w-2 h-2 rounded-full bg-white opacity-0 group-has-[:checked]:opacity-100" />
-                        </div>
-                      </div>
-                      {p.full_description && (
-                        <details className="mt-3">
-                          <summary className="text-xs font-semibold cursor-pointer hover:text-[#F5A623]" style={{ color }}>
-                            Read full description
-                          </summary>
-                          <div className="mt-2 p-3 rounded-lg bg-navy/5 text-xs text-navy/70 whitespace-pre-wrap leading-relaxed max-h-60 overflow-y-auto">
-                            {p.full_description}
-                          </div>
-                        </details>
-                      )}
-                    </div>
-                  </label>
-                );
-              })}
+                      </label>
+                    );
+                  })}
+                </div>
+              ))}
               <div className="flex justify-end pt-2">
                 <SubmitButton
                   pendingText="Saving..."

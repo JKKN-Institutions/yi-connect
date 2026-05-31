@@ -13,6 +13,7 @@
 
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
 import { sendEmail } from "@/lib/yi-future/email";
+import { yfUrl } from "@/lib/yi-future/constants";
 
 // ─── TRIGGER 1: Registration confirmed ──────────────────────────────────────
 
@@ -46,7 +47,7 @@ Welcome to Yi YUVA Future 6.0! You're officially registered.
 
 Your access code: ${d.access_code}
 
-Keep this safe — you'll need it to sign in at https://yifuture-platform.vercel.app/join
+Keep this safe — you'll need it to sign in at ${yfUrl("/join")}
 
 What's next:
 - Join or form a team of 3–5 delegates
@@ -97,7 +98,7 @@ export async function notifyTeamInvite(
 
 You've been invited to join team "${fromTeamName}" for Future 6.0.
 
-To accept, sign in at https://yifuture-platform.vercel.app/join with your access code: ${d.access_code}
+To accept, sign in at ${yfUrl("/join")} with your access code: ${d.access_code}
 
 Then go to My Team → Accept Invite.
 
@@ -166,7 +167,7 @@ Problem: ${problemTitle}
 ${problemDesc ? `\n${problemDesc}\n` : ""}
 Your 90-day journey starts now. Phase A deliverable is due at the end of Month 1.
 
-Sign in at https://yifuture-platform.vercel.app/join to view the full brief and start submitting.
+Sign in at ${yfUrl("/join")} to view the full brief and start submitting.
 
 Yi YUVA · CII`;
 
@@ -390,7 +391,7 @@ Date: ${dateStr}
 
 IMPORTANT — Parent consent required:
 All delegates must submit a signed Parent Consent Letter before travelling.
-Download yours at https://yifuture-platform.vercel.app/me/consent
+Download yours at ${yfUrl("/me/consent")}
 
 Travel and accommodation details will be shared separately by your Chapter Coordinator.
 

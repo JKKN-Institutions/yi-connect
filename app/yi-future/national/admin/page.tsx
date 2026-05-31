@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
 import { PushSubscribe } from "@/components/yi-future/pwa/PushSubscribe";
+import { NudgeButton } from "./whatsapp-outreach/SendButton";
 
 type ChapterRow = {
   id: string;
@@ -87,7 +88,9 @@ function pushMessage(opts: {
   editionName: string;
 }): string {
   const { chairFirstName, chapter, count, editionName } = opts;
-  return `Hi ${chairFirstName}, this is a quick nudge from Yi National.\n\n${chapter} chapter currently has ${count} delegate${count === 1 ? "" : "s"} registered for ${editionName}.\n\nIf you need help recruiting from your colleges, reply here. Your chapter dashboard: https://yifuture-platform.vercel.app/chapter\n\n— Yi National`;
+  const appUrl =
+    process.env.NEXT_PUBLIC_APP_URL ?? "https://yi-connect-app.vercel.app";
+  return `Hi ${chairFirstName}, this is a quick nudge from Yi National.\n\n${chapter} chapter currently has ${count} delegate${count === 1 ? "" : "s"} registered for ${editionName}.\n\nIf you need help recruiting from your colleges, reply here. Your chapter dashboard: ${appUrl}/yi-future/chapter\n\n— Yi National`;
 }
 
 export default async function NationalDashboard() {
@@ -334,6 +337,13 @@ export default async function NationalDashboard() {
                             no mobile
                           </span>
                         )}
+                        <NudgeButton
+                          chapterId={r.id}
+                          mobile={r.chair_mobile}
+                          name={r.chair_name ?? "Chair"}
+                          message={message}
+                          label="Send via WhatsApp"
+                        />
                       </div>
                     </td>
                   </tr>

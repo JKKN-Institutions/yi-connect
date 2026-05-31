@@ -175,7 +175,7 @@ export async function GET(
             90 days. 4 tracks. One shot at real impact.
           </div>
           <div style={{ display: "flex", color: "#F5A623" }}>
-            yifuture-platform.vercel.app
+            yi-connect-app.vercel.app/yi-future
           </div>
         </div>
       </div>

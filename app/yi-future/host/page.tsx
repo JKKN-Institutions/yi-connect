@@ -4,19 +4,8 @@ import { createServiceClient } from "@/lib/yi-future/supabase/server";
 import { getHostContext } from "@/lib/yi-future/host-context";
 import { publishNationalEvent } from "@/app/yi-future/actions/host-events";
 
-async function getStats(chapterId: string, editionId: string) {
+async function getStats(eventId: string | null) {
   const svc = await createServiceClient();
-  const [{ data: ev }] = await Promise.all([
-    svc
-      .schema("future")
-      .from("events")
-      .select("id")
-      .eq("chapter_id", chapterId)
-      .eq("edition_id", editionId)
-      .eq("type", "national_track_final")
-      .limit(1),
-  ]);
-  const eventId = ((ev as unknown as { id: string }[]) ?? [])[0]?.id ?? null;
 
   if (!eventId) {
     return { partners: 0, slots: 0, interviews: 0, government: 0, finalists: 0 };
@@ -120,8 +109,8 @@ export default async function HostDashboard() {
     );
   }
 
-  const stats = await getStats(ctx.chapterId, ctx.editionId);
   const ev = ctx.nationalEvent;
+  const stats = await getStats(ev?.id ?? null);
 
   async function togglePublish() {
     "use server";

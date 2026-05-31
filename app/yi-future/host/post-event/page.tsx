@@ -23,14 +23,34 @@ async function listHostEvents(
   editionId: string
 ): Promise<HostEventLite[]> {
   const svc = await createServiceClient();
-  const { data } = await svc
+  const cols = "id, name, start_date, end_date, venue";
+
+  // Prefer the all-4-tracks regional finale; fall back to legacy
+  // per-track national_track_final events so existing data still renders.
+  // (Live future.event_type enum includes "regional_finale" though the
+  // generated types are stale — hence the `as never` cast.)
+  const { data: regional } = await svc
     .schema("future")
     .from("events")
-    .select("id, name, start_date, end_date, venue")
+    .select(cols)
     .eq("chapter_id", chapterId)
     .eq("edition_id", editionId)
-    .eq("type", "national_track_final")
+    .eq("type", "regional_finale" as never)
     .order("start_date", { ascending: false });
+
+  let data = regional;
+  if (!data || data.length === 0) {
+    const { data: legacy } = await svc
+      .schema("future")
+      .from("events")
+      .select(cols)
+      .eq("chapter_id", chapterId)
+      .eq("edition_id", editionId)
+      .eq("type", "national_track_final")
+      .order("start_date", { ascending: false });
+    data = legacy;
+  }
+
   return (data as unknown as HostEventLite[]) ?? [];
 }
 

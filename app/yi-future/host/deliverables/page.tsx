@@ -21,6 +21,22 @@ async function getHostEvent(
   editionId: string
 ): Promise<EventRow | null> {
   const svc = await createServiceClient();
+
+  // Prefer the all-4-tracks regional finale; fall back to legacy per-track
+  // national_track_final so existing data still renders. (Live
+  // future.event_type enum includes "regional_finale" though the generated
+  // types are stale — hence the `as never` cast.)
+  const { data: regional } = await svc
+    .schema("future")
+    .from("events")
+    .select("id, name")
+    .eq("chapter_id", chapterId)
+    .eq("edition_id", editionId)
+    .eq("type", "regional_finale" as never)
+    .limit(1)
+    .maybeSingle();
+  if (regional) return regional as unknown as EventRow;
+
   const { data } = await svc
     .schema("future")
     .from("events")

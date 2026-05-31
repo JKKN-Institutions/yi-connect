@@ -64,15 +64,19 @@ function capabilityMatches(stored: string, requested: string): boolean {
  * @returns true on the FIRST role assignment that grants the capability in scope;
  *          false otherwise (deny-by-default).
  */
-export async function can(
+/**
+ * Policy resolution given an explicit set of role assignments. Reads the
+ * capability map from yi_directory.role_permissions and intersects. Separated
+ * from the session lookup so it can be previewed/tested for ANY user (see
+ * /api/debug-can) — `can()` is the thin session-bound wrapper below.
+ */
+export async function canForAssignments(
+  assignments: RoleAssignment[],
   capability: string,
   target: { app: string; chapter?: string | null; zone?: string | null; year?: number }
 ): Promise<boolean> {
-  const me = await getCurrentPersonRoles();
-  if (!me) return false;
-
   // Only assignments that are active AND for the target app can ever grant access.
-  const relevant = me.assignments.filter(
+  const relevant = assignments.filter(
     (a) => a.is_active && a.app === target.app
   );
   if (relevant.length === 0) return false;

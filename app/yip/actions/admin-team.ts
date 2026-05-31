@@ -119,7 +119,7 @@ export async function adminListTeam(filters?: {
       };
     };
     const { data: people } = await svcDir
-      .from("contestants")
+      .from("people")
       .select("id, full_name, email, photo_url")
       .in("id", personIds);
     for (const p of (people ?? []) as Array<{

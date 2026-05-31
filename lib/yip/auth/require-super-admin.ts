@@ -12,14 +12,15 @@
  * Historical note (Phase 19 / E, commit 6efc129): the previous implementation
  * read `yip.organizers.role='national'`. The shape of the returned gate is
  * preserved so no caller needs to change (13 call sites in app/yip/actions/*
- * and 2 in app/yip/dashboard/*).
+ * and 2 in app/yip/dashboard/*). As of the tier-1 cutover the gate no longer
+ * touches yip.organizers at all — the backward-compat `organizerId` field now
+ * carries the canonical yi_directory `person_id`.
  *
  * Usage:
  *
  *     const gate = await requireSuperAdmin();
  *     if (!gate.ok) return { success: false, error: gate.error };
  */
-import { createServiceClient } from "@/lib/yip/supabase/server";
 import {
   getCurrentPersonRoles,
   isPlatformSuperAdmin,
@@ -93,22 +94,14 @@ export async function requireSuperAdmin(): Promise<SuperAdminGate> {
     active_roles: activeRoles,
   });
 
-  // Backward-compat: callers expect a string `organizerId` field. The field
-  // is currently unread (no caller dereferences gate.organizerId), but the
-  // type must remain stable. Look up the legacy yip.organizers row if it
-  // exists; otherwise return empty string. Deprecate this field in a future
-  // pass once we're sure nothing depends on it.
-  const svc = await createServiceClient();
-  const { data: organizer } = await svc
-    .from("organizers")
-    .select("id")
-    .eq("user_id", me.user_id)
-    .maybeSingle();
-
+  // Backward-compat: callers expect a string `organizerId` field (the type
+  // must remain stable; no caller currently dereferences it). We return the
+  // canonical yi_directory person_id rather than touching the legacy
+  // yip.organizers table — the gate no longer reads organizers at all.
   return {
     ok: true,
     userId: me.user_id,
-    organizerId: organizer?.id ?? "",
+    organizerId: me.person_id,
   };
 }
 

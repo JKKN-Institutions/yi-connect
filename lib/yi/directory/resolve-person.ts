@@ -84,11 +84,11 @@ export async function resolvePerson(input: {
 }): Promise<string> {
   const fullName = input.full_name.trim();
   const email = input.email ? norm(input.email) : null;
-  const phone = input.phone ? input.phone.trim() : null;
+  const phone = input.phone ? normPhone(input.phone) : null;
 
   const svc = await createServiceClient();
 
-  // 1. Match by email first (strongest dedupe key).
+  // 1. Match by email (strongest dedupe key).
   if (email) {
     const { data } = await directoryPeople(svc)
       .select("id")
@@ -97,8 +97,9 @@ export async function resolvePerson(input: {
     if (data) return data.id;
   }
 
-  // 2. Else match by phone (soft dedupe).
-  if (!email && phone) {
+  // 2. Fallback to phone — decision 2026-05-31: identity = email OR phone, so we
+  //    try phone even when an email was given but did not match.
+  if (phone) {
     const { data } = await directoryPeople(svc)
       .select("id")
       .eq("phone", phone)
@@ -106,13 +107,18 @@ export async function resolvePerson(input: {
     if (data) return data.id;
   }
 
-  // 3. No match — create one identity row. Subjects carry no user_id (no login).
+  // 3. No identifying match — create one identity row (subjects carry no
+  //    user_id / no login). Decision 2026-05-31: if NEITHER email nor phone was
+  //    provided we cannot safely dedupe, so flag the row for human review rather
+  //    than risk silent duplicates (the failure mode that caused the 6-RM mess).
+  const needsReview = !email && !phone;
   const { data: created, error } = await directoryPeople(svc)
     .insert({
       full_name: fullName,
       email,
       phone,
       is_active: true,
+      needs_identity_review: needsReview,
     })
     .select("id")
     .single();

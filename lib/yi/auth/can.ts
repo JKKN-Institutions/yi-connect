@@ -140,3 +140,17 @@ export async function canForAssignments(
 
   return false;
 }
+
+/**
+ * Resolve whether the CURRENT (session) user may perform `capability` against
+ * `target`. Thin wrapper over canForAssignments using the live auth session —
+ * this is what pages and Server Actions call. Deny-by-default if no session.
+ */
+export async function can(
+  capability: string,
+  target: { app: string; chapter?: string | null; zone?: string | null; year?: number }
+): Promise<boolean> {
+  const me = await getCurrentPersonRoles();
+  if (!me) return false;
+  return canForAssignments(me.assignments, capability, target);
+}

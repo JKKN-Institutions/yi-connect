@@ -222,6 +222,13 @@ export async function getRegionalAdminZones(
  * dashboard event list: under the two-role-per-chapter model `created_by` is
  * no longer an authz signal, so a chapter chair/organiser must see their
  * chapter's events even when someone else (national / SQL) created them.
+ *
+ * For app='yip' this ALSO projects the chair_email fallback: a Yi chapter
+ * chair registered only via yi.chapters.chair_email — with NO explicit
+ * chapter_admin/chapter_organizer role — must still see their chapter's
+ * events. getYipEventAccess already honours chair_email for a single event;
+ * this closes the listing half of that gap (found 2026-06-01, where the
+ * Mizoram chair saw an empty dashboard despite chairing the chapter).
  */
 export async function getYipChapterScopes(
   app: string,
@@ -238,6 +245,28 @@ export async function getYipChapterScopes(
     if (yi_year !== undefined && a.yi_year !== yi_year) continue;
     if (a.yi_chapter) chapters.add(a.yi_chapter);
   }
+
+  // chair_email fallback (YIP-only). Other apps recognise their chapter chair
+  // via their own role/context layer, not yi.chapters.chair_email.
+  if (app === "yip") {
+    const email = (me.email ?? "").trim().toLowerCase();
+    if (email) {
+      const svc = await createServiceClient();
+      const { data: chaired } = await svc
+        .schema("yi")
+        .from("chapters")
+        .select("name, chair_email")
+        .ilike("chair_email", email);
+      for (const c of chaired ?? []) {
+        // Re-verify on the normalised value and require non-empty (fail-closed),
+        // mirroring the equality guard in getYipEventAccess.
+        if (c.name && (c.chair_email ?? "").trim().toLowerCase() === email) {
+          chapters.add(c.name);
+        }
+      }
+    }
+  }
+
   return Array.from(chapters);
 }
 

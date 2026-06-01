@@ -98,7 +98,7 @@ export function useVoteSession(
         "postgres_changes",
         {
           event: "*",
-          schema: "public",
+          schema: "yip",
           table: "vote_sessions",
           filter: `event_id=eq.${eventId}`,
         },
@@ -150,7 +150,7 @@ export function useVoteSession(
         "postgres_changes",
         {
           event: "INSERT",
-          schema: "public",
+          schema: "yip",
           table: "votes",
           filter: `agenda_item_id=eq.${session.agenda_item_id}`,
         },

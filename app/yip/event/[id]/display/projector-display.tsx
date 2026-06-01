@@ -157,7 +157,7 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
         "postgres_changes",
         {
           event: "*",
-          schema: "public",
+          schema: "yip",
           table: "agenda_speakers",
           filter: `agenda_item_id=eq.${event.current_agenda_item_id}`,
         },
@@ -227,7 +227,7 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
         "postgres_changes",
         {
           event: "*",
-          schema: "public",
+          schema: "yip",
           table: "questions",
           filter: `event_id=eq.${eventId}`,
         },
@@ -295,7 +295,7 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
         "postgres_changes",
         {
           event: "*",
-          schema: "public",
+          schema: "yip",
           table: "bills",
           filter: `event_id=eq.${eventId}`,
         },

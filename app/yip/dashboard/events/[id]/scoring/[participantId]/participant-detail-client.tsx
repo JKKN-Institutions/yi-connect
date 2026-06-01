@@ -15,6 +15,9 @@ import {
   MessageSquare,
   AlertTriangle,
   Star,
+  Download,
+  CheckCircle2,
+  MinusCircle,
 } from "lucide-react";
 
 const FLAG_LABELS: Record<keyof ParticipantScoreRow["flags"], string> = {
@@ -61,15 +64,78 @@ export function ParticipantDetailClient({
     (groups.get(key) ?? groups.set(key, []).get(key)!).push(s);
   }
 
+  // Export this participant's jury scores as a CSV (client-side, no deps).
+  function exportCsv() {
+    const criteriaKeys = Array.from(
+      new Set(scores.flatMap((s) => Object.keys(s.criteria_scores)))
+    ).sort();
+    const esc = (v: string | number | null) => {
+      const str = v == null ? "" : String(v);
+      return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+    };
+    const header = [
+      "Juror",
+      "Session",
+      "Total",
+      ...criteriaKeys,
+      "Special Remarks",
+      "Comments",
+      "Status",
+      "Submitted At",
+    ];
+    const lines = scores.map((s) => {
+      const remarks = (Object.keys(s.flags) as (keyof typeof s.flags)[])
+        .filter((k) => s.flags[k])
+        .map((k) => FLAG_LABELS[k])
+        .join("; ");
+      const sessionLabel =
+        s.session_title != null
+          ? `Day ${s.session_day} - ${s.session_title}`
+          : "Overall";
+      return [
+        s.jury_name,
+        sessionLabel,
+        s.total_score,
+        ...criteriaKeys.map((k) => s.criteria_scores[k] ?? ""),
+        remarks,
+        s.comments ?? "",
+        s.status ?? "",
+        s.submitted_at ?? "",
+      ]
+        .map(esc)
+        .join(",");
+    });
+    const csv = [header.map(esc).join(","), ...lines].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${p.full_name.replace(/[^a-z0-9]+/gi, "_")}_scores.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <div className="space-y-5">
-      <Link
-        href={`/yip/dashboard/events/${eventId}/scoring`}
-        className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-600 hover:text-gray-900"
-      >
-        <ArrowLeft className="size-4" />
-        Back to Scoring
-      </Link>
+      <div className="flex items-center justify-between gap-2">
+        <Link
+          href={`/yip/dashboard/events/${eventId}/scoring`}
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-600 hover:text-gray-900"
+        >
+          <ArrowLeft className="size-4" />
+          Back to Scoring
+        </Link>
+        {scores.length > 0 && (
+          <button
+            type="button"
+            onClick={exportCsv}
+            className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          >
+            <Download className="size-4" />
+            Export CSV
+          </button>
+        )}
+      </div>
 
       {/* Participant header */}
       <Card>
@@ -96,6 +162,28 @@ export function ParticipantDetailClient({
                   <span className="text-xs text-gray-500">
                     {p.constituency_name}
                   </span>
+                )}
+                {p.checked_in ? (
+                  <Badge
+                    variant="secondary"
+                    className="text-[11px] bg-green-100 text-green-700"
+                  >
+                    <CheckCircle2 className="mr-1 size-3" />
+                    Checked in
+                    {p.checked_in_at && (
+                      <span className="ml-1 font-normal opacity-80">
+                        <SubmittedAt iso={p.checked_in_at} />
+                      </span>
+                    )}
+                  </Badge>
+                ) : (
+                  <Badge
+                    variant="secondary"
+                    className="text-[11px] bg-gray-100 text-gray-500"
+                  >
+                    <MinusCircle className="mr-1 size-3" />
+                    Not checked in
+                  </Badge>
                 )}
               </div>
             </div>

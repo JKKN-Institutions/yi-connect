@@ -42,6 +42,14 @@ interface ScoreFormProps {
   agendaItemId: string | null;
   juryAssignmentId: string;
   existingScore: ExistingScore | null;
+  /**
+   * Net of any ticked Special Remarks deltas (e.g. walkout −5, no-confidence +3).
+   * These apply at results-computation time and are NOT folded into the stored
+   * criteria total. When provided and non-zero, the form shows a "with remarks"
+   * projected line so jurors can see their flags are captured and how they move
+   * the score — fixes the "score on top is not added/subtracted" confusion.
+   */
+  specialRemarksDelta?: number;
   onSubmit: (data: {
     criteriaScores: Record<string, number>;
     totalScore: number;
@@ -60,6 +68,7 @@ export function ScoreForm({
   agendaItemId,
   juryAssignmentId,
   existingScore,
+  specialRemarksDelta,
   onSubmit,
 }: ScoreFormProps) {
   // Why: form state must be EXACTLY the current rubric's parent keys. Stale localStorage
@@ -215,6 +224,23 @@ export function ScoreForm({
           <span className="text-sm font-normal text-gray-400">/{maxTotal}</span>
         </span>
       </div>
+
+      {/* Special Remarks projection — confirms ticked flags ARE captured and how
+          they move the score, even though deltas are applied at results time (not
+          folded into the stored criteria total). Hidden when no flag is ticked. */}
+      {typeof specialRemarksDelta === "number" && specialRemarksDelta !== 0 && (
+        <div className="flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-5 py-2.5 -mt-2">
+          <span className="text-xs font-medium text-amber-800">
+            With special remarks (
+            {specialRemarksDelta > 0 ? `+${specialRemarksDelta}` : specialRemarksDelta}
+            , applied at results)
+          </span>
+          <span className="text-lg font-bold text-amber-900 tabular-nums">
+            {totalScore + specialRemarksDelta}
+            <span className="text-xs font-normal text-amber-700">/{maxTotal}</span>
+          </span>
+        </div>
+      )}
 
       {/* Criteria Sliders — 2-column grid in landscape */}
       <div className="space-y-5 landscape-2col">

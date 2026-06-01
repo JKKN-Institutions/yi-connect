@@ -2,6 +2,7 @@
 
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { requireSuperAdmin } from "@/lib/yip/auth/require-super-admin";
+import { checkRoleWriteAllowed } from "@/lib/yi/auth/role-write-guard";
 import { revalidatePath } from "next/cache";
 import type { YiZone, YiRole } from "@/lib/yip/hierarchy";
 
@@ -173,6 +174,14 @@ export async function adminCreateMember(
   if (err) return { success: false, error: err };
   const normalized = normalizeInput(input);
 
+  // Privilege-escalation guard (locked 2026-06-01): only a platform
+  // super-admin may write a super-tier member. role "national" projects to
+  // yip_super_admin via the yip.organizers → yi_directory sync trigger, so a
+  // YIP super-admin must not be able to mint a peer super-admin here — they
+  // manage operational roles (rm / chapter_em) only.
+  const esc = await checkRoleWriteAllowed("yip", normalized.role);
+  if (!esc.ok) return { success: false, error: esc.error };
+
   const supabase = await createServiceClient();
   const { data, error } = await supabase
     .from("organizers")
@@ -206,6 +215,14 @@ export async function adminUpdateMember(
   const err = validateMember(input);
   if (err) return { success: false, error: err };
   const normalized = normalizeInput(input);
+
+  // Privilege-escalation guard (locked 2026-06-01): only a platform
+  // super-admin may write a super-tier member. role "national" projects to
+  // yip_super_admin via the yip.organizers → yi_directory sync trigger, so a
+  // YIP super-admin must not be able to mint a peer super-admin here — they
+  // manage operational roles (rm / chapter_em) only.
+  const esc = await checkRoleWriteAllowed("yip", normalized.role);
+  if (!esc.ok) return { success: false, error: esc.error };
 
   const supabase = await createServiceClient();
   const { data, error } = await supabase

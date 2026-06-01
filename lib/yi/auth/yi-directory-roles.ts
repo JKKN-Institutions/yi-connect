@@ -162,6 +162,31 @@ export async function getRegionalAdminZones(
 }
 
 /**
+ * Chapter names where the current user holds an active CHAPTER role
+ * (chapter_admin or chapter_organizer) for `app`. Used to scope the YIP
+ * dashboard event list: under the two-role-per-chapter model `created_by` is
+ * no longer an authz signal, so a chapter chair/organiser must see their
+ * chapter's events even when someone else (national / SQL) created them.
+ */
+export async function getYipChapterScopes(
+  app: string,
+  yi_year?: number
+): Promise<string[]> {
+  const me = await getCurrentPersonRoles();
+  if (!me) return [];
+
+  const chapters = new Set<string>();
+  for (const a of me.assignments) {
+    if (!a.is_active) continue;
+    if (a.app !== app) continue;
+    if (a.role !== "chapter_admin" && a.role !== "chapter_organizer") continue;
+    if (yi_year !== undefined && a.yi_year !== yi_year) continue;
+    if (a.yi_chapter) chapters.add(a.yi_chapter);
+  }
+  return Array.from(chapters);
+}
+
+/**
  * Convenience predicate — true if the current user is an active regional
  * admin for the given app + zone. Used by event-level read gates.
  */

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/yip/supabase/server";
 import { isCurrentUserSuperAdmin } from "@/lib/yip/auth/require-super-admin";
-import { getRegionalAdminZones } from "@/lib/yi/auth/yi-directory-roles";
+import { getRegionalAdminZones, getYipChapterScopes } from "@/lib/yi/auth/yi-directory-roles";
 import { Badge } from "@/components/yip/ui/badge";
 import { Plus, CalendarDays, Users, MapPin } from "lucide-react";
 
@@ -76,23 +76,28 @@ export default async function DashboardPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Three-tier event visibility (2026-05-28):
-  //  - Super-admin (national)  → ALL events
-  //  - Regional admin          → events in their assigned zone(s) + their own
-  //  - Everyone else           → only events they created
+  // Event visibility (updated 2026-06-01 for the two-role-per-chapter model):
+  //  - Super-admin (national)     → ALL events
+  //  - Regional admin             → events in their assigned zone(s)
+  //  - Chapter admin / organiser  → events for their chapter(s)
+  //  - Plus everyone: events they created
+  // created_by alone is NO LONGER the chapter-visibility signal — a chapter
+  // chair/organiser must see their chapter's events even when national/SQL
+  // created them. (Bug: chapter organisers saw an empty dashboard.)
   const isSuper = await isCurrentUserSuperAdmin();
   const regionalZones = isSuper ? [] : await getRegionalAdminZones("yip");
+  const myChapters = isSuper ? [] : await getYipChapterScopes("yip");
   let eventsQuery = supabase.from("events").select("*");
   if (!isSuper) {
+    // Postgrest "or": own events OR events in my zone(s) OR events in my chapter(s).
+    const ors = [`created_by.eq.${user!.id}`];
     if (regionalZones.length > 0) {
-      // Postgrest "or" filter: own events OR events in any of my zones.
-      const zoneCsv = regionalZones.map((z) => `"${z}"`).join(",");
-      eventsQuery = eventsQuery.or(
-        `created_by.eq.${user!.id},yi_zone_code.in.(${zoneCsv})`
-      );
-    } else {
-      eventsQuery = eventsQuery.eq("created_by", user!.id);
+      ors.push(`yi_zone_code.in.(${regionalZones.map((z) => `"${z}"`).join(",")})`);
     }
+    if (myChapters.length > 0) {
+      ors.push(`chapter_name.in.(${myChapters.map((c) => `"${c}"`).join(",")})`);
+    }
+    eventsQuery = eventsQuery.or(ors.join(","));
   }
   const { data: events } = await eventsQuery.order("created_at", { ascending: false });
 

@@ -348,6 +348,7 @@ function JuryScoringClientInner({
 
   const loadAllParticipants = async () => {
     if (allParticipants.length > 0) {
+      if (showPicker) setPickerSearch(""); // clear search when closing the picker
       setShowPicker(!showPicker);
       return;
     }
@@ -361,6 +362,7 @@ function JuryScoringClientInner({
   const selectManualParticipant = async (p: Participant) => {
     setManualParticipant(p);
     setShowPicker(false);
+    setPickerSearch(""); // clear search after picking a participant
     setLoading(true);
     await loadRubricAndScore(p);
     setLoading(false);

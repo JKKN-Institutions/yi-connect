@@ -1,5 +1,6 @@
 "use server";
 
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient, createServiceClient } from "@/lib/yi-future/supabase/server";
@@ -249,9 +250,46 @@ export async function clearAccessCodeSession(): Promise<void> {
 }
 
 // ─── SESSION HELPERS ────────────────────────────────────────────────
+//
+// The yifuture_session cookie carries a server-trusted identity
+// ({ type, id, edition_id, name }) that gates access to delegate /
+// mentor / jury / partner data — including parent-PII consent PDFs.
+// It MUST therefore be cryptographically signed: a plaintext JSON
+// cookie can be hand-forged by anyone who knows or guesses a row UUID,
+// letting them impersonate that person server-side (httpOnly/secure do
+// not defend against forgery). We store the cookie as
+//   base64url(json) "." base64url(HMAC-SHA256(json))
+// and reject any value whose recomputed HMAC does not match.
+
+function getSessionSecret(): string {
+  const secret = process.env.YIFUTURE_SESSION_SECRET;
+  if (!secret || secret.length === 0) return "";
+  return secret;
+}
+
+function signPayload(json: string, secret: string): string {
+  return createHmac("sha256", secret).update(json).digest("base64url");
+}
+
 async function writeSession(payload: SessionPayload): Promise<void> {
+  const secret = getSessionSecret();
+  if (!secret) {
+    // FAIL CLOSED: never write an unsigned/forgeable cookie. The
+    // YIFUTURE_SESSION_SECRET env var MUST be set (e.g. in Vercel)
+    // before access-code / OAuth logins can succeed.
+    throw new Error(
+      "YIFUTURE_SESSION_SECRET is not set; refusing to write an unsigned session cookie."
+    );
+  }
+
+  const json = JSON.stringify(payload);
+  const value =
+    Buffer.from(json, "utf8").toString("base64url") +
+    "." +
+    signPayload(json, secret);
+
   const jar = await cookies();
-  jar.set(SESSION_COOKIE_NAME, JSON.stringify(payload), {
+  jar.set(SESSION_COOKIE_NAME, value, {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
@@ -261,11 +299,39 @@ async function writeSession(payload: SessionPayload): Promise<void> {
 }
 
 export async function readSession(): Promise<SessionPayload | null> {
+  const secret = getSessionSecret();
+  // FAIL CLOSED: with no secret we cannot verify any signature, so we
+  // treat every request as logged-out rather than trusting raw cookies.
+  if (!secret) return null;
+
   const jar = await cookies();
   const raw = jar.get(SESSION_COOKIE_NAME)?.value;
   if (!raw) return null;
+
+  const dot = raw.indexOf(".");
+  if (dot <= 0 || dot === raw.length - 1) return null; // malformed / legacy unsigned
+
+  const encodedPayload = raw.slice(0, dot);
+  const providedSig = raw.slice(dot + 1);
+
+  let json: string;
   try {
-    return JSON.parse(raw) as SessionPayload;
+    json = Buffer.from(encodedPayload, "base64url").toString("utf8");
+  } catch {
+    return null;
+  }
+
+  const expectedSig = signPayload(json, secret);
+
+  // Constant-time comparison; bail if lengths differ (timingSafeEqual
+  // throws on length mismatch, so guard first).
+  const providedBuf = Buffer.from(providedSig);
+  const expectedBuf = Buffer.from(expectedSig);
+  if (providedBuf.length !== expectedBuf.length) return null;
+  if (!timingSafeEqual(providedBuf, expectedBuf)) return null;
+
+  try {
+    return JSON.parse(json) as SessionPayload;
   } catch {
     return null;
   }

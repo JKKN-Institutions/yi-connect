@@ -23,11 +23,16 @@ export default async function BroadcastPage(): Promise<React.JSX.Element> {
   const email = user.email.trim().toLowerCase();
   const svc = await createServiceClient();
 
-  // Source-of-truth gate (2026-05-28): yi_directory.role_assignments
-  // replaces the legacy yi.national_admins flag check. Two-step lookup
-  // (people.id by email, then role_assignments) mirrors the inline
-  // guard in app/yi-future/actions/push.ts#isSuperOrPlatform. Casts via
-  // `unknown` because yi_directory isn't in the future-pinned types.
+  // STRICT platform/super-tier gate (2026-06-01). yi_directory.role_assignments
+  // is the source of truth. This page renders the broadcast form, whose
+  // action (push.ts#broadcastPush → isSuperOrPlatform) is strict — so the
+  // page gate MUST be strict too, or a regular admin sees a form the
+  // action will reject. Two branches mirror isSuperOrPlatform:
+  //   (a) cross-app platform-owner (platform_super_admin / super_admin on
+  //       ANY app — lets director@jkkn.ac.in through); then
+  //   (b) app='future' platform/super tier (regular future_admin /
+  //       national_admin EXCLUDED).
+  // Casts via `unknown` because yi_directory isn't in the future-pinned types.
   const svcDir = (svc as unknown as {
     schema: (s: string) => {
       from: (t: string) => {
@@ -47,40 +52,66 @@ export default async function BroadcastPage(): Promise<React.JSX.Element> {
 
   let allowed = false;
   if (person) {
-    const svcDirRoles = (svc as unknown as {
+    // (a) Cross-app platform-owner short-circuit — NO app filter.
+    const svcDirPlatform = (svc as unknown as {
       schema: (s: string) => {
         from: (t: string) => {
           select: (c: string) => {
             eq: (k: string, v: string) => {
-              eq: (k: string, v: string) => {
-                eq: (k: string, v: boolean) => {
-                  in: (
-                    k: string,
-                    v: string[]
-                  ) => Promise<{ data: Array<{ role: string }> | null }>;
-                };
+              eq: (k: string, v: boolean) => {
+                in: (
+                  k: string,
+                  v: string[]
+                ) => Promise<{ data: Array<{ role: string }> | null }>;
               };
             };
           };
         };
       };
     }).schema("yi_directory");
-    const { data: rows } = await svcDirRoles
+    const { data: platformRows } = await svcDirPlatform
       .from("role_assignments")
       .select("role")
       .eq("person_id", person.id)
-      .eq("app", "future")
       .eq("is_active", true)
-      // New app-scoped role names (future_*) + legacy names accepted during the
-      // 2026-06-01 role-taxonomy transition window.
-      .in("role", [
-        "future_super_admin",
-        "future_admin",
-        "super_admin",
-        "platform_admin",
-        "national_admin",
-      ]);
-    allowed = (rows ?? []).length > 0;
+      .in("role", ["platform_super_admin", "super_admin"]);
+
+    if ((platformRows ?? []).length > 0) {
+      allowed = true;
+    } else {
+      // (b) app='future' platform/super tier (regular tier excluded).
+      const svcDirRoles = (svc as unknown as {
+        schema: (s: string) => {
+          from: (t: string) => {
+            select: (c: string) => {
+              eq: (k: string, v: string) => {
+                eq: (k: string, v: string) => {
+                  eq: (k: string, v: boolean) => {
+                    in: (
+                      k: string,
+                      v: string[]
+                    ) => Promise<{ data: Array<{ role: string }> | null }>;
+                  };
+                };
+              };
+            };
+          };
+        };
+      }).schema("yi_directory");
+      const { data: rows } = await svcDirRoles
+        .from("role_assignments")
+        .select("role")
+        .eq("person_id", person.id)
+        .eq("app", "future")
+        .eq("is_active", true)
+        .in("role", [
+          "future_super_admin",
+          "platform_super_admin",
+          "super_admin",
+          "platform_admin",
+        ]);
+      allowed = (rows ?? []).length > 0;
+    }
   }
 
   if (!allowed) {

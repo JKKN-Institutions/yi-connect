@@ -71,7 +71,15 @@ export default async function BroadcastPage(): Promise<React.JSX.Element> {
       .eq("person_id", person.id)
       .eq("app", "future")
       .eq("is_active", true)
-      .in("role", ["super_admin", "platform_admin", "national_admin"]);
+      // New app-scoped role names (future_*) + legacy names accepted during the
+      // 2026-06-01 role-taxonomy transition window.
+      .in("role", [
+        "future_super_admin",
+        "future_admin",
+        "super_admin",
+        "platform_admin",
+        "national_admin",
+      ]);
     allowed = (rows ?? []).length > 0;
   }
 

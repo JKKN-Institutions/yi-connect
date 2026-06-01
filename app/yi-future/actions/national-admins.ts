@@ -196,7 +196,16 @@ async function hasYiFuturePlatformRole(email: string): Promise<boolean> {
     .eq("person_id", person.id)
     .eq("app", "future")
     .eq("is_active", true)
-    .in("role", ["super_admin", "platform_admin", "national_admin"]);
+    // Accept BOTH the new app-scoped names (future_super_admin / future_admin,
+    // migrated 2026-06-01) AND the legacy names during the transition window,
+    // so admins are never locked out between the data migration and code deploy.
+    .in("role", [
+      "future_super_admin",
+      "future_admin",
+      "super_admin",
+      "platform_admin",
+      "national_admin",
+    ]);
 
   return (rows ?? []).length > 0;
 }

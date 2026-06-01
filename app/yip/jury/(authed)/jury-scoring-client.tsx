@@ -12,6 +12,10 @@ import {
   type CurrentSpeakerInfo,
 } from "@/app/yip/actions/scoring";
 import {
+  getSessionsForJury,
+  type ScoreableSession,
+} from "@/app/yip/actions/jury-sessions";
+import {
   getScoringFlagsConfig,
   type FlagDeltas,
   type FlagKey,
@@ -135,6 +139,16 @@ function JuryScoringClientInner({
     initialEventLocked ?? false
   );
 
+  // Per-session scoring (BUG-385): a juror scores within a session they're
+  // assigned to. selectedSessionId is the agenda_item_id used for every score op.
+  const [assignedSessions, setAssignedSessions] = useState<ScoreableSession[]>(
+    []
+  );
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(
+    null
+  );
+  const [sessionsLoaded, setSessionsLoaded] = useState(false);
+
   // Manual participant picker state
   const [showPicker, setShowPicker] = useState(false);
   const [allParticipants, setAllParticipants] = useState<Participant[]>([]);
@@ -170,7 +184,12 @@ function JuryScoringClientInner({
 
       const [rubricResult, scoreResult] = await Promise.all([
         getRubricForRole(role),
-        getScoreForParticipant(juryAssignmentId, participant.id, eventId),
+        getScoreForParticipant(
+          juryAssignmentId,
+          participant.id,
+          eventId,
+          selectedSessionId
+        ),
       ]);
 
       if (rubricResult.success) {
@@ -199,7 +218,7 @@ function JuryScoringClientInner({
 
       setScoreKey((k) => k + 1);
     },
-    [juryAssignmentId, eventId]
+    [juryAssignmentId, eventId, selectedSessionId]
   );
 
   const loadCurrentSpeaker = useCallback(async () => {
@@ -233,6 +252,34 @@ function JuryScoringClientInner({
     loadCurrentSpeaker();
     loadEventLock();
   }, [loadCurrentSpeaker, loadEventLock]);
+
+  // Load this juror's assigned sessions; default the selection to the live
+  // session if it's one of theirs, otherwise the first assigned session.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const sessions = await getSessionsForJury(juryAssignmentId, eventId);
+      if (cancelled) return;
+      setAssignedSessions(sessions);
+      setSelectedSessionId((prev) =>
+        prev && sessions.some((s) => s.id === prev)
+          ? prev
+          : sessions[0]?.id ?? null
+      );
+      setSessionsLoaded(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [juryAssignmentId, eventId]);
+
+  // When the selected session changes, reload the active participant's score for
+  // that session so the form reflects the right existing values.
+  useEffect(() => {
+    if (!activeParticipant || !selectedSessionId) return;
+    void loadRubricAndScore(activeParticipant);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedSessionId]);
 
   // Load Special-Remarks delta config once. Falls back to the migration's
   // seeded defaults if the row is missing or the call fails.
@@ -271,7 +318,8 @@ function JuryScoringClientInner({
       const fresh = await getScoreForParticipant(
         juryAssignmentId,
         activeParticipant.id,
-        eventId
+        eventId,
+        selectedSessionId
       );
       if (cancelled) return;
       if (!fresh) {
@@ -294,7 +342,7 @@ function JuryScoringClientInner({
     return () => {
       cancelled = true;
     };
-  }, [activeParticipant, juryAssignmentId, eventId]);
+  }, [activeParticipant, juryAssignmentId, eventId, selectedSessionId]);
 
   // ─── Realtime: watch events table for current_agenda_item_id ────
 
@@ -410,12 +458,20 @@ function JuryScoringClientInner({
       };
     }
 
+    // Per-session: a score must belong to the session the juror is scoring.
+    if (!selectedSessionId) {
+      return {
+        success: false as const,
+        error: "Select the session you're scoring first.",
+      };
+    }
+
     const result = await submitScore({
       juryAssignmentId,
       participantId: activeParticipant.id,
       eventId,
       rubricId: rubric.id,
-      agendaItemId: currentSpeaker?.agendaItemId ?? null,
+      agendaItemId: selectedSessionId,
       criteriaScores: data.criteriaScores,
       totalScore: data.totalScore,
       comments: data.comments,
@@ -428,7 +484,8 @@ function JuryScoringClientInner({
       const fresh = await getScoreForParticipant(
         juryAssignmentId,
         activeParticipant.id,
-        eventId
+        eventId,
+        selectedSessionId
       );
       if (fresh) {
         setExistingScore({
@@ -461,6 +518,23 @@ function JuryScoringClientInner({
   // Suppress unused variable warning — juryName is passed for future use
   void juryName;
 
+  // Formal per-session panels: a juror with no assigned sessions has nothing to
+  // score. Show a clear message rather than an empty scoring form.
+  if (sessionsLoaded && assignedSessions.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 text-center px-4">
+        <div className="size-16 rounded-full bg-amber-100 flex items-center justify-center mb-4">
+          <AlertTriangle className="size-8 text-amber-600" />
+        </div>
+        <h2 className="text-lg font-bold text-gray-900">No sessions assigned</h2>
+        <p className="text-sm text-gray-500 mt-2 max-w-xs">
+          You haven&apos;t been assigned to any sessions yet. Ask the organizer to
+          add you to the sessions you&apos;ll be judging.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       {eventLocked && (
@@ -480,6 +554,32 @@ function JuryScoringClientInner({
         </div>
       )}
 
+
+      {/* Session selector — only the sessions this juror is assigned to.
+          The selected session is the agenda_item every score is filed under. */}
+      {assignedSessions.length > 0 && (
+        <div className="mx-4 mt-4">
+          <label
+            htmlFor="session-select"
+            className="block text-xs font-semibold text-gray-600 mb-1"
+          >
+            Scoring session
+          </label>
+          <select
+            id="session-select"
+            value={selectedSessionId ?? ""}
+            onChange={(e) => setSelectedSessionId(e.target.value || null)}
+            className="w-full rounded-lg border-2 border-gray-200 bg-white px-3 py-3 text-sm font-medium text-gray-900 focus:border-blue-500 focus:outline-none"
+            style={{ minHeight: "48px" }}
+          >
+            {assignedSessions.map((s) => (
+              <option key={s.id} value={s.id}>
+                Day {s.day} · {s.title}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {/* Current agenda context */}
       {currentSpeaker && !manualParticipant && (
@@ -585,7 +685,7 @@ function JuryScoringClientInner({
           criteria={rubric.criteria}
           rubricId={rubric.id}
           eventId={eventId}
-          agendaItemId={currentSpeaker?.agendaItemId ?? null}
+          agendaItemId={selectedSessionId}
           juryAssignmentId={juryAssignmentId}
           existingScore={existingScore}
           specialRemarksDelta={netFlagDelta}

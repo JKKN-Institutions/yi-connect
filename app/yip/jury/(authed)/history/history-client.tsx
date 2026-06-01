@@ -49,6 +49,9 @@ export function HistoryClient({ scores, juryAssignmentId, eventId }: Props) {
     useState<ExistingScoreData | null>(null);
   const [editParticipant, setEditParticipant] =
     useState<ScoreWithParticipant["participant"] | null>(null);
+  // Per-session (BUG-385): the session this history row belongs to, so editing
+  // updates that session's score rather than overwriting a different one.
+  const [editAgendaItemId, setEditAgendaItemId] = useState<string | null>(null);
 
   const handleEditClick = useCallback(
     async (score: ScoreWithParticipant) => {
@@ -57,6 +60,7 @@ export function HistoryClient({ scores, juryAssignmentId, eventId }: Props) {
 
       setLoadingEdit(true);
       setEditing(score.participant_id);
+      setEditAgendaItemId(score.agenda_item_id);
 
       const role = score.participant.parliament_role ?? "mp";
 
@@ -65,7 +69,8 @@ export function HistoryClient({ scores, juryAssignmentId, eventId }: Props) {
         getScoreForParticipant(
           juryAssignmentId,
           score.participant_id,
-          eventId
+          eventId,
+          score.agenda_item_id
         ),
       ]);
 
@@ -109,7 +114,7 @@ export function HistoryClient({ scores, juryAssignmentId, eventId }: Props) {
       participantId: editParticipant.id,
       eventId,
       rubricId: rubric.id,
-      agendaItemId: null,
+      agendaItemId: editAgendaItemId,
       criteriaScores: data.criteriaScores,
       totalScore: data.totalScore,
       comments: data.comments,
@@ -121,7 +126,8 @@ export function HistoryClient({ scores, juryAssignmentId, eventId }: Props) {
       const fresh = await getScoreForParticipant(
         juryAssignmentId,
         editParticipant.id,
-        eventId
+        eventId,
+        editAgendaItemId
       );
       if (fresh) {
         setExistingScore({
@@ -147,6 +153,7 @@ export function HistoryClient({ scores, juryAssignmentId, eventId }: Props) {
     setRubric(null);
     setExistingScore(null);
     setEditParticipant(null);
+    setEditAgendaItemId(null);
     router.refresh();
   };
 
@@ -175,7 +182,7 @@ export function HistoryClient({ scores, juryAssignmentId, eventId }: Props) {
           criteria={rubric.criteria}
           rubricId={rubric.id}
           eventId={eventId}
-          agendaItemId={null}
+          agendaItemId={editAgendaItemId}
           juryAssignmentId={juryAssignmentId}
           existingScore={existingScore}
           onSubmit={handleSubmit}

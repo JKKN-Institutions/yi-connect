@@ -2,6 +2,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
 import { TEAM_SIZE_MIN, TEAM_SIZE_MAX, PHASE_LABELS } from "@/lib/yi-future/constants";
+import { WhatsAppIconButton } from "@/components/whatsapp";
+
+// Normalize an Indian mobile number to a country-code-prefixed digit string.
+function waPhone(raw: string): string {
+  const digits = raw.replace(/\D/g, "").replace(/^0+/, "");
+  return digits.startsWith("91") ? digits : "91" + digits;
+}
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -320,8 +327,21 @@ export default async function NationalAdminTeamDetail({
           </div>
           {team.captain ? (
             <>
-              <div className="text-sm font-semibold text-navy">
-                {team.captain.full_name}
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-sm font-semibold text-navy">
+                  {team.captain.full_name}
+                </div>
+                {(team.captain.whatsapp ?? team.captain.phone) && (
+                  <WhatsAppIconButton
+                    contact={{
+                      phone: waPhone(
+                        (team.captain.whatsapp ?? team.captain.phone)!
+                      ),
+                      name: team.captain.full_name,
+                    }}
+                    defaultMessage={`Hi ${team.captain.full_name.split(" ")[0]},\n\nThis is from Yi YUVA Future 6.0 regarding your team "${team.team_name}".\n\n`}
+                  />
+                )}
               </div>
               <div className="mt-1 text-xs text-navy/60">
                 {team.captain.email ?? "no email"} · {team.captain.phone ?? "no phone"}

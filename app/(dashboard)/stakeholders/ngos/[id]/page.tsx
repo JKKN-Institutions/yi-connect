@@ -55,6 +55,7 @@ import {
   MouStatusBadge,
 } from '@/components/stakeholders/status-badges'
 import { requireRole } from '@/lib/auth'
+import { WhatsAppIconButton, WhatsAppBulkButton } from '@/components/whatsapp'
 
 interface NGODetailPageProps {
   params: Promise<{ id: string }>
@@ -448,8 +449,25 @@ async function ContactsSidebar({ ngoId }: { ngoId: string }) {
   return (
     <Card>
       <CardHeader className="bg-gradient-to-r from-orange-500/10 to-pink-500/10">
-        <CardTitle>Key Contacts</CardTitle>
-        <CardDescription>People associated with this NGO</CardDescription>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle>Key Contacts</CardTitle>
+            <CardDescription>People associated with this NGO</CardDescription>
+          </div>
+          {contacts.filter((c) => c.phone_primary).length > 0 && (
+            <WhatsAppBulkButton
+              contacts={contacts
+                .filter((c) => c.phone_primary)
+                .map((c) => ({
+                  phone: c.phone_primary!,
+                  name: c.contact_name,
+                }))}
+              label={`WhatsApp All (${contacts.filter((c) => c.phone_primary).length})`}
+              dialogTitle="Send WhatsApp to All Contacts"
+              defaultMessage={`Hi,\n\n[Your message here]\n`}
+            />
+          )}
+        </div>
       </CardHeader>
       <CardContent className="pt-6">
         {contacts.length === 0 ? (
@@ -491,9 +509,18 @@ async function ContactsSidebar({ ngoId }: { ngoId: string }) {
                       </div>
                     )}
                     {contact.phone_primary && (
-                      <div className="flex items-center gap-2 text-xs">
-                        <Phone className="h-3 w-3 text-muted-foreground" />
-                        <span>{contact.phone_primary}</span>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-xs">
+                          <Phone className="h-3 w-3 text-muted-foreground" />
+                          <span>{contact.phone_primary}</span>
+                        </div>
+                        <WhatsAppIconButton
+                          contact={{
+                            phone: contact.phone_primary,
+                            name: contact.contact_name,
+                          }}
+                          defaultMessage={`Hi ${contact.contact_name.split(' ')[0]},\n\n[Your message here]\n`}
+                        />
                       </div>
                     )}
                   </div>

@@ -9,6 +9,13 @@ import {
   unassignMentorFromTeam,
 } from "@/app/yi-future/actions/mentors";
 import { autoAllocateMentors } from "@/app/yi-future/actions/feedback";
+import { WhatsAppIconButton } from "@/components/whatsapp";
+
+// Normalize an Indian mobile number to a country-code-prefixed digit string.
+function waPhone(raw: string): string {
+  const digits = raw.replace(/\D/g, "").replace(/^0+/, "");
+  return digits.startsWith("91") ? digits : "91" + digits;
+}
 
 type Mentor = {
   id: string;
@@ -150,10 +157,19 @@ export default async function MentorsPage() {
                       {m.organization}
                     </div>
                   )}
-                  <div className="text-xs text-navy/50 mt-1">
+                  <div className="flex items-center gap-1.5 text-xs text-navy/50 mt-1">
                     {m.email}
                     {m.email && m.phone && " · "}
                     {m.phone}
+                    {m.phone && (
+                      <WhatsAppIconButton
+                        contact={{
+                          phone: waPhone(m.phone),
+                          name: m.full_name,
+                        }}
+                        defaultMessage={`Hi ${m.full_name.split(" ")[0]},\n\nThis is from your Yi YUVA Future 6.0 chapter team regarding mentorship.\n\n`}
+                      />
+                    )}
                   </div>
                   {m.expertise && (
                     <div className="mt-2 text-xs text-navy/70">

@@ -11,7 +11,7 @@
  * audit-logged server-side.
  */
 import { notFound } from "next/navigation";
-import { isCurrentUserSuperAdmin } from "@/lib/yip/auth/require-super-admin";
+import { isCurrentUserPlatformSuperAdmin } from "@/lib/yip/auth/require-super-admin";
 import { getPersonDetail } from "../../actions/directory-reads";
 import { RolesEditClient } from "./roles-edit-client";
 
@@ -24,13 +24,13 @@ export default async function DirectoryRolesEditPage({
 }) {
   const { personId } = await params;
 
-  const isSuperAdmin = await isCurrentUserSuperAdmin();
+  const isSuperAdmin = await isCurrentUserPlatformSuperAdmin();
   if (!isSuperAdmin) {
     return (
       <div className="rounded-lg border border-red-200 bg-red-50 p-6">
         <h1 className="text-lg font-semibold text-red-900">403 · Forbidden</h1>
         <p className="mt-2 text-sm text-red-800">
-          Only super-admins (national role) can edit directory roles.
+          Only the platform super-admin (director) can edit directory roles.
         </p>
       </div>
     );

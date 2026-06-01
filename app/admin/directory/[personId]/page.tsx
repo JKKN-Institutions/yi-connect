@@ -5,7 +5,7 @@
  * (active + inactive) grouped by app+year.
  */
 import { notFound } from "next/navigation";
-import { isCurrentUserSuperAdmin } from "@/lib/yip/auth/require-super-admin";
+import { isCurrentUserPlatformSuperAdmin } from "@/lib/yip/auth/require-super-admin";
 import { getPersonDetail } from "../actions/directory-reads";
 import { PersonDetailClient } from "./person-detail-client";
 
@@ -18,13 +18,13 @@ export default async function DirectoryPersonDetailPage({
 }) {
   const { personId } = await params;
 
-  const isSuperAdmin = await isCurrentUserSuperAdmin();
+  const isSuperAdmin = await isCurrentUserPlatformSuperAdmin();
   if (!isSuperAdmin) {
     return (
       <div className="rounded-lg border border-red-200 bg-red-50 p-6">
         <h1 className="text-lg font-semibold text-red-900">403 · Forbidden</h1>
         <p className="mt-2 text-sm text-red-800">
-          Only super-admins (national role) can view the cross-vertical Yi
+          Only the platform super-admin (director) can view the cross-vertical Yi
           Directory.
         </p>
       </div>

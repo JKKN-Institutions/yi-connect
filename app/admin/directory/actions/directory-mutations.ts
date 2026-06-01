@@ -7,7 +7,7 @@
  *   - invite flow: create auth.users + people + initial role_assignment
  *
  * Every mutation:
- *   1. Gates on `isCurrentUserSuperAdmin()` server-side (no client trust).
+ *   1. Gates on `isCurrentUserPlatformSuperAdmin()` server-side (no client trust).
  *   2. Uses the SERVICE client (yi_directory schema has no RLS for staff yet).
  *   3. Calls `logAuditAction()` so every change is auditable per the
  *      2026-05-27 Yi National team decision ("who did the changes, what has
@@ -30,7 +30,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createServiceClient } from "@/lib/yip/supabase/server";
-import { isCurrentUserSuperAdmin } from "@/lib/yip/auth/require-super-admin";
+import { isCurrentUserPlatformSuperAdmin } from "@/lib/yip/auth/require-super-admin";
 import { logAuditAction } from "@/lib/yip/audit/log-action";
 
 // ─── Types ──────────────────────────────────────────────────────────────
@@ -162,7 +162,7 @@ export async function addRoleAssignment(
   personId: string,
   input: RoleAssignmentInput
 ): Promise<MutationResult<{ id: string }>> {
-  const gate = await isCurrentUserSuperAdmin();
+  const gate = await isCurrentUserPlatformSuperAdmin();
   if (!gate) return { success: false, error: "Forbidden" };
   if (!personId) return { success: false, error: "personId is required" };
 
@@ -249,7 +249,7 @@ export async function updateRoleAssignment(
   assignmentId: string,
   patch: RoleAssignmentPatch
 ): Promise<MutationResult<{ id: string }>> {
-  const gate = await isCurrentUserSuperAdmin();
+  const gate = await isCurrentUserPlatformSuperAdmin();
   if (!gate) return { success: false, error: "Forbidden" };
   if (!assignmentId)
     return { success: false, error: "assignmentId is required" };
@@ -339,7 +339,7 @@ export async function updateRoleAssignment(
 export async function deactivateRoleAssignment(
   assignmentId: string
 ): Promise<MutationResult<{ id: string }>> {
-  const gate = await isCurrentUserSuperAdmin();
+  const gate = await isCurrentUserPlatformSuperAdmin();
   if (!gate) return { success: false, error: "Forbidden" };
   if (!assignmentId)
     return { success: false, error: "assignmentId is required" };
@@ -403,7 +403,7 @@ export async function updatePerson(
   personId: string,
   patch: PersonPatch
 ): Promise<MutationResult<{ id: string }>> {
-  const gate = await isCurrentUserSuperAdmin();
+  const gate = await isCurrentUserPlatformSuperAdmin();
   if (!gate) return { success: false, error: "Forbidden" };
   if (!personId) return { success: false, error: "personId is required" };
 
@@ -480,7 +480,7 @@ export async function updatePerson(
 export async function invitePersonAndAssignRole(
   input: InvitePersonInput
 ): Promise<MutationResult<InviteResult>> {
-  const gate = await isCurrentUserSuperAdmin();
+  const gate = await isCurrentUserPlatformSuperAdmin();
   if (!gate) return { success: false, error: "Forbidden" };
 
   // Field validation

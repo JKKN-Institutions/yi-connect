@@ -35,7 +35,17 @@ const DENY_MESSAGE = "Only super-admin (national role) can perform deletions.";
 const UNAUTH_MESSAGE = "Not authenticated";
 
 // Roles that count as YIP super-admin in yi_directory.role_assignments.
-const YIP_SUPER_ROLES = new Set(["national", "super_admin"]);
+// New scheme: yip_super_admin / platform_super_admin. Legacy 'national' /
+// 'super_admin' kept during the rename transition (dropped in Phase-6 cleanup).
+const YIP_SUPER_ROLES = new Set([
+  "yip_super_admin",
+  "platform_super_admin",
+  "national",
+  "super_admin",
+]);
+
+// Platform-tier role names (new + legacy) for the strict directory gate.
+const PLATFORM_SUPER_ROLES = ["platform_super_admin", "super_admin"];
 
 /**
  * Structured audit line for the super-admin gate. Emitted on EVERY verdict
@@ -128,4 +138,62 @@ export async function requireSuperAdmin(): Promise<SuperAdminGate> {
 export async function isCurrentUserSuperAdmin(): Promise<boolean> {
   const gate = await requireSuperAdmin();
   return gate.ok;
+}
+
+/**
+ * STRICT platform-tier gate — ONLY platform_super_admin (the cross-app
+ * platform owner) passes. Used to lock the cross-app yi_directory console
+ * (/admin/directory) to the platform owner ALONE; YIP super-admins / national
+ * do NOT pass (2026-06-01 model: only director edits the directory). Distinct
+ * from requireSuperAdmin, which also accepts YIP super-admins for YIP
+ * master-data.
+ */
+export async function requirePlatformSuperAdmin(): Promise<SuperAdminGate> {
+  const me = await getCurrentPersonRoles();
+  if (!me) {
+    logGateVerdict({
+      tag_gate: "platform",
+      verdict: "deny",
+      reason: "unauthenticated_or_no_person_row",
+    });
+    return { ok: false, error: UNAUTH_MESSAGE };
+  }
+
+  const activeRoles = me.assignments
+    .filter((a) => a.is_active)
+    .map((a) => `${a.app}:${a.role}`);
+
+  const isPlatform = me.assignments.some(
+    (a) => a.is_active && PLATFORM_SUPER_ROLES.includes(a.role)
+  );
+
+  if (!isPlatform) {
+    logGateVerdict({
+      tag_gate: "platform",
+      verdict: "deny",
+      reason: "not_platform_super_admin",
+      user_id: me.user_id,
+      email: me.email,
+      active_roles: activeRoles,
+    });
+    return {
+      ok: false,
+      error: "Only the platform super-admin can manage the directory.",
+    };
+  }
+
+  logGateVerdict({
+    tag_gate: "platform",
+    verdict: "allow",
+    user_id: me.user_id,
+    email: me.email,
+    active_roles: activeRoles,
+  });
+
+  return { ok: true, userId: me.user_id, organizerId: me.person_id };
+}
+
+/** Client-safe probe for the strict platform gate (UX only). */
+export async function isCurrentUserPlatformSuperAdmin(): Promise<boolean> {
+  return (await requirePlatformSuperAdmin()).ok;
 }

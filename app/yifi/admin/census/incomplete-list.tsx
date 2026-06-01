@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { WhatsAppIconButton } from "@/components/whatsapp";
 
 interface IncompletePerson {
   id: string;
@@ -21,14 +22,11 @@ function firstName(fullName: string | null): string {
   return trimmed.split(/\s+/)[0];
 }
 
-function buildWhatsAppLink(person: IncompletePerson): string | null {
-  if (!person.phone) return null;
-  const digits = person.phone.replace(/\D/g, "");
+// Normalize an Indian mobile number to a country-code-prefixed digit string.
+function waPhone(raw: string): string | null {
+  const digits = raw.replace(/\D/g, "").replace(/^0+/, "");
   if (!digits) return null;
-  const message = `Hi ${firstName(
-    person.full_name
-  )}, please complete your YiFi Madurai 2026 census so we can match you to the right people. Thanks!`;
-  return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
+  return digits.startsWith("91") ? digits : "91" + digits;
 }
 
 export function IncompleteList({ items }: IncompleteListProps) {
@@ -61,7 +59,7 @@ export function IncompleteList({ items }: IncompleteListProps) {
       ) : (
         <div className="space-y-3">
           {filtered.map((person) => {
-            const waLink = buildWhatsAppLink(person);
+            const phone = person.phone ? waPhone(person.phone) : null;
             return (
               <div
                 key={person.id}
@@ -75,15 +73,18 @@ export function IncompleteList({ items }: IncompleteListProps) {
                     {person.organisation || "—"}
                   </p>
                 </div>
-                {waLink ? (
-                  <a
-                    href={waLink}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="shrink-0 rounded-lg bg-[#229434]/20 text-[#229434] text-xs font-medium px-3 py-2 hover:bg-[#229434]/30 transition-colors whitespace-nowrap"
-                  >
-                    Nudge on WhatsApp
-                  </a>
+                {phone ? (
+                  <div className="shrink-0">
+                    <WhatsAppIconButton
+                      contact={{
+                        phone,
+                        name: person.full_name ?? undefined,
+                      }}
+                      defaultMessage={`Hi ${firstName(
+                        person.full_name
+                      )}, please complete your YiFi Madurai 2026 census so we can match you to the right people. Thanks!`}
+                    />
+                  </div>
                 ) : (
                   <span className="shrink-0 text-white/30 text-xs whitespace-nowrap">
                     No phone

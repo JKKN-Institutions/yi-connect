@@ -7,6 +7,13 @@ import {
   deleteDelegate,
   regenerateAccessCode,
 } from "@/app/yi-future/actions/delegates";
+import { WhatsAppIconButton } from "@/components/whatsapp";
+
+// Normalize an Indian mobile number to a country-code-prefixed digit string.
+function waPhone(raw: string): string {
+  const digits = raw.replace(/\D/g, "").replace(/^0+/, "");
+  return digits.startsWith("91") ? digits : "91" + digits;
+}
 
 type Delegate = {
   id: string;
@@ -137,10 +144,19 @@ export default async function DelegatesPage({
                   <tr key={d.id} className="border-t border-navy/5">
                     <td className="px-4 py-3">
                       <div className="font-semibold">{d.full_name}</div>
-                      <div className="text-xs text-navy/60">
+                      <div className="flex items-center gap-1.5 text-xs text-navy/60">
                         {d.email && <span>{d.email}</span>}
                         {d.email && d.phone && <span> · </span>}
                         {d.phone && <span>{d.phone}</span>}
+                        {d.phone && (
+                          <WhatsAppIconButton
+                            contact={{
+                              phone: waPhone(d.phone),
+                              name: d.full_name,
+                            }}
+                            defaultMessage={`Hi ${d.full_name.split(" ")[0]},\n\nThis is from your Yi YUVA Future 6.0 chapter team.\n\n`}
+                          />
+                        )}
                       </div>
                       {(d.course || d.year_of_study) && (
                         <div className="text-xs text-navy/50">

@@ -14,6 +14,13 @@ import {
 import { ResetPasswordForm } from "../admins/ResetPasswordForm";
 import { AddChairForm } from "./AddChairForm";
 import { YearSelector } from "./YearSelector";
+import { WhatsAppIconButton } from "@/components/whatsapp";
+
+// Normalize an Indian mobile number to a country-code-prefixed digit string.
+function waPhone(raw: string): string {
+  const digits = raw.replace(/\D/g, "").replace(/^0+/, "");
+  return digits.startsWith("91") ? digits : "91" + digits;
+}
 
 export const metadata: Metadata = {
   title: "Chairs · Yi National · Yi Future 6.0",
@@ -218,7 +225,13 @@ function ChairRow({
       </td>
       {canReset && (
         <td className="px-4 py-3">
-          <div className="flex items-center justify-end">
+          <div className="flex items-center justify-end gap-1">
+            {row.phone && (
+              <WhatsAppIconButton
+                contact={{ phone: waPhone(row.phone), name: row.full_name }}
+                defaultMessage={`Hi ${row.full_name.split(" ")[0]},\n\nThis is from Yi National regarding Yi YUVA Future 6.0.\n\n`}
+              />
+            )}
             {row.email ? (
               <ResetPasswordForm
                 email={row.email}

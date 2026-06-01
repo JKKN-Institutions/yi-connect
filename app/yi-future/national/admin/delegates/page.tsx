@@ -1,6 +1,13 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient, createServiceClient } from "@/lib/yi-future/supabase/server";
+import { WhatsAppIconButton } from "@/components/whatsapp";
+
+// Normalize an Indian mobile number to a country-code-prefixed digit string.
+function waPhone(raw: string): string {
+  const digits = raw.replace(/\D/g, "").replace(/^0+/, "");
+  return digits.startsWith("91") ? digits : "91" + digits;
+}
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -343,7 +350,20 @@ export default async function AllDelegatesPage({
                         {d.email ?? "—"}
                       </td>
                       <td className="px-3 py-2.5 text-xs text-navy/70">
-                        {d.phone ?? "—"}
+                        {d.phone ? (
+                          <div className="flex items-center gap-1.5">
+                            <span>{d.phone}</span>
+                            <WhatsAppIconButton
+                              contact={{
+                                phone: waPhone(d.phone),
+                                name: d.full_name,
+                              }}
+                              defaultMessage={`Hi ${d.full_name.split(" ")[0]},\n\nThis is from Yi YUVA Future 6.0.\n\n`}
+                            />
+                          </div>
+                        ) : (
+                          "—"
+                        )}
                       </td>
                       <td className="px-3 py-2.5 text-navy/80">
                         {chapterName}

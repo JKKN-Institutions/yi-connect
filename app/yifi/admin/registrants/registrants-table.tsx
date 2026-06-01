@@ -3,6 +3,13 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toggleCheckIn } from "./actions";
+import { WhatsAppIconButton } from "@/components/whatsapp";
+
+// Normalize an Indian mobile number to a country-code-prefixed digit string.
+function waPhone(raw: string): string {
+  const digits = raw.replace(/\D/g, "").replace(/^0+/, "");
+  return digits.startsWith("91") ? digits : "91" + digits;
+}
 
 export interface Registrant {
   id: string;
@@ -70,12 +77,13 @@ export function RegistrantsTable({ rows }: { rows: Registrant[] }) {
                 </th>
                 <th className="text-left px-4 py-3 text-white/50 font-medium">Census</th>
                 <th className="text-left px-4 py-3 text-white/50 font-medium">Check-in</th>
+                <th className="text-left px-4 py-3 text-white/50 font-medium">WhatsApp</th>
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-10 text-center text-white/40 text-sm">
+                  <td colSpan={7} className="px-4 py-10 text-center text-white/40 text-sm">
                     No registrants match &ldquo;{query}&rdquo;.
                   </td>
                 </tr>
@@ -124,6 +132,19 @@ export function RegistrantsTable({ rows }: { rows: Registrant[] }) {
                     </td>
                     <td className="px-4 py-3">
                       <CheckInButton registrant={r} />
+                    </td>
+                    <td className="px-4 py-3">
+                      {r.phone ? (
+                        <WhatsAppIconButton
+                          contact={{
+                            phone: waPhone(r.phone),
+                            name: r.full_name,
+                          }}
+                          defaultMessage={`Hi ${r.full_name.split(" ")[0]},\n\nThis is from the YiFi Madurai 2026 team.\n\n`}
+                        />
+                      ) : (
+                        <span className="text-white/30 text-xs">—</span>
+                      )}
                     </td>
                   </tr>
                 ))

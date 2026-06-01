@@ -7,6 +7,13 @@ import {
   approvePendingCollege,
   mergePendingCollege,
 } from "@/app/yi-future/actions/colleges";
+import { WhatsAppIconButton } from "@/components/whatsapp";
+
+// Normalize an Indian mobile number to a country-code-prefixed digit string.
+function waPhone(raw: string): string {
+  const digits = raw.replace(/\D/g, "").replace(/^0+/, "");
+  return digits.startsWith("91") ? digits : "91" + digits;
+}
 
 type CollegeRow = {
   id: string;
@@ -265,8 +272,17 @@ function ApprovedList({
                       <div className="text-navy/60">
                         {c.primary_contact_email}
                       </div>
-                      <div className="text-navy/60">
+                      <div className="flex items-center gap-1.5 text-navy/60">
                         {c.primary_contact_phone}
+                        {c.primary_contact_phone && (
+                          <WhatsAppIconButton
+                            contact={{
+                              phone: waPhone(c.primary_contact_phone),
+                              name: c.primary_contact_name,
+                            }}
+                            defaultMessage={`Hi ${c.primary_contact_name.split(" ")[0]},\n\nThis is from Yi YUVA Future 6.0 regarding ${c.name}.\n\n`}
+                          />
+                        )}
                       </div>
                     </div>
                   ) : (

@@ -21,8 +21,22 @@
  *   - `chapter` is a yi.chapters.id (UUID). Applied where applicable.
  *   - `region` is a yi.chapters.region code (ER/NER/NR/SRTKKA/SRTN/WR).
  *
- * Auth: requires Supabase auth user (v1). Refine to chapter membership / role
- * checks once the admin RBAC settles.
+ * Auth & scoping (2026-06-01 — closes a broken-object-level-authorization
+ * gap where ANY signed-in admin, including a chapter-level admin, could
+ * export NATIONAL-scope PII and access codes via the service client):
+ *
+ *   • NATIONAL-scope exports — `editions`, `chapters` (all chapter chair
+ *     emails/mobiles), `jury`, `partners`, `chair_credentials_template`,
+ *     and any roster export requested WITHOUT a single-chapter constraint
+ *     — require the STRICT platform/super tier (isCurrentUserPlatformAdmin).
+ *     Non-platform admins get 403.
+ *   • CHAPTER-scope exports — `delegates`, `teams`, `scoring`, `colleges`,
+ *     `mentors` for one chapter — are allowed for a chapter core-team
+ *     admin, but the query is FORCED to their OWN chapter_id (resolved via
+ *     getChapterContext()); any chapter/region param they pass is ignored.
+ *     Platform/super admins may export across chapters / nationally.
+ *   • access_code columns are EXCLUDED from non-platform (chapter-admin)
+ *     exports — credentials are a national/super concern only.
  */
 
 import { createClient, createServiceClient } from "@/lib/yi-future/supabase/server";
@@ -31,6 +45,8 @@ import {
   aggregateEvaluations,
   type CriteriaScores,
 } from "@/lib/yi-future/rubric";
+import { isCurrentUserPlatformAdmin } from "@/app/yi-future/actions/national-admins";
+import { getChapterContext } from "@/lib/yi-future/chapter-context";
 
 export const runtime = "nodejs";
 
@@ -139,11 +155,94 @@ export async function GET(
 
   const url = new URL(req.url);
   // Legacy single-chapter export param
-  const legacyChapterId = url.searchParams.get("chapter_id");
+  let legacyChapterId = url.searchParams.get("chapter_id");
   // New filter params
-  const chapterFilter = url.searchParams.get("chapter");
-  const regionFilter = url.searchParams.get("region");
+  let chapterFilter = url.searchParams.get("chapter");
+  let regionFilter = url.searchParams.get("region");
   const editionSlug = url.searchParams.get("edition");
+
+  // ────────────────────────────────────────────────────────────────────
+  // Role / chapter scoping (BOLA fix, 2026-06-01)
+  //
+  // Until now this route gated only `if (!user) 401`, then read everything
+  // through the service client (RLS bypassed). That let ANY signed-in admin
+  // — including a chapter-level core-team admin — export national-scope PII
+  // and access codes. We now split scopes into two classes and enforce:
+  //
+  //   1. NATIONAL_ONLY scopes → require the STRICT platform/super tier.
+  //   2. CHAPTER_SCOPABLE scopes → allowed for a chapter admin, but the
+  //      query is FORCED to their own chapter (params overridden); platform
+  //      admins keep cross-chapter / national reach.
+  //
+  // We resolve the platform tier ONCE here (strict predicate from PR #274)
+  // and resolve the caller's chapter from the canonical getChapterContext()
+  // helper — the same mechanism every /chapter page uses — rather than
+  // inventing a parallel chapter-resolution path.
+  // ────────────────────────────────────────────────────────────────────
+
+  // Scopes that expose all-chapters PII / access codes / national config.
+  // Always require the strict platform/super tier.
+  const NATIONAL_ONLY_SCOPES: ReadonlySet<Scope> = new Set<Scope>([
+    "chapters", // every chapter's chair email + mobile
+    "editions", // national structural config
+    "jury", // national jury roster incl. access codes
+    "partners", // corporate partners incl. access codes
+    "evaluations", // cross-chapter evaluation dump
+    "chair_credentials_template", // template for seeding chair credentials
+  ]);
+
+  // Scopes a chapter admin may export, constrained to their own chapter.
+  const CHAPTER_SCOPABLE_SCOPES: ReadonlySet<Scope> = new Set<Scope>([
+    "delegates",
+    "teams",
+    "scoring",
+    "colleges",
+    "mentors",
+  ]);
+
+  const { isPlatform } = await isCurrentUserPlatformAdmin();
+
+  // `true` when the export is being served to a non-platform chapter admin
+  // (used downstream to strip access_code columns from chapter exports).
+  let isChapterScopedExport = false;
+
+  if (!isPlatform) {
+    // National-only scope requested by a non-platform admin → hard 403.
+    if (NATIONAL_ONLY_SCOPES.has(scope)) {
+      return jsonError(
+        403,
+        "Forbidden: national-scope exports require a platform/super admin."
+      );
+    }
+
+    if (CHAPTER_SCOPABLE_SCOPES.has(scope)) {
+      // Resolve the caller's own chapter via the canonical helper. A
+      // non-platform admin with no chapter core-team membership cannot
+      // export anything.
+      const ctx = await getChapterContext();
+      if (!ctx) {
+        return jsonError(
+          403,
+          "Forbidden: you are not a chapter admin for the active edition."
+        );
+      }
+      // Force the query to the caller's own chapter and discard any
+      // chapter/region the request tried to pass (no cross-chapter reach).
+      // We set BOTH params because the scopes branch differently:
+      //   • scoring only honours the legacy `chapter_id`;
+      //   • colleges/mentors only honour the new `chapter` filter;
+      //   • delegates/teams honour the new `chapter` filter when present
+      //     (and that branch omits the access_code column).
+      // Setting both guarantees every chapter-scopable scope is constrained.
+      legacyChapterId = ctx.chapterId;
+      chapterFilter = ctx.chapterId;
+      regionFilter = null;
+      isChapterScopedExport = true;
+    } else {
+      // Any future scope not explicitly classified is denied by default.
+      return jsonError(403, "Forbidden");
+    }
+  }
 
   const svc = await createServiceClient();
 
@@ -803,7 +902,12 @@ export async function GET(
       { key: "expertise", label: "Expertise" },
       { key: "chapter_name", label: "Chapter" },
       { key: "region", label: "Region" },
-      { key: "access_code", label: "Access Code" },
+      // Access codes are a national/super concern — drop the column for
+      // non-platform (chapter-admin) exports so a chapter admin can manage
+      // their own mentors without harvesting login credentials.
+      ...(isChapterScopedExport
+        ? []
+        : [{ key: "access_code", label: "Access Code" }]),
       { key: "is_active", label: "Active" },
       { key: "created_at", label: "Created At" },
     ];

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { fireConfetti } from "@/components/ui/confetti";
 import { CountUp } from "@/components/ui/count-up";
+import { yfUrl } from "@/lib/yi-future/constants";
 import type { DelegateContext } from "@/app/yi-future/actions/gamification";
 
 const BADGE_META: Record<string, { icon: string; label: string; color: string }> = {
@@ -42,8 +43,8 @@ export function CelebrationStep({
   );
   const shareUrl =
     typeof window !== "undefined"
-      ? `${window.location.origin}/join`
-      : "https://yifuture-platform.vercel.app/join";
+      ? `${window.location.origin}/yi-future/join`
+      : yfUrl("/join");
 
   const whatsappHref = `https://wa.me/?text=${shareText}%20${encodeURIComponent(shareUrl)}`;
   const twitterHref = `https://twitter.com/intent/tweet?text=${shareText}&url=${encodeURIComponent(shareUrl)}`;

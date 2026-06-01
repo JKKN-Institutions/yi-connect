@@ -12,7 +12,8 @@ import {
 import { validateTeamForSubmission } from "@/lib/yi-future/team-validation";
 import { addMember, removeMember } from "@/app/yi-future/actions/members";
 import { TEAM_SIZE_MAX } from "@/lib/yi-future/constants";
-import { trackIconText } from "@/components/yi-future/TrackIcon";
+import { TrackIcon, trackIconText } from "@/components/yi-future/TrackIcon";
+import { unfreezeTeam } from "@/app/yi-future/actions/team-invites";
 
 type TeamDetail = {
   id: string;
@@ -22,6 +23,7 @@ type TeamDetail = {
   status: string | null;
   captain_id: string | null;
   problem_statement_id: string | null;
+  is_frozen: boolean | null;
   team_members: {
     delegate_id: string;
     role_in_team: string | null;
@@ -42,7 +44,7 @@ type Problem = {
   title: string;
   short_description: string;
   is_active: boolean | null;
-  tracks: { name: string; icon: string | null } | null;
+  tracks: { id: string; name: string; icon: string | null } | null;
 };
 
 async function getTeam(id: string): Promise<TeamDetail | null> {
@@ -51,7 +53,7 @@ async function getTeam(id: string): Promise<TeamDetail | null> {
     .schema("future")
     .from("teams")
     .select(
-      "id, chapter_id, edition_id, team_name, status, captain_id, problem_statement_id, team_members(delegate_id, role_in_team, delegates(full_name, email)), problem_statements(title, short_description)"
+      "id, chapter_id, edition_id, team_name, status, captain_id, problem_statement_id, is_frozen, team_members(delegate_id, role_in_team, delegates(full_name, email)), problem_statements(title, short_description)"
     )
     .eq("id", id)
     .maybeSingle();
@@ -74,22 +76,21 @@ async function getAvailableDelegates(
   return (data as unknown as Delegate[]) ?? [];
 }
 
-async function getChapterProblems(
-  editionId: string,
-  trackId: string | null
-): Promise<Problem[]> {
+async function getChapterProblems(editionId: string): Promise<Problem[]> {
   const svc = await createServiceClient();
 
-  // If the chapter has a track assignment, only show problems from that track.
-  // Otherwise show all problems across the edition.
-  let query = svc
+  // Future 6.0: every chapter runs all 4 tracks, so the admin can allocate
+  // ANY of the 12 problem statements (4 tracks × 3 each) for the active
+  // edition — do NOT filter by the chapter's primary track assignment.
+  const { data } = await svc
     .schema("future")
     .from("problem_statements")
-    .select("id, title, short_description, is_active, tracks!inner(edition_id, name, icon, id)")
+    .select(
+      "id, title, short_description, is_active, tracks!inner(id, edition_id, name, icon)"
+    )
     .eq("is_active", true)
-    .eq("tracks.edition_id", editionId);
-  if (trackId) query = query.eq("tracks.id", trackId);
-  const { data } = await query.order("display_order", { ascending: true });
+    .eq("tracks.edition_id", editionId)
+    .order("display_order", { ascending: true });
   return (data as unknown as Problem[]) ?? [];
 }
 
@@ -108,8 +109,28 @@ export default async function TeamDetailPage({
 
   const [delegates, problems] = await Promise.all([
     getAvailableDelegates(team.chapter_id, team.edition_id),
-    getChapterProblems(team.edition_id, ctx.trackId),
+    getChapterProblems(team.edition_id),
   ]);
+
+  // Group the 12 problems by track so the picker reads track-by-track.
+  const problemsByTrack = problems.reduce<
+    { trackId: string; trackName: string; trackIcon: string | null; items: Problem[] }[]
+  >((acc, p) => {
+    const tId = p.tracks?.id ?? "untracked";
+    const tName = p.tracks?.name ?? "Other";
+    let group = acc.find((g) => g.trackId === tId);
+    if (!group) {
+      group = {
+        trackId: tId,
+        trackName: tName,
+        trackIcon: p.tracks?.icon ?? null,
+        items: [],
+      };
+      acc.push(group);
+    }
+    group.items.push(p);
+    return acc;
+  }, []);
 
   const memberIds = new Set(team.team_members.map((m) => m.delegate_id));
   const validation = validateTeamForSubmission({
@@ -158,6 +179,11 @@ export default async function TeamDetailPage({
     redirect("/yi-future/chapter/teams");
   }
 
+  async function unfreezeTeamAction() {
+    "use server";
+    await unfreezeTeam(team!.id);
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -194,6 +220,25 @@ export default async function TeamDetailPage({
               <li key={e}>{e}</li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {/* Frozen banner + unfreeze (chapter-admin) */}
+      {team.is_frozen && (
+        <div className="bg-navy/5 border border-navy/20 rounded-md p-3 flex items-center justify-between gap-4">
+          <div className="text-sm text-navy/80">
+            <span className="font-semibold text-navy">Team is frozen.</span>{" "}
+            Members cannot change their roster or problem statement until you
+            unfreeze it.
+          </div>
+          <form action={unfreezeTeamAction}>
+            <button
+              type="submit"
+              className="px-4 py-2 rounded-md bg-navy text-ivory text-sm font-semibold hover:bg-navy-dark whitespace-nowrap"
+            >
+              Unfreeze team
+            </button>
+          </form>
         </div>
       )}
 
@@ -338,7 +383,23 @@ export default async function TeamDetailPage({
             </p>
           </div>
         ) : (
-          <form action={pickProblemAction} className="space-y-2">
+          <form action={pickProblemAction} className="space-y-3">
+            {/* Track legend — all 4 tracks the chapter can allocate from */}
+            {problemsByTrack.length > 0 && (
+              <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-navy/60">
+                {problemsByTrack.map((g) => (
+                  <span key={g.trackId} className="flex items-center gap-1.5">
+                    <TrackIcon
+                      icon={g.trackIcon}
+                      name={g.trackName}
+                      size={16}
+                      className="inline-block"
+                    />
+                    {g.trackName}
+                  </span>
+                ))}
+              </div>
+            )}
             <select
               name="problem_id"
               required
@@ -348,10 +409,17 @@ export default async function TeamDetailPage({
               <option value="" disabled>
                 — pick a problem —
               </option>
-              {problems.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {trackIconText(p.tracks?.icon)} {p.title}
-                </option>
+              {problemsByTrack.map((g) => (
+                <optgroup
+                  key={g.trackId}
+                  label={`${trackIconText(g.trackIcon)} ${g.trackName}`}
+                >
+                  {g.items.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.title}
+                    </option>
+                  ))}
+                </optgroup>
               ))}
             </select>
             <div className="flex justify-end">

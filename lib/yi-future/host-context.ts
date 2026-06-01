@@ -61,16 +61,41 @@ export async function getHostContext(
   const m = membership as unknown as Row;
   const isHost = m.chapters?.is_finale_host === true;
 
-  const { data: events } = await svc
+  // The regional model: one all-4-tracks "regional_finale" event per host
+  // chapter. Prefer those. Fall back to the legacy per-track
+  // "national_track_final" events so pre-existing data still renders.
+  //
+  // NOTE: the generated database.ts enum is stale (only lists
+  // chapter_final | national_track_final), but the live future.event_type
+  // enum DOES include "regional_finale" (verified against the DB on
+  // 2026-05-31 — a control probe with a bogus value returns 22P02 while
+  // "regional_finale" returns HTTP 200). Hence the `as never` cast on the
+  // type filter, matching the existing pattern in actions/events.ts and
+  // actions/shortlist.ts.
+  const selectCols =
+    "id, name, start_date, end_date, venue, is_published, track_id, tagline";
+
+  const { data: regionalEvents } = await svc
     .schema("future")
     .from("events")
-    .select(
-      "id, name, start_date, end_date, venue, is_published, track_id, tagline"
-    )
+    .select(selectCols)
     .eq("chapter_id", m.chapter_id)
     .eq("edition_id", m.edition_id)
-    .eq("type", "national_track_final")
+    .eq("type", "regional_finale" as never)
     .order("created_at", { ascending: false });
+
+  let events = regionalEvents;
+  if (!events || events.length === 0) {
+    const { data: legacyEvents } = await svc
+      .schema("future")
+      .from("events")
+      .select(selectCols)
+      .eq("chapter_id", m.chapter_id)
+      .eq("edition_id", m.edition_id)
+      .eq("type", "national_track_final")
+      .order("created_at", { ascending: false });
+    events = legacyEvents;
+  }
 
   const nationalEvents = (events as unknown as HostEvent[]) ?? [];
 

@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
 import { BrandStrip, ProgramWordmark } from "@/components/yi-future/brand/BrandHeader";
+import { TrackIcon } from "@/components/yi-future/TrackIcon";
 
 type Problem = {
   id: string;
@@ -28,7 +29,7 @@ async function getProblem(id: string): Promise<Problem | null> {
     .schema("future")
     .from("problem_statements")
     .select(
-      "id, title, short_description, full_description, national_priority_context, sdg_alignment, display_order, is_active, tracks(id, slug, name, icon, color_hex, editions(slug, name))"
+      "id, title, short_description, full_description, national_priority_context, sdg_alignment, display_order, is_active, tracks(id, slug, name, icon, color_hex, editions!tracks_edition_id_fkey(slug, name))"
     )
     .eq("id", id)
     .maybeSingle();
@@ -80,7 +81,7 @@ export default async function PublicProblemPage({
 
       <section className="px-4 pt-16 pb-12 max-w-3xl mx-auto">
         <div className="flex items-center gap-2 mb-3">
-          <span className="text-3xl">{p.tracks?.icon ?? "•"}</span>
+          <TrackIcon icon={p.tracks?.icon} name={p.tracks?.name} size={36} />
           <Link
             href={`/tracks`}
             className="text-xs font-semibold uppercase tracking-widest"

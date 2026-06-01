@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
 import { readSession } from "@/app/yi-future/actions/auth";
+import { getChapterContext } from "@/lib/yi-future/chapter-context";
 import { TEAM_SIZE_MAX } from "@/lib/yi-future/constants";
 
 // `team_invitations` was added in migration 120 but generated types haven't
@@ -382,6 +383,52 @@ export async function freezeTeam(teamId: string): Promise<ActionResult> {
   return { ok: true, message: "Team frozen." };
 }
 
+// ─── UNFREEZE TEAM (chapter-admin auth) ─────────────────────────────
+// The UI copy tells delegates to "ask your chapter admin to unfreeze".
+// freezeTeam gates by team ownership (leader/captain); the chapter-admin
+// equivalent of that ownership check is getChapterContext + the same
+// chapter ownership check the team-detail page enforces.
+export async function unfreezeTeam(teamId: string): Promise<ActionResult> {
+  const ctx = await getChapterContext();
+  if (!ctx) {
+    return { ok: false, error: "Sign in as a chapter admin first." };
+  }
+
+  const team = await loadTeam(teamId);
+  if (!team) return { ok: false, error: "Team not found." };
+
+  // Ownership: the team must belong to the admin's chapter.
+  if (team.chapter_id !== ctx.chapterId) {
+    return {
+      ok: false,
+      error: "Only the team's chapter admin can unfreeze it.",
+    };
+  }
+
+  if (!team.is_frozen) {
+    return { ok: false, error: "Team is not frozen." };
+  }
+
+  const svc = await createServiceClient();
+  const nowIso = new Date().toISOString();
+  const { error } = await svc
+    .schema("future")
+    .from("teams")
+    .update({
+      is_frozen: false,
+      frozen_at: null,
+      updated_at: nowIso,
+    } as never)
+    .eq("id", teamId);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath(`/yi-future/chapter/teams/${teamId}`);
+  revalidatePath("/yi-future/me/team");
+  revalidatePath("/yi-future/me/team/directory");
+  revalidatePath("/yi-future/me/team/invites");
+  return { ok: true, message: "Team unfrozen." };
+}
+
 // ─── PICK PROBLEM STATEMENT (delegate auth — any team member) ───────
 export async function pickProblemAsDelegate(
   teamId: string,
@@ -396,7 +443,13 @@ export async function pickProblemAsDelegate(
   const team = await loadTeam(teamId);
   if (!team) return { ok: false, error: "Team not found." };
 
-  // PS can be picked anytime (no freeze required)
+  if (team.is_frozen) {
+    return {
+      ok: false,
+      error:
+        "Team is frozen — ask your chapter admin to unfreeze before changing the problem.",
+    };
+  }
 
   const { data: member } = await svc
     .schema("future")

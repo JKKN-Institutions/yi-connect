@@ -63,13 +63,16 @@ export async function getChapterContext(): Promise<ChapterContext | null> {
   };
   const m = membership as unknown as Row;
 
-  // Fetch this chapter's track assignment for the active edition
+  // Fetch this chapter's track assignment for the active edition.
+  // Future 6.0: chapters run all 4 tracks; this returns one primary assignment
+  // only — do NOT use trackId to filter problem lists.
   const { data: assignment } = await svc
     .schema("future")
     .from("chapter_track_assignments")
     .select("role, tracks(id, name, icon)")
     .eq("chapter_id", m.chapter_id)
     .eq("edition_id", m.edition_id)
+    .limit(1)
     .maybeSingle();
 
   const a = assignment as unknown as {

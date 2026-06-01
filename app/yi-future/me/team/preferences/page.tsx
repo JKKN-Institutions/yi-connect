@@ -211,6 +211,12 @@ export default async function PreferencesPage() {
           allocate one problem per team aiming for an even spread, honouring
           your preference where possible.
         </p>
+        <Link
+          href="/yi-future/me/team/quiz"
+          className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-yi-gold/40 bg-yi-gold/10 px-3 py-2 text-sm font-semibold text-navy hover:border-yi-gold/70 hover:bg-yi-gold/20"
+        >
+          Unsure? Take the suggestion quiz →
+        </Link>
       </div>
 
       <div className="bg-yi-gold/10 border border-yi-gold/30 rounded-lg p-4 text-sm text-navy">

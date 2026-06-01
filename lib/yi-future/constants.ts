@@ -327,6 +327,17 @@ export const NATIONAL_SUCCESS_TARGETS = {
 // ─── SESSION COOKIE ─────────────────────────────────────────────────
 export const SESSION_COOKIE_NAME = "yifuture_session";
 
+// ─── PRODUCTION BASE URL ────────────────────────────────────────────
+// yi-future is served under the /yi-future path prefix of the monorepo.
+// Reuse the centralized NEXT_PUBLIC_APP_URL (do NOT invent a new env var).
+export const YF_BASE =
+  process.env.NEXT_PUBLIC_APP_URL ?? "https://yi-connect-app.vercel.app";
+
+// Build a fully-qualified URL for an APP route (adds the /yi-future prefix).
+// For ROOT static assets (e.g. /future-6-logo.png) use YF_BASE directly — no prefix.
+export const yfUrl = (path: string) =>
+  `${YF_BASE}/yi-future${path.startsWith("/") ? path : "/" + path}`;
+
 // ─── YI / YUVA / CII BRANDING PLACEHOLDERS (Q5 pending) ─────────────
 export const BRAND = {
   program: "Future 6.0",

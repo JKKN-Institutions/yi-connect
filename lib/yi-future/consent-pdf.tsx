@@ -21,6 +21,7 @@ import {
   renderToBuffer,
   renderToStream,
 } from "@react-pdf/renderer";
+import { YF_BASE } from "@/lib/yi-future/constants";
 
 // ─── PUBLIC PROPS ───────────────────────────────────────────────────
 export interface ConsentLetterDelegate {
@@ -36,8 +37,7 @@ export interface ConsentLetterPDFProps {
 
 // Logo must be an HTTPS URL because @react-pdf/renderer cannot read
 // from the Next.js public/ tree at runtime in a server-action context.
-const DEFAULT_LOGO_URL =
-  "https://yifuture-platform.vercel.app/future-6-logo.png";
+const DEFAULT_LOGO_URL = `${YF_BASE}/future-6-logo.png`;
 
 // ─── STYLES ─────────────────────────────────────────────────────────
 const styles = StyleSheet.create({

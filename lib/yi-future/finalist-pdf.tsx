@@ -16,6 +16,7 @@ import {
   Image,
   StyleSheet,
 } from "@react-pdf/renderer";
+import { YF_BASE } from "@/lib/yi-future/constants";
 
 // ─── PUBLIC TYPES ────────────────────────────────────────────────────────────
 
@@ -42,7 +43,7 @@ export interface FinalistRosterPDFProps {
 
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
 
-const LOGO_URL = "https://yifuture-platform.vercel.app/future-6-logo.png";
+const LOGO_URL = `${YF_BASE}/future-6-logo.png`;
 const NAVY = "#1a1a3e";
 const GOLD = "#F5A623";
 const SLATE = "#6b6b86";

@@ -1,6 +1,7 @@
 "use server";
 
 import { createServiceClient } from "@/lib/yip/supabase/server";
+import { requireSuperAdmin } from "@/lib/yip/auth/require-super-admin";
 import { revalidatePath } from "next/cache";
 import type { ParliamentRole } from "@/lib/yip/constants";
 
@@ -328,6 +329,8 @@ async function clearDefaultForRole(
 export async function createRubric(
   input: RubricInput
 ): Promise<ActionResult<Rubric>> {
+  const gate = await requireSuperAdmin();
+  if (!gate.ok) return { success: false, error: gate.error };
   const validated = validateInput(input);
   if (!validated.ok) return { success: false, error: validated.error };
   const clean = validated.clean;
@@ -376,6 +379,8 @@ export async function updateRubric(
   id: string,
   input: RubricInput
 ): Promise<ActionResult<Rubric>> {
+  const gate = await requireSuperAdmin();
+  if (!gate.ok) return { success: false, error: gate.error };
   const validated = validateInput(input);
   if (!validated.ok) return { success: false, error: validated.error };
   const clean = validated.clean;
@@ -426,6 +431,8 @@ export async function cloneRubric(
   id: string,
   opts: { newName: string; newRole?: ParliamentRole }
 ): Promise<ActionResult<Rubric>> {
+  const gate = await requireSuperAdmin();
+  if (!gate.ok) return { success: false, error: gate.error };
   const source = await getRubric(id);
   if (!source) return { success: false, error: "Source rubric not found" };
 
@@ -449,6 +456,8 @@ export async function cloneRubric(
 }
 
 export async function deactivateRubric(id: string): Promise<ActionResult> {
+  const gate = await requireSuperAdmin();
+  if (!gate.ok) return { success: false, error: gate.error };
   const supabase = await createServiceClient();
 
   const { data: target } = await supabase
@@ -493,6 +502,8 @@ export async function deactivateRubric(id: string): Promise<ActionResult> {
 }
 
 export async function reactivateRubric(id: string): Promise<ActionResult> {
+  const gate = await requireSuperAdmin();
+  if (!gate.ok) return { success: false, error: gate.error };
   const supabase = await createServiceClient();
   const { error } = await supabase
     .from("rubrics")
@@ -505,6 +516,8 @@ export async function reactivateRubric(id: string): Promise<ActionResult> {
 }
 
 export async function setAsDefault(id: string): Promise<ActionResult> {
+  const gate = await requireSuperAdmin();
+  if (!gate.ok) return { success: false, error: gate.error };
   const supabase = await createServiceClient();
 
   const { data: target } = await supabase

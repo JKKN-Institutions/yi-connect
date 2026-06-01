@@ -1,6 +1,7 @@
 "use server";
 
 import { createServiceClient } from "@/lib/yip/supabase/server";
+import { requireSuperAdmin } from "@/lib/yip/auth/require-super-admin";
 import { revalidatePath } from "next/cache";
 
 // ─── Types ──────────────────────────────────────────────────────
@@ -183,6 +184,8 @@ export async function adminListBrandingRules(
 export async function adminCreateBrandingRule(
   input: BrandingRuleInput
 ): Promise<ActionResult<AdminBrandingRule>> {
+  const gate = await requireSuperAdmin();
+  if (!gate.ok) return { success: false, error: gate.error };
   const validated = validateInput(input);
   if (!validated.ok) return { success: false, error: validated.error };
   const clean = validated.clean;
@@ -254,6 +257,8 @@ export async function adminUpdateBrandingRule(
   id: string,
   input: BrandingRuleInput
 ): Promise<ActionResult<AdminBrandingRule>> {
+  const gate = await requireSuperAdmin();
+  if (!gate.ok) return { success: false, error: gate.error };
   const validated = validateInput(input);
   if (!validated.ok) return { success: false, error: validated.error };
   const clean = validated.clean;
@@ -311,6 +316,8 @@ export async function adminUpdateBrandingRule(
 export async function adminDeactivateBrandingRule(
   id: string
 ): Promise<ActionResult> {
+  const gate = await requireSuperAdmin();
+  if (!gate.ok) return { success: false, error: gate.error };
   const supabase = await createServiceClient();
   const { error } = await supabase
     .schema("yi").from("brand_rules") /* TODO yip-absorption: verify schema-pin */
@@ -327,6 +334,8 @@ export async function adminDeactivateBrandingRule(
 export async function adminReactivateBrandingRule(
   id: string
 ): Promise<ActionResult> {
+  const gate = await requireSuperAdmin();
+  if (!gate.ok) return { success: false, error: gate.error };
   const supabase = await createServiceClient();
   const { error } = await supabase
     .schema("yi").from("brand_rules") /* TODO yip-absorption: verify schema-pin */
@@ -344,6 +353,8 @@ export async function adminReactivateBrandingRule(
 export async function adminReorderBrandingRules(
   orderedIds: string[]
 ): Promise<ActionResult<{ reordered: number }>> {
+  const gate = await requireSuperAdmin();
+  if (!gate.ok) return { success: false, error: gate.error };
   if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
     return { success: true, data: { reordered: 0 } };
   }

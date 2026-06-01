@@ -1,6 +1,7 @@
 "use server";
 
 import { createServiceClient } from "@/lib/yip/supabase/server";
+import { requireSuperAdmin } from "@/lib/yip/auth/require-super-admin";
 import { revalidatePath } from "next/cache";
 
 // ─── Types ──────────────────────────────────────────────────────
@@ -114,6 +115,8 @@ export async function adminListSeasons(): Promise<AdminSeason[]> {
 export async function adminCreateSeason(
   input: SeasonInput
 ): Promise<ActionResult<AdminSeason>> {
+  const gate = await requireSuperAdmin();
+  if (!gate.ok) return { success: false, error: gate.error };
   const validated = validateInput(input);
   if (!validated.ok) return { success: false, error: validated.error };
   const clean = validated.clean;
@@ -153,6 +156,8 @@ export async function adminUpdateSeason(
   id: string,
   input: SeasonInput
 ): Promise<ActionResult<AdminSeason>> {
+  const gate = await requireSuperAdmin();
+  if (!gate.ok) return { success: false, error: gate.error };
   const validated = validateInput(input);
   if (!validated.ok) return { success: false, error: validated.error };
   const clean = validated.clean;
@@ -195,6 +200,8 @@ export async function adminUpdateSeason(
 export async function adminArchiveSeason(
   id: string
 ): Promise<ActionResult> {
+  const gate = await requireSuperAdmin();
+  if (!gate.ok) return { success: false, error: gate.error };
   const supabase = await createServiceClient();
 
   const { data: allEvents, error: fetchErr } = await supabase
@@ -238,6 +245,8 @@ export async function adminArchiveSeason(
 export async function adminReactivateSeason(
   id: string
 ): Promise<ActionResult> {
+  const gate = await requireSuperAdmin();
+  if (!gate.ok) return { success: false, error: gate.error };
   const supabase = await createServiceClient();
 
   await clearActiveOnAll(supabase, id);
@@ -262,6 +271,8 @@ export async function adminCloneSeason(
   id: string,
   newYear: number
 ): Promise<ActionResult<AdminSeason>> {
+  const gate = await requireSuperAdmin();
+  if (!gate.ok) return { success: false, error: gate.error };
   const year = Number(newYear);
   if (!Number.isFinite(year) || year < 2000 || year > 2100) {
     return {

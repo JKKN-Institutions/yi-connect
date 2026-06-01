@@ -84,6 +84,11 @@ export async function requireSuperAdmin(): Promise<SuperAdminGate> {
       platform_super: false,
       active_roles: activeRoles,
     });
+    // SHADOW MODE (deny path): the SIGNAL-RICH side — log where the new gate
+    // `can('event.delete',{app:'yip'})` would GRANT what this legacy
+    // national/super_admin gate DENIES. Expected hit: platform_admin (global '*'
+    // in the map, but not national/super_admin here). Observational only.
+    void shadowCompare("require_super_admin", false, "event.delete", { app: "yip" });
     return { ok: false, error: DENY_MESSAGE };
   }
 

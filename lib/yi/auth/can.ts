@@ -91,12 +91,20 @@ export async function canForAssignments(
   },
   selfPersonId?: string | null
 ): Promise<boolean> {
-  // Root super-admin (decision 2026-05-31): a 'super_admin' assignment grants
-  // everything in EVERY app — the yi-connect-level super-admin is cross-app and
-  // can never be locked out by the capability map. (platform_admin / national
-  // stay PER-APP and flow through the map below.) Kept in code, not just data,
-  // so a map mistake can never lock out the platform owner.
-  if (assignments.some((a) => a.is_active && a.role === "super_admin")) {
+  // Root platform super-admin (decision 2026-05-31, role renamed 2026-06-01): a
+  // 'platform_super_admin' assignment grants everything in EVERY app — the
+  // yi-connect-level owner is cross-app and can never be locked out by the
+  // capability map. Legacy 'super_admin' kept during the rename transition.
+  // ({app}_super_admin / {app}_admin stay PER-APP and flow through the map
+  // below.) Kept in code, not just data, so a map mistake can never lock out
+  // the platform owner.
+  if (
+    assignments.some(
+      (a) =>
+        a.is_active &&
+        (a.role === "platform_super_admin" || a.role === "super_admin")
+    )
+  ) {
     return true;
   }
 

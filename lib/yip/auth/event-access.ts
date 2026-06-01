@@ -95,11 +95,19 @@ export async function getYipEventAccess(eventId: string): Promise<YipEventAccess
 
   const active = roles.assignments.filter((a) => a.is_active);
 
-  // 1. Platform super_admin (any app) OR YIP national/super_admin → full, any event.
+  // 1. Platform super-admin (any app) OR YIP super-admin → full, any event.
+  //    New scheme: platform_super_admin / yip_super_admin. Legacy super_admin /
+  //    national kept during the rename transition (Phase-6 cleanup drops them).
   const isSuper =
-    active.some((a) => a.role === "super_admin") ||
     active.some(
-      (a) => a.app === "yip" && (a.role === "national" || a.role === "super_admin")
+      (a) => a.role === "platform_super_admin" || a.role === "super_admin"
+    ) ||
+    active.some(
+      (a) =>
+        a.app === "yip" &&
+        (a.role === "yip_super_admin" ||
+          a.role === "national" ||
+          a.role === "super_admin")
     );
   if (isSuper) return FULL("super_admin", "super_admin");
 

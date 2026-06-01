@@ -112,23 +112,78 @@ export async function hasRole(opts: {
 }
 
 /**
- * Platform super-admin = a user with a cross-vertical "super_admin" role.
+ * Three-tier app-scoped role model (locked 2026-06-01, Director interview;
+ * see memory project_yi_auth_tier_model):
+ *   - platform_super_admin : cross-app; owns the platform; sole directory editor.
+ *   - {app}_super_admin     : manages ONE app's roles, scoped to that app.
+ *   - {app}_admin           : operates ONE app; not a role-manager.
  *
- * Convention (locked 2026-05-28): a role assignment with role='super_admin'
- * on ANY app value is treated as platform-wide super-admin. Vertical-
- * specific super-admin gates (e.g. requireSuperAdmin in YIP) MUST also
- * accept this as a positive answer.
- *
- * Today no rows match (the role enum used by humans is 'national' / 'rm' /
- * 'chapter_em' / 'chapter_chair'). The hook is here so a future migration
- * can introduce a single platform super-admin without touching every gate.
+ * TRANSITION (rename in flight): until the Phase-1 data migration renames the
+ * legacy role values, these predicates ALSO accept the OLD names so no admin
+ * is locked out between the code deploy and the data migration. The legacy
+ * acceptance is removed in the Phase-6 cleanup migration.
+ */
+
+// Platform-tier role names (new + legacy accepted during the transition window).
+const PLATFORM_SUPER_ROLES = ["platform_super_admin", "super_admin"];
+
+// Legacy per-app "super admin" role names accepted during the rename window.
+const LEGACY_APP_SUPER_ROLES: Record<string, string[]> = {
+  yip: ["national"],
+  future: ["national_admin", "platform_admin"],
+};
+
+/** Pure check against an already-fetched PersonRoles (avoids a second fetch). */
+function holdsPlatformSuper(me: PersonRoles): boolean {
+  return me.assignments.some(
+    (a) => a.is_active && PLATFORM_SUPER_ROLES.includes(a.role)
+  );
+}
+
+/**
+ * Platform super-admin = the cross-app platform owner
+ * (role='platform_super_admin', or legacy 'super_admin' during transition) on
+ * ANY app. The ONLY tier allowed to edit the cross-app directory; short-
+ * circuits every per-app gate.
  */
 export async function isPlatformSuperAdmin(): Promise<boolean> {
   const me = await getCurrentPersonRoles();
-  if (!me) return false;
+  return me ? holdsPlatformSuper(me) : false;
+}
 
+/**
+ * App super-admin = manages ONE app's roles, scoped to that app. Platform
+ * super-admin short-circuits to true. Accepts the new `{app}_super_admin`
+ * plus that app's legacy top-tier names during the transition.
+ */
+export async function isAppSuperAdmin(app: string): Promise<boolean> {
+  const me = await getCurrentPersonRoles();
+  if (!me) return false;
+  if (holdsPlatformSuper(me)) return true;
+  const accept = new Set([
+    `${app}_super_admin`,
+    ...(LEGACY_APP_SUPER_ROLES[app] ?? []),
+  ]);
   return me.assignments.some(
-    (a) => a.is_active && a.role === "super_admin"
+    (a) => a.is_active && a.app === app && accept.has(a.role)
+  );
+}
+
+/**
+ * App admin (or above) = operates ONE app. True for `{app}_admin`,
+ * `{app}_super_admin`, that app's legacy top-tier names, or platform super.
+ */
+export async function isAppAdmin(app: string): Promise<boolean> {
+  const me = await getCurrentPersonRoles();
+  if (!me) return false;
+  if (holdsPlatformSuper(me)) return true;
+  const accept = new Set([
+    `${app}_super_admin`,
+    `${app}_admin`,
+    ...(LEGACY_APP_SUPER_ROLES[app] ?? []),
+  ]);
+  return me.assignments.some(
+    (a) => a.is_active && a.app === app && accept.has(a.role)
   );
 }
 

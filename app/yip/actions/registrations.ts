@@ -152,6 +152,12 @@ export async function ingestCSV(
     return { success: false, error: "CSV is empty" };
   }
 
+  // IDOR gate: importing registration rows (student PII) is a managing action.
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
+
   const supabase = await createServiceClient();
 
   // Verify event exists + ingestion enabled
@@ -329,6 +335,13 @@ export async function approveRegistration(
     .single();
 
   if (!reg) return { success: false, error: "Registration not found" };
+
+  // IDOR gate: approving creates a participant (PII + access code) — managing action.
+  const access = await getYipEventAccess(reg.event_id);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
+
   if (reg.status === "approved") {
     return { success: false, error: "Already approved" };
   }
@@ -434,6 +447,14 @@ export async function rejectRegistration(
     .eq("id", regId)
     .single();
 
+  if (!reg) return { success: false, error: "Registration not found" };
+
+  // IDOR gate: reviewing/mutating a registration is a managing action.
+  const access = await getYipEventAccess(reg.event_id);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
+
   const { error } = await regs(supabase)
     .update({
       status: "rejected",
@@ -461,6 +482,14 @@ export async function markAsDuplicate(regId: string): Promise<ActionResult> {
     .select("event_id")
     .eq("id", regId)
     .single();
+
+  if (!reg) return { success: false, error: "Registration not found" };
+
+  // IDOR gate: reviewing/mutating a registration is a managing action.
+  const access = await getYipEventAccess(reg.event_id);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
 
   const { error } = await regs(supabase)
     .update({
@@ -542,6 +571,11 @@ export async function setIngestionEnabled(
   eventId: string,
   enabled: boolean
 ): Promise<ActionResult> {
+  // IDOR gate: toggling the ingestion kill-switch is a managing action.
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
   const supabase = await createServiceClient();
   const { error } = await supabase
     .from("events")

@@ -50,7 +50,12 @@ export function GoogleOAuthButton({
       const { error: oauthErr } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${window.location.origin}${redirectTo}`,
+          // Route through /auth/callback so the PKCE `code` is exchanged for a
+          // session (exchangeCodeForSession) BEFORE landing on the protected
+          // destination. Pointing straight at `redirectTo` (a protected page
+          // with no code-exchange) orphaned the code — Google authorized, the
+          // app bounced to /login?code=…, and sign-in never completed.
+          redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(redirectTo)}`,
         },
       });
       if (oauthErr) {

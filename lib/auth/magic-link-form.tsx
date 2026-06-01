@@ -41,7 +41,13 @@ export function MagicLinkForm({ redirectTo, className }: MagicLinkFormProps) {
       const { error: otpErr } = await supabase.auth.signInWithOtp({
         email,
         options: {
-          emailRedirectTo: `${window.location.origin}${redirectTo}`,
+          // Route through /auth/callback so the PKCE `code` from the magic link
+          // is exchanged for a session (exchangeCodeForSession) BEFORE landing on
+          // the protected destination. Pointing `emailRedirectTo` straight at a
+          // protected page (e.g. /yip/dashboard) orphans the code — the page has
+          // no code-exchange, so the link bounces and sign-in never completes.
+          // Same fix already applied to GoogleOAuthButton.
+          emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(redirectTo)}`,
         },
       });
       if (otpErr) {
@@ -71,7 +77,7 @@ export function MagicLinkForm({ redirectTo, className }: MagicLinkFormProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className={`space-y-2 ${className ?? ""}`}>
+    <form method="post" action="#" onSubmit={handleSubmit} className={`space-y-2 ${className ?? ""}`}>
       <Label htmlFor="magic-email" className="text-sm">Email me a sign-in link</Label>
       <div className="flex gap-2">
         <Input

@@ -1,6 +1,7 @@
 "use server";
 
 import { createServiceClient } from "@/lib/yip/supabase/server";
+import { requireSuperAdmin } from "@/lib/yip/auth/require-super-admin";
 import { revalidatePath } from "next/cache";
 import {
   HANDBOOK_CHECKLIST_TEMPLATE,
@@ -133,6 +134,8 @@ export async function adminListChecklistTemplate(opts?: {
 export async function adminCreateChecklistItem(
   input: AdminChecklistItemInput
 ): Promise<ActionResult<AdminChecklistItem>> {
+  const gate = await requireSuperAdmin();
+  if (!gate.ok) return { success: false, error: gate.error };
   const validation = validateChecklistInput(input);
   if (validation) return { success: false, error: validation.message };
 
@@ -197,6 +200,8 @@ export async function adminUpdateChecklistItem(
   id: string,
   input: Partial<AdminChecklistItemInput>
 ): Promise<ActionResult<null>> {
+  const gate = await requireSuperAdmin();
+  if (!gate.ok) return { success: false, error: gate.error };
   const patch = sanitizeUpdate(input);
 
   // Validate only the fields present in the patch.
@@ -243,6 +248,8 @@ export async function adminUpdateChecklistItem(
 export async function adminDeactivateChecklistItem(
   id: string
 ): Promise<ActionResult<null>> {
+  const gate = await requireSuperAdmin();
+  if (!gate.ok) return { success: false, error: gate.error };
   const supabase = await createServiceClient();
   const { error } = await supabase
     .from("checklist_template")
@@ -256,6 +263,8 @@ export async function adminDeactivateChecklistItem(
 export async function adminReactivateChecklistItem(
   id: string
 ): Promise<ActionResult<null>> {
+  const gate = await requireSuperAdmin();
+  if (!gate.ok) return { success: false, error: gate.error };
   const supabase = await createServiceClient();
   const { error } = await supabase
     .from("checklist_template")
@@ -274,6 +283,8 @@ export async function adminReorderChecklistCategory(
   category: string,
   orderedIds: string[]
 ): Promise<ActionResult<null>> {
+  const gate = await requireSuperAdmin();
+  if (!gate.ok) return { success: false, error: gate.error };
   if (!category || category.trim().length < 2) {
     return { success: false, error: "Category is required" };
   }
@@ -319,6 +330,8 @@ export async function adminRenameCategory(
   oldName: string,
   newName: string
 ): Promise<ActionResult<{ updated: number }>> {
+  const gate = await requireSuperAdmin();
+  if (!gate.ok) return { success: false, error: gate.error };
   const trimmedOld = oldName.trim();
   const trimmedNew = newName.trim();
   if (trimmedOld.length < 2) {
@@ -350,6 +363,8 @@ export async function adminRenameCategory(
 export async function adminReseedFromHandbook(): Promise<
   ActionResult<{ inserted: number; skipped: number }>
 > {
+  const gate = await requireSuperAdmin();
+  if (!gate.ok) return { success: false, error: gate.error };
   const supabase = await createServiceClient();
 
   const { data: existing, error: readErr } = await supabase

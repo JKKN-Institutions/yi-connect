@@ -1,7 +1,7 @@
 "use server";
 
 import { createServiceClient } from "@/lib/yip/supabase/server";
-import { isCurrentUserSuperAdmin } from "@/lib/yip/auth/require-super-admin";
+import { isCurrentUserSuperAdmin, requireSuperAdmin } from "@/lib/yip/auth/require-super-admin";
 import { logAuditAction } from "@/lib/yip/audit/log-action";
 import { revalidatePath } from "next/cache";
 
@@ -127,6 +127,8 @@ export async function getSchoolParticipationStats(): Promise<
 export async function createSchool(
   input: Omit<School, "id" | "created_at">
 ): Promise<ActionResult<School>> {
+  const gate = await requireSuperAdmin();
+  if (!gate.ok) return { success: false, error: gate.error };
   const supabase = await createServiceClient();
   const { data, error } = await supabase
     .schema("yi")
@@ -150,6 +152,8 @@ export async function updateSchool(
   id: string,
   input: Partial<Omit<School, "id" | "created_at">>
 ): Promise<ActionResult<School>> {
+  const gate = await requireSuperAdmin();
+  if (!gate.ok) return { success: false, error: gate.error };
   const supabase = await createServiceClient();
   const patch: Record<string, unknown> = {};
   if (input.name !== undefined) patch.name = input.name;

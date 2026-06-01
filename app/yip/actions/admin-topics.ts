@@ -3,6 +3,7 @@
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { revalidatePath } from "next/cache";
 import type { YiZone } from "@/lib/yip/hierarchy";
+import { requireSuperAdmin } from "@/lib/yip/auth/require-super-admin";
 
 // ─── Types ──────────────────────────────────────────────────────
 
@@ -136,6 +137,8 @@ export async function adminListTopics(
 export async function adminCreateTopic(
   input: TopicInput
 ): Promise<ActionResult<AdminTopic>> {
+  const gate = await requireSuperAdmin();
+  if (!gate.ok) return { success: false, error: gate.error };
   const err = validateInput(input);
   if (err) return { success: false, error: err };
 
@@ -195,6 +198,8 @@ export async function adminUpdateTopic(
   id: string,
   input: TopicInput
 ): Promise<ActionResult<AdminTopic>> {
+  const gate = await requireSuperAdmin();
+  if (!gate.ok) return { success: false, error: gate.error };
   const err = validateInput(input);
   if (err) return { success: false, error: err };
 
@@ -234,6 +239,8 @@ export async function adminUpdateTopic(
 export async function adminDeactivateTopic(
   id: string
 ): Promise<ActionResult> {
+  const gate = await requireSuperAdmin();
+  if (!gate.ok) return { success: false, error: gate.error };
   const supabase = await createServiceClient();
   const { error } = await supabase
     .from("topics")
@@ -252,6 +259,8 @@ export async function adminDeactivateTopic(
 export async function adminReactivateTopic(
   id: string
 ): Promise<ActionResult> {
+  const gate = await requireSuperAdmin();
+  if (!gate.ok) return { success: false, error: gate.error };
   const supabase = await createServiceClient();
   const { error } = await supabase
     .from("topics")
@@ -274,6 +283,8 @@ export async function adminReorderTopics(
   zone: YiZone | null,
   orderedIds: string[]
 ): Promise<ActionResult<{ reordered: number }>> {
+  const gate = await requireSuperAdmin();
+  if (!gate.ok) return { success: false, error: gate.error };
   if (category === "regional" && !zone) {
     return { success: false, error: "Regional reorder requires a zone" };
   }
@@ -315,6 +326,8 @@ export async function adminReorderTopics(
 export async function adminBulkImport(
   rows: CsvRow[]
 ): Promise<ActionResult<{ inserted: number; skipped: number }>> {
+  const gate = await requireSuperAdmin();
+  if (!gate.ok) return { success: false, error: gate.error };
   if (rows.length === 0) {
     return { success: false, error: "No rows to import" };
   }
@@ -423,6 +436,7 @@ export async function adminBulkImport(
 // Returns the number of rows upserted, or 0 if no active central topics
 // exist (which is a legitimate no-op, not an error).
 
+// Internal helper — auth enforced at createEvent boundary; not directly super-admin-gated.
 export async function attachCentralTopicsToEvent(
   eventId: string,
   _yearId: string | null = null
@@ -462,6 +476,8 @@ export async function pushCentralTopicsToAllChapterEvents(
   yearId: string | null,
   topicIds: string[]
 ): Promise<ActionResult<{ events_updated: number; rows_upserted: number }>> {
+  const gate = await requireSuperAdmin();
+  if (!gate.ok) return { success: false, error: gate.error };
   if (topicIds.length === 0) {
     return { success: false, error: "No topic IDs provided" };
   }

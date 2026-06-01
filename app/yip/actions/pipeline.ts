@@ -1,6 +1,7 @@
 "use server";
 
 import { createServiceClient } from "@/lib/yip/supabase/server";
+import { requireSuperAdmin } from "@/lib/yip/auth/require-super-admin";
 import { revalidatePath } from "next/cache";
 
 type ActionResult<T = null> =
@@ -51,6 +52,8 @@ export async function markQualified(
   participantIds: string[],
   eventId: string
 ): Promise<ActionResult> {
+  const gate = await requireSuperAdmin();
+  if (!gate.ok) return { success: false, error: gate.error };
   if (participantIds.length === 0) {
     return { success: false, error: "No participants selected" };
   }
@@ -79,6 +82,8 @@ export async function unmarkQualified(
   participantIds: string[],
   eventId: string
 ): Promise<ActionResult> {
+  const gate = await requireSuperAdmin();
+  if (!gate.ok) return { success: false, error: gate.error };
   if (participantIds.length === 0) {
     return { success: false, error: "No participants selected" };
   }
@@ -157,6 +162,8 @@ export async function promoteToEvent(
   fromEventId: string,
   toEventId: string
 ): Promise<ActionResult<{ promoted: number }>> {
+  const gate = await requireSuperAdmin();
+  if (!gate.ok) return { success: false, error: gate.error };
   const supabase = await createServiceClient();
 
   // Get source event info
@@ -320,6 +327,8 @@ export async function promoteTopN(
   toEventId: string,
   topN: number
 ): Promise<ActionResult<{ marked: number; promoted: number }>> {
+  const gate = await requireSuperAdmin();
+  if (!gate.ok) return { success: false, error: gate.error };
   if (topN < 1) return { success: false, error: "Top N must be >= 1" };
 
   const supabase = await createServiceClient();
@@ -564,6 +573,8 @@ export async function createRegionalEvent(
     max_participants?: number;
   }
 ): Promise<ActionResult<{ id: string }>> {
+  const gate = await requireSuperAdmin();
+  if (!gate.ok) return { success: false, error: gate.error };
   const supabase = await createServiceClient();
 
   // Verify season exists
@@ -623,6 +634,8 @@ export async function createNationalEvent(
     max_participants?: number;
   }
 ): Promise<ActionResult<{ id: string }>> {
+  const gate = await requireSuperAdmin();
+  if (!gate.ok) return { success: false, error: gate.error };
   const supabase = await createServiceClient();
 
   // Verify season exists

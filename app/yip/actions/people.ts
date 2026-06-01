@@ -1,6 +1,7 @@
 "use server";
 
 import { createServiceClient } from "@/lib/yip/supabase/server";
+import { requireSuperAdmin } from "@/lib/yip/auth/require-super-admin";
 import { revalidatePath } from "next/cache";
 
 type ActionResult<T = null> =
@@ -131,6 +132,8 @@ export async function getPerson(id: string): Promise<Person | null> {
 export async function createPerson(
   input: PersonInput
 ): Promise<ActionResult<Person>> {
+  const gate = await requireSuperAdmin();
+  if (!gate.ok) return { success: false, error: gate.error };
   const clean = sanitize(input);
   if (!clean.full_name || clean.full_name.length < 2) {
     return { success: false, error: "Name required (min 2 chars)" };
@@ -153,6 +156,8 @@ export async function updatePerson(
   id: string,
   input: Partial<PersonInput>
 ): Promise<ActionResult<Person>> {
+  const gate = await requireSuperAdmin();
+  if (!gate.ok) return { success: false, error: gate.error };
   const clean = sanitize({ full_name: "placeholder", ...input } as PersonInput);
   // Restore partiality — only keys the caller passed
   const patch: Record<string, string | number | null> = {};
@@ -179,6 +184,8 @@ export async function updatePerson(
 }
 
 export async function archivePerson(id: string): Promise<ActionResult> {
+  const gate = await requireSuperAdmin();
+  if (!gate.ok) return { success: false, error: gate.error };
   const supabase = await createServiceClient();
   const { error } = await supabase
     .from("contestants")
@@ -190,6 +197,8 @@ export async function archivePerson(id: string): Promise<ActionResult> {
 }
 
 export async function restorePerson(id: string): Promise<ActionResult> {
+  const gate = await requireSuperAdmin();
+  if (!gate.ok) return { success: false, error: gate.error };
   const supabase = await createServiceClient();
   const { error } = await supabase
     .from("contestants")
@@ -359,6 +368,8 @@ export async function mergePeople(
   keepId: string,
   mergeId: string
 ): Promise<ActionResult<{ moved_participants: number }>> {
+  const gate = await requireSuperAdmin();
+  if (!gate.ok) return { success: false, error: gate.error };
   if (keepId === mergeId) {
     return { success: false, error: "Cannot merge a person into itself" };
   }

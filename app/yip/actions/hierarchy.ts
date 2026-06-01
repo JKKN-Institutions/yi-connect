@@ -1,6 +1,7 @@
 "use server";
 
 import { createServiceClient } from "@/lib/yip/supabase/server";
+import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { revalidatePath } from "next/cache";
 import { YI_ZONES, type YiZone, type YiRole } from "@/lib/yip/hierarchy";
 
@@ -74,6 +75,8 @@ export async function setEventZone(
   zone: YiZone | null,
   chapterEmId?: string | null
 ): Promise<ActionResult> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) return { success: false, error: access.reason || "Forbidden: you cannot manage this event." };
   const supabase = await createServiceClient();
   const update: { zone: YiZone | null; chapter_em_id?: string | null } = { zone };
   if (chapterEmId !== undefined) update.chapter_em_id = chapterEmId;

@@ -1,6 +1,7 @@
 "use server";
 
 import { createServiceClient } from "@/lib/yip/supabase/server";
+import { requireSuperAdmin } from "@/lib/yip/auth/require-super-admin";
 import { revalidatePath } from "next/cache";
 import type { YiZone, YiRole } from "@/lib/yip/hierarchy";
 
@@ -166,6 +167,8 @@ export async function adminListTeam(filters?: {
 export async function adminCreateMember(
   input: MemberInput
 ): Promise<ActionResult<TeamMember>> {
+  const gate = await requireSuperAdmin();
+  if (!gate.ok) return { success: false, error: gate.error };
   const err = validateMember(input);
   if (err) return { success: false, error: err };
   const normalized = normalizeInput(input);
@@ -198,6 +201,8 @@ export async function adminUpdateMember(
   id: string,
   input: MemberInput
 ): Promise<ActionResult<TeamMember>> {
+  const gate = await requireSuperAdmin();
+  if (!gate.ok) return { success: false, error: gate.error };
   const err = validateMember(input);
   if (err) return { success: false, error: err };
   const normalized = normalizeInput(input);
@@ -230,6 +235,8 @@ export async function adminUpdateMember(
 export async function adminArchiveMember(
   id: string
 ): Promise<ActionResult> {
+  const gate = await requireSuperAdmin();
+  if (!gate.ok) return { success: false, error: gate.error };
   const supabase = await createServiceClient();
   const { error } = await supabase
     .from("organizers")
@@ -244,6 +251,8 @@ export async function adminArchiveMember(
 export async function adminRestoreMember(
   id: string
 ): Promise<ActionResult> {
+  const gate = await requireSuperAdmin();
+  if (!gate.ok) return { success: false, error: gate.error };
   const supabase = await createServiceClient();
   const { error } = await supabase
     .from("organizers")
@@ -263,6 +272,8 @@ export async function adminLinkUser(
   memberId: string,
   userIdOrEmail: string
 ): Promise<ActionResult<{ user_id: string; email: string | null }>> {
+  const gate = await requireSuperAdmin();
+  if (!gate.ok) return { success: false, error: gate.error };
   const trimmed = userIdOrEmail.trim();
   if (!trimmed) return { success: false, error: "Email or user ID required" };
 
@@ -334,6 +345,8 @@ export async function adminLinkUser(
 export async function adminUnlinkUser(
   memberId: string
 ): Promise<ActionResult> {
+  const gate = await requireSuperAdmin();
+  if (!gate.ok) return { success: false, error: gate.error };
   const supabase = await createServiceClient();
   const { error } = await supabase
     .from("organizers")

@@ -1,6 +1,6 @@
 "use server";
 
-import { createServiceClient } from "@/lib/yip/supabase/server";
+import { createClient, createServiceClient } from "@/lib/yip/supabase/server";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 
 // Organizer drill-down for one participant's scoring: every juror's score
@@ -159,4 +159,70 @@ export async function getParticipantScoringDetail(
     scores,
     result,
   };
+}
+
+// Chair-only correction of a juror's score, fully audited. Gated to canManage
+// (the event chair / super-admin). Every change is written to yip.score_audit
+// with the actor + old→new values. Allowed even when scores are locked — a
+// chair correction is exactly the override case — and the audit records it.
+export async function updateScoreAsOrganizer(
+  eventId: string,
+  scoreId: string,
+  criteriaScores: Record<string, number>,
+  comments: string
+): Promise<{ success: true; total: number } | { success: false; error: string }> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Only the event chair can correct scores." };
+  }
+
+  // Who is making the correction (for the audit trail).
+  const authClient = await createClient();
+  const {
+    data: { user },
+  } = await authClient.auth.getUser();
+  const actor = user?.email ?? user?.id ?? "organizer";
+
+  const supabase = await createServiceClient();
+
+  const { data: existing } = await supabase
+    .from("scores")
+    .select("id, criteria_scores, total_score")
+    .eq("id", scoreId)
+    .eq("event_id", eventId)
+    .maybeSingle();
+  if (!existing) {
+    return { success: false, error: "Score not found for this event." };
+  }
+
+  // Sanitize: keep only finite, non-negative numbers; total = their sum.
+  const clean: Record<string, number> = {};
+  for (const [k, v] of Object.entries(criteriaScores)) {
+    const n = Number(v);
+    if (Number.isFinite(n)) clean[k] = Math.max(0, n);
+  }
+  const total = Object.values(clean).reduce((sum, v) => sum + v, 0);
+
+  const { error: updErr } = await supabase
+    .from("scores")
+    .update({
+      criteria_scores: clean,
+      total_score: total,
+      comments: comments || null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", scoreId);
+  if (updErr) return { success: false, error: updErr.message };
+
+  await supabase.from("score_audit").insert({
+    score_id: scoreId,
+    previous_scores: existing.criteria_scores,
+    previous_total: existing.total_score,
+    new_scores: clean,
+    new_total: total,
+    changed_by: `organizer:${actor}`,
+    reason: "Organizer correction",
+  });
+
+  return { success: true, total };
 }

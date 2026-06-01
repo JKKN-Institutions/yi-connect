@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/yip/supabase/server";
 import { getEvent } from "@/app/yip/actions/events";
 import { getParticipantScoringDetail } from "@/app/yip/actions/scoring-detail";
+import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { ParticipantDetailClient } from "./participant-detail-client";
 import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
 
@@ -32,5 +33,13 @@ export default async function ParticipantScoringDetailPage({
     );
   }
 
-  return <ParticipantDetailClient eventId={id} detail={detail} />;
+  const access = await getYipEventAccess(id);
+
+  return (
+    <ParticipantDetailClient
+      eventId={id}
+      detail={detail}
+      canEdit={access.canManage}
+    />
+  );
 }

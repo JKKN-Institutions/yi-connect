@@ -1,10 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
-import type {
-  ParticipantScoringDetail,
-  ParticipantScoreRow,
+import {
+  updateScoreAsOrganizer,
+  type ParticipantScoringDetail,
+  type ParticipantScoreRow,
 } from "@/app/yip/actions/scoring-detail";
 import { ROLE_LABELS, PARTY_COLORS } from "@/lib/yip/constants";
 import { Badge } from "@/components/yip/ui/badge";
@@ -18,6 +20,10 @@ import {
   Download,
   CheckCircle2,
   MinusCircle,
+  Pencil,
+  Save,
+  X,
+  Loader2,
 } from "lucide-react";
 
 const FLAG_LABELS: Record<keyof ParticipantScoreRow["flags"], string> = {
@@ -47,9 +53,11 @@ function SubmittedAt({ iso }: { iso: string | null }) {
 export function ParticipantDetailClient({
   eventId,
   detail,
+  canEdit,
 }: {
   eventId: string;
   detail: ParticipantScoringDetail;
+  canEdit: boolean;
 }) {
   const { participant: p, scores, result } = detail;
   const side = p.party_side as "ruling" | "opposition" | null;
@@ -113,6 +121,55 @@ export function ParticipantDetailClient({
     a.download = `${p.full_name.replace(/[^a-z0-9]+/gi, "_")}_scores.csv`;
     a.click();
     URL.revokeObjectURL(url);
+  }
+
+  // Chair-only score correction (audited).
+  const router = useRouter();
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editVals, setEditVals] = useState<Record<string, string>>({});
+  const [editComments, setEditComments] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [editErr, setEditErr] = useState<string | null>(null);
+
+  function startEdit(s: ParticipantScoreRow) {
+    setEditErr(null);
+    setEditingId(s.id);
+    setEditVals(
+      Object.fromEntries(
+        Object.entries(s.criteria_scores).map(([k, v]) => [k, String(v)])
+      )
+    );
+    setEditComments(s.comments ?? "");
+  }
+  function cancelEdit() {
+    setEditingId(null);
+    setEditErr(null);
+  }
+  const editTotal = Object.values(editVals).reduce((sum, v) => {
+    const n = Number(v);
+    return sum + (Number.isFinite(n) ? Math.max(0, n) : 0);
+  }, 0);
+  async function saveEdit(scoreId: string) {
+    setSaving(true);
+    setEditErr(null);
+    const criteria: Record<string, number> = {};
+    for (const [k, v] of Object.entries(editVals)) {
+      const n = Number(v);
+      criteria[k] = Number.isFinite(n) ? Math.max(0, n) : 0;
+    }
+    const res = await updateScoreAsOrganizer(
+      eventId,
+      scoreId,
+      criteria,
+      editComments
+    );
+    setSaving(false);
+    if (!res.success) {
+      setEditErr(res.error);
+      return;
+    }
+    setEditingId(null);
+    router.refresh();
   }
 
   return (
@@ -298,20 +355,103 @@ export function ParticipantDetailClient({
                               <span className="font-mono text-sm font-bold text-gray-900">
                                 {s.total_score}
                               </span>
+                              {canEdit && editingId !== s.id && (
+                                <button
+                                  type="button"
+                                  onClick={() => startEdit(s)}
+                                  className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                                  title="Correct this score (chair only — audited)"
+                                >
+                                  <Pencil className="size-3.5" />
+                                </button>
+                              )}
                             </div>
                           </div>
 
-                          {Object.keys(s.criteria_scores).length > 0 && (
-                            <div className="mt-2 flex flex-wrap gap-1.5">
-                              {Object.entries(s.criteria_scores).map(([k, v]) => (
-                                <span
-                                  key={k}
-                                  className="rounded bg-gray-100 px-1.5 py-0.5 text-[11px] text-gray-600"
-                                >
-                                  {k}: <span className="font-semibold">{v}</span>
+                          {editingId === s.id ? (
+                            <div className="mt-2 space-y-2 rounded-md border border-blue-200 bg-blue-50/50 p-2.5">
+                              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                                {Object.keys(editVals).map((k) => (
+                                  <label
+                                    key={k}
+                                    className="text-[11px] text-gray-600"
+                                  >
+                                    {k}
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      value={editVals[k]}
+                                      onChange={(e) =>
+                                        setEditVals((prev) => ({
+                                          ...prev,
+                                          [k]: e.target.value,
+                                        }))
+                                      }
+                                      className="mt-0.5 w-full rounded border border-gray-300 px-2 py-1 text-sm"
+                                    />
+                                  </label>
+                                ))}
+                              </div>
+                              <textarea
+                                value={editComments}
+                                onChange={(e) => setEditComments(e.target.value)}
+                                placeholder="Comments (optional)"
+                                rows={2}
+                                className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
+                              />
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-xs text-gray-600">
+                                  New total:{" "}
+                                  <span className="font-bold">{editTotal}</span>
                                 </span>
-                              ))}
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={cancelEdit}
+                                    disabled={saving}
+                                    className="inline-flex items-center gap-1 rounded border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-50"
+                                  >
+                                    <X className="size-3" /> Cancel
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => saveEdit(s.id)}
+                                    disabled={saving}
+                                    className="inline-flex items-center gap-1 rounded bg-blue-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                                  >
+                                    {saving ? (
+                                      <Loader2 className="size-3 animate-spin" />
+                                    ) : (
+                                      <Save className="size-3" />
+                                    )}
+                                    Save correction
+                                  </button>
+                                </div>
+                              </div>
+                              {editErr && (
+                                <p className="text-xs text-red-600">{editErr}</p>
+                              )}
+                              <p className="text-[10px] text-gray-500">
+                                Logged as an organizer correction. Re-run “Compute
+                                Results” afterwards to update standings.
+                              </p>
                             </div>
+                          ) : (
+                            Object.keys(s.criteria_scores).length > 0 && (
+                              <div className="mt-2 flex flex-wrap gap-1.5">
+                                {Object.entries(s.criteria_scores).map(
+                                  ([k, v]) => (
+                                    <span
+                                      key={k}
+                                      className="rounded bg-gray-100 px-1.5 py-0.5 text-[11px] text-gray-600"
+                                    >
+                                      {k}:{" "}
+                                      <span className="font-semibold">{v}</span>
+                                    </span>
+                                  )
+                                )}
+                              </div>
+                            )
                           )}
 
                           {activeFlags.length > 0 && (
@@ -328,7 +468,7 @@ export function ParticipantDetailClient({
                             </div>
                           )}
 
-                          {s.comments && (
+                          {editingId !== s.id && s.comments && (
                             <div className="mt-2 flex items-start gap-1.5 text-xs text-gray-600">
                               <MessageSquare className="mt-0.5 size-3 shrink-0" />
                               <span>{s.comments}</span>

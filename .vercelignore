@@ -8,3 +8,10 @@ whatsapp-service/
 # Other dev files
 .env*
 *.log
+
+# Heavy local-only dirs (Vercel installs deps + builds fresh; these must not upload)
+.claude/
+node_modules/
+.next/
+.git/
+backups/

@@ -16,6 +16,18 @@ directly) already shipped. The READ side already converged:
 - `app/yip/actions/admin-team.ts` — identity enrichment now reads
   `yi_directory.people` (was the non-existent `contestants` table).
 
+## Progress as of 2026-06-01
+
+**Done & live (prod):** Phase 1 dedup (86 people / 92 roles, 0 dups) · Phase 6
+foundations (`resolvePerson`, `yip.participations`) · Phase 7 permission layer —
+`role_permissions` (RATIFIED map), `can()` with self/edition/zone/chapter/global
+scopes + cross-app `super_admin` root (runtime-proven) · shadow-mode `can()`
+logging wired into `requireSuperAdmin` (observe-only) · siloed-visibility
+primitive `yi_directory.current_user_can_see()`.
+
+**Still owned by THIS runbook (the irreversible coupled flip):** Phases 2–5 below.
+Pre-req before running any of them: **DB snapshot + Director go.**
+
 What remains is the WRITE side: three writers still INSERT/UPDATE
 `yip.organizers` as a source of truth, and `yip.events.chapter_em_id` still
 FK-references `yip.organizers(id)` instead of `yi_directory.people(id)`.

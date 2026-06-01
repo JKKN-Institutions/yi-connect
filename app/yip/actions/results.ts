@@ -182,10 +182,18 @@ export async function computeResults(
   const scoresByParticipant = new Map<string, RawScore[]>();
   for (const s of scores) {
     const arr = scoresByParticipant.get(s.participant_id) ?? [];
+    // Guard the JSONB shape: criteria_scores is `Json` (nullable) and a
+    // malformed row (null / array / scalar) would crash Object.entries() below.
+    // Coerce to a plain object here so per-criterion aggregation is always safe.
+    const cs = s.criteria_scores;
+    const safeCriteria: Record<string, number> =
+      cs && typeof cs === "object" && !Array.isArray(cs)
+        ? (cs as Record<string, number>)
+        : {};
     arr.push({
       jury_assignment_id: s.jury_assignment_id,
       total_score: s.total_score,
-      criteria_scores: s.criteria_scores as Record<string, number>,
+      criteria_scores: safeCriteria,
       flag_no_confidence_brought: Boolean(s.flag_no_confidence_brought),
       flag_walkout: Boolean(s.flag_walkout),
       flag_ruckus: Boolean(s.flag_ruckus),
@@ -222,7 +230,9 @@ export async function computeResults(
 
     for (const s of pScores) {
       for (const [key, value] of Object.entries(s.criteria_scores)) {
-        criteriaSum[key] = (criteriaSum[key] ?? 0) + (value as number);
+        const num = Number(value);
+        if (!Number.isFinite(num)) continue; // skip malformed criterion values
+        criteriaSum[key] = (criteriaSum[key] ?? 0) + num;
         criteriaCount[key] = (criteriaCount[key] ?? 0) + 1;
       }
     }

@@ -223,8 +223,14 @@ async function setModuleCookies(
   } catch {}
 
   try {
-    // Check YIP participants
+    // Check YIP participants. YIP tables live in the `yip` schema, but the
+    // base client is pinned to `yi_connect` (see lib/supabase/server.ts), so we
+    // MUST override the schema here. Without it `.from('participants')` resolves
+    // to yi_connect.participants (nonexistent), the query throws, and the catch
+    // silently swallows it — so the yip_session cookie was never set and the
+    // frictionless Google sign-in for YIP participants quietly did nothing.
     const { data: yipParticipant } = await supabase
+      .schema('yip' as any)
       .from('participants')
       .select('id, full_name, access_code, event_id')
       .eq('email', email)

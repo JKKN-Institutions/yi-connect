@@ -154,7 +154,10 @@ export async function assignParticipantsToParty(
       party_number: party.party_number,
       party_side: party.side,
     })
-    .in("id", participantIds);
+    .in("id", participantIds)
+    // Scope to the gated event so foreign participant ids from another event
+    // can't be re-parented into this party (cross-event write).
+    .eq("event_id", party.event_id);
 
   if (error) return { success: false, error: error.message };
 
@@ -194,11 +197,13 @@ export async function electPartyLeader(
     return { success: false, error: error?.message ?? "Failed" };
   }
 
-  // Mark the participant's role as party_leader
+  // Mark the participant's role as party_leader (scope to the gated event so
+  // a participant from another event can't be mutated via a foreign id).
   await supabase
     .from("participants")
     .update({ parliament_role: "party_leader" })
-    .eq("id", participantId);
+    .eq("id", participantId)
+    .eq("event_id", updated.event_id);
 
   revalidatePath(`/yip/dashboard/events/${updated.event_id}/parties`);
   revalidatePath(`/yip/dashboard/events/${updated.event_id}/participants`);

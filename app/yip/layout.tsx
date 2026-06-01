@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Playfair_Display, DM_Sans, JetBrains_Mono } from "next/font/google";
 import { YipBrandHeader } from "@/components/yip/brand/Header";
 import { YipBrandFooter } from "@/components/yip/brand/Footer";
+import { YipBugReporterWrapper } from "@/components/yip/bug-reporter-wrapper";
 
 const playfair = Playfair_Display({
   variable: "--font-heading",
@@ -96,15 +97,17 @@ export default function YipLayout({
       <a href="#yip-main" className="skip-link sr-only focus:not-sr-only">
         Skip to main content
       </a>
-      <div
-        className={`${playfair.variable} ${dmSans.variable} ${jetbrainsMono.variable} flex min-h-screen flex-col bg-white antialiased`}
-      >
-        <YipBrandHeader />
-        <main id="yip-main" className="flex-1">
-          {children}
-        </main>
-        <YipBrandFooter />
-      </div>
+      <YipBugReporterWrapper>
+        <div
+          className={`${playfair.variable} ${dmSans.variable} ${jetbrainsMono.variable} flex min-h-screen flex-col bg-white antialiased`}
+        >
+          <YipBrandHeader />
+          <main id="yip-main" className="flex-1">
+            {children}
+          </main>
+          <YipBrandFooter />
+        </div>
+      </YipBugReporterWrapper>
     </>
   );
 }

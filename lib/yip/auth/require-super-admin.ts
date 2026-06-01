@@ -95,6 +95,14 @@ export async function requireSuperAdmin(): Promise<SuperAdminGate> {
     active_roles: activeRoles,
   });
 
+  // SHADOW MODE (Phase 7): fire-and-forget logging of where the new scoped gate
+  // `can('event.delete', { app: 'yip' })` would DISAGREE with this legacy
+  // national/super_admin verdict. Purely observational — the verdict here is an
+  // allow (both deny paths already returned), returned unchanged below; can()
+  // enforces nothing. Expected signal: platform_admin (per-app, via the
+  // capability map rather than this gate) surfaces as a disagreement.
+  void shadowCompare("require_super_admin", true, "event.delete", { app: "yip" });
+
   // Backward-compat: callers expect a string `organizerId` field (the type
   // must remain stable; no caller currently dereferences it). We return the
   // canonical yi_directory person_id rather than touching the legacy

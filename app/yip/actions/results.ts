@@ -72,12 +72,17 @@ type RawScore = {
   flag_suspension: boolean;
 };
 
-function flagDeltaForScore(s: RawScore, deltas: FlagDeltas): number {
+// Special Remarks are OBJECTIVE events (a walkout / suspension / ruckus /
+// no-confidence motion happened or it didn't), so each one applies ONCE at its
+// full delta if ANY juror marked it — it is NOT averaged across jurors. This
+// returns the net delta to add a single time to the participant's final score.
+function participantFlagDelta(scores: RawScore[], deltas: FlagDeltas): number {
   let d = 0;
-  if (s.flag_no_confidence_brought) d += deltas.no_confidence_brought;
-  if (s.flag_walkout) d += deltas.walkout;
-  if (s.flag_ruckus) d += deltas.ruckus;
-  if (s.flag_suspension) d += deltas.suspension;
+  if (scores.some((s) => s.flag_no_confidence_brought))
+    d += deltas.no_confidence_brought;
+  if (scores.some((s) => s.flag_walkout)) d += deltas.walkout;
+  if (scores.some((s) => s.flag_ruckus)) d += deltas.ruckus;
+  if (scores.some((s) => s.flag_suspension)) d += deltas.suspension;
   return d;
 }
 
@@ -210,20 +215,26 @@ export async function computeResults(
     if (!pScores || pScores.length === 0) continue;
 
     const juryCount = pScores.length;
-    // F4: each juror's contribution includes Special-Remarks flag deltas
-    // applied at that juror's row. The deltas come from
-    // yip.scoring_flags_config; min/avg use the flag-adjusted value so
-    // both the leaderboard and the MVP award reflect remarks consistently.
-    const adjusted = pScores.map(
-      (s) => s.total_score + flagDeltaForScore(s, flagDeltas)
-    );
+    // F4: Special Remarks are applied ONCE at full value per participant if any
+    // juror marked them (objective events), then layered on top of the averaged
+    // criteria score — NOT averaged per juror. Deltas come from
+    // yip.scoring_flags_config. avg/min both include the once-applied delta so
+    // the leaderboard and MVP award stay consistent.
+    const specialRemarksDelta = participantFlagDelta(pScores, flagDeltas);
     // F3: role-based position bonus applied once per participant.
     const roleBonus =
       (participant.parliament_role && positionBonuses[participant.parliament_role]) || 0;
     const avgScore =
-      adjusted.reduce((sum, v) => sum + v, 0) / juryCount + roleBonus;
+      pScores.reduce((sum, s) => sum + s.total_score, 0) / juryCount +
+      roleBonus +
+      specialRemarksDelta;
     const minJurorScore =
-      adjusted.reduce((min, v) => (v < min ? v : min), Infinity) + roleBonus;
+      pScores.reduce(
+        (min, s) => (s.total_score < min ? s.total_score : min),
+        Infinity
+      ) +
+      roleBonus +
+      specialRemarksDelta;
 
     const criteriaSum: Record<string, number> = {};
     const criteriaCount: Record<string, number> = {};

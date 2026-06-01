@@ -62,8 +62,15 @@ type ParticipantLite = {
   constituency_name: string | null;
 };
 
+// Best-N aggregation (Director decision 2026-06-01): a delegate's base score is
+// the average of their top-N SESSION scores, so a few strong showings count and
+// weak/absent sessions don't drag them down. Configurable — change N here (or
+// later move to a config table). Default 3.
+const BEST_N_SESSIONS = 3;
+
 type RawScore = {
   jury_assignment_id: string;
+  agenda_item_id: string | null;
   total_score: number;
   criteria_scores: Record<string, number>;
   flag_no_confidence_brought: boolean;
@@ -73,9 +80,9 @@ type RawScore = {
 };
 
 // Special Remarks are OBJECTIVE events (a walkout / suspension / ruckus /
-// no-confidence motion happened or it didn't), so each one applies ONCE at its
-// full delta if ANY juror marked it — it is NOT averaged across jurors. This
-// returns the net delta to add a single time to the participant's final score.
+// no-confidence happened or it didn't), so each applies ONCE at full value if
+// ANY juror in ANY session marked it — not averaged. Returns the net delta to
+// add a single time to the participant's final score.
 function participantFlagDelta(scores: RawScore[], deltas: FlagDeltas): number {
   let d = 0;
   if (scores.some((s) => s.flag_no_confidence_brought))
@@ -149,7 +156,7 @@ export async function computeResults(
   const { data: scores, error: scoresError } = await supabase
     .from("scores")
     .select(
-      "participant_id, jury_assignment_id, total_score, criteria_scores, status, flag_no_confidence_brought, flag_walkout, flag_ruckus, flag_suspension"
+      "participant_id, jury_assignment_id, agenda_item_id, total_score, criteria_scores, status, flag_no_confidence_brought, flag_walkout, flag_ruckus, flag_suspension"
     )
     .eq("event_id", eventId)
     .eq("status", "submitted");
@@ -161,7 +168,7 @@ export async function computeResults(
     return { success: false, error: "No submitted scores found for this event" };
   }
 
-  // 1b. Flag deltas config — applied per juror row, before averaging.
+  // 1b. Flag deltas config — applied ONCE per participant (any juror, any session).
   const flagsConfig = await getScoringFlagsConfig();
   const flagDeltas: FlagDeltas = flagsConfig.success
     ? flagsConfig.data.deltas
@@ -197,6 +204,7 @@ export async function computeResults(
         : {};
     arr.push({
       jury_assignment_id: s.jury_assignment_id,
+      agenda_item_id: s.agenda_item_id,
       total_score: s.total_score,
       criteria_scores: safeCriteria,
       flag_no_confidence_brought: Boolean(s.flag_no_confidence_brought),
@@ -214,27 +222,36 @@ export async function computeResults(
     const pScores = scoresByParticipant.get(participant.id);
     if (!pScores || pScores.length === 0) continue;
 
-    const juryCount = pScores.length;
-    // F4: Special Remarks are applied ONCE at full value per participant if any
-    // juror marked them (objective events), then layered on top of the averaged
-    // criteria score — NOT averaged per juror. Deltas come from
-    // yip.scoring_flags_config. avg/min both include the once-applied delta so
-    // the leaderboard and MVP award stay consistent.
-    const specialRemarksDelta = participantFlagDelta(pScores, flagDeltas);
-    // F3: role-based position bonus applied once per participant.
+    // Per-session best-N (BUG-385): average the criteria total across the jurors
+    // who scored each SESSION, then average the participant's top-N session
+    // scores. Special remarks + role bonus apply ONCE on top.
+    const bySession = new Map<string, number[]>();
+    for (const s of pScores) {
+      const key = s.agenda_item_id ?? "__none__";
+      const arr = bySession.get(key) ?? [];
+      arr.push(s.total_score);
+      bySession.set(key, arr);
+    }
+    const sessionScores = Array.from(bySession.values())
+      .map((vals) => vals.reduce((a, b) => a + b, 0) / vals.length)
+      .sort((a, b) => b - a);
+    const bestN = sessionScores.slice(0, BEST_N_SESSIONS);
+    const baseScore = bestN.length
+      ? bestN.reduce((a, b) => a + b, 0) / bestN.length
+      : 0;
+
+    // jury_count = distinct jurors who scored this participant (across sessions).
+    const juryCount = new Set(pScores.map((s) => s.jury_assignment_id)).size;
+    // F3: role-based position bonus — applied once per participant.
     const roleBonus =
       (participant.parliament_role && positionBonuses[participant.parliament_role]) || 0;
-    const avgScore =
-      pScores.reduce((sum, s) => sum + s.total_score, 0) / juryCount +
-      roleBonus +
-      specialRemarksDelta;
+    // F4: Special Remarks — once at full value if any juror in any session
+    // marked them (objective events, not averaged).
+    const remarksDelta = participantFlagDelta(pScores, flagDeltas);
+
+    const avgScore = baseScore + roleBonus + remarksDelta;
     const minJurorScore =
-      pScores.reduce(
-        (min, s) => (s.total_score < min ? s.total_score : min),
-        Infinity
-      ) +
-      roleBonus +
-      specialRemarksDelta;
+      (bestN.length ? Math.min(...bestN) : 0) + roleBonus + remarksDelta;
 
     const criteriaSum: Record<string, number> = {};
     const criteriaCount: Record<string, number> = {};

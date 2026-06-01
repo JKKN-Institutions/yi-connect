@@ -2,6 +2,7 @@
 
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { requireJurySession } from "@/lib/yip/auth/yip-session";
+import { isJurorAssignedToSession } from "./jury-sessions";
 import type { Tables } from "@/types/yip/database";
 
 type Score = Tables<{ schema: "yip" }, "scores">;
@@ -100,13 +101,31 @@ export async function submitScore(
     return { success: false, error: "Scoring is locked for this event" };
   }
 
-  // Check if an existing score exists for this jury + participant
+  // Per-session scoring (BUG-385): every score belongs to a specific session,
+  // and a juror may only score sessions they're assigned to.
+  if (!input.agendaItemId) {
+    return {
+      success: false,
+      error: "No session selected — pick the session you're scoring.",
+    };
+  }
+  const assigned = await isJurorAssignedToSession(
+    input.juryAssignmentId,
+    input.agendaItemId
+  );
+  if (!assigned) {
+    return { success: false, error: "You're not assigned to score this session." };
+  }
+
+  // One score per (juror, participant, SESSION) — so the same delegate scored
+  // in a later session creates a new row instead of overwriting the earlier one.
   const { data: existing } = await supabase
     .from("scores")
     .select("id, criteria_scores, total_score, status")
     .eq("jury_assignment_id", input.juryAssignmentId)
     .eq("participant_id", input.participantId)
     .eq("event_id", input.eventId)
+    .eq("agenda_item_id", input.agendaItemId)
     .maybeSingle();
 
   // If existing score is locked, prevent edit
@@ -238,16 +257,27 @@ export async function getScoresForJury(
 export async function getScoreForParticipant(
   juryAssignmentId: string,
   participantId: string,
-  eventId: string
+  eventId: string,
+  agendaItemId?: string | null
 ): Promise<Score | null> {
   const supabase = await createServiceClient();
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("scores")
     .select("*")
     .eq("jury_assignment_id", juryAssignmentId)
     .eq("participant_id", participantId)
-    .eq("event_id", eventId)
+    .eq("event_id", eventId);
+
+  // Per-session: when a session is given, load that session's score exactly.
+  // Without one (legacy callers), fall back to the most recent row.
+  if (agendaItemId) {
+    query = query.eq("agenda_item_id", agendaItemId);
+  }
+
+  const { data, error } = await query
+    .order("updated_at", { ascending: false })
+    .limit(1)
     .maybeSingle();
 
   if (error || !data) return null;

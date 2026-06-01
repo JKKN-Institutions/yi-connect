@@ -25,6 +25,7 @@ import {
   getCurrentPersonRoles,
   isPlatformSuperAdmin,
 } from "@/lib/yi/auth/yi-directory-roles";
+import { shadowCompare } from "@/lib/yi/auth/shadow";
 
 export type SuperAdminGate =
   | { ok: true; userId: string; organizerId: string }

@@ -13,6 +13,14 @@
  * It then intersects the two: for each active assignment in the requested app,
  * is there a matching permission row whose scope contains the target?
  *
+ * Scope types understood by the resolver:
+ *   - global  → grants everywhere in the app (no further check)
+ *   - zone    → grants when the assignment's yi_zone === target.zone
+ *   - chapter → grants when the assignment's yi_chapter === target.chapter
+ *   - edition → grants when the assignment's yi_edition_id === target.editionId
+ *   - self    → grants only when the target subject record IS the current user
+ *               (target.subjectPersonId === the acting person's id)
+ *
  * ⚠️ The capability map this reads is a DRAFT pending Director review (see
  * docs/permission-capability-map-DRAFT.md). The MACHINERY here is the
  * deliverable; do not treat the current allow/deny answers as security-final.
@@ -73,7 +81,15 @@ function capabilityMatches(stored: string, requested: string): boolean {
 export async function canForAssignments(
   assignments: RoleAssignment[],
   capability: string,
-  target: { app: string; chapter?: string | null; zone?: string | null; year?: number }
+  target: {
+    app: string;
+    chapter?: string | null;
+    zone?: string | null;
+    year?: number;
+    subjectPersonId?: string | null;
+    editionId?: string | null;
+  },
+  selfPersonId?: string | null
 ): Promise<boolean> {
   // Root super-admin (decision 2026-05-31): a 'super_admin' assignment grants
   // everything in EVERY app — the yi-connect-level super-admin is cross-app and
@@ -131,15 +147,26 @@ export async function canForAssignments(
           }
           break;
         case "edition":
-          // TODO(Phase 7): edition scope — match assignment.yi_edition_id against
-          // target. The yi_edition_id is not yet surfaced on RoleAssignment, and the
-          // semantics ("does this edition belong to the assignment?") need Director
-          // sign-off (see docs/permission-capability-map-DRAFT.md open questions).
+          // Edition scope: the assignment is pinned to one yi_edition_id and the
+          // target names the edition it concerns. Grant only on an exact match.
+          if (
+            assignment.yi_edition_id != null &&
+            target.editionId != null &&
+            assignment.yi_edition_id === target.editionId
+          ) {
+            return true;
+          }
           break;
         case "self":
-          // TODO(Phase 7): self scope — allow only when the target subject IS the
-          // current user. target has no subject identity yet; defer until the
-          // subjects layer (plan §6) lands. Deny for now.
+          // Self scope: the action targets a subject record and that subject IS the
+          // acting person. Grant only when both ids are known and equal.
+          if (
+            target.subjectPersonId != null &&
+            selfPersonId != null &&
+            target.subjectPersonId === selfPersonId
+          ) {
+            return true;
+          }
           break;
         default:
           break;
@@ -157,9 +184,16 @@ export async function canForAssignments(
  */
 export async function can(
   capability: string,
-  target: { app: string; chapter?: string | null; zone?: string | null; year?: number }
+  target: {
+    app: string;
+    chapter?: string | null;
+    zone?: string | null;
+    year?: number;
+    subjectPersonId?: string | null;
+    editionId?: string | null;
+  }
 ): Promise<boolean> {
   const me = await getCurrentPersonRoles();
   if (!me) return false;
-  return canForAssignments(me.assignments, capability, target);
+  return canForAssignments(me.assignments, capability, target, me.person_id);
 }

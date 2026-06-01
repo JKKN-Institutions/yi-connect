@@ -298,7 +298,7 @@ function JuryScoringClientInner({
         "postgres_changes",
         {
           event: "UPDATE",
-          schema: "public",
+          schema: "yip",
           table: "events",
           filter: `id=eq.${eventId}`,
         },
@@ -317,7 +317,7 @@ function JuryScoringClientInner({
         "postgres_changes",
         {
           event: "UPDATE",
-          schema: "public",
+          schema: "yip",
           table: "agenda_speakers",
         },
         (payload) => {

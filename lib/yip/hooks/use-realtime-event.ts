@@ -69,7 +69,7 @@ export function useRealtimeEvent(
         "postgres_changes",
         {
           event: "*",
-          schema: "public",
+          schema: "yip",
           table: "events",
           filter: `id=eq.${eventId}`,
         },
@@ -83,7 +83,7 @@ export function useRealtimeEvent(
         "postgres_changes",
         {
           event: "*",
-          schema: "public",
+          schema: "yip",
           table: "agenda",
           filter: `event_id=eq.${eventId}`,
         },

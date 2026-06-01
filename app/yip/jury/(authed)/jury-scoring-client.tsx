@@ -86,6 +86,7 @@ type Participant = {
   school_name: string;
   ministry?: string | null;
   constituency_name?: string | null;
+  serial_no?: number | null;
 };
 
 interface Props {
@@ -140,6 +141,8 @@ function JuryScoringClientInner({
   const [manualParticipant, setManualParticipant] =
     useState<Participant | null>(null);
   const [loadingPicker, setLoadingPicker] = useState(false);
+  // Jury lookup by participant number / constituency / name (Mizoram req)
+  const [pickerSearch, setPickerSearch] = useState("");
 
   // Special Remarks (Phase 18 / F4) — flag checkboxes + delta config
   const [flagDeltas, setFlagDeltas] = useState<FlagDeltas | null>(null);
@@ -619,61 +622,99 @@ function JuryScoringClientInner({
           )}
         </button>
 
-        {showPicker && allParticipants.length > 0 && (
-          <div
-            id="participant-picker-list"
-            className="mt-2 max-h-80 overflow-y-auto rounded-xl border border-gray-200 bg-white divide-y divide-gray-100 shadow-md"
-          >
-            {allParticipants.map((p) => {
-              const roleLabel = p.parliament_role
-                ? ROLE_LABELS[p.parliament_role] ?? p.parliament_role
-                : "";
-              const roleColor = p.parliament_role
-                ? ROLE_COLORS[p.parliament_role] ?? "bg-gray-500 text-white"
-                : "bg-gray-500 text-white";
-              const partyColor = p.party_side
-                ? PARTY_COLORS[p.party_side as keyof typeof PARTY_COLORS]
-                : null;
+        {showPicker && allParticipants.length > 0 && (() => {
+          const q = pickerSearch.trim().toLowerCase();
+          const list = q
+            ? allParticipants.filter(
+                (p) =>
+                  p.full_name.toLowerCase().includes(q) ||
+                  (p.serial_no != null && String(p.serial_no).includes(q)) ||
+                  (p.constituency_name?.toLowerCase().includes(q) ?? false)
+              )
+            : allParticipants;
+          return (
+            <div className="mt-2 rounded-xl border border-gray-200 bg-white shadow-md overflow-hidden">
+              <div className="border-b border-gray-100 p-2">
+                <input
+                  type="text"
+                  autoFocus
+                  value={pickerSearch}
+                  onChange={(e) => setPickerSearch(e.target.value)}
+                  placeholder="Search by number, constituency, or name"
+                  aria-label="Search participants by number, constituency, or name"
+                  className="w-full rounded-lg border-2 border-gray-200 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none"
+                />
+              </div>
+              <div
+                id="participant-picker-list"
+                className="max-h-72 overflow-y-auto divide-y divide-gray-100"
+              >
+                {list.length === 0 ? (
+                  <p className="px-4 py-6 text-center text-sm text-gray-400">
+                    No participant matches that search.
+                  </p>
+                ) : (
+                  list.map((p) => {
+                    const roleLabel = p.parliament_role
+                      ? ROLE_LABELS[p.parliament_role] ?? p.parliament_role
+                      : "";
+                    const roleColor = p.parliament_role
+                      ? ROLE_COLORS[p.parliament_role] ?? "bg-gray-500 text-white"
+                      : "bg-gray-500 text-white";
+                    const partyColor = p.party_side
+                      ? PARTY_COLORS[p.party_side as keyof typeof PARTY_COLORS]
+                      : null;
 
-              return (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => selectManualParticipant(p)}
-                  className={`w-full text-left px-4 hover:bg-gray-50 active:bg-gray-100 transition-colors touch-manipulation
-                    ${manualParticipant?.id === p.id ? "bg-blue-50" : ""}
-                  `}
-                  style={{ minHeight: "52px" }}
-                >
-                  <div className="flex items-center justify-between gap-2 py-3">
-                    <div className="min-w-0 flex-1">
-                      <p className="font-semibold text-gray-900 text-sm truncate">
-                        {p.full_name}
-                      </p>
-                      <p className="text-xs text-gray-500 truncate">
-                        {p.school_name}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      {partyColor && (
-                        <span
-                          className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${partyColor.badge}`}
-                        >
-                          {p.party_side === "ruling" ? "R" : "O"}
-                        </span>
-                      )}
-                      <span
-                        className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${roleColor}`}
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => selectManualParticipant(p)}
+                        className={`w-full text-left px-4 hover:bg-gray-50 active:bg-gray-100 transition-colors touch-manipulation
+                          ${manualParticipant?.id === p.id ? "bg-blue-50" : ""}
+                        `}
+                        style={{ minHeight: "52px" }}
                       >
-                        {roleLabel}
-                      </span>
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        )}
+                        <div className="flex items-center justify-between gap-2 py-3">
+                          <div className="min-w-0 flex-1">
+                            <p className="font-semibold text-gray-900 text-sm truncate">
+                              {p.serial_no != null && (
+                                <span className="tabular-nums text-gray-400">
+                                  #{p.serial_no}
+                                  {" · "}
+                                </span>
+                              )}
+                              {p.full_name}
+                            </p>
+                            <p className="text-xs text-gray-500 truncate">
+                              {p.constituency_name
+                                ? `${p.constituency_name} · ${p.school_name}`
+                                : p.school_name}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {partyColor && (
+                              <span
+                                className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${partyColor.badge}`}
+                              >
+                                {p.party_side === "ruling" ? "R" : "O"}
+                              </span>
+                            )}
+                            <span
+                              className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${roleColor}`}
+                            >
+                              {roleLabel}
+                            </span>
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          );
+        })()}
       </div>
     </div>
   );

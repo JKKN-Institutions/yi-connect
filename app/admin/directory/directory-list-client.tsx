@@ -16,8 +16,10 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
+  Mail,
   Search,
   ShieldAlert,
+  UserPlus,
 } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -53,15 +55,22 @@ const APP_OPTIONS = [
   { value: "yi", label: "Yi (cross)" },
 ];
 
+// Reflects the 3-tier taxonomy locked 2026-06-01 (platform / {app}_super_admin
+// / {app}_admin) plus the unchanged operational roles. Values match the actual
+// role strings stored in yi_directory.role_assignments (exact-match filter).
 const ROLE_OPTIONS = [
   { value: "all", label: "All roles" },
-  { value: "super_admin", label: "Super admin" },
-  { value: "national_admin", label: "National admin" },
-  { value: "national", label: "National" },
+  { value: "platform_super_admin", label: "Platform super admin" },
+  { value: "yip_super_admin", label: "YIP super admin" },
+  { value: "future_super_admin", label: "Yi-Future super admin" },
+  { value: "future_admin", label: "Yi-Future admin" },
+  { value: "yifi_super_admin", label: "YiFi super admin" },
+  { value: "regional_admin", label: "Regional admin" },
   { value: "rm", label: "Regional manager" },
+  { value: "chapter_admin", label: "Chapter admin (YIP chair)" },
+  { value: "chapter_organizer", label: "Chapter organizer" },
   { value: "chapter_em", label: "Chapter EM" },
-  { value: "chapter_chair", label: "Chapter chair" },
-  { value: "platform_admin", label: "Platform admin" },
+  { value: "chapter_chair", label: "Chapter chair (Yi-Future)" },
 ];
 
 const STATUS_OPTIONS: { value: DirectoryStatusFilter; label: string }[] = [
@@ -154,7 +163,7 @@ export function DirectoryListClient({
 
   return (
     <div className="space-y-6">
-      <header className="flex items-end justify-between">
+      <header className="flex items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
             Directory
@@ -163,6 +172,18 @@ export function DirectoryListClient({
             {total.toLocaleString()} {total === 1 ? "person" : "people"} ·
             page {page} of {totalPages}
           </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Link href="/admin/directory/new">
+            <Button variant="outline" size="sm">
+              <UserPlus className="mr-1.5 h-4 w-4" /> New person
+            </Button>
+          </Link>
+          <Link href="/admin/directory/invite">
+            <Button size="sm">
+              <Mail className="mr-1.5 h-4 w-4" /> Invite
+            </Button>
+          </Link>
         </div>
       </header>
 

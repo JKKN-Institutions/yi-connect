@@ -3,7 +3,11 @@
  *
  * Write surfaces for the cross-vertical yi_directory.* mother source:
  *   - role_assignments CRUD (add / update / soft-deactivate)
- *   - people PATCH (name / email / phone)
+ *   - people PATCH (name / email / phone / photo / identity-review flag)
+ *   - people CREATE (bare directory record, decoupled from invite — for
+ *     subject / no-login identities)
+ *   - people soft delete / restore (setPersonActive) with a self-lockout guard
+ *     (cannot deactivate the last active platform_super_admin)
  *   - invite flow: create auth.users + people + initial role_assignment
  *
  * Every mutation:
@@ -64,6 +68,17 @@ export type PersonPatch = {
   full_name?: string;
   email?: string | null;
   phone?: string | null;
+  photo_url?: string | null;
+  needs_identity_review?: boolean;
+};
+
+export type CreatePersonInput = {
+  full_name: string;
+  email?: string | null;
+  phone?: string | null;
+  photo_url?: string | null;
+  /** Defaults to false. Set true for auto-imported / unverified identities. */
+  needs_identity_review?: boolean;
 };
 
 export type InvitePersonInput = {
@@ -423,7 +438,7 @@ export async function updatePerson(
   const svc = await createServiceClient();
 
   const before = await (svc.schema("yi_directory" as "public") as unknown as DirClient).from("people")
-    .select("id, full_name, email, phone")
+    .select("id, full_name, email, phone, photo_url, needs_identity_review")
     .eq("id", personId)
     .maybeSingle();
 
@@ -437,6 +452,10 @@ export async function updatePerson(
   if (patch.full_name !== undefined) update.full_name = patch.full_name.trim();
   if (emailNormalised !== undefined) update.email = emailNormalised;
   if (patch.phone !== undefined) update.phone = patch.phone?.trim() || null;
+  if (patch.photo_url !== undefined)
+    update.photo_url = patch.photo_url?.trim() || null;
+  if (patch.needs_identity_review !== undefined)
+    update.needs_identity_review = patch.needs_identity_review === true;
   update.updated_at = new Date().toISOString();
 
   const upd = await (svc.schema("yi_directory" as "public") as unknown as DirClient).from("people").update(update).eq("id", personId);
@@ -459,11 +478,15 @@ export async function updatePerson(
         full_name: beforeRow.full_name,
         email: beforeRow.email,
         phone: beforeRow.phone,
+        photo_url: beforeRow.photo_url,
+        needs_identity_review: beforeRow.needs_identity_review,
       },
       patch: {
         full_name: patch.full_name,
         email: emailNormalised,
         phone: patch.phone,
+        photo_url: patch.photo_url,
+        needs_identity_review: patch.needs_identity_review,
       },
     },
   });
@@ -705,5 +728,214 @@ export async function invitePersonAndAssignRole(
     message: inviteEmailSent
       ? "Invite email sent"
       : "User created — share the manual invite link below",
+  };
+}
+
+// ─── createPerson (bare directory record, invite-decoupled) ─────────────
+
+/**
+ * Create a bare yi_directory.people row with no auth login attached. For
+ * subject / no-login identities the directory needs to track but who never
+ * sign in. To grant a login later, use the Invite flow (it binds user_id by
+ * email). Email is optional but, when given, must be unique.
+ */
+export async function createPerson(
+  input: CreatePersonInput
+): Promise<MutationResult<{ id: string }>> {
+  const gate = await isCurrentUserPlatformSuperAdmin();
+  if (!gate) return { success: false, error: "Forbidden" };
+
+  if (!input.full_name || !input.full_name.trim()) {
+    return { success: false, error: "Full name is required" };
+  }
+  const email = normaliseEmail(input.email);
+  if (email && !isValidEmail(email)) {
+    return { success: false, error: "Invalid email format" };
+  }
+
+  const svc = await createServiceClient();
+
+  // Email is UNIQUE in yi_directory.people — refuse a duplicate so the admin
+  // edits the existing record (or uses Invite to bind a login) instead of
+  // creating a second identity for the same person.
+  if (email) {
+    const dupe = await (svc.schema("yi_directory" as "public") as unknown as DirClient).from("people")
+      .select("id")
+      .eq("email", email)
+      .maybeSingle();
+    if (dupe.data && (dupe.data as { id?: string }).id) {
+      const id = (dupe.data as { id: string }).id;
+      return {
+        success: false,
+        error: `A person with that email already exists (id ${id.slice(0, 8)}). Edit it instead.`,
+      };
+    }
+  }
+
+  const row: DirRow = {
+    full_name: input.full_name.trim(),
+    email,
+    phone: input.phone?.trim() || null,
+    photo_url: input.photo_url?.trim() || null,
+    needs_identity_review: input.needs_identity_review === true,
+    is_active: true,
+  };
+
+  const ins = await (svc.schema("yi_directory" as "public") as unknown as DirClient).from("people")
+    .insert(row)
+    .select("id")
+    .single();
+
+  if (ins.error || !ins.data) {
+    return {
+      success: false,
+      error: `Failed to create person: ${String(
+        (ins.error as { message?: string } | null)?.message ?? "unknown error"
+      )}`,
+    };
+  }
+
+  const newId = (ins.data as { id: string }).id;
+
+  await logAuditAction({
+    action_type: "create",
+    target_table: "yi_directory.people",
+    target_id: newId,
+    metadata: {
+      full_name: row.full_name,
+      email,
+      phone: row.phone,
+      photo_url: row.photo_url,
+      needs_identity_review: row.needs_identity_review,
+      bare_record: true,
+    },
+  });
+
+  revalidatePath("/admin/directory");
+  revalidatePath(`/admin/directory/${newId}`);
+
+  return { success: true, data: { id: newId }, message: "Person created" };
+}
+
+// ─── setPersonActive (soft delete / restore + self-lockout guard) ───────
+
+// Platform-tier role names (new + legacy accepted during the rename window).
+// Mirrors PLATFORM_SUPER_ROLES in lib/yi/auth/yi-directory-roles.ts.
+const PLATFORM_SUPER_ROLES = ["platform_super_admin", "super_admin"] as const;
+
+/**
+ * Soft delete (is_active=false) or restore (is_active=true) a person. There is
+ * no hard delete (locked decision 2026-06-01). A deactivated person loses all
+ * access immediately — getCurrentPersonRoles returns null for inactive people.
+ *
+ * Self-lockout guard: refuse to deactivate the LAST active platform_super_admin,
+ * which would lock everyone out of the directory (its only editor).
+ */
+export async function setPersonActive(
+  personId: string,
+  isActive: boolean
+): Promise<MutationResult<{ id: string }>> {
+  const gate = await isCurrentUserPlatformSuperAdmin();
+  if (!gate) return { success: false, error: "Forbidden" };
+  if (!personId) return { success: false, error: "personId is required" };
+
+  const svc = await createServiceClient();
+
+  const before = await (svc.schema("yi_directory" as "public") as unknown as DirClient).from("people")
+    .select("id, full_name, email, is_active")
+    .eq("id", personId)
+    .maybeSingle();
+
+  if (!before.data) return { success: false, error: "Person not found" };
+  const beforeRow = before.data as Record<string, unknown>;
+
+  // No-op if already in the requested state.
+  if ((beforeRow.is_active !== false) === isActive) {
+    return {
+      success: true,
+      data: { id: personId },
+      message: isActive ? "Already active" : "Already inactive",
+    };
+  }
+
+  // Self-lockout guard (only relevant when deactivating).
+  if (!isActive) {
+    type AnyQuery = {
+      eq: (k: string, v: unknown) => AnyQuery;
+      in: (k: string, v: unknown[]) => AnyQuery;
+      then: <T>(on: (v: { data: unknown; error: unknown }) => T) => Promise<T>;
+    };
+    const dirAny = svc.schema("yi_directory" as "public") as unknown as {
+      from: (t: string) => { select: (cols: string) => AnyQuery };
+    };
+
+    // Active platform-tier role rows (any app — the platform tier is identified
+    // by role name, not app; see holdsPlatformSuper in yi-directory-roles.ts).
+    const platRes = (await dirAny
+      .from("role_assignments")
+      .select("person_id")
+      .eq("is_active", true)
+      .in("role", [...PLATFORM_SUPER_ROLES])) as {
+      data: { person_id: string }[] | null;
+    };
+    const holderIds = new Set((platRes.data ?? []).map((r) => r.person_id));
+
+    if (holderIds.has(personId)) {
+      const otherIds = [...holderIds].filter((id) => id !== personId);
+      let anotherActiveExists = false;
+      if (otherIds.length > 0) {
+        const othersRes = (await dirAny
+          .from("people")
+          .select("id, is_active")
+          .in("id", otherIds)) as {
+          data: { id: string; is_active: boolean | null }[] | null;
+        };
+        anotherActiveExists = (othersRes.data ?? []).some(
+          (p) => p.is_active !== false
+        );
+      }
+      if (!anotherActiveExists) {
+        return {
+          success: false,
+          error:
+            "Cannot deactivate the last active platform super-admin — this would lock everyone out of the directory. Assign another platform super-admin first.",
+        };
+      }
+    }
+  }
+
+  const upd = await (svc.schema("yi_directory" as "public") as unknown as DirClient).from("people")
+    .update({ is_active: isActive, updated_at: new Date().toISOString() })
+    .eq("id", personId);
+
+  if (upd.error) {
+    return {
+      success: false,
+      error: `Failed to ${isActive ? "reactivate" : "deactivate"} person: ${String(
+        (upd.error as { message?: string } | null)?.message ?? "unknown error"
+      )}`,
+    };
+  }
+
+  await logAuditAction({
+    action_type: isActive ? "update" : "delete",
+    target_table: "yi_directory.people",
+    target_id: personId,
+    metadata: {
+      full_name: beforeRow.full_name,
+      email: beforeRow.email,
+      is_active: isActive,
+      soft_delete: !isActive,
+    },
+  });
+
+  revalidatePath("/admin/directory");
+  revalidatePath(`/admin/directory/${personId}`);
+  revalidatePath(`/admin/directory/${personId}/edit`);
+
+  return {
+    success: true,
+    data: { id: personId },
+    message: isActive ? "Person reactivated" : "Person deactivated",
   };
 }

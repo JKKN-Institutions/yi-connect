@@ -56,11 +56,17 @@ export async function getCurrentPersonRoles(): Promise<PersonRoles | null> {
   const { data: person, error: personErr } = await svc
     .schema("yi_directory")
     .from("people")
-    .select("id, email")
+    .select("id, email, is_active")
     .eq("user_id", user.id)
     .maybeSingle();
 
   if (personErr || !person) return null;
+
+  // A soft-deleted (deactivated) person holds no effective roles — treat them
+  // as having no directory identity so every gate fails closed immediately.
+  // Deactivation takes effect on the next request (no session invalidation
+  // needed) because every predicate funnels through this function.
+  if (person.is_active === false) return null;
 
   // 2. person.id → role_assignments
   const { data: rows, error: rowsErr } = await svc

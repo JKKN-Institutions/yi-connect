@@ -78,6 +78,7 @@ export type DirectoryPersonDetail = {
     phone: string | null;
     photo_url: string | null;
     is_active: boolean;
+    needs_identity_review: boolean;
     user_id: string | null;
     has_auth: boolean;
     source_yip_profile_id: string | null;
@@ -98,6 +99,7 @@ type PeopleRow = {
   phone: string | null;
   photo_url: string | null;
   is_active: boolean | null;
+  needs_identity_review: boolean | null;
   user_id: string | null;
   source_yip_profile_id: string | null;
   source_future_team_id: string | null;
@@ -371,7 +373,7 @@ export async function getPersonDetail(
 
   const personRes = await (svc.schema("yi_directory" as "public") as unknown as typeof dirAny).from("people")
     .select(
-      "id, full_name, email, phone, photo_url, is_active, user_id, source_yip_profile_id, source_future_team_id, created_at, updated_at"
+      "id, full_name, email, phone, photo_url, is_active, needs_identity_review, user_id, source_yip_profile_id, source_future_team_id, created_at, updated_at"
     )
     .eq("id", personId)
     .maybeSingle();
@@ -414,6 +416,7 @@ export async function getPersonDetail(
       phone: p.phone,
       photo_url: p.photo_url,
       is_active: p.is_active !== false,
+      needs_identity_review: p.needs_identity_review === true,
       user_id: p.user_id,
       has_auth: !!p.user_id,
       source_yip_profile_id: p.source_yip_profile_id,

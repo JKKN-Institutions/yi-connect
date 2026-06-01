@@ -65,7 +65,7 @@ export async function GET(req: Request) {
 
   const { data: rows } = await dir
     .from("role_assignments")
-    .select("app, role, yi_year, yi_chapter, yi_zone, is_active")
+    .select("app, role, yi_year, yi_chapter, yi_zone, yi_edition_id, is_active")
     .eq("person_id", person.id);
 
   const assignments: RoleAssignment[] = (rows ?? []).map((r) => ({

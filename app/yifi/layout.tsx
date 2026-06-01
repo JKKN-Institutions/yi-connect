@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { YifiBugReporterWrapper } from "@/components/yifi/bug-reporter-wrapper";
 
 export const viewport: Viewport = {
   themeColor: "#000066",
@@ -49,7 +50,9 @@ export default function YiFiLayout({
       <a href="#yifi-main" className="skip-link">
         Skip to main content
       </a>
-      <div id="yifi-main">{children}</div>
+      <YifiBugReporterWrapper>
+        <div id="yifi-main">{children}</div>
+      </YifiBugReporterWrapper>
     </>
   );
 }

@@ -1,39 +1,31 @@
 /**
- * Directory Admin — Edit Person Client (Phase B, 2026-05-28)
+ * Directory Admin — New Person Client (2026-06-01)
+ *
+ * Creates a bare people record (no login). Mirrors the edit form. To attach a
+ * sign-in later, use Invite (binds auth.users by email).
  */
 "use client";
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Save } from "lucide-react";
+import { ArrowLeft, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-import { updatePerson } from "../../actions/directory-mutations";
+import { createPerson } from "../actions/directory-mutations";
 
-type Props = {
-  personId: string;
-  initial: {
-    full_name: string;
-    email: string;
-    phone: string;
-    photo_url: string;
-    needs_identity_review: boolean;
-  };
-};
-
-export function PersonEditClient({ personId, initial }: Props) {
+export function NewPersonClient() {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [fullName, setFullName] = useState(initial.full_name);
-  const [email, setEmail] = useState(initial.email);
-  const [phone, setPhone] = useState(initial.phone);
-  const [photoUrl, setPhotoUrl] = useState(initial.photo_url);
-  const [needsReview, setNeedsReview] = useState(initial.needs_identity_review);
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [photoUrl, setPhotoUrl] = useState("");
+  const [needsReview, setNeedsReview] = useState(false);
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -42,7 +34,7 @@ export function PersonEditClient({ personId, initial }: Props) {
       return;
     }
     startTransition(async () => {
-      const res = await updatePerson(personId, {
+      const res = await createPerson({
         full_name: fullName.trim(),
         email: email.trim() || null,
         phone: phone.trim() || null,
@@ -50,8 +42,8 @@ export function PersonEditClient({ personId, initial }: Props) {
         needs_identity_review: needsReview,
       });
       if (res.success) {
-        toast.success(res.message ?? "Saved");
-        router.push(`/admin/directory/${personId}`);
+        toast.success(res.message ?? "Created");
+        router.push(`/admin/directory/${res.data.id}`);
         router.refresh();
       } else {
         toast.error(res.error);
@@ -59,25 +51,23 @@ export function PersonEditClient({ personId, initial }: Props) {
     });
   }
 
-  const dirty =
-    fullName.trim() !== initial.full_name ||
-    email.trim() !== initial.email ||
-    phone.trim() !== initial.phone ||
-    photoUrl.trim() !== initial.photo_url ||
-    needsReview !== initial.needs_identity_review;
-
   return (
     <div className="max-w-2xl mx-auto p-6 space-y-6">
       <div>
         <Link
-          href={`/admin/directory/${personId}`}
+          href="/admin/directory"
           className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
         >
-          <ArrowLeft className="h-3 w-3" /> Back to person
+          <ArrowLeft className="h-3 w-3" /> Back to directory
         </Link>
-        <h1 className="mt-2 text-2xl font-semibold">Edit Person</h1>
+        <h1 className="mt-2 text-2xl font-semibold">New Person</h1>
         <p className="text-sm text-muted-foreground">
-          Updates yi_directory.people. Role assignments are managed separately.
+          Creates a directory record with no sign-in attached. To give this
+          person a login, use{" "}
+          <Link href="/admin/directory/invite" className="underline">
+            Invite
+          </Link>{" "}
+          instead — it provisions an auth account and binds it by email.
         </p>
       </div>
 
@@ -104,8 +94,7 @@ export function PersonEditClient({ personId, initial }: Props) {
             placeholder="name@example.org"
           />
           <p className="text-xs text-muted-foreground">
-            Used for sign-in. Changing this does NOT update the linked
-            auth.users record.
+            Optional. Must be unique. No sign-in is created here.
           </p>
         </div>
 
@@ -129,9 +118,6 @@ export function PersonEditClient({ personId, initial }: Props) {
             disabled={pending}
             placeholder="https://.../photo.jpg"
           />
-          <p className="text-xs text-muted-foreground">
-            Public image URL for this person&apos;s avatar.
-          </p>
         </div>
 
         <div className="flex items-start gap-2 pt-1">
@@ -146,8 +132,7 @@ export function PersonEditClient({ personId, initial }: Props) {
           <div className="space-y-0.5">
             <Label htmlFor="needs_identity_review">Needs identity review</Label>
             <p className="text-xs text-muted-foreground">
-              Flag for auto-imported or unverified identities awaiting a manual
-              check.
+              Flag for unverified identities awaiting a manual check.
             </p>
           </div>
         </div>
@@ -155,14 +140,14 @@ export function PersonEditClient({ personId, initial }: Props) {
         <div className="flex items-center gap-2 pt-2">
           <Button
             type="submit"
-            disabled={pending || !dirty}
+            disabled={pending || !fullName.trim()}
             className="bg-emerald-600 hover:bg-emerald-700 text-white"
           >
-            <Save className="mr-2 h-4 w-4" />
-            {pending ? "Saving..." : "Save changes"}
+            <UserPlus className="mr-2 h-4 w-4" />
+            {pending ? "Creating..." : "Create person"}
           </Button>
           <Link
-            href={`/admin/directory/${personId}`}
+            href="/admin/directory"
             className="text-sm text-muted-foreground hover:text-foreground"
           >
             Cancel

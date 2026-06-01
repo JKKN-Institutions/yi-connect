@@ -1,28 +1,98 @@
 /**
  * Directory Admin — Person Detail Client (Phase A, 2026-05-28)
  *
- * Pure display. No edit buttons. The AA agent owns the mutation surfaces
- * (role grant, invite, deactivate) — they will live under `./roles/` and
- * `../invite/` and are out of scope for Phase A.
+ * Display + person-level lifecycle controls (Edit, Deactivate/Reactivate).
+ * Role grants live under `./roles/`; invite lives under `../invite/`.
+ * All mutation actions are gated platform-super-admin server-side; this whole
+ * route is already behind that gate.
  */
 "use client";
 
+import { useState, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   CheckCircle2,
   Mail,
+  Pencil,
   Phone,
   ShieldAlert,
   Star,
 } from "lucide-react";
+import { toast } from "sonner";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { setPersonActive } from "../actions/directory-mutations";
 import type {
   DirectoryPersonDetail,
   RoleAssignmentRow,
 } from "../actions/directory-reads";
+
+function ActiveToggle({
+  personId,
+  isActive,
+}: {
+  personId: string;
+  isActive: boolean;
+}) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [confirming, setConfirming] = useState(false);
+
+  function run() {
+    startTransition(async () => {
+      const res = await setPersonActive(personId, !isActive);
+      if (res.success) {
+        toast.success(res.message ?? "Updated");
+        setConfirming(false);
+        router.refresh();
+      } else {
+        toast.error(res.error);
+      }
+    });
+  }
+
+  if (!isActive) {
+    return (
+      <Button size="sm" variant="outline" disabled={pending} onClick={run}>
+        {pending ? "Restoring…" : "Reactivate"}
+      </Button>
+    );
+  }
+
+  return confirming ? (
+    <div className="flex items-center gap-2">
+      <span className="text-xs text-slate-500">Deactivate?</span>
+      <Button
+        size="sm"
+        variant="destructive"
+        disabled={pending}
+        onClick={run}
+      >
+        {pending ? "…" : "Confirm"}
+      </Button>
+      <Button
+        size="sm"
+        variant="ghost"
+        disabled={pending}
+        onClick={() => setConfirming(false)}
+      >
+        Cancel
+      </Button>
+    </div>
+  ) : (
+    <Button
+      size="sm"
+      variant="outline"
+      onClick={() => setConfirming(true)}
+    >
+      Deactivate
+    </Button>
+  );
+}
 
 const APP_BADGE_CLASS: Record<string, string> = {
   yip: "bg-orange-100 text-orange-800 border-orange-200",
@@ -166,6 +236,14 @@ export function PersonDetailClient({
                   <ShieldAlert className="h-3.5 w-3.5" /> Pending auth
                 </span>
               )}
+              {person.needs_identity_review ? (
+                <Badge
+                  variant="outline"
+                  className="border-amber-200 bg-amber-50 text-xs text-amber-800"
+                >
+                  needs review
+                </Badge>
+              ) : null}
             </div>
             <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-700">
               {person.email ? (
@@ -180,6 +258,14 @@ export function PersonDetailClient({
                   {person.phone}
                 </span>
               ) : null}
+            </div>
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <Link href={`/admin/directory/${person.id}/edit`}>
+                <Button size="sm" variant="outline">
+                  <Pencil className="mr-1.5 h-3.5 w-3.5" /> Edit
+                </Button>
+              </Link>
+              <ActiveToggle personId={person.id} isActive={person.is_active} />
             </div>
           </div>
         </div>

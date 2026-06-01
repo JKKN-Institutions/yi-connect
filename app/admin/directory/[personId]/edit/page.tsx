@@ -41,6 +41,8 @@ export default async function DirectoryPersonEditPage({
         full_name: detail.person.full_name,
         email: detail.person.email ?? "",
         phone: detail.person.phone ?? "",
+        photo_url: detail.person.photo_url ?? "",
+        needs_identity_review: detail.person.needs_identity_review,
       }}
     />
   );

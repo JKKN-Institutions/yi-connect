@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   runAllocationAction,
   lockAllocation,
@@ -74,6 +75,8 @@ interface AllocationClientProps {
   participants: Participant[];
   allocationLocked: boolean;
   customCommittees?: string[];
+  rulingPartyCount: number;
+  oppositionPartyCount: number;
 }
 
 // ─── Component ─────────────────────────────────────────────────────
@@ -83,6 +86,8 @@ export function AllocationClient({
   participants,
   allocationLocked,
   customCommittees,
+  rulingPartyCount,
+  oppositionPartyCount,
 }: AllocationClientProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -213,6 +218,38 @@ export function AllocationClient({
   // ── Not Yet Allocated State ───────────────────────────────────────
 
   if (!hasAllocation) {
+    // Parties must exist on both benches before allocation can run — otherwise
+    // the engine has no ruling/opposition structure to assign participants into.
+    const partiesReady = rulingPartyCount > 0 && oppositionPartyCount > 0;
+
+    if (!partiesReady) {
+      return (
+        <div className="space-y-4">
+          <Card className="py-16">
+            <CardContent className="flex flex-col items-center text-center">
+              <Users className="mb-4 size-12 text-gray-300" />
+              <h3 className="text-lg font-semibold text-gray-700">
+                Set up parties first
+              </h3>
+              <p className="mt-2 max-w-md text-sm text-gray-500">
+                Allocation assigns participants into ruling and opposition
+                parties, so you need at least one party on each bench before you
+                can run it. Currently: {rulingPartyCount} ruling,{" "}
+                {oppositionPartyCount} opposition.
+              </p>
+              <Link
+                href={`/yip/dashboard/events/${eventId}/parties`}
+                className="mt-6 inline-flex items-center gap-2 rounded-md bg-[#FF9933] px-4 py-2 text-sm font-medium text-white hover:bg-[#E68A2E]"
+              >
+                <Users className="size-4" />
+                Go to Parties
+              </Link>
+            </CardContent>
+          </Card>
+        </div>
+      );
+    }
+
     return (
       <div className="space-y-4">
         <Card className="py-16">
@@ -222,9 +259,10 @@ export function AllocationClient({
               Ready to Allocate
             </h3>
             <p className="mt-2 max-w-md text-sm text-gray-500">
-              {participants.length} participants registered. The allocation
-              engine will assign parties, roles, constituencies, and committees
-              automatically.
+              {participants.length} participants registered across{" "}
+              {rulingPartyCount} ruling + {oppositionPartyCount} opposition
+              parties. The allocation engine will assign parties, roles,
+              constituencies, and committees automatically.
             </p>
             <Button
               className="mt-6 bg-[#FF9933] text-white hover:bg-[#E68A2E]"

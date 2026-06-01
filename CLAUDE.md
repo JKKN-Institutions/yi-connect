@@ -21,6 +21,35 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **If unsure whether a new table belongs:** It probably doesn't. Reuse `yi_directory.role_assignments` with a new `app` value or `role` value. The table is intentionally generic for this reason.
 
+## 🔴 REPO & DEPLOY REALITY — this repo IS the live monorepo
+
+**`yi-connect` (GitHub `JKKN-Institutions/yi-connect`) is the single source of truth.** It hosts FOUR apps in one Next.js project: Yi Connect main (`app/(dashboard)/*`, `app/events/*`), **YIP** (`app/yip/*`), **Yi-Future** (`app/yi-future/*`), and **YiFi**.
+
+- **Deploy:** production is `https://yi-connect-app.vercel.app` (YIP at `/yip`). Yi is a **separate org from JKKN** — there is NO apex domain, and JKKN skills/branding/terminology do NOT apply. The Vercel alias **auto-flips on push to `master`** (no manual `vercel alias set` for routine pushes — verify by SHA, not by `x-vercel-cache`).
+- **Supabase:** project ref `bkmpbcoxbjyafieabxao`. DDL / read-only queries via the Management API `POST https://api.supabase.com/v1/projects/bkmpbcoxbjyafieabxao/database/query` (token at `~/.supabase/access-token`).
+
+### ⛔ The retired standalone YIP repo — DO NOT EDIT IT
+`/Users/omm/PROJECTS/YIP` (GitHub `Ommsharravana/yip-platform`, now archived) is the **original standalone YIP app from before the 2026-05-26 absorption** — a **stale duplicate**. Editing code there **ships NOTHING.** ALL YIP code work happens **here** in `app/yip/*`. That folder survives only as a historical archive (auto-save to it is disabled). **If your shell CWD is `/Users/omm/PROJECTS/YIP` you are in the dead repo — `cd /Users/omm/PROJECTS/yi-connect` before any code work.**
+
+## 🔴 YIP AUTHORIZATION MODEL (two gates — never mix them)
+
+1. **Event-scoped actions** (anything tied to one event: import / allocate / lock / go-live / score / compute / publish, and every `events/[id]/*` page + layout) → `getYipEventAccess(eventId)` from `lib/yip/auth/event-access.ts` → `{ canView, canManage, canDelete, role, reason }`. chair = `chapter_admin` (full incl. delete); organiser = `chapter_organizer` (everything but delete); above chapters: YIP `national`/`super_admin` (any event), `regional_admin` (within zone). **`events.created_by` is NOT an authz signal** — authz is purely role-based via `yi_directory.role_assignments`.
+2. **Platform master data** (rubrics, seasons, topic catalogue, admin team, checklist templates, branding rules, cross-event pipeline promotions — everything under `/yip/dashboard/admin/*`, `app/yip/actions/admin-*`, `pipeline.ts`) → `requireSuperAdmin()` from `lib/yip/auth/require-super-admin.ts`. NOT event-scoped; `getYipEventAccess` does not apply.
+
+**Two hard rules for every gate:**
+- **Fail CLOSED.** Null/unknown scope must DENY. `&& scope && target !== scope` is a fail-OPEN bug (null scope skips the block). Correct form: `&& target && (scope === null || target !== scope)`.
+- **Deny EXPLICITLY.** Render `<Forbidden403>` (`app/yip/_components/Forbidden403.tsx`) or return `{ success:false, error }` — NEVER a silent `redirect()` to a landing page (it creates an undiagnosable bounce-loop). Gate **every** sub-page + layout with the same helper; one stale `.eq("created_by")` silently 403s every child.
+
+## 🔴 OPERATIONAL GOTCHAS (hard-won — re-reading these prevents re-learning them)
+
+- **`npx tsc --noEmit` on the MAIN tree is the ONLY authoritative build gate.** Worktree / parallel-agent tsc LIES (no `node_modules` → false "cannot find module" errors). Re-run tsc on `/Users/omm/PROJECTS/yi-connect` after merging any branch or agent work.
+- **`Agent` with `isolation:'worktree'` builds the worktree from the SHELL CWD's repo, NOT a path named in the prompt.** `cd /Users/omm/PROJECTS/yi-connect` BEFORE spawning, or agents land in the wrong repo. (`cd` does not persist across Bash tool calls — chain it in one command.)
+- **A `"use server"` file may export ONLY async functions.** Non-async exports (types, constants, objects) break the Vercel build → put them in `lib/`.
+- **The Supabase Management API BYPASSES RLS** → false-green on write tests. To exercise a real write path, use a service-client REST insert with header `Content-Profile: yip` (the path deployed code takes), not the Management API.
+- **`supabase gen types` appends a "new version available" banner** that corrupts `types.ts` — strip it (`sed '/^A new version/,$d'`) before writing. IDE diagnostics lag ~30 min after regen; tsc is authoritative.
+- **Audits flag ONE line per drift pattern** — when an audit flags a bad column/table, grep the WHOLE codebase for it before declaring done (e.g. `jury_members` appeared in 9 places; the audit flagged 1).
+- **A "small change" diff with hundreds of deletions = a `Write`-clobber.** Use `Edit`/`MultiEdit` on existing files; reserve `Write` for brand-new files. Expected diff for adding a gate is ~+3/−0; if you see −300, STOP and revert.
+
 ## Project Overview
 
 yi-connect is a Next.js 16 application using React 19, TypeScript, and Tailwind CSS 4. The project integrates shadcn/ui components (New York style) with extensive Radix UI primitives for building a modern, accessible user interface.

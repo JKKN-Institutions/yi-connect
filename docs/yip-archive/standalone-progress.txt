@@ -1,0 +1,224 @@
+### Session 2026-05-31 (pane 374b4a7f) — YIP two-role model + RLS write-fix SHIPPED to prod (PR #248+#249 merged, a2b0dac live) → .claude/sessions/374b4a7f.md
+### Session 2026-05-30 (pane b936559b) — Yi Connect + YIP drift/security sweep (18 agents, ~30 bugs), YIP dress rehearsal, topics-framework fix → .claude/sessions/b936559b.md
+
+### Session 2026-05-28 evening (pane 8a26a326) — YIP smoke-test 6 admin logins + 3-tier gate bug-fix + Mizoram topic-attach → .claude/sessions/8a26a326.md
+### Session 2026-05-28 (pane ca4a0e15) — YIP Phase 19 + CFT bugs + canonical auth + 8 admin provisioning + Mizoram June 4-5 demo path-prep → .claude/sessions/ca4a0e15.md
+### Session 2026-05-27 (pane ca4a0e15) — YIP demo-readiness sprint: F1/F5/F6/F8 fully shipped; F2/F3/F4/F7 schema+action shipped (UI deferred); standalone YIP archived → .claude/sessions/ca4a0e15.md
+### Session 2026-05-26 (pane ca4a0e15) — YIP absorbed into yi-connect monorepo as /yip/* module → .claude/sessions/ca4a0e15.md
+# YIP Platform - Progress Tracker
+
+## Session: 2026-04-25 (Evening) — 4-agent parallel worktree sprint: P0/P1/P2/P3 cleanup + workflow validation
+
+### Accomplished
+
+**Workflow validation (3-role browser-use test on prod):**
+- Organizer ✅ /dashboard shows 3 mock events (P0.2 fix verified end-to-end)
+- Student ✅ /me shows full participant context for Vishnu Rajasekaran (PM, Ruling Party)
+- Jury ✅ /jury shows 30+ mock participants + scoring affordances
+
+**4-agent parallel worktree sprint (all merged to master):**
+- **Agent A — Scoring (P0.1, P1.4, P1.7):** Fixed buffer-rehydration pollution in ScoreForm — root cause was `getInitialScores` accepting any shape from localStorage, allowing flat parents + dotted sub-keys to coexist and double-count on submit. New `sanitizeScores` rebuilds state strictly from active rubric's parent keys. Added `scripts/backfill-score-breakdown.mjs` (30 mock results backfilled). Added `rubric.total_max` to `getScoresForJury` join + replaced hardcoded `/100` in jury history with rubric-derived value (MP scores now render `xx/110`).
+- **Agent B — Branding/Types (P1.3, P1.5):** `branding_rules` DB table is now the source of truth for compliance checker (with static catalog as fallback when DB returns empty). 7 `LooseClient`/`(supabase as any)` casts removed across `branding.ts` + `admin-branding-rules.ts`.
+- **Agent C — Realtime/Control (P2.6, P2.9):** Jury client now subscribes to `events.scores_locked` via the existing `jury-event-{eventId}` realtime channel — amber Lock banner appears within ~1s when organizer locks. New "Locks" card in Control panel with 3 toggles (allocation_lock / registrations_frozen / scores_locked) — confirmation dialog only on the irreversible scores_locked. New `setAllocationLocked`/`setScoresLocked`/`setRegistrationsFrozen` server actions with `created_by = user.id` auth check (matching existing pattern). Migration 022 added `events.registrations_frozen` column (applied live to bkmpbcoxbjyafieabxao).
+- **Agent D — UX/a11y/Motions (P2.8, D2 a11y, P3.10):** New `/me/motion` participant surface — students raise their own parliamentary motions (7 types) with subject + details + optional ministry; Speaker reviews them. Folded D's `motion-types.ts` into existing `lib/motions.ts` (added `needsMinistry` flag). `/test-login` cards converted from clickable `<div>` to proper `<button>` with `aria-label` + `data-testid` — keyboard-navigable, screen-reader-friendly, automation-stable. `/dashboard/admin/mock-data` wipe-confirm now shows table-by-table deletion preview before requiring "WIPE MOCK" type-to-confirm.
+
+**Merge orchestration:**
+- 4 conflicts resolved (mostly union-merges between WIP auto-saves and agent branches): scoring trio (took A's), `jury-scoring-client.tsx` (deduped `eventLocked` — kept C's local-state realtime approach with `initialEventLocked` prop seeding initial value), motions.ts (took master's organizer-side, appended D's participant-side).
+- `Criterion` interface in score-form.tsx widened to allow `description?: string | null` to match `RubricCriterionShape`.
+- Removed redundant `eventLocked` prop pass on ScoreForm (handleSubmit guard above already covers it).
+
+**Final state:** tsc clean (exit 0), `npm run build` ✅ Compiled successfully in 3.9s, 31 routes including new `/me/motion`.
+
+### Files changed (across all 4 agents, post-merge)
+- src/components/scoring/score-form.tsx (sanitizeScores + Criterion widen)
+- src/app/actions/scoring.ts (rubric.total_max join)
+- src/app/actions/branding.ts, src/app/actions/admin-branding-rules.ts (typed client)
+- src/app/actions/events.ts (3 lock toggle actions)
+- src/app/actions/motions.ts (raiseMotion + getMyMotions + getEventMotionCutoff)
+- src/app/jury/jury-scoring-client.tsx (realtime eventLocked + Lock banner)
+- src/app/jury/page.tsx, src/app/jury/history/page.tsx (initialEventLocked plumbing)
+- src/app/jury/history/history-client.tsx (rubric.total_max render)
+- src/app/dashboard/events/[id]/control/control-panel.tsx (Locks card)
+- src/app/dashboard/admin/mock-data/mock-data-client.tsx (wipe preview)
+- src/app/me/motion/page.tsx + motion-client.tsx (NEW)
+- src/app/me/page.tsx (Raise a Motion nav card)
+- src/app/test-login/test-login-client.tsx (button + a11y)
+- src/lib/motions.ts (added needsMinistry flag)
+- src/components/ui/switch.tsx (NEW)
+- supabase/migrations/022_registrations_frozen.sql (NEW + applied live)
+- scripts/backfill-score-breakdown.mjs (NEW)
+
+### Carrying Forward
+- P3.11 Demo deck — non-code, screenshot the app for Yi National Team review (skipped per "all pending bugs" being code work).
+- A11y note from workflow test #2: jury card identification — student "Nithin Venkataraman" shares surname with juror "Dr. Ramaswamy Venkataraman", trips automation by name. The new `data-testid` attributes on test-login cards address this.
+
+---
+
+## Session: 2026-04-25 — Mock seeder auto-links demo organizer (P0.2 from prior session)
+
+### Accomplished
+- **P0.2 fixed** — `seedMockData()` now resolves the demo-organizer auth.users.id and stamps `created_by` on all 3 seeded events (chapter / regional / national). Adds `ensureDemoOrganizerUserId()` helper that creates-or-finds the demo user idempotently. Self-heals existing seeds by backfilling `created_by` on mock events where it's null. Demo org email/password extracted to `src/lib/demo-credentials.ts` so seeder + /test-login share one source.
+- **End-to-end verified** against live DB (bkmpbcoxbjyafieabxao): set a mock event's `created_by` to NULL, ran the backfill → restored correctly (`scripts/test-selfheal-mock-events.mjs`).
+- **Build green**, tsc clean.
+
+### Files Touched
+- `src/lib/demo-credentials.ts` (new) — shared `DEMO_ORG_EMAIL` / `DEMO_ORG_PASSWORD`
+- `src/app/actions/test-login.ts` — import shared creds
+- `src/app/actions/mock-data.ts` — `ensureDemoOrganizerUserId()` helper, `created_by` on 3 event inserts, idempotent-path self-heal backfill
+- `scripts/check-mock-events.mjs` (new) — one-off diagnostic
+- `scripts/test-selfheal-mock-events.mjs` (new) — end-to-end self-heal test
+
+### Carrying Forward
+Remaining tasks from previous next-session list — P0.1 (buffer-rehydration ScoreForm), P1 (branding_rules DB source-of-truth, score_breakdown backfill, remove `(supabase as any)` casts), P2 (real-time eventLocked, /me/motion, control-panel toggles), P3 (mock-data UX polish, demo deck).
+
+---
+
+## Session: 2026-04-24 (End) — Handbook-fidelity expansion + Option B identity + mock-data + workflow test
+
+### Accomplished (massive session across ~10 days real time: 2026-04-15 → 2026-04-24)
+- **Handbook gap analysis** — Read YIP 2026 Handbook (49 pages) cover-to-cover, mapped 30+ gaps vs implementation, prioritized P0→P4
+- **P0 correctness fixes** — MP rubric /100 → /110 (handbook p.20), 5 → 15 awards (handbook p.21), 8 → 11 parliament roles (p.16–18), closing_ceremony → valedictory terminology, OATH_TEXT constant (p.44)
+- **P1 structural** — Schools + Parties first-class entities (manifesto/symbol/4-point), Yi National/RM/Chapter hierarchy (6 zones, 8 team members), promotion audit trail, Party↔Committee mode on agenda
+- **P2 parliamentary fidelity** — 7 motion types (adjournment / calling-attention / breach-of-privilege / no-confidence / short-duration / obituary / laying-of-papers) with Speaker ruling + voting + minister response flows; Oath ceremony renderer on projector
+- **P3 learning & ops** — 71-topic library (10 central + 61 regional, handbook p.25–38), auto-seeded 33-item chapter checklist (p.45–46), 17 FAQs + Sample Script + PRS/CPR links on /me/learn, fee tracking (₹399 + MyCII), volunteer roster (11 stations), post-session national-format CSV export
+- **P4 quality+completeness** — Checklist UI, Fees UI, Volunteers UI, 90-sec per-speaker timer wired, Q-Hour 4-day cutoff enforced
+- **P5 parallel-agent sprint (5 worktree agents)** — Microsoft Forms registration ingestion, Event Media upload (+ Storage bucket), Feedback surveys (4 respondent types + NPS), Branding Compliance (14 rules), Mobile jury audit (D → A- usability)
+- **Admin superstructure (5 more parallel agents)** — 7 CRUD surfaces at /dashboard/admin/{pipeline, rubrics, topics, checklist, team, seasons, branding-rules}. Pushed 3 timed-out agent's client files myself.
+- **Option B — People entity** — New `people` table, participants.person_id FK, `/me/journey` cross-round timeline, admin People Directory (/dashboard/admin/people), findOrCreatePerson used by registration + promotion
+- **Mock Data system** — Full 30-person chapter + 3-event promotion chain seeded (~353 rows), all flagged `is_mock=true` + `[MOCK]` prefix, wipe-all confirmation "WIPE MOCK"
+- **Test Login** — /test-login with one-click POV buttons (Demo Organizer + 5 students + 4 jury + 3 projector links); demo organizer auto-provisioned via admin.createUser
+- **Multi-role workflow test** — 3 browser-use sessions, 5 stages. Caught 3 real bugs end-to-end: dashboard empty (mock events lacked created_by), /me 500 (junk score_breakdown), silent submit rejection (event lock + stale banner lying to jurors)
+- **17 sub-criteria nested rubric** — Jury form now renders 13 independent sliders grouped under 5 collapsible parents, handbook-exact wording ("Relevance to topic", not "Relevance & Topic"). Parent totals derived from sub sums. Speaker/Deputy flat rubrics still work (backward-compat). Server recomputes total to prevent client spoofing.
+- **21 migrations applied to production** (011–021): questions cutoff + checklist enhancements, registrations, event_media, feedback, branding_compliance, admin soft-delete flags, branding_rules, participant serial_no, people entity, mock_data_flag, sub_criteria
+
+### Current Status
+- **Feature**: all P0–P4 + Option B + mock data + workflow tests passing
+- **Build**: Vercel production `yip-platform-two.vercel.app` green — last deploy 49s
+- **Branch**: master, ahead of origin by many wip auto-save commits (auto-save hook in effect)
+- **Migrations**: 21 applied (live DB bkmpbcoxbjyafieabxao)
+- **tsc**: clean (0 errors)
+
+### Lessons Learned
+See 4 new memory entries at `~/.claude/projects/-Users-omm-PROJECTS-YIP/memory/`:
+- `feedback_use_server.md` — non-async exports in `"use server"` files break Vercel
+- `feedback_supabase_gen_types_corruption.md` — CLI version banner corrupts types.ts output
+- `feedback_ide_diagnostics_stale.md` — IDE lags tsc after supabase types regen
+- `feedback_mock_seeders_shape_correct_jsonb.md` — seed correct JSONB shape + guard renderers
+
+### Next Session — Tasks
+1. [P0] Investigate & fix buffer-rehydration pollution in ScoreForm — the sub-criteria submit worked in a fresh session but on a polluted session old flat keys silently overrode dotted keys. See `src/components/scoring/score-form.tsx:405-431` (getInitialScores partial-legacy fallback). Root cause suspected: legacy `existingScore.criteria_scores` with flat parent keys + stale localStorage buffer. (medium)
+2. [P0] Auto-link demo organizer user_id to newly created mock events — so `/dashboard` isn't empty after fresh seed. Patch `seedMockData()` in `src/app/actions/mock-data.ts` to fetch the demo org's user_id from auth.users and set `events.created_by`. (small)
+3. [P1] Make `branding_rules` DB the source of truth for chapter compliance checker — current `src/app/actions/branding.ts::listComplianceChecks` still reads the static `src/lib/branding-rules.ts` catalogue. Switch to query `branding_rules where is_active=true` so admin edits surface at chapter level. Agent left TODO. (small)
+4. [P1] Backfill `score_breakdown` on existing mock results with sub-criteria dotted keys — they currently have flat parent keys from seeder, which mix-shape still works but looks inconsistent on /me breakdown. (small)
+5. [P1] Remove `(supabase as any)` casts now that types.ts has branding_rules — polish pass per agent's noted follow-up. (small)
+6. [P2] Wire real-time invalidation so jury's `eventLocked` prop flips live when organizer locks scores mid-session. Today requires page refresh. (medium)
+7. [P2] Seed MP rubric history view's rubric_total_max via the scoring_rubrics join — already done in getScoresForJury but verify history card shows /110 not /100 after score update. (small)
+8. [P2] Add `/me/motion` participant surface so students can raise parliamentary motions themselves (today it's organizer-only). Handbook page 23–24 motions are intentionally participant-originated. (medium)
+9. [P2] Unlock/lock toggle on the Control panel for `scores_locked` + `allocation_locked` + `registrations_frozen` — currently editable only via DB. (small)
+10. [P3] Build /dashboard/admin/mock-data UX polish — add per-table row counts live + confirmation dialog showing exactly what will delete. (small)
+11. [P3] Screenshot-the-app and publish a one-page demo deck using the mock data for the Yi National Team review. (small)
+
+---
+
+## Session: 2026-03-31
+
+### Working On
+- Phase 9: Polish + Deploy (final)
+
+### Completed This Session
+- Phase 1: Project Setup - Next.js 15, shadcn/ui, Supabase project
+- Phase 2: Database Schema - 13 tables, 543 constituencies, rubrics, agenda template
+- Phase 3: Auth + Layout - Login, access codes, dashboard layout, landing page
+- Phase 4: Event Management - Creation wizard, participants, CSV import, jury management
+- Phase 5: Smart Allocation Engine - One-click party/role/constituency/committee assignment
+- Phase 6: Live Control Panel - Agenda state machine, timer, speaker queue, projector display
+- Phase 7: Jury Scoring System - Score submission, rubric lookup, audit log
+- Phase 8: Results + Participant View - computeResults, awards, leaderboard, /me participant view
+
+### Phase 8 Details
+- `src/app/actions/results.ts` — 7 server actions (computeResults, publish/unpublish, lock/unlock, getResults, getScoringProgress)
+- `src/app/dashboard/events/[id]/scoring/` — Scoring progress page with per-jury/per-participant tables, lock/compute buttons
+- `src/app/dashboard/events/[id]/results/` — Results dashboard with award cards, leaderboard, publish/unpublish, CSV export
+- `src/app/me/` — Participant view with premium role card, event schedule timeline, results (if published)
+- Awards: Best Overall, Best Speaker, Best Deputy Speaker, Best MP (Ruling), Best MP (Opposition) — with tie handling
+- CSV export: client-side blob download with all participant + score columns
+
+### Decisions Made
+- Supabase project: bkmpbcoxbjyafieabxao (Mumbai region)
+- Access codes for students/jury (6-char, no email)
+- Timer via server UTC timestamps (zero drift across devices)
+- Rubrics as JSONB (flexible for Yi National to change)
+- Agenda as state machine (advancing changes all views)
+- Dashboard moved from route group (dashboard) to plain /dashboard
+- /me route for participants (middleware-protected, cookie-based session)
+- Results use createServiceClient to bypass RLS
+- Award ties: all tied participants get the award
+
+### Next Steps
+1. Phase 9: Polish, responsive, branding, deploy to Vercel
+
+---
+
+## Session History
+
+### 2026-03-31 - Full platform build (Phases 1-8)
+
+**Completed:**
+- Full domain analysis from 7 YIP documents
+- SDD spec: 14 screens, 55 tasks, 9 phases
+- Phases 1-6 built and committed
+- Build passing consistently
+
+**State at End:**
+- Project status: Core features built, scoring + results in progress
+- Next priority: Complete Phase 7-8, then polish + deploy
+
+---
+
+## Session: 2026-05-27 → 2026-05-28 (pane 8a26a326) — YIP Phase 18 + Phase 19 demo-critical
+
+### Completed
+- **F2** Topics tab in event-tab-nav.tsx (Megaphone icon)
+- **F3** Position-bonus UI on control panel + math wired (commit b6ed618 + bridge 9aa10be)
+- **F4** Special-remarks jury UI + flag deltas in computeResults (commit 64a7f1c)
+- **F7** Admin push-central-topics button with confirmation dialog (commit 70c6ce0)
+- **P2** F6 importer extended to accept allocation columns party/constituency/committee (commit 0133a96)
+- **K** Auto-inherit central topics on chapter event creation (commit 31ae738)
+- **E** All 13 delete endpoints gated by organizers.role='national' (commit 6efc129)
+- **D** Frictionless jury login at /yip/jury/login (commit 3951179, migration 20260527230000)
+- 20 ministry central topics seeded into yip.topics (10 legacy deactivated)
+- Mizoram Chapter Round 2026 event provisioned: UUID 27219472-5d6d-4b77-b6e0-22b77a6eb38b, dates 2026-06-04 → 2026-06-05
+- Full-column XLSX generated: /Users/omm/Downloads/Mizoram_participant_list_v2_full.xlsx (94 rows, F6 importer-friendly headers)
+- Transcript captured + audited: /Users/omm/PROJECTS/YIP/docs/yip-2026-05-27-recording-122.md (43 min, 7 speakers)
+- Phase 18 marked self-verified, Phase 19 added to features.json
+- yi-connect/master pushed to origin (Vercel auto-deploy)
+- YIP standalone/master pushed to origin
+
+### Phase 19 Leftovers (carry to next session — POST-Mizoram, NOT demo-critical)
+- **B** Admin audit log (login/edit/delete actions beyond score_audit) — POST-DEMO
+- **C** Concurrency load test (5-10 chapters simultaneous, 7500 entries) — needs deployed prod; can run anytime
+- **F** Skill profiling on /me (research/speaking/policy/process from sub-criteria scores)
+- **G** Regional cross-chapter leaderboard (CricInfo-style aggregation)
+- **H** Yi-Future ↔ YIP single sign-on (verify same chapter login across both)
+- **I** Awareness training deliverable for chapters (docs/video, non-code)
+
+### Deferred indefinitely
+- **A** OTP-based admin login (user explicitly deferred)
+- **J** MOM document for the Yi National team meeting (user explicitly deferred)
+
+### Mizoram Demo Flow (June 4-5)
+1. Open event 27219472-5d6d-4b77-b6e0-22b77a6eb38b — 20 central topics auto-attached via K
+2. Upload Mizoram_participant_list_v2_full.xlsx → 94 students + 5 parties created (P2)
+3. Pick 5 of the 20 attached topics
+4. Jury opens /yip/jury/login, enters email, picks event from dropdown → straight into scoring (D)
+5. Control panel: assign Speaker/PM/Cabinet via Positions card (F3)
+6. Jury: Special Remarks checkboxes during scoring (F4)
+7. Compute results — position bonus + flag deltas baked in
+8. Chapter chair can't delete data (E)
+
+### State at End
+- yi-connect master: pushed, Vercel auto-deploying
+- YIP standalone master: pushed
+- tsc: clean (EXIT=0 across yi-connect)
+- Mizoram event: empty (wiped) and ready for fresh F6 upload test
+- Live DB: 2 new migrations applied via Management API (20260527200000, 20260527230000)

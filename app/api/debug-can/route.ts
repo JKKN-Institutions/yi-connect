@@ -74,6 +74,7 @@ export async function GET(req: Request) {
     yi_year: r.yi_year,
     yi_chapter: r.yi_chapter,
     yi_zone: r.yi_zone,
+    yi_edition_id: r.yi_edition_id,
     is_active: r.is_active ?? false,
   }));
 

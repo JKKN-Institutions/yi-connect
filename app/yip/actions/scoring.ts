@@ -346,11 +346,10 @@ export async function getScoreableParticipants(eventId: string) {
 
   const { data, error } = await supabase
     .from("participants")
-    .select("id, full_name, parliament_role, party_side, school_name, ministry, constituency_name")
+    .select("id, full_name, parliament_role, party_side, school_name, ministry, constituency_name, serial_no")
     .eq("event_id", eventId)
     .not("parliament_role", "is", null)
-    .order("party_side")
-    .order("parliament_role")
+    .order("serial_no", { nullsFirst: false })
     .order("full_name");
 
   if (error || !data) return [];

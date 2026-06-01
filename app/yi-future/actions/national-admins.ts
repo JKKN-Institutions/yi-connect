@@ -130,29 +130,24 @@ export async function isCurrentUserSuperAdmin(): Promise<{
   return { email, isSuper: Boolean(data?.is_super_admin) };
 }
 
-/**
- * Internal: returns true iff `email` has an active yi_directory
- * role_assignment for app='future' with role in
- * (super_admin, platform_admin, national_admin).
- *
- * Two-step lookup because yi_directory.role_assignments keys on
- * person_id, not email: (1) resolve people.id by email, (2) probe
- * role_assignments for the required role. Service client is used so
- * cross-schema reads bypass RLS.
- *
- * Casts via `unknown` mirror the existing pattern in chapter-chairs.ts
- * — the generated Database type for yi-future pins schema='future', so
- * yi_directory tables aren't in the typed surface area. Re-generating
- * types with `supabase gen types --schema yi_directory` would remove
- * the casts.
- *
- * Source-of-truth migration (2026-05-28): replaces the previous
- * yi.national_admins.is_platform_admin flag check. yi.national_admins
- * is kept for back-compat reads from un-migrated paths.
- */
-async function hasYiFuturePlatformRole(email: string): Promise<boolean> {
-  const svc = await createServiceClient();
-  const svcDir = (svc as unknown as {
+// ─── Role-tier predicates (yi_directory source of truth) ────────────
+//
+// SECURITY (2026-06-01): a single predicate used to gate BOTH the broad
+// VIEW surface AND the privileged WRITE actions. That accepted the
+// regular admin tier (future_admin / national_admin) for privileged
+// writes — a privilege escalation: a regular national admin could
+// promote/demote platform admins, reset other admins' passwords, and
+// broadcast. We now split into TWO predicates with different strictness.
+//
+// Two-step lookup (resolve people.id by email, then probe
+// role_assignments) — kept because it is the known-good path used since
+// the 2026-05-28 source-of-truth migration. Casts via `unknown` mirror
+// chapter-chairs.ts: the future-pinned Database type doesn't include
+// yi_directory tables. Service client bypasses RLS.
+
+// Typed-cast view of the service client into yi_directory.people.
+function dirPeople(svc: Awaited<ReturnType<typeof createServiceClient>>) {
+  return (svc as unknown as {
     schema: (s: string) => {
       from: (t: string) => {
         select: (c: string) => {
@@ -163,15 +158,91 @@ async function hasYiFuturePlatformRole(email: string): Promise<boolean> {
       };
     };
   }).schema("yi_directory");
+}
 
-  const { data: person } = await svcDir
+// Typed-cast view of the service client into yi_directory.role_assignments,
+// filtered to the active rows for one person, then `.in(role, [...])`.
+function dirActiveRolesForPerson(
+  svc: Awaited<ReturnType<typeof createServiceClient>>
+) {
+  return (svc as unknown as {
+    schema: (s: string) => {
+      from: (t: string) => {
+        select: (c: string) => {
+          eq: (k: string, v: string) => {
+            eq: (k: string, v: boolean) => {
+              in: (
+                k: string,
+                v: string[]
+              ) => Promise<{ data: Array<{ role: string }> | null }>;
+            };
+          };
+        };
+      };
+    };
+  }).schema("yi_directory");
+}
+
+/**
+ * STRICT platform/super tier. Returns true iff `email` resolves to a
+ * yi_directory person who holds EITHER:
+ *   (a) a cross-app platform-owner role on ANY app — role in
+ *       (platform_super_admin, super_admin), is_active — which short-
+ *       circuits every per-app gate (e.g. director@jkkn.ac.in holds
+ *       platform_super_admin on app='platform', NOT 'future'); OR
+ *   (b) an active app='future' role in the platform/super set:
+ *       (future_super_admin, platform_super_admin, super_admin,
+ *       platform_admin).
+ *
+ * DELIBERATELY EXCLUDES the regular admin tier (future_admin,
+ * national_admin) — those may VIEW but never perform privileged writes.
+ *
+ * Gates: requirePlatformAdmin, isCurrentUserPlatformAdmin (button
+ * visibility), and push.ts#isSuperOrPlatform (via the mirrored inline
+ * predicate). Keep the role sets in sync with push.ts if either changes.
+ */
+async function hasYiFuturePlatformTier(email: string): Promise<boolean> {
+  const svc = await createServiceClient();
+
+  const { data: person } = await dirPeople(svc)
     .from("people")
     .select("id")
     .eq("email", email)
     .maybeSingle();
   if (!person) return false;
 
-  const svcDirRoles = (svc as unknown as {
+  // (a) Cross-app platform-owner short-circuit — NO app filter, because
+  // platform_super_admin lives on app='platform' for some owners.
+  const { data: platformRows } = await dirActiveRolesForPerson(svc)
+    .from("role_assignments")
+    .select("role")
+    .eq("person_id", person.id)
+    .eq("is_active", true)
+    .in("role", ["platform_super_admin", "super_admin"]);
+  if ((platformRows ?? []).length > 0) return true;
+
+  // (b) app='future' platform/super tier (regular tier excluded).
+  const { data: futureRows } = await dirActiveRolesForPersonScopedToFuture(svc)
+    .from("role_assignments")
+    .select("role")
+    .eq("person_id", person.id)
+    .eq("app", "future")
+    .eq("is_active", true)
+    .in("role", [
+      "future_super_admin",
+      "platform_super_admin",
+      "super_admin",
+      "platform_admin",
+    ]);
+  return (futureRows ?? []).length > 0;
+}
+
+// Typed-cast view scoped to app='future' (adds the .eq("app",...) hop the
+// strict (b) branch and the broad predicate both need).
+function dirActiveRolesForPersonScopedToFuture(
+  svc: Awaited<ReturnType<typeof createServiceClient>>
+) {
+  return (svc as unknown as {
     schema: (s: string) => {
       from: (t: string) => {
         select: (c: string) => {
@@ -189,16 +260,46 @@ async function hasYiFuturePlatformRole(email: string): Promise<boolean> {
       };
     };
   }).schema("yi_directory");
+}
 
-  const { data: rows } = await svcDirRoles
+/**
+ * BROAD "any future admin" tier. Returns true iff `email` resolves to a
+ * yi_directory person who holds EITHER the strict platform tier (via the
+ * cross-app short-circuit, so platform owners always pass) OR an active
+ * app='future' role in the FULL admin set, INCLUDING the regular tier:
+ *   (future_super_admin, future_admin, super_admin, platform_admin,
+ *   national_admin).
+ *
+ * Used ONLY for the VIEW gate (national/admin/layout.tsx) so a regular
+ * national admin (e.g. vedant@wrs.energy = future_admin) keeps read
+ * access to /national/admin. MUST NOT gate any privileged write.
+ */
+async function hasYiFutureAdminRole(email: string): Promise<boolean> {
+  const svc = await createServiceClient();
+
+  const { data: person } = await dirPeople(svc)
+    .from("people")
+    .select("id")
+    .eq("email", email)
+    .maybeSingle();
+  if (!person) return false;
+
+  // Cross-app platform-owner short-circuit (same as the strict tier).
+  const { data: platformRows } = await dirActiveRolesForPerson(svc)
+    .from("role_assignments")
+    .select("role")
+    .eq("person_id", person.id)
+    .eq("is_active", true)
+    .in("role", ["platform_super_admin", "super_admin"]);
+  if ((platformRows ?? []).length > 0) return true;
+
+  // app='future' full admin set (regular tier INCLUDED for view access).
+  const { data: rows } = await dirActiveRolesForPersonScopedToFuture(svc)
     .from("role_assignments")
     .select("role")
     .eq("person_id", person.id)
     .eq("app", "future")
     .eq("is_active", true)
-    // Accept BOTH the new app-scoped names (future_super_admin / future_admin,
-    // migrated 2026-06-01) AND the legacy names during the transition window,
-    // so admins are never locked out between the data migration and code deploy.
     .in("role", [
       "future_super_admin",
       "future_admin",
@@ -211,14 +312,40 @@ async function hasYiFuturePlatformRole(email: string): Promise<boolean> {
 }
 
 /**
- * Returns the signed-in user's email if and only if they are a platform
- * admin. Otherwise redirects: unauthenticated → /login, authenticated
- * but not platform → /national/admin?error=not_platform_admin.
+ * Non-redirecting probe: returns whether the signed-in user is ANY
+ * future admin (BROAD tier, regular tier included). Drives the VIEW gate
+ * in national/admin/layout.tsx so a regular national admin keeps read
+ * access to /national/admin.
  *
- * Gates structural-config mutations (editions/tracks/problems/rubrics).
- * Source of truth: yi_directory.role_assignments (app='future', role in
- * super_admin/platform_admin/national_admin, is_active=true). Replaces
- * the legacy yi.national_admins.is_platform_admin check (2026-05-28).
+ * MUST NOT be used to gate privileged writes — use
+ * requirePlatformAdmin / isCurrentUserPlatformAdmin (STRICT) for those.
+ */
+export async function isCurrentUserFutureAdmin(): Promise<{
+  email: string | null;
+  isAdmin: boolean;
+}> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user || !user.email) return { email: null, isAdmin: false };
+
+  const email = normalizeEmail(user.email);
+  const isAdmin = await hasYiFutureAdminRole(email);
+  return { email, isAdmin };
+}
+
+/**
+ * Returns the signed-in user's email if and only if they are in the
+ * STRICT platform/super tier. Otherwise redirects: unauthenticated →
+ * /login, authenticated but not platform → /national/admin?error=not_platform_admin.
+ *
+ * Gates the privileged write actions (togglePlatformAdmin, the promote
+ * action, structural-config mutations). STRICT: accepts only
+ * future_super_admin / platform_super_admin / super_admin /
+ * platform_admin on app='future', plus the cross-app platform-owner
+ * short-circuit. EXCLUDES the regular tier (future_admin / national_admin)
+ * — closing the 2026-06-01 privilege-escalation finding.
  */
 export async function requirePlatformAdmin(): Promise<string> {
   const supabase = await createClient();
@@ -228,7 +355,7 @@ export async function requirePlatformAdmin(): Promise<string> {
   if (!user || !user.email) redirect("/yi-future/login");
 
   const email = normalizeEmail(user.email);
-  const allowed = await hasYiFuturePlatformRole(email);
+  const allowed = await hasYiFuturePlatformTier(email);
   if (!allowed) {
     redirect("/yi-future/national/admin?error=not_platform_admin");
   }
@@ -236,10 +363,13 @@ export async function requirePlatformAdmin(): Promise<string> {
 }
 
 /**
- * Non-redirecting probe: returns whether the signed-in user is a
- * platform admin. The structural-config pages use this to decide which
- * buttons to render WITHOUT forcing a redirect for non-platform viewers
- * (who are still allowed to see the read-only data).
+ * Non-redirecting probe: returns whether the signed-in user is in the
+ * STRICT platform/super tier. Drives button visibility on the Admins
+ * page (Promote/Demote-platform, Reset-password) and the structural-
+ * config pages (editions/tracks/problems). Uses the same predicate as
+ * requirePlatformAdmin so UI visibility never diverges from gate
+ * behavior. Regular admins (future_admin / national_admin) get isPlatform
+ * = false and therefore see the read-only surface only.
  */
 export async function isCurrentUserPlatformAdmin(): Promise<{
   email: string | null;
@@ -252,10 +382,7 @@ export async function isCurrentUserPlatformAdmin(): Promise<{
   if (!user || !user.email) return { email: null, isPlatform: false };
 
   const email = normalizeEmail(user.email);
-  // Source-of-truth migration (2026-05-28): use the same yi_directory
-  // predicate as requirePlatformAdmin so UI button visibility never
-  // diverges from gate behavior.
-  const isPlatform = await hasYiFuturePlatformRole(email);
+  const isPlatform = await hasYiFuturePlatformTier(email);
   return { email, isPlatform };
 }
 

@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/yi-future/supabase/server";
 import { AdminShell, type NavItem } from "@/components/yi-future/admin/AdminShell";
-import { isCurrentUserPlatformAdmin } from "@/app/yi-future/actions/national-admins";
+import { isCurrentUserFutureAdmin } from "@/app/yi-future/actions/national-admins";
 
 const NAV: NavItem[] = [
   { label: "Dashboard", href: "/yi-future/national/admin" },
@@ -44,11 +44,20 @@ export default async function NationalAdminLayout({
   } = await supabase.auth.getUser();
   if (!user) redirect("/yi-future/login");
 
-  // SECURITY: only platform-admin / super-admin / national_admin (per yi_directory
-  // via BB refactor) may view national admin surfaces. CFT 2026-05-28 found
-  // demo-organizer could see 22 delegates + 65 chapters without this gate.
-  const { isPlatform } = await isCurrentUserPlatformAdmin();
-  if (!isPlatform) redirect("/yi-future/chapter");
+  // SECURITY: only future admins (BROAD tier — future_super_admin /
+  // future_admin / super_admin / platform_admin / national_admin per
+  // yi_directory, plus the cross-app platform-owner short-circuit) may
+  // VIEW national admin surfaces. CFT 2026-05-28 found demo-organizer
+  // could see 22 delegates + 65 chapters without this gate.
+  //
+  // NOTE (2026-06-01): this is the BROAD view gate and INTENTIONALLY
+  // accepts the regular admin tier (e.g. vedant@wrs.energy = future_admin)
+  // — do not narrow it to the strict platform tier or regular national
+  // admins get locked out (regression of PR #267). Privileged WRITE
+  // actions are separately gated by the STRICT requirePlatformAdmin /
+  // isCurrentUserPlatformAdmin.
+  const { isAdmin } = await isCurrentUserFutureAdmin();
+  if (!isAdmin) redirect("/yi-future/chapter");
 
   return (
     <AdminShell title="Yi National Admin" roleLabel="National" items={NAV}>

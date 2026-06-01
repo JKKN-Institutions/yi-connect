@@ -21,6 +21,7 @@ type RawRole = {
   yi_year: number;
   yi_chapter: string | null;
   yi_zone: string | null;
+  yi_edition_id: string | null;
   is_active: boolean | null;
 };
 

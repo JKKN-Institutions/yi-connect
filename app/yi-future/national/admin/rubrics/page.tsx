@@ -59,9 +59,18 @@ export default async function RubricsPage() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-navy">Rubrics</h2>
+          {/*
+            NOTE: [HPB §4] historically specified a "5 criteria × 20 pts = 100"
+            rubric. The actual seeded default (DEFAULT_RUBRIC in
+            lib/yi-future/constants.ts, sourced from the May 2026 Yi Judging Kit)
+            uses 6 weighted criteria totalling 100 (national threshold 70). The
+            helper text below describes the ACTUAL seeded rubric. The 5×20 vs
+            6-weighted discrepancy is flagged for product — only re-align the
+            scoring if product confirms; do NOT silently change weights here.
+          */}
           <p className="mt-1 text-sm text-navy/60">
-            Handbook default: 5 criteria × 20 pts = 100. One default per
-            (edition, scope).
+            Default rubric: 6 weighted criteria totalling 100 pts (national
+            advancement threshold 70). One default per (edition, scope).
           </p>
         </div>
         {isPlatform && (

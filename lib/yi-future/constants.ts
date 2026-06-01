@@ -14,8 +14,10 @@ export const TRACK_SLUGS = [
 ] as const;
 export type TrackSlug = (typeof TRACK_SLUGS)[number];
 
+// Display names aligned to the canonical track `name` column shown on the
+// Tracks admin page, so filters/labels read consistently everywhere.
 export const TRACK_LABELS: Record<TrackSlug, string> = {
-  climate_change: "Climate Change",
+  climate_change: "Climate Action",
   road_safety: "Road Safety",
   accessibility: "Accessibility",
   public_health: "Health",

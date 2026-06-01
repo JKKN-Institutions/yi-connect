@@ -24,6 +24,7 @@ export type RoleAssignment = {
   yi_year: number;
   yi_chapter: string | null;
   yi_zone: string | null;
+  yi_edition_id: string | null;
   is_active: boolean;
 };
 
@@ -65,7 +66,7 @@ export async function getCurrentPersonRoles(): Promise<PersonRoles | null> {
   const { data: rows, error: rowsErr } = await svc
     .schema("yi_directory")
     .from("role_assignments")
-    .select("app, role, yi_year, yi_chapter, yi_zone, is_active")
+    .select("app, role, yi_year, yi_chapter, yi_zone, yi_edition_id, is_active")
     .eq("person_id", person.id);
 
   if (rowsErr) return null;
@@ -76,6 +77,7 @@ export async function getCurrentPersonRoles(): Promise<PersonRoles | null> {
     yi_year: r.yi_year,
     yi_chapter: r.yi_chapter,
     yi_zone: r.yi_zone,
+    yi_edition_id: r.yi_edition_id ?? null,
     is_active: r.is_active ?? false,
   }));
 

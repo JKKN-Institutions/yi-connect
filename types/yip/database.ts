@@ -723,6 +723,7 @@ export type Database = {
           duration_minutes: number | null
           event_id: string
           id: string
+          is_scoreable: boolean
           mode: Database["public"]["Enums"]["agenda_mode"]
           planned_start: string | null
           sequence_order: number
@@ -741,6 +742,7 @@ export type Database = {
           duration_minutes?: number | null
           event_id: string
           id?: string
+          is_scoreable?: boolean
           mode?: Database["public"]["Enums"]["agenda_mode"]
           planned_start?: string | null
           sequence_order: number
@@ -759,6 +761,7 @@ export type Database = {
           duration_minutes?: number | null
           event_id?: string
           id?: string
+          is_scoreable?: boolean
           mode?: Database["public"]["Enums"]["agenda_mode"]
           planned_start?: string | null
           sequence_order?: number
@@ -1590,6 +1593,52 @@ export type Database = {
             columns: ["event_id"]
             isOneToOne: false
             referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      jury_session_assignments: {
+        Row: {
+          agenda_item_id: string
+          created_at: string
+          event_id: string
+          id: string
+          jury_assignment_id: string
+        }
+        Insert: {
+          agenda_item_id: string
+          created_at?: string
+          event_id: string
+          id?: string
+          jury_assignment_id: string
+        }
+        Update: {
+          agenda_item_id?: string
+          created_at?: string
+          event_id?: string
+          id?: string
+          jury_assignment_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "jury_session_assignments_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "jury_session_assignments_jury_assignment_id_fkey"
+            columns: ["jury_assignment_id"]
+            isOneToOne: false
+            referencedRelation: "jury_assignments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "jury_session_assignments_agenda_item_id_fkey"
+            columns: ["agenda_item_id"]
+            isOneToOne: false
+            referencedRelation: "agenda"
             referencedColumns: ["id"]
           },
         ]

@@ -134,9 +134,10 @@ export async function registerSelf(formData: FormData): Promise<RegisterResult> 
 }
 
 /**
- * Pre-fill known Yi members from the directory by email (name + phone only;
- * the directory has no sector/chapter). Returns null when there is no match,
- * so the form simply leaves fields blank — never blocks registration.
+ * Pre-fill a known Yi member's name from the directory by email. Returns NAME
+ * ONLY by design — the RPC does not expose phone/photo, so a guessed email cannot
+ * harvest member contact details. Returns null when there is no match, so the form
+ * simply leaves fields blank — never blocks registration.
  */
 export async function prefillByEmail(email: string): Promise<PrefillResult> {
   const clean = (email || "").trim();

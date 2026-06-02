@@ -15,12 +15,16 @@ import {
   Database,
   KeyRound,
   ScrollText,
+  SlidersHorizontal,
+  Scale,
 } from "lucide-react";
 
 const NAV = [
   { label: "Pipeline", href: "/yip/dashboard/admin", icon: GitBranch, exact: true },
   { label: "People", href: "/yip/dashboard/admin/people", icon: UserCircle },
   { label: "Rubrics", href: "/yip/dashboard/admin/rubrics", icon: Ruler },
+  { label: "Session Scoring", href: "/yip/dashboard/admin/session-parameters", icon: SlidersHorizontal },
+  { label: "Scoring Rules", href: "/yip/dashboard/admin/scoring-rules", icon: Scale },
   { label: "Topics", href: "/yip/dashboard/admin/topics", icon: BookOpen },
   { label: "Checklist Template", href: "/yip/dashboard/admin/checklist", icon: ListChecks },
   { label: "National Team", href: "/yip/dashboard/admin/team", icon: Users },

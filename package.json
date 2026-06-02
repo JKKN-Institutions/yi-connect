@@ -64,7 +64,7 @@
     "jose": "^6.1.3",
     "lucide-react": "^0.552.0",
     "mermaid": "^11.12.2",
-    "next": "16.0.10",
+    "next": "16.2.7",
     "next-themes": "^0.4.6",
     "nuqs": "^2.8.6",
     "qrcode": "^1.5.4",
@@ -83,7 +83,7 @@
     "vaul": "^1.1.2",
     "web-push": "^3.6.7",
     "whatsapp-web.js": "^1.26.1-alpha.3",
-    "xlsx": "^0.18.5",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
     "zod": "^4.3.5",
     "zustand": "^5.0.9"
   },
@@ -105,10 +105,10 @@
   },
   "overrides": {
     "html2canvas": "npm:html2canvas-pro@^1.5.13",
-    "tar-fs": "^3.0.6",
-    "ws": "^8.18.0"
+    "tar-fs": "^3.0.9",
+    "ws": "^8.18.3"
   },
   "comments": {
-    "xlsx-vulnerability": "xlsx has known prototype pollution (GHSA-4r6h-8v6p-xvw6) and ReDoS (GHSA-5pgg-2g8v-p4x9) vulnerabilities with NO FIX available. The library is used for Excel export functionality. Consider migrating to exceljs if security is critical. Monitor https://github.com/SheetJS/sheetjs for updates."
+    "xlsx-vulnerability": "RESOLVED 2026-06-02: xlsx pinned to the SheetJS CDN build (cdn.sheetjs.com/xlsx-0.20.3) which fixes the prototype pollution (GHSA-4r6h-8v6p-xvw6) and ReDoS (GHSA-5pgg-2g8v-p4x9) — the npm-registry xlsx is frozen at 0.18.5 with no fix. API-compatible (import * as XLSX). Monitor https://cdn.sheetjs.com for newer builds."
   }
 }

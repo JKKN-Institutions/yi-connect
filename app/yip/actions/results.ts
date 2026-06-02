@@ -179,18 +179,53 @@ export async function computeResults(
   // (all set by super-admin in the admin Scoring Rules / Session Scoring
   // screens; nothing hardcoded here).
   const settings = await getScoringSettings();
-  const sessionCfgByType = new Map(
-    (await listSessionParameters()).map((c) => [
-      c.agenda_type,
-      { total_max: c.total_max, session_weight: c.session_weight },
-    ])
-  );
+
+  // Build TWO config lookups from the global session catalog:
+  //   • cfgBySessionKey — 1:1, the PRIMARY key. Each of the 11 handbook
+  //     sessions has its own session_key, so this distinguishes the 3
+  //     duplicated agenda_types (2 Speaker / 2 Opening / 2 Debate sessions).
+  //   • cfgByType — FALLBACK only, for agenda items not yet tagged with a
+  //     session_key. When several configs share an agenda_type we keep the one
+  //     with the LOWEST display_order (iterate in ascending display_order and
+  //     only set on first sight) so the fallback is deterministic.
+  const sessionConfigs = await listSessionParameters();
+  const cfgBySessionKey = new Map<
+    string,
+    { total_max: number; session_weight: number }
+  >();
+  const cfgByType = new Map<
+    string,
+    { total_max: number; session_weight: number }
+  >();
+  for (const c of [...sessionConfigs].sort(
+    (a, b) => a.display_order - b.display_order
+  )) {
+    cfgBySessionKey.set(c.session_key, {
+      total_max: c.total_max,
+      session_weight: c.session_weight,
+    });
+    if (c.agenda_type && !cfgByType.has(c.agenda_type)) {
+      cfgByType.set(c.agenda_type, {
+        total_max: c.total_max,
+        session_weight: c.session_weight,
+      });
+    }
+  }
+
   const { data: agendaRows } = await supabase
     .from("agenda")
-    .select("id, agenda_type")
+    .select("id, agenda_type, session_key")
     .eq("event_id", eventId);
-  const agendaTypeById = new Map(
-    (agendaRows ?? []).map((a) => [a.id, a.agenda_type])
+  // Map agenda_item_id → { agenda_type, session_key } so per-session config can
+  // be resolved by session_key FIRST (1:1), falling back to agenda_type.
+  const agendaById = new Map<
+    string,
+    { agenda_type: string | null; session_key: string | null }
+  >(
+    (agendaRows ?? []).map((a) => [
+      a.id,
+      { agenda_type: a.agenda_type, session_key: a.session_key },
+    ])
   );
 
   // 2. Participants (with constituency for Best Constituency Rep / Community Impact)
@@ -252,11 +287,20 @@ export async function computeResults(
     const sessionEntries = Array.from(bySession.entries()).map(
       ([agendaItemId, vals]) => {
         const raw = vals.reduce((a, b) => a + b, 0) / vals.length;
-        const agendaType =
-          agendaItemId === "__none__"
-            ? null
-            : agendaTypeById.get(agendaItemId) ?? null;
-        const cfg = agendaType ? sessionCfgByType.get(agendaType) : undefined;
+        // Resolve this scored session's config 1:1: session_key FIRST (the
+        // primary key — distinguishes the 3 repeated agenda_types), then fall
+        // back to agenda_type for items not yet tagged with a session_key.
+        // If neither resolves → no config (max=0 → no normalize, weight=1).
+        const meta =
+          agendaItemId === "__none__" ? null : agendaById.get(agendaItemId);
+        let cfg: { total_max: number; session_weight: number } | undefined;
+        if (meta) {
+          if (meta.session_key && cfgBySessionKey.has(meta.session_key)) {
+            cfg = cfgBySessionKey.get(meta.session_key);
+          } else if (meta.agenda_type && cfgByType.has(meta.agenda_type)) {
+            cfg = cfgByType.get(meta.agenda_type);
+          }
+        }
         const max = cfg && cfg.total_max > 0 ? cfg.total_max : 0;
         const score =
           settings.normalize_per_session && max > 0 ? (raw / max) * 100 : raw;

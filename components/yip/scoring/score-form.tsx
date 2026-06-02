@@ -14,6 +14,10 @@ interface Criterion {
   label: string;
   max_score: number;
   description?: string | null;
+  // Per-session params carry a kind so the juror sees participation parameters
+  // in a visually distinct group. Undefined on the role-rubric fallback path,
+  // which renders as a single ungrouped list (unchanged behaviour).
+  kind?: "evaluation" | "participation";
 }
 
 interface ParticipantInfo {
@@ -182,6 +186,110 @@ export function ScoreForm({
     }
   };
 
+  // Renders one criterion card (slider + quick-tap buttons). Shared by the
+  // evaluation and participation groups so both use the identical 0…max control.
+  const renderCriterion = (criterion: Criterion) => {
+    const value = scores[criterion.key] ?? 0;
+    const pct = criterion.max_score > 0 ? (value / criterion.max_score) * 100 : 0;
+
+    return (
+      <div key={criterion.key} className="rounded-lg border border-gray-200 bg-white p-4">
+        <div className="flex items-start justify-between gap-2 mb-1">
+          <div className="min-w-0 flex-1">
+            <label className="text-sm font-semibold text-gray-900">
+              {criterion.label}
+            </label>
+            <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">
+              {criterion.description}
+            </p>
+          </div>
+          <span className="shrink-0 text-lg font-bold text-gray-900 tabular-nums">
+            {value}
+            <span className="text-xs font-normal text-gray-400">
+              /{criterion.max_score}
+            </span>
+          </span>
+        </div>
+
+        {/* Custom range input with large touch target */}
+        <div className="mt-3 relative">
+          {/* Background track */}
+          <div className="h-3 w-full rounded-full bg-gray-100 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-blue-500 to-blue-600 transition-all duration-150"
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+          {/* Native range input overlay — large touch area */}
+          <input
+            type="range"
+            min={0}
+            max={criterion.max_score}
+            step={1}
+            value={value}
+            disabled={isLocked}
+            onChange={(e) =>
+              handleScoreChange(criterion.key, parseInt(e.target.value, 10))
+            }
+            className="absolute inset-0 w-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
+            style={{ height: "48px", marginTop: "-18px" }}
+            aria-label={`Score for ${criterion.label}`}
+          />
+        </div>
+
+        {/* Quick-tap score buttons */}
+        <div className="flex gap-1.5 mt-3 flex-wrap">
+          {Array.from(
+            { length: Math.min(criterion.max_score + 1, 11) },
+            (_, i) => {
+              // Show evenly distributed buttons if max > 10
+              if (criterion.max_score > 10) {
+                const step = criterion.max_score / 10;
+                const val = Math.round(i * step);
+                return (
+                  <button
+                    key={val}
+                    type="button"
+                    disabled={isLocked}
+                    onClick={() => handleScoreChange(criterion.key, val)}
+                    className={`min-w-[36px] h-9 rounded-md text-xs font-medium transition-all
+                      ${
+                        value === val
+                          ? "bg-blue-600 text-white shadow-sm"
+                          : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                      }
+                      disabled:opacity-50 disabled:cursor-not-allowed
+                    `}
+                  >
+                    {val}
+                  </button>
+                );
+              }
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  disabled={isLocked}
+                  onClick={() => handleScoreChange(criterion.key, i)}
+                  className={`min-w-[36px] h-9 rounded-md text-xs font-medium transition-all
+                    ${
+                      value === i
+                        ? "bg-blue-600 text-white shadow-sm"
+                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                    }
+                    disabled:opacity-50 disabled:cursor-not-allowed
+                  `}
+                >
+                  {i}
+                </button>
+              );
+            }
+          )}
+        </div>
+      </div>
+    );
+  };
+
   const roleLabel = participant.parliament_role
     ? ROLE_LABELS[participant.parliament_role] ?? participant.parliament_role
     : "Participant";
@@ -242,113 +350,46 @@ export function ScoreForm({
         </div>
       )}
 
-      {/* Criteria Sliders — 2-column grid in landscape */}
-      <div className="space-y-5 landscape-2col">
-        {criteria.map((criterion) => {
-          const value = scores[criterion.key] ?? 0;
-          const pct = criterion.max_score > 0 ? (value / criterion.max_score) * 100 : 0;
+      {/* Criteria Sliders — grouped: evaluation params first, then (only when
+          present) a clearly labeled Participation subsection. The total/maxTotal
+          math above sums ALL criteria regardless of group, so the running total
+          and submit payload are unchanged. When no criterion carries a `kind`
+          (role-rubric fallback), everything is treated as evaluation and renders
+          as a single ungrouped list exactly as before. */}
+      {(() => {
+        const participationCriteria = criteria.filter(
+          (c) => c.kind === "participation"
+        );
+        const evaluationCriteria = criteria.filter(
+          (c) => c.kind !== "participation"
+        );
 
-          return (
-            <div key={criterion.key} className="rounded-lg border border-gray-200 bg-white p-4">
-              <div className="flex items-start justify-between gap-2 mb-1">
-                <div className="min-w-0 flex-1">
-                  <label className="text-sm font-semibold text-gray-900">
-                    {criterion.label}
-                  </label>
-                  <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">
-                    {criterion.description}
-                  </p>
-                </div>
-                <span className="shrink-0 text-lg font-bold text-gray-900 tabular-nums">
-                  {value}
-                  <span className="text-xs font-normal text-gray-400">
-                    /{criterion.max_score}
-                  </span>
-                </span>
-              </div>
-
-              {/* Custom range input with large touch target */}
-              <div className="mt-3 relative">
-                {/* Background track */}
-                <div className="h-3 w-full rounded-full bg-gray-100 overflow-hidden">
-                  <div
-                    className="h-full rounded-full bg-gradient-to-r from-blue-500 to-blue-600 transition-all duration-150"
-                    style={{ width: `${pct}%` }}
-                  />
-                </div>
-                {/* Native range input overlay — large touch area */}
-                <input
-                  type="range"
-                  min={0}
-                  max={criterion.max_score}
-                  step={1}
-                  value={value}
-                  disabled={isLocked}
-                  onChange={(e) =>
-                    handleScoreChange(criterion.key, parseInt(e.target.value, 10))
-                  }
-                  className="absolute inset-0 w-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
-                  style={{ height: "48px", marginTop: "-18px" }}
-                  aria-label={`Score for ${criterion.label}`}
-                />
-              </div>
-
-              {/* Quick-tap score buttons */}
-              <div className="flex gap-1.5 mt-3 flex-wrap">
-                {Array.from(
-                  { length: Math.min(criterion.max_score + 1, 11) },
-                  (_, i) => {
-                    // Show evenly distributed buttons if max > 10
-                    if (criterion.max_score > 10) {
-                      const step = criterion.max_score / 10;
-                      const val = Math.round(i * step);
-                      if (i > 0 && i < 10 && val === scores[criterion.key]) {
-                        // Will show as active
-                      }
-                      return (
-                        <button
-                          key={val}
-                          type="button"
-                          disabled={isLocked}
-                          onClick={() => handleScoreChange(criterion.key, val)}
-                          className={`min-w-[36px] h-9 rounded-md text-xs font-medium transition-all
-                            ${
-                              value === val
-                                ? "bg-blue-600 text-white shadow-sm"
-                                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                            }
-                            disabled:opacity-50 disabled:cursor-not-allowed
-                          `}
-                        >
-                          {val}
-                        </button>
-                      );
-                    }
-                    return (
-                      <button
-                        key={i}
-                        type="button"
-                        disabled={isLocked}
-                        onClick={() => handleScoreChange(criterion.key, i)}
-                        className={`min-w-[36px] h-9 rounded-md text-xs font-medium transition-all
-                          ${
-                            value === i
-                              ? "bg-blue-600 text-white shadow-sm"
-                              : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                          }
-                          disabled:opacity-50 disabled:cursor-not-allowed
-                        `}
-                      >
-                        {i}
-                      </button>
-                    );
-                  }
-                )}
-              </div>
+        return (
+          <>
+            <div className="space-y-5 landscape-2col">
+              {evaluationCriteria.map((criterion) =>
+                renderCriterion(criterion)
+              )}
             </div>
-          );
-        })}
-      </div>
+
+            {participationCriteria.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-3 pt-1">
+                  <span className="text-xs font-bold uppercase tracking-wide text-indigo-700">
+                    Participation
+                  </span>
+                  <span className="h-px flex-1 bg-indigo-200" />
+                </div>
+                <div className="space-y-5 landscape-2col">
+                  {participationCriteria.map((criterion) =>
+                    renderCriterion(criterion)
+                  )}
+                </div>
+              </div>
+            )}
+          </>
+        );
+      })()}
 
       {/* Comments */}
       <div className="rounded-lg border border-gray-200 bg-white p-4">

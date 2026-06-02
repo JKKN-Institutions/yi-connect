@@ -39,7 +39,11 @@ import type { RubricCriterionShape } from "@/lib/yip/rubric";
 
 // Accepts both flat and nested criteria (handbook p.20 MP rubric nests 17
 // sub-criteria under 5 parents). ScoreForm reads `sub_criteria` when present.
-type Criterion = RubricCriterionShape;
+// `kind` is set only on the per-session-params path (evaluation vs participation);
+// the role-rubric fallback leaves it undefined and ScoreForm renders ungrouped.
+type Criterion = RubricCriterionShape & {
+  kind?: "evaluation" | "participation";
+};
 
 interface RubricData {
   id: string;

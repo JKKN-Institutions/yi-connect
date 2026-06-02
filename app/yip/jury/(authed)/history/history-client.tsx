@@ -7,6 +7,7 @@ import { ScoreForm } from "@/components/yip/scoring/score-form";
 import {
   getRubricForRole,
   getScoreForParticipant,
+  getSessionScoringParams,
   submitScore,
   type ScoreWithParticipant,
 } from "@/app/yip/actions/scoring";
@@ -64,7 +65,7 @@ export function HistoryClient({ scores, juryAssignmentId, eventId }: Props) {
 
       const role = score.participant.parliament_role ?? "mp";
 
-      const [rubricResult, freshScore] = await Promise.all([
+      const [rubricResult, freshScore, sessionParams] = await Promise.all([
         getRubricForRole(role),
         getScoreForParticipant(
           juryAssignmentId,
@@ -72,13 +73,23 @@ export function HistoryClient({ scores, juryAssignmentId, eventId }: Props) {
           eventId,
           score.agenda_item_id
         ),
+        // Per-session scoring: the criteria shown for editing come from THIS
+        // score's session (its agenda_item_id) when it has configured params.
+        // Legacy scores with no agenda_item_id keep the role-rubric behavior.
+        score.agenda_item_id
+          ? getSessionScoringParams(score.agenda_item_id)
+          : Promise.resolve(null),
       ]);
 
       if (rubricResult.success) {
+        // Prefer the SESSION's configured parameters; the role rubric supplies
+        // the rubric_id (FK) + the fallback criteria when the session has no
+        // configured parameters. Mirrors jury-scoring-client.tsx.
         setRubric({
           id: rubricResult.data.id,
-          criteria: rubricResult.data.criteria as unknown as Criterion[],
-          total_max: rubricResult.data.total_max,
+          criteria: (sessionParams?.criteria ??
+            rubricResult.data.criteria) as unknown as Criterion[],
+          total_max: sessionParams?.total_max ?? rubricResult.data.total_max,
         });
       }
 

@@ -62,7 +62,12 @@ export async function getRubricForRole(
 export async function getSessionScoringParams(
   agendaItemId: string
 ): Promise<{
-  criteria: { key: string; label: string; max_score: number }[];
+  criteria: {
+    key: string;
+    label: string;
+    max_score: number;
+    kind: "evaluation" | "participation";
+  }[];
   total_max: number;
 } | null> {
   const supabase = await createServiceClient();
@@ -94,12 +99,19 @@ export async function getSessionScoringParams(
     key: string;
     label: string;
     max_score: number;
+    kind?: "evaluation" | "participation";
   }[];
   const criteria = params.map((p) => ({
     key: p.key,
     label: p.label,
     max_score: Number(p.max_score),
-  }));
+    kind: p.kind === "participation" ? "participation" : "evaluation",
+  })) as {
+    key: string;
+    label: string;
+    max_score: number;
+    kind: "evaluation" | "participation";
+  }[];
   if (criteria.length === 0) return null;
   return { criteria, total_max: Number(cfg.total_max) };
 }

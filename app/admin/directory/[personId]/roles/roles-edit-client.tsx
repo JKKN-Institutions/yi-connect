@@ -43,6 +43,51 @@ import {
 const KNOWN_APPS = ["yip", "future", "yuva", "thalir", "masoom", "yi"] as const;
 const YEARS = [2025, 2026, 2027, 2028, 2029, 2030];
 
+/**
+ * Convert a tz-naive datetime-local value ("2026-06-20T17:30") to a UTC ISO
+ * string via an explicit Date — NEVER string-concat (that drops the IST→UTC
+ * offset and silently stores the wrong instant).
+ */
+function localToISO(v: string): string | null {
+  if (!v) return null;
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+/** Status of a role's validity window relative to now. */
+function windowStatus(
+  validFrom: string | null,
+  validUntil: string | null
+): { kind: "open" | "scheduled" | "expired" | "active-window"; label: string } | null {
+  const now = Date.now();
+  if (validFrom) {
+    const from = Date.parse(validFrom);
+    if (!Number.isNaN(from) && now < from) {
+      return { kind: "scheduled", label: `Scheduled · from ${new Date(from).toLocaleString("en-IN")}` };
+    }
+  }
+  if (validUntil) {
+    const until = Date.parse(validUntil);
+    if (!Number.isNaN(until) && now > until) {
+      return { kind: "expired", label: `Expired · ${new Date(until).toLocaleString("en-IN")}` };
+    }
+  }
+  if (validFrom || validUntil) {
+    return {
+      kind: "active-window",
+      label:
+        "Window · " +
+        [
+          validFrom ? `from ${new Date(validFrom).toLocaleDateString("en-IN")}` : null,
+          validUntil ? `until ${new Date(validUntil).toLocaleDateString("en-IN")}` : null,
+        ]
+          .filter(Boolean)
+          .join(" "),
+    };
+  }
+  return null;
+}
+
 type Props = {
   personId: string;
   detail: DirectoryPersonDetail;
@@ -61,6 +106,8 @@ export function RolesEditClient({ personId, detail }: Props) {
     yi_chapter: "",
     title: "",
     is_primary: false,
+    valid_from: "",
+    valid_until: "",
   });
 
   function refresh() {
@@ -80,6 +127,8 @@ export function RolesEditClient({ personId, detail }: Props) {
         yi_chapter: draft.yi_chapter || null,
         title: draft.title || null,
         is_primary: draft.is_primary,
+        valid_from: localToISO(draft.valid_from),
+        valid_until: localToISO(draft.valid_until),
       });
       if (res.success) {
         toast.success(res.message ?? "Role added");
@@ -91,6 +140,8 @@ export function RolesEditClient({ personId, detail }: Props) {
           yi_chapter: "",
           title: "",
           is_primary: false,
+          valid_from: "",
+          valid_until: "",
         });
         refresh();
       } else {
@@ -199,6 +250,34 @@ export function RolesEditClient({ personId, detail }: Props) {
                 }
                 placeholder="e.g. Chennai"
               />
+            </div>
+
+            <div className="space-y-1">
+              <Label>Valid from (optional)</Label>
+              <Input
+                type="datetime-local"
+                value={draft.valid_from}
+                onChange={(e) =>
+                  setDraft({ ...draft, valid_from: e.target.value })
+                }
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Role auto-activates at this time. Blank = active now.
+              </p>
+            </div>
+
+            <div className="space-y-1">
+              <Label>Valid until (optional)</Label>
+              <Input
+                type="datetime-local"
+                value={draft.valid_until}
+                onChange={(e) =>
+                  setDraft({ ...draft, valid_until: e.target.value })
+                }
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Role auto-expires after this time. Blank = no expiry.
+              </p>
             </div>
 
             <div className="flex items-end gap-2">
@@ -360,6 +439,17 @@ function RoleRow({
             </Badge>
           )}
           {!row.is_active && <Badge variant="secondary">Inactive</Badge>}
+          {(() => {
+            const w = windowStatus(row.valid_from, row.valid_until);
+            if (!w) return null;
+            const cls =
+              w.kind === "expired"
+                ? "bg-red-100 text-red-800 hover:bg-red-100"
+                : w.kind === "scheduled"
+                  ? "bg-blue-100 text-blue-800 hover:bg-blue-100"
+                  : "bg-slate-100 text-slate-700 hover:bg-slate-100";
+            return <Badge className={cls}>{w.label}</Badge>;
+          })()}
         </div>
 
         {row.yi_chapter && (

@@ -51,6 +51,10 @@ export type RoleAssignmentInput = {
   yi_zone?: string | null;
   title?: string | null;
   is_primary?: boolean;
+  /** ISO timestamp; role auto-activates at this instant. NULL = active now. */
+  valid_from?: string | null;
+  /** ISO timestamp; role auto-expires after this instant. NULL = no expiry. */
+  valid_until?: string | null;
 };
 
 export type RoleAssignmentPatch = {
@@ -62,6 +66,8 @@ export type RoleAssignmentPatch = {
   title?: string | null;
   is_primary?: boolean;
   is_active?: boolean;
+  valid_from?: string | null;
+  valid_until?: string | null;
 };
 
 export type PersonPatch = {
@@ -144,6 +150,27 @@ function validateRoleInput(input: RoleAssignmentInput): string | null {
   return null;
 }
 
+/** "" / undefined → null; otherwise the trimmed ISO string. */
+function normWindowTs(v: string | null | undefined): string | null {
+  if (v == null) return null;
+  const t = v.trim();
+  return t.length === 0 ? null : t;
+}
+
+/** Validate a [from, until] validity window (both optional). */
+function validateWindow(from: string | null, until: string | null): string | null {
+  if (from && Number.isNaN(Date.parse(from)))
+    return "Valid-from is not a valid date/time";
+  if (until && Number.isNaN(Date.parse(until)))
+    return "Valid-until is not a valid date/time";
+  if (from && until && Date.parse(until) < Date.parse(from))
+    return "Valid-until must be on or after valid-from";
+  return null;
+}
+
+/** Platform-tier role names that must never be given an expiry (self-lockout). */
+const PLATFORM_TIER_ROLE_NAMES = ["platform_super_admin", "super_admin"];
+
 // yi_directory is not in the generated yip schema; cast through a small
 // permissive helper. Same shape the read-side uses.
 type DirRow = Record<string, unknown>;
@@ -184,6 +211,19 @@ export async function addRoleAssignment(
   const vErr = validateRoleInput(input);
   if (vErr) return { success: false, error: vErr };
 
+  const validFrom = normWindowTs(input.valid_from);
+  const validUntil = normWindowTs(input.valid_until);
+  const wErr = validateWindow(validFrom, validUntil);
+  if (wErr) return { success: false, error: wErr };
+  // Never give a platform-tier role an expiry (would lock out the directory).
+  if (validUntil && PLATFORM_TIER_ROLE_NAMES.includes(input.role.trim())) {
+    return {
+      success: false,
+      error:
+        "A platform super-admin role cannot be given an expiry (it would lock everyone out of the directory).",
+    };
+  }
+
   const svc = await createServiceClient();
 
   // Conflict policy: refuse if an ACTIVE row already matches
@@ -218,6 +258,8 @@ export async function addRoleAssignment(
     title: input.title?.trim() || null,
     is_primary: input.is_primary === true,
     is_active: true,
+    valid_from: validFrom,
+    valid_until: validUntil,
   };
 
   const ins = await (svc.schema("yi_directory" as "public") as unknown as DirClient).from("role_assignments")
@@ -283,7 +325,7 @@ export async function updateRoleAssignment(
   // Look up the existing row so we can record what was actually changed.
   const before = await (svc.schema("yi_directory" as "public") as unknown as DirClient).from("role_assignments")
     .select(
-      "id, person_id, app, role, yi_year, yi_chapter, yi_zone, title, is_active, is_primary"
+      "id, person_id, app, role, yi_year, yi_chapter, yi_zone, title, is_active, is_primary, valid_from, valid_until"
     )
     .eq("id", assignmentId)
     .maybeSingle();
@@ -293,6 +335,30 @@ export async function updateRoleAssignment(
   }
 
   const beforeRow = before.data as Record<string, unknown>;
+
+  // Validity-window validation against the EFFECTIVE resulting window (patched
+  // value if provided, else the stored value) + platform self-lockout guard.
+  if (patch.valid_from !== undefined || patch.valid_until !== undefined) {
+    const effFrom =
+      patch.valid_from !== undefined
+        ? normWindowTs(patch.valid_from)
+        : ((beforeRow.valid_from as string | null) ?? null);
+    const effUntil =
+      patch.valid_until !== undefined
+        ? normWindowTs(patch.valid_until)
+        : ((beforeRow.valid_until as string | null) ?? null);
+    const wErr = validateWindow(effFrom, effUntil);
+    if (wErr) return { success: false, error: wErr };
+    const effRole =
+      patch.role !== undefined ? patch.role.trim() : String(beforeRow.role ?? "");
+    if (effUntil && PLATFORM_TIER_ROLE_NAMES.includes(effRole)) {
+      return {
+        success: false,
+        error:
+          "A platform super-admin role cannot be given an expiry (it would lock everyone out of the directory).",
+      };
+    }
+  }
 
   const update: DirRow = {};
   if (patch.app !== undefined) update.app = patch.app.trim().toLowerCase();
@@ -305,6 +371,10 @@ export async function updateRoleAssignment(
   if (patch.title !== undefined) update.title = patch.title?.trim() || null;
   if (patch.is_primary !== undefined) update.is_primary = patch.is_primary;
   if (patch.is_active !== undefined) update.is_active = patch.is_active;
+  if (patch.valid_from !== undefined)
+    update.valid_from = normWindowTs(patch.valid_from);
+  if (patch.valid_until !== undefined)
+    update.valid_until = normWindowTs(patch.valid_until);
   update.updated_at = new Date().toISOString();
 
   const upd = await (svc.schema("yi_directory" as "public") as unknown as DirClient).from("role_assignments")

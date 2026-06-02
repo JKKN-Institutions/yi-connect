@@ -36,12 +36,41 @@ export type PersonRoles = {
 };
 
 /**
+ * True if `now` falls within [valid_from, valid_until] (inclusive). NULL bounds
+ * are open. Fail-closed: a malformed/unparseable bound yields false, so a
+ * broken window can only DENY, never grant (matches the project's
+ * null-scope-must-deny doctrine).
+ */
+function withinValidityWindow(
+  validFrom: string | null | undefined,
+  validUntil: string | null | undefined
+): boolean {
+  const now = Date.now();
+  if (validFrom) {
+    const from = Date.parse(validFrom);
+    if (Number.isNaN(from) || now < from) return false;
+  }
+  if (validUntil) {
+    const until = Date.parse(validUntil);
+    if (Number.isNaN(until) || now > until) return false;
+  }
+  return true;
+}
+
+/**
  * Resolve the currently-authenticated user's yi_directory identity and all
- * their role assignments (active + inactive — callers filter as needed).
+ * their role assignments.
+ *
+ * IMPORTANT: the per-assignment `is_active` returned here is the EFFECTIVE
+ * active flag = stored is_active AND now() within [valid_from, valid_until].
+ * Every auth gate funnels through this function, so time-bounded roles
+ * auto-activate / auto-expire across all gates with no per-gate change. The 4
+ * DB SECURITY DEFINER auth functions enforce the same window on the SQL plane.
  *
  * Returns `null` if:
  *   - no auth session
  *   - no matching yi_directory.people row for this auth user
+ *   - the person is deactivated (is_active=false)
  */
 export async function getCurrentPersonRoles(): Promise<PersonRoles | null> {
   const supabase = await createClient();
@@ -68,11 +97,34 @@ export async function getCurrentPersonRoles(): Promise<PersonRoles | null> {
   // needed) because every predicate funnels through this function.
   if (person.is_active === false) return null;
 
-  // 2. person.id → role_assignments
-  const { data: rows, error: rowsErr } = await svc
+  // 2. person.id → role_assignments.
+  // valid_from / valid_until are new columns not yet in the generated types,
+  // so cast this query to a local typed row (the columns exist in the DB).
+  type RoleRow = {
+    app: string;
+    role: string;
+    yi_year: number;
+    yi_chapter: string | null;
+    yi_zone: string | null;
+    yi_edition_id: string | null;
+    is_active: boolean | null;
+    valid_from: string | null;
+    valid_until: string | null;
+  };
+  const rolesQuery = svc
     .schema("yi_directory")
-    .from("role_assignments")
-    .select("app, role, yi_year, yi_chapter, yi_zone, yi_edition_id, is_active")
+    .from("role_assignments") as unknown as {
+    select: (cols: string) => {
+      eq: (
+        k: string,
+        v: unknown
+      ) => Promise<{ data: RoleRow[] | null; error: unknown }>;
+    };
+  };
+  const { data: rows, error: rowsErr } = await rolesQuery
+    .select(
+      "app, role, yi_year, yi_chapter, yi_zone, yi_edition_id, is_active, valid_from, valid_until"
+    )
     .eq("person_id", person.id);
 
   if (rowsErr) return null;
@@ -84,7 +136,10 @@ export async function getCurrentPersonRoles(): Promise<PersonRoles | null> {
     yi_chapter: r.yi_chapter,
     yi_zone: r.yi_zone,
     yi_edition_id: r.yi_edition_id ?? null,
-    is_active: r.is_active ?? false,
+    // EFFECTIVE active: stored flag AND within the validity window.
+    is_active:
+      (r.is_active ?? false) &&
+      withinValidityWindow(r.valid_from, r.valid_until),
   }));
 
   return {

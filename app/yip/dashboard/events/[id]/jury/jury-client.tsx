@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { addJury, removeJury } from "@/app/yip/actions/jury";
 import { Button } from "@/components/yip/ui/button";
 import { Input } from "@/components/yip/ui/input";
@@ -32,6 +33,7 @@ import {
   Check,
   Scale,
   Loader2,
+  CalendarClock,
 } from "lucide-react";
 
 type JuryAssignment = {
@@ -103,6 +105,18 @@ export function JuryClient({
 
   return (
     <div className="space-y-4">
+      {/* Per-session panels (BUG-385): assign which juror scores which session */}
+      <Link
+        href={`/yip/dashboard/events/${eventId}/jury/sessions`}
+        className="flex items-center justify-between rounded-lg border border-[#FF9933]/30 bg-[#FF9933]/5 px-4 py-2.5 text-sm font-medium text-[#994d00] hover:bg-[#FF9933]/10"
+      >
+        <span className="inline-flex items-center gap-2">
+          <CalendarClock className="size-4" />
+          Assign jurors to sessions
+        </span>
+        <span aria-hidden>→</span>
+      </Link>
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">

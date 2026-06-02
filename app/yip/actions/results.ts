@@ -6,6 +6,8 @@ import { revalidatePath } from "next/cache";
 import { parentScoreByKey } from "@/lib/yip/rubric";
 import { getScoringFlagsConfig, type FlagDeltas } from "./scoring-flags";
 import { getPositionBonusConfig } from "./positions";
+import { getScoringSettings } from "./scoring-settings";
+import { listSessionParameters } from "./session-parameters";
 
 type ActionResult<T = null> =
   | { success: true; data: T }
@@ -64,6 +66,7 @@ type ParticipantLite = {
 
 type RawScore = {
   jury_assignment_id: string;
+  agenda_item_id: string | null;
   total_score: number;
   criteria_scores: Record<string, number>;
   flag_no_confidence_brought: boolean;
@@ -73,9 +76,9 @@ type RawScore = {
 };
 
 // Special Remarks are OBJECTIVE events (a walkout / suspension / ruckus /
-// no-confidence motion happened or it didn't), so each one applies ONCE at its
-// full delta if ANY juror marked it — it is NOT averaged across jurors. This
-// returns the net delta to add a single time to the participant's final score.
+// no-confidence happened or it didn't), so each applies ONCE at full value if
+// ANY juror in ANY session marked it — not averaged. Returns the net delta to
+// add a single time to the participant's final score.
 function participantFlagDelta(scores: RawScore[], deltas: FlagDeltas): number {
   let d = 0;
   if (scores.some((s) => s.flag_no_confidence_brought))
@@ -149,7 +152,7 @@ export async function computeResults(
   const { data: scores, error: scoresError } = await supabase
     .from("scores")
     .select(
-      "participant_id, jury_assignment_id, total_score, criteria_scores, status, flag_no_confidence_brought, flag_walkout, flag_ruckus, flag_suspension"
+      "participant_id, jury_assignment_id, agenda_item_id, total_score, criteria_scores, status, flag_no_confidence_brought, flag_walkout, flag_ruckus, flag_suspension"
     )
     .eq("event_id", eventId)
     .eq("status", "submitted");
@@ -161,7 +164,7 @@ export async function computeResults(
     return { success: false, error: "No submitted scores found for this event" };
   }
 
-  // 1b. Flag deltas config — applied per juror row, before averaging.
+  // 1b. Flag deltas config — applied ONCE per participant (any juror, any session).
   const flagsConfig = await getScoringFlagsConfig();
   const flagDeltas: FlagDeltas = flagsConfig.success
     ? flagsConfig.data.deltas
@@ -171,6 +174,24 @@ export async function computeResults(
   // per juror (bonus is a role attribute, not a per-juror judgement).
   const positionConfig = await getPositionBonusConfig();
   const positionBonuses = positionConfig.bonuses;
+
+  // 1d. Global scoring settings + per-session config — drive the aggregation
+  // (all set by super-admin in the admin Scoring Rules / Session Scoring
+  // screens; nothing hardcoded here).
+  const settings = await getScoringSettings();
+  const sessionCfgByType = new Map(
+    (await listSessionParameters()).map((c) => [
+      c.agenda_type,
+      { total_max: c.total_max, session_weight: c.session_weight },
+    ])
+  );
+  const { data: agendaRows } = await supabase
+    .from("agenda")
+    .select("id, agenda_type")
+    .eq("event_id", eventId);
+  const agendaTypeById = new Map(
+    (agendaRows ?? []).map((a) => [a.id, a.agenda_type])
+  );
 
   // 2. Participants (with constituency for Best Constituency Rep / Community Impact)
   const { data: participants, error: pError } = await supabase
@@ -197,6 +218,7 @@ export async function computeResults(
         : {};
     arr.push({
       jury_assignment_id: s.jury_assignment_id,
+      agenda_item_id: s.agenda_item_id,
       total_score: s.total_score,
       criteria_scores: safeCriteria,
       flag_no_confidence_brought: Boolean(s.flag_no_confidence_brought),
@@ -214,27 +236,70 @@ export async function computeResults(
     const pScores = scoresByParticipant.get(participant.id);
     if (!pScores || pScores.length === 0) continue;
 
-    const juryCount = pScores.length;
-    // F4: Special Remarks are applied ONCE at full value per participant if any
-    // juror marked them (objective events), then layered on top of the averaged
-    // criteria score — NOT averaged per juror. Deltas come from
-    // yip.scoring_flags_config. avg/min both include the once-applied delta so
-    // the leaderboard and MVP award stay consistent.
-    const specialRemarksDelta = participantFlagDelta(pScores, flagDeltas);
-    // F3: role-based position bonus applied once per participant.
+    // Per-session aggregation, driven by the global scoring settings (admin
+    // Scoring Rules screen — nothing hardcoded). One score per session = mean
+    // of the jurors who scored it; optionally normalized to a % of that
+    // session's configured max so sessions with different parameter sets
+    // combine fairly. Then combined per the chosen method. Special remarks +
+    // role bonus apply ONCE on top.
+    const bySession = new Map<string, number[]>();
+    for (const s of pScores) {
+      const key = s.agenda_item_id ?? "__none__";
+      const arr = bySession.get(key) ?? [];
+      arr.push(s.total_score);
+      bySession.set(key, arr);
+    }
+    const sessionEntries = Array.from(bySession.entries()).map(
+      ([agendaItemId, vals]) => {
+        const raw = vals.reduce((a, b) => a + b, 0) / vals.length;
+        const agendaType =
+          agendaItemId === "__none__"
+            ? null
+            : agendaTypeById.get(agendaItemId) ?? null;
+        const cfg = agendaType ? sessionCfgByType.get(agendaType) : undefined;
+        const max = cfg && cfg.total_max > 0 ? cfg.total_max : 0;
+        const score =
+          settings.normalize_per_session && max > 0 ? (raw / max) * 100 : raw;
+        const weight = cfg ? cfg.session_weight : 1;
+        return { score, weight };
+      }
+    );
+
+    let baseScore = 0;
+    let minSession = 0;
+    if (sessionEntries.length > 0) {
+      const arr = sessionEntries.map((e) => e.score);
+      if (settings.aggregation_method === "best_n") {
+        const top = [...arr]
+          .sort((a, b) => b - a)
+          .slice(0, Math.max(1, settings.best_n));
+        baseScore = top.reduce((a, b) => a + b, 0) / top.length;
+        minSession = Math.min(...top);
+      } else if (settings.aggregation_method === "average") {
+        baseScore = arr.reduce((a, b) => a + b, 0) / arr.length;
+        minSession = Math.min(...arr);
+      } else {
+        // weighted_average (default)
+        const totalW = sessionEntries.reduce((a, e) => a + e.weight, 0);
+        baseScore =
+          totalW > 0
+            ? sessionEntries.reduce((a, e) => a + e.score * e.weight, 0) / totalW
+            : arr.reduce((a, b) => a + b, 0) / arr.length;
+        minSession = Math.min(...arr);
+      }
+    }
+
+    // jury_count = distinct jurors who scored this participant (across sessions).
+    const juryCount = new Set(pScores.map((s) => s.jury_assignment_id)).size;
+    // F3: role-based position bonus — applied once per participant.
     const roleBonus =
       (participant.parliament_role && positionBonuses[participant.parliament_role]) || 0;
-    const avgScore =
-      pScores.reduce((sum, s) => sum + s.total_score, 0) / juryCount +
-      roleBonus +
-      specialRemarksDelta;
-    const minJurorScore =
-      pScores.reduce(
-        (min, s) => (s.total_score < min ? s.total_score : min),
-        Infinity
-      ) +
-      roleBonus +
-      specialRemarksDelta;
+    // F4: Special Remarks — once at full value if any juror in any session
+    // marked them (objective events, not averaged).
+    const remarksDelta = participantFlagDelta(pScores, flagDeltas);
+
+    const avgScore = baseScore + roleBonus + remarksDelta;
+    const minJurorScore = minSession + roleBonus + remarksDelta;
 
     const criteriaSum: Record<string, number> = {};
     const criteriaCount: Record<string, number> = {};

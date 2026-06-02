@@ -353,6 +353,41 @@ const YIFUTURE_ROLE_HOME: Record<string, string> = {
   partner: '/yi-future/partner',
 }
 
+/**
+ * Edge-safe extraction of the { type, ... } payload from an access-code
+ * cookie. Accepts BOTH formats:
+ *   • legacy plaintext JSON  "{...}"  (yip_session, yifi_session, and
+ *     pre-signing yifuture_session)
+ *   • HMAC-signed            "base64url(json).base64url(hmac)"
+ *     (new yifuture_session)
+ * The signature is NOT verified here — middleware runs on the Edge runtime
+ * (no node:crypto) and only needs `type` to route. The authoritative
+ * signature check is performed at the page/route layer by readSession()
+ * (Node). A forged cookie can pass this coarse router but is still rejected
+ * by readSession() before any data is served.
+ */
+function parseSessionCookie(value: string): { type?: string } | null {
+  // Legacy plaintext JSON.
+  if (value.startsWith('{')) {
+    try {
+      return JSON.parse(value)
+    } catch {
+      return null
+    }
+  }
+  // Signed format: decode the base64url payload (left of the ".") only.
+  const dot = value.indexOf('.')
+  if (dot <= 0) return null
+  try {
+    let b64 = value.slice(0, dot).replace(/-/g, '+').replace(/_/g, '/')
+    b64 += '='.repeat((4 - (b64.length % 4)) % 4)
+    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))
+    return JSON.parse(new TextDecoder().decode(bytes))
+  } catch {
+    return null
+  }
+}
+
 function requireAccessCodeCookie(
   request: NextRequest,
   supabaseResponse: NextResponse,
@@ -370,19 +405,16 @@ function requireAccessCodeCookie(
   const redirectToJoin = () => redirectTo(joinPath)
 
   if (!session) return redirectToJoin()
-  try {
-    const parsed = JSON.parse(session)
-    if (parsed?.type === expectedType) return supabaseResponse
-    // Valid session for a different role — route to that role's home
-    // instead of bouncing them to the public registration form.
-    if (cookieName === 'yifuture_session' && typeof parsed?.type === 'string') {
-      const correctHome = YIFUTURE_ROLE_HOME[parsed.type]
-      if (correctHome) return redirectTo(correctHome)
-    }
-    return redirectToJoin()
-  } catch {
-    return redirectToJoin()
+  const parsed = parseSessionCookie(session)
+  if (!parsed || typeof parsed.type !== 'string') return redirectToJoin()
+  if (parsed.type === expectedType) return supabaseResponse
+  // Valid session for a different role — route to that role's home
+  // instead of bouncing them to the public registration form.
+  if (cookieName === 'yifuture_session') {
+    const correctHome = YIFUTURE_ROLE_HOME[parsed.type]
+    if (correctHome) return redirectTo(correctHome)
   }
+  return redirectToJoin()
 }
 
 /**

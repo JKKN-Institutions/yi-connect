@@ -12,10 +12,9 @@
  *      stamps future.delegates.email_verified_at.
  */
 
-import { cookies } from "next/headers";
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
 import { sendEmail } from "@/lib/yi-future/email";
-import { SESSION_COOKIE_NAME } from "@/lib/yi-future/constants";
+import { readSession } from "./auth";
 
 const OTP_TTL_MINUTES = 15;
 const OTP_MAX_ATTEMPTS = 5;
@@ -32,16 +31,11 @@ type DelegateSession = {
 };
 
 async function readDelegateSession(): Promise<DelegateSession | null> {
-  const jar = await cookies();
-  const raw = jar.get(SESSION_COOKIE_NAME)?.value;
-  if (!raw) return null;
-  try {
-    const s = JSON.parse(raw) as DelegateSession;
-    if (s.type !== "delegate" || !s.id) return null;
-    return s;
-  } catch {
-    return null;
-  }
+  // Route through the canonical readSession() so this honours the signed
+  // cookie format (and dual-accepts legacy plaintext during rollout).
+  const s = await readSession();
+  if (!s || s.type !== "delegate" || !s.id) return null;
+  return { type: s.type, id: s.id, edition_id: s.edition_id, name: s.name };
 }
 
 function generateOtpCode(): string {

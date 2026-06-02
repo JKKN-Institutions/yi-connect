@@ -5,8 +5,22 @@ import { isPlatformSuperAdmin } from "@/lib/yi/auth/yi-directory-roles";
 
 function parseSession(raw: string | undefined): Record<string, unknown> | null {
   if (!raw) return null;
+  // Plaintext JSON cookie (yifi_session, yip_session, legacy yifuture_session).
+  if (raw.startsWith("{")) {
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+  // Signed yifuture_session: base64url(json) "." base64url(hmac). Decode the
+  // payload to read `type` for routing only — the module's own gate verifies
+  // the signature. (Server component → Node Buffer is available.)
+  const dot = raw.indexOf(".");
+  if (dot <= 0) return null;
   try {
-    return JSON.parse(raw);
+    const json = Buffer.from(raw.slice(0, dot), "base64url").toString("utf8");
+    return JSON.parse(json);
   } catch {
     return null;
   }

@@ -1,5 +1,6 @@
 "use server";
 
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient, createServiceClient } from "@/lib/yi-future/supabase/server";
@@ -249,9 +250,45 @@ export async function clearAccessCodeSession(): Promise<void> {
 }
 
 // ─── SESSION HELPERS ────────────────────────────────────────────────
+//
+// The yifuture_session cookie carries a server-trusted identity
+// ({ type, id, edition_id, name }) that gates delegate / mentor / jury /
+// partner data — including parent-PII consent PDFs. A bare plaintext JSON
+// cookie can be hand-forged by anyone who knows or guesses a row UUID, so
+// we HMAC-SHA256 sign it. Stored as:  base64url(json) "." base64url(HMAC).
+//
+// ROLLOUT NOTE (read this before tightening): readSession deliberately
+// ACCEPTS legacy plaintext cookies as well as signed ones. A previous
+// attempt (#276) fail-closed-rejected every unsigned cookie the moment it
+// shipped, which instantly logged out every already-signed-in user and
+// looked like "login is broken" (reverted in #294). The dual-accept window
+// below is what prevents a repeat. SECURITY: while plaintext is still
+// accepted, the forgery vector is open at the SAME level it is today
+// (pre-signing) — no regression, but not yet closed. A follow-up should
+// flip to signed-only once existing cookies have re-minted (<=30d maxAge).
+
+function getSessionSecret(): string {
+  return process.env.YIFUTURE_SESSION_SECRET ?? "";
+}
+
+function signPayload(json: string, secret: string): string {
+  return createHmac("sha256", secret).update(json).digest("base64url");
+}
+
 async function writeSession(payload: SessionPayload): Promise<void> {
+  const secret = getSessionSecret();
+  const json = JSON.stringify(payload);
+  // Sign when a secret is configured. If it is somehow absent, fall back to
+  // a plaintext cookie rather than THROWING — a throwing writeSession turns
+  // a missing env var into a hard login outage. readSession reads both.
+  const value = secret
+    ? Buffer.from(json, "utf8").toString("base64url") +
+      "." +
+      signPayload(json, secret)
+    : json;
+
   const jar = await cookies();
-  jar.set(SESSION_COOKIE_NAME, JSON.stringify(payload), {
+  jar.set(SESSION_COOKIE_NAME, value, {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
@@ -264,9 +301,45 @@ export async function readSession(): Promise<SessionPayload | null> {
   const jar = await cookies();
   const raw = jar.get(SESSION_COOKIE_NAME)?.value;
   if (!raw) return null;
-  try {
-    return JSON.parse(raw) as SessionPayload;
-  } catch {
-    return null;
+
+  // Disambiguate by first character — no edge cases:
+  //   • LEGACY plaintext cookie -> bare JSON, always starts with "{"
+  //   • SIGNED cookie           -> base64url(json), always starts with "eyJ"
+  //     (base64url of a payload beginning `{"` is always "eyJ...").
+  // So a "." inside a delegate's name can NEVER be mistaken for the
+  // signature separator, and the two formats never collide.
+
+  // LEGACY plaintext (pre-signing). Accept during the rollout window so
+  // in-flight sessions are not mass-logged-out. See ROLLOUT NOTE above.
+  if (raw.startsWith("{")) {
+    try {
+      return JSON.parse(raw) as SessionPayload;
+    } catch {
+      return null;
+    }
   }
+
+  // SIGNED cookie: "<base64url(json)>.<base64url(hmac)>".
+  const secret = getSessionSecret();
+  if (!secret) return null; // cannot verify without the secret
+  const dot = raw.indexOf(".");
+  if (dot <= 0 || dot === raw.length - 1) return null; // malformed
+
+  const encodedPayload = raw.slice(0, dot);
+  const providedSig = raw.slice(dot + 1);
+  try {
+    const json = Buffer.from(encodedPayload, "base64url").toString("utf8");
+    const expectedSig = signPayload(json, secret);
+    const providedBuf = Buffer.from(providedSig);
+    const expectedBuf = Buffer.from(expectedSig);
+    if (
+      providedBuf.length === expectedBuf.length &&
+      timingSafeEqual(providedBuf, expectedBuf)
+    ) {
+      return JSON.parse(json) as SessionPayload;
+    }
+  } catch {
+    return null; // malformed signed cookie
+  }
+  return null; // signature mismatch — forged / corrupted / wrong secret
 }

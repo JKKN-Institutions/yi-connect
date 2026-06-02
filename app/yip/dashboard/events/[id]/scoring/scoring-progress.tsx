@@ -30,6 +30,7 @@ import {
   Clock,
   Star,
   Users,
+  ChevronRight,
 } from "lucide-react";
 
 function formatRelative(dateStr: string | null): string {
@@ -352,7 +353,15 @@ export function ScoringProgress({
                     const color = statusColor(p.juriesScored, p.totalJuries);
                     const side = p.party_side as "ruling" | "opposition" | null;
                     return (
-                      <TableRow key={p.id}>
+                      <TableRow
+                        key={p.id}
+                        onClick={() =>
+                          router.push(
+                            `/yip/dashboard/events/${eventId}/scoring/${p.id}`
+                          )
+                        }
+                        className="cursor-pointer hover:bg-gray-50"
+                      >
                         <TableCell>
                           <div>
                             <p className="font-medium text-sm">
@@ -398,9 +407,12 @@ export function ScoringProgress({
                             : "--"}
                         </TableCell>
                         <TableCell>
-                          <div
-                            className={`size-2.5 rounded-full ${STATUS_DOTS[color]}`}
-                          />
+                          <div className="flex items-center justify-end gap-2">
+                            <div
+                              className={`size-2.5 rounded-full ${STATUS_DOTS[color]}`}
+                            />
+                            <ChevronRight className="size-4 text-gray-300" />
+                          </div>
                         </TableCell>
                       </TableRow>
                     );

@@ -46,6 +46,11 @@ const METHOD_LABELS: { value: AggregationMethod; label: string; hint: string }[]
     label: "Best-N sessions",
     hint: "Average only a delegate's top-N session scores.",
   },
+  {
+    value: "sum",
+    label: "Sum — additive total (official workbook)",
+    hint: "Adds each component's score to a total out of 100.",
+  },
 ];
 
 function Saved({ msg }: { msg: string | null }) {

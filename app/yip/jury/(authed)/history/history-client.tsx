@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { ScoreCard } from "@/components/yip/scoring/score-card";
 import { ScoreForm } from "@/components/yip/scoring/score-form";
@@ -18,7 +18,11 @@ interface Criterion {
   key: string;
   label: string;
   max_score: number;
-  description: string;
+  description?: string | null;
+  // Per-session params carry a kind so the edit view groups participation
+  // parameters the same way live scoring does. Undefined on the role-rubric
+  // fallback path (renders ungrouped) — mirrors ScoreForm's Criterion.
+  kind?: "evaluation" | "participation";
 }
 
 interface RubricData {
@@ -53,6 +57,44 @@ export function HistoryClient({ scores, juryAssignmentId, eventId }: Props) {
   // Per-session (BUG-385): the session this history row belongs to, so editing
   // updates that session's score rather than overwriting a different one.
   const [editAgendaItemId, setEditAgendaItemId] = useState<string | null>(null);
+
+  // Per-session denominators (workbook 2026): a session is scored out of its
+  // OWN total (15/20/10/…), NOT the role rubric's /100—/110. Resolve the real
+  // max for each distinct session once so every card shows the correct /N and a
+  // correctly-filled ring. Rows whose session has no configured params keep the
+  // role-rubric total_max (resolved below at render time).
+  const [sessionMaxById, setSessionMaxById] = useState<Record<string, number>>(
+    {}
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    const ids = Array.from(
+      new Set(
+        scores
+          .map((s) => s.agenda_item_id)
+          .filter((id): id is string => Boolean(id))
+      )
+    );
+    if (ids.length === 0) return;
+    (async () => {
+      const entries = await Promise.all(
+        ids.map(async (id) => {
+          const params = await getSessionScoringParams(id);
+          return [id, params?.total_max] as const;
+        })
+      );
+      if (cancelled) return;
+      const map: Record<string, number> = {};
+      for (const [id, max] of entries) {
+        if (typeof max === "number") map[id] = max;
+      }
+      setSessionMaxById(map);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [scores]);
 
   const handleEditClick = useCallback(
     async (score: ScoreWithParticipant) => {
@@ -241,7 +283,12 @@ export function HistoryClient({ scores, juryAssignmentId, eventId }: Props) {
               parliamentRole={score.participant.parliament_role}
               partySide={score.participant.party_side}
               totalScore={score.total_score}
-              maxScore={score.rubric?.total_max ?? 100}
+              maxScore={
+                (score.agenda_item_id &&
+                  sessionMaxById[score.agenda_item_id]) ||
+                score.rubric?.total_max ||
+                100
+              }
               status={score.status}
               updatedAt={score.updated_at}
               onClick={

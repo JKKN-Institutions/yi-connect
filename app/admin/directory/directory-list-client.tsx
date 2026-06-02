@@ -9,6 +9,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
+import { toast } from "sonner";
 import {
   ArrowDown,
   ArrowUp,
@@ -17,6 +18,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Mail,
+  Power,
+  PowerOff,
   Search,
   ShieldAlert,
   UserPlus,
@@ -41,6 +44,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { bulkSetPersonActive } from "./actions/directory-mutations";
 import type {
   DirectoryListResult,
   DirectoryStatusFilter,
@@ -114,6 +118,7 @@ export function DirectoryListClient({
 
   const [q, setQ] = useState(initialFilters.q);
   const [chapter, setChapter] = useState(initialFilters.chapter);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const selectedApps = useMemo(
     () => (initialFilters.apps ? initialFilters.apps.split(",").filter(Boolean) : []),
@@ -159,6 +164,45 @@ export function DirectoryListClient({
   }
 
   const { rows, total, page, limit, available_years } = initialResult;
+
+  function toggleRow(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+  const pageIds = rows.map((r) => r.id);
+  const allOnPageSelected =
+    pageIds.length > 0 && pageIds.every((id) => selected.has(id));
+  function toggleAll() {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (allOnPageSelected) pageIds.forEach((id) => next.delete(id));
+      else pageIds.forEach((id) => next.add(id));
+      return next;
+    });
+  }
+  function runBulkActive(isActive: boolean) {
+    const ids = [...selected];
+    if (ids.length === 0) return;
+    startTransition(async () => {
+      const res = await bulkSetPersonActive(ids, isActive);
+      if (res.success) {
+        toast.success(res.message ?? "Done");
+        if (res.data && res.data.skipped.length > 0) {
+          toast.message(
+            `${res.data.skipped.length} skipped (e.g. last platform super-admin)`
+          );
+        }
+        setSelected(new Set());
+        router.refresh();
+      } else {
+        toast.error(res.error);
+      }
+    });
+  }
   const totalPages = Math.max(1, Math.ceil(total / limit));
 
   return (
@@ -326,11 +370,56 @@ export function DirectoryListClient({
         </div>
       </div>
 
+      {/* Bulk action toolbar */}
+      {selected.size > 0 ? (
+        <div className="flex items-center justify-between rounded-lg border border-slate-300 bg-slate-50 px-4 py-2">
+          <span className="text-sm font-medium text-slate-700">
+            {selected.size} selected
+          </span>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={isPending}
+              onClick={() => runBulkActive(true)}
+            >
+              <Power className="mr-1.5 h-4 w-4" /> Reactivate
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={isPending}
+              onClick={() => runBulkActive(false)}
+              className="border-red-200 text-red-600 hover:bg-red-50"
+            >
+              <PowerOff className="mr-1.5 h-4 w-4" /> Deactivate
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={isPending}
+              onClick={() => setSelected(new Set())}
+            >
+              Clear
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
       {/* Table */}
       <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-8">
+                <input
+                  type="checkbox"
+                  aria-label="Select all on page"
+                  checked={allOnPageSelected}
+                  onChange={toggleAll}
+                  className="h-4 w-4 rounded border-input"
+                />
+              </TableHead>
               <TableHead>
                 <button
                   type="button"
@@ -367,7 +456,7 @@ export function DirectoryListClient({
             {rows.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={6}
+                  colSpan={7}
                   className="py-10 text-center text-sm text-slate-500"
                 >
                   No people match the current filters.
@@ -379,6 +468,15 @@ export function DirectoryListClient({
                   key={p.id}
                   className={isPending ? "opacity-60" : undefined}
                 >
+                  <TableCell className="w-8">
+                    <input
+                      type="checkbox"
+                      aria-label={`Select ${p.full_name}`}
+                      checked={selected.has(p.id)}
+                      onChange={() => toggleRow(p.id)}
+                      className="h-4 w-4 rounded border-input"
+                    />
+                  </TableCell>
                   <TableCell>
                     <Link
                       href={`/admin/directory/${p.id}`}

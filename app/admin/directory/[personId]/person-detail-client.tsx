@@ -26,6 +26,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { setPersonActive } from "../actions/directory-mutations";
+import { MergePanel } from "./merge-panel";
 import type {
   DirectoryPersonDetail,
   RoleAssignmentRow,
@@ -333,6 +334,11 @@ export function PersonDetailClient({
           </div>
         </section>
       ) : null}
+
+      {/* Merge — fold a duplicate identity into this (canonical) person */}
+      <section className="border-t border-slate-200 pt-4">
+        <MergePanel targetId={person.id} targetName={person.full_name} />
+      </section>
     </div>
   );
 }

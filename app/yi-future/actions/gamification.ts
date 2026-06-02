@@ -1,9 +1,8 @@
 "use server";
 
-import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
-import { SESSION_COOKIE_NAME } from "@/lib/yi-future/constants";
+import { readSession } from "./auth";
 
 // ─── LIVE COUNTERS (safe for public SSR/client) ────────────────────
 export type LiveCounts = {
@@ -205,16 +204,11 @@ export type CompleteProfileInput = {
 type SessionPayload = { type: string; id: string; edition_id: string };
 
 async function readDelegateSession(): Promise<SessionPayload | null> {
-  const jar = await cookies();
-  const raw = jar.get(SESSION_COOKIE_NAME)?.value;
-  if (!raw) return null;
-  try {
-    const s = JSON.parse(raw) as SessionPayload;
-    if (s.type !== "delegate") return null;
-    return s;
-  } catch {
-    return null;
-  }
+  // Route through the canonical readSession() so this honours the signed
+  // cookie format (and dual-accepts legacy plaintext during rollout).
+  const s = await readSession();
+  if (!s || s.type !== "delegate") return null;
+  return { type: s.type, id: s.id, edition_id: s.edition_id };
 }
 
 export type CompleteProfileResult =

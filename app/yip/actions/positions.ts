@@ -12,7 +12,9 @@
  * do NOT reimplement role-assignment here.
  */
 
-import { createClient } from "@/lib/yip/supabase/server";
+import { createClient, createServiceClient } from "@/lib/yip/supabase/server";
+import { requireSuperAdmin } from "@/lib/yip/auth/require-super-admin";
+import { revalidatePath } from "next/cache";
 import type { Database } from "@/types/yip/database";
 
 type ParliamentRole = Database["public"]["Enums"]["parliament_role"];
@@ -143,4 +145,31 @@ export async function getAllEventParticipants(
     .order("full_name");
 
   return data ?? [];
+}
+
+// Super-admin: update the per-role position bonuses (singleton, global).
+export async function updatePositionBonusConfig(
+  bonuses: Record<string, number>
+): Promise<{ success: true } | { success: false; error: string }> {
+  const gate = await requireSuperAdmin();
+  if (!gate.ok) return { success: false, error: gate.error };
+
+  const clean: Record<string, number> = {};
+  for (const [k, v] of Object.entries(bonuses ?? {})) {
+    const n = Number(v);
+    if (Number.isFinite(n)) clean[k] = n;
+  }
+
+  const supabase = await createServiceClient();
+  const { error } = await supabase.from("position_bonus_config").upsert(
+    {
+      id: true,
+      bonuses: clean as unknown as never,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "id" }
+  );
+  if (error) return { success: false, error: error.message };
+  revalidatePath("/dashboard/admin/scoring-rules");
+  return { success: true };
 }

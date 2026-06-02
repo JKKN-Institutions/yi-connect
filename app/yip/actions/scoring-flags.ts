@@ -1,6 +1,8 @@
 "use server";
 
 import { createServiceClient } from "@/lib/yip/supabase/server";
+import { requireSuperAdmin } from "@/lib/yip/auth/require-super-admin";
+import { revalidatePath } from "next/cache";
 
 type ActionResult<T = null> =
   | { success: true; data: T }
@@ -80,4 +82,32 @@ export async function getScoringFlagsConfig(): Promise<
       updated_at: data.updated_at,
     },
   };
+}
+
+// Super-admin: update the Special Remarks point deltas (singleton, global).
+export async function updateScoringFlagsConfig(
+  deltas: FlagDeltas
+): Promise<ActionResult<{ deltas: FlagDeltas }>> {
+  const gate = await requireSuperAdmin();
+  if (!gate.ok) return { success: false, error: gate.error };
+
+  const clean = coerceDeltas(deltas);
+  for (const v of Object.values(clean)) {
+    if (!Number.isFinite(v)) {
+      return { success: false, error: "All deltas must be numbers" };
+    }
+  }
+
+  const supabase = await createServiceClient();
+  const { error } = await supabase.from("scoring_flags_config").upsert(
+    {
+      id: true,
+      deltas: clean as unknown as never,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "id" }
+  );
+  if (error) return { success: false, error: error.message };
+  revalidatePath("/dashboard/admin/scoring-rules");
+  return { success: true, data: { deltas: clean } };
 }

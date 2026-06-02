@@ -4,8 +4,9 @@ import { createServiceClient } from "@/lib/yip/supabase/server";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { revalidatePath } from "next/cache";
 import { parentScoreByKey } from "@/lib/yip/rubric";
-import { getScoringFlagsConfig, type FlagDeltas } from "./scoring-flags";
 import { getPositionBonusConfig } from "./positions";
+import { getScoringSettings } from "./scoring-settings";
+import { listSessionParameters } from "./session-parameters";
 
 type ActionResult<T = null> =
   | { success: true; data: T }
@@ -64,6 +65,7 @@ type ParticipantLite = {
 
 type RawScore = {
   jury_assignment_id: string;
+  agenda_item_id: string | null;
   total_score: number;
   criteria_scores: Record<string, number>;
   flag_no_confidence_brought: boolean;
@@ -72,18 +74,15 @@ type RawScore = {
   flag_suspension: boolean;
 };
 
-// Special Remarks are OBJECTIVE events (a walkout / suspension / ruckus /
-// no-confidence motion happened or it didn't), so each one applies ONCE at its
-// full delta if ANY juror marked it — it is NOT averaged across jurors. This
-// returns the net delta to add a single time to the participant's final score.
-function participantFlagDelta(scores: RawScore[], deltas: FlagDeltas): number {
-  let d = 0;
-  if (scores.some((s) => s.flag_no_confidence_brought))
-    d += deltas.no_confidence_brought;
-  if (scores.some((s) => s.flag_walkout)) d += deltas.walkout;
-  if (scores.some((s) => s.flag_ruckus)) d += deltas.ruckus;
-  if (scores.some((s) => s.flag_suspension)) d += deltas.suspension;
-  return d;
+// Disciplinary special-remarks flags (walkout / ruckus / suspension) are
+// OBJECTIVE events. Under the Yi 2026 Evaluation Workbook they NO LONGER alter
+// the additive /100 total — they only gate the "Exemplary Parliamentary
+// Decorum" award. Returns true if ANY juror in ANY session raised a
+// disciplinary flag for the participant.
+function hasDisciplinaryFlag(scores: RawScore[]): boolean {
+  return scores.some(
+    (s) => s.flag_walkout || s.flag_ruckus || s.flag_suspension
+  );
 }
 
 type ResultRow = {
@@ -93,6 +92,9 @@ type ResultRow = {
   jury_count: number;
   score_breakdown: Record<string, number>;
   min_juror_score: number; // for MVP consistency
+  // In-memory only (NOT persisted) — used by award logic below.
+  baseScore: number; // additive component sum, EXCLUDING position points
+  hasDisciplinary: boolean; // any walkout / ruckus / suspension flag
   rank: number;
   award_category: string | null;
   computed_at: string;
@@ -149,7 +151,7 @@ export async function computeResults(
   const { data: scores, error: scoresError } = await supabase
     .from("scores")
     .select(
-      "participant_id, jury_assignment_id, total_score, criteria_scores, status, flag_no_confidence_brought, flag_walkout, flag_ruckus, flag_suspension"
+      "participant_id, jury_assignment_id, agenda_item_id, total_score, criteria_scores, status, flag_no_confidence_brought, flag_walkout, flag_ruckus, flag_suspension"
     )
     .eq("event_id", eventId)
     .eq("status", "submitted");
@@ -161,16 +163,64 @@ export async function computeResults(
     return { success: false, error: "No submitted scores found for this event" };
   }
 
-  // 1b. Flag deltas config — applied per juror row, before averaging.
-  const flagsConfig = await getScoringFlagsConfig();
-  const flagDeltas: FlagDeltas = flagsConfig.success
-    ? flagsConfig.data.deltas
-    : { no_confidence_brought: 3, walkout: -5, ruckus: -3, suspension: -10 };
-
-  // 1c. Position bonuses (F3) — applied ONCE per participant to avg/min, NOT
-  // per juror (bonus is a role attribute, not a per-juror judgement).
+  // 1c. Position points (Yi 2026 Workbook) — auto-awarded per role, applied
+  // ONCE per participant and CAPPED at 10 (the Position Points component is
+  // max 10 of the /100 total). Not a per-juror judgement.
   const positionConfig = await getPositionBonusConfig();
   const positionBonuses = positionConfig.bonuses;
+
+  // 1d. Global scoring settings + per-session config — drive the aggregation
+  // (all set by super-admin in the admin Scoring Rules / Session Scoring
+  // screens; nothing hardcoded here).
+  const settings = await getScoringSettings();
+
+  // Build TWO config lookups from the global session catalog:
+  //   • cfgBySessionKey — 1:1, the PRIMARY key. Each of the 11 handbook
+  //     sessions has its own session_key, so this distinguishes the 3
+  //     duplicated agenda_types (2 Speaker / 2 Opening / 2 Debate sessions).
+  //   • cfgByType — FALLBACK only, for agenda items not yet tagged with a
+  //     session_key. When several configs share an agenda_type we keep the one
+  //     with the LOWEST display_order (iterate in ascending display_order and
+  //     only set on first sight) so the fallback is deterministic.
+  const sessionConfigs = await listSessionParameters();
+  const cfgBySessionKey = new Map<
+    string,
+    { total_max: number; session_weight: number }
+  >();
+  const cfgByType = new Map<
+    string,
+    { total_max: number; session_weight: number }
+  >();
+  for (const c of [...sessionConfigs].sort(
+    (a, b) => a.display_order - b.display_order
+  )) {
+    cfgBySessionKey.set(c.session_key, {
+      total_max: c.total_max,
+      session_weight: c.session_weight,
+    });
+    if (c.agenda_type && !cfgByType.has(c.agenda_type)) {
+      cfgByType.set(c.agenda_type, {
+        total_max: c.total_max,
+        session_weight: c.session_weight,
+      });
+    }
+  }
+
+  const { data: agendaRows } = await supabase
+    .from("agenda")
+    .select("id, agenda_type, session_key")
+    .eq("event_id", eventId);
+  // Map agenda_item_id → { agenda_type, session_key } so per-session config can
+  // be resolved by session_key FIRST (1:1), falling back to agenda_type.
+  const agendaById = new Map<
+    string,
+    { agenda_type: string | null; session_key: string | null }
+  >(
+    (agendaRows ?? []).map((a) => [
+      a.id,
+      { agenda_type: a.agenda_type, session_key: a.session_key },
+    ])
+  );
 
   // 2. Participants (with constituency for Best Constituency Rep / Community Impact)
   const { data: participants, error: pError } = await supabase
@@ -197,6 +247,7 @@ export async function computeResults(
         : {};
     arr.push({
       jury_assignment_id: s.jury_assignment_id,
+      agenda_item_id: s.agenda_item_id,
       total_score: s.total_score,
       criteria_scores: safeCriteria,
       flag_no_confidence_brought: Boolean(s.flag_no_confidence_brought),
@@ -214,27 +265,98 @@ export async function computeResults(
     const pScores = scoresByParticipant.get(participant.id);
     if (!pScores || pScores.length === 0) continue;
 
-    const juryCount = pScores.length;
-    // F4: Special Remarks are applied ONCE at full value per participant if any
-    // juror marked them (objective events), then layered on top of the averaged
-    // criteria score — NOT averaged per juror. Deltas come from
-    // yip.scoring_flags_config. avg/min both include the once-applied delta so
-    // the leaderboard and MVP award stay consistent.
-    const specialRemarksDelta = participantFlagDelta(pScores, flagDeltas);
-    // F3: role-based position bonus applied once per participant.
-    const roleBonus =
-      (participant.parliament_role && positionBonuses[participant.parliament_role]) || 0;
-    const avgScore =
-      pScores.reduce((sum, s) => sum + s.total_score, 0) / juryCount +
-      roleBonus +
-      specialRemarksDelta;
-    const minJurorScore =
-      pScores.reduce(
-        (min, s) => (s.total_score < min ? s.total_score : min),
-        Infinity
-      ) +
-      roleBonus +
-      specialRemarksDelta;
+    // Per-session aggregation, driven by the global scoring settings (admin
+    // Scoring Rules screen — nothing hardcoded). Each scoreable agenda item
+    // maps 1:1 to a scoring component (session_key); a participant's score for
+    // a component = MEAN of that component's juror total_scores. When
+    // normalize_per_session is false (Yi 2026 Workbook additive model) the raw
+    // component means are used as-is. Components are then combined per the
+    // chosen method. Position Points apply ONCE on top (capped at 10).
+    const bySession = new Map<string, number[]>();
+    for (const s of pScores) {
+      const key = s.agenda_item_id ?? "__none__";
+      const arr = bySession.get(key) ?? [];
+      arr.push(s.total_score);
+      bySession.set(key, arr);
+    }
+    const sessionEntries = Array.from(bySession.entries()).map(
+      ([agendaItemId, vals]) => {
+        const raw = vals.reduce((a, b) => a + b, 0) / vals.length;
+        // Resolve this scored session's config 1:1: session_key FIRST (the
+        // primary key — distinguishes the 3 repeated agenda_types), then fall
+        // back to agenda_type for items not yet tagged with a session_key.
+        // If neither resolves → no config (max=0 → no normalize, weight=1).
+        const meta =
+          agendaItemId === "__none__" ? null : agendaById.get(agendaItemId);
+        let cfg: { total_max: number; session_weight: number } | undefined;
+        if (meta) {
+          if (meta.session_key && cfgBySessionKey.has(meta.session_key)) {
+            cfg = cfgBySessionKey.get(meta.session_key);
+          } else if (meta.agenda_type && cfgByType.has(meta.agenda_type)) {
+            cfg = cfgByType.get(meta.agenda_type);
+          }
+        }
+        const max = cfg && cfg.total_max > 0 ? cfg.total_max : 0;
+        // Use RAW component totals unless normalize_per_session is enabled.
+        const score =
+          settings.normalize_per_session && max > 0 ? (raw / max) * 100 : raw;
+        const weight = cfg ? cfg.session_weight : 1;
+        return { score, weight };
+      }
+    );
+
+    // `aggregation_method` is widened to string here so the additive 'sum'
+    // model (Yi 2026 Workbook) can be matched without changing the shared
+    // ScoringSettings type in scoring-settings.ts. Other events keep
+    // average / weighted_average / best_n.
+    const method = settings.aggregation_method as string;
+
+    let baseScore = 0;
+    let minSession = 0;
+    if (sessionEntries.length > 0) {
+      const arr = sessionEntries.map((e) => e.score);
+      if (method === "sum") {
+        // Yi 2026 Workbook: additive — final base = SUM of per-component means
+        // (do NOT divide by count). Each component is already capped by its
+        // configured max, so the six juror-scored components sum to 90.
+        baseScore = arr.reduce((a, b) => a + b, 0);
+        minSession = Math.min(...arr);
+      } else if (method === "best_n") {
+        const top = [...arr]
+          .sort((a, b) => b - a)
+          .slice(0, Math.max(1, settings.best_n));
+        baseScore = top.reduce((a, b) => a + b, 0) / top.length;
+        minSession = Math.min(...top);
+      } else if (method === "average") {
+        baseScore = arr.reduce((a, b) => a + b, 0) / arr.length;
+        minSession = Math.min(...arr);
+      } else {
+        // weighted_average (default)
+        const totalW = sessionEntries.reduce((a, e) => a + e.weight, 0);
+        baseScore =
+          totalW > 0
+            ? sessionEntries.reduce((a, e) => a + e.score * e.weight, 0) / totalW
+            : arr.reduce((a, b) => a + b, 0) / arr.length;
+        minSession = Math.min(...arr);
+      }
+    }
+
+    // jury_count = distinct jurors who scored this participant (across sessions).
+    const juryCount = new Set(pScores.map((s) => s.jury_assignment_id)).size;
+    // Position Points (auto) — applied once per participant, capped at 10.
+    const positionPoints = Math.min(
+      10,
+      (participant.parliament_role &&
+        positionBonuses[participant.parliament_role]) ||
+        0
+    );
+    // Disciplinary flags no longer alter the total — award-gating only.
+    const hasDisciplinary = hasDisciplinaryFlag(pScores);
+
+    // Final additive total out of 100: 6 juror-scored components (sum 90) +
+    // Position Points (max 10). Special remarks are NOT added.
+    const avgScore = baseScore + positionPoints;
+    const minJurorScore = minSession + positionPoints;
 
     const criteriaSum: Record<string, number> = {};
     const criteriaCount: Record<string, number> = {};
@@ -261,6 +383,8 @@ export async function computeResults(
       jury_count: juryCount,
       score_breakdown: scoreBreakdown,
       min_juror_score: minJurorScore === Infinity ? 0 : Math.round(minJurorScore * 100) / 100,
+      baseScore: Math.round(baseScore * 100) / 100,
+      hasDisciplinary,
       rank: 0,
       award_category: null,
       computed_at: new Date().toISOString(),
@@ -282,64 +406,107 @@ export async function computeResults(
     participants.map((p) => [p.id, p as ParticipantLite])
   );
 
-  // ── 15 awards from YIP 2026 Handbook page 21 ───────────────────
-  // Each derivation is documented inline so the National team can audit it.
+  // ── 9 awards from the Yi 2026 Evaluation Workbook ──────────────
+  // All awards roll up the NAMESPACED criterion keys "<comp>.<criterion>"
+  // (comp ∈ {mupi,qh,zero,pol,cmte,bill}). parentScoreByKey() sums any key
+  // equal to OR prefixed by the family, so parentScoreByKey(b,'pol') =
+  // Political Acumen total and parentScoreByKey(b,'mupi.conduct') = the single
+  // MuPI conduct criterion. sumKeys() adds an explicit list of criteria.
 
   const all = (_p: ParticipantLite) => true;
-  const isSpeaker = (p: ParticipantLite) => p.parliament_role === "speaker";
-  const isIndependent = (p: ParticipantLite) => p.parliament_role === "independent_mp";
-  const isLeadership = (p: ParticipantLite) =>
-    p.parliament_role !== null && LEADERSHIP_ROLES.has(p.parliament_role);
-  const isRuling = (p: ParticipantLite) => isRulingMP(p.parliament_role, p.party_side);
-  const isOpposition = (p: ParticipantLite) => isOppositionMP(p.parliament_role, p.party_side);
-  const hasConstituency = (p: ParticipantLite) =>
-    p.constituency_name !== null && p.constituency_name.trim().length > 0;
-  const isConstituencyMP = (p: ParticipantLite) =>
-    hasConstituency(p) && (p.parliament_role === "mp" || p.parliament_role === "independent_mp");
 
-  const byAvg = (r: ResultRow) => r.avg_score;
-  // Parent-aware criterion lookup: works with legacy flat rubrics
-  // ({"content": 20}) AND the new nested rubrics
-  // ({"content.relevance": 8, "content.originality": 7, "content.research": 5}).
-  // Handbook p.20 awards are defined at the parent-criterion level, so we
-  // always roll children up.
-  const byCriterion = (key: string) => (r: ResultRow) =>
-    parentScoreByKey(r.score_breakdown, key);
-  const byContentPlusArgumentation = (r: ResultRow) =>
-    parentScoreByKey(r.score_breakdown, "content") +
-    parentScoreByKey(r.score_breakdown, "argumentation");
-  const byMinJuror = (r: ResultRow) => r.min_juror_score;
+  // Sum an explicit set of namespaced criterion keys.
+  const sumKeys =
+    (keys: string[]) =>
+    (r: ResultRow): number =>
+      keys.reduce((sum, k) => sum + parentScoreByKey(r.score_breakdown, k), 0);
 
-  // 1. Best Parliamentarian — top overall
-  assignAward(resultRows, participantMap, "Best Parliamentarian", all, byAvg);
-  // 2. Best Speaker — top among role=speaker
-  assignAward(resultRows, participantMap, "Best Speaker", isSpeaker, byAvg);
-  // 3. Leadership Excellence — top across all leadership roles
-  assignAward(resultRows, participantMap, "Leadership Excellence", isLeadership, byAvg);
-  // 4. Best Member — Ruling Bench
-  assignAward(resultRows, participantMap, "Best Member — Ruling Bench", isRuling, byAvg);
-  // 5. Best Member — Opposition Bench
-  assignAward(resultRows, participantMap, "Best Member — Opposition Bench", isOpposition, byAvg);
-  // 6. Best Debater — top argumentation criterion
-  assignAward(resultRows, participantMap, "Best Debater", all, byCriterion("argumentation"));
-  // 7. Most Persuasive Policy Advocate — content + argumentation combined
-  assignAward(resultRows, participantMap, "Most Persuasive Policy Advocate", all, byContentPlusArgumentation);
-  // 8. Best Research & Presentation — top content criterion
-  assignAward(resultRows, participantMap, "Best Research & Presentation", all, byCriterion("content"));
-  // 9. Innovative Ideas — top content (proxy for originality sub-criterion)
-  assignAward(resultRows, participantMap, "Innovative Ideas", all, byCriterion("content"));
-  // 10. Community Impact — top among constituency-bearing participants
-  assignAward(resultRows, participantMap, "Community Impact", hasConstituency, byContentPlusArgumentation);
-  // 11. MVP — most consistent excellence (highest minimum juror score)
-  assignAward(resultRows, participantMap, "Most Valuable Participant (MVP)", all, byMinJuror);
-  // 12. Team Spirit — top teamwork criterion
-  assignAward(resultRows, participantMap, "Team Spirit", all, byCriterion("teamwork"));
-  // 13. Exemplary Parliamentary Decorum — top conduct criterion
-  assignAward(resultRows, participantMap, "Exemplary Parliamentary Decorum", all, byCriterion("conduct"));
-  // 14. Independent Voice of the House — top among independent_mp role (skipped if none)
-  assignAward(resultRows, participantMap, "Independent Voice of the House", isIndependent, byAvg);
-  // 15. Best Constituency Representative — top MP/Independent with assigned constituency
-  assignAward(resultRows, participantMap, "Best Constituency Representative", isConstituencyMP, byAvg);
+  // 1. Best Parliamentarian — top overall additive total.
+  assignAward(
+    resultRows,
+    participantMap,
+    "Best Parliamentarian",
+    all,
+    (r) => r.avg_score
+  );
+  // 2. Best Debater — Political Acumen + Question Hour.
+  assignAward(resultRows, participantMap, "Best Debater", all, (r) =>
+    parentScoreByKey(r.score_breakdown, "pol") +
+    parentScoreByKey(r.score_breakdown, "qh")
+  );
+  // 3. Best Research & Presentation — research/knowledge across components.
+  assignAward(
+    resultRows,
+    participantMap,
+    "Best Research & Presentation",
+    all,
+    sumKeys([
+      "mupi.research_constituency",
+      "qh.subject_knowledge",
+      "bill.understanding",
+      "cmte.research_contribution",
+    ])
+  );
+  // 4. Most Valuable Participant (MVP) — top base score (EXCLUDING position).
+  assignAward(
+    resultRows,
+    participantMap,
+    "Most Valuable Participant (MVP)",
+    all,
+    (r) => r.baseScore
+  );
+  // 5. Best Constituency Representative — MuPI + Question Hour + Zero Hour.
+  assignAward(
+    resultRows,
+    participantMap,
+    "Best Constituency Representative",
+    all,
+    (r) =>
+      parentScoreByKey(r.score_breakdown, "mupi") +
+      parentScoreByKey(r.score_breakdown, "qh") +
+      parentScoreByKey(r.score_breakdown, "zero")
+  );
+  // 6. Exemplary Parliamentary Decorum — clean conduct only; sum conduct
+  //    criteria. Eligible = no disciplinary flag raised by any juror.
+  assignAward(
+    resultRows,
+    participantMap,
+    "Exemplary Parliamentary Decorum",
+    (_p, r) => !r.hasDisciplinary,
+    sumKeys(["mupi.conduct", "zero.conduct", "bill.conduct"])
+  );
+  // 7. Team Spirit — committee collaboration + committee-level credit.
+  assignAward(
+    resultRows,
+    participantMap,
+    "Team Spirit",
+    all,
+    sumKeys([
+      "cmte.team_collaboration",
+      "cmte.committee_level",
+      "bill.committee_level",
+    ])
+  );
+  // 8. Innovative Ideas — Zero Hour creativity / problem-solving / policy.
+  assignAward(
+    resultRows,
+    participantMap,
+    "Innovative Ideas",
+    all,
+    sumKeys(["zero.creativity", "zero.problem_solving", "zero.policy_orientation"])
+  );
+  // 9. Community Impact — policy orientation + bill feasibility + constituency research.
+  assignAward(
+    resultRows,
+    participantMap,
+    "Community Impact",
+    all,
+    sumKeys([
+      "zero.policy_orientation",
+      "bill.feasibility",
+      "mupi.research_constituency",
+    ])
+  );
 
   // 7. Replace and persist
   await supabase.from("results").delete().eq("event_id", eventId);

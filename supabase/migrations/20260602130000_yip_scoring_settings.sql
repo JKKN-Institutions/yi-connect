@@ -20,7 +20,7 @@ create table if not exists yip.scoring_settings (
   updated_at            timestamptz not null default now(),
   constraint scoring_settings_singleton check (id),
   constraint scoring_settings_method_valid
-    check (aggregation_method in ('weighted_average', 'average', 'best_n'))
+    check (aggregation_method in ('weighted_average', 'average', 'best_n', 'sum'))
 );
 
 alter table yip.scoring_settings enable row level security;

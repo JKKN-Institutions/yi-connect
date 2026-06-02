@@ -2,6 +2,7 @@
 
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { requireJurySession } from "@/lib/yip/auth/yip-session";
+import { isJurorAssignedToSession } from "./jury-sessions";
 import type { Tables } from "@/types/yip/database";
 
 type Score = Tables<{ schema: "yip" }, "scores">;
@@ -53,6 +54,68 @@ export async function getRubricForRole(
   return { success: true, data: rubric };
 }
 
+// ─── Session scoring parameters ───────────────────────────────────
+// Per-session scoring: the criteria a juror sees come from the SESSION's
+// configured parameters (yip.session_parameters), resolved from the agenda item
+// via its session_key (preferred) or agenda_type. Returns null when the session
+// has no configured parameters (caller falls back to the role rubric).
+export async function getSessionScoringParams(
+  agendaItemId: string
+): Promise<{
+  criteria: {
+    key: string;
+    label: string;
+    max_score: number;
+    kind: "evaluation" | "participation";
+  }[];
+  total_max: number;
+} | null> {
+  const supabase = await createServiceClient();
+  const { data: item } = await supabase
+    .from("agenda")
+    .select("session_key, agenda_type")
+    .eq("id", agendaItemId)
+    .maybeSingle();
+  if (!item) return null;
+
+  let cfgQuery = supabase
+    .from("session_parameters")
+    .select("parameters, total_max")
+    .eq("is_active", true);
+  if (item.session_key) {
+    cfgQuery = cfgQuery.eq("session_key", item.session_key);
+  } else if (item.agenda_type) {
+    cfgQuery = cfgQuery
+      .eq("agenda_type", item.agenda_type)
+      .order("display_order", { ascending: true });
+  } else {
+    return null;
+  }
+  const { data: cfgs } = await cfgQuery.limit(1);
+  const cfg = cfgs?.[0];
+  if (!cfg || !Array.isArray(cfg.parameters)) return null;
+
+  const params = cfg.parameters as {
+    key: string;
+    label: string;
+    max_score: number;
+    kind?: "evaluation" | "participation";
+  }[];
+  const criteria = params.map((p) => ({
+    key: p.key,
+    label: p.label,
+    max_score: Number(p.max_score),
+    kind: p.kind === "participation" ? "participation" : "evaluation",
+  })) as {
+    key: string;
+    label: string;
+    max_score: number;
+    kind: "evaluation" | "participation";
+  }[];
+  if (criteria.length === 0) return null;
+  return { criteria, total_max: Number(cfg.total_max) };
+}
+
 // ─── Submit Score (upsert + audit log) ────────────────────────────
 
 interface SubmitScoreInput {
@@ -100,13 +163,31 @@ export async function submitScore(
     return { success: false, error: "Scoring is locked for this event" };
   }
 
-  // Check if an existing score exists for this jury + participant
+  // Per-session scoring (BUG-385): every score belongs to a specific session,
+  // and a juror may only score sessions they're assigned to.
+  if (!input.agendaItemId) {
+    return {
+      success: false,
+      error: "No session selected — pick the session you're scoring.",
+    };
+  }
+  const assigned = await isJurorAssignedToSession(
+    input.juryAssignmentId,
+    input.agendaItemId
+  );
+  if (!assigned) {
+    return { success: false, error: "You're not assigned to score this session." };
+  }
+
+  // One score per (juror, participant, SESSION) — so the same delegate scored
+  // in a later session creates a new row instead of overwriting the earlier one.
   const { data: existing } = await supabase
     .from("scores")
     .select("id, criteria_scores, total_score, status")
     .eq("jury_assignment_id", input.juryAssignmentId)
     .eq("participant_id", input.participantId)
     .eq("event_id", input.eventId)
+    .eq("agenda_item_id", input.agendaItemId)
     .maybeSingle();
 
   // If existing score is locked, prevent edit
@@ -238,16 +319,27 @@ export async function getScoresForJury(
 export async function getScoreForParticipant(
   juryAssignmentId: string,
   participantId: string,
-  eventId: string
+  eventId: string,
+  agendaItemId?: string | null
 ): Promise<Score | null> {
   const supabase = await createServiceClient();
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("scores")
     .select("*")
     .eq("jury_assignment_id", juryAssignmentId)
     .eq("participant_id", participantId)
-    .eq("event_id", eventId)
+    .eq("event_id", eventId);
+
+  // Per-session: when a session is given, load that session's score exactly.
+  // Without one (legacy callers), fall back to the most recent row.
+  if (agendaItemId) {
+    query = query.eq("agenda_item_id", agendaItemId);
+  }
+
+  const { data, error } = await query
+    .order("updated_at", { ascending: false })
+    .limit(1)
     .maybeSingle();
 
   if (error || !data) return null;

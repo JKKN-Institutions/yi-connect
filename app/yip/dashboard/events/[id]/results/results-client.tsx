@@ -32,160 +32,99 @@ import {
   Award,
   Crown,
   Star,
-  Shield,
-  Swords,
   ArrowUpRight,
   MessageSquare,
   Lightbulb,
   BookOpen,
   Users,
   Heart,
-  Sparkles,
   Gavel,
-  Mic,
   MapPin,
   TrendingUp,
 } from "lucide-react";
 
-// ─── Award card config — 15 awards from YIP 2026 Handbook page 21 ─────────
+// ─── Award card styling ───────────────────────────────────────────
+// The engine decides which awards exist and emits their labels in
+// `award_category` (a comma-joined string). The UI must render whatever
+// labels are present — never assume a fixed list or count. This map only
+// supplies presentation (icon + colors) per known label; any label not
+// found here falls back to a neutral style, so new/renamed awards still
+// render correctly.
 
-const AWARD_CARDS = [
-  {
-    key: "Best Parliamentarian",
-    label: "Best Parliamentarian",
+type AwardStyle = {
+  icon: typeof Award;
+  bg: string;
+  border: string;
+  iconColor: string;
+};
+
+const AWARD_STYLES: Record<string, AwardStyle> = {
+  "Best Parliamentarian": {
     icon: Crown,
-    gradient: "from-amber-500 to-yellow-400",
     bg: "bg-gradient-to-br from-amber-50 to-yellow-50",
     border: "border-amber-200",
     iconColor: "text-amber-600",
   },
-  {
-    key: "Best Speaker",
-    label: "Best Speaker",
-    icon: Gavel,
-    gradient: "from-purple-500 to-indigo-500",
-    bg: "bg-gradient-to-br from-purple-50 to-indigo-50",
-    border: "border-purple-200",
-    iconColor: "text-purple-600",
-  },
-  {
-    key: "Leadership Excellence",
-    label: "Leadership Excellence",
-    icon: Star,
-    gradient: "from-orange-500 to-amber-400",
-    bg: "bg-gradient-to-br from-orange-50 to-amber-50",
-    border: "border-orange-200",
-    iconColor: "text-orange-600",
-  },
-  {
-    key: "Best Member — Ruling Bench",
-    label: "Best Member — Ruling Bench",
-    icon: Shield,
-    gradient: "from-blue-600 to-blue-400",
-    bg: "bg-gradient-to-br from-blue-50 to-sky-50",
-    border: "border-blue-200",
-    iconColor: "text-blue-700",
-  },
-  {
-    key: "Best Member — Opposition Bench",
-    label: "Best Member — Opposition Bench",
-    icon: Swords,
-    gradient: "from-red-500 to-rose-500",
-    bg: "bg-gradient-to-br from-red-50 to-rose-50",
-    border: "border-red-200",
-    iconColor: "text-red-600",
-  },
-  {
-    key: "Best Debater",
-    label: "Best Debater",
+  "Best Debater": {
     icon: MessageSquare,
-    gradient: "from-fuchsia-500 to-pink-500",
     bg: "bg-gradient-to-br from-fuchsia-50 to-pink-50",
     border: "border-fuchsia-200",
     iconColor: "text-fuchsia-600",
   },
-  {
-    key: "Most Persuasive Policy Advocate",
-    label: "Most Persuasive Policy Advocate",
-    icon: Mic,
-    gradient: "from-teal-500 to-cyan-500",
-    bg: "bg-gradient-to-br from-teal-50 to-cyan-50",
-    border: "border-teal-200",
-    iconColor: "text-teal-600",
-  },
-  {
-    key: "Best Research & Presentation",
-    label: "Best Research & Presentation",
+  "Best Research & Presentation": {
     icon: BookOpen,
-    gradient: "from-indigo-500 to-blue-500",
     bg: "bg-gradient-to-br from-indigo-50 to-blue-50",
     border: "border-indigo-200",
     iconColor: "text-indigo-600",
   },
-  {
-    key: "Innovative Ideas",
-    label: "Innovative Ideas",
-    icon: Lightbulb,
-    gradient: "from-yellow-500 to-amber-400",
-    bg: "bg-gradient-to-br from-yellow-50 to-amber-50",
-    border: "border-yellow-200",
-    iconColor: "text-yellow-600",
-  },
-  {
-    key: "Community Impact",
-    label: "Community Impact",
-    icon: Heart,
-    gradient: "from-rose-500 to-pink-500",
-    bg: "bg-gradient-to-br from-rose-50 to-pink-50",
-    border: "border-rose-200",
-    iconColor: "text-rose-600",
-  },
-  {
-    key: "Most Valuable Participant (MVP)",
-    label: "MVP",
+  "Most Valuable Participant (MVP)": {
     icon: TrendingUp,
-    gradient: "from-emerald-500 to-teal-500",
     bg: "bg-gradient-to-br from-emerald-50 to-teal-50",
     border: "border-emerald-200",
     iconColor: "text-emerald-600",
   },
-  {
-    key: "Team Spirit",
-    label: "Team Spirit",
-    icon: Users,
-    gradient: "from-cyan-500 to-blue-500",
-    bg: "bg-gradient-to-br from-cyan-50 to-blue-50",
-    border: "border-cyan-200",
-    iconColor: "text-cyan-600",
-  },
-  {
-    key: "Exemplary Parliamentary Decorum",
-    label: "Exemplary Parliamentary Decorum",
-    icon: Award,
-    gradient: "from-violet-500 to-purple-500",
-    bg: "bg-gradient-to-br from-violet-50 to-purple-50",
-    border: "border-violet-200",
-    iconColor: "text-violet-600",
-  },
-  {
-    key: "Independent Voice of the House",
-    label: "Independent Voice",
-    icon: Sparkles,
-    gradient: "from-emerald-600 to-green-500",
-    bg: "bg-gradient-to-br from-emerald-50 to-green-50",
-    border: "border-emerald-200",
-    iconColor: "text-emerald-700",
-  },
-  {
-    key: "Best Constituency Representative",
-    label: "Best Constituency Representative",
+  "Best Constituency Representative": {
     icon: MapPin,
-    gradient: "from-saffron-500 to-orange-400",
     bg: "bg-gradient-to-br from-orange-50 to-amber-50",
     border: "border-orange-200",
     iconColor: "text-orange-700",
   },
-] as const;
+  "Exemplary Parliamentary Decorum": {
+    icon: Gavel,
+    bg: "bg-gradient-to-br from-violet-50 to-purple-50",
+    border: "border-violet-200",
+    iconColor: "text-violet-600",
+  },
+  "Team Spirit": {
+    icon: Users,
+    bg: "bg-gradient-to-br from-cyan-50 to-blue-50",
+    border: "border-cyan-200",
+    iconColor: "text-cyan-600",
+  },
+  "Innovative Ideas": {
+    icon: Lightbulb,
+    bg: "bg-gradient-to-br from-yellow-50 to-amber-50",
+    border: "border-yellow-200",
+    iconColor: "text-yellow-600",
+  },
+  "Community Impact": {
+    icon: Heart,
+    bg: "bg-gradient-to-br from-rose-50 to-pink-50",
+    border: "border-rose-200",
+    iconColor: "text-rose-600",
+  },
+};
+
+const DEFAULT_AWARD_STYLE: AwardStyle = {
+  icon: Star,
+  bg: "bg-gradient-to-br from-slate-50 to-gray-50",
+  border: "border-gray-200",
+  iconColor: "text-gray-600",
+};
+
+function getAwardStyle(label: string): AwardStyle {
+  return AWARD_STYLES[label] ?? DEFAULT_AWARD_STYLE;
+}
 
 function getMinistryLabel(key: string | null): string {
   if (!key) return "";
@@ -396,11 +335,14 @@ export function ResultsClient({
     setPublishLoading(false);
   }
 
-  // Build award winners map
+  // Build award winners map from whatever labels the engine emitted.
   const awardWinners = new Map<string, ResultWithParticipant[]>();
   for (const r of results) {
     if (r.award_category) {
-      const categories = r.award_category.split(", ");
+      const categories = r.award_category
+        .split(",")
+        .map((c) => c.trim())
+        .filter(Boolean);
       for (const cat of categories) {
         const existing = awardWinners.get(cat) ?? [];
         existing.push(r);
@@ -408,6 +350,19 @@ export function ResultsClient({
       }
     }
   }
+
+  // Order: known awards first (in the order declared in AWARD_STYLES),
+  // then any unrecognized labels alphabetically. Only labels actually
+  // present in the data are rendered.
+  const styleOrder = Object.keys(AWARD_STYLES);
+  const awardLabels = Array.from(awardWinners.keys()).sort((a, b) => {
+    const ai = styleOrder.indexOf(a);
+    const bi = styleOrder.indexOf(b);
+    if (ai !== -1 && bi !== -1) return ai - bi;
+    if (ai !== -1) return -1;
+    if (bi !== -1) return 1;
+    return a.localeCompare(b);
+  });
 
   if (results.length === 0) {
     return (
@@ -538,63 +493,47 @@ export function ResultsClient({
         </div>
       </div>
 
-      {/* Award Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {AWARD_CARDS.map((award) => {
-          const winners = awardWinners.get(award.key);
-          if (!winners || winners.length === 0) {
+      {/* Award Cards — driven entirely by the labels present in the data */}
+      {awardLabels.length > 0 && (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {awardLabels.map((label) => {
+            const winners = awardWinners.get(label) ?? [];
+            const style = getAwardStyle(label);
+            const Icon = style.icon;
             return (
-              <Card key={award.key} className={`${award.bg} border ${award.border} opacity-50`}>
+              <Card key={label} className={`${style.bg} border ${style.border}`}>
                 <CardContent className="pt-6">
                   <div className="flex items-start gap-3">
-                    <award.icon className={`size-8 ${award.iconColor}`} />
+                    <Icon className={`size-8 shrink-0 ${style.iconColor}`} />
                     <div className="min-w-0">
                       <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                        {award.label}
+                        {label}
                       </p>
-                      <p className="mt-1 text-sm text-gray-400 italic">
-                        No winner
-                      </p>
+                      {winners.map((w) => (
+                        <div key={w.participant_id} className="mt-1">
+                          <p className="text-base font-bold text-gray-900 truncate">
+                            {w.participant.full_name}
+                          </p>
+                          <p className="text-xs text-gray-600">
+                            {w.participant.school_name}
+                          </p>
+                          <p className="mt-1 text-lg font-bold text-gray-900">
+                            {w.avg_score?.toFixed(1)}
+                            <span className="text-xs font-normal text-gray-500">
+                              {" "}
+                              pts
+                            </span>
+                          </p>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 </CardContent>
               </Card>
             );
-          }
-
-          return (
-            <Card key={award.key} className={`${award.bg} border ${award.border}`}>
-              <CardContent className="pt-6">
-                <div className="flex items-start gap-3">
-                  <award.icon className={`size-8 shrink-0 ${award.iconColor}`} />
-                  <div className="min-w-0">
-                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                      {award.label}
-                    </p>
-                    {winners.map((w) => (
-                      <div key={w.participant_id} className="mt-1">
-                        <p className="text-base font-bold text-gray-900 truncate">
-                          {w.participant.full_name}
-                        </p>
-                        <p className="text-xs text-gray-600">
-                          {w.participant.school_name}
-                        </p>
-                        <p className="mt-1 text-lg font-bold text-gray-900">
-                          {w.avg_score?.toFixed(1)}
-                          <span className="text-xs font-normal text-gray-500">
-                            {" "}
-                            pts
-                          </span>
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
+          })}
+        </div>
+      )}
 
       {/* Leaderboard Table */}
       <Card>
@@ -675,15 +614,19 @@ export function ResultsClient({
                       <TableCell>
                         {r.award_category && (
                           <div className="flex flex-wrap gap-1">
-                            {r.award_category.split(", ").map((a) => (
-                              <Badge
-                                key={a}
-                                variant="secondary"
-                                className="bg-amber-100 text-amber-800 text-[10px] px-1.5 py-0"
-                              >
-                                {a}
-                              </Badge>
-                            ))}
+                            {r.award_category
+                              .split(",")
+                              .map((a) => a.trim())
+                              .filter(Boolean)
+                              .map((a) => (
+                                <Badge
+                                  key={a}
+                                  variant="secondary"
+                                  className="bg-amber-100 text-amber-800 text-[10px] px-1.5 py-0"
+                                >
+                                  {a}
+                                </Badge>
+                              ))}
                           </div>
                         )}
                       </TableCell>

@@ -35,6 +35,19 @@ export default async function AllocationPage({
     .order("serial_no", { nullsFirst: false })
     .order("full_name");
 
+  // Parties must be set up (>=1 ruling + >=1 opposition) before allocation can
+  // run — the engine assigns participants into those benches.
+  const { data: parties } = await supabase
+    .from("parties")
+    .select("side")
+    .eq("event_id", id);
+  const rulingPartyCount = (parties ?? []).filter(
+    (p) => p.side === "ruling"
+  ).length;
+  const oppositionPartyCount = (parties ?? []).filter(
+    (p) => p.side === "opposition"
+  ).length;
+
   // Parse custom committee topics
   let customCommittees: string[] | undefined;
   if (event.committee_topics) {
@@ -54,6 +67,8 @@ export default async function AllocationPage({
       participants={participants ?? []}
       allocationLocked={event.allocation_locked ?? false}
       customCommittees={customCommittees}
+      rulingPartyCount={rulingPartyCount}
+      oppositionPartyCount={oppositionPartyCount}
     />
   );
 }

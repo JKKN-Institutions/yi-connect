@@ -1,17 +1,30 @@
 -- YiFi self-serve registration: the form IS the census IS the routing input.
 --
 -- Adds three nullable columns (expectations/intent, team size, free-text chapter
--- for a national registrant base) and a public SECURITY DEFINER RPC that:
+-- for a national registrant base) and public SECURITY DEFINER RPCs that match the
+-- existing unexposed-yifi-schema pattern (yifi_lookup_registrant / yifi_update_census).
+--
+-- Security posture (the registration page /yifi/join is PUBLIC + unauthenticated):
+--   * yifi_register_self NEVER returns an existing registrant's access_code. On a
+--     duplicate (edition_id, email) it returns only { already_registered: true } so
+--     possession of an email can NOT mint a session or reveal a credential. A fresh
+--     code is returned only for a row created in this same call.
+--   * yifi_prefill_by_email returns name only (no phone/photo) to avoid turning the
+--     member directory into a public phone book.
+--   * All three functions are locked to service_role (the server actions use the
+--     service client); EXECUTE is revoked from PUBLIC.
+--
+-- Behaviour:
 --   * resolves the current edition (status != 'archived'),
---   * is idempotent on (edition_id, email) so a double-submit returns the same
---     row instead of hitting the UNIQUE(edition_id, email) constraint,
+--   * idempotent on (edition_id, email) — sequential AND concurrent (the INSERT is
+--     guarded against the UNIQUE(edition_id, email) race),
 --   * generates a collision-free YIFI-XXXX access code,
---   * handles couples (creates the partner as their own registrant, cross-links),
+--   * handles couples: the partner becomes their own registrant (census_complete
+--     FALSE so they complete their own census at /yifi/me — spec: each spouse is
+--     filtered to their own problems), cross-linked; if the partner's email is
+--     already registered we link to that row instead of dropping it,
 --   * flips census_complete with the SAME rule as yifi_update_census
 --     (>= 1 challenge AND a non-empty sector) so the Census Monitor counts it.
---
--- All access to the unexposed `yifi` schema stays behind public RPCs, matching
--- the existing yifi_lookup_registrant / yifi_update_census pattern.
 
 -- 1. Additive schema (nullable, no backfill)
 ALTER TABLE yifi.registrants ADD COLUMN IF NOT EXISTS seeking text[];
@@ -66,7 +79,7 @@ SECURITY DEFINER
 AS $$
 DECLARE
   v_edition_id    uuid;
-  v_existing      yifi.registrants%ROWTYPE;
+  v_dup_id        uuid;
   v_code          text;
   v_partner_code  text;
   v_id            uuid;
@@ -77,9 +90,13 @@ DECLARE
   v_phone         text := nullif(trim(coalesce(p_phone, '')), '');
   v_chapter       text := nullif(trim(coalesce(p_chapter_name, '')), '');
   v_sector        text := nullif(trim(coalesce(p_sector, '')), '');
+  v_org           text := nullif(trim(coalesce(p_organisation, '')), '');
+  v_desig         text := nullif(trim(coalesce(p_designation, '')), '');
+  v_city          text := nullif(trim(coalesce(p_city, '')), '');
   v_mc            text := lower(nullif(trim(coalesce(p_member_category, '')), ''));
   v_team          text := nullif(trim(coalesce(p_total_team_size, '')), '');
   v_partner_name  text := nullif(trim(coalesce(p_partner_name, '')), '');
+  v_partner_phone text := nullif(trim(coalesce(p_partner_phone, '')), '');
   v_partner_email text := nullif(trim(coalesce(p_partner_email, '')), '');
 BEGIN
   IF v_name IS NULL THEN
@@ -107,65 +124,79 @@ BEGIN
   v_census := (coalesce(array_length(p_challenges, 1), 0) >= 1
                AND v_sector IS NOT NULL);
 
-  -- idempotency: same edition + email -> return the existing row (no duplicate)
+  -- idempotency: same edition + email -> say so, but NEVER leak the existing code
+  -- or mint a session for an identity the caller has not proven they own.
   IF v_email IS NOT NULL THEN
-    SELECT * INTO v_existing
+    SELECT id INTO v_dup_id
     FROM yifi.registrants
     WHERE edition_id = v_edition_id AND lower(email) = lower(v_email)
     LIMIT 1;
-    IF FOUND THEN
-      RETURN json_build_object(
-        'id', v_existing.id,
-        'access_code', v_existing.access_code,
-        'full_name', v_existing.full_name,
-        'edition_id', v_existing.edition_id,
-        'census_complete', v_existing.census_complete,
-        'already_registered', true
-      );
+    IF v_dup_id IS NOT NULL THEN
+      RETURN json_build_object('already_registered', true);
     END IF;
   END IF;
 
   v_code := public.yifi_gen_access_code();
 
-  INSERT INTO yifi.registrants (
-    edition_id, access_code, full_name, email, phone, member_category,
-    chapter_name, sector, organisation, designation, city, challenges,
-    can_offer, seeking, total_team_size, is_couple, census_complete
-  ) VALUES (
-    v_edition_id, v_code, v_name, v_email, v_phone, v_mc,
-    v_chapter, v_sector,
-    nullif(trim(coalesce(p_organisation, '')), ''),
-    nullif(trim(coalesce(p_designation, '')), ''),
-    nullif(trim(coalesce(p_city, '')), ''),
-    p_challenges, coalesce(p_can_offer, '{}'::jsonb), p_seeking, v_team,
-    coalesce(p_is_couple, false), v_census
-  )
-  RETURNING id INTO v_id;
+  -- primary insert, guarded against the concurrent (edition_id, email) race
+  BEGIN
+    INSERT INTO yifi.registrants (
+      edition_id, access_code, full_name, email, phone, member_category,
+      chapter_name, sector, organisation, designation, city, challenges,
+      can_offer, seeking, total_team_size, is_couple, census_complete
+    ) VALUES (
+      v_edition_id, v_code, v_name, v_email, v_phone, v_mc,
+      v_chapter, v_sector, v_org, v_desig, v_city,
+      p_challenges, coalesce(p_can_offer, '{}'::jsonb), p_seeking, v_team,
+      coalesce(p_is_couple, false), v_census
+    )
+    RETURNING id INTO v_id;
+  EXCEPTION WHEN unique_violation THEN
+    -- a concurrent submit for the same email won the race; treat as duplicate
+    -- (still never returning the existing code)
+    RETURN json_build_object('already_registered', true);
+  END;
 
-  -- couple: partner becomes their own registrant (own access code), cross-linked
+  -- couple: partner becomes their own registrant. They complete THEIR OWN census
+  -- at /yifi/me, so census_complete starts FALSE (do not overcount completion).
   IF coalesce(p_is_couple, false) AND v_partner_name IS NOT NULL THEN
-    v_partner_code := public.yifi_gen_access_code();
-    BEGIN
-      INSERT INTO yifi.registrants (
-        edition_id, access_code, full_name, email, phone, member_category,
-        chapter_name, sector, organisation, designation, city, challenges,
-        can_offer, seeking, total_team_size, is_couple, partner_registrant_id,
-        census_complete
-      ) VALUES (
-        v_edition_id, v_partner_code, v_partner_name, v_partner_email,
-        nullif(trim(coalesce(p_partner_phone, '')), ''), v_mc,
-        v_chapter, v_sector,
-        nullif(trim(coalesce(p_organisation, '')), ''), null,
-        nullif(trim(coalesce(p_city, '')), ''),
-        p_challenges, coalesce(p_can_offer, '{}'::jsonb), p_seeking, v_team,
-        true, v_id, v_census
-      )
-      RETURNING id INTO v_partner_id;
+    -- if the partner is already registered (by email) link to that row, don't dup
+    IF v_partner_email IS NOT NULL THEN
+      SELECT id INTO v_partner_id
+      FROM yifi.registrants
+      WHERE edition_id = v_edition_id AND lower(email) = lower(v_partner_email)
+      LIMIT 1;
+    END IF;
 
-      UPDATE yifi.registrants SET partner_registrant_id = v_partner_id WHERE id = v_id;
-    EXCEPTION WHEN unique_violation THEN
-      v_partner_id := NULL;  -- partner email already registered; skip silently
-    END;
+    IF v_partner_id IS NULL THEN
+      v_partner_code := public.yifi_gen_access_code();
+      BEGIN
+        INSERT INTO yifi.registrants (
+          edition_id, access_code, full_name, email, phone, member_category,
+          chapter_name, sector, organisation, designation, city, challenges,
+          can_offer, seeking, total_team_size, is_couple, partner_registrant_id,
+          census_complete
+        ) VALUES (
+          v_edition_id, v_partner_code, v_partner_name, v_partner_email,
+          v_partner_phone, v_mc, v_chapter, v_sector, v_org, null, v_city,
+          p_challenges, coalesce(p_can_offer, '{}'::jsonb), p_seeking, v_team,
+          true, v_id, false
+        )
+        RETURNING id INTO v_partner_id;
+      EXCEPTION WHEN unique_violation THEN
+        -- raced to register the partner email; fall back to linking the existing row
+        SELECT id INTO v_partner_id
+        FROM yifi.registrants
+        WHERE edition_id = v_edition_id AND lower(email) = lower(v_partner_email)
+        LIMIT 1;
+      END;
+    END IF;
+
+    IF v_partner_id IS NOT NULL THEN
+      UPDATE yifi.registrants SET partner_registrant_id = v_partner_id, is_couple = true WHERE id = v_id;
+      UPDATE yifi.registrants SET partner_registrant_id = v_id, is_couple = true
+        WHERE id = v_partner_id AND partner_registrant_id IS NULL;
+    END IF;
   END IF;
 
   RETURN json_build_object(
@@ -174,14 +205,14 @@ BEGIN
     'full_name', v_name,
     'edition_id', v_edition_id,
     'census_complete', v_census,
-    'partner_id', v_partner_id,
+    'partner_linked', v_partner_id IS NOT NULL,
     'already_registered', false
   );
 END;
 $$;
 
--- 4. Prefill helper for known Yi members (name/phone/photo only; directory has no
---    sector/chapter). Returns null when no active match by email.
+-- 4. Prefill helper for known Yi members. Returns NAME ONLY (no phone/photo) so a
+--    guessed email cannot harvest contact details from the directory.
 CREATE OR REPLACE FUNCTION public.yifi_prefill_by_email(p_email text)
 RETURNS json
 LANGUAGE plpgsql
@@ -189,23 +220,33 @@ STABLE SECURITY DEFINER
 AS $$
 DECLARE
   v_email text := lower(nullif(trim(coalesce(p_email, '')), ''));
-  v_row   record;
+  v_name  text;
 BEGIN
   IF v_email IS NULL THEN
     RETURN NULL;
   END IF;
-  SELECT full_name, email, phone, photo_url INTO v_row
+  SELECT full_name INTO v_name
   FROM yi_directory.people
   WHERE lower(email) = v_email AND coalesce(is_active, true) = true
   LIMIT 1;
-  IF NOT FOUND THEN
+  IF v_name IS NULL THEN
     RETURN NULL;
   END IF;
-  RETURN json_build_object(
-    'full_name', v_row.full_name,
-    'email', v_row.email,
-    'phone', v_row.phone,
-    'photo_url', v_row.photo_url
-  );
+  RETURN json_build_object('full_name', v_name);
 END;
 $$;
+
+-- 5. Lock the new functions to the service role (the server actions use the service
+--    client). Matches the explicit-grant discipline of the prior yifi migrations and
+--    removes the default PUBLIC execute grant.
+REVOKE ALL ON FUNCTION public.yifi_gen_access_code() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.yifi_register_self(
+  text, text, text, text, text, text, text, text, text, text[], jsonb, text[],
+  text, boolean, text, text, text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.yifi_prefill_by_email(text) FROM PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.yifi_gen_access_code() TO service_role;
+GRANT EXECUTE ON FUNCTION public.yifi_register_self(
+  text, text, text, text, text, text, text, text, text, text[], jsonb, text[],
+  text, boolean, text, text, text) TO service_role;
+GRANT EXECUTE ON FUNCTION public.yifi_prefill_by_email(text) TO service_role;

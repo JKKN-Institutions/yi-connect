@@ -1,4 +1,7 @@
 {
+  "worktree": {
+    "symlinkDirectories": ["node_modules"]
+  },
   "permissions": {
     "allow": [
       "Bash",

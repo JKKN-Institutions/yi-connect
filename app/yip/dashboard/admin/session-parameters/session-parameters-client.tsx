@@ -171,9 +171,9 @@ export function SessionParametersClient({
           <h1 className="text-2xl font-bold text-[#1a1a3e]">Session Scoring</h1>
           <p className="mt-1 max-w-2xl text-sm text-[#1a1a3e]/60">
             The scoreable sessions and their parameters. <strong>Global</strong> —
-            applies to every chapter and event. A delegate&apos;s final score is the{" "}
-            <strong>weighted average</strong> across the sessions they were scored
-            in. Add, edit, or remove sessions freely.
+            applies to every chapter and event. Session scores are combined into a
+            delegate&apos;s final score using the method set in{" "}
+            <strong>Scoring Rules</strong>. Add, edit, or remove sessions freely.
           </p>
         </div>
         {editing === null && (

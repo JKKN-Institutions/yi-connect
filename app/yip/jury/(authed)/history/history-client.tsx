@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { ScoreCard } from "@/components/yip/scoring/score-card";
 import { ScoreForm } from "@/components/yip/scoring/score-form";
@@ -43,9 +43,17 @@ interface Props {
   scores: ScoreWithParticipant[];
   juryAssignmentId: string;
   eventId: string;
+  // Per-session denominators resolved SERVER-SIDE (page.tsx) so each card shows
+  // the correct /N (15/20/10) on first paint — no client fallback flash.
+  sessionMaxById: Record<string, number>;
 }
 
-export function HistoryClient({ scores, juryAssignmentId, eventId }: Props) {
+export function HistoryClient({
+  scores,
+  juryAssignmentId,
+  eventId,
+  sessionMaxById,
+}: Props) {
   const router = useRouter();
   const [editing, setEditing] = useState<string | null>(null); // participant id
   const [loadingEdit, setLoadingEdit] = useState(false);
@@ -58,43 +66,9 @@ export function HistoryClient({ scores, juryAssignmentId, eventId }: Props) {
   // updates that session's score rather than overwriting a different one.
   const [editAgendaItemId, setEditAgendaItemId] = useState<string | null>(null);
 
-  // Per-session denominators (workbook 2026): a session is scored out of its
-  // OWN total (15/20/10/…), NOT the role rubric's /100—/110. Resolve the real
-  // max for each distinct session once so every card shows the correct /N and a
-  // correctly-filled ring. Rows whose session has no configured params keep the
-  // role-rubric total_max (resolved below at render time).
-  const [sessionMaxById, setSessionMaxById] = useState<Record<string, number>>(
-    {}
-  );
-
-  useEffect(() => {
-    let cancelled = false;
-    const ids = Array.from(
-      new Set(
-        scores
-          .map((s) => s.agenda_item_id)
-          .filter((id): id is string => Boolean(id))
-      )
-    );
-    if (ids.length === 0) return;
-    (async () => {
-      const entries = await Promise.all(
-        ids.map(async (id) => {
-          const params = await getSessionScoringParams(id);
-          return [id, params?.total_max] as const;
-        })
-      );
-      if (cancelled) return;
-      const map: Record<string, number> = {};
-      for (const [id, max] of entries) {
-        if (typeof max === "number") map[id] = max;
-      }
-      setSessionMaxById(map);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [scores]);
+  // Per-session denominators come from the server (sessionMaxById prop) so each
+  // card shows the correct /N (15/20/10) on first paint. Rows whose session has
+  // no configured params fall back to the role-rubric total_max at render time.
 
   const handleEditClick = useCallback(
     async (score: ScoreWithParticipant) => {

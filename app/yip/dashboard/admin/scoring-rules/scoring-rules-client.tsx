@@ -27,6 +27,10 @@ const ROLE_LABELS: { key: string; label: string }[] = [
   { key: "deputy_speaker", label: "Deputy Speaker" },
   { key: "leader_of_opposition", label: "Leader of Opposition" },
   { key: "cabinet_minister", label: "Cabinet Minister" },
+  { key: "shadow_minister", label: "Shadow Minister" },
+  { key: "party_leader", label: "Party Leader" },
+  { key: "coalition_leader", label: "Coalition Leader" },
+  { key: "committee_chair", label: "Committee Chairperson" },
   { key: "mp", label: "Member of Parliament" },
 ];
 

@@ -41,7 +41,7 @@ export type PersonRoles = {
  * broken window can only DENY, never grant (matches the project's
  * null-scope-must-deny doctrine).
  */
-function withinValidityWindow(
+export function withinValidityWindow(
   validFrom: string | null | undefined,
   validUntil: string | null | undefined
 ): boolean {

@@ -18,7 +18,11 @@ export function toCSV<T extends Record<string, unknown>>(
 ): string {
   const escape = (value: unknown): string => {
     if (value === null || value === undefined) return "";
-    const str = String(value);
+    let str = String(value);
+    // CSV/spreadsheet formula-injection guard: a value starting with = + - @
+    // tab or CR is auto-evaluated by Excel / Sheets / LibreOffice. Prefix a
+    // single quote (the standard mitigation) so it renders as literal text.
+    if (/^[=+\-@\t\r]/.test(str)) str = "'" + str;
     // Wrap in quotes if the value contains a comma, newline, or double-quote.
     if (str.includes(",") || str.includes("\n") || str.includes('"')) {
       return `"${str.replace(/"/g, '""')}"`;

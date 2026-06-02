@@ -27,7 +27,7 @@ export function JoinDoors() {
       </div>
 
       {mode === "register" ? (
-        <RegisterForm />
+        <RegisterForm onUseCode={() => setMode("code")} />
       ) : (
         <div>
           <div className="text-center mb-6">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { registerSelf, prefillByEmail } from "@/app/yifi/actions/register";
 
@@ -30,7 +30,9 @@ const SEEKING_OPTIONS = [
   { value: "learn", label: "Learn & explore" },
 ];
 
-export function RegisterForm() {
+type SuccessState = { kind: "registered"; code: string } | { kind: "already" };
+
+export function RegisterForm({ onUseCode }: { onUseCode?: () => void }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState("");
@@ -42,19 +44,28 @@ export function RegisterForm() {
   const [email, setEmail] = useState("");
   const [prefilled, setPrefilled] = useState(false);
 
-  const [success, setSuccess] = useState<{ code: string; already: boolean } | null>(null);
+  const [success, setSuccess] = useState<SuccessState | null>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
 
-  function handleEmailBlur() {
+  // On the success swap, bring the (short) success card into view and announce it —
+  // otherwise on this long form the all-important access code can render above the fold.
+  useEffect(() => {
+    if (success) {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      headingRef.current?.focus();
+    }
+  }, [success]);
+
+  // Prefill runs OUTSIDE the submit transition so a slow directory lookup never
+  // disables the submit button, and only fills fields the user has left blank.
+  async function handleEmailBlur() {
     const value = email.trim();
-    if (!value || !value.includes("@")) return;
-    startTransition(async () => {
-      const match = await prefillByEmail(value);
-      if (match) {
-        if (match.full_name && !fullName) setFullName(match.full_name);
-        if (match.phone && !phone) setPhone(match.phone);
-        if (match.full_name || match.phone) setPrefilled(true);
-      }
-    });
+    if (!value.includes("@")) return;
+    const match = await prefillByEmail(value);
+    if (match?.full_name) {
+      setFullName((prev) => (prev ? prev : match.full_name));
+      setPrefilled(true);
+    }
   }
 
   function handleSubmit(formData: FormData) {
@@ -65,21 +76,47 @@ export function RegisterForm() {
         setError(result.error);
         return;
       }
-      setSuccess({ code: result.accessCode, already: result.alreadyRegistered });
+      if (result.status === "already_registered") {
+        setSuccess({ kind: "already" });
+        return;
+      }
+      setSuccess({ kind: "registered", code: result.accessCode });
     });
   }
 
-  if (success) {
+  if (success?.kind === "already") {
     return (
       <div className="bg-white/5 border border-white/10 rounded-xl p-6 text-center">
-        <div className="text-4xl mb-3">{success.already ? "👋" : "🎉"}</div>
-        <h2 className="text-xl font-bold text-white mb-1">
-          {success.already ? "You're already registered" : "You're in."}
+        <div className="text-4xl mb-3">👋</div>
+        <h2 ref={headingRef} tabIndex={-1} className="text-xl font-bold text-white mb-1 outline-none">
+          You&apos;re already registered
         </h2>
         <p className="text-white/50 text-sm mb-5">
-          {success.already
-            ? "We found your existing registration. Here's your access code."
-            : "Welcome to YiFi 2026 — Built for Generations."}
+          This email already has a YiFi registration. Use the access code from your registration
+          confirmation to log in.
+        </p>
+        <button
+          onClick={() => onUseCode?.()}
+          className="w-full py-3 bg-[#FD7215] text-white font-semibold rounded-lg hover:bg-[#e5660f] transition-colors"
+        >
+          I have a code →
+        </button>
+        <p className="text-white/40 text-xs mt-4">
+          Can&apos;t find your code? Contact your chapter&apos;s YiFi organiser to have it resent.
+        </p>
+      </div>
+    );
+  }
+
+  if (success?.kind === "registered") {
+    return (
+      <div className="bg-white/5 border border-white/10 rounded-xl p-6 text-center">
+        <div className="text-4xl mb-3">🎉</div>
+        <h2 ref={headingRef} tabIndex={-1} className="text-xl font-bold text-white mb-1 outline-none">
+          You&apos;re in.
+        </h2>
+        <p className="text-white/50 text-sm mb-5">
+          Welcome to YiFi 2026 — Built for Generations.
         </p>
 
         <div className="bg-[#FD7215]/10 border border-[#FD7215]/40 rounded-lg py-4 mb-2">
@@ -115,13 +152,16 @@ export function RegisterForm() {
         {/* Identity */}
         <div className="space-y-3">
           <div>
-            <label className={LABEL}>Email {prefilled && <span className="text-[#229434] normal-case">· found your Yi profile</span>}</label>
+            <label className={LABEL}>
+              Email{" "}
+              {prefilled && <span className="text-[#229434] normal-case">· found your Yi profile</span>}
+            </label>
             <input
               name="email"
               type="email"
               inputMode="email"
               autoComplete="email"
-              placeholder="you@email.com (helps us pre-fill)"
+              placeholder="you@email.com (helps us pre-fill your name)"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               onBlur={handleEmailBlur}
@@ -268,6 +308,11 @@ export function RegisterForm() {
               <input name="partner_phone" inputMode="tel" placeholder="Partner's phone (optional)" className={INPUT} />
               <input name="partner_email" type="email" placeholder="Partner's email (optional)" className={INPUT} />
             </div>
+          )}
+          {isCouple && (
+            <p className="text-white/40 text-xs mt-2">
+              Your partner gets their own access code and confirms their own census when they log in.
+            </p>
           )}
         </div>
 

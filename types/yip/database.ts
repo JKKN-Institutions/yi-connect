@@ -1679,6 +1679,30 @@ export type Database = {
         }
         Relationships: []
       }
+      scoring_settings: {
+        Row: {
+          aggregation_method: string
+          best_n: number
+          id: boolean
+          normalize_per_session: boolean
+          updated_at: string
+        }
+        Insert: {
+          aggregation_method?: string
+          best_n?: number
+          id?: boolean
+          normalize_per_session?: boolean
+          updated_at?: string
+        }
+        Update: {
+          aggregation_method?: string
+          best_n?: number
+          id?: boolean
+          normalize_per_session?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
       media: {
         Row: {
           caption: string | null

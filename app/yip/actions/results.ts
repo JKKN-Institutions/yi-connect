@@ -6,6 +6,8 @@ import { revalidatePath } from "next/cache";
 import { parentScoreByKey } from "@/lib/yip/rubric";
 import { getScoringFlagsConfig, type FlagDeltas } from "./scoring-flags";
 import { getPositionBonusConfig } from "./positions";
+import { getScoringSettings } from "./scoring-settings";
+import { listSessionParameters } from "./session-parameters";
 
 type ActionResult<T = null> =
   | { success: true; data: T }
@@ -61,12 +63,6 @@ type ParticipantLite = {
   school_name: string;
   constituency_name: string | null;
 };
-
-// Best-N aggregation (Director decision 2026-06-01): a delegate's base score is
-// the average of their top-N SESSION scores, so a few strong showings count and
-// weak/absent sessions don't drag them down. Configurable — change N here (or
-// later move to a config table). Default 3.
-const BEST_N_SESSIONS = 3;
 
 type RawScore = {
   jury_assignment_id: string;
@@ -179,6 +175,24 @@ export async function computeResults(
   const positionConfig = await getPositionBonusConfig();
   const positionBonuses = positionConfig.bonuses;
 
+  // 1d. Global scoring settings + per-session config — drive the aggregation
+  // (all set by super-admin in the admin Scoring Rules / Session Scoring
+  // screens; nothing hardcoded here).
+  const settings = await getScoringSettings();
+  const sessionCfgByType = new Map(
+    (await listSessionParameters()).map((c) => [
+      c.agenda_type,
+      { total_max: c.total_max, session_weight: c.session_weight },
+    ])
+  );
+  const { data: agendaRows } = await supabase
+    .from("agenda")
+    .select("id, agenda_type")
+    .eq("event_id", eventId);
+  const agendaTypeById = new Map(
+    (agendaRows ?? []).map((a) => [a.id, a.agenda_type])
+  );
+
   // 2. Participants (with constituency for Best Constituency Rep / Community Impact)
   const { data: participants, error: pError } = await supabase
     .from("participants")
@@ -222,9 +236,12 @@ export async function computeResults(
     const pScores = scoresByParticipant.get(participant.id);
     if (!pScores || pScores.length === 0) continue;
 
-    // Per-session best-N (BUG-385): average the criteria total across the jurors
-    // who scored each SESSION, then average the participant's top-N session
-    // scores. Special remarks + role bonus apply ONCE on top.
+    // Per-session aggregation, driven by the global scoring settings (admin
+    // Scoring Rules screen — nothing hardcoded). One score per session = mean
+    // of the jurors who scored it; optionally normalized to a % of that
+    // session's configured max so sessions with different parameter sets
+    // combine fairly. Then combined per the chosen method. Special remarks +
+    // role bonus apply ONCE on top.
     const bySession = new Map<string, number[]>();
     for (const s of pScores) {
       const key = s.agenda_item_id ?? "__none__";
@@ -232,13 +249,45 @@ export async function computeResults(
       arr.push(s.total_score);
       bySession.set(key, arr);
     }
-    const sessionScores = Array.from(bySession.values())
-      .map((vals) => vals.reduce((a, b) => a + b, 0) / vals.length)
-      .sort((a, b) => b - a);
-    const bestN = sessionScores.slice(0, BEST_N_SESSIONS);
-    const baseScore = bestN.length
-      ? bestN.reduce((a, b) => a + b, 0) / bestN.length
-      : 0;
+    const sessionEntries = Array.from(bySession.entries()).map(
+      ([agendaItemId, vals]) => {
+        const raw = vals.reduce((a, b) => a + b, 0) / vals.length;
+        const agendaType =
+          agendaItemId === "__none__"
+            ? null
+            : agendaTypeById.get(agendaItemId) ?? null;
+        const cfg = agendaType ? sessionCfgByType.get(agendaType) : undefined;
+        const max = cfg && cfg.total_max > 0 ? cfg.total_max : 0;
+        const score =
+          settings.normalize_per_session && max > 0 ? (raw / max) * 100 : raw;
+        const weight = cfg ? cfg.session_weight : 1;
+        return { score, weight };
+      }
+    );
+
+    let baseScore = 0;
+    let minSession = 0;
+    if (sessionEntries.length > 0) {
+      const arr = sessionEntries.map((e) => e.score);
+      if (settings.aggregation_method === "best_n") {
+        const top = [...arr]
+          .sort((a, b) => b - a)
+          .slice(0, Math.max(1, settings.best_n));
+        baseScore = top.reduce((a, b) => a + b, 0) / top.length;
+        minSession = Math.min(...top);
+      } else if (settings.aggregation_method === "average") {
+        baseScore = arr.reduce((a, b) => a + b, 0) / arr.length;
+        minSession = Math.min(...arr);
+      } else {
+        // weighted_average (default)
+        const totalW = sessionEntries.reduce((a, e) => a + e.weight, 0);
+        baseScore =
+          totalW > 0
+            ? sessionEntries.reduce((a, e) => a + e.score * e.weight, 0) / totalW
+            : arr.reduce((a, b) => a + b, 0) / arr.length;
+        minSession = Math.min(...arr);
+      }
+    }
 
     // jury_count = distinct jurors who scored this participant (across sessions).
     const juryCount = new Set(pScores.map((s) => s.jury_assignment_id)).size;
@@ -250,8 +299,7 @@ export async function computeResults(
     const remarksDelta = participantFlagDelta(pScores, flagDeltas);
 
     const avgScore = baseScore + roleBonus + remarksDelta;
-    const minJurorScore =
-      (bestN.length ? Math.min(...bestN) : 0) + roleBonus + remarksDelta;
+    const minJurorScore = minSession + roleBonus + remarksDelta;
 
     const criteriaSum: Record<string, number> = {};
     const criteriaCount: Record<string, number> = {};

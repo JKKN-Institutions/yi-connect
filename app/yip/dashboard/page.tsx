@@ -95,7 +95,14 @@ export default async function DashboardPage() {
       ors.push(`yi_zone_code.in.(${regionalZones.map((z) => `"${z}"`).join(",")})`);
     }
     if (myChapters.length > 0) {
-      ors.push(`chapter_name.in.(${myChapters.map((c) => `"${c}"`).join(",")})`);
+      // Chapter chairs / organisers are scoped to CHAPTER-level events only.
+      // Regional / national events (even if tagged with a chapter_name) belong
+      // to RM (zone) / national roles, not the chapter chair. (2026-06-02)
+      ors.push(
+        `and(chapter_name.in.(${myChapters
+          .map((c) => `"${c}"`)
+          .join(",")}),level.eq.chapter)`
+      );
     }
     eventsQuery = eventsQuery.or(ors.join(","));
   }

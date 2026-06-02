@@ -87,7 +87,7 @@ export async function getYipEventAccess(eventId: string): Promise<YipEventAccess
   const svc = await createServiceClient();
   const { data: event } = await svc
     .from("events")
-    .select("id, chapter_name, yi_zone_code")
+    .select("id, chapter_name, yi_zone_code, level")
     .eq("id", eventId)
     .maybeSingle();
 
@@ -124,7 +124,12 @@ export async function getYipEventAccess(eventId: string): Promise<YipEventAccess
     return FULL("regional_admin", "regional_admin");
   }
 
-  if (event.chapter_name) {
+  // Chapter authority is CHAPTER-level only: a chapter_admin / chair_email /
+  // organiser matches by chapter ONLY for chapter-level events. Regional /
+  // national events (even if they carry a chapter_name) are owned by RM (zone,
+  // step 2) / national / super (step 1) — a chapter chair is NOT their owner.
+  // (2026-06-02; matches the dashboard listing scope.)
+  if (event.chapter_name && event.level === "chapter") {
     const chapName = norm(event.chapter_name);
 
     // 3a. Explicit YIP chapter_admin role for this chapter → full (canonical chair).

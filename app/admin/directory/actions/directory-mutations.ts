@@ -197,6 +197,56 @@ type DirClient = {
   };
 };
 
+/**
+ * Lockout guard: is `assignmentId` the ONLY active platform-super-admin role
+ * held by an active person? If so, deactivating it / flipping it inactive /
+ * changing it away from a platform-super role would leave ZERO platform supers
+ * — an unrecoverable lockout of the directory (its sole editor). Returns true
+ * to BLOCK such a change. yi_directory has no RLS, so this server-side check is
+ * the boundary (the merge/setPersonActive guards cover the person-level paths;
+ * this covers the role-level paths).
+ */
+async function isLastActivePlatformSuperAssignment(
+  svc: Awaited<ReturnType<typeof createServiceClient>>,
+  assignmentId: string
+): Promise<boolean> {
+  type Row = { id: string; person_id: string };
+  const lc = svc.schema("yi_directory" as "public") as unknown as {
+    from: (t: string) => {
+      select: (cols: string) => {
+        eq: (k: string, v: unknown) => {
+          in: (k: string, v: unknown[]) => Promise<{ data: Row[] | null }>;
+        };
+      } & { in: (k: string, v: unknown[]) => Promise<{ data: { id: string; is_active: boolean | null }[] | null }> };
+    };
+  };
+  const platRes = await lc
+    .from("role_assignments")
+    .select("id, person_id")
+    .eq("is_active", true)
+    .in("role", [...PLATFORM_TIER_ROLE_NAMES]);
+  const rows = platRes.data ?? [];
+  if (!rows.some((r) => r.id === assignmentId)) return false; // not a platform-super row
+  const personIds = [...new Set(rows.map((r) => r.person_id))];
+  const pplRes = await lc
+    .from("people")
+    .select("id, is_active")
+    .in("id", personIds);
+  const activePeople = new Set(
+    (pplRes.data ?? []).filter((p) => p.is_active !== false).map((p) => p.id)
+  );
+  const activePlatAssignmentIds = rows
+    .filter((r) => activePeople.has(r.person_id))
+    .map((r) => r.id);
+  return (
+    activePlatAssignmentIds.length > 0 &&
+    activePlatAssignmentIds.every((id) => id === assignmentId)
+  );
+}
+
+const LOCKOUT_ERROR =
+  "Cannot remove the last active platform super-admin role — it would lock everyone out of the directory. Grant another platform super-admin first.";
+
 
 // ─── addRoleAssignment ──────────────────────────────────────────────────
 
@@ -360,6 +410,19 @@ export async function updateRoleAssignment(
     }
   }
 
+  // Lockout guard: deactivating, or demoting away from platform-super, the LAST
+  // active platform-super assignment would brick the directory.
+  const demotingPlatform =
+    patch.role !== undefined &&
+    PLATFORM_TIER_ROLE_NAMES.includes(String(beforeRow.role ?? "")) &&
+    !PLATFORM_TIER_ROLE_NAMES.includes(patch.role.trim());
+  if (
+    (patch.is_active === false || demotingPlatform) &&
+    (await isLastActivePlatformSuperAssignment(svc, assignmentId))
+  ) {
+    return { success: false, error: LOCKOUT_ERROR };
+  }
+
   const update: DirRow = {};
   if (patch.app !== undefined) update.app = patch.app.trim().toLowerCase();
   if (patch.role !== undefined) update.role = patch.role.trim();
@@ -444,6 +507,10 @@ export async function deactivateRoleAssignment(
 
   if (beforeRow.is_active === false) {
     return { success: true, data: { id: assignmentId }, message: "Already inactive" };
+  }
+
+  if (await isLastActivePlatformSuperAssignment(svc, assignmentId)) {
+    return { success: false, error: LOCKOUT_ERROR };
   }
 
   const upd = await (svc.schema("yi_directory" as "public") as unknown as DirClient).from("role_assignments")

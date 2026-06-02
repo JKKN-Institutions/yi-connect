@@ -7,6 +7,7 @@
  * RLS — the gate is the whole boundary.
  */
 import { createServiceClient } from "@/lib/yip/supabase/server";
+import { withinValidityWindow } from "@/lib/yi/auth/yi-directory-roles";
 
 export type RoleHolderRow = {
   person_id: string;
@@ -57,11 +58,23 @@ export async function getAccessSummaryGrid(): Promise<AccessSummaryCell[]> {
   const svc = await createServiceClient();
   const res = (await dir(svc)
     .from("role_assignments")
-    .select("app, role, is_active")
-    .eq("is_active", true)) as { data: { app: string; role: string }[] | null };
+    .select("app, role, is_active, valid_from, valid_until")
+    .eq("is_active", true)) as {
+    data:
+      | {
+          app: string;
+          role: string;
+          valid_from: string | null;
+          valid_until: string | null;
+        }[]
+      | null;
+  };
 
   const counts = new Map<string, AccessSummaryCell>();
   for (const r of res.data ?? []) {
+    // EFFECTIVE access only — match the gate (stored is_active already filtered;
+    // exclude scheduled/expired so the grid never over-counts vs the gate).
+    if (!withinValidityWindow(r.valid_from, r.valid_until)) continue;
     const key = `${r.app}__${r.role}`;
     const cell = counts.get(key) ?? { app: r.app, role: r.role, count: 0 };
     cell.count += 1;
@@ -84,7 +97,7 @@ export async function getRoleHolders(
   const roleRes = (await dir(svc)
     .from("role_assignments")
     .select(
-      "person_id, yi_chapter, yi_zone, yi_year, title, is_primary, is_active"
+      "person_id, yi_chapter, yi_zone, yi_year, title, is_primary, is_active, valid_from, valid_until"
     )
     .eq("is_active", true)
     .eq("app", app)
@@ -97,10 +110,15 @@ export async function getRoleHolders(
           yi_year: number | null;
           title: string | null;
           is_primary: boolean | null;
+          valid_from: string | null;
+          valid_until: string | null;
         }[]
       | null;
   };
-  const roles = roleRes.data ?? [];
+  // EFFECTIVE access only — drop scheduled/expired rows so holders match the gate.
+  const roles = (roleRes.data ?? []).filter((r) =>
+    withinValidityWindow(r.valid_from, r.valid_until)
+  );
   if (roles.length === 0) return [];
 
   const personIds = [...new Set(roles.map((r) => r.person_id))];

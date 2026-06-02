@@ -66,6 +66,8 @@ export type RoleAssignmentRow = {
   title: string | null;
   is_active: boolean;
   is_primary: boolean;
+  valid_from: string | null;
+  valid_until: string | null;
   created_at: string | null;
   updated_at: string | null;
 };
@@ -119,6 +121,8 @@ type RawRoleRow = {
   title: string | null;
   is_active: boolean | null;
   is_primary: boolean | null;
+  valid_from: string | null;
+  valid_until: string | null;
   created_at: string | null;
   updated_at: string | null;
 };
@@ -180,7 +184,7 @@ export async function listDirectoryPeople(
   // Step 1a: load ALL active role_assignments first so we can apply
   // role-level filters (app, role, year, chapter) by intersecting person_ids.
   let roleQuery = (svc.schema("yi_directory" as "public") as unknown as typeof dirAny).from("role_assignments").select(
-    "id, person_id, app, role, yi_year, yi_chapter, yi_zone, yi_edition_id, title, is_active, is_primary, created_at, updated_at"
+    "id, person_id, app, role, yi_year, yi_chapter, yi_zone, yi_edition_id, title, is_active, is_primary, valid_from, valid_until, created_at, updated_at"
   );
 
   if (filters.apps && filters.apps.length > 0) {
@@ -383,7 +387,7 @@ export async function getPersonDetail(
 
   const rolesRes = await (svc.schema("yi_directory" as "public") as unknown as typeof dirAny).from("role_assignments")
     .select(
-      "id, person_id, app, role, yi_year, yi_chapter, yi_zone, yi_edition_id, title, is_active, is_primary, created_at, updated_at"
+      "id, person_id, app, role, yi_year, yi_chapter, yi_zone, yi_edition_id, title, is_active, is_primary, valid_from, valid_until, created_at, updated_at"
     )
     .eq("person_id", personId)
     .order("yi_year", { ascending: false })
@@ -401,6 +405,8 @@ export async function getPersonDetail(
     title: r.title,
     is_active: r.is_active !== false,
     is_primary: r.is_primary === true,
+    valid_from: r.valid_from,
+    valid_until: r.valid_until,
     created_at: r.created_at,
     updated_at: r.updated_at,
   });

@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { JoinForm } from "./join-form";
+import { JoinDoors } from "./join-doors";
 
 export const metadata = {
-  title: "Enter Your Code",
+  title: "Register · YiFi 2026",
 };
 
 export default function JoinPage() {
@@ -16,17 +16,9 @@ export default function JoinPage() {
         </div>
       </header>
 
-      <section className="flex-1 flex items-center justify-center px-4 py-12">
-        <div className="w-full max-w-md">
-          <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-white mb-2">
-              Enter Your <span className="text-[#FD7215]">Access Code</span>
-            </h1>
-            <p className="text-white/50 text-sm">
-              Your code was sent with your YiFi registration confirmation.
-            </p>
-          </div>
-          <JoinForm />
+      <section className="flex-1 flex items-start justify-center px-4 py-10">
+        <div className="w-full max-w-lg">
+          <JoinDoors />
         </div>
       </section>
 

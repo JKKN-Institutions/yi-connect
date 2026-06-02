@@ -31,9 +31,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### ⛔ The retired standalone YIP repo — DO NOT EDIT IT
 `/Users/omm/PROJECTS/YIP` (GitHub `Ommsharravana/yip-platform`, now archived) is the **original standalone YIP app from before the 2026-05-26 absorption** — a **stale duplicate**. Editing code there **ships NOTHING.** ALL YIP code work happens **here** in `app/yip/*`. That folder survives only as a historical archive (auto-save to it is disabled). **If your shell CWD is `/Users/omm/PROJECTS/YIP` you are in the dead repo — `cd /Users/omm/PROJECTS/yi-connect` before any code work.**
 
-## 🔴 YIP AUTHORIZATION MODEL → `.claude/rules/yip-authorization.md`
+## 🔴 PER-VERTICAL AUTHORIZATION RULES → `.claude/rules/<vertical>-authorization.md`
 
-The two-gate YIP authz model (event-scoped `getYipEventAccess` vs platform-master-data `requireSuperAdmin`, plus the fail-closed + deny-explicitly rules) is a **path-scoped rule** that auto-loads when you touch `app/yip/**` or `lib/yip/**`. It is intentionally NOT in this always-loaded file so Yi-Future / YiFi / dashboard sessions don't carry it.
+App-specific authz models are **path-scoped rules** that auto-load only when you touch that vertical's code, keeping them out of this always-loaded file:
+- **YIP** (`app/yip/**`, `lib/yip/**`) → `.claude/rules/yip-authorization.md` — two gates: event-scoped `getYipEventAccess` vs master-data `requireSuperAdmin`.
+- **Yi-Future** (`app/yi-future/**`, `lib/yi-future/**`) → `.claude/rules/yi-future-authorization.md` — strict (write) vs broad (view) `app='future'` tiers.
+- **YiFi** (`app/yifi/**`, `lib/yifi/**`) → `.claude/rules/yifi-authorization.md` — edition-scoped organiser permissions + access-code members.
+
+**Building a NEW vertical** (yuva, thalir, masoom, …)? Create `.claude/rules/<vertical>-authorization.md` with `paths: ["app/<vertical>/**", "lib/<vertical>/**"]` and document that app's gates there. Do NOT add app-specific authz to this root file, and do NOT pre-create empty rules for verticals that don't exist yet. The **universal** discipline that applies to every vertical — yi_directory as the role source; fail CLOSED; deny EXPLICITLY with a surfaced reason (never a silent redirect); never gate a WRITE with a VIEW predicate — stays in this root file.
 
 ## 🔴 OPERATIONAL GOTCHAS (hard-won — re-reading these prevents re-learning them)
 

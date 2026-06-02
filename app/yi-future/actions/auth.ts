@@ -287,6 +287,12 @@ async function writeSession(payload: SessionPayload): Promise<void> {
       signPayload(json, secret)
     : json;
 
+  // TEMP DIAG (remove before prod): proves whether the action signs and what
+  // it stores. No secret value / no PII logged — presence + lengths + prefix.
+  console.error(
+    `[YF-COOKIE-DIAG] write secretPresent=${!!secret} secretLen=${secret.length} valPrefix=${value.slice(0, 8)} valLen=${value.length}`
+  );
+
   const jar = await cookies();
   jar.set(SESSION_COOKIE_NAME, value, {
     httpOnly: true,
@@ -300,6 +306,10 @@ async function writeSession(payload: SessionPayload): Promise<void> {
 export async function readSession(): Promise<SessionPayload | null> {
   const jar = await cookies();
   const raw = jar.get(SESSION_COOKIE_NAME)?.value;
+  // TEMP DIAG (remove before prod): what does the read side actually see?
+  console.error(
+    `[YF-COOKIE-DIAG] read raw?=${!!raw} prefix=${raw?.slice(0, 8)} len=${raw?.length}`
+  );
   if (!raw) return null;
 
   // Disambiguate by first character — no edge cases:
@@ -312,6 +322,7 @@ export async function readSession(): Promise<SessionPayload | null> {
   // LEGACY plaintext (pre-signing). Accept during the rollout window so
   // in-flight sessions are not mass-logged-out. See ROLLOUT NOTE above.
   if (raw.startsWith("{")) {
+    console.error("[YF-COOKIE-DIAG] read -> plaintext branch");
     try {
       return JSON.parse(raw) as SessionPayload;
     } catch {
@@ -321,6 +332,9 @@ export async function readSession(): Promise<SessionPayload | null> {
 
   // SIGNED cookie: "<base64url(json)>.<base64url(hmac)>".
   const secret = getSessionSecret();
+  console.error(
+    `[YF-COOKIE-DIAG] read signed branch secretPresent=${!!secret} secretLen=${secret.length}`
+  );
   if (!secret) return null; // cannot verify without the secret
   const dot = raw.indexOf(".");
   if (dot <= 0 || dot === raw.length - 1) return null; // malformed
@@ -332,13 +346,22 @@ export async function readSession(): Promise<SessionPayload | null> {
     const expectedSig = signPayload(json, secret);
     const providedBuf = Buffer.from(providedSig);
     const expectedBuf = Buffer.from(expectedSig);
-    if (
+    const match =
       providedBuf.length === expectedBuf.length &&
-      timingSafeEqual(providedBuf, expectedBuf)
-    ) {
+      timingSafeEqual(providedBuf, expectedBuf);
+    console.error(
+      `[YF-COOKIE-DIAG] read verify match=${match} jsonOk=${json.startsWith(
+        "{"
+      )} provSigPfx=${providedSig.slice(0, 6)} expSigPfx=${expectedSig.slice(
+        0,
+        6
+      )} provLen=${providedBuf.length} expLen=${expectedBuf.length}`
+    );
+    if (match) {
       return JSON.parse(json) as SessionPayload;
     }
-  } catch {
+  } catch (e) {
+    console.error("[YF-COOKIE-DIAG] read signed decode threw", e);
     return null; // malformed signed cookie
   }
   return null; // signature mismatch — forged / corrupted / wrong secret

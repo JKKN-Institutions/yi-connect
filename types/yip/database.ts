@@ -1643,6 +1643,42 @@ export type Database = {
           },
         ]
       }
+      session_parameters: {
+        Row: {
+          agenda_type: string
+          created_at: string
+          id: string
+          is_active: boolean
+          label: string
+          parameters: Json
+          session_weight: number
+          total_max: number
+          updated_at: string
+        }
+        Insert: {
+          agenda_type: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          label: string
+          parameters?: Json
+          session_weight?: number
+          total_max?: number
+          updated_at?: string
+        }
+        Update: {
+          agenda_type?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          label?: string
+          parameters?: Json
+          session_weight?: number
+          total_max?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       media: {
         Row: {
           caption: string | null

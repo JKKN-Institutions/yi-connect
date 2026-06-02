@@ -239,11 +239,15 @@ $$;
 -- 5. Lock the new functions to the service role (the server actions use the service
 --    client). Matches the explicit-grant discipline of the prior yifi migrations and
 --    removes the default PUBLIC execute grant.
-REVOKE ALL ON FUNCTION public.yifi_gen_access_code() FROM PUBLIC;
+-- Revoke from PUBLIC *and* from anon/authenticated. Supabase auto-grants EXECUTE
+-- on new public functions to anon+authenticated via ALTER DEFAULT PRIVILEGES, which
+-- would otherwise let the public anon key invoke these directly through PostgREST
+-- (/rest/v1/rpc/...), bypassing the server actions. These must be service_role-only.
+REVOKE ALL ON FUNCTION public.yifi_gen_access_code() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.yifi_register_self(
   text, text, text, text, text, text, text, text, text, text[], jsonb, text[],
-  text, boolean, text, text, text) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.yifi_prefill_by_email(text) FROM PUBLIC;
+  text, boolean, text, text, text) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.yifi_prefill_by_email(text) FROM PUBLIC, anon, authenticated;
 
 GRANT EXECUTE ON FUNCTION public.yifi_gen_access_code() TO service_role;
 GRANT EXECUTE ON FUNCTION public.yifi_register_self(

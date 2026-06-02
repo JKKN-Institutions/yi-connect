@@ -4,10 +4,11 @@ import { cookies } from "next/headers";
 import { createServiceClient } from "@/lib/yifi/supabase/server";
 
 type RegisterResult =
-  | { ok: true; accessCode: string; alreadyRegistered: boolean }
+  | { ok: true; status: "registered"; accessCode: string }
+  | { ok: true; status: "already_registered" }
   | { ok: false; error: string };
 
-type PrefillResult = { full_name: string | null; phone: string | null } | null;
+type PrefillResult = { full_name: string } | null;
 
 function str(formData: FormData, key: string): string {
   const v = formData.get(key);
@@ -93,15 +94,24 @@ export async function registerSelf(formData: FormData): Promise<RegisterResult> 
     access_code?: string;
     full_name?: string;
     edition_id?: string;
-    census_complete?: boolean;
     already_registered?: boolean;
   };
 
   if (result.error) return { ok: false, error: result.error };
+
+  // Already registered: the RPC deliberately returns no code and no id. We must NOT
+  // mint a session or reveal a credential for an identity the caller has not proven
+  // they own — route them to the "I have a code" door instead.
+  if (result.already_registered) {
+    return { ok: true, status: "already_registered" };
+  }
+
   if (!result.id || !result.access_code || !result.edition_id) {
     return { ok: false, error: "Something went wrong saving your registration. Please try again." };
   }
 
+  // Fresh registration only: auto-login with a session scoped to the row we just
+  // created (its code was generated in this same call).
   const cookieStore = await cookies();
   cookieStore.set(
     "yifi_session",
@@ -120,11 +130,7 @@ export async function registerSelf(formData: FormData): Promise<RegisterResult> 
     }
   );
 
-  return {
-    ok: true,
-    accessCode: result.access_code,
-    alreadyRegistered: !!result.already_registered,
-  };
+  return { ok: true, status: "registered", accessCode: result.access_code };
 }
 
 /**
@@ -140,6 +146,6 @@ export async function prefillByEmail(email: string): Promise<PrefillResult> {
   const { data } = await supabase.rpc("yifi_prefill_by_email", { p_email: clean });
   if (!data) return null;
 
-  const row = data as { full_name?: string | null; phone?: string | null };
-  return { full_name: row.full_name ?? null, phone: row.phone ?? null };
+  const row = data as { full_name?: string | null };
+  return row.full_name ? { full_name: row.full_name } : null;
 }

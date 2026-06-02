@@ -1009,3 +1009,204 @@ export async function setPersonActive(
     message: isActive ? "Person reactivated" : "Person deactivated",
   };
 }
+
+// ─── mergePeople (fold a duplicate identity into a canonical one) ────────
+
+export type MergeSummary = {
+  source_id: string;
+  target_id: string;
+  role_assignments_repointed: number;
+  role_assignments_deduped: number;
+  chapter_core_team: number;
+  yc_profiles: number;
+  organiser_roles: number;
+  organizers: number;
+  participations: number;
+  auth_action: string;
+  orphaned_auth_user_id: string | null;
+};
+
+/**
+ * Merge a duplicate person (source) into the canonical person (target). Atomic
+ * via the public.merge_directory_people SECURITY DEFINER function: re-points
+ * every FK referencer (role_assignments w/ collision-dedupe, chapter_core_team,
+ * yi_connect.profiles, yifi.organiser_roles, yip.organizers, yip.participations),
+ * resolves the auth login (target-wins by default; orphaned login surfaced,
+ * never auto-banned — hard auth changes are out of scope), and soft-deletes the
+ * source (is_active=false, merged_into=target).
+ */
+export async function mergePeople(
+  sourceId: string,
+  targetId: string,
+  preferSourceAuth = false
+): Promise<MutationResult<MergeSummary>> {
+  const gate = await isCurrentUserPlatformSuperAdmin();
+  if (!gate) return { success: false, error: "Forbidden" };
+  if (!sourceId || !targetId)
+    return { success: false, error: "Both source and target are required" };
+  if (sourceId === targetId)
+    return { success: false, error: "Cannot merge a person into themselves" };
+
+  const svc = await createServiceClient();
+  const dirc = (svc.schema("yi_directory" as "public") as unknown as DirClient).from("people");
+
+  const tgt = await dirc.select("id, full_name, is_active").eq("id", targetId).maybeSingle();
+  if (!tgt.data) return { success: false, error: "Target person not found" };
+  const src = await (svc.schema("yi_directory" as "public") as unknown as DirClient)
+    .from("people").select("id, full_name").eq("id", sourceId).maybeSingle();
+  if (!src.data) return { success: false, error: "Source person not found" };
+
+  // Last-platform-super guard: if the source carries an ACTIVE platform-super
+  // role, the merge moves it onto the target — refuse if the target is inactive
+  // (that would leave NO active platform super → directory locked out).
+  const srcSuper = await (svc.schema("yi_directory" as "public") as unknown as DirClient)
+    .from("role_assignments")
+    .select("id")
+    .eq("person_id", sourceId)
+    .eq("role", "platform_super_admin")
+    .eq("is_active", true)
+    .maybeSingle();
+  if (
+    srcSuper.data &&
+    (tgt.data as { is_active?: boolean }).is_active === false
+  ) {
+    return {
+      success: false,
+      error:
+        "Source is a platform super-admin; merging into an inactive person would lock everyone out of the directory. Reactivate the target first.",
+    };
+  }
+
+  const rpc = svc as unknown as {
+    rpc: (
+      fn: string,
+      args: Record<string, unknown>
+    ) => Promise<{ data: unknown; error: { message?: string } | null }>;
+  };
+  const { data, error } = await rpc.rpc("merge_directory_people", {
+    p_source: sourceId,
+    p_target: targetId,
+    p_prefer_source_auth: preferSourceAuth,
+  });
+  if (error) {
+    return { success: false, error: `Merge failed: ${error.message ?? "unknown error"}` };
+  }
+  const summary = data as MergeSummary;
+
+  await logAuditAction({
+    action_type: "update",
+    target_table: "yi_directory.people",
+    target_id: targetId,
+    metadata: { action: "merge", source_id: sourceId, target_id: targetId, summary },
+  });
+
+  revalidatePath("/admin/directory");
+  revalidatePath(`/admin/directory/${targetId}`);
+  revalidatePath(`/admin/directory/${sourceId}`);
+
+  return {
+    success: true,
+    data: summary,
+    message: `Merged into target — ${summary.role_assignments_repointed} role(s) moved, ${summary.role_assignments_deduped} deduped`,
+  };
+}
+
+// ─── bulk operations ────────────────────────────────────────────────────
+
+export type BulkResult = {
+  ok: number;
+  skipped: { id: string; error: string }[];
+};
+
+const BULK_MAX = 500;
+
+/** Deactivate/reactivate many people. Reuses setPersonActive per id (so the
+ *  last-platform-super self-lockout guard applies); non-atomic, reports skips. */
+export async function bulkSetPersonActive(
+  personIds: string[],
+  isActive: boolean
+): Promise<MutationResult<BulkResult>> {
+  const gate = await isCurrentUserPlatformSuperAdmin();
+  if (!gate) return { success: false, error: "Forbidden" };
+  const ids = [...new Set(personIds.filter(Boolean))];
+  if (ids.length === 0) return { success: false, error: "No people selected" };
+  if (ids.length > BULK_MAX)
+    return { success: false, error: `Too many selected (max ${BULK_MAX})` };
+
+  const result: BulkResult = { ok: 0, skipped: [] };
+  for (const id of ids) {
+    const r = await setPersonActive(id, isActive);
+    if (r.success) result.ok += 1;
+    else result.skipped.push({ id, error: r.error });
+  }
+  return {
+    success: true,
+    data: result,
+    message: `${result.ok} updated${result.skipped.length ? `, ${result.skipped.length} skipped` : ""}`,
+  };
+}
+
+/** Grant one role+scope to many people. Reuses addRoleAssignment per id (so
+ *  validation + active-duplicate skip apply); non-atomic, reports skips. */
+export async function bulkGrantRole(
+  personIds: string[],
+  input: RoleAssignmentInput
+): Promise<MutationResult<BulkResult>> {
+  const gate = await isCurrentUserPlatformSuperAdmin();
+  if (!gate) return { success: false, error: "Forbidden" };
+  const roleErr = validateRoleInput(input);
+  if (roleErr) return { success: false, error: roleErr };
+  const ids = [...new Set(personIds.filter(Boolean))];
+  if (ids.length === 0) return { success: false, error: "No people selected" };
+  if (ids.length > BULK_MAX)
+    return { success: false, error: `Too many selected (max ${BULK_MAX})` };
+
+  const result: BulkResult = { ok: 0, skipped: [] };
+  for (const id of ids) {
+    const r = await addRoleAssignment(id, input);
+    if (r.success) result.ok += 1;
+    else result.skipped.push({ id, error: r.error });
+  }
+  return {
+    success: true,
+    data: result,
+    message: `${result.ok} granted${result.skipped.length ? `, ${result.skipped.length} skipped` : ""}`,
+  };
+}
+
+// ─── searchPeopleForMerge (picker for the merge dialog) ─────────────────
+
+export type MergeCandidate = {
+  id: string;
+  full_name: string;
+  email: string | null;
+  is_active: boolean;
+};
+
+/** Typeahead for the merge source picker (platform-super gated). */
+export async function searchPeopleForMerge(
+  query: string,
+  excludeId: string
+): Promise<MergeCandidate[]> {
+  const gate = await isCurrentUserPlatformSuperAdmin();
+  if (!gate) return [];
+  const safe = query.trim().replace(/[%,()]/g, "");
+  if (!safe) return [];
+
+  const svc = await createServiceClient();
+  const dirAny = svc.schema("yi_directory" as "public") as unknown as {
+    from: (t: string) => {
+      select: (cols: string) => {
+        or: (filter: string) => {
+          limit: (n: number) => Promise<{ data: MergeCandidate[] | null }>;
+        };
+      };
+    };
+  };
+  const res = await dirAny
+    .from("people")
+    .select("id, full_name, email, is_active")
+    .or(`full_name.ilike.%${safe}%,email.ilike.%${safe}%`)
+    .limit(20);
+  return (res.data ?? []).filter((p) => p.id !== excludeId);
+}

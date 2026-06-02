@@ -31,14 +31,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### ⛔ The retired standalone YIP repo — DO NOT EDIT IT
 `/Users/omm/PROJECTS/YIP` (GitHub `Ommsharravana/yip-platform`, now archived) is the **original standalone YIP app from before the 2026-05-26 absorption** — a **stale duplicate**. Editing code there **ships NOTHING.** ALL YIP code work happens **here** in `app/yip/*`. That folder survives only as a historical archive (auto-save to it is disabled). **If your shell CWD is `/Users/omm/PROJECTS/YIP` you are in the dead repo — `cd /Users/omm/PROJECTS/yi-connect` before any code work.**
 
-## 🔴 YIP AUTHORIZATION MODEL (two gates — never mix them)
+## 🔴 YIP AUTHORIZATION MODEL → `.claude/rules/yip-authorization.md`
 
-1. **Event-scoped actions** (anything tied to one event: import / allocate / lock / go-live / score / compute / publish, and every `events/[id]/*` page + layout) → `getYipEventAccess(eventId)` from `lib/yip/auth/event-access.ts` → `{ canView, canManage, canDelete, role, reason }`. chair = `chapter_admin` (full incl. delete); organiser = `chapter_organizer` (everything but delete); above chapters: YIP `national`/`super_admin` (any event), `regional_admin` (within zone). **`events.created_by` is NOT an authz signal** — authz is purely role-based via `yi_directory.role_assignments`.
-2. **Platform master data** (rubrics, seasons, topic catalogue, admin team, checklist templates, branding rules, cross-event pipeline promotions — everything under `/yip/dashboard/admin/*`, `app/yip/actions/admin-*`, `pipeline.ts`) → `requireSuperAdmin()` from `lib/yip/auth/require-super-admin.ts`. NOT event-scoped; `getYipEventAccess` does not apply.
-
-**Two hard rules for every gate:**
-- **Fail CLOSED.** Null/unknown scope must DENY. `&& scope && target !== scope` is a fail-OPEN bug (null scope skips the block). Correct form: `&& target && (scope === null || target !== scope)`.
-- **Deny EXPLICITLY.** Render `<Forbidden403>` (`app/yip/_components/Forbidden403.tsx`) or return `{ success:false, error }` — NEVER a silent `redirect()` to a landing page (it creates an undiagnosable bounce-loop). Gate **every** sub-page + layout with the same helper; one stale `.eq("created_by")` silently 403s every child.
+The two-gate YIP authz model (event-scoped `getYipEventAccess` vs platform-master-data `requireSuperAdmin`, plus the fail-closed + deny-explicitly rules) is a **path-scoped rule** that auto-loads when you touch `app/yip/**` or `lib/yip/**`. It is intentionally NOT in this always-loaded file so Yi-Future / YiFi / dashboard sessions don't carry it.
 
 ## 🔴 OPERATIONAL GOTCHAS (hard-won — re-reading these prevents re-learning them)
 

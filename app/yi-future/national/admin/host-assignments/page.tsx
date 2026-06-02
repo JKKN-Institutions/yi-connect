@@ -22,9 +22,13 @@ type RegionStats = {
 async function loadData() {
   const svc = await createServiceClient();
 
+  // Read chapter + chair contact from the yi source table directly (service
+  // role), NOT the future.chapters compat view — chair_email/chair_mobile are
+  // being dropped from that view (chair PII hardening). yi.chapters has every
+  // column the view exposed; all other future-side chair readers already do this.
   const { data: chapters } = await svc
-    .schema("future")
-    .from("chapters" as never)
+    .schema("yi")
+    .from("chapters")
     .select(
       "id, name, city, finale_region, finale_start_date, finale_end_date, is_finale_host, chair_name, chair_email"
     )

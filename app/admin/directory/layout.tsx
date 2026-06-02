@@ -27,6 +27,12 @@ export default function DirectoryAdminLayout({
           </Link>
           <div className="flex items-center gap-4">
             <Link
+              href="/admin/directory/access-review"
+              className="text-xs font-medium text-slate-700 hover:text-slate-900"
+            >
+              Access review
+            </Link>
+            <Link
               href="/admin/directory/audit"
               className="text-xs font-medium text-slate-700 hover:text-slate-900"
             >

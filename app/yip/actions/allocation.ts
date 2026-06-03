@@ -21,12 +21,20 @@ type ActionResult<T = unknown> =
 // ─── Run Allocation ────────────────────────────────────────────────
 
 export async function runAllocationAction(
-  eventId: string
+  eventId: string,
+  opts?: { assignSides?: boolean }
 ): Promise<ActionResult<AllocationResult>> {
   const access = await getYipEventAccess(eventId);
   if (!access.canManage) {
     return { success: false, error: "Not authorized to manage this event" };
   }
+  // When false, the allocation leaves the political structure blank for the
+  // students to form on event day: party_side is cleared and every participant
+  // is a plain MP (no PM/LoP/Ministers/Speakers). Only the side-neutral
+  // constituency + committee assignments are written. The engine still computes
+  // a full allocation internally; we strip the side-dependent fields here so the
+  // engine stays untouched. Defaults to true (preserves auto-allocation).
+  const assignSides = opts?.assignSides !== false;
   const supabase = await createServiceClient();
 
   // Fetch event — check lock
@@ -93,8 +101,13 @@ export async function runAllocationAction(
     const { error: updateError } = await supabase
       .from("participants")
       .update({
-        party_side: assignment.party_side as "ruling" | "opposition",
-        parliament_role: assignment.parliament_role as
+        party_side: (assignSides ? assignment.party_side : null) as
+          | "ruling"
+          | "opposition"
+          | null,
+        parliament_role: (assignSides
+          ? assignment.parliament_role
+          : "mp") as
           | "speaker"
           | "deputy_speaker"
           | "prime_minister"
@@ -103,7 +116,7 @@ export async function runAllocationAction(
           | "shadow_minister"
           | "bill_committee"
           | "mp",
-        ministry: assignment.ministry as
+        ministry: (assignSides ? assignment.ministry : null) as
           | "home"
           | "finance"
           | "education"

@@ -96,13 +96,23 @@ export function AllocationClient({
   const [confirmLock, setConfirmLock] = useState(false);
   const [confirmUnlock, setConfirmUnlock] = useState(false);
   const [editingParticipant, setEditingParticipant] = useState<Participant | null>(null);
+  // OFF by default → new events do NOT pre-assign party sides/leadership; the
+  // engine only writes side-neutral constituencies + committees and students
+  // form parties + pick leadership live on event day. Check it to restore the
+  // full auto-allocation behaviour.
+  const [autoFormParties, setAutoFormParties] = useState(false);
 
   const committeeNames = customCommittees && customCommittees.length > 0
     ? customCommittees
     : [...COMMITTEES];
 
-  // Check if allocation has been run (any participant has a party_side)
-  const hasAllocation = participants.some((p) => p.party_side !== null);
+  // Check if allocation has been run. A full (auto-form) run sets party_side;
+  // a blank-bench run leaves party_side null but still assigns constituencies,
+  // so treat a populated constituency as "allocated" too — otherwise the screen
+  // would loop back to "Ready to Allocate" after a blank-bench run.
+  const hasAllocation = participants.some(
+    (p) => p.party_side !== null || !!p.constituency_name
+  );
 
   // ── Derived Data ──────────────────────────────────────────────────
 
@@ -139,11 +149,15 @@ export function AllocationClient({
 
   // ── Handlers ──────────────────────────────────────────────────────
 
-  async function handleRunAllocation() {
+  async function handleRunAllocation(autoForm: boolean) {
     setLoading(true);
-    const result = await runAllocationAction(eventId);
+    const result = await runAllocationAction(eventId, { assignSides: autoForm });
     if (result.success) {
-      toast.success("Allocation completed successfully");
+      toast.success(
+        autoForm
+          ? "Allocation completed successfully"
+          : "Constituencies & committees assigned — benches left blank for the day"
+      );
       router.refresh();
     } else {
       toast.error(result.error);
@@ -218,37 +232,12 @@ export function AllocationClient({
   // ── Not Yet Allocated State ───────────────────────────────────────
 
   if (!hasAllocation) {
-    // Parties must exist on both benches before allocation can run — otherwise
-    // the engine has no ruling/opposition structure to assign participants into.
+    // Parties only need to exist when AUTO-forming. With auto-form OFF (the
+    // default) the benches are left blank for students to form on event day and
+    // only the side-neutral constituencies + committees are assigned — so no
+    // parties are required up front.
     const partiesReady = rulingPartyCount > 0 && oppositionPartyCount > 0;
-
-    if (!partiesReady) {
-      return (
-        <div className="space-y-4">
-          <Card className="py-16">
-            <CardContent className="flex flex-col items-center text-center">
-              <Users className="mb-4 size-12 text-gray-300" />
-              <h3 className="text-lg font-semibold text-gray-700">
-                Set up parties first
-              </h3>
-              <p className="mt-2 max-w-md text-sm text-gray-500">
-                Allocation assigns participants into ruling and opposition
-                parties, so you need at least one party on each bench before you
-                can run it. Currently: {rulingPartyCount} ruling,{" "}
-                {oppositionPartyCount} opposition.
-              </p>
-              <Link
-                href={`/yip/dashboard/events/${eventId}/parties`}
-                className="mt-6 inline-flex items-center gap-2 rounded-md bg-[#FF9933] px-4 py-2 text-sm font-medium text-white hover:bg-[#E68A2E]"
-              >
-                <Users className="size-4" />
-                Go to Parties
-              </Link>
-            </CardContent>
-          </Card>
-        </div>
-      );
-    }
+    const needsParties = autoFormParties && !partiesReady;
 
     return (
       <div className="space-y-4">
@@ -259,23 +248,61 @@ export function AllocationClient({
               Ready to Allocate
             </h3>
             <p className="mt-2 max-w-md text-sm text-gray-500">
-              {participants.length} participants registered across{" "}
-              {rulingPartyCount} ruling + {oppositionPartyCount} opposition
-              parties. The allocation engine will assign parties, roles,
-              constituencies, and committees automatically.
+              {participants.length} participants registered
+              {autoFormParties
+                ? ` across ${rulingPartyCount} ruling + ${oppositionPartyCount} opposition parties. `
+                : ". "}
+              {autoFormParties
+                ? "The engine will assign parties, roles, constituencies, and committees automatically."
+                : "Constituencies and committees will be assigned; party benches and roles are left blank for students to decide on event day."}
             </p>
-            <Button
-              className="mt-6 bg-[#FF9933] text-white hover:bg-[#E68A2E]"
-              onClick={handleRunAllocation}
-              disabled={loading}
-            >
-              {loading ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <Shuffle className="size-4" />
-              )}
-              {loading ? "Running Allocation..." : "Run Allocation"}
-            </Button>
+
+            <label className="mt-5 flex max-w-md cursor-pointer items-start gap-2 text-left text-sm text-gray-600">
+              <input
+                type="checkbox"
+                className="mt-0.5 size-4 accent-[#FF9933]"
+                checked={autoFormParties}
+                onChange={(e) => setAutoFormParties(e.target.checked)}
+              />
+              <span>
+                <span className="font-medium text-gray-700">
+                  Auto-form parties, roles &amp; leadership
+                </span>
+                <br />
+                Leave unchecked so students form parties and pick leadership
+                live on the day (recommended for chapter rounds).
+              </span>
+            </label>
+
+            {needsParties ? (
+              <div className="mt-6 flex flex-col items-center">
+                <p className="max-w-md text-sm text-amber-700">
+                  Auto-forming needs at least one party on each bench.
+                  Currently: {rulingPartyCount} ruling, {oppositionPartyCount}{" "}
+                  opposition.
+                </p>
+                <Link
+                  href={`/yip/dashboard/events/${eventId}/parties`}
+                  className="mt-3 inline-flex items-center gap-2 rounded-md bg-[#FF9933] px-4 py-2 text-sm font-medium text-white hover:bg-[#E68A2E]"
+                >
+                  <Users className="size-4" />
+                  Go to Parties
+                </Link>
+              </div>
+            ) : (
+              <Button
+                className="mt-6 bg-[#FF9933] text-white hover:bg-[#E68A2E]"
+                onClick={() => handleRunAllocation(autoFormParties)}
+                disabled={loading}
+              >
+                {loading ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Shuffle className="size-4" />
+                )}
+                {loading ? "Running Allocation..." : "Run Allocation"}
+              </Button>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -648,7 +675,7 @@ export function AllocationClient({
             </DialogClose>
             <Button
               className="bg-[#FF9933] text-white hover:bg-[#E68A2E]"
-              onClick={handleRunAllocation}
+              onClick={() => handleRunAllocation(true)}
               disabled={loading}
             >
               {loading ? (

@@ -5,6 +5,8 @@ import { FileEdit, CheckCircle2, Lock, Clock } from "lucide-react";
 
 interface ScoreCardProps {
   participantName: string;
+  // Optional constituency line shown under the participant name/number.
+  constituency?: string | null;
   parliamentRole: string | null;
   partySide: string | null;
   totalScore: number;
@@ -16,6 +18,7 @@ interface ScoreCardProps {
 
 export function ScoreCard({
   participantName,
+  constituency,
   parliamentRole,
   partySide,
   totalScore,
@@ -79,6 +82,9 @@ export function ScoreCard({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <h3 className="font-semibold text-gray-900 truncate">{participantName}</h3>
+          {constituency && (
+            <p className="text-xs text-gray-500 truncate mt-0.5">{constituency}</p>
+          )}
           <div className="flex items-center gap-2 mt-1.5 flex-wrap">
             <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${roleColor}`}>
               {roleLabel}

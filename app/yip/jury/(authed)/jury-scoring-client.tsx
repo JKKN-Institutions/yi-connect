@@ -809,11 +809,12 @@ function JuryScoringClientInner({
                               )}
                               {p.full_name}
                             </p>
-                            <p className="text-xs text-gray-500 truncate">
-                              {p.constituency_name
-                                ? `${p.constituency_name} · ${p.school_name}`
-                                : p.school_name}
-                            </p>
+                            {/* Constituency only — school is not shown to jurors. */}
+                            {p.constituency_name && (
+                              <p className="text-xs text-gray-500 truncate">
+                                {p.constituency_name}
+                              </p>
+                            )}
                           </div>
                           <div className="flex items-center gap-1.5 shrink-0">
                             {partyColor && (

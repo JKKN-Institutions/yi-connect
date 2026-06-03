@@ -278,6 +278,10 @@ export type ScoreWithParticipant = Score & {
     parliament_role: string | null;
     party_side: string | null;
     school_name: string;
+    // Juror identifies a participant by name + serial # + constituency
+    // (school is not shown to jurors).
+    constituency_name: string | null;
+    serial_no: number | null;
   };
   rubric: {
     total_max: number;
@@ -300,7 +304,9 @@ export async function getScoresForJury(
         full_name,
         parliament_role,
         party_side,
-        school_name
+        school_name,
+        constituency_name,
+        serial_no
       ),
       rubric:rubrics(total_max)
     `
@@ -361,6 +367,8 @@ export type CurrentSpeakerInfo = {
     school_name: string;
     ministry: string | null;
     constituency_name: string | null;
+    // Shown to jurors as the unique participant number alongside the name.
+    serial_no: number | null;
   };
 };
 
@@ -404,7 +412,8 @@ export async function getCurrentSpeaker(
         party_side,
         school_name,
         ministry,
-        constituency_name
+        constituency_name,
+        serial_no
       )
     `
     )

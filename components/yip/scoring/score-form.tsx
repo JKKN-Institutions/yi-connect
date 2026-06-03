@@ -28,6 +28,8 @@ interface ParticipantInfo {
   school_name: string;
   ministry?: string | null;
   constituency_name?: string | null;
+  // Shown next to the name as the unique participant number.
+  serial_no?: number | null;
 }
 
 interface ExistingScore {
@@ -308,12 +310,19 @@ export function ScoreForm({
       >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
+            {/* Juror sees name + unique serial # + constituency. School is
+                intentionally not shown to jurors. */}
             <h2 className="text-lg font-bold text-gray-900 truncate">
+              {participant.serial_no != null && (
+                <span className="tabular-nums text-gray-400">
+                  #{participant.serial_no}
+                  {" · "}
+                </span>
+              )}
               {participant.full_name}
             </h2>
-            <p className="text-sm text-gray-600 mt-0.5">{participant.school_name}</p>
             {participant.constituency_name && (
-              <p className="text-xs text-gray-500 mt-0.5">
+              <p className="text-sm text-gray-600 mt-0.5">
                 Constituency: {participant.constituency_name}
               </p>
             )}

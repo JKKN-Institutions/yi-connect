@@ -45,9 +45,19 @@ export function YipBrandHeader(): React.JSX.Element {
             height={32}
             className="hidden h-8 w-auto sm:block"
           />
-          <div className="hidden text-right text-[10px] uppercase tracking-wider text-slate-700 sm:block sm:text-xs">
-            <div className="font-semibold">By Yi · CII</div>
-            <div>Bharat Rising</div>
+          <div className="hidden flex-col items-end gap-1 sm:flex">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-700 sm:text-xs">
+              By Yi · CII
+            </span>
+            {/* Bharat One — "One Bharat, One Spirit" (replaces the former
+                "Bharat Rising" tagline). White-bg logo on a small rounded chip. */}
+            <Image
+              src="/yip/logos/bharat-one-logo.png"
+              alt="One Bharat, One Spirit"
+              width={269}
+              height={187}
+              className="h-8 w-auto rounded bg-white p-0.5 shadow-sm ring-1 ring-black/5"
+            />
           </div>
         </div>
       </div>

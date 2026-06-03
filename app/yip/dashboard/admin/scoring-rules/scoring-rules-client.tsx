@@ -52,8 +52,13 @@ const METHOD_LABELS: { value: AggregationMethod; label: string; hint: string }[]
   },
   {
     value: "sum",
-    label: "Sum — additive total (official workbook)",
-    hint: "Adds each component's score to a total out of 100.",
+    label: "Sum — additive total",
+    hint: "Adds each component's score to a total out of 100. A session a delegate wasn't scored in counts as 0.",
+  },
+  {
+    value: "weighted_90",
+    label: "Weighted average → /90 + Position /10 (Yi 2026 Workbook)",
+    hint: "Scores a delegate only on the sessions they took part in: (sum of component scores ÷ sum of those components' maxes) × 90, then Position Points add up to 10 on top. A delegate strong in 3 sessions isn't capped by the ones they missed.",
   },
 ];
 

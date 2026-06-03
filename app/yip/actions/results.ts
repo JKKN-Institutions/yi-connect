@@ -7,6 +7,7 @@ import { parentScoreByKey } from "@/lib/yip/rubric";
 import { getPositionBonusConfig } from "./positions";
 import { getScoringSettings } from "./scoring-settings";
 import { listSessionParameters } from "./session-parameters";
+import { getScoringFlagsConfig } from "./scoring-flags";
 import {
   deriveCommitteeLevels,
   CMTE_LEVEL_CRITERION,
@@ -179,6 +180,16 @@ export async function computeResults(
   // (all set by super-admin in the admin Scoring Rules / Session Scoring
   // screens; nothing hardcoded here).
   const settings = await getScoringSettings();
+
+  // 1e. Special-remarks point deltas (admin-configurable, global singleton).
+  // Director decision 2026-06-03: each raised remark now adjusts the
+  // participant's FINAL /100 total — applied ONCE at full value if ANY juror
+  // in ANY session raised it (not averaged across jurors). Disciplinary flags
+  // ALSO still gate the Decorum award (kept). Falls back to seeded defaults.
+  const flagsCfgRes = await getScoringFlagsConfig();
+  const flagDeltas = flagsCfgRes.success
+    ? flagsCfgRes.data.deltas
+    : { no_confidence_brought: 3, walkout: -5, ruckus: -3, suspension: -10 };
 
   // Build TWO config lookups from the global session catalog:
   //   • cfgBySessionKey — 1:1, the PRIMARY key. Each of the 11 handbook
@@ -427,12 +438,30 @@ export async function computeResults(
         positionBonuses[participant.parliament_role]) ||
         0
     );
-    // Disciplinary flags no longer alter the total — award-gating only.
+    // Disciplinary flags still gate the Decorum award (kept).
     const hasDisciplinary = hasDisciplinaryFlag(pScores);
 
+    // Special remarks (Director decision 2026-06-03): each raised remark
+    // adjusts the final total ONCE at full value if ANY juror in ANY session
+    // raised it for this participant — not averaged. Net of all raised flags.
+    const specialRemarksDelta =
+      (pScores.some((s) => s.flag_no_confidence_brought)
+        ? flagDeltas.no_confidence_brought
+        : 0) +
+      (pScores.some((s) => s.flag_walkout) ? flagDeltas.walkout : 0) +
+      (pScores.some((s) => s.flag_ruckus) ? flagDeltas.ruckus : 0) +
+      (pScores.some((s) => s.flag_suspension) ? flagDeltas.suspension : 0);
+
     // Final additive total out of 100: 6 juror-scored components (sum 90) +
-    // Position Points (max 10). Special remarks are NOT added.
-    const avgScore = baseScore + positionPoints;
+    // Position Points (max 10) + special remarks, clamped to [0, 100].
+    // The 100-cap assumes the configured per-component maxes total <= 90 for
+    // the active aggregation (true for the Yi 2026 Workbook 'sum' / 'weighted_90'
+    // models, both /100). If a future event uses 'best_n' with a single session
+    // max > 90, revisit the cap so a legitimate total isn't silently clipped.
+    const avgScore = Math.max(
+      0,
+      Math.min(100, baseScore + positionPoints + specialRemarksDelta)
+    );
     const minJurorScore = minSession + positionPoints;
 
     const criteriaSum: Record<string, number> = {};

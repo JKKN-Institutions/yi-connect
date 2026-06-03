@@ -173,14 +173,6 @@ function JuryScoringClientInner({
   const activeParticipant =
     manualParticipant ?? currentSpeaker?.participant ?? null;
 
-  // Net of the currently-ticked Special Remarks deltas. Passed to ScoreForm so
-  // jurors see their flags reflected in a "with remarks" projected line — the
-  // deltas still apply at results time (not stored in the criteria total).
-  const netFlagDelta = FLAG_ORDER.reduce(
-    (sum, k) => sum + (flags[k] ? flagDeltas?.[k] ?? 0 : 0),
-    0
-  );
-
   // ─── Fetch speaker data ─────────────────────────────────────────
 
   const loadRubricAndScore = useCallback(
@@ -700,7 +692,6 @@ function JuryScoringClientInner({
           agendaItemId={selectedSessionId}
           juryAssignmentId={juryAssignmentId}
           existingScore={existingScore}
-          specialRemarksDelta={netFlagDelta}
           onSubmit={handleSubmit}
         />
       ) : (

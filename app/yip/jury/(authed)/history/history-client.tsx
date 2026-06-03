@@ -204,7 +204,8 @@ export function HistoryClient({
           participant={{
             ...editParticipant,
             ministry: null,
-            constituency_name: null,
+            // Keep constituency_name + serial_no (from editParticipant) so the
+            // edit header shows "#N · Name · Constituency" like live scoring.
           }}
           criteria={rubric.criteria}
           rubricId={rubric.id}
@@ -253,7 +254,12 @@ export function HistoryClient({
           {scores.map((score) => (
             <ScoreCard
               key={score.id}
-              participantName={score.participant.full_name}
+              participantName={
+                score.participant.serial_no != null
+                  ? `#${score.participant.serial_no} · ${score.participant.full_name}`
+                  : score.participant.full_name
+              }
+              constituency={score.participant.constituency_name}
               parliamentRole={score.participant.parliament_role}
               partySide={score.participant.party_side}
               totalScore={score.total_score}

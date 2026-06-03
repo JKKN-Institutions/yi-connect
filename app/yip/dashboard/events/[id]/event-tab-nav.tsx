@@ -25,6 +25,7 @@ import {
   MessageCircleHeart,
   Megaphone,
   UserCog,
+  Boxes,
 } from "lucide-react";
 
 const TABS = [
@@ -46,6 +47,7 @@ const TABS = [
   { label: "Control", href: "/control", icon: Radio },
   { label: "Media", href: "/media", icon: Images },
   { label: "Scoring", href: "/scoring", icon: Star },
+  { label: "Committees", href: "/committee-scoring", icon: Boxes },
   { label: "Results", href: "/results", icon: Trophy },
   { label: "Feedback", href: "/feedback", icon: MessageCircleHeart },
   { label: "Certificates", href: "/certificates", icon: Award },

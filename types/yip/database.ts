@@ -1078,6 +1078,62 @@ export type Database = {
         }
         Relationships: []
       }
+      committee_scores: {
+        Row: {
+          bill_draft_quality: number
+          committee_name: string
+          created_at: string
+          event_id: string
+          feasibility: number
+          id: string
+          innovation: number
+          judge_notes: string | null
+          policy_relevance: number
+          presentation_defence: number
+          scored_by: string | null
+          team_collaboration: number
+          updated_at: string
+        }
+        Insert: {
+          bill_draft_quality?: number
+          committee_name: string
+          created_at?: string
+          event_id: string
+          feasibility?: number
+          id?: string
+          innovation?: number
+          judge_notes?: string | null
+          policy_relevance?: number
+          presentation_defence?: number
+          scored_by?: string | null
+          team_collaboration?: number
+          updated_at?: string
+        }
+        Update: {
+          bill_draft_quality?: number
+          committee_name?: string
+          created_at?: string
+          event_id?: string
+          feasibility?: number
+          id?: string
+          innovation?: number
+          judge_notes?: string | null
+          policy_relevance?: number
+          presentation_defence?: number
+          scored_by?: string | null
+          team_collaboration?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "committee_scores_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       constituencies: {
         Row: {
           created_at: string | null

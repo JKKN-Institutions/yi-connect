@@ -130,7 +130,10 @@ function assignAward(
     if (s > topScore) topScore = s;
   }
 
-  if (!anyEligible || topScore === -Infinity) return;
+  // No eligible participant, OR no real signal (everyone tied at 0 — e.g. an
+  // award keyed to a family/session that wasn't scored at this event). Award
+  // no one rather than the whole field (handbook intent: don't fabricate).
+  if (!anyEligible || topScore <= 0) return;
 
   for (const r of rows) {
     const p = participants.get(r.participant_id);
@@ -512,20 +515,34 @@ export async function computeResults(
     participants.map((p) => [p.id, p as ParticipantLite])
   );
 
-  // ── 9 awards from the Yi 2026 Evaluation Workbook ──────────────
+  // ── 15 awards from the Yi 2026 Evaluation Workbook ─────────────
   // All awards roll up the NAMESPACED criterion keys "<comp>.<criterion>"
   // (comp ∈ {mupi,qh,zero,pol,cmte,bill}). parentScoreByKey() sums any key
   // equal to OR prefixed by the family, so parentScoreByKey(b,'pol') =
   // Political Acumen total and parentScoreByKey(b,'mupi.conduct') = the single
-  // MuPI conduct criterion. sumKeys() adds an explicit list of criteria.
+  // MuPI conduct criterion. sumKeys() adds an explicit list of criteria OR whole
+  // families — pass a family key like "pol" to sum every pol.* criterion.
+  // Awards 1–9 are open to all; the final 6 add role/side eligibility per the
+  // official Yi 2026 Awards & Recognition matrix (matrix #s noted inline).
 
   const all = (_p: ParticipantLite) => true;
 
-  // Sum an explicit set of namespaced criterion keys.
+  // Sum a set of namespaced criterion keys OR whole families.
   const sumKeys =
     (keys: string[]) =>
     (r: ResultRow): number =>
       keys.reduce((sum, k) => sum + parentScoreByKey(r.score_breakdown, k), 0);
+
+  // Role/side eligibility for the 6 matrix awards.
+  const isSpeaker = (p: ParticipantLite) => p.parliament_role === "speaker";
+  const isLeadership = (p: ParticipantLite) =>
+    !!p.parliament_role && LEADERSHIP_ROLES.has(p.parliament_role);
+  const isRuling = (p: ParticipantLite) =>
+    isRulingMP(p.parliament_role, p.party_side);
+  const isOpposition = (p: ParticipantLite) =>
+    isOppositionMP(p.parliament_role, p.party_side);
+  const isIndependent = (p: ParticipantLite) =>
+    p.parliament_role === "independent_mp";
 
   // 1. Best Parliamentarian — top overall additive total.
   assignAward(
@@ -613,6 +630,34 @@ export async function computeResults(
       "mupi.research_constituency",
     ])
   );
+
+  // ── + the 6 role/side awards from the official matrix ──────────
+  // 10. Best Speaker (matrix #2) — Speaker only; 100% leadership & parliamentary
+  //     conduct (the Speaker's own rubric total = avg_score).
+  assignAward(resultRows, participantMap, "Best Speaker", isSpeaker,
+    (r) => r.avg_score);
+  // 11. Leadership Excellence (matrix #3) — leadership roles; 50% Leadership
+  //     (position points /10) + 50% Participation (base score /90).
+  assignAward(resultRows, participantMap, "Leadership Excellence", isLeadership,
+    (r) =>
+      0.5 * Math.min(1, Math.max(0, r.avg_score - r.baseScore) / 10) +
+      0.5 * Math.min(1, r.baseScore / 90));
+  // 12. Best Member — Ruling Bench (matrix #4) — ruling side; 100% House
+  //     Performance (Political Acumen + Question Hour + Bill + Committee).
+  assignAward(resultRows, participantMap, "Best Member — Ruling Bench", isRuling,
+    sumKeys(["pol", "qh", "bill", "cmte"]));
+  // 13. Best Member — Opposition Bench (matrix #5) — opposition side; 100%
+  //     Opposition Performance (Question Hour + Zero Hour + Political Acumen).
+  assignAward(resultRows, participantMap, "Best Member — Opposition Bench", isOpposition,
+    sumKeys(["qh", "zero", "pol"]));
+  // 14. Most Persuasive Policy Advocate (matrix #7) — all; Policy Content +
+  //     Persuasion (Political Acumen + Bill Defence).
+  assignAward(resultRows, participantMap, "Most Persuasive Policy Advocate", all,
+    sumKeys(["pol", "bill"]));
+  // 15. Independent Voice of the House (matrix #14) — Independent MP only;
+  //     Debate + Zero Hour + Question Hour.
+  assignAward(resultRows, participantMap, "Independent Voice of the House", isIndependent,
+    sumKeys(["pol", "zero", "qh"]));
 
   // 7. Replace and persist
   await supabase.from("results").delete().eq("event_id", eventId);

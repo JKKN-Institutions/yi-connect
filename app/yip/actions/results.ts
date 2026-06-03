@@ -307,13 +307,34 @@ export async function computeResults(
       let value = s.total_score;
       // For the two committee-scored components, swap the juror's per-individual
       // committee-level mark for the committee's shared value (same for every
-      // member). Only when the committee has a /60 score — otherwise unchanged.
+      // member). Guards:
+      //   (a) the committee has a /60 score (cl), AND
+      //   (b) this score row actually carries the committee-level criterion —
+      //       so we never ADD a shared mark to a session whose config has no
+      //       committee-level slot (that would inflate it with nothing to net
+      //       against), and
+      //   (c) the swapped total is clamped to the component's [0, max], so the
+      //       swap can never push a session above its configured cap (which
+      //       would let avg_score exceed 100 and mis-rank) or below 0.
       if (cl && s.agenda_item_id) {
         const sk = agendaById.get(s.agenda_item_id)?.session_key;
-        if (sk === "committee_bill_drafting") {
-          value = value - (s.criteria_scores[CMTE_LEVEL_CRITERION] ?? 0) + cl.cmte;
-        } else if (sk === "bill_presentation_voting") {
-          value = value - (s.criteria_scores[BILL_LEVEL_CRITERION] ?? 0) + cl.bill;
+        const sessionMax = sk ? cfgBySessionKey.get(sk)?.total_max ?? 0 : 0;
+        let swapped = false;
+        if (
+          sk === "committee_bill_drafting" &&
+          CMTE_LEVEL_CRITERION in s.criteria_scores
+        ) {
+          value = value - s.criteria_scores[CMTE_LEVEL_CRITERION] + cl.cmte;
+          swapped = true;
+        } else if (
+          sk === "bill_presentation_voting" &&
+          BILL_LEVEL_CRITERION in s.criteria_scores
+        ) {
+          value = value - s.criteria_scores[BILL_LEVEL_CRITERION] + cl.bill;
+          swapped = true;
+        }
+        if (swapped && sessionMax > 0) {
+          value = Math.max(0, Math.min(sessionMax, value));
         }
       }
       const arr = bySession.get(key) ?? [];

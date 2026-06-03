@@ -20,6 +20,7 @@ export type PartySide = (typeof PARTY_SIDES)[number];
 // Adds: deputy_prime_minister (page 16), independent_mp (page 18), party_leader (page 17).
 export const PARLIAMENT_ROLES = [
   "speaker",
+  "nominated_speaker",
   "deputy_speaker",
   "prime_minister",
   "deputy_prime_minister",
@@ -55,6 +56,7 @@ export const COMMITTEES = [
 
 export const ROLE_LABELS: Record<string, string> = {
   speaker: "Speaker",
+  nominated_speaker: "Nominated for Speaker",
   deputy_speaker: "Deputy Speaker",
   prime_minister: "Prime Minister",
   deputy_prime_minister: "Deputy Prime Minister",
@@ -69,6 +71,7 @@ export const ROLE_LABELS: Record<string, string> = {
 
 export const ROLE_COLORS: Record<string, string> = {
   speaker: "bg-amber-500 text-white",
+  nominated_speaker: "bg-amber-200 text-amber-900",
   deputy_speaker: "bg-amber-400 text-white",
   prime_minister: "bg-blue-600 text-white",
   deputy_prime_minister: "bg-blue-500 text-white",

@@ -23,7 +23,8 @@ const FLAG_LABELS: { key: keyof FlagDeltas; label: string }[] = [
 
 const ROLE_LABELS: { key: string; label: string }[] = [
   { key: "prime_minister", label: "Prime Minister" },
-  { key: "speaker", label: "Speaker" },
+  { key: "speaker", label: "Speaker (elected)" },
+  { key: "nominated_speaker", label: "Nominated for Speaker" },
   { key: "deputy_speaker", label: "Deputy Speaker" },
   { key: "leader_of_opposition", label: "Leader of Opposition" },
   { key: "cabinet_minister", label: "Cabinet Minister" },

@@ -11,8 +11,19 @@ type ActionResult<T = null> =
   | { success: true; data: T }
   | { success: false; error: string };
 
-export type AggregationMethod = "weighted_average" | "average" | "best_n" | "sum";
-const METHODS: AggregationMethod[] = ["weighted_average", "average", "best_n", "sum"];
+export type AggregationMethod =
+  | "weighted_average"
+  | "average"
+  | "best_n"
+  | "sum"
+  | "weighted_90";
+const METHODS: AggregationMethod[] = [
+  "weighted_average",
+  "average",
+  "best_n",
+  "sum",
+  "weighted_90",
+];
 
 export type ScoringSettings = {
   aggregation_method: AggregationMethod;

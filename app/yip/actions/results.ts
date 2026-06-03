@@ -301,7 +301,7 @@ export async function computeResults(
         const score =
           settings.normalize_per_session && max > 0 ? (raw / max) * 100 : raw;
         const weight = cfg ? cfg.session_weight : 1;
-        return { score, weight };
+        return { score, weight, raw, max };
       }
     );
 
@@ -330,6 +330,21 @@ export async function computeResults(
       } else if (method === "average") {
         baseScore = arr.reduce((a, b) => a + b, 0) / arr.length;
         minSession = Math.min(...arr);
+      } else if (method === "weighted_90") {
+        // Yi 2026 Workbook (weighted average → /90): score the student only on
+        // the components they were scored in. base = (Σ component means ÷ Σ
+        // component maxes) × 90, so 3 sessions at 80% ≈ 72/90 — same ceiling as
+        // 6 sessions. Position Points (max 10) add on top → /100. Uses raw means
+        // + maxes directly, independent of normalize_per_session.
+        const sumRaw = sessionEntries.reduce((a, e) => a + e.raw, 0);
+        const sumMax = sessionEntries.reduce((a, e) => a + e.max, 0);
+        baseScore = sumMax > 0 ? (sumRaw / sumMax) * 90 : 0;
+        // Consistency floor (for the MVP award): the weakest single component,
+        // expressed on the same /90 scale.
+        const ratios = sessionEntries
+          .filter((e) => e.max > 0)
+          .map((e) => (e.raw / e.max) * 90);
+        minSession = ratios.length > 0 ? Math.min(...ratios) : 0;
       } else {
         // weighted_average (default)
         const totalW = sessionEntries.reduce((a, e) => a + e.weight, 0);

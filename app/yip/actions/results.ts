@@ -7,6 +7,11 @@ import { parentScoreByKey } from "@/lib/yip/rubric";
 import { getPositionBonusConfig } from "./positions";
 import { getScoringSettings } from "./scoring-settings";
 import { listSessionParameters } from "./session-parameters";
+import {
+  deriveCommitteeLevels,
+  CMTE_LEVEL_CRITERION,
+  BILL_LEVEL_CRITERION,
+} from "@/lib/yip/committee-score";
 
 type ActionResult<T = null> =
   | { success: true; data: T }
@@ -61,6 +66,7 @@ type ParticipantLite = {
   party_side: string | null;
   school_name: string;
   constituency_name: string | null;
+  committee_name: string | null;
 };
 
 type RawScore = {
@@ -222,10 +228,29 @@ export async function computeResults(
     ])
   );
 
+  // Committee-once scoring (Phase 3): a committee is scored ONCE on the /60
+  // sheet; the derived committee-level points (cmte + bill, each 0–5) replace
+  // every member's per-individual committee_level criterion. When NO committee
+  // score exists (e.g. legacy events / Mizoram), nothing changes — the juror's
+  // own committee_level stays in their session total. So this is legacy-safe
+  // with no method gate: the presence of a committee_scores row is the switch.
+  const { data: committeeScoreRows } = await supabase
+    .from("committee_scores")
+    .select(
+      "committee_name, bill_draft_quality, policy_relevance, innovation, feasibility, team_collaboration, presentation_defence"
+    )
+    .eq("event_id", eventId);
+  const committeeLevelByName = new Map<string, { cmte: number; bill: number }>(
+    (committeeScoreRows ?? []).map((c) => {
+      const { cmteLevel, billLevel } = deriveCommitteeLevels(c);
+      return [c.committee_name, { cmte: cmteLevel, bill: billLevel }];
+    })
+  );
+
   // 2. Participants (with constituency for Best Constituency Rep / Community Impact)
   const { data: participants, error: pError } = await supabase
     .from("participants")
-    .select("id, full_name, parliament_role, party_side, school_name, constituency_name")
+    .select("id, full_name, parliament_role, party_side, school_name, constituency_name, committee_name")
     .eq("event_id", eventId)
     .not("parliament_role", "is", null);
 
@@ -272,11 +297,27 @@ export async function computeResults(
     // normalize_per_session is false (Yi 2026 Workbook additive model) the raw
     // component means are used as-is. Components are then combined per the
     // chosen method. Position Points apply ONCE on top (capped at 10).
+    // Committee-once override lookup for this participant's committee (if scored).
+    const cl = participant.committee_name
+      ? committeeLevelByName.get(participant.committee_name)
+      : undefined;
     const bySession = new Map<string, number[]>();
     for (const s of pScores) {
       const key = s.agenda_item_id ?? "__none__";
+      let value = s.total_score;
+      // For the two committee-scored components, swap the juror's per-individual
+      // committee-level mark for the committee's shared value (same for every
+      // member). Only when the committee has a /60 score — otherwise unchanged.
+      if (cl && s.agenda_item_id) {
+        const sk = agendaById.get(s.agenda_item_id)?.session_key;
+        if (sk === "committee_bill_drafting") {
+          value = value - (s.criteria_scores[CMTE_LEVEL_CRITERION] ?? 0) + cl.cmte;
+        } else if (sk === "bill_presentation_voting") {
+          value = value - (s.criteria_scores[BILL_LEVEL_CRITERION] ?? 0) + cl.bill;
+        }
+      }
       const arr = bySession.get(key) ?? [];
-      arr.push(s.total_score);
+      arr.push(value);
       bySession.set(key, arr);
     }
     const sessionEntries = Array.from(bySession.entries()).map(

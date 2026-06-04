@@ -150,6 +150,11 @@ export function ScoreForm({
     if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
 
     autoSaveTimerRef.current = setTimeout(() => {
+      // STICKY SUBMIT INTENT: once the juror has offline-SUBMITTED this sheet,
+      // later edits keep the submitted intent — the refined values sync as
+      // submitted. Without this, "submit offline, then fix one number" silently
+      // demoted the score to a draft that never counts in results.
+      const prev = getFromBuffer(juryAssignmentId, participant.id, agendaItemId);
       saveToBuffer(juryAssignmentId, {
         participantId: participant.id,
         rubricId,
@@ -159,9 +164,7 @@ export function ScoreForm({
         totalScore,
         comments,
         savedAt: new Date().toISOString(),
-        // Editing after an offline Submit intentionally resets the intent to
-        // draft — the changed score needs a fresh Submit from the juror.
-        status: "draft",
+        status: prev?.status === "submitted" ? "submitted" : "draft",
         ...(flags ? { flags } : {}),
       });
     }, 500);

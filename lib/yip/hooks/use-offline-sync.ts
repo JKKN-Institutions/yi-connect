@@ -140,6 +140,12 @@ export function useOfflineSync(juryAssignmentId: string | null): SyncState {
             removeFromBufferByKey(key);
             synced += 1;
           } else {
+            // A stale-rubric rejection can never succeed on retry — drop the
+            // entry so the badge doesn't show a forever-pending score; the
+            // juror re-scores that participant against the live sheet.
+            if (res.error?.startsWith("STALE_OFFLINE_SCORE")) {
+              removeFromBufferByKey(key);
+            }
             failed += 1;
           }
         } catch {

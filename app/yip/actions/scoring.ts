@@ -211,6 +211,28 @@ export async function submitScore(
     return { success: true, data: { id: existing.id } };
   }
 
+  // Offline-replay rubric guard: a score buffered on a phone is replayed
+  // verbatim — if the session's scoring parameters changed in between, its
+  // criteria keys / total no longer fit and would corrupt results. Reject with
+  // the STALE_OFFLINE_SCORE marker; the flush drops the entry (it can never
+  // succeed) and the juror re-scores against the live parameters.
+  if (input.fromOfflineSync && input.agendaItemId) {
+    const params = await getSessionScoringParams(input.agendaItemId);
+    if (params && params.criteria.length > 0) {
+      const expected = new Set(params.criteria.map((c) => c.key));
+      const hasForeignKey = Object.keys(input.criteriaScores).some(
+        (k) => !expected.has(k)
+      );
+      if (hasForeignKey || input.totalScore > params.total_max) {
+        return {
+          success: false,
+          error:
+            "STALE_OFFLINE_SCORE: the scoring sheet changed since this was saved offline — please re-score this participant",
+        };
+      }
+    }
+  }
+
   const scoreData = {
     jury_assignment_id: input.juryAssignmentId,
     participant_id: input.participantId,

@@ -101,6 +101,9 @@ type ResultRow = {
   min_juror_score: number; // for MVP consistency
   // In-memory only (NOT persisted) — used by award logic below.
   baseScore: number; // additive component sum, EXCLUDING position points
+  positionPoints: number; // role position points (capped 10) — Leadership award.
+  // NOTE: avg_score = base + position + special-remarks delta (clamped /100)
+  // since #308, so (avg − base) is NOT position points anymore — use this.
   hasDisciplinary: boolean; // any walkout / ruckus / suspension flag
   consistencyFloor: number; // MVP: weakest session as a 0–1 fraction of its max
   consistencySessionCount: number; // # scored sessions (MVP min-participation gate)
@@ -531,6 +534,7 @@ export async function computeResults(
       score_breakdown: scoreBreakdown,
       min_juror_score: minJurorScore === Infinity ? 0 : Math.round(minJurorScore * 100) / 100,
       baseScore: Math.round(baseScore * 100) / 100,
+      positionPoints,
       hasDisciplinary,
       consistencyFloor: Math.round(consistencyFloor * 1000) / 1000,
       consistencySessionCount,
@@ -699,7 +703,9 @@ export async function computeResults(
   //     (position points /10) + 50% Participation (base score /90).
   assignAward(resultRows, participantMap, "Leadership Excellence", isLeadership,
     (r) =>
-      0.5 * Math.min(1, Math.max(0, r.avg_score - r.baseScore) / 10) +
+      // Real position points — NOT (avg − base), which since #308 also carries
+      // the special-remarks delta and would distort the leadership half.
+      0.5 * Math.min(1, Math.max(0, r.positionPoints) / 10) +
       0.5 * Math.min(1, r.baseScore / 90));
   // 12. Best Member — Ruling Bench (matrix #4) — ruling side; House Performance,
   //     FLOOR-ONLY per Director ruling (Political Acumen + Question Hour + Bill;

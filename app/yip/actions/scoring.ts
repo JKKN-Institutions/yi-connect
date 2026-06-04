@@ -138,6 +138,10 @@ interface SubmitScoreInput {
     ruckus?: boolean;
     suspension?: boolean;
   };
+  // Set ONLY by the offline-sync flush. A stale buffered DRAFT replayed after
+  // reconnect must never downgrade/overwrite a score the juror has since
+  // SUBMITTED — the flush is a background replay, not a live edit.
+  fromOfflineSync?: boolean;
 }
 
 export async function submitScore(
@@ -193,6 +197,18 @@ export async function submitScore(
   // If existing score is locked, prevent edit
   if (existing?.status === "locked") {
     return { success: false, error: "This score has been locked and cannot be edited" };
+  }
+
+  // Offline-sync replay guard: a buffered DRAFT must never overwrite a row the
+  // juror has since SUBMITTED (e.g. a stale phone buffer flushing after the
+  // juror re-scored online). Report success so the flush clears the stale
+  // entry — the submitted row is the newer truth and stays untouched.
+  if (
+    input.fromOfflineSync &&
+    existing?.status === "submitted" &&
+    input.status !== "submitted"
+  ) {
+    return { success: true, data: { id: existing.id } };
   }
 
   const scoreData = {

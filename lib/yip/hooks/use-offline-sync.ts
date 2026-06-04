@@ -2,11 +2,14 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { submitScore } from "@/app/yip/actions/scoring";
-import { removeFromBuffer, type BufferedScore } from "@/lib/yip/score-buffer";
+import { removeFromBufferByKey, type BufferedScore } from "@/lib/yip/score-buffer";
 
 export type SyncState = {
   isOnline: boolean;
   pendingCount: number;
+  // How many of the pending entries are intended SUBMITS (not just drafts) —
+  // these are the ones that decide results, so the badge calls them out.
+  pendingSubmits: number;
   syncing: boolean;
   lastSyncAt: string | null;
   lastSyncResult: { synced: number; failed: number } | null;
@@ -26,6 +29,7 @@ export function useOfflineSync(juryAssignmentId: string | null): SyncState {
     typeof navigator === "undefined" ? true : navigator.onLine
   );
   const [pendingCount, setPendingCount] = useState(0);
+  const [pendingSubmits, setPendingSubmits] = useState(0);
   const [syncing, setSyncing] = useState(false);
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
   const [lastSyncResult, setLastSyncResult] = useState<{
@@ -39,23 +43,29 @@ export function useOfflineSync(juryAssignmentId: string | null): SyncState {
   const countPending = useCallback(() => {
     if (!juryAssignmentId) {
       setPendingCount(0);
+      setPendingSubmits(0);
       return;
     }
-    // Buffer keys are formatted `${juryAssignmentId}::${participantId}` in
-    // score-buffer. We read localStorage directly to filter by our jury id,
-    // since getAllBuffered() drops the key scope.
+    // Buffer keys start `${juryAssignmentId}::` (now suffixed with the session
+    // id). We read localStorage directly to filter by our jury id, since
+    // getAllBuffered() drops the key scope.
     try {
       const raw = localStorage.getItem("yip_score_buffer");
       if (!raw) {
         setPendingCount(0);
+        setPendingSubmits(0);
         return;
       }
       const map = JSON.parse(raw) as Record<string, BufferedScore>;
       const prefix = `${juryAssignmentId}::`;
-      const count = Object.keys(map).filter((k) => k.startsWith(prefix)).length;
-      setPendingCount(count);
+      const mine = Object.entries(map).filter(([k]) => k.startsWith(prefix));
+      setPendingCount(mine.length);
+      setPendingSubmits(
+        mine.filter(([, v]) => v.status === "submitted").length
+      );
     } catch {
       setPendingCount(0);
+      setPendingSubmits(0);
     }
   }, [juryAssignmentId]);
 
@@ -83,7 +93,25 @@ export function useOfflineSync(juryAssignmentId: string | null): SyncState {
       let synced = 0;
       let failed = 0;
 
-      for (const [, buffered] of entries) {
+      for (const [key, buffered] of entries) {
+        // Discard phantom entries: untouched all-zero drafts written by the
+        // old mount-autosave (no scores, no comments, no flags, not a Submit).
+        // Replaying these as drafts could clobber a real score with zeros.
+        const hasAnyScore = Object.values(buffered.criteriaScores ?? {}).some(
+          (v) => Number(v) > 0
+        );
+        const hasAnyFlag = buffered.flags
+          ? Object.values(buffered.flags).some(Boolean)
+          : false;
+        if (
+          buffered.status !== "submitted" &&
+          !hasAnyScore &&
+          !hasAnyFlag &&
+          !(buffered.comments ?? "").trim()
+        ) {
+          removeFromBufferByKey(key);
+          continue;
+        }
         try {
           const res = await submitScore({
             juryAssignmentId,
@@ -94,13 +122,22 @@ export function useOfflineSync(juryAssignmentId: string | null): SyncState {
             criteriaScores: buffered.criteriaScores,
             totalScore: buffered.totalScore,
             comments: buffered.comments ?? "",
-            // Keep the buffered intent: a draft in the buffer stays a draft.
-            // If the juror wanted it submitted, they would have hit Submit,
-            // which calls submitScore directly and clears the buffer entry.
-            status: "draft",
+            // Honour the buffered INTENT. A juror who pressed Submit while
+            // offline meant "submitted" — drafts are excluded from results, so
+            // downgrading here silently made offline submissions never count.
+            // Legacy entries without a status stay drafts.
+            status: buffered.status === "submitted" ? "submitted" : "draft",
+            // Special-Remarks flags captured offline ride along; omitted for
+            // legacy entries (submitScore treats them as optional).
+            ...(buffered.flags ? { flags: buffered.flags } : {}),
+            // Mark as a background replay: the server refuses to downgrade a
+            // since-SUBMITTED row with a stale buffered draft.
+            fromOfflineSync: true,
           });
           if (res.success) {
-            removeFromBuffer(juryAssignmentId, buffered.participantId);
+            // Delete by the EXACT stored key — entries may be legacy 2-part
+            // (jury::participant) or current 3-part (jury::participant::session).
+            removeFromBufferByKey(key);
             synced += 1;
           } else {
             failed += 1;
@@ -140,8 +177,14 @@ export function useOfflineSync(juryAssignmentId: string | null): SyncState {
     countPending();
 
     // Also: refresh pending count periodically since saveToBuffer doesn't fire
-    // an event. Every 10s is plenty — the buffer is localStorage, not hot path.
-    const interval = setInterval(countPending, 10_000);
+    // an event — AND retry the flush. navigator.onLine lies on captive-portal
+    // venue wifi ("online" but requests fail), so the `online` event alone can
+    // miss real recovery; a periodic attempt is cheap (flush() early-returns
+    // when offline / already flushing / buffer empty).
+    const interval = setInterval(() => {
+      countPending();
+      flush();
+    }, 10_000);
 
     // And trigger one flush attempt on mount in case we loaded straight into
     // online mode with buffered drafts from a prior session.
@@ -167,6 +210,7 @@ export function useOfflineSync(juryAssignmentId: string | null): SyncState {
   return {
     isOnline,
     pendingCount,
+    pendingSubmits,
     syncing,
     lastSyncAt,
     lastSyncResult,

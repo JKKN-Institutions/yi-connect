@@ -15,6 +15,19 @@ export interface BufferedScore {
   totalScore: number;
   comments: string;
   savedAt: string;
+  // Offline intent (2026-06-04): what the juror MEANT. A buffered "submitted"
+  // must sync as submitted — drafts are EXCLUDED from results, so silently
+  // downgrading an offline Submit to draft makes the score never count.
+  // Optional so legacy buffered entries (no status) default to draft on flush.
+  status?: "draft" | "submitted";
+  // Special-Remarks flags captured offline — without these in the buffer,
+  // flags ticked during an outage were dropped at sync time.
+  flags?: {
+    no_confidence_brought: boolean;
+    walkout: boolean;
+    ruckus: boolean;
+    suspension: boolean;
+  };
 }
 
 function getBuffer(): Record<string, BufferedScore> {
@@ -36,9 +49,19 @@ function setBuffer(buffer: Record<string, BufferedScore>): void {
   }
 }
 
-/** Build a unique key for a jury+participant score */
-function bufferKey(juryAssignmentId: string, participantId: string): string {
-  return `${juryAssignmentId}::${participantId}`;
+/**
+ * Build a unique key for a jury+participant+SESSION score. Per-session scoring
+ * means the same juror scores the same participant once per session — a 2-part
+ * key made an offline score for session B overwrite session A's offline work.
+ * Legacy 2-part entries already in a phone's buffer still flush correctly (the
+ * flush iterates raw entries and deletes by their exact stored key).
+ */
+function bufferKey(
+  juryAssignmentId: string,
+  participantId: string,
+  agendaItemId: string | null
+): string {
+  return `${juryAssignmentId}::${participantId}::${agendaItemId ?? "none"}`;
 }
 
 // ─── Stale-rubric guard ───────────────────────────────────────────
@@ -86,7 +109,7 @@ export function saveToBuffer(
   score: BufferedScore
 ): void {
   const buffer = getBuffer();
-  const key = bufferKey(juryAssignmentId, score.participantId);
+  const key = bufferKey(juryAssignmentId, score.participantId, score.agendaItemId);
   buffer[key] = { ...score, savedAt: new Date().toISOString() };
   setBuffer(buffer);
 }
@@ -104,10 +127,11 @@ export function saveToBuffer(
 export function getFromBuffer(
   juryAssignmentId: string,
   participantId: string,
+  agendaItemId: string | null,
   rubricKeys?: string[] | null
 ): BufferedScore | null {
   const buffer = getBuffer();
-  const key = bufferKey(juryAssignmentId, participantId);
+  const key = bufferKey(juryAssignmentId, participantId, agendaItemId);
   const entry = buffer[key] ?? null;
   if (!entry) return null;
 
@@ -125,10 +149,22 @@ export function getFromBuffer(
 /** Remove a specific score from the buffer (after successful sync) */
 export function removeFromBuffer(
   juryAssignmentId: string,
-  participantId: string
+  participantId: string,
+  agendaItemId: string | null
 ): void {
   const buffer = getBuffer();
-  const key = bufferKey(juryAssignmentId, participantId);
+  const key = bufferKey(juryAssignmentId, participantId, agendaItemId);
+  delete buffer[key];
+  setBuffer(buffer);
+}
+
+/**
+ * Remove a buffered entry by its exact storage key. The flush iterates the raw
+ * buffer (whose keys may be legacy 2-part OR current 3-part), so deletion must
+ * use the key the entry is actually stored under — recomputing it can miss.
+ */
+export function removeFromBufferByKey(key: string): void {
+  const buffer = getBuffer();
   delete buffer[key];
   setBuffer(buffer);
 }

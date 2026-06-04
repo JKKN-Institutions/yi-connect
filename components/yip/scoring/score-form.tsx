@@ -48,6 +48,14 @@ interface ScoreFormProps {
   agendaItemId: string | null;
   juryAssignmentId: string;
   existingScore: ExistingScore | null;
+  // Special-Remarks flags from the parent panel — included in every buffer
+  // write so flags ticked during an outage survive to the sync.
+  flags?: {
+    no_confidence_brought: boolean;
+    walkout: boolean;
+    ruckus: boolean;
+    suspension: boolean;
+  };
   onSubmit: (data: {
     criteriaScores: Record<string, number>;
     totalScore: number;
@@ -66,6 +74,7 @@ export function ScoreForm({
   agendaItemId,
   juryAssignmentId,
   existingScore,
+  flags,
   onSubmit,
 }: ScoreFormProps) {
   // Why: form state must be EXACTLY the current rubric's parent keys. Stale localStorage
@@ -91,24 +100,36 @@ export function ScoreForm({
     );
     if (fromExisting) return fromExisting;
 
-    const buffered = getFromBuffer(juryAssignmentId, participant.id);
+    // Session-aware + rubric-validated: only rehydrate a buffer entry written
+    // for THIS session, and only when its keys match the active rubric.
+    const buffered = getFromBuffer(
+      juryAssignmentId,
+      participant.id,
+      agendaItemId,
+      criteria.map((c) => c.key)
+    );
     const fromBuffer = sanitizeScores(
       buffered?.criteriaScores as Record<string, unknown> | undefined
     );
     if (fromBuffer) return fromBuffer;
 
     return Object.fromEntries(criteria.map((c) => [c.key, 0]));
-  }, [criteria, existingScore, juryAssignmentId, participant.id, sanitizeScores]);
+  }, [criteria, existingScore, juryAssignmentId, participant.id, agendaItemId, sanitizeScores]);
 
   const [scores, setScores] = useState<Record<string, number>>(getInitialScores);
   const [comments, setComments] = useState(
-    existingScore?.comments ?? getFromBuffer(juryAssignmentId, participant.id)?.comments ?? ""
+    existingScore?.comments ??
+      getFromBuffer(juryAssignmentId, participant.id, agendaItemId)?.comments ??
+      ""
   );
   const [saving, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [lastSaved, setLastSaved] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // True once the juror has touched the form (score/comment edit). Gates the
+  // autosave buffer so merely VIEWING a participant never creates an entry.
+  const dirtyRef = useRef(false);
 
   // Why: only sum keys that belong to the active rubric — defends totals from any leaked
   // foreign keys (legacy dotted sub-criteria) that might have slipped past sanitization.
@@ -120,11 +141,20 @@ export function ScoreForm({
   const isLocked = existingScore?.status === "locked";
   const isSubmitted = existingScore?.status === "submitted";
 
-  // Auto-save to localStorage buffer on score changes
+  // Auto-save to localStorage buffer on score changes — but ONLY once the juror
+  // has actually edited something. Without the dirty guard this effect fires on
+  // mount (and on async flag hydration) and buffers an untouched all-zero form,
+  // which the offline flush then syncs as a phantom 0-point draft row.
   useEffect(() => {
+    if (!dirtyRef.current) return;
     if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
 
     autoSaveTimerRef.current = setTimeout(() => {
+      // STICKY SUBMIT INTENT: once the juror has offline-SUBMITTED this sheet,
+      // later edits keep the submitted intent — the refined values sync as
+      // submitted. Without this, "submit offline, then fix one number" silently
+      // demoted the score to a draft that never counts in results.
+      const prev = getFromBuffer(juryAssignmentId, participant.id, agendaItemId);
       saveToBuffer(juryAssignmentId, {
         participantId: participant.id,
         rubricId,
@@ -134,19 +164,22 @@ export function ScoreForm({
         totalScore,
         comments,
         savedAt: new Date().toISOString(),
+        status: prev?.status === "submitted" ? "submitted" : "draft",
+        ...(flags ? { flags } : {}),
       });
     }, 500);
 
     return () => {
       if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     };
-  }, [scores, comments, juryAssignmentId, participant.id, rubricId, eventId, agendaItemId, totalScore]);
+  }, [scores, comments, juryAssignmentId, participant.id, rubricId, eventId, agendaItemId, totalScore, flags]);
 
   const handleScoreChange = (key: string, value: number) => {
     if (isLocked) return;
     const criterion = criteria.find((c) => c.key === key);
     if (!criterion) return;
     const clamped = Math.max(0, Math.min(value, criterion.max_score));
+    dirtyRef.current = true;
     setScores((prev) => ({ ...prev, [key]: clamped }));
     setError(null);
   };
@@ -167,13 +200,36 @@ export function ScoreForm({
       });
 
       if (result.success) {
-        removeFromBuffer(juryAssignmentId, participant.id);
+        removeFromBuffer(juryAssignmentId, participant.id, agendaItemId);
+        dirtyRef.current = false;
         setLastSaved(new Date().toLocaleTimeString());
       } else {
+        // The server RESPONDED with a rejection (lock, validation, auth) —
+        // a retry won't change it, so show the error without buffering intent.
         setError(result.error ?? "Failed to save");
       }
     } catch {
-      setError("Network error. Your scores are saved locally.");
+      // Network failure — the server never saw this. Preserve the juror's
+      // INTENT in the buffer: an offline Submit syncs as SUBMITTED when
+      // connectivity returns (drafts are excluded from results, so silently
+      // downgrading a Submit made the score never count). A Save stays draft.
+      saveToBuffer(juryAssignmentId, {
+        participantId: participant.id,
+        rubricId,
+        eventId,
+        agendaItemId,
+        criteriaScores: cleanScores,
+        totalScore,
+        comments,
+        savedAt: new Date().toISOString(),
+        status,
+        ...(flags ? { flags } : {}),
+      });
+      setError(
+        status === "submitted"
+          ? "No internet — your SUBMIT is saved on this phone and will send automatically when connection returns. Keep this tab open."
+          : "No internet — your draft is saved on this phone and will sync automatically. Keep this tab open."
+      );
     } finally {
       setLoadingFn(false);
     }
@@ -383,6 +439,7 @@ export function ScoreForm({
         <Textarea
           value={comments}
           onChange={(e) => {
+            dirtyRef.current = true;
             setComments(e.target.value);
             setError(null);
           }}

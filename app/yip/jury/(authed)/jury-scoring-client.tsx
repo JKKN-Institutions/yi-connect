@@ -33,6 +33,10 @@ import {
 } from "lucide-react";
 import { useOfflineSync } from "@/lib/yip/hooks/use-offline-sync";
 import { OfflineSyncBadge } from "@/components/yip/scoring/offline-sync-badge";
+import {
+  readOfflineCache,
+  patchOfflineCache,
+} from "@/lib/yip/offline-cache";
 import type { RubricCriterionShape } from "@/lib/yip/rubric";
 
 // ─── Types ────────────────────────────────────────────────────────
@@ -168,6 +172,8 @@ function JuryScoringClientInner({
   const [flags, setFlags] = useState<FlagsState>(EMPTY_FLAGS);
 
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  // One-shot guard for the offline prefetch (roster + rubrics + session params).
+  const prefetchedRef = useRef(false);
 
   // The active participant is either the current speaker or a manually selected one
   const activeParticipant =
@@ -179,44 +185,69 @@ function JuryScoringClientInner({
     async (participant: Participant) => {
       const role = participant.parliament_role ?? "mp";
 
-      const [rubricResult, scoreResult, sessionParams] = await Promise.all([
-        getRubricForRole(role),
-        getScoreForParticipant(
-          juryAssignmentId,
-          participant.id,
-          eventId,
+      try {
+        const [rubricResult, scoreResult, sessionParams] = await Promise.all([
+          getRubricForRole(role),
+          getScoreForParticipant(
+            juryAssignmentId,
+            participant.id,
+            eventId,
+            selectedSessionId
+          ),
           selectedSessionId
-        ),
-        selectedSessionId
-          ? getSessionScoringParams(selectedSessionId)
-          : Promise.resolve(null),
-      ]);
+            ? getSessionScoringParams(selectedSessionId)
+            : Promise.resolve(null),
+        ]);
 
-      if (rubricResult.success) {
-        const r = rubricResult.data;
-        // Per-session scoring: prefer the SESSION's configured parameters; the
-        // role rubric supplies the rubric_id (FK) + the fallback criteria when
-        // the session has no configured parameters.
-        setRubric({
-          id: r.id,
-          criteria: (sessionParams?.criteria ??
-            r.criteria) as unknown as Criterion[],
-          total_max: sessionParams?.total_max ?? r.total_max,
-        });
-      } else {
-        setRubric(null);
-      }
+        if (rubricResult.success) {
+          const r = rubricResult.data;
+          // Per-session scoring: prefer the SESSION's configured parameters; the
+          // role rubric supplies the rubric_id (FK) + the fallback criteria when
+          // the session has no configured parameters.
+          setRubric({
+            id: r.id,
+            criteria: (sessionParams?.criteria ??
+              r.criteria) as unknown as Criterion[],
+            total_max: sessionParams?.total_max ?? r.total_max,
+          });
+        } else {
+          setRubric(null);
+        }
 
-      if (scoreResult) {
-        setExistingScore({
-          id: scoreResult.id,
-          criteria_scores:
-            scoreResult.criteria_scores as unknown as Record<string, number>,
-          total_score: scoreResult.total_score,
-          comments: scoreResult.comments,
-          status: scoreResult.status,
-        });
-      } else {
+        if (scoreResult) {
+          setExistingScore({
+            id: scoreResult.id,
+            criteria_scores:
+              scoreResult.criteria_scores as unknown as Record<string, number>,
+            total_score: scoreResult.total_score,
+            comments: scoreResult.comments,
+            status: scoreResult.status,
+          });
+        } else {
+          setExistingScore(null);
+        }
+      } catch {
+        // OFFLINE FALLBACK (2026-06-04): the server is unreachable — resolve the
+        // rubric + session params from the prefetched cache so the juror can
+        // keep moving between participants without internet. The existing score
+        // can't be known offline; ScoreForm rehydrates this session's values
+        // from the local buffer instead.
+        const cache = readOfflineCache(eventId, juryAssignmentId);
+        const cachedRubric = cache?.rubricsByRole?.[role];
+        const cachedParams = selectedSessionId
+          ? cache?.sessionParams?.[selectedSessionId]
+          : null;
+        if (cachedRubric) {
+          setRubric({
+            id: cachedRubric.id,
+            criteria: (cachedParams?.criteria ??
+              cachedRubric.criteria) as unknown as Criterion[],
+            total_max: cachedParams?.total_max ?? cachedRubric.total_max,
+          });
+        } else {
+          // Never prefetched on this phone — we can't render a safe scoresheet.
+          setRubric(null);
+        }
         setExistingScore(null);
       }
 
@@ -226,16 +257,23 @@ function JuryScoringClientInner({
   );
 
   const loadCurrentSpeaker = useCallback(async () => {
-    const result = await getCurrentSpeaker(eventId);
-    if (result.success) {
-      setCurrentSpeaker(result.data);
-      // If no manual override, load rubric for current speaker
-      if (!manualParticipant && result.data?.participant) {
-        await loadRubricAndScore(result.data.participant);
-      } else if (!manualParticipant && !result.data) {
-        setRubric(null);
-        setExistingScore(null);
+    try {
+      const result = await getCurrentSpeaker(eventId);
+      if (result.success) {
+        setCurrentSpeaker(result.data);
+        // If no manual override, load rubric for current speaker
+        if (!manualParticipant && result.data?.participant) {
+          await loadRubricAndScore(result.data.participant);
+        } else if (!manualParticipant && !result.data) {
+          setRubric(null);
+          setExistingScore(null);
+        }
       }
+    } catch {
+      // Offline at load — no live speaker to follow; the juror scores via the
+      // manual picker (served from the offline cache). Without this catch the
+      // throw skips setLoading(false) and the page spins forever.
+      setCurrentSpeaker(null);
     }
     setLoading(false);
   }, [eventId, manualParticipant, loadRubricAndScore]);
@@ -262,7 +300,17 @@ function JuryScoringClientInner({
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const sessions = await getSessionsForJury(juryAssignmentId, eventId);
+      let sessions: ScoreableSession[] = [];
+      try {
+        sessions = await getSessionsForJury(juryAssignmentId, eventId);
+        // Cache for offline reloads (the PWA shell can serve the page offline;
+        // this gives it the juror's sessions too).
+        patchOfflineCache(eventId, juryAssignmentId, { sessions });
+      } catch {
+        // Offline — fall back to the prefetched cache.
+        const cache = readOfflineCache(eventId, juryAssignmentId);
+        sessions = (cache?.sessions as ScoreableSession[] | undefined) ?? [];
+      }
       if (cancelled) return;
       setAssignedSessions(sessions);
       setSelectedSessionId((prev) =>
@@ -285,28 +333,106 @@ function JuryScoringClientInner({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedSessionId]);
 
-  // Load Special-Remarks delta config once. Falls back to the migration's
-  // seeded defaults if the row is missing or the call fails.
+  // ─── Offline prefetch (2026-06-04) ──────────────────────────────
+  // Once the juror's sessions are known, pull EVERYTHING needed to keep
+  // scoring through an outage — the roster, each distinct role's rubric, and
+  // each assigned session's scoring parameters — into localStorage. Every
+  // server call above falls back to this cache when the network is gone.
+  // Best-effort: failures here mean we were already offline; the cache from a
+  // previous online visit (if any) still applies.
   useEffect(() => {
+    if (!sessionsLoaded || assignedSessions.length === 0) return;
+    if (prefetchedRef.current) return;
+    prefetchedRef.current = true;
     let cancelled = false;
     (async () => {
-      const res = await getScoringFlagsConfig();
-      if (cancelled) return;
-      setFlagDeltas(
-        res.success
-          ? res.data.deltas
-          : {
-              no_confidence_brought: 3,
-              walkout: -5,
-              ruckus: -3,
-              suspension: -10,
+      try {
+        const roster = await getScoreableParticipants(eventId);
+        if (cancelled) return;
+        // Feed the picker too — it opens instantly and works offline.
+        setAllParticipants((prev) => (prev.length > 0 ? prev : roster));
+        patchOfflineCache(eventId, juryAssignmentId, { roster });
+
+        const roles = Array.from(
+          new Set(roster.map((p) => p.parliament_role ?? "mp"))
+        );
+        const rubricPairs = await Promise.all(
+          roles.map(async (role) => {
+            try {
+              const r = await getRubricForRole(role);
+              return r.success
+                ? ([
+                    role,
+                    {
+                      id: r.data.id,
+                      criteria: r.data.criteria,
+                      total_max: r.data.total_max,
+                    },
+                  ] as const)
+                : null;
+            } catch {
+              return null;
             }
-      );
+          })
+        );
+        const paramPairs = await Promise.all(
+          assignedSessions.map(async (s) => {
+            try {
+              const p = await getSessionScoringParams(s.id);
+              return [s.id, p] as const;
+            } catch {
+              return [s.id, null] as const;
+            }
+          })
+        );
+        if (cancelled) return;
+        patchOfflineCache(eventId, juryAssignmentId, {
+          rubricsByRole: Object.fromEntries(
+            rubricPairs.filter((x): x is NonNullable<typeof x> => x !== null)
+          ),
+          sessionParams: Object.fromEntries(paramPairs),
+        });
+      } catch {
+        // Already offline at first load — nothing to prefetch; allow a retry
+        // on the next mount.
+        prefetchedRef.current = false;
+      }
     })();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [sessionsLoaded, assignedSessions, eventId, juryAssignmentId]);
+
+  // Load Special-Remarks delta config once. Falls back to the migration's
+  // seeded defaults if the row is missing or the call fails.
+  useEffect(() => {
+    let cancelled = false;
+    const FALLBACK_DELTAS = {
+      no_confidence_brought: 3,
+      walkout: -5,
+      ruckus: -3,
+      suspension: -10,
+    };
+    (async () => {
+      try {
+        const res = await getScoringFlagsConfig();
+        if (cancelled) return;
+        const deltas = res.success ? res.data.deltas : FALLBACK_DELTAS;
+        setFlagDeltas(deltas);
+        patchOfflineCache(eventId, juryAssignmentId, { flagDeltas: deltas });
+      } catch {
+        // Offline — cached deltas if we have them, else the seeded defaults.
+        if (cancelled) return;
+        const cache = readOfflineCache(eventId, juryAssignmentId);
+        setFlagDeltas(
+          (cache?.flagDeltas as FlagDeltas | undefined) ?? FALLBACK_DELTAS
+        );
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [eventId, juryAssignmentId]);
 
   // Hydrate flag checkboxes whenever the active participant changes.
   // We pull straight from the scores row via a typed cast — the columns
@@ -319,12 +445,19 @@ function JuryScoringClientInner({
     }
     let cancelled = false;
     (async () => {
-      const fresh = await getScoreForParticipant(
-        juryAssignmentId,
-        activeParticipant.id,
-        eventId,
-        selectedSessionId
-      );
+      let fresh: Awaited<ReturnType<typeof getScoreForParticipant>> = null;
+      try {
+        fresh = await getScoreForParticipant(
+          juryAssignmentId,
+          activeParticipant.id,
+          eventId,
+          selectedSessionId
+        );
+      } catch {
+        // Offline — no server copy to hydrate from; start with clean flags
+        // (any flags the juror sets are preserved in the local buffer).
+        fresh = null;
+      }
       if (cancelled) return;
       if (!fresh) {
         setFlags(EMPTY_FLAGS);
@@ -413,7 +546,14 @@ function JuryScoringClientInner({
       return;
     }
     setLoadingPicker(true);
-    const data = await getScoreableParticipants(eventId);
+    let data: Participant[] = [];
+    try {
+      data = await getScoreableParticipants(eventId);
+    } catch {
+      // Offline — serve the prefetched roster so the picker still works.
+      const cache = readOfflineCache(eventId, juryAssignmentId);
+      data = (cache?.roster as Participant[] | undefined) ?? [];
+    }
     setAllParticipants(data);
     setShowPicker(true);
     setLoadingPicker(false);
@@ -484,22 +624,27 @@ function JuryScoringClientInner({
     });
 
     if (result.success) {
-      // Refresh the existing score after saving
-      const fresh = await getScoreForParticipant(
-        juryAssignmentId,
-        activeParticipant.id,
-        eventId,
-        selectedSessionId
-      );
-      if (fresh) {
-        setExistingScore({
-          id: fresh.id,
-          criteria_scores:
-            fresh.criteria_scores as unknown as Record<string, number>,
-          total_score: fresh.total_score,
-          comments: fresh.comments,
-          status: fresh.status,
-        });
+      // Refresh the existing score after saving — best-effort; if the network
+      // dropped between the save and this read, the save still stands.
+      try {
+        const fresh = await getScoreForParticipant(
+          juryAssignmentId,
+          activeParticipant.id,
+          eventId,
+          selectedSessionId
+        );
+        if (fresh) {
+          setExistingScore({
+            id: fresh.id,
+            criteria_scores:
+              fresh.criteria_scores as unknown as Record<string, number>,
+            total_score: fresh.total_score,
+            comments: fresh.comments,
+            status: fresh.status,
+          });
+        }
+      } catch {
+        // ignore — display refresh only
       }
     }
 
@@ -692,6 +837,7 @@ function JuryScoringClientInner({
           agendaItemId={selectedSessionId}
           juryAssignmentId={juryAssignmentId}
           existingScore={existingScore}
+          flags={flags}
           onSubmit={handleSubmit}
         />
       ) : (

@@ -9,14 +9,16 @@ import type { SyncState } from "@/lib/yip/hooks/use-offline-sync";
  * when the auditorium Wi-Fi flaps.
  */
 export function OfflineSyncBadge({ state }: { state: SyncState }) {
-  const { isOnline, pendingCount, syncing, lastSyncResult } = state;
+  const { isOnline, pendingCount, pendingSubmits, syncing, lastSyncResult } =
+    state;
+  const submitsNote = pendingSubmits > 0 ? ` (${pendingSubmits} to submit)` : "";
 
   // Precedence: syncing → offline-with-pending → offline → just-synced → online-idle
   if (syncing) {
     return (
       <Pill tone="amber" aria-live="polite">
         <Loader2 className="size-3.5 animate-spin" />
-        Syncing {pendingCount > 0 ? `${pendingCount} ` : ""}draft
+        Syncing {pendingCount > 0 ? `${pendingCount} ` : ""}score
         {pendingCount === 1 ? "" : "s"}…
       </Pill>
     );
@@ -26,7 +28,7 @@ export function OfflineSyncBadge({ state }: { state: SyncState }) {
     return (
       <Pill tone="red" aria-live="assertive">
         <CloudOff className="size-3.5" />
-        Offline · {pendingCount} draft{pendingCount === 1 ? "" : "s"} queued
+        Offline · {pendingCount} saved on phone{submitsNote}
       </Pill>
     );
   }
@@ -57,7 +59,7 @@ export function OfflineSyncBadge({ state }: { state: SyncState }) {
     return (
       <Pill tone="amber" aria-live="polite">
         <Cloud className="size-3.5" />
-        {pendingCount} pending
+        {pendingCount} pending{submitsNote}
       </Pill>
     );
   }

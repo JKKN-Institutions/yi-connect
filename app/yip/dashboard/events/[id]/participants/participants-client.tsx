@@ -45,6 +45,7 @@ import {
   UserCheck,
 } from "lucide-react";
 import { CsvImport } from "@/components/yip/csv-import";
+import { WhatsAppSendCodes } from "@/components/yip/whatsapp-send-codes";
 
 type Participant = {
   id: string;
@@ -301,6 +302,10 @@ export function ParticipantsClient({
             <Download className="size-4" />
             Export CSV
           </Button>
+
+          {/* Send each student's access code to their phone via the connected
+              Yi WhatsApp number (bridge service). Re-sends are deduped. */}
+          <WhatsAppSendCodes eventId={eventId} />
 
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger

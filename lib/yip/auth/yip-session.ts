@@ -18,7 +18,10 @@ import { cookies } from "next/headers";
 
 export type YipSession =
   | { type: "jury"; id: string; name: string; eventId: string }
-  | { type: "participant"; id: string; name: string; eventId: string };
+  | { type: "participant"; id: string; name: string; eventId: string }
+  // Floor voting: YUVA volunteers log in with an access code and act as
+  // roving kiosks — `id` is the volunteers.id row for this event.
+  | { type: "volunteer"; id: string; name: string; eventId: string };
 
 export async function getYipSession(): Promise<YipSession | null> {
   const store = await cookies();
@@ -26,7 +29,12 @@ export async function getYipSession(): Promise<YipSession | null> {
   if (!raw) return null;
   try {
     const p = JSON.parse(raw);
-    if ((p?.type === "jury" || p?.type === "participant") && p.id && p.name && p.eventId) {
+    if (
+      (p?.type === "jury" || p?.type === "participant" || p?.type === "volunteer") &&
+      p.id &&
+      p.name &&
+      p.eventId
+    ) {
       return p as YipSession;
     }
     return null;
@@ -49,6 +57,21 @@ export async function requireJurySession(
   if (s.eventId !== eventId) return { ok: false, error: "Session is for a different event" };
   if (s.id !== juryAssignmentId) return { ok: false, error: "Not authorized for this jury identity" };
   return { ok: true };
+}
+
+/**
+ * Require an active volunteer session for `eventId`. Volunteers are kiosk
+ * carriers: they may surface the pending-voter list and relay a student's
+ * self-cast vote during an OPEN session — nothing else. Returns the volunteer
+ * id so capture actions can stamp provenance (recorded_by_volunteer_id).
+ */
+export async function requireVolunteerSession(
+  eventId: string
+): Promise<{ ok: true; volunteerId: string; name: string } | { ok: false; error: string }> {
+  const s = await getYipSession();
+  if (!s || s.type !== "volunteer") return { ok: false, error: "Volunteer session required" };
+  if (s.eventId !== eventId) return { ok: false, error: "Session is for a different event" };
+  return { ok: true, volunteerId: s.id, name: s.name };
 }
 
 /**

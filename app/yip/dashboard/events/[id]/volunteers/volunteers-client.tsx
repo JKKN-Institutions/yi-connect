@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Badge } from "@/components/yip/ui/badge";
 import { Button } from "@/components/yip/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/yip/ui/card";
@@ -13,12 +14,19 @@ import {
   Users,
   Shield,
   CheckCircle2,
+  KeyRound,
+  Copy,
+  Check,
+  X,
 } from "lucide-react";
 import { VOLUNTEER_STATIONS, type VolunteerStation } from "@/lib/yip/volunteers";
 import {
   addVolunteer,
   markVolunteerArrived,
   deleteVolunteer,
+  generateVolunteerCode,
+  generateAllVolunteerCodes,
+  revokeVolunteerCode,
   type Volunteer,
 } from "@/app/yip/actions/volunteers";
 
@@ -80,6 +88,9 @@ export function VolunteersClient({
   const [error, setError] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
+  const [confirmRevoke, setConfirmRevoke] = useState<string | null>(null);
+  const router = useRouter();
 
   function submitAdd() {
     if (!form.full_name.trim()) {
@@ -142,9 +153,62 @@ export function VolunteersClient({
     });
   }
 
+  function handleGenerateCode(v: Volunteer) {
+    startTransition(async () => {
+      const res = await generateVolunteerCode(eventId, v.id);
+      if (!res.success) {
+        setError(res.error);
+        return;
+      }
+      setVolunteers((prev) =>
+        prev.map((x) => (x.id === v.id ? { ...x, access_code: res.data.code } : x))
+      );
+    });
+  }
+
+  function handleRevokeCode(v: Volunteer) {
+    startTransition(async () => {
+      const res = await revokeVolunteerCode(eventId, v.id);
+      if (!res.success) {
+        setError(res.error);
+        return;
+      }
+      setVolunteers((prev) =>
+        prev.map((x) => (x.id === v.id ? { ...x, access_code: null } : x))
+      );
+      setConfirmRevoke(null);
+    });
+  }
+
+  function handleGenerateAll() {
+    startTransition(async () => {
+      const res = await generateAllVolunteerCodes(eventId);
+      if (!res.success) {
+        setError(res.error);
+        return;
+      }
+      // Refetch is overkill — just optimistically reflect that all blanks were
+      // filled (exact codes are revealed on the next page render / reload).
+      setFlash(
+        res.data.generated > 0
+          ? `Generated ${res.data.generated} code${res.data.generated === 1 ? "" : "s"}`
+          : "All volunteers already have codes"
+      );
+      setTimeout(() => setFlash(null), 2500);
+      router.refresh();
+    });
+  }
+
+  function copyCode(code: string) {
+    void navigator.clipboard?.writeText(code);
+    setCopied(code);
+    setTimeout(() => setCopied((c) => (c === code ? null : c)), 1500);
+  }
+
   const total = volunteers.length;
   const arrived = volunteers.filter((v) => v.arrived).length;
   const yuvaCount = volunteers.filter((v) => v.is_yuva).length;
+  const missingCodes = volunteers.filter((v) => !v.access_code).length;
 
   const byStation = VOLUNTEER_STATIONS.map((s) => ({
     ...s,
@@ -163,17 +227,38 @@ export function VolunteersClient({
           <p className="text-sm text-[#1a1a3e]/60 mt-1">
             {eventName} · Handbook p.10 · Min {YUVA_MIN} YUVA volunteers required
           </p>
+          <p className="text-xs text-[#1a1a3e]/50 mt-1 flex items-center gap-1.5">
+            <KeyRound className="size-3 text-[#FF9933]" />
+            Volunteers sign in at <span className="font-mono">/yip/join</span> with their code to run voting kiosks on event day.
+          </p>
         </div>
-        <Button
-          onClick={() => {
-            setCreating(true);
-            setError(null);
-          }}
-          className="bg-[#FF9933] hover:bg-[#FF9933]/90 text-white"
-        >
-          <Plus className="size-4 mr-2" />
-          Add Volunteer
-        </Button>
+        <div className="flex items-center gap-2 shrink-0">
+          {missingCodes > 0 && (
+            <Button
+              variant="outline"
+              onClick={handleGenerateAll}
+              disabled={pending}
+              className="border-[#FF9933]/40 text-[#FF9933] hover:bg-[#FF9933]/10"
+            >
+              {pending ? (
+                <Loader2 className="size-4 mr-2 animate-spin" />
+              ) : (
+                <KeyRound className="size-4 mr-2" />
+              )}
+              Generate all codes ({missingCodes})
+            </Button>
+          )}
+          <Button
+            onClick={() => {
+              setCreating(true);
+              setError(null);
+            }}
+            className="bg-[#FF9933] hover:bg-[#FF9933]/90 text-white"
+          >
+            <Plus className="size-4 mr-2" />
+            Add Volunteer
+          </Button>
+        </div>
       </div>
 
       {flash && (
@@ -384,6 +469,76 @@ export function VolunteersClient({
                       <div className="text-xs text-[#1a1a3e]/50 flex gap-2">
                         {v.phone && <span>{v.phone}</span>}
                         {v.shift && <span>· {v.shift.replace(/_/g, " ")}</span>}
+                      </div>
+                      {/* Access Code — kiosk login credential */}
+                      <div className="mt-1 flex items-center gap-1.5">
+                        {v.access_code ? (
+                          <>
+                            <span className="inline-flex items-center gap-1.5 rounded bg-[#FF9933]/10 border border-[#FF9933]/20 px-2 py-0.5 font-mono text-xs font-semibold tracking-wider text-[#FF9933]">
+                              <KeyRound className="size-3" />
+                              {v.access_code}
+                            </span>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => copyCode(v.access_code as string)}
+                              title="Copy code"
+                              className="size-6 text-[#1a1a3e]/50 hover:text-[#1a1a3e]"
+                            >
+                              {copied === v.access_code ? (
+                                <Check className="size-3 text-[#138808]" />
+                              ) : (
+                                <Copy className="size-3" />
+                              )}
+                            </Button>
+                            {confirmRevoke === v.id ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] text-red-600">
+                                Revoke?
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  onClick={() => handleRevokeCode(v)}
+                                  disabled={pending}
+                                  title="Confirm revoke"
+                                  className="size-6 text-red-600 hover:bg-red-50"
+                                >
+                                  <Check className="size-3" />
+                                </Button>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  onClick={() => setConfirmRevoke(null)}
+                                  title="Keep code"
+                                  className="size-6 text-[#1a1a3e]/50 hover:bg-[#1a1a3e]/5"
+                                >
+                                  <X className="size-3" />
+                                </Button>
+                              </span>
+                            ) : (
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => setConfirmRevoke(v.id)}
+                                disabled={pending}
+                                title="Revoke code"
+                                className="size-6 text-[#1a1a3e]/40 hover:text-red-500 hover:bg-red-50"
+                              >
+                                <Trash2 className="size-3" />
+                              </Button>
+                            )}
+                          </>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleGenerateCode(v)}
+                            disabled={pending}
+                            className="h-6 px-2 text-[11px] text-[#FF9933] hover:bg-[#FF9933]/10"
+                          >
+                            <KeyRound className="size-3 mr-1" />
+                            Generate code
+                          </Button>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center gap-1 shrink-0">

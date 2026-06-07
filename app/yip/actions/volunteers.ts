@@ -23,6 +23,7 @@ export type Volunteer = {
   arrived: boolean;
   arrived_at: string | null;
   notes: string | null;
+  access_code: string | null;
 };
 
 export async function listVolunteers(eventId: string): Promise<Volunteer[]> {
@@ -107,6 +108,111 @@ export async function markVolunteerArrived(
       arrived_at: arrived ? new Date().toISOString() : null,
     })
     .eq("id", id);
+
+  if (error) return { success: false, error: error.message };
+  revalidatePath(`/yip/dashboard/events/${eventId}/volunteers`);
+  return { success: true, data: null };
+}
+
+// Kiosk access codes — volunteers carry these to /yip/join and become roving
+// vote kiosks on event day. Ambiguous glyphs (0/O/1/I) excluded so codes are
+// easy to read off a phone screen / printed sheet.
+const CODE_CHARSET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const CODE_LENGTH = 6;
+const MAX_CODE_ATTEMPTS = 5;
+
+function randomCode(): string {
+  let code = "";
+  for (let i = 0; i < CODE_LENGTH; i++) {
+    code += CODE_CHARSET[Math.floor(Math.random() * CODE_CHARSET.length)];
+  }
+  return code;
+}
+
+export async function generateVolunteerCode(
+  eventId: string,
+  volunteerId: string
+): Promise<ActionResult<{ code: string }>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
+
+  const supabase = await createServiceClient();
+
+  // Retry on the per-event unique-index collision (Postgres 23505) — a fresh
+  // random code is generated each attempt rather than failing the request.
+  for (let attempt = 0; attempt < MAX_CODE_ATTEMPTS; attempt++) {
+    const code = randomCode();
+    const { error } = await supabase
+      .from("volunteers")
+      .update({ access_code: code })
+      .eq("id", volunteerId)
+      .eq("event_id", eventId);
+
+    if (!error) {
+      revalidatePath(`/yip/dashboard/events/${eventId}/volunteers`);
+      return { success: true, data: { code } };
+    }
+    if (error.code !== "23505") return { success: false, error: error.message };
+  }
+
+  return { success: false, error: "Could not generate a unique code, please retry" };
+}
+
+export async function generateAllVolunteerCodes(
+  eventId: string
+): Promise<ActionResult<{ generated: number }>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
+
+  const supabase = await createServiceClient();
+
+  // Only fill volunteers with NO code yet — existing codes are left untouched
+  // so a re-run never invalidates kiosks already signed in on event day.
+  const { data: pending, error: fetchError } = await supabase
+    .from("volunteers")
+    .select("id")
+    .eq("event_id", eventId)
+    .is("access_code", null);
+
+  if (fetchError) return { success: false, error: fetchError.message };
+
+  let generated = 0;
+  for (const v of pending ?? []) {
+    for (let attempt = 0; attempt < MAX_CODE_ATTEMPTS; attempt++) {
+      const code = randomCode();
+      const { error } = await supabase
+        .from("volunteers")
+        .update({ access_code: code })
+        .eq("id", v.id)
+        .eq("event_id", eventId);
+
+      if (!error) {
+        generated++;
+        break;
+      }
+      if (error.code !== "23505") return { success: false, error: error.message };
+    }
+  }
+
+  revalidatePath(`/yip/dashboard/events/${eventId}/volunteers`);
+  return { success: true, data: { generated } };
+}
+
+export async function revokeVolunteerCode(
+  eventId: string,
+  volunteerId: string
+): Promise<ActionResult> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
+
+  const supabase = await createServiceClient();
+  // Clearing access_code immediately revokes the kiosk login (auth.ts matches
+  // on access_code, so a null code can never sign in).
+  const { error } = await supabase
+    .from("volunteers")
+    .update({ access_code: null })
+    .eq("id", volunteerId)
+    .eq("event_id", eventId);
 
   if (error) return { success: false, error: error.message };
   revalidatePath(`/yip/dashboard/events/${eventId}/volunteers`);

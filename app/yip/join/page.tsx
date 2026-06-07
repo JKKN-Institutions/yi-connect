@@ -26,6 +26,8 @@ export default function JoinPage() {
         router.push("/yip/me");
       } else if (result.type === "jury") {
         router.push("/yip/jury");
+      } else if (result.type === "volunteer") {
+        router.push("/yip/volunteer");
       } else {
         setError(result.message);
         inputRef.current?.focus();

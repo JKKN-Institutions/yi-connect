@@ -32,11 +32,15 @@ export function TeamClient({
   canEditTeam,
   myRole,
   initialRoles,
+  suggestedChair,
 }: {
   eventId: string;
   canEditTeam: boolean;
   myRole: string;
   initialRoles: ChapterRoleRow[];
+  // Inherited from the linked chapter (yi.chapters chair) — offered as a
+  // one-click prefill so the organizer doesn't retype the known chair.
+  suggestedChair?: { name: string; email: string } | null;
 }) {
   const [roles, setRoles] = useState<ChapterRoleRow[]>(initialRoles);
   const [fullName, setFullName] = useState("");
@@ -205,6 +209,22 @@ export function TeamClient({
                 {error}
               </div>
             )}
+            {suggestedChair?.email &&
+              email !== suggestedChair.email &&
+              roles.length === 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFullName(suggestedChair.name);
+                    setEmail(suggestedChair.email);
+                    setRole("chapter_admin");
+                  }}
+                  className="flex w-full items-center gap-2 rounded-lg border border-[#FF9933]/40 bg-[#FF9933]/10 px-3 py-2 text-left text-sm text-[#994d00] hover:bg-[#FF9933]/20"
+                >
+                  <Plus className="size-4 shrink-0" />
+                  Use chapter chair: <span className="font-semibold">{suggestedChair.name}</span> · {suggestedChair.email}
+                </button>
+              )}
             <div className="grid gap-3 sm:grid-cols-2">
               <Input
                 placeholder="Full name"

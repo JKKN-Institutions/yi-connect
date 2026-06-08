@@ -27,6 +27,11 @@ export type Volunteer = {
 };
 
 export async function listVolunteers(eventId: string): Promise<Volunteer[]> {
+  // Event-scope this read: volunteer rows carry access_code (a credential),
+  // so a logged-in organizer must not be able to call this raw server action
+  // for an event they don't manage. Matches addVolunteer's gate.
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) return [];
   const supabase = await createServiceClient();
   const { data } = await supabase
     .from("volunteers")

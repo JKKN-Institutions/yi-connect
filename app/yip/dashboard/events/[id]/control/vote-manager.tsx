@@ -898,7 +898,7 @@ function FloorCapture({ sessionId, voteType, candidates }: FloorCaptureProps) {
                       </p>
                       <p className="text-[11px] text-gray-500">
                         {labelForValue(e.voteValue)} ·{" "}
-                        {e.entryMethod === "kiosk"
+                        {e.entryMethod === "volunteer_kiosk"
                           ? `Kiosk: ${e.recordedBy ?? "Volunteer"}`
                           : "Organizer"}
                       </p>

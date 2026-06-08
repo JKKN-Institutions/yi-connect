@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Vote, CheckCircle2, ChevronRight } from "lucide-react";
 import { Card, CardContent } from "@/components/yip/ui/card";
 import { useVoteSession } from "@/lib/yip/hooks/use-vote-session";
-import { createClient } from "@/lib/yip/supabase/client";
+import { hasParticipantVoted } from "@/app/yip/actions/voting";
 
 interface VoteNowCardProps {
   eventId: string;
@@ -26,15 +26,10 @@ export function VoteNowCard({ eventId, participantId }: VoteNowCardProps) {
 
     async function checkVote() {
       if (!voteSession) return;
-      const supabase = createClient();
-      const { data } = await supabase
-        .from("votes")
-        .select("id")
-        .eq("agenda_item_id", voteSession.agenda_item_id)
-        .eq("participant_id", participantId)
-        .maybeSingle();
-
-      setHasVoted(!!data);
+      // Votes are RLS-sealed until reveal, so check via the participant-gated
+      // server action rather than reading the votes table from the browser.
+      const res = await hasParticipantVoted(voteSession.id, participantId);
+      setHasVoted(res.success && res.data.hasVoted);
       setCheckingVote(false);
     }
 

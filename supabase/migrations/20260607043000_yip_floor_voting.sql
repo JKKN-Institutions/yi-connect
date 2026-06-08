@@ -34,3 +34,17 @@ CREATE TABLE IF NOT EXISTS yip.vote_audit (
 
 REVOKE ALL ON yip.vote_audit FROM anon, authenticated;
 REVOKE ALL ON yip.volunteers FROM anon;
+
+-- 4. Secret ballot: votes are readable ONLY once the session is revealed.
+--    Previously `USING (true)` exposed every vote (value + voter) to the anon
+--    key in real time — a live tally/identity leak. Pre-reveal reads now go
+--    through participant-/organizer-gated server actions (service role).
+DROP POLICY IF EXISTS "Votes are readable" ON yip.votes;
+CREATE POLICY "Votes readable only when revealed" ON yip.votes
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM yip.vote_sessions vs
+      WHERE vs.agenda_item_id = votes.agenda_item_id
+        AND vs.status = 'revealed'
+    )
+  );

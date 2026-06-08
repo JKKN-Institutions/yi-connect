@@ -2,6 +2,7 @@
 
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { requireVolunteerSession } from "@/lib/yip/auth/yip-session";
+import { validateVoteValue } from "@/lib/yip/vote-validate";
 
 /**
  * Floor-voting kiosk capture actions.
@@ -9,7 +10,7 @@ import { requireVolunteerSession } from "@/lib/yip/auth/yip-session";
  * YUVA volunteers carry a device around the house during an OPEN vote session.
  * They surface the list of students who have not yet voted, hand the device to
  * a student, and relay that student's self-cast vote — stamping provenance
- * (entry_method: "kiosk", recorded_by_volunteer_id).
+ * (entry_method: "volunteer_kiosk", recorded_by_volunteer_id).
  *
  * Every export is gated by requireVolunteerSession(eventId): the underlying
  * yip.votes table has INSERT policies open to `public`, so the server action is
@@ -203,7 +204,7 @@ export async function castKioskVote(
   // is open or belongs to this event.
   const { data: voteSession } = await supabase
     .from("vote_sessions")
-    .select("id, event_id, agenda_item_id, vote_type, status")
+    .select("id, event_id, agenda_item_id, vote_type, status, config")
     .eq("id", sessionId)
     .maybeSingle();
 
@@ -214,6 +215,10 @@ export async function castKioskVote(
   if (voteSession.status !== "open") {
     return { success: true, data: { status: "closed" } };
   }
+
+  // Reject junk / non-candidate values before they pollute the tally.
+  const valid = validateVoteValue(voteSession, voteValue);
+  if (!valid.ok) return { success: false, error: valid.error };
 
   // Verify the participant belongs to this event before recording on their behalf.
   const { data: participant } = await supabase
@@ -235,7 +240,7 @@ export async function castKioskVote(
     participant_id: participantId,
     vote_type: voteSession.vote_type,
     vote_value: voteValue,
-    entry_method: "kiosk",
+    entry_method: "volunteer_kiosk",
     recorded_by_volunteer_id: session.volunteerId,
   });
 

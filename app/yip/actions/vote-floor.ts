@@ -2,6 +2,7 @@
 
 import { createClient, createServiceClient } from "@/lib/yip/supabase/server";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
+import { validateVoteValue } from "@/lib/yip/vote-validate";
 
 type ActionResult<T = null> =
   | { success: true; data: T }
@@ -49,6 +50,7 @@ type SessionRow = {
   agenda_item_id: string;
   vote_type: string;
   status: string | null;
+  config: unknown;
 };
 
 async function loadGatedSession(
@@ -61,7 +63,7 @@ async function loadGatedSession(
 
   const { data: session } = await service
     .from("vote_sessions")
-    .select("id, event_id, agenda_item_id, vote_type, status")
+    .select("id, event_id, agenda_item_id, vote_type, status, config")
     .eq("id", sessionId)
     .single();
 
@@ -117,7 +119,7 @@ export async function getFloorPanel(
   const channels = { self: 0, kiosk: 0, organizer: 0 };
   for (const v of voteRows) {
     if (v.entry_method === "self") channels.self += 1;
-    else if (v.entry_method === "kiosk") channels.kiosk += 1;
+    else if (v.entry_method === "volunteer_kiosk") channels.kiosk += 1;
     else if (v.entry_method === "organizer") channels.organizer += 1;
   }
 
@@ -134,7 +136,7 @@ export async function getFloorPanel(
   // Volunteer kiosk-capture counts.
   const volunteerCounts = new Map<string, number>();
   for (const v of voteRows) {
-    if (v.entry_method === "kiosk" && v.recorded_by_volunteer_id) {
+    if (v.entry_method === "volunteer_kiosk" && v.recorded_by_volunteer_id) {
       volunteerCounts.set(
         v.recorded_by_volunteer_id,
         (volunteerCounts.get(v.recorded_by_volunteer_id) ?? 0) + 1
@@ -166,7 +168,7 @@ export async function getFloorPanel(
     .map((v) => {
       const p = rosterById.get(v.participant_id);
       const recordedBy =
-        v.entry_method === "kiosk" && v.recorded_by_volunteer_id
+        v.entry_method === "volunteer_kiosk" && v.recorded_by_volunteer_id
           ? volunteerName.get(v.recorded_by_volunteer_id) ?? "Volunteer"
           : "Organizer";
       return {
@@ -209,6 +211,10 @@ export async function castFloorVote(
   if (session.status !== "open") {
     return { success: true, data: { status: "closed" } };
   }
+
+  // Reject junk / non-candidate values before they pollute the tally.
+  const valid = validateVoteValue(session, voteValue);
+  if (!valid.ok) return { success: false, error: valid.error };
 
   const service = await createServiceClient();
 

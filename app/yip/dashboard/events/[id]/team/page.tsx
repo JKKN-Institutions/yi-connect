@@ -29,12 +29,36 @@ export default async function TeamPage({
   const rolesResult = await listChapterRoles(id);
   const roles = rolesResult.ok ? rolesResult.data : [];
 
+  // Offer the linked chapter's chair as a one-click prefill (inheritance from
+  // yi.chapters). Read-only lookup; never auto-creates a login.
+  let suggestedChair: { name: string; email: string } | null = null;
+  const { data: event } = await supabase
+    .from("events")
+    .select("yi_chapter_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (event?.yi_chapter_id) {
+    const { data: chapter } = await supabase
+      .schema("yi")
+      .from("chapters")
+      .select("chair_name, chair_email")
+      .eq("id", event.yi_chapter_id)
+      .maybeSingle();
+    if (chapter?.chair_email) {
+      suggestedChair = {
+        name: chapter.chair_name ?? "",
+        email: chapter.chair_email,
+      };
+    }
+  }
+
   return (
     <TeamClient
       eventId={id}
       canEditTeam={access.canDelete}
       myRole={access.role}
       initialRoles={roles}
+      suggestedChair={suggestedChair}
     />
   );
 }

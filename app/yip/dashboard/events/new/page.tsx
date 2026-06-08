@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { createEvent } from "@/app/yip/actions/events";
+import { createEvent, listEventChapters } from "@/app/yip/actions/events";
 import { COMMITTEES } from "@/lib/yip/constants";
 import { Button } from "@/components/yip/ui/button";
 import { Input } from "@/components/yip/ui/input";
@@ -21,9 +21,23 @@ import {
 
 type WizardStep = 1 | 2 | 3;
 
+interface ChapterOption {
+  id: string;
+  name: string;
+  city: string | null;
+  state: string | null;
+  programmeDurationDays: number | null;
+}
+
+interface ChapterGroup {
+  region: string;
+  chapters: ChapterOption[];
+}
+
 interface EventFormData {
   name: string;
   level: "chapter" | "regional" | "national";
+  yi_chapter_id: string;
   chapter_name: string;
   city: string;
   state: string;
@@ -33,6 +47,16 @@ interface EventFormData {
   venue_address: string;
   central_agenda: string;
   committee_topics: Record<string, string>;
+}
+
+/** Add (days - 1) days to an ISO yyyy-mm-dd date string, returning yyyy-mm-dd. */
+function addDays(isoDate: string, days: number): string {
+  const d = new Date(`${isoDate}T00:00:00`);
+  d.setDate(d.getDate() + days);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
 }
 
 const STEPS = [
@@ -53,6 +77,9 @@ export default function NewEventPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  const [chapterGroups, setChapterGroups] = useState<ChapterGroup[]>([]);
+  const [chaptersLoading, setChaptersLoading] = useState(true);
+
   // Initialize committee topics with committee names as keys
   const initialTopics: Record<string, string> = {};
   COMMITTEES.forEach((c) => {
@@ -62,6 +89,7 @@ export default function NewEventPage() {
   const [form, setForm] = useState<EventFormData>({
     name: "",
     level: "chapter",
+    yi_chapter_id: "",
     chapter_name: "",
     city: "",
     state: "",
@@ -72,6 +100,39 @@ export default function NewEventPage() {
     central_agenda: "",
     committee_topics: initialTopics,
   });
+
+  // Load the canonical chapter list (grouped by region) on mount.
+  useEffect(() => {
+    let active = true;
+    listEventChapters()
+      .then((groups) => {
+        if (active) setChapterGroups(groups);
+      })
+      .catch(() => {
+        if (active) setError("Could not load the chapter list. Please refresh.");
+      })
+      .finally(() => {
+        if (active) setChaptersLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // Flat lookup of chapter id -> chapter (+ its region) for auto-fill displays.
+  const chapterById = useMemo(() => {
+    const map = new Map<string, ChapterOption & { region: string }>();
+    for (const group of chapterGroups) {
+      for (const chapter of group.chapters) {
+        map.set(chapter.id, { ...chapter, region: group.region });
+      }
+    }
+    return map;
+  }, [chapterGroups]);
+
+  const selectedChapter = form.yi_chapter_id
+    ? chapterById.get(form.yi_chapter_id) ?? null
+    : null;
 
   function updateField<K extends keyof EventFormData>(
     key: K,
@@ -91,9 +152,53 @@ export default function NewEventPage() {
     }));
   }
 
+  // Selecting a chapter auto-fills chapter_name/city/state (kept for back-compat;
+  // the server re-derives these authoritatively from yi_chapter_id). It also
+  // defaults Day 2 from the chapter's programme duration when Day 1 is set and
+  // Day 2 is still empty.
+  function handleChapterSelect(chapterId: string) {
+    const chapter = chapterId ? chapterById.get(chapterId) ?? null : null;
+    setForm((prev) => {
+      let day2 = prev.day2_date;
+      if (chapter && prev.day1_date && !prev.day2_date) {
+        const duration = chapter.programmeDurationDays ?? 2;
+        day2 = addDays(prev.day1_date, Math.max(duration, 1) - 1);
+      }
+      return {
+        ...prev,
+        yi_chapter_id: chapterId,
+        chapter_name: chapter ? chapter.name : "",
+        city: chapter ? chapter.city ?? "" : "",
+        state: chapter ? chapter.state ?? "" : "",
+        day2_date: day2,
+      };
+    });
+    setError("");
+  }
+
+  // Setting Day 1 defaults Day 2 from the selected chapter's programme
+  // duration when Day 2 has not been set yet (covers picking the chapter
+  // before entering a date). The user can still override Day 2.
+  function handleDay1Change(value: string) {
+    setForm((prev) => {
+      let day2 = prev.day2_date;
+      if (value && !prev.day2_date && prev.yi_chapter_id) {
+        const chapter = chapterById.get(prev.yi_chapter_id);
+        const duration = chapter?.programmeDurationDays ?? 2;
+        day2 = addDays(value, Math.max(duration, 1) - 1);
+      }
+      return { ...prev, day1_date: value, day2_date: day2 };
+    });
+    setError("");
+  }
+
   function validateStep1(): boolean {
     if (!form.name.trim()) {
       setError("Event name is required");
+      return false;
+    }
+    if (form.level === "chapter" && !form.yi_chapter_id) {
+      setError("Please choose a chapter for a Chapter Level event");
       return false;
     }
     if (!form.day1_date) {
@@ -124,7 +229,12 @@ export default function NewEventPage() {
     setLoading(true);
     setError("");
 
-    const result = await createEvent(form);
+    const result = await createEvent({
+      ...form,
+      // Send undefined (not "") so the server's `if (data.yi_chapter_id)`
+      // derivation only runs when a chapter is actually linked.
+      yi_chapter_id: form.yi_chapter_id || undefined,
+    });
 
     if (result.success) {
       router.push(`/yip/dashboard/events/${result.data.id}`);
@@ -228,35 +338,57 @@ export default function NewEventPage() {
               </select>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="chapter_name">Chapter Name</Label>
-                <Input
-                  id="chapter_name"
-                  placeholder="e.g., Coimbatore"
-                  value={form.chapter_name}
-                  onChange={(e) => updateField("chapter_name", e.target.value)}
-                />
-              </div>
-              <div>
-                <Label htmlFor="city">City</Label>
-                <Input
-                  id="city"
-                  placeholder="e.g., Coimbatore"
-                  value={form.city}
-                  onChange={(e) => updateField("city", e.target.value)}
-                />
-              </div>
+            <div>
+              <Label htmlFor="yi_chapter_id">
+                Chapter {form.level === "chapter" ? "*" : "(optional)"}
+              </Label>
+              <select
+                id="yi_chapter_id"
+                value={form.yi_chapter_id}
+                disabled={chaptersLoading}
+                onChange={(e) => handleChapterSelect(e.target.value)}
+                className="flex h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
+              >
+                <option value="">
+                  {chaptersLoading ? "Loading chapters…" : "Select a chapter…"}
+                </option>
+                {chapterGroups.map((group) => (
+                  <optgroup key={group.region} label={group.region}>
+                    {group.chapters.map((chapter) => (
+                      <option key={chapter.id} value={chapter.id}>
+                        {chapter.name}
+                        {chapter.city ? ` — ${chapter.city}` : ""}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-gray-500">
+                Linking a chapter fills in the city, state and region
+                automatically.
+              </p>
             </div>
 
-            <div>
-              <Label htmlFor="state">State</Label>
-              <Input
-                id="state"
-                placeholder="e.g., Tamil Nadu"
-                value={form.state}
-                onChange={(e) => updateField("state", e.target.value)}
-              />
+            {/* Auto-filled, read-only location inherited from the chapter */}
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <Label>City</Label>
+                <div className="flex h-8 w-full items-center rounded-lg border border-input bg-gray-50 px-2.5 text-sm text-gray-600">
+                  {selectedChapter?.city || "—"}
+                </div>
+              </div>
+              <div>
+                <Label>State</Label>
+                <div className="flex h-8 w-full items-center rounded-lg border border-input bg-gray-50 px-2.5 text-sm text-gray-600">
+                  {selectedChapter?.state || "—"}
+                </div>
+              </div>
+              <div>
+                <Label>Region</Label>
+                <div className="flex h-8 w-full items-center rounded-lg border border-input bg-gray-50 px-2.5 text-sm text-gray-600">
+                  {selectedChapter?.region || "—"}
+                </div>
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -266,7 +398,7 @@ export default function NewEventPage() {
                   id="day1_date"
                   type="date"
                   value={form.day1_date}
-                  onChange={(e) => updateField("day1_date", e.target.value)}
+                  onChange={(e) => handleDay1Change(e.target.value)}
                 />
               </div>
               <div>
@@ -371,10 +503,16 @@ export default function NewEventPage() {
                   <span className="text-gray-500">Level</span>
                   <span className="font-medium capitalize">{form.level}</span>
                 </div>
-                {form.chapter_name && (
+                {selectedChapter && (
                   <div className="flex justify-between">
                     <span className="text-gray-500">Chapter</span>
-                    <span className="font-medium">{form.chapter_name}</span>
+                    <span className="font-medium">{selectedChapter.name}</span>
+                  </div>
+                )}
+                {selectedChapter?.region && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Region</span>
+                    <span className="font-medium">{selectedChapter.region}</span>
                   </div>
                 )}
                 <div className="flex justify-between">

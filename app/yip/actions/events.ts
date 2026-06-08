@@ -44,6 +44,10 @@ interface UpdateEventData {
   central_agenda?: string;
   committee_topics?: Record<string, string>;
   status?: "draft" | "registration_open" | "registration_closed" | "day1_live" | "day1_complete" | "day2_live" | "completed" | "results_published";
+  // When provided, yi.chapters becomes the source of truth: the link is set
+  // and chapter_name/city/state/yi_zone_code/zone are re-derived from it,
+  // overriding any free text in this same payload (mirrors createEvent).
+  yi_chapter_id?: string;
 }
 
 type ActionResult<T = unknown> =
@@ -76,16 +80,27 @@ export async function createEvent(
   // 20260528160000_yip_events_autoderive_zone_and_topics provides the
   // same guarantee for any caller that bypasses this code path (direct
   // SQL, Management API inserts, seed scripts).
+  // When a chapter is linked, yi.chapters is the SOURCE OF TRUTH for
+  // chapter_name/city/state/zone — we OVERRIDE whatever free text the form
+  // sent so a linked event can never drift from the canonical chapter record.
   let derivedZoneCode: string | null = null;
+  let derivedChapterName: string | null = null;
+  let derivedCity: string | null = null;
+  let derivedState: string | null = null;
   if (data.yi_chapter_id) {
     const { data: chapter } = await supabase
       .schema("yi")
       .from("chapters")
-      .select("region")
+      .select("name, city, state, region")
       .eq("id", data.yi_chapter_id)
       .maybeSingle();
-    if (chapter?.region) {
-      derivedZoneCode = chapter.region;
+    if (chapter) {
+      derivedChapterName = chapter.name;
+      derivedCity = chapter.city;
+      derivedState = chapter.state;
+      if (chapter.region) {
+        derivedZoneCode = chapter.region;
+      }
     }
   }
 
@@ -113,9 +128,11 @@ export async function createEvent(
     .insert({
       name: data.name,
       level: data.level,
-      chapter_name: data.chapter_name,
-      city: data.city,
-      state: data.state,
+      // When a chapter is linked, the canonical yi.chapters values win over
+      // the form's free text (derived* fall back to form text when unlinked).
+      chapter_name: derivedChapterName ?? data.chapter_name,
+      city: derivedCity ?? data.city,
+      state: derivedState ?? data.state,
       day1_date: data.day1_date,
       day2_date: data.day2_date,
       venue_name: data.venue_name,
@@ -251,9 +268,42 @@ export async function updateEvent(
   }
   const supabase = await createServiceClient();
 
+  // When the caller (re)links a chapter, re-derive the canonical fields from
+  // yi.chapters and fold them into the update payload — the same source-of-truth
+  // override createEvent applies. derivedFields is empty when unlinked so the
+  // spread is a no-op for ordinary edits.
+  let derivedFields: {
+    chapter_name?: string;
+    city?: string;
+    state?: string | null;
+    yi_zone_code?: string;
+    zone?: Database["public"]["Enums"]["yi_zone"];
+  } = {};
+  if (data.yi_chapter_id) {
+    const { data: chapter } = await supabase
+      .schema("yi")
+      .from("chapters")
+      .select("name, city, state, region")
+      .eq("id", data.yi_chapter_id)
+      .maybeSingle();
+    if (chapter) {
+      derivedFields = {
+        chapter_name: chapter.name,
+        city: chapter.city,
+        state: chapter.state,
+        ...(chapter.region
+          ? {
+              yi_zone_code: chapter.region,
+              zone: chapter.region as Database["public"]["Enums"]["yi_zone"],
+            }
+          : {}),
+      };
+    }
+  }
+
   const { error } = await supabase
     .from("events")
-    .update(data)
+    .update({ ...data, ...derivedFields })
     .eq("id", eventId);
 
   if (error) {
@@ -262,6 +312,69 @@ export async function updateEvent(
 
   revalidatePath(`/yip/dashboard/events/${eventId}`);
   return { success: true, data: null };
+}
+
+// ─── List Chapters (picker) ────────────────────────────────────────
+// Full catalog of active Yi chapters, grouped by region, for the
+// create/edit event chapter picker. Reads from yi.chapters (the source of
+// truth) so the dropdown always reflects the canonical chapter list.
+
+interface ChapterOption {
+  id: string;
+  name: string;
+  city: string | null;
+  state: string | null;
+  programmeDurationDays: number | null;
+}
+
+interface ChapterRegionGroup {
+  region: string;
+  chapters: ChapterOption[];
+}
+
+export async function listEventChapters(): Promise<ChapterRegionGroup[]> {
+  // Any signed-in organizer/admin may read the chapter catalog for the picker;
+  // it is non-sensitive reference data, so a plain auth check is sufficient.
+  const authClient = await createClient();
+  const {
+    data: { user },
+  } = await authClient.auth.getUser();
+  if (!user) return [];
+
+  const supabase = await createServiceClient();
+  const { data: chapters } = await supabase
+    .schema("yi")
+    .from("chapters")
+    .select("id, name, city, state, region, programme_duration_days")
+    .eq("is_active", true)
+    .order("name");
+
+  if (!chapters) return [];
+
+  // Group by region (NULL region collapses to "Unassigned" so no row is lost),
+  // then sort regions alphabetically. Within a region, order("name") already
+  // sorted the rows, so insertion order preserves alphabetical chapters.
+  const groups = new Map<string, ChapterOption[]>();
+  for (const chapter of chapters) {
+    const region = chapter.region ?? "Unassigned";
+    const option: ChapterOption = {
+      id: chapter.id,
+      name: chapter.name,
+      city: chapter.city,
+      state: chapter.state,
+      programmeDurationDays: chapter.programme_duration_days,
+    };
+    const existing = groups.get(region);
+    if (existing) {
+      existing.push(option);
+    } else {
+      groups.set(region, [option]);
+    }
+  }
+
+  return Array.from(groups.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([region, regionChapters]) => ({ region, chapters: regionChapters }));
 }
 
 // ─── Get Event ─────────────────────────────────────────────────────

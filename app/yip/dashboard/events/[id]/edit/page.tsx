@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { getEvent, updateEvent } from "@/app/yip/actions/events";
+import { getEvent, updateEvent, listEventChapters } from "@/app/yip/actions/events";
 import { Button } from "@/components/yip/ui/button";
 import { Input } from "@/components/yip/ui/input";
 import { Label } from "@/components/yip/ui/label";
@@ -18,9 +18,23 @@ const LEVEL_OPTIONS = [
   { value: "national", label: "National Level" },
 ] as const;
 
+interface ChapterOption {
+  id: string;
+  name: string;
+  city: string | null;
+  state: string | null;
+  programmeDurationDays: number | null;
+}
+
+interface ChapterGroup {
+  region: string;
+  chapters: ChapterOption[];
+}
+
 interface EditFormData {
   name: string;
   level: "chapter" | "regional" | "national";
+  yi_chapter_id: string;
   chapter_name: string;
   city: string;
   state: string;
@@ -40,9 +54,12 @@ export default function EditEventPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
+  const [chapterGroups, setChapterGroups] = useState<ChapterGroup[]>([]);
+
   const [form, setForm] = useState<EditFormData>({
     name: "",
     level: "chapter",
+    yi_chapter_id: "",
     chapter_name: "",
     city: "",
     state: "",
@@ -53,18 +70,24 @@ export default function EditEventPage() {
     central_agenda: "",
   });
 
-  // Load existing event data
+  // Load the existing event and the canonical chapter list together so the
+  // picker can pre-select the event's current chapter.
   useEffect(() => {
-    async function loadEvent() {
-      const event = await getEvent(eventId);
+    async function load() {
+      const [event, groups] = await Promise.all([
+        getEvent(eventId),
+        listEventChapters().catch(() => [] as ChapterGroup[]),
+      ]);
       if (!event) {
         toast.error("Event not found");
         router.push("/yip/dashboard");
         return;
       }
+      setChapterGroups(groups);
       setForm({
         name: event.name ?? "",
         level: event.level as "chapter" | "regional" | "national",
+        yi_chapter_id: event.yi_chapter_id ?? "",
         chapter_name: event.chapter_name ?? "",
         city: event.city ?? "",
         state: event.state ?? "",
@@ -76,8 +99,23 @@ export default function EditEventPage() {
       });
       setLoading(false);
     }
-    loadEvent();
+    load();
   }, [eventId, router]);
+
+  // Flat lookup of chapter id -> chapter (+ its region) for auto-fill displays.
+  const chapterById = useMemo(() => {
+    const map = new Map<string, ChapterOption & { region: string }>();
+    for (const group of chapterGroups) {
+      for (const chapter of group.chapters) {
+        map.set(chapter.id, { ...chapter, region: group.region });
+      }
+    }
+    return map;
+  }, [chapterGroups]);
+
+  const selectedChapter = form.yi_chapter_id
+    ? chapterById.get(form.yi_chapter_id) ?? null
+    : null;
 
   function updateField<K extends keyof EditFormData>(
     key: K,
@@ -87,9 +125,28 @@ export default function EditEventPage() {
     setError("");
   }
 
+  // Selecting a chapter auto-fills chapter_name/city/state (kept for back-compat;
+  // the server re-derives these authoritatively from yi_chapter_id). No Day 2
+  // auto-default on edit — dates already exist.
+  function handleChapterSelect(chapterId: string) {
+    const chapter = chapterId ? chapterById.get(chapterId) ?? null : null;
+    setForm((prev) => ({
+      ...prev,
+      yi_chapter_id: chapterId,
+      chapter_name: chapter ? chapter.name : "",
+      city: chapter ? chapter.city ?? "" : "",
+      state: chapter ? chapter.state ?? "" : "",
+    }));
+    setError("");
+  }
+
   function validate(): boolean {
     if (!form.name.trim()) {
       setError("Event name is required");
+      return false;
+    }
+    if (form.level === "chapter" && !form.yi_chapter_id) {
+      setError("Please choose a chapter for a Chapter Level event");
       return false;
     }
     if (!form.day1_date) {
@@ -116,6 +173,9 @@ export default function EditEventPage() {
     const result = await updateEvent(eventId, {
       name: form.name,
       level: form.level,
+      // Send undefined (not "") when no chapter is linked so the server only
+      // re-derives location/zone when a chapter is actually selected.
+      yi_chapter_id: form.yi_chapter_id || undefined,
       chapter_name: form.chapter_name || undefined,
       city: form.city || undefined,
       state: form.state || undefined,
@@ -207,35 +267,54 @@ export default function EditEventPage() {
             </select>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="chapter_name">Chapter Name</Label>
-              <Input
-                id="chapter_name"
-                placeholder="e.g., Coimbatore"
-                value={form.chapter_name}
-                onChange={(e) => updateField("chapter_name", e.target.value)}
-              />
-            </div>
-            <div>
-              <Label htmlFor="city">City</Label>
-              <Input
-                id="city"
-                placeholder="e.g., Coimbatore"
-                value={form.city}
-                onChange={(e) => updateField("city", e.target.value)}
-              />
-            </div>
+          <div>
+            <Label htmlFor="yi_chapter_id">
+              Chapter {form.level === "chapter" ? "*" : "(optional)"}
+            </Label>
+            <select
+              id="yi_chapter_id"
+              value={form.yi_chapter_id}
+              onChange={(e) => handleChapterSelect(e.target.value)}
+              className="flex h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+            >
+              <option value="">Select a chapter…</option>
+              {chapterGroups.map((group) => (
+                <optgroup key={group.region} label={group.region}>
+                  {group.chapters.map((chapter) => (
+                    <option key={chapter.id} value={chapter.id}>
+                      {chapter.name}
+                      {chapter.city ? ` — ${chapter.city}` : ""}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-gray-500">
+              Linking a chapter fills in the city, state and region
+              automatically.
+            </p>
           </div>
 
-          <div>
-            <Label htmlFor="state">State</Label>
-            <Input
-              id="state"
-              placeholder="e.g., Tamil Nadu"
-              value={form.state}
-              onChange={(e) => updateField("state", e.target.value)}
-            />
+          {/* Auto-filled, read-only location inherited from the chapter */}
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <Label>City</Label>
+              <div className="flex h-8 w-full items-center rounded-lg border border-input bg-gray-50 px-2.5 text-sm text-gray-600">
+                {selectedChapter?.city || form.city || "—"}
+              </div>
+            </div>
+            <div>
+              <Label>State</Label>
+              <div className="flex h-8 w-full items-center rounded-lg border border-input bg-gray-50 px-2.5 text-sm text-gray-600">
+                {selectedChapter?.state || form.state || "—"}
+              </div>
+            </div>
+            <div>
+              <Label>Region</Label>
+              <div className="flex h-8 w-full items-center rounded-lg border border-input bg-gray-50 px-2.5 text-sm text-gray-600">
+                {selectedChapter?.region || "—"}
+              </div>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">

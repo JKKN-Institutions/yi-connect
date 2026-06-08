@@ -17,10 +17,12 @@ import {
   ScrollText,
   SlidersHorizontal,
   Scale,
+  Globe,
 } from "lucide-react";
 
 const NAV = [
   { label: "Pipeline", href: "/yip/dashboard/admin", icon: GitBranch, exact: true },
+  { label: "Coverage", href: "/yip/dashboard/admin/coverage", icon: Globe },
   { label: "People", href: "/yip/dashboard/admin/people", icon: UserCircle },
   { label: "Rubrics", href: "/yip/dashboard/admin/rubrics", icon: Ruler },
   { label: "Session Scoring", href: "/yip/dashboard/admin/session-parameters", icon: SlidersHorizontal },

@@ -3,6 +3,7 @@
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { requireParticipantSession } from "@/lib/yip/auth/yip-session";
+import { validateVoteValue } from "@/lib/yip/vote-validate";
 import type { Tables, Json } from "@/types/yip/database";
 
 type VoteSession = Tables<{ schema: "yip" }, "vote_sessions">;
@@ -257,6 +258,10 @@ export async function castVote(
     };
   }
 
+  // Reject junk / non-candidate values before they pollute the tally.
+  const valid = validateVoteValue(session, voteValue);
+  if (!valid.ok) return { success: false, error: valid.error };
+
   // Check if already voted (via unique constraint)
   const { data: existingVote } = await supabase
     .from("votes")
@@ -414,24 +419,6 @@ export async function getEventBills(
   return data;
 }
 
-// ─── Check If Participant Has Voted ─────────────────────────────
-
-export async function hasParticipantVoted(
-  agendaItemId: string,
-  participantId: string
-): Promise<boolean> {
-  const supabase = await createServiceClient();
-
-  const { data } = await supabase
-    .from("votes")
-    .select("id")
-    .eq("agenda_item_id", agendaItemId)
-    .eq("participant_id", participantId)
-    .maybeSingle();
-
-  return !!data;
-}
-
 // ─── Get Live Vote Counts (for organizer) ───────────────────────
 
 export async function getLiveVoteCounts(
@@ -471,4 +458,38 @@ export async function getLiveVoteCounts(
       totalVotes: (votes ?? []).length,
     },
   };
+}
+
+// ─── Has the current participant voted? ─────────────────────────────
+//
+// After the votes RLS was tightened to "readable only when revealed", the
+// browser client can no longer check a student's own vote during an OPEN
+// session. This participant-gated server action restores that check via the
+// service client — it returns ONLY a boolean for the caller's own id, never
+// any other student's vote or the running tally.
+export async function hasParticipantVoted(
+  sessionId: string,
+  participantId: string
+): Promise<ActionResult<{ hasVoted: boolean }>> {
+  const supabase = await createServiceClient();
+
+  const { data: session } = await supabase
+    .from("vote_sessions")
+    .select("event_id, agenda_item_id")
+    .eq("id", sessionId)
+    .maybeSingle();
+  if (!session) return { success: false, error: "Vote session not found" };
+
+  // Verify the caller owns this participant identity for this event.
+  const sess = await requireParticipantSession(participantId, session.event_id);
+  if (!sess.ok) return { success: false, error: sess.error };
+
+  const { data: existing } = await supabase
+    .from("votes")
+    .select("id")
+    .eq("agenda_item_id", session.agenda_item_id)
+    .eq("participant_id", participantId)
+    .maybeSingle();
+
+  return { success: true, data: { hasVoted: Boolean(existing) } };
 }

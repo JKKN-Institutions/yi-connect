@@ -29,6 +29,15 @@ type ValidationResult =
       eventId: string;
     }
   | {
+      // Floor voting: YUVA volunteer kiosk login (access code on yip.volunteers).
+      type: "volunteer";
+      volunteer: {
+        id: string;
+        full_name: string;
+      };
+      eventId: string;
+    }
+  | {
       type: "error";
       message: string;
     };
@@ -128,6 +137,43 @@ export async function validateAccessCode(
         jury_name: jury.jury_name,
       },
       eventId: jury.event_id,
+    };
+  }
+
+  // Check volunteers table (floor-voting kiosk carriers). A volunteer's code
+  // can be revoked by clearing volunteers.access_code in the Volunteers tab.
+  const { data: volunteer, error: vError } = await supabase
+    .from("volunteers")
+    .select("id, full_name, event_id")
+    .eq("access_code", trimmed)
+    .single();
+
+  if (volunteer && !vError) {
+    const cookieStore = await cookies();
+    cookieStore.set(
+      "yip_session",
+      JSON.stringify({
+        type: "volunteer",
+        id: volunteer.id,
+        name: volunteer.full_name,
+        eventId: volunteer.event_id,
+      }),
+      {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: 60 * 60 * 24, // 24 hours
+        path: "/",
+      }
+    );
+
+    return {
+      type: "volunteer",
+      volunteer: {
+        id: volunteer.id,
+        full_name: volunteer.full_name,
+      },
+      eventId: volunteer.event_id,
     };
   }
 

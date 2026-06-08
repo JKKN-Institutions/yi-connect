@@ -19,6 +19,7 @@ import { useVoteSession } from "@/lib/yip/hooks/use-vote-session";
 import {
   castVote,
   getSpeakerCandidates,
+  hasParticipantVoted,
   type VoteCandidate,
 } from "@/app/yip/actions/voting";
 import { createClient } from "@/lib/yip/supabase/client";
@@ -99,16 +100,10 @@ export default function VotePage() {
         }
       }
 
-      // Check if already voted
-      const supabase = createClient();
-      const { data: existingVote } = await supabase
-        .from("votes")
-        .select("id")
-        .eq("agenda_item_id", voteSession.agenda_item_id)
-        .eq("participant_id", session.id)
-        .maybeSingle();
-
-      if (existingVote) {
+      // Check if already voted — via server action (votes are RLS-sealed until
+      // reveal, so the browser client can't read them during an open session).
+      const votedRes = await hasParticipantVoted(voteSession.id, session.id);
+      if (votedRes.success && votedRes.data.hasVoted) {
         setHasVoted(true);
       }
 

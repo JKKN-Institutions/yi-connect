@@ -41,6 +41,48 @@ export type Database = {
           role_name: string
         }[]
       }
+      merge_directory_people: {
+        Args: {
+          p_prefer_source_auth?: boolean
+          p_source: string
+          p_target: string
+        }
+        Returns: Json
+      }
+      yifi_admin_census_summary: {
+        Args: { p_edition_id: string }
+        Returns: Json
+      }
+      yifi_admin_list_dossiers: {
+        Args: { p_edition_id: string }
+        Returns: Json
+      }
+      yifi_admin_list_matches: { Args: { p_edition_id: string }; Returns: Json }
+      yifi_admin_list_registrants: {
+        Args: { p_edition_id: string }
+        Returns: Json
+      }
+      yifi_admin_list_vows: { Args: { p_edition_id: string }; Returns: Json }
+      yifi_admin_toggle_checkin: {
+        Args: { p_checked_in: boolean; p_registrant_id: string }
+        Returns: Json
+      }
+      yifi_admin_update_match: {
+        Args: {
+          p_match_id: string
+          p_slot_time: string
+          p_table_number: number
+        }
+        Returns: Json
+      }
+      yifi_admin_update_vow: {
+        Args: {
+          p_tile_engraved: boolean
+          p_tile_placed: boolean
+          p_vow_id: string
+        }
+        Returns: Json
+      }
       yifi_check_organiser: {
         Args: { p_edition_id: string; p_email: string }
         Returns: Json
@@ -56,6 +98,7 @@ export type Database = {
       }
       yifi_current_edition: { Args: never; Returns: Json }
       yifi_find_by_email: { Args: { p_email: string }; Returns: Json }
+      yifi_gen_access_code: { Args: never; Returns: string }
       yifi_get_dossier: {
         Args: { p_edition_id: string; p_registrant_id: string }
         Returns: Json
@@ -73,6 +116,29 @@ export type Database = {
       }
       yifi_list_organisers: { Args: { p_edition_id: string }; Returns: Json }
       yifi_lookup_registrant: { Args: { p_code: string }; Returns: Json }
+      yifi_prefill_by_email: { Args: { p_email: string }; Returns: Json }
+      yifi_register_self: {
+        Args: {
+          p_can_offer: Json
+          p_challenges: string[]
+          p_chapter_name: string
+          p_city: string
+          p_designation: string
+          p_email: string
+          p_full_name: string
+          p_is_couple: boolean
+          p_member_category: string
+          p_organisation: string
+          p_partner_email: string
+          p_partner_name: string
+          p_partner_phone: string
+          p_phone: string
+          p_sector: string
+          p_seeking: string[]
+          p_total_team_size: string
+        }
+        Returns: Json
+      }
       yifi_update_census: {
         Args: {
           p_can_offer: Json
@@ -599,6 +665,8 @@ export type Database = {
           full_name: string
           id: string
           is_active: boolean | null
+          merged_into: string | null
+          needs_identity_review: boolean
           phone: string | null
           photo_url: string | null
           source_future_team_id: string | null
@@ -612,6 +680,8 @@ export type Database = {
           full_name: string
           id?: string
           is_active?: boolean | null
+          merged_into?: string | null
+          needs_identity_review?: boolean
           phone?: string | null
           photo_url?: string | null
           source_future_team_id?: string | null
@@ -625,6 +695,8 @@ export type Database = {
           full_name?: string
           id?: string
           is_active?: boolean | null
+          merged_into?: string | null
+          needs_identity_review?: boolean
           phone?: string | null
           photo_url?: string | null
           source_future_team_id?: string | null
@@ -632,7 +704,15 @@ export type Database = {
           updated_at?: string | null
           user_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "people_merged_into_fkey"
+            columns: ["merged_into"]
+            isOneToOne: false
+            referencedRelation: "people"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       role_assignments: {
         Row: {
@@ -647,6 +727,8 @@ export type Database = {
           source_yip_profile_id: string | null
           title: string | null
           updated_at: string | null
+          valid_from: string | null
+          valid_until: string | null
           yi_chapter: string | null
           yi_edition_id: string | null
           yi_year: number
@@ -664,6 +746,8 @@ export type Database = {
           source_yip_profile_id?: string | null
           title?: string | null
           updated_at?: string | null
+          valid_from?: string | null
+          valid_until?: string | null
           yi_chapter?: string | null
           yi_edition_id?: string | null
           yi_year?: number
@@ -681,6 +765,8 @@ export type Database = {
           source_yip_profile_id?: string | null
           title?: string | null
           updated_at?: string | null
+          valid_from?: string | null
+          valid_until?: string | null
           yi_chapter?: string | null
           yi_edition_id?: string | null
           yi_year?: number
@@ -696,12 +782,36 @@ export type Database = {
           },
         ]
       }
+      role_permissions: {
+        Row: {
+          app: string
+          capability: string
+          role: string
+          scope_type: string
+        }
+        Insert: {
+          app: string
+          capability: string
+          role: string
+          scope_type: string
+        }
+        Update: {
+          app?: string
+          capability?: string
+          role?: string
+          scope_type?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      current_user_can_see: {
+        Args: { p_app: string; p_chapter?: string; p_zone?: string }
+        Returns: boolean
+      }
     }
     Enums: {
       [_ in never]: never
@@ -712,6 +822,59 @@ export type Database = {
   }
   yip: {
     Tables: {
+      admin_audit_log: {
+        Row: {
+          action_type: string
+          created_at: string
+          id: string
+          ip_address: string | null
+          metadata: Json
+          performed_by_email: string | null
+          performed_by_organizer_id: string | null
+          performed_by_user_id: string | null
+          target_event_id: string | null
+          target_id: string | null
+          target_table: string
+          user_agent: string | null
+        }
+        Insert: {
+          action_type: string
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          metadata?: Json
+          performed_by_email?: string | null
+          performed_by_organizer_id?: string | null
+          performed_by_user_id?: string | null
+          target_event_id?: string | null
+          target_id?: string | null
+          target_table: string
+          user_agent?: string | null
+        }
+        Update: {
+          action_type?: string
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          metadata?: Json
+          performed_by_email?: string | null
+          performed_by_organizer_id?: string | null
+          performed_by_user_id?: string | null
+          target_event_id?: string | null
+          target_id?: string | null
+          target_table?: string
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_audit_log_target_event_id_fkey"
+            columns: ["target_event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       agenda: {
         Row: {
           actual_end: string | null
@@ -725,10 +888,10 @@ export type Database = {
           event_id: string
           id: string
           is_scoreable: boolean
-          session_key: string | null
           mode: Database["public"]["Enums"]["agenda_mode"]
           planned_start: string | null
           sequence_order: number
+          session_key: string | null
           status: Database["public"]["Enums"]["agenda_status"] | null
           title: string
           updated_at: string | null
@@ -745,10 +908,10 @@ export type Database = {
           event_id: string
           id?: string
           is_scoreable?: boolean
-          session_key?: string | null
           mode?: Database["public"]["Enums"]["agenda_mode"]
           planned_start?: string | null
           sequence_order: number
+          session_key?: string | null
           status?: Database["public"]["Enums"]["agenda_status"] | null
           title: string
           updated_at?: string | null
@@ -765,10 +928,10 @@ export type Database = {
           event_id?: string
           id?: string
           is_scoreable?: boolean
-          session_key?: string | null
           mode?: Database["public"]["Enums"]["agenda_mode"]
           planned_start?: string | null
           sequence_order?: number
+          session_key?: string | null
           status?: Database["public"]["Enums"]["agenda_status"] | null
           title?: string
           updated_at?: string | null
@@ -1657,72 +1820,6 @@ export type Database = {
           },
         ]
       }
-      session_parameters: {
-        Row: {
-          agenda_type: string | null
-          created_at: string
-          display_order: number
-          id: string
-          is_active: boolean
-          label: string
-          parameters: Json
-          session_key: string
-          session_weight: number
-          total_max: number
-          updated_at: string
-        }
-        Insert: {
-          agenda_type?: string | null
-          created_at?: string
-          display_order?: number
-          id?: string
-          is_active?: boolean
-          label: string
-          parameters?: Json
-          session_key: string
-          session_weight?: number
-          total_max?: number
-          updated_at?: string
-        }
-        Update: {
-          agenda_type?: string | null
-          created_at?: string
-          display_order?: number
-          id?: string
-          is_active?: boolean
-          label?: string
-          parameters?: Json
-          session_key?: string
-          session_weight?: number
-          total_max?: number
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      scoring_settings: {
-        Row: {
-          aggregation_method: string
-          best_n: number
-          id: boolean
-          normalize_per_session: boolean
-          updated_at: string
-        }
-        Insert: {
-          aggregation_method?: string
-          best_n?: number
-          id?: boolean
-          normalize_per_session?: boolean
-          updated_at?: string
-        }
-        Update: {
-          aggregation_method?: string
-          best_n?: number
-          id?: boolean
-          normalize_per_session?: boolean
-          updated_at?: string
-        }
-        Relationships: []
-      }
       jury_session_assignments: {
         Row: {
           agenda_item_id: string
@@ -1747,6 +1844,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "jury_session_assignments_agenda_item_id_fkey"
+            columns: ["agenda_item_id"]
+            isOneToOne: false
+            referencedRelation: "agenda"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "jury_session_assignments_event_id_fkey"
             columns: ["event_id"]
             isOneToOne: false
@@ -1758,13 +1862,6 @@ export type Database = {
             columns: ["jury_assignment_id"]
             isOneToOne: false
             referencedRelation: "jury_assignments"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "jury_session_assignments_agenda_item_id_fkey"
-            columns: ["agenda_item_id"]
-            isOneToOne: false
-            referencedRelation: "agenda"
             referencedColumns: ["id"]
           },
         ]
@@ -2168,6 +2265,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      participations: {
+        Row: {
+          created_at: string | null
+          edition_id: string | null
+          event_id: string | null
+          id: string
+          person_id: string
+          score: number | null
+          status: string | null
+          team: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          edition_id?: string | null
+          event_id?: string | null
+          id?: string
+          person_id: string
+          score?: number | null
+          status?: string | null
+          team?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          edition_id?: string | null
+          event_id?: string | null
+          id?: string
+          person_id?: string
+          score?: number | null
+          status?: string | null
+          team?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
       }
       parties: {
         Row: {
@@ -2737,6 +2870,72 @@ export type Database = {
         }
         Relationships: []
       }
+      scoring_settings: {
+        Row: {
+          aggregation_method: string
+          best_n: number
+          id: boolean
+          normalize_per_session: boolean
+          updated_at: string
+        }
+        Insert: {
+          aggregation_method?: string
+          best_n?: number
+          id?: boolean
+          normalize_per_session?: boolean
+          updated_at?: string
+        }
+        Update: {
+          aggregation_method?: string
+          best_n?: number
+          id?: boolean
+          normalize_per_session?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      session_parameters: {
+        Row: {
+          agenda_type: string | null
+          created_at: string
+          display_order: number
+          id: string
+          is_active: boolean
+          label: string
+          parameters: Json
+          session_key: string
+          session_weight: number
+          total_max: number
+          updated_at: string
+        }
+        Insert: {
+          agenda_type?: string | null
+          created_at?: string
+          display_order?: number
+          id?: string
+          is_active?: boolean
+          label: string
+          parameters?: Json
+          session_key: string
+          session_weight?: number
+          total_max?: number
+          updated_at?: string
+        }
+        Update: {
+          agenda_type?: string | null
+          created_at?: string
+          display_order?: number
+          id?: string
+          is_active?: boolean
+          label?: string
+          parameters?: Json
+          session_key?: string
+          session_weight?: number
+          total_max?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       topics: {
         Row: {
           category: Database["public"]["Enums"]["topic_category"]
@@ -2778,6 +2977,7 @@ export type Database = {
       }
       volunteers: {
         Row: {
+          access_code: string | null
           arrived: boolean | null
           arrived_at: string | null
           created_at: string | null
@@ -2795,6 +2995,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          access_code?: string | null
           arrived?: boolean | null
           arrived_at?: string | null
           created_at?: string | null
@@ -2812,6 +3013,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          access_code?: string | null
           arrived?: boolean | null
           arrived_at?: string | null
           created_at?: string | null
@@ -2834,6 +3036,44 @@ export type Database = {
             columns: ["event_id"]
             isOneToOne: false
             referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vote_audit: {
+        Row: {
+          changed_at: string
+          changed_by: string
+          id: string
+          new_value: string
+          old_value: string
+          reason: string | null
+          vote_id: string
+        }
+        Insert: {
+          changed_at?: string
+          changed_by: string
+          id?: string
+          new_value: string
+          old_value: string
+          reason?: string | null
+          vote_id: string
+        }
+        Update: {
+          changed_at?: string
+          changed_by?: string
+          id?: string
+          new_value?: string
+          old_value?: string
+          reason?: string | null
+          vote_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vote_audit_vote_id_fkey"
+            columns: ["vote_id"]
+            isOneToOne: false
+            referencedRelation: "votes"
             referencedColumns: ["id"]
           },
         ]
@@ -2903,27 +3143,39 @@ export type Database = {
         Row: {
           agenda_item_id: string
           cast_at: string | null
+          entry_method: string
           event_id: string
           id: string
           participant_id: string
+          recorded_by_user: string | null
+          recorded_by_volunteer_id: string | null
+          recorded_via_volunteer_id: string | null
           vote_type: string
           vote_value: string
         }
         Insert: {
           agenda_item_id: string
           cast_at?: string | null
+          entry_method?: string
           event_id: string
           id?: string
           participant_id: string
+          recorded_by_user?: string | null
+          recorded_by_volunteer_id?: string | null
+          recorded_via_volunteer_id?: string | null
           vote_type: string
           vote_value: string
         }
         Update: {
           agenda_item_id?: string
           cast_at?: string | null
+          entry_method?: string
           event_id?: string
           id?: string
           participant_id?: string
+          recorded_by_user?: string | null
+          recorded_by_volunteer_id?: string | null
+          recorded_via_volunteer_id?: string | null
           vote_type?: string
           vote_value?: string
         }
@@ -2940,6 +3192,20 @@ export type Database = {
             columns: ["participant_id"]
             isOneToOne: false
             referencedRelation: "participants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "votes_recorded_by_volunteer_id_fkey"
+            columns: ["recorded_by_volunteer_id"]
+            isOneToOne: false
+            referencedRelation: "volunteers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "votes_recorded_via_volunteer_id_fkey"
+            columns: ["recorded_via_volunteer_id"]
+            isOneToOne: false
+            referencedRelation: "volunteers"
             referencedColumns: ["id"]
           },
           {

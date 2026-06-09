@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/yip/supabase/server";
 import { getEvent } from "@/app/yip/actions/events";
+import { getEventParticipants } from "@/app/yip/actions/participants";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { ParticipantsClient } from "./participants-client";
 import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
@@ -26,19 +27,18 @@ export default async function ParticipantsPage({
     );
   }
 
-  // Fetch participants
-  const { data: participants } = await supabase
-    .from("participants")
-    .select("*")
-    .eq("event_id", id)
-    .order("full_name");
+  // Fetch participants via the gated service-role action. The roster includes
+  // access_code + PII; migration 20260609000000 revokes those columns from the
+  // `authenticated` role, so this read must go through service_role (the action
+  // re-checks getYipEventAccess().canManage, so it stays event-scoped).
+  const participants = await getEventParticipants(id);
 
   const access = await getYipEventAccess(id);
 
   return (
     <ParticipantsClient
       eventId={id}
-      participants={participants ?? []}
+      participants={participants}
       allocationLocked={event.allocation_locked ?? false}
       canDelete={access.canDelete}
     />

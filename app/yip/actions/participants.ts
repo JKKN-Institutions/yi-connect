@@ -495,14 +495,24 @@ export async function bulkCheckIn(
 
 // ─── Get Participants ──────────────────────────────────────────────
 
-export async function getParticipants(eventId: string) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+/**
+ * Read the full participant roster (incl. access_code + PII) for an event.
+ *
+ * Uses the SERVICE-ROLE client and is gated by getYipEventAccess(): a logged-in
+ * user only receives rows for an event they actually manage. This replaces the
+ * old pattern where the participants dashboard page read
+ * `participants.select("*")` with the AUTHENTICATED client — which exposed
+ * `access_code` (the student login credential) + email/phone/parent_phone to any
+ * logged-in user for ANY event over the raw PostgREST surface. Migration
+ * 20260609000000_yip_scope_access_code_authenticated.sql revokes those columns
+ * from the `authenticated` role, so the sensitive columns MUST now be read via
+ * service_role here. Mirrors listVolunteers() in volunteers.ts.
+ */
+export async function getEventParticipants(eventId: string) {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) return [];
 
-  if (!user) return [];
-
+  const supabase = await createServiceClient();
   const { data } = await supabase
     .from("participants")
     .select("*")

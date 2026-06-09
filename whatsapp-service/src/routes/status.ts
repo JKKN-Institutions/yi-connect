@@ -12,7 +12,8 @@ statusRoute.get('/', async (req, res) => {
       state: status.state,
       isLoggedIn: status.isLoggedIn,
       qrCode: getQRCode(),
-      clientInfo: status.info
+      clientInfo: status.info,
+      lastError: status.lastError
     });
   } catch (error) {
     const err = error as Error;

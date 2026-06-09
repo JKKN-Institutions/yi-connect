@@ -71,7 +71,19 @@ const CLIENT_ID = process.env.CLIENT_ID || 'whatsapp-service';
 // session survives redeploys/restarts. In production a Railway Volume MUST be
 // mounted at /data; locally it falls back to ./.wwebjs_auth via AUTH_PATH override.
 const AUTH_PATH = process.env.AUTH_PATH || '/data/.wwebjs_auth';
-const INIT_TIMEOUT_MS = 120000;
+// QR-phase timeout: bounds ONLY "get a QR and reach `authenticated`" (i.e. the
+// human scan). It is CLEARED the moment `authenticated` fires so the post-auth
+// "loading" phase is never killed mid-load. The old single 120s INIT_TIMEOUT
+// used to fire during loading and tore the session down before `ready` could
+// arrive — that is the core defect this split removes.
+const QR_TIMEOUT_MS = 120000;
+// Post-auth safety timeout: a GENEROUS bound on the loading phase (authenticated
+// -> ready). On fire it only records lastError; it does NOT destroy a client
+// that may still be loading. Set to 0 to disable entirely.
+const POST_AUTH_TIMEOUT_MS = Number(process.env.POST_AUTH_TIMEOUT_MS ?? 180000);
+// When WhatsApp reports a conflicting web session, take it over instead of
+// failing permanently. takeoverTimeoutMs bounds how long the takeover waits.
+const TAKEOVER_TIMEOUT_MS = Number(process.env.TAKEOVER_TIMEOUT_MS ?? 60000);
 // Remote webVersionCache mitigation: a stale bundled WA Web build can be rejected
 // by WhatsApp and crash during initialize() before the `qr` event fires. Using a
 // remote HTML cache forces a fresh fetch of the WA Web build instead of a stale
@@ -111,27 +123,81 @@ export function ensureConnected(): Client {
   return client;
 }
 
+// States in which a live client already exists (or is being built). A new
+// `Client` must NOT be constructed while currentState is one of these — doing so
+// is exactly what caused the multi-`authenticated`, never-`ready` pile-up
+// (WhatsApp allows only ONE live web session, so concurrent clients conflict).
+const LIVE_STATES: ConnectionState[] = ['connecting', 'qr_ready', 'authenticated', 'ready'];
+
+/**
+ * Safely tear down a client we are abandoning/replacing. Always destroys the
+ * underlying browser/session inside try/catch so no orphan Chromium lingers,
+ * then nulls the module-level reference if it is still the same instance.
+ */
+async function destroyClient(c: Client | null, reason: string): Promise<void> {
+  if (!c) return;
+  try {
+    await c.destroy();
+  } catch (err) {
+    console.error(`[WhatsApp] destroy() failed during ${reason}:`, err);
+  }
+  // Only null the shared ref if it still points at the client we destroyed —
+  // avoids clobbering a freshly created client from a later init.
+  if (client === c) {
+    client = null;
+  }
+}
+
 export async function initializeClient(): Promise<void> {
-  if (initPromise) return initPromise;
+  // SINGLE-INSTANCE GUARD. If a client is already live (or mid-init) reuse it
+  // instead of constructing a second `Client`. WhatsApp permits only ONE web
+  // session; a second client conflicts and neither finishes loading.
   if (currentState === 'ready' && client) return;
+  if (client !== null && LIVE_STATES.includes(currentState)) {
+    // A client exists and is connecting/showing QR/authenticated/loading.
+    // Return the in-flight init (or resolve immediately if it already settled).
+    return initPromise ?? Promise.resolve();
+  }
 
   currentState = 'connecting';
   currentQR = null;
   lastError = null;
 
   initPromise = new Promise<void>((resolve, reject) => {
-    const timeout = setTimeout(() => {
+    let settled = false;
+    // QR-phase timeout: bounds only "QR shown + scanned -> authenticated".
+    // Cleared on `authenticated` so the loading phase is never killed.
+    let qrTimeout: ReturnType<typeof setTimeout> | null = setTimeout(() => {
+      qrTimeout = null;
+      lastError = { message: 'QR_TIMEOUT: no QR scanned / authenticated within timeout', at: new Date().toISOString() };
+      const stale = client;
       currentState = 'disconnected';
       initPromise = null;
-      lastError = { message: 'QR_TIMEOUT: no QR or ready event within timeout', at: new Date().toISOString() };
+      settled = true;
+      // Destroy the stale client so no orphan Chromium/session lingers.
+      void destroyClient(stale, 'qr_timeout');
       reject(new Error('QR_TIMEOUT'));
-    }, INIT_TIMEOUT_MS);
+    }, QR_TIMEOUT_MS);
 
-    client = new Client({
+    // Post-auth safety timeout: a GENEROUS bound on loading. On fire it ONLY
+    // records lastError — it does NOT destroy a client that may still be
+    // loading, and it does NOT reject (we let loading run to `ready`).
+    let postAuthTimeout: ReturnType<typeof setTimeout> | null = null;
+
+    const clearTimers = () => {
+      if (qrTimeout) { clearTimeout(qrTimeout); qrTimeout = null; }
+      if (postAuthTimeout) { clearTimeout(postAuthTimeout); postAuthTimeout = null; }
+    };
+
+    const newClient = new Client({
       authStrategy: new LocalAuth({
         dataPath: AUTH_PATH,
         clientId: CLIENT_ID
       }),
+      // Take over a stale/competing web session rather than conflicting with it
+      // forever. This claims the single allowed WhatsApp web session for us.
+      takeoverOnConflict: true,
+      takeoverTimeoutMs: TAKEOVER_TIMEOUT_MS,
       // Use a remote WA Web build so a stale bundled version doesn't cause
       // initialize() to reject before the `qr` event fires. webVersion is only
       // set when WEB_VERSION is provided; otherwise the library picks its own.
@@ -154,8 +220,9 @@ export async function initializeClient(): Promise<void> {
         executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined
       }
     });
+    client = newClient;
 
-    client.on('qr', async (qr) => {
+    newClient.on('qr', async (qr) => {
       console.log('[WhatsApp] QR code received');
       try {
         currentQR = await qrcode.toDataURL(qr);
@@ -165,47 +232,68 @@ export async function initializeClient(): Promise<void> {
       }
     });
 
-    client.on('authenticated', () => {
+    newClient.on('authenticated', () => {
       console.log('[WhatsApp] Authenticated');
       currentState = 'authenticated';
       currentQR = null;
+      // SCAN DONE — stop bounding the QR phase. The loading phase (-> ready)
+      // must NOT be killed by the QR timeout. This is the core fix.
+      if (qrTimeout) { clearTimeout(qrTimeout); qrTimeout = null; }
+      // Optional generous loading-phase safety net. Records lastError only;
+      // never destroys (the client may still be loading) and never rejects.
+      if (POST_AUTH_TIMEOUT_MS > 0 && !postAuthTimeout) {
+        postAuthTimeout = setTimeout(() => {
+          postAuthTimeout = null;
+          if (currentState !== 'ready') {
+            lastError = {
+              message: 'POST_AUTH_SLOW: authenticated but `ready` not reached within timeout (still loading; session left intact)',
+              at: new Date().toISOString()
+            };
+            console.warn('[WhatsApp] Post-auth loading exceeded timeout; leaving session to finish loading');
+          }
+        }, POST_AUTH_TIMEOUT_MS);
+      }
     });
 
-    client.on('ready', () => {
+    newClient.on('ready', () => {
       console.log('[WhatsApp] Client is ready');
       currentState = 'ready';
-      clearTimeout(timeout);
+      clearTimers();
       initPromise = null;
-      resolve();
+      if (!settled) { settled = true; resolve(); }
     });
 
-    client.on('disconnected', (reason) => {
+    newClient.on('disconnected', (reason) => {
       console.log('[WhatsApp] Disconnected:', reason);
       currentState = 'disconnected';
       currentQR = null;
-      client = null;
+      clearTimers();
       initPromise = null;
+      // Destroy on teardown so no orphan browser/session lingers.
+      void destroyClient(newClient, 'disconnected');
     });
 
-    client.on('auth_failure', (message) => {
+    newClient.on('auth_failure', (message) => {
       console.error('[WhatsApp] Auth failure:', message);
       currentState = 'disconnected';
       lastError = { message: `AUTH_FAILURE: ${message}`, at: new Date().toISOString() };
-      clearTimeout(timeout);
+      clearTimers();
       initPromise = null;
-      reject(new Error('AUTH_FAILURE'));
+      void destroyClient(newClient, 'auth_failure');
+      if (!settled) { settled = true; reject(new Error('AUTH_FAILURE')); }
     });
 
-    client.initialize().catch((err) => {
+    newClient.initialize().catch((err) => {
       console.error('[WhatsApp] Initialize error:', err);
       currentState = 'disconnected';
       lastError = {
         message: `INIT_ERROR: ${err instanceof Error ? err.message : String(err)}`,
         at: new Date().toISOString()
       };
-      clearTimeout(timeout);
+      clearTimers();
       initPromise = null;
-      reject(err);
+      void destroyClient(newClient, 'init_error');
+      if (!settled) { settled = true; reject(err); }
     });
   });
 
@@ -213,11 +301,16 @@ export async function initializeClient(): Promise<void> {
 }
 
 export async function disconnect(): Promise<void> {
-  if (client) {
-    await client.logout();
-    await client.destroy();
-    client = null;
+  const c = client;
+  if (c) {
+    try {
+      await c.logout();
+    } catch (err) {
+      console.error('[WhatsApp] logout() failed during disconnect:', err);
+    }
+    await destroyClient(c, 'disconnect');
   }
+  client = null;
   currentState = 'disconnected';
   currentQR = null;
   initPromise = null;

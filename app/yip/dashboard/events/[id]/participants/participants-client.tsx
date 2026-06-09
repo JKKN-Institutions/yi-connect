@@ -520,10 +520,21 @@ export function ParticipantsClient({
             </TableHeader>
             <TableBody>
               {displayedParticipants.map((p) => (
-                <TableRow key={p.id}>
+                <TableRow
+                  key={p.id}
+                  onClick={() =>
+                    router.push(
+                      `/yip/dashboard/events/${eventId}/participants/${p.id}`
+                    )
+                  }
+                  className="cursor-pointer hover:bg-[#1a1a3e]/[0.025]"
+                >
                   <TableCell>
                     <button
-                      onClick={() => handleToggleCheckIn(p)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleToggleCheckIn(p);
+                      }}
                       disabled={checkingIn.has(p.id)}
                       className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition-colors hover:bg-gray-50 disabled:opacity-50"
                       title={p.checked_in ? "Click to check out" : "Click to check in"}
@@ -580,7 +591,10 @@ export function ParticipantsClient({
                         {p.access_code}
                       </code>
                       <button
-                        onClick={() => handleCopy(p.access_code, p.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleCopy(p.access_code, p.id);
+                        }}
                         className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
                         title="Copy code"
                       >
@@ -595,7 +609,10 @@ export function ParticipantsClient({
                   <TableCell>
                     {!allocationLocked && canDelete && (
                       <button
-                        onClick={() => handleDelete(p.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDelete(p.id);
+                        }}
                         className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600"
                         title="Remove participant"
                       >

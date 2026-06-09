@@ -58,13 +58,31 @@ let currentState: ConnectionState = 'disconnected';
 let currentQR: string | null = null;
 let initPromise: Promise<void> | null = null;
 
+// Last initialization / auth error, surfaced via /status so failures are
+// diagnosable without access to Railway logs.
+let lastError: { message: string; at: string } | null = null;
+
 // LID Cache for privacy-preserving ID resolution
 const lidCache: Map<string, { phone: string; name?: string }> = new Map();
 
 // Configuration
 const CLIENT_ID = process.env.CLIENT_ID || 'whatsapp-service';
-const AUTH_PATH = process.env.AUTH_PATH || './.wwebjs_auth';
+// AUTH_PATH defaults to a Railway-Volume-friendly location so the WhatsApp
+// session survives redeploys/restarts. In production a Railway Volume MUST be
+// mounted at /data; locally it falls back to ./.wwebjs_auth via AUTH_PATH override.
+const AUTH_PATH = process.env.AUTH_PATH || '/data/.wwebjs_auth';
 const INIT_TIMEOUT_MS = 120000;
+// Remote webVersionCache mitigation: a stale bundled WA Web build can be rejected
+// by WhatsApp and crash during initialize() before the `qr` event fires. Using a
+// remote HTML cache forces a fresh fetch of the WA Web build instead of a stale
+// local copy. We do NOT hard-pin a webVersion by default — whatsapp-web.js detects
+// its own target version and substitutes it into {version}, so the cache stays in
+// step with the library bump. Set WEB_VERSION only if you must force a specific
+// build (the matching {version}.html must exist in the remote store).
+const WEB_VERSION = process.env.WEB_VERSION || undefined;
+const WEB_VERSION_CACHE_URL =
+  process.env.WEB_VERSION_CACHE_URL ||
+  'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/{version}.html';
 
 // ============================================================================
 // CORE: Connection Management
@@ -76,6 +94,10 @@ export function getState(): ConnectionState {
 
 export function getQRCode(): string | null {
   return currentQR;
+}
+
+export function getLastError(): { message: string; at: string } | null {
+  return lastError;
 }
 
 export function getClient(): Client | null {
@@ -95,11 +117,13 @@ export async function initializeClient(): Promise<void> {
 
   currentState = 'connecting';
   currentQR = null;
+  lastError = null;
 
   initPromise = new Promise<void>((resolve, reject) => {
     const timeout = setTimeout(() => {
       currentState = 'disconnected';
       initPromise = null;
+      lastError = { message: 'QR_TIMEOUT: no QR or ready event within timeout', at: new Date().toISOString() };
       reject(new Error('QR_TIMEOUT'));
     }, INIT_TIMEOUT_MS);
 
@@ -108,6 +132,14 @@ export async function initializeClient(): Promise<void> {
         dataPath: AUTH_PATH,
         clientId: CLIENT_ID
       }),
+      // Use a remote WA Web build so a stale bundled version doesn't cause
+      // initialize() to reject before the `qr` event fires. webVersion is only
+      // set when WEB_VERSION is provided; otherwise the library picks its own.
+      ...(WEB_VERSION ? { webVersion: WEB_VERSION } : {}),
+      webVersionCache: {
+        type: 'remote' as const,
+        remotePath: WEB_VERSION_CACHE_URL
+      },
       puppeteer: {
         headless: true,
         args: [
@@ -158,6 +190,7 @@ export async function initializeClient(): Promise<void> {
     client.on('auth_failure', (message) => {
       console.error('[WhatsApp] Auth failure:', message);
       currentState = 'disconnected';
+      lastError = { message: `AUTH_FAILURE: ${message}`, at: new Date().toISOString() };
       clearTimeout(timeout);
       initPromise = null;
       reject(new Error('AUTH_FAILURE'));
@@ -166,6 +199,10 @@ export async function initializeClient(): Promise<void> {
     client.initialize().catch((err) => {
       console.error('[WhatsApp] Initialize error:', err);
       currentState = 'disconnected';
+      lastError = {
+        message: `INIT_ERROR: ${err instanceof Error ? err.message : String(err)}`,
+        at: new Date().toISOString()
+      };
       clearTimeout(timeout);
       initPromise = null;
       reject(err);
@@ -871,7 +908,8 @@ export async function getConnectionStatus(): Promise<any> {
   return {
     state: currentState,
     isLoggedIn: currentState === 'ready',
-    info: getClientInfo()
+    info: getClientInfo(),
+    lastError
   };
 }
 

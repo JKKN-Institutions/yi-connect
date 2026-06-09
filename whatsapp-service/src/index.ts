@@ -8,6 +8,8 @@
 import express from 'express';
 import cors from 'cors';
 
+import { initializeClient } from './whatsapp';
+
 // Route imports
 import { connectRoute } from './routes/connect';
 import { statusRoute } from './routes/status';
@@ -248,6 +250,13 @@ app.listen(PORT, () => {
   console.log(`║  Origins: ${allowedOrigins.join(', ').slice(0, 45).padEnd(45)}   ║`);
   console.log('╚══════════════════════════════════════════════════════════════╝');
   console.log('');
+
+  // Auto-initialize on boot so the bridge restores a saved session (or starts
+  // emitting a QR) without waiting for a manual POST /connect. Failures are
+  // swallowed here — they are captured in lastError and surfaced via GET /status.
+  initializeClient().catch((err) => {
+    console.error('[WhatsApp] Auto-init on boot failed:', err);
+  });
 });
 
 export default app;

@@ -59,6 +59,20 @@ function maskPhone(normalized: string | null): string | null {
   return `${local.slice(0, 2)}******${local.slice(-2)}`;
 }
 
+// Read the bridge's own `lastError` off the /status payload. The bridge added
+// this field after lib/whatsapp/api-client.ts's StatusResponse type was frozen,
+// so it isn't declared there — but getWhatsAppStatusAPI returns the parsed JSON
+// verbatim, so the value is present at runtime. We read it through a narrow,
+// local cast (NOT by editing the shared client, which other modules depend on)
+// and coerce anything non-string to null.
+function readBridgeLastError(status: unknown): string | null {
+  if (status && typeof status === "object" && "lastError" in status) {
+    const v = (status as { lastError?: unknown }).lastError;
+    if (typeof v === "string" && v.trim().length > 0) return v;
+  }
+  return null;
+}
+
 // ─── 1. Bridge state ──────────────────────────────────────────────
 // Mirrors the Railway status into our YipWaState. When the service isn't
 // configured we report a benign "not configured" state (success:true) so the UI
@@ -79,6 +93,7 @@ export async function getYipWhatsAppState(
         status: "disconnected",
         qrCode: null,
         error: "Service not configured",
+        lastError: null,
       },
     };
   }
@@ -92,6 +107,7 @@ export async function getYipWhatsAppState(
         status: status.status,
         qrCode: status.qrCode,
         error: status.error,
+        lastError: readBridgeLastError(status),
       },
     };
   } catch (e) {
@@ -123,6 +139,7 @@ export async function connectYipWhatsApp(
         status: "disconnected",
         qrCode: null,
         error: "Service not configured",
+        lastError: null,
       },
     };
   }
@@ -137,6 +154,7 @@ export async function connectYipWhatsApp(
         status: status.status,
         qrCode: status.qrCode,
         error: status.error,
+        lastError: readBridgeLastError(status),
       },
     };
   } catch (e) {

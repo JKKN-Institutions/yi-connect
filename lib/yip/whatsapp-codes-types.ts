@@ -16,6 +16,13 @@ export type YipWaState = {
   /** data-URL QR image when status === "qr_ready", else null. */
   qrCode: string | null;
   error: string | null;
+  /**
+   * Last failure reported by the bridge itself (e.g. auth failure, session
+   * conflict), surfaced so the organiser can see WHY it isn't connecting.
+   * Distinct from `error`, which is THIS app's reason for not getting a status
+   * back. null when the bridge has reported no error.
+   */
+  lastError: string | null;
 };
 
 /** One participant as shown in the "who will receive a code" preview. */

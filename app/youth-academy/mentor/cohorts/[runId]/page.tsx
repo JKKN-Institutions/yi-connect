@@ -136,11 +136,7 @@ export default async function MentorCohortPage({
         </TabsContent>
 
         <TabsContent value="submissions" className="mt-4">
-          <ComingSoon
-            icon={<FileStack className="size-5" />}
-            title="Submissions queue"
-            phase="Phase 13 adds per-session student work with review & feedback"
-          />
+          <ReviewQueue sessions={submissionsQueue} />
         </TabsContent>
       </Tabs>
 

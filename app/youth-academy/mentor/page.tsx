@@ -1,12 +1,21 @@
 /**
- * Mentor dashboard shell (Phase 6).
- * Profile-completeness nudge + "My sessions" placeholder (Phase 11 wires the
- * real assigned-sessions list). The layout already gates access; the page
- * tailors content: mentors see their nudge, staff see a viewing note.
+ * Mentor dashboard shell (Phase 6; Phase 11 wired the real "My sessions"
+ * list). Profile-completeness nudge + assigned upcoming/past sessions with
+ * links to the session detail + cohort pages. The layout already gates
+ * access; the page tailors content: mentors see their nudge + sessions,
+ * staff see a viewing note.
  */
 
 import Link from "next/link";
-import { CalendarClock, CircleCheck, CircleDashed, UserPen } from "lucide-react";
+import {
+  CalendarClock,
+  ChevronRight,
+  CircleCheck,
+  CircleDashed,
+  MapPin,
+  UserPen,
+  Users,
+} from "lucide-react";
 import { getYuvaAccess } from "@/lib/yuva/auth/yuva-access";
 import { createServiceClient as createYuvaService } from "@/lib/yuva/supabase/service";
 import { Forbidden403 } from "@/app/youth-academy/_components/Forbidden403";

@@ -258,20 +258,32 @@ export default async function ChapterCohortPage({
         </details>
       </section>
 
-      {/* Certificates — Phase 14 fills this slot */}
-      <section className="rounded-xl border border-dashed border-slate-300 bg-slate-50/60 p-5">
-        <div className="flex items-start gap-3">
-          <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-amber-50">
-            <Award className="size-5 text-amber-600" />
-          </div>
-          <div>
-            <p className="font-semibold text-slate-900">Issue certificates</p>
-            <p className="mt-0.5 text-sm text-slate-500">
-              Coming in Phase 14 — eligibility list with attendance % (default
-              ≥75%), per-student override, PDF generation and email delivery.
-            </p>
-          </div>
+      {/* Certificates — issue panel (Phase 14) */}
+      <section className="space-y-3">
+        <div>
+          <h2 className="flex items-center gap-2 font-semibold text-slate-900">
+            <Award className="size-4 text-amber-600" />
+            Certificates
+          </h2>
+          <p className="mt-0.5 text-sm text-slate-500">
+            Default eligibility is ≥{CERT_ATTENDANCE_DEFAULT}% attendance —
+            tick or untick per student to override. Already-issued students
+            are always skipped (re-running never duplicates a certificate).
+          </p>
         </div>
+        <EligibilityTable
+          runId={cohort.run.id}
+          rows={eligibilityRows}
+          threshold={CERT_ATTENDANCE_DEFAULT}
+          canIssue={canIssue}
+          blockedReason={
+            canIssue
+              ? null
+              : `Certificates can be issued once the run is completed (this run is ${RUN_STATUS_LABELS[cohort.run.status].toLowerCase()}).`
+          }
+          overrideAllowed={overrideGate.allowed}
+          overrideBlockedReason={overrideGate.reason ?? null}
+        />
       </section>
     </main>
   );

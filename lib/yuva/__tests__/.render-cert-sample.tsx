@@ -22,7 +22,8 @@ async function main() {
   try {
     buffer = await renderCertificatePdfBuffer({
       ...base,
-      logoUrl: "https://yi-connect-app.vercel.app/yi-future/yi-logo.png",
+      // High-res Yi logo — representative of real uploaded academy logos.
+      logoUrl: "https://yi-connect-app.vercel.app/yip/logos/yi-logo.png",
     });
     console.log("rendered WITH remote logo");
   } catch (e) {

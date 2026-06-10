@@ -96,6 +96,35 @@ export default async function ChapterCohortPage({
   const reopenedUntil = await fetchAttendanceReopenedUntil(cohort.run.id);
   const lock = canEditAttendance(cohort.run.status, !!reopenedUntil);
 
+  // Certificates (Phase 14): live attendance % comes from the roster
+  // computation above; cert rows are fetched per enrollment.
+  const certByEnrollment = await fetchCertificatesByEnrollment(
+    cohort.roster.map((r) => r.enrollment_id)
+  );
+  const eligibilityRows: EligibilityRow[] = cohort.roster.map((r) => {
+    const cert = certByEnrollment.get(r.enrollment_id);
+    return {
+      enrollment_id: r.enrollment_id,
+      full_name: r.full_name,
+      institution_name: r.institution_name,
+      status: r.status,
+      attendance_pct: r.attendance_pct,
+      certificate: cert
+        ? {
+            id: cert.id,
+            certificate_no: cert.certificate_no,
+            issued_at: cert.issued_at,
+            revoked: cert.revoked,
+          }
+        : null,
+    };
+  });
+  const canIssue =
+    cohort.run.status === "completed" || cohort.run.status === "certified";
+  const overrideGate = canOverrideEligibility(
+    cohort.sessions.map((s) => ({ status: s.status }))
+  );
+
   const activeCount = cohort.roster.filter(
     (r) => r.status !== "dropped"
   ).length;

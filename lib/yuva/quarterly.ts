@@ -35,7 +35,9 @@ export interface QuarterSession extends NormSession {
   academy_id: string;
 }
 
-export interface QuarterlyRow {
+// Type alias (not interface) so rows satisfy toCSV's Record<string, unknown>
+// constraint without a cast.
+export type QuarterlyRow = {
   academy: string;
   chapter: string;
   institution: string;

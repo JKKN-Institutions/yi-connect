@@ -107,6 +107,11 @@ export async function updateSession(request: NextRequest) {
     return handleYiFiAuth(request, supabaseResponse, user)
   }
 
+  // ─── Yi Youth Academy nested mount (/youth-academy/*) ────────────────
+  if (pathname.startsWith('/youth-academy')) {
+    return handleYuvaAuth(request, supabaseResponse, user)
+  }
+
   // ─── yi-connect main surface ──────────────────────────────────────────
 
   // Public auth-recovery routes (the (auth) route group). These must stay
@@ -432,6 +437,93 @@ function requireAccessCodeCookie(
  * Access-code-gated (yifi_session cookie required):
  *   /yifi/me/*                  — member personal dashboard (type=member)
  */
+/**
+ * Yi Youth Academy auth gate. Routes are mounted at /youth-academy/* in
+ * yi-connect (spec: docs/yi-youth-academy-spec.md).
+ *
+ * Public (no auth):
+ *   /youth-academy                      — landing (runs grid + Our Network)
+ *   /youth-academy/programs/*           — public run detail
+ *   /youth-academy/mentors              — public Mentor YUVA Network page
+ *   /youth-academy/apply/*              — public application form
+ *   /youth-academy/applications/*       — tokenized application status
+ *   /youth-academy/login                — student + staff login
+ *
+ * API routes pass through (donor-style blanket pass-through; routes self-gate).
+ *
+ * OAuth-gated (Supabase session; page layouts re-check yuva roles fail-closed):
+ *   /youth-academy/national/*, /youth-academy/chapter/*,
+ *   /youth-academy/mentor/*, /youth-academy/institution/*
+ *
+ * Cookie-gated (yuva_session, type=student, path-scoped to /youth-academy):
+ *   /youth-academy/me/*
+ *
+ * Cookie collision check: `yuva_session` overlaps no other vertical
+ * (yip_session / yifuture_session / yifi_session / sb-* OAuth token).
+ */
+function handleYuvaAuth(
+  request: NextRequest,
+  supabaseResponse: NextResponse,
+  user: { id: string } | null
+): NextResponse {
+  const { pathname } = request.nextUrl
+
+  // Always allow Youth Academy API routes (route handlers self-gate).
+  if (pathname.startsWith('/youth-academy/api')) {
+    return supabaseResponse
+  }
+
+  // Public routes.
+  const publicYuvaPrefixes = [
+    '/youth-academy/programs',
+    '/youth-academy/mentors',
+    '/youth-academy/apply',
+    '/youth-academy/applications',
+    '/youth-academy/login',
+  ]
+  if (pathname === '/youth-academy' || pathname === '/youth-academy/') {
+    return supabaseResponse
+  }
+  if (
+    publicYuvaPrefixes.some(p => pathname === p || pathname.startsWith(p + '/'))
+  ) {
+    return supabaseResponse
+  }
+
+  // Staff areas — OAuth-gated (layouts re-check yuva roles, fail closed).
+  const oauthYuvaPrefixes = [
+    '/youth-academy/national',
+    '/youth-academy/chapter',
+    '/youth-academy/mentor',
+    '/youth-academy/institution',
+  ]
+  if (
+    oauthYuvaPrefixes.some(p => pathname === p || pathname.startsWith(p + '/'))
+  ) {
+    if (!user) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/youth-academy/login'
+      url.searchParams.set('redirectTo', pathname)
+      return NextResponse.redirect(url)
+    }
+    return supabaseResponse
+  }
+
+  // /youth-academy/me/* — student session cookie (signature re-verified
+  // server-side in actions; middleware only checks shape/type).
+  if (pathname.startsWith('/youth-academy/me')) {
+    return requireAccessCodeCookie(
+      request,
+      supabaseResponse,
+      'yuva_session',
+      'student',
+      '/youth-academy/login'
+    )
+  }
+
+  return supabaseResponse
+}
+
 function handleYiFiAuth(
   request: NextRequest,
   supabaseResponse: NextResponse,

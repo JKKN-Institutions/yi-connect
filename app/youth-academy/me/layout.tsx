@@ -1,0 +1,83 @@
+/**
+ * Student portal layout (Phase 10) — the /youth-academy/me/* gate.
+ *
+ * Middleware only checks cookie PRESENCE + shape; THIS layout re-verifies
+ * the HMAC signature server-side via getStudentSession() and denies to the
+ * login page WITH a message (spec Phase 10 task 4 — the sanctioned deny
+ * shape for an unauthenticated session; in-portal authz failures render
+ * Forbidden403 instead). Every server action gates itself again — the
+ * layout is UX, the actions are the security boundary.
+ */
+
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { Award, ClipboardList, GraduationCap, Home, MessagesSquare } from "lucide-react";
+import { getStudentSession } from "@/lib/yuva/auth/student-session";
+import { SignOutButton } from "@/components/yuva/student/sign-out-button";
+
+export const dynamic = "force-dynamic";
+
+export const metadata = { title: "My portal" };
+
+export default async function StudentPortalLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const session = await getStudentSession();
+  if (!session) {
+    // Forged / expired / missing-signature cookie → login with a message.
+    redirect("/youth-academy/login?reason=session");
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-50">
+      <header className="bg-[#0f2557] text-white">
+        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-6 py-4">
+          <Link
+            href="/youth-academy/me"
+            className="inline-flex items-center gap-2 font-semibold"
+          >
+            <GraduationCap className="size-5" />
+            Yi Youth Academy
+            <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs font-medium text-slate-200">
+              Student
+            </span>
+          </Link>
+          <SignOutButton />
+        </div>
+        <nav className="mx-auto flex max-w-5xl flex-wrap items-center gap-1 px-6 pb-3 text-sm">
+          <Link
+            href="/youth-academy/me"
+            className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-medium text-slate-200 transition-colors hover:bg-white/10 hover:text-white"
+          >
+            <Home className="size-3.5" />
+            My programs
+          </Link>
+          <Link
+            href="/youth-academy/me/certificate"
+            className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-medium text-slate-200 transition-colors hover:bg-white/10 hover:text-white"
+          >
+            <Award className="size-3.5" />
+            Certificate
+          </Link>
+          <Link
+            href="/youth-academy/me/work"
+            className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-medium text-slate-200 transition-colors hover:bg-white/10 hover:text-white"
+          >
+            <ClipboardList className="size-3.5" />
+            My work
+          </Link>
+          <Link
+            href="/youth-academy/me/messages"
+            className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-medium text-slate-200 transition-colors hover:bg-white/10 hover:text-white"
+          >
+            <MessagesSquare className="size-3.5" />
+            Messages
+          </Link>
+        </nav>
+      </header>
+      <div className="mx-auto max-w-5xl px-6 py-8">{children}</div>
+    </div>
+  );
+}

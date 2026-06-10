@@ -41,11 +41,16 @@ export default async function NationalAcademyDetailPage({
   const chapters = chaptersResult.success ? chaptersResult.data : [];
 
   const svc = await createServiceClient();
-  const { data: runs } = await svc
-    .from("runs")
-    .select("id, status, start_date, end_date, created_at")
-    .eq("academy_id", academy.id)
-    .order("created_at", { ascending: false });
+  const [{ data: runs }, compliance] = await Promise.all([
+    svc
+      .from("runs")
+      .select("id, status, start_date, end_date, created_at")
+      .eq("academy_id", academy.id)
+      .order("created_at", { ascending: false }),
+    // Compact usage-norm strip (Phase 15) — this month's engagements by
+    // category + active days YTD; norm math in lib/yuva/norms.ts.
+    getAcademyCompliance(academy.id),
+  ]);
 
   return (
     <main className="mx-auto max-w-3xl space-y-6 p-6">

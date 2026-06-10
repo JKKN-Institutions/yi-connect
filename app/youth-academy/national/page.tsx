@@ -1,34 +1,36 @@
 import Link from "next/link";
-import {
-  Building2,
-  CalendarCheck,
-  GraduationCap,
-  PlayCircle,
-  Users,
-} from "lucide-react";
+import { Building2 } from "lucide-react";
 import { requireYuvaNational } from "@/lib/yuva/auth/require-national";
 import { Forbidden403 } from "@/app/youth-academy/_components/Forbidden403";
+import {
+  getComplianceSnapshot,
+  getEmailQueueHealth,
+} from "@/app/youth-academy/actions/national-reports";
+import { KpiCards } from "@/components/yuva/national/dashboard/kpi-cards";
+import { ComplianceTable } from "@/components/yuva/national/dashboard/compliance-table";
+import { QueueHealthCard } from "@/components/yuva/national/dashboard/queue-health-card";
+import { QuarterlyExport } from "@/components/yuva/national/dashboard/quarterly-export";
 
 /**
- * Yi Youth Academy — national dashboard SHELL (Phase 4).
- * KPI cards and the usage-norm compliance table are PLACEHOLDERS — live
- * metrics (sessions conducted, norm RAG, quarterly export) land in
- * Phase 15 via lib/yuva/norms.ts + actions/national-reports.ts.
+ * Yi Youth Academy — national dashboard (Phase 15 — live).
+ * KPIs, per-academy usage-norm compliance (RAG), email-queue health and the
+ * quarterly review CSV export. Data assembly lives in
+ * app/youth-academy/actions/national-reports.ts (national-gated);
+ * norm math in lib/yuva/norms.ts + lib/yuva/quarterly.ts (TDD).
  */
 
-const KPI_PLACEHOLDERS = [
-  { label: "Active academies", icon: Building2 },
-  { label: "Runs in progress", icon: PlayCircle },
-  { label: "Sessions this month", icon: CalendarCheck },
-  { label: "Students engaged", icon: Users },
-  { label: "Students certified", icon: GraduationCap },
-];
+export const dynamic = "force-dynamic";
 
 export default async function NationalDashboardPage() {
   const gate = await requireYuvaNational();
   if (!gate.ok) {
     return <Forbidden403 reason={gate.error} />;
   }
+
+  const [snapshot, queueHealth] = await Promise.all([
+    getComplianceSnapshot(),
+    getEmailQueueHealth(),
+  ]);
 
   return (
     <div className="space-y-8">
@@ -42,42 +44,58 @@ export default async function NationalDashboardPage() {
         </p>
       </div>
 
-      {/* KPI placeholders — replaced with live metrics in Phase 15. */}
+      {/* KPIs — live (Phase 15). */}
       <section aria-label="Key metrics">
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-          {KPI_PLACEHOLDERS.map(({ label, icon: Icon }) => (
-            <div
-              key={label}
-              className="rounded-xl border border-slate-200 bg-white p-4"
-            >
-              <div className="flex items-center gap-2 text-slate-400">
-                <Icon className="size-4" />
-                <span className="text-xs font-medium uppercase tracking-wide">
-                  {label}
-                </span>
-              </div>
-              <p className="mt-3 text-2xl font-bold text-slate-300">—</p>
-              <p className="mt-1 text-[11px] text-slate-400">
-                Live metric coming soon
-              </p>
-            </div>
-          ))}
-        </div>
+        {snapshot.success ? (
+          <KpiCards kpis={snapshot.data.kpis} />
+        ) : (
+          <p className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+            Could not load network metrics: {snapshot.error}
+          </p>
+        )}
       </section>
 
-      {/* Usage-norm compliance placeholder — Phase 15. */}
+      {/* Operational strip: email-queue health + quarterly CSV export. */}
       <section
-        aria-label="Usage-norm compliance"
-        className="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center"
+        aria-label="Operations"
+        className="grid gap-4 sm:grid-cols-2"
       >
-        <h2 className="text-sm font-semibold text-slate-700">
-          Usage-norm compliance
-        </h2>
-        <p className="mx-auto mt-2 max-w-md text-sm text-slate-500">
-          Per-academy red/amber/green view of the usage norms (≥3 engagements
-          per month, ≥30 active days per year) plus the quarterly review
-          export will appear here once academies start running sessions.
-        </p>
+        {queueHealth.success ? (
+          <QueueHealthCard health={queueHealth.data} />
+        ) : (
+          <p className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+            Could not load email-queue health: {queueHealth.error}
+          </p>
+        )}
+        <QuarterlyExport />
+      </section>
+
+      {/* Usage-norm compliance — live per-academy RAG (Phase 15). */}
+      <section aria-label="Usage-norm compliance">
+        {!snapshot.success ? null : snapshot.data.academies.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center">
+            <Building2 className="mx-auto size-8 text-slate-300" />
+            <h2 className="mt-3 text-sm font-semibold text-slate-700">
+              No academies yet
+            </h2>
+            <p className="mx-auto mt-2 max-w-md text-sm text-slate-500">
+              Usage-norm compliance appears here once the network has active
+              academies. The national team creates academies — creating one is
+              the approval.
+            </p>
+            <Link
+              href="/youth-academy/national/academies/new"
+              className="mt-4 inline-flex items-center justify-center rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-800"
+            >
+              Create your first academy
+            </Link>
+          </div>
+        ) : (
+          <ComplianceTable
+            month={snapshot.data.month}
+            academies={snapshot.data.academies}
+          />
+        )}
       </section>
 
       <section className="flex flex-col gap-3 sm:flex-row">

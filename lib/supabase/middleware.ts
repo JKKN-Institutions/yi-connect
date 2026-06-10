@@ -107,6 +107,11 @@ export async function updateSession(request: NextRequest) {
     return handleYiFiAuth(request, supabaseResponse, user)
   }
 
+  // ─── Yi Youth Academy nested mount (/youth-academy/*) ────────────────
+  if (pathname.startsWith('/youth-academy')) {
+    return handleYuvaAuth(request, supabaseResponse, user)
+  }
+
   // ─── yi-connect main surface ──────────────────────────────────────────
 
   // Public auth-recovery routes (the (auth) route group). These must stay

@@ -56,7 +56,7 @@ export type QuarterlyRow = {
   /** Norm standing evaluated for the LAST month of the quarter. */
   norm_rag: NormRag;
   qualitative_notes: string;
-}
+};
 
 /** The three "YYYY-MM" keys of a quarter, in order. */
 export function quarterMonths(quarter: Quarter, year: number): string[] {

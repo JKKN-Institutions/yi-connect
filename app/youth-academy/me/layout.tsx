@@ -7,9 +7,6 @@
  * shape for an unauthenticated session; in-portal authz failures render
  * Forbidden403 instead). Every server action gates itself again — the
  * layout is UX, the actions are the security boundary.
- *
- * Nav note: My Work (Phase 13) and Messages (Phase 12) are "coming soon"
- * stubs — labels only, no routes yet.
  */
 
 import Link from "next/link";

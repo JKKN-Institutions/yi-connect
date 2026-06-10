@@ -1,8 +1,8 @@
 /**
  * Mentor — cohort view (Phase 11).
  * Spec: docs/yi-youth-academy-spec.md → "Mentor — dashboard / sessions /
- * cohort": tabs Roster | Messages | Submissions (Messages/Submissions are
- * Phase 12/13 placeholder slots); roster shows attendance %, submissions
+ * cohort": tabs Roster | Messages (Phase 12) | Submissions (Phase 13 —
+ * per-session queue with review/feedback); roster shows attendance %, submissions
  * status and progress % per student (lib/yuva/progress.ts over live data);
  * full run schedule + program summary/takeaways visible read-only — the
  * syllabus view (locked Email-1 mentor monitoring requirement).

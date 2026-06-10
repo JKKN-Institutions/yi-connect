@@ -84,6 +84,10 @@ export default async function NationalAcademyDetailPage({
         </div>
       </div>
 
+      {compliance.success ? (
+        <ComplianceStrip strip={compliance.data} />
+      ) : null}
+
       <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <h2 className="mb-4 font-semibold text-slate-900">Logo</h2>
         <LogoUpload

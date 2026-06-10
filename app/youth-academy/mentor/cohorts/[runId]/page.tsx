@@ -72,7 +72,10 @@ export default async function MentorCohortPage({
     return <Forbidden403 reason={gate.reason} />;
   }
 
-  const cohort = await fetchCohortData(runId);
+  const [cohort, submissionsQueue] = await Promise.all([
+    fetchCohortData(runId),
+    fetchRunSubmissionsQueue(runId),
+  ]);
   if (!cohort) {
     notFound();
   }

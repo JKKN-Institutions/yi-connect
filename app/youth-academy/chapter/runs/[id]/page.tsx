@@ -150,6 +150,27 @@ export default async function RunManagementPage({
         </span>
       </Link>
 
+      {/* Cohort management entry point (Phase 11) */}
+      <Link
+        href={`/youth-academy/chapter/runs/${run.id}/cohort`}
+        className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-5 transition-colors hover:border-sky-300 hover:bg-sky-50/40"
+      >
+        <div className="flex items-center gap-3">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-sky-50">
+            <Users className="size-5 text-sky-700" />
+          </div>
+          <div>
+            <p className="font-semibold text-slate-900">Cohort</p>
+            <p className="text-sm text-slate-500">
+              {run.enrollments_count > 0
+                ? `${run.enrollments_count} enrolled — roster, attendance, progress`
+                : "Roster, attendance and progress (after cohort formation)"}
+            </p>
+          </div>
+        </div>
+        <span className="text-sm font-medium text-sky-700">Manage →</span>
+      </Link>
+
       <section className="rounded-xl border border-slate-200 bg-white p-5">
         <h2 className="font-semibold text-slate-900">Run settings</h2>
         <p className="mt-0.5 mb-4 text-sm text-slate-500">

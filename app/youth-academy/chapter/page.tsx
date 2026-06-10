@@ -16,6 +16,8 @@ import {
   fetchAcademies,
   type AcademyScope,
 } from "@/components/yuva/academies/data";
+import { fetchRuns, runScopeFromAccess } from "@/components/yuva/runs/data";
+import { RunStatusBadge } from "@/components/yuva/runs/run-status-badge";
 
 export const metadata = { title: "Chapter dashboard" };
 
@@ -28,7 +30,10 @@ export default async function ChapterDashboardPage() {
       ? { kind: "chapter", chapter: access.chapterAdminOf }
       : { kind: "ids", ids: access.coordinatorAcademyIds };
 
-  const academies = await fetchAcademies(scope);
+  const [academies, activeRuns] = await Promise.all([
+    fetchAcademies(scope),
+    fetchRuns(runScopeFromAccess(access), { activeOnly: true, limit: 5 }),
+  ]);
   const heading = access.chapterAdminOf
     ? `Yi ${access.chapterAdminOf} — Youth Academy`
     : access.isNational
@@ -75,16 +80,49 @@ export default async function ChapterDashboardPage() {
         </div>
       )}
 
-      {/* Placeholder slots — Phase 7 (runs) and Phase 9 (applications) fill these. */}
+      {/* Phase 7 fills the runs slot; Phase 9 (applications/sessions) fills the rest. */}
       <div className="grid gap-4 sm:grid-cols-3">
         <div className="rounded-xl border border-slate-200 bg-white p-5">
-          <div className="flex items-center gap-2 text-slate-700">
-            <CalendarClock className="size-4 text-amber-600" />
-            <h2 className="font-semibold">Program runs</h2>
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-slate-700">
+              <CalendarClock className="size-4 text-amber-600" />
+              <h2 className="font-semibold">Program runs</h2>
+            </div>
+            <Link
+              href="/youth-academy/chapter/runs"
+              className="text-xs font-medium text-emerald-700 underline-offset-2 hover:underline"
+            >
+              View all →
+            </Link>
           </div>
-          <p className="mt-1 text-sm text-slate-400">
-            Scheduling and publishing arrive with program runs — coming soon.
-          </p>
+          {activeRuns.length === 0 ? (
+            <p className="mt-1 text-sm text-slate-400">
+              No active runs yet —{" "}
+              <Link
+                href="/youth-academy/chapter/runs/new"
+                className="font-medium text-emerald-700 underline-offset-2 hover:underline"
+              >
+                create one
+              </Link>{" "}
+              from an approved program.
+            </p>
+          ) : (
+            <ul className="mt-2 space-y-1.5">
+              {activeRuns.map((run) => (
+                <li key={run.id}>
+                  <Link
+                    href={`/youth-academy/chapter/runs/${run.id}`}
+                    className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-slate-50"
+                  >
+                    <span className="truncate font-medium text-slate-700">
+                      {run.program_title}
+                    </span>
+                    <RunStatusBadge status={run.status} />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-5">
           <div className="flex items-center gap-2 text-slate-700">

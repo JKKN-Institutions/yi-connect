@@ -22,11 +22,20 @@ import {
 import { Forbidden403 } from "@/app/youth-academy/_components/Forbidden403";
 import { canEditAttendance } from "@/lib/yuva/attendance-lock";
 import { getYuvaAccess } from "@/lib/yuva/auth/yuva-access";
-import { RUN_STATUS_LABELS } from "@/lib/yuva/constants";
+import { canOverrideEligibility } from "@/lib/yuva/certificate-eligibility";
+import {
+  CERT_ATTENDANCE_DEFAULT,
+  RUN_STATUS_LABELS,
+} from "@/lib/yuva/constants";
 import { CategoryBadge } from "@/components/yuva/national/category-badge";
 import { AttendanceGrid } from "@/components/yuva/attendance/attendance-grid";
 import { fetchAttendanceReopenedUntil } from "@/components/yuva/attendance/data";
 import { AttendanceLockBanner } from "@/components/yuva/attendance/lock-banner";
+import { fetchCertificatesByEnrollment } from "@/components/yuva/certificates/data";
+import {
+  EligibilityTable,
+  type EligibilityRow,
+} from "@/components/yuva/certificates/eligibility-table";
 import {
   fetchCohortData,
   gridRosterForSession,

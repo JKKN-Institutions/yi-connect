@@ -227,6 +227,35 @@ export default async function ChapterCohortPage({
         )}
       </section>
 
+      {/* Cohort thread (Phase 12) — compact, collapsed by default */}
+      <section className="space-y-3">
+        <div>
+          <h2 className="flex items-center gap-2 font-semibold text-slate-900">
+            <MessagesSquare className="size-4 text-slate-500" />
+            Cohort thread
+          </h2>
+          <p className="mt-0.5 text-sm text-slate-500">
+            One shared thread per cohort — students, mentors and your chapter
+            team all see it.
+          </p>
+        </div>
+        <details className="group rounded-lg border border-slate-200 bg-white">
+          <summary className="flex cursor-pointer items-center justify-between gap-2 px-4 py-3 text-sm font-medium text-slate-900 [&::-webkit-details-marker]:hidden">
+            <span>Open the thread</span>
+            <span className="text-xs font-normal text-slate-400">
+              <span className="group-open:hidden">▸</span>
+              <span className="hidden group-open:inline">▾</span>
+            </span>
+          </summary>
+          <div className="border-t border-slate-100 p-4">
+            <CohortThread
+              runId={cohort.run.id}
+              viewerPersonId={access.personId}
+            />
+          </div>
+        </details>
+      </section>
+
       {/* Certificates — Phase 14 fills this slot */}
       <section className="rounded-xl border border-dashed border-slate-300 bg-slate-50/60 p-5">
         <div className="flex items-start gap-3">

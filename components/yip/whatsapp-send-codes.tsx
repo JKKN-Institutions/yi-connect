@@ -345,8 +345,13 @@ export function WhatsAppSendCodes({
                 </div>
               )}
 
-              {waState.qrCode ? (
+              {waState.status === "qr_ready" && waState.qrCode ? (
                 <div className="space-y-3 text-center">
+                  {/* Only render the QR when the bridge is genuinely at
+                      qr_ready. A QR present on any other state is a STALE cached
+                      code (the bridge can serve an expired QR after a timeout);
+                      showing it makes the organiser scan a dead code, which
+                      trips WhatsApp's "can't link new devices" block. */}
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={waState.qrCode}

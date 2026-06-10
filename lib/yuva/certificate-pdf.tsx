@@ -225,6 +225,11 @@ export function CertificatePDF(props: CertificatePdfProps) {
       <Page size="A4" orientation="landscape" style={styles.page}>
         <View style={styles.frame}>
           <View style={styles.innerFrame}>
+            {/* Faint centered watermark (academy logo) — anti-blank zone */}
+            {props.logoUrl ? (
+              <Image src={props.logoUrl} style={styles.watermark} fixed />
+            ) : null}
+
             {/* Placeholder zone: academy display name + logo */}
             <View style={styles.headerRow}>
               {props.logoUrl ? (

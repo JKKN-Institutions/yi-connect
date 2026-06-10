@@ -270,7 +270,7 @@ export default async function MentorDashboardPage() {
         </Card>
       )}
 
-      {/* My sessions — placeholder; Phase 11 wires the real list */}
+      {/* My sessions (Phase 11) — real assigned-sessions list */}
       <Card className="border-slate-200">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
@@ -281,16 +281,119 @@ export default async function MentorDashboardPage() {
             Sessions assigned to you across program runs.
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="rounded-lg border border-dashed border-slate-300 p-8 text-center">
-            <p className="text-sm font-medium text-slate-700">
-              No sessions to show yet
-            </p>
-            <p className="mt-1 text-sm text-slate-500">
-              When a chapter assigns you to a session, it will appear here with
-              the date, venue and cohort details.
-            </p>
-          </div>
+        <CardContent className="space-y-5">
+          {!access.isMentor ? (
+            <div className="rounded-lg border border-dashed border-slate-300 p-8 text-center">
+              <p className="text-sm text-slate-500">
+                The assigned-sessions list appears for mentor accounts.
+              </p>
+            </div>
+          ) : upcoming.length === 0 && past.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-slate-300 p-8 text-center">
+              <p className="text-sm font-medium text-slate-700">
+                No sessions to show yet
+              </p>
+              <p className="mt-1 text-sm text-slate-500">
+                When a chapter assigns you to a session, it will appear here
+                with the date, venue and cohort details.
+              </p>
+            </div>
+          ) : (
+            <>
+              {upcoming.length > 0 && (
+                <div>
+                  <p className="mb-2 text-xs font-semibold tracking-wide text-slate-500 uppercase">
+                    Upcoming ({upcoming.length})
+                  </p>
+                  <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
+                    {upcoming.map((session) => (
+                      <li key={session.id}>
+                        <Link
+                          href={`/youth-academy/mentor/sessions/${session.id}`}
+                          className="flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-slate-50"
+                        >
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium text-slate-900">
+                              {session.seq}. {session.name}
+                            </p>
+                            <p className="mt-0.5 truncate text-xs text-slate-500">
+                              {session.program_title} · {session.academy_name}
+                            </p>
+                            <p className="mt-0.5 flex flex-wrap items-center gap-x-3 text-xs text-slate-500">
+                              <span>
+                                {formatSessionWhen(session.scheduled_at)}
+                              </span>
+                              {session.venue && (
+                                <span className="inline-flex items-center gap-1">
+                                  <MapPin className="size-3" />
+                                  {session.venue}
+                                </span>
+                              )}
+                            </p>
+                          </div>
+                          <ChevronRight className="size-4 shrink-0 text-slate-400" />
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {past.length > 0 && (
+                <div>
+                  <p className="mb-2 text-xs font-semibold tracking-wide text-slate-500 uppercase">
+                    Past
+                  </p>
+                  <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
+                    {past.map((session) => (
+                      <li key={session.id}>
+                        <Link
+                          href={`/youth-academy/mentor/sessions/${session.id}`}
+                          className="flex items-center justify-between gap-3 px-4 py-2.5 transition-colors hover:bg-slate-50"
+                        >
+                          <div className="min-w-0">
+                            <p className="truncate text-sm text-slate-700">
+                              {session.seq}. {session.name}
+                              <span className="ml-2 text-xs text-slate-400">
+                                {session.program_title} ·{" "}
+                                {formatSessionWhen(session.scheduled_at)}
+                                {session.status !== "scheduled"
+                                  ? ` · ${session.status}`
+                                  : ""}
+                              </span>
+                            </p>
+                          </div>
+                          <ChevronRight className="size-4 shrink-0 text-slate-400" />
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Cohort shortcuts — one per distinct run */}
+              {(() => {
+                const runs = new Map<string, MentorSessionItem>();
+                for (const s of [...upcoming, ...past]) {
+                  if (!runs.has(s.run_id)) runs.set(s.run_id, s);
+                }
+                return (
+                  <div className="flex flex-wrap gap-2">
+                    {[...runs.values()].map((s) => (
+                      <Link
+                        key={s.run_id}
+                        href={`/youth-academy/mentor/cohorts/${s.run_id}`}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50"
+                      >
+                        <Users className="size-3.5" />
+                        Cohort · {s.program_title}
+                      </Link>
+                    ))}
+                  </div>
+                );
+              })()}
+            </>
+          )}
         </CardContent>
       </Card>
     </div>

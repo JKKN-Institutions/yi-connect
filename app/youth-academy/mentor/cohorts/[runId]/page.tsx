@@ -16,7 +16,6 @@ import { notFound } from "next/navigation";
 import {
   ArrowLeft,
   FileStack,
-  MessagesSquare,
   Users,
 } from "lucide-react";
 import { Forbidden403 } from "@/app/youth-academy/_components/Forbidden403";
@@ -24,6 +23,7 @@ import { getMentorRunAccess } from "@/lib/yuva/auth/mentor-access";
 import { RUN_STATUS_LABELS } from "@/lib/yuva/constants";
 import { CategoryBadge } from "@/components/yuva/national/category-badge";
 import { fetchCohortData } from "@/components/yuva/cohort/data";
+import { CohortThread } from "@/components/yuva/messages/thread";
 import { RosterTable } from "@/components/yuva/cohort/roster-table";
 import { SyllabusView } from "@/components/yuva/cohort/syllabus-view";
 import { Badge } from "@/components/ui/badge";

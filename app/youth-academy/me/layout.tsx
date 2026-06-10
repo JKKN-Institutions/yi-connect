@@ -75,17 +75,13 @@ export default async function StudentPortalLayout({
               soon
             </span>
           </span>
-          {/* Phase 12 — nav stub only */}
-          <span
-            className="inline-flex cursor-not-allowed items-center gap-1.5 rounded-lg px-3 py-1.5 font-medium text-slate-400"
-            title="Coming soon"
+          <Link
+            href="/youth-academy/me/messages"
+            className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-medium text-slate-200 transition-colors hover:bg-white/10 hover:text-white"
           >
             <MessagesSquare className="size-3.5" />
             Messages
-            <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px]">
-              soon
-            </span>
-          </span>
+          </Link>
         </nav>
       </header>
       <div className="mx-auto max-w-5xl px-6 py-8">{children}</div>

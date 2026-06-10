@@ -970,7 +970,22 @@ Parallel phases have disjoint file sets by construction (checked: 2↔3 share on
 
 ## Known Issues (P2/P3 — deferred)
 
+- P2: server-action transport caps file uploads at ~7.4 MB raw (10 MB base64) — `serverActions.bodySizeLimit` is a shared next.config value; raise only as a deliberate cross-app decision (flagged Phase 13).
+- P1 (ops, pre-launch): set `CRON_SECRET` in Vercel envs — the version-controlled drain crons (yuva + yi-future) authenticate with it; route fails closed until set.
+- P2: dev-seed test users for chapter_admin / mentor / institution_coordinator RLS browser probes still pending (docs/plans/yuva-dev-seeds.md).
+- P3: zod v4 deprecation warnings (.uuid()/.email() forms) across action files — cosmetic, repo-wide pattern.
+
 - P2: CAPTCHA/Turnstile on public apply + OTP endpoints — add if abuse observed (env keys needed).
 - P2: Student transfer between runs (re-apply workaround).
 - P3: Program-level syllabus attachment on `yuva.programs`.
 - P2: `yi.institutions` dedupe vs `yi_connect.schools`/`colleges` incomplete beyond the `future.colleges` backfill.
+
+
+---
+
+## Implementation Notes (build of 2026-06-10/11 — worktree `worktree-yuva-academy`)
+
+- **All 19 phases executed** (0–17 built, 18 sweep run at close). 15 test suites… actually 14 test files / 300+ assertions, ALL TDD-tagged phases done RED→GREEN. Production build passes with the full /youth-academy route tree.
+- **Live DB state:** `yuva` schema (19 tables incl. `login_attempts` added during build — spec counts updated), role-aware RLS verified through REST (anon 401; access_code/status_token column-blocked), PostgREST exposes `yuva`, 4 storage buckets, `yi.institutions` backfilled 60→69, 7 academies seeded (canonical "Nashik", not the email's "Nasik"), 1 placeholder draft program, `yuva_super_admin` granted live to piyush.garg@powertekengg.com / vedant@wrs.energy / mayank.jain@cii.in (+ director@jkkn.ac.in as dev seed).
+- **Notable build-time decisions:** per-IP application throttle counts via `audit_log.meta.ip` (no IP column on applications); rejection emails sent immediately only post-formation; acceptance email dedupe key includes person_id; both email-drain crons (yuva + yi-future) registered in vercel.json and the yi-future route's auth widened to accept Vercel's Bearer form (it would have 401'd forever); student session cookie carries `type:'student'` for the shared middleware parser; certificates: client preview reuses the same pure `buildIssuePlan` as the server.
+- **Pending artifacts from the Director:** real academy logos (7), certificate design file (dummy A4-landscape design shipped — eyeballed, renders clean), consent-text sign-off, program content for National to enter.

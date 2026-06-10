@@ -1,8 +1,8 @@
 /**
- * CHAPTER — dashboard shell (Phase 5; spec "Chapter — dashboard").
- * Shows the academy/academies in the caller's scope (national-created) with
- * placeholder slots for runs / applications / sessions — Phases 7 and 9 fill
- * them. Coordinator assignment lives on the academy view.
+ * CHAPTER — dashboard (spec "Chapter — dashboard").
+ * Shows the academy/academies in the caller's scope (national-created),
+ * active runs, and pending-application counts. Coordinator assignment lives
+ * on the academy view.
  */
 
 import Link from "next/link";

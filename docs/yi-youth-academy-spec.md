@@ -518,6 +518,15 @@ CREATE TABLE yuva.login_otps (                    -- student email-OTP fallback
 );
 CREATE INDEX login_otps_email_idx ON yuva.login_otps(email, created_at);
 
+CREATE TABLE yuva.login_attempts (                -- access-code login throttle (per-IP + global);
+                                                  -- pruned by the email-drain cron
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  key text NOT NULL,                              -- 'ip:{addr}' | 'email:{addr}' | 'global'
+  success boolean NOT NULL DEFAULT false,
+  attempted_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX login_attempts_key_idx ON yuva.login_attempts(key, attempted_at);
+
 CREATE TABLE yuva.notification_log (              -- durable email queue (yi-future clone)
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   recipient text NOT NULL,
@@ -614,7 +623,7 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = yuva, yi_directory, publi
   );
 $$;
 
-ALTER TABLE yuva.academies              ENABLE ROW LEVEL SECURITY;  -- … repeat for ALL 18 tables
+ALTER TABLE yuva.academies              ENABLE ROW LEVEL SECURITY;  -- … repeat for ALL 19 tables (incl. login_attempts)
 -- Pattern A (chapter-scoped + coordinator academy scope): academies, runs, applications,
 -- enrollments (audit_log stays chapter-scoped via can_see only — no coordinator/mentor clause):
 CREATE POLICY siloed_read ON yuva.academies FOR SELECT TO authenticated
@@ -758,9 +767,9 @@ Conventions for every phase: tasks are 2–5 min each; commit at every phase bou
 ### Phase 1 — Schema migrations + generated types (SEQUENTIAL) [TDD: RLS]
 1. Write `supabase/migrations/20260610100000_yuva_academy_schema.sql` exactly per the Database Schema section. Done when: file matches plan tables/enums/triggers/grants.
 2. Show SQL to user; apply via Management API in ordered chunks (schema+enums → tables → indexes/triggers/function → grants). Done when: each API call returns success.
-3. Verify: SELECT from `information_schema.tables WHERE table_schema='yuva'` returns 18 tables; `SELECT yuva.next_certificate_no()` returns `YYA-2026-0001` then `-0002` (then DELETE the counter row to reset). Done when: outputs match.
+3. Verify: SELECT from `information_schema.tables WHERE table_schema='yuva'` returns 19 tables; `SELECT yuva.next_certificate_no()` returns `YYA-2026-0001` then `-0002` (then DELETE the counter row to reset). Done when: outputs match.
 4. PATCH the project's PostgREST config via Management API to append `yuva` to db_schema (precedent: supabase/migrations/20260531120000_theknit_archive_schema.sql lines 105-112 — exposed-schema change is applied OUTSIDE migrations), then GET the config back and confirm `yuva` is listed BEFORE any REST probe. Done when: GET /v1/projects/.../postgrest shows yuva in db_schema.
-5. Write + show + apply `20260610101000_yuva_academy_rls.sql` (helpers + ENABLE RLS on all 18 tables + policies per patterns A–D + the column-level grants). Done when: applied; `SELECT relrowsecurity FROM pg_class JOIN pg_namespace ... nspname='yuva'` shows `t` for all 18.
+5. Write + show + apply `20260610101000_yuva_academy_rls.sql` (helpers + ENABLE RLS on all 19 tables + policies per patterns A–D + the column-level grants). Done when: applied; `SELECT relrowsecurity FROM pg_class JOIN pg_namespace ... nspname='yuva'` shows `t` for all 19.
 6. [TDD] RLS probe — anon: REST GET `/rest/v1/runs` with `Accept-Profile: yuva` + anon key → expect 401/permission denied (no anon usage). Done when: probe denies.
 7. [TDD] RLS probe — authenticated non-yuva user (any existing test user with no yuva role): REST GET runs → 200 with `[]` (rows filtered). Done when: empty array.
 8. Write + show + apply `20260610102000_yuva_academy_storage.sql` (3 private buckets + 1 public bucket `yuva-public` via `insert into storage.buckets`). Done when: `SELECT id FROM storage.buckets WHERE id LIKE 'yuva-%'` returns 4 rows.

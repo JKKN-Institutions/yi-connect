@@ -34,26 +34,6 @@ export const metadata = { title: "Cohort" };
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-function ComingSoon({
-  icon,
-  title,
-  phase,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  phase: string;
-}) {
-  return (
-    <div className="rounded-lg border border-dashed border-slate-300 p-10 text-center">
-      <div className="mx-auto flex size-10 items-center justify-center rounded-lg bg-slate-100 text-slate-400">
-        {icon}
-      </div>
-      <p className="mt-3 text-sm font-medium text-slate-700">{title}</p>
-      <p className="mt-1 text-sm text-slate-500">Coming soon — {phase}.</p>
-    </div>
-  );
-}
-
 export default async function MentorCohortPage({
   params,
 }: {

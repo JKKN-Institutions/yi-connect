@@ -69,6 +69,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 48,
     alignItems: "center",
   },
+  watermark: {
+    position: "absolute",
+    top: "28%",
+    left: "38%",
+    width: 200,
+    height: 200,
+    opacity: 0.05,
+    objectFit: "contain",
+  },
   headerRow: {
     flexDirection: "row",
     alignItems: "center",

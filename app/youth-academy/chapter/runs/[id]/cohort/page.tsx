@@ -31,6 +31,7 @@ import {
   fetchCohortData,
   gridRosterForSession,
 } from "@/components/yuva/cohort/data";
+import { CohortThread } from "@/components/yuva/messages/thread";
 import { RosterTable } from "@/components/yuva/cohort/roster-table";
 import { Badge } from "@/components/ui/badge";
 

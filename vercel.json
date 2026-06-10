@@ -3,6 +3,16 @@
   "framework": "nextjs",
   "buildCommand": "npm run build",
   "outputDirectory": ".next",
+  "crons": [
+    {
+      "path": "/yi-future/api/cron/drain-emails",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/youth-academy/api/cron/drain-emails",
+      "schedule": "*/5 * * * *"
+    }
+  ],
   "headers": [
     {
       "source": "/.well-known/assetlinks.json",

@@ -186,6 +186,12 @@ export async function initializeClient(): Promise<void> {
       lastError = { message: 'QR_TIMEOUT: no QR scanned / authenticated within timeout', at: new Date().toISOString() };
       const stale = client;
       currentState = 'disconnected';
+      // Clear the cached QR on this terminal transition. Without this, /status
+      // keeps serving the now-EXPIRED QR (hasQR:true while state:disconnected),
+      // the organiser dialog shows it, and scanning a dead QR repeatedly trips
+      // WhatsApp's "can't link new devices" abuse block. Matches the same clear
+      // already done on `disconnected`/`authenticated`/init-reset.
+      currentQR = null;
       initPromise = null;
       settled = true;
       // Destroy the stale client so no orphan Chromium/session lingers.
@@ -307,6 +313,7 @@ export async function initializeClient(): Promise<void> {
     newClient.on('auth_failure', (message) => {
       console.error('[WhatsApp] Auth failure:', message);
       currentState = 'disconnected';
+      currentQR = null;
       lastError = { message: `AUTH_FAILURE: ${message}`, at: new Date().toISOString() };
       clearTimers();
       initPromise = null;
@@ -317,6 +324,7 @@ export async function initializeClient(): Promise<void> {
     newClient.initialize().catch((err) => {
       console.error('[WhatsApp] Initialize error:', err);
       currentState = 'disconnected';
+      currentQR = null;
       lastError = {
         message: `INIT_ERROR: ${err instanceof Error ? err.message : String(err)}`,
         at: new Date().toISOString()

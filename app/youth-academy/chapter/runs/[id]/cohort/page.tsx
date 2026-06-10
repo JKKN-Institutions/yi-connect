@@ -16,6 +16,7 @@ import {
   ArrowLeft,
   Award,
   ClipboardCheck,
+  MessagesSquare,
   Users,
 } from "lucide-react";
 import { Forbidden403 } from "@/app/youth-academy/_components/Forbidden403";

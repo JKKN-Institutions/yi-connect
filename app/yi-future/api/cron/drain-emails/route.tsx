@@ -59,10 +59,16 @@ async function sendViaResend(row: LogRow): Promise<{ ok: boolean; error?: string
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   // ── Auth ──────────────────────────────────────────────────────────────────
+  // Accepts X-Cron-Secret (manual curl) OR `Authorization: Bearer <CRON_SECRET>`
+  // — the header Vercel Cron itself sends now this route is in vercel.json.
   const cronSecret = process.env.CRON_SECRET;
   const incomingSecret = request.headers.get("x-cron-secret");
+  const bearer = request.headers.get("authorization");
 
-  if (!cronSecret || incomingSecret !== cronSecret) {
+  if (
+    !cronSecret ||
+    (incomingSecret !== cronSecret && bearer !== `Bearer ${cronSecret}`)
+  ) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

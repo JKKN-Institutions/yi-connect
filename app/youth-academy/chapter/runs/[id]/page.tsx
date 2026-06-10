@@ -125,6 +125,31 @@ export default async function RunManagementPage({
         </div>
       </div>
 
+      {/* Applications review entry point (Phase 9) */}
+      <Link
+        href={`/youth-academy/chapter/runs/${run.id}/applications`}
+        className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-5 transition-colors hover:border-emerald-300 hover:bg-emerald-50/40"
+      >
+        <div className="flex items-center gap-3">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-emerald-50">
+            <Inbox className="size-5 text-emerald-700" />
+          </div>
+          <div>
+            <p className="font-semibold text-slate-900">Applications</p>
+            <p className="text-sm text-slate-500">
+              {run.pending_count > 0
+                ? `${run.pending_count} pending review`
+                : "No pending applications"}
+              {" · "}
+              {run.accepted_count} accepted of {run.applications_count} total
+            </p>
+          </div>
+        </div>
+        <span className="text-sm font-medium text-emerald-700">
+          Review →
+        </span>
+      </Link>
+
       <section className="rounded-xl border border-slate-200 bg-white p-5">
         <h2 className="font-semibold text-slate-900">Run settings</h2>
         <p className="mt-0.5 mb-4 text-sm text-slate-500">

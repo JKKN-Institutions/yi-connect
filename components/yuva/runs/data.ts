@@ -158,6 +158,7 @@ export type RunDetail = {
   sessions: RunSessionDetail[];
   applications_count: number;
   accepted_count: number;
+  pending_count: number;
   enrollments_count: number;
 };
 
@@ -173,8 +174,15 @@ export async function fetchRunDetail(id: string): Promise<RunDetail | null> {
     .maybeSingle();
   if (!run) return null;
 
-  const [programRes, academyRes, sessionsRes, appsRes, acceptedRes, enrRes] =
-    await Promise.all([
+  const [
+    programRes,
+    academyRes,
+    sessionsRes,
+    appsRes,
+    acceptedRes,
+    pendingRes,
+    enrRes,
+  ] = await Promise.all([
       svc
         .from("programs")
         .select("id, title, category")
@@ -202,6 +210,11 @@ export async function fetchRunDetail(id: string): Promise<RunDetail | null> {
         .eq("run_id", run.id)
         .eq("status", "accepted"),
       svc
+        .from("applications")
+        .select("id", { count: "exact", head: true })
+        .eq("run_id", run.id)
+        .eq("status", "pending"),
+      svc
         .from("enrollments")
         .select("id", { count: "exact", head: true })
         .eq("run_id", run.id)
@@ -218,6 +231,7 @@ export async function fetchRunDetail(id: string): Promise<RunDetail | null> {
     sessions: (sessionsRes.data ?? []) as RunSessionDetail[],
     applications_count: appsRes.count ?? 0,
     accepted_count: acceptedRes.count ?? 0,
+    pending_count: pendingRes.count ?? 0,
     enrollments_count: enrRes.count ?? 0,
   };
 }

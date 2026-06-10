@@ -46,12 +46,20 @@ export function acceptanceEmail(input: {
   programName: string;
   accessCode: string;
   loginUrl: string;
+  /** Optional one-line program/schedule summary (academy · dates · sessions). */
+  scheduleSummary?: string;
 }): RenderedEmail {
   const subject = `You're in — ${input.programName}`;
-  const text = `Hi ${input.studentName},\n\nCongratulations! You have been accepted into ${input.programName}.\n\nYour access code: ${input.accessCode}\nLog in: ${input.loginUrl}\n\nYi Youth Academy`;
+  const summaryText = input.scheduleSummary
+    ? `\n${input.scheduleSummary}\n`
+    : "";
+  const text = `Hi ${input.studentName},\n\nCongratulations! You have been accepted into ${input.programName}.${summaryText}\nYour access code: ${input.accessCode}\nLog in: ${input.loginUrl}\n\nYi Youth Academy`;
+  const summaryHtml = input.scheduleSummary
+    ? `<p style="color:#444">${escapeHtml(input.scheduleSummary)}</p>`
+    : "";
   const html = shell(
     "You're accepted!",
-    `<p>Hi ${escapeHtml(input.studentName)},</p><p>Congratulations! You have been accepted into <strong>${escapeHtml(input.programName)}</strong>.</p><p>Your access code: <strong style="font-size:18px;letter-spacing:2px">${escapeHtml(input.accessCode)}</strong></p><p><a href="${input.loginUrl}">Log in to your student portal</a></p>`
+    `<p>Hi ${escapeHtml(input.studentName)},</p><p>Congratulations! You have been accepted into <strong>${escapeHtml(input.programName)}</strong>.</p>${summaryHtml}<p>Your access code: <strong style="font-size:18px;letter-spacing:2px">${escapeHtml(input.accessCode)}</strong></p><p><a href="${input.loginUrl}">Log in to your student portal</a></p>`
   );
   return { subject, html, text };
 }

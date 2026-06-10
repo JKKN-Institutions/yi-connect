@@ -35,6 +35,41 @@ export const metadata = {
 
 type ChecklistItem = { label: string; done: boolean };
 
+type MentorSessionItem = {
+  id: string;
+  seq: number;
+  name: string;
+  scheduled_at: string | null;
+  venue: string | null;
+  status: "scheduled" | "completed" | "cancelled";
+  run_id: string;
+  program_title: string;
+  academy_name: string;
+};
+
+// Run statuses with a mentor-visible schedule (draft runs are not yet
+// announced; cancelled runs are gone).
+const MENTOR_VISIBLE_RUN_STATUSES = new Set([
+  "published",
+  "applications_closed",
+  "in_progress",
+  "completed",
+  "certified",
+]);
+
+function formatSessionWhen(scheduledAt: string | null): string {
+  if (!scheduledAt) return "To be scheduled";
+  const d = new Date(scheduledAt);
+  if (Number.isNaN(d.getTime())) return "To be scheduled";
+  return d.toLocaleString([], {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 export default async function MentorDashboardPage() {
   const access = await getYuvaAccess();
   // Defense-in-depth (layout already gates).
@@ -44,6 +79,8 @@ export default async function MentorDashboardPage() {
 
   let checklist: ChecklistItem[] | null = null;
   let isPublic = false;
+  let upcoming: MentorSessionItem[] = [];
+  let past: MentorSessionItem[] = [];
 
   if (access.isMentor && access.personId) {
     const yuva = await createYuvaService();
@@ -60,6 +97,76 @@ export default async function MentorDashboardPage() {
       { label: "Add your organization", done: !!profile?.organization?.trim() },
     ];
     isPublic = profile?.is_public ?? false;
+
+    // My sessions (Phase 11) — sessions assigned to this mentor across runs.
+    const { data: sessionRows } = await yuva
+      .from("run_sessions")
+      .select(
+        "id, seq, name, scheduled_at, venue, status, run_id, runs ( id, status, program_id, academy_id )"
+      )
+      .eq("mentor_person_id", access.personId);
+
+    const visible = (sessionRows ?? []).filter(
+      (s) => s.runs && MENTOR_VISIBLE_RUN_STATUSES.has(s.runs.status)
+    );
+
+    const programIds = [
+      ...new Set(visible.map((s) => s.runs!.program_id)),
+    ];
+    const academyIds = [
+      ...new Set(visible.map((s) => s.runs!.academy_id)),
+    ];
+    const [programsRes, academiesRes] = await Promise.all([
+      programIds.length > 0
+        ? yuva.from("programs").select("id, title").in("id", programIds)
+        : Promise.resolve({ data: [] as { id: string; title: string }[] }),
+      academyIds.length > 0
+        ? yuva
+            .from("academies")
+            .select("id, display_name")
+            .in("id", academyIds)
+        : Promise.resolve({
+            data: [] as { id: string; display_name: string }[],
+          }),
+    ]);
+    const programTitleById = new Map(
+      (programsRes.data ?? []).map((p) => [p.id, p.title])
+    );
+    const academyNameById = new Map(
+      (academiesRes.data ?? []).map((a) => [a.id, a.display_name])
+    );
+
+    const items: MentorSessionItem[] = visible.map((s) => ({
+      id: s.id,
+      seq: s.seq,
+      name: s.name,
+      scheduled_at: s.scheduled_at,
+      venue: s.venue,
+      status: s.status,
+      run_id: s.run_id,
+      program_title:
+        programTitleById.get(s.runs!.program_id) ?? "Untitled program",
+      academy_name: academyNameById.get(s.runs!.academy_id) ?? "—",
+    }));
+
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const isUpcoming = (s: MentorSessionItem) =>
+      s.status === "scheduled" &&
+      (!s.scheduled_at || new Date(s.scheduled_at) >= todayStart);
+
+    upcoming = items
+      .filter(isUpcoming)
+      .sort((a, b) =>
+        // Dated sessions first (soonest first); unscheduled last.
+        (a.scheduled_at ?? "9999") < (b.scheduled_at ?? "9999") ? -1 : 1
+      );
+    past = items
+      .filter((s) => !isUpcoming(s))
+      .sort((a, b) =>
+        (a.scheduled_at ?? "") > (b.scheduled_at ?? "") ? -1 : 1
+      )
+      .slice(0, 10);
   }
 
   const doneCount = checklist?.filter((c) => c.done).length ?? 0;

@@ -85,13 +85,27 @@ const POST_AUTH_TIMEOUT_MS = Number(process.env.POST_AUTH_TIMEOUT_MS ?? 180000);
 // failing permanently. takeoverTimeoutMs bounds how long the takeover waits.
 const TAKEOVER_TIMEOUT_MS = Number(process.env.TAKEOVER_TIMEOUT_MS ?? 60000);
 // Remote webVersionCache mitigation: a stale bundled WA Web build can be rejected
-// by WhatsApp and crash during initialize() before the `qr` event fires. Using a
-// remote HTML cache forces a fresh fetch of the WA Web build instead of a stale
-// local copy. We do NOT hard-pin a webVersion by default — whatsapp-web.js detects
-// its own target version and substitutes it into {version}, so the cache stays in
-// step with the library bump. Set WEB_VERSION only if you must force a specific
-// build (the matching {version}.html must exist in the remote store).
-const WEB_VERSION = process.env.WEB_VERSION || undefined;
+// by WhatsApp and crash during initialize() before the `qr` event fires.
+//
+// LOADING-HANG ROOT CAUSE (diagnosed 2026-06-10): the previous comment here
+// assumed "whatsapp-web.js detects its own target version and the remote cache
+// stays in step." That assumption is WRONG and is a primary cause of the
+// authenticated-but-never-`ready` loading hang. The library's self-detected
+// default webVersion (2.3000.1017054665 in both 1.34.2 and 1.34.7) does NOT
+// exist in the wppconnect wa-version store — that exact URL returns HTTP 404.
+// RemoteWebCache.resolve() is non-strict, so on a 404 it silently falls back to
+// the STALE bundled WA Web build, which WhatsApp's backend then refuses to fully
+// drive — the session authenticates but the post-login sync never completes and
+// `ready` never fires. (Every build currently in the wppconnect store carries an
+// `-alpha` suffix; none of the library's plain numeric defaults match.)
+//
+// FIX: hard-pin webVersion to a build that ACTUALLY EXISTS in the remote store
+// (verified HTTP 200), so the remote cache serves a real, current WA Web index
+// instead of 404→stale-fallback. WEB_VERSION env still overrides. When the store
+// prunes this build (404 returns), bump WEB_VERSION to a newer build that 200s:
+//   curl -sI https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/<v>.html
+const DEFAULT_WEB_VERSION = '2.3000.1041149705-alpha';
+const WEB_VERSION = process.env.WEB_VERSION || DEFAULT_WEB_VERSION;
 const WEB_VERSION_CACHE_URL =
   process.env.WEB_VERSION_CACHE_URL ||
   'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/{version}.html';
@@ -198,10 +212,12 @@ export async function initializeClient(): Promise<void> {
       // forever. This claims the single allowed WhatsApp web session for us.
       takeoverOnConflict: true,
       takeoverTimeoutMs: TAKEOVER_TIMEOUT_MS,
-      // Use a remote WA Web build so a stale bundled version doesn't cause
-      // initialize() to reject before the `qr` event fires. webVersion is only
-      // set when WEB_VERSION is provided; otherwise the library picks its own.
-      ...(WEB_VERSION ? { webVersion: WEB_VERSION } : {}),
+      // Pin a WA Web build that EXISTS in the remote store (see WEB_VERSION note
+      // above). Without this, the library's default 404s in the store and falls
+      // back to a stale bundled build → the post-auth loading hang. webVersion +
+      // webVersionCache.remotePath together make the remote cache serve this
+      // exact, verified-present build.
+      webVersion: WEB_VERSION,
       webVersionCache: {
         type: 'remote' as const,
         remotePath: WEB_VERSION_CACHE_URL
@@ -230,6 +246,21 @@ export async function initializeClient(): Promise<void> {
       } catch (err) {
         console.error('[WhatsApp] QR generation error:', err);
       }
+    });
+
+    // OBSERVABILITY for the post-auth loading phase (the phase that hangs).
+    // whatsapp-web.js emits `loading_screen` with a percent + message while it
+    // syncs after authentication. Logging it lets us SEE in Railway logs exactly
+    // how far the sync gets (e.g. stuck at 99%) instead of a silent hang. The
+    // last value is also mirrored into lastError-style visibility via the log.
+    newClient.on('loading_screen', (percent, message) => {
+      console.log(`[WhatsApp] Loading screen: ${percent}% — ${message}`);
+    });
+
+    // Log raw WA connection-state transitions (CONNECTED / OPENING / PAIRING /
+    // TIMEOUT / CONFLICT etc.) so a stuck/looping state is visible in logs.
+    newClient.on('change_state', (state) => {
+      console.log(`[WhatsApp] State change: ${state}`);
     });
 
     newClient.on('authenticated', () => {

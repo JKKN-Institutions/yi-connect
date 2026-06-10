@@ -1,10 +1,11 @@
 /**
- * Chapter / Institution — cohort management (Phase 11).
+ * Chapter / Institution — cohort management (Phase 11 + Phase 14).
  * Spec: docs/yi-youth-academy-spec.md → "Chapter / Institution — cohort
  * management": roster (name, institution, attendance %, submissions status,
  * progress %, enrollment status + mark-dropped), per-session attendance
  * grids (same shared component as the mentor's), reopen-attendance control
- * when locked, certificates placeholder (Phase 14 fills it).
+ * when locked, certificate issue panel (eligibility at ≥75% with
+ * per-student override, idempotent batch issue, reissue/revoke/download).
  *
  * Gate (defense-in-depth on top of the chapter layout): canManageRun on the
  * run's {academy_id, chapter} — explicit Forbidden403, never a redirect.

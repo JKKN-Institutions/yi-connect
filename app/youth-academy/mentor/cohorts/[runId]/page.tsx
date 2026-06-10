@@ -132,11 +132,7 @@ export default async function MentorCohortPage({
         </TabsContent>
 
         <TabsContent value="messages" className="mt-4">
-          <ComingSoon
-            icon={<MessagesSquare className="size-5" />}
-            title="Cohort message thread"
-            phase="Phase 12 adds the shared thread between you and the cohort"
-          />
+          <CohortThread runId={runId} viewerPersonId={gate.personId} />
         </TabsContent>
 
         <TabsContent value="submissions" className="mt-4">

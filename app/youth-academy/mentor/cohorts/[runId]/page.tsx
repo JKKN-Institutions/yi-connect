@@ -13,11 +13,7 @@
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import {
-  ArrowLeft,
-  FileStack,
-  Users,
-} from "lucide-react";
+import { ArrowLeft, Users } from "lucide-react";
 import { Forbidden403 } from "@/app/youth-academy/_components/Forbidden403";
 import { getMentorRunAccess } from "@/lib/yuva/auth/mentor-access";
 import { RUN_STATUS_LABELS } from "@/lib/yuva/constants";

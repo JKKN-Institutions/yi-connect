@@ -353,21 +353,20 @@ export function CertificatePDF(props: CertificatePdfProps) {
               leadership journey.
             </Text>
 
-            {/* Placeholder zone: signature blocks (dummy — Director's
-                design will define the real signatories/artwork) */}
+            {/* Signature blocks — configured per academy in the UI
+                (decision 2026-06-11); empty config falls back to the two
+                generic blocks. Name (if set) sits on the line; label below. */}
             <View style={styles.signatureRow}>
-              <View style={styles.signatureBlock}>
-                <View style={styles.signatureLine} />
-                <Text style={styles.signatureLabel}>
-                  Chapter Chair{"\n"}Yi {props.chapter}
-                </Text>
-              </View>
-              <View style={styles.signatureBlock}>
-                <View style={styles.signatureLine} />
-                <Text style={styles.signatureLabel}>
-                  Institution Coordinator{"\n"}{props.academyName}
-                </Text>
-              </View>
+              {signatureBlocks.map((block, i) => (
+                <View key={i} style={styles.signatureBlock}>
+                  <View style={styles.signatureLine}>
+                    {block.name ? (
+                      <Text style={styles.signatureName}>{block.name}</Text>
+                    ) : null}
+                  </View>
+                  <Text style={styles.signatureLabel}>{block.label}</Text>
+                </View>
+              ))}
             </View>
 
             {/* Placeholder zone: certificate number + issue date */}

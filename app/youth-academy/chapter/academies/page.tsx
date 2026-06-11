@@ -13,6 +13,7 @@ import { getYuvaAccess } from "@/lib/yuva/auth/yuva-access";
 import { AcademyCard } from "@/components/yuva/academies/academy-card";
 import { CoordinatorAssignDialog } from "@/components/yuva/academies/coordinator-assign-dialog";
 import { QualitativeNotesEditor } from "@/components/yuva/academies/qualitative-notes-editor";
+import { SignatoriesEditor } from "@/components/yuva/academies/signatories-editor";
 import {
   fetchAcademies,
   type AcademyScope,

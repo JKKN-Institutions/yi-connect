@@ -49,7 +49,10 @@ import {
   openRunoff,
   getSpeakerCandidates,
   getEventBills,
+  getEventParties,
+  getPartyMembers,
   type VoteCandidate,
+  type PartyLite,
 } from "@/app/yip/actions/voting";
 import { computeElectionOutcome } from "@/lib/yip/election-outcome";
 import {
@@ -90,6 +93,16 @@ export function VoteManager({
   const [isPending, startTransition] = useTransition();
   const [candidates, setCandidates] = useState<VoteCandidate[]>([]);
   const [bills, setBills] = useState<BillOption[]>([]);
+  const [parties, setParties] = useState<PartyLite[]>([]);
+  // Party-leader nomination dialog: the party being elected for, its members,
+  // and the organiser's 3–5 chosen nominees.
+  const [leaderDialog, setLeaderDialog] = useState<{
+    open: boolean;
+    party: PartyLite | null;
+    members: VoteCandidate[];
+    selectedIds: string[];
+    loading: boolean;
+  }>({ open: false, party: null, members: [], selectedIds: [], loading: false });
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean;
     title: string;
@@ -108,8 +121,20 @@ export function VoteManager({
   } = useVoteSession(eventId, { trackVotes: true });
 
   const agendaType = currentAgendaItem?.agenda_type;
+  // Party-leader elections are not tied to one agenda_type — the organiser can
+  // hold them whenever an agenda item is live. Voting + bill controls still gate
+  // on their agenda types.
   const showVoteControls =
-    agendaType === "speaker_election" || agendaType === "bill_presentation";
+    agendaType === "speaker_election" ||
+    agendaType === "bill_presentation" ||
+    Boolean(currentAgendaItem);
+
+  // The active party-leader session's party id (config.partyId), used to label
+  // its tally with member names and to name the party in the result block.
+  const activeLeaderPartyId =
+    voteSession?.vote_type === "party_leader"
+      ? ((voteSession.config ?? {}) as { partyId?: string }).partyId ?? null
+      : null;
 
   // Fetch candidates or bills when agenda type warrants it
   useEffect(() => {
@@ -120,6 +145,22 @@ export function VoteManager({
       getEventBills(eventId).then(setBills);
     }
   }, [agendaType, eventId]);
+
+  // Parties are always available to the organiser (party-leader elections can be
+  // held during any agenda item).
+  useEffect(() => {
+    if (currentAgendaItem) {
+      getEventParties(eventId).then(setParties);
+    }
+  }, [currentAgendaItem?.id, eventId]);
+
+  // When a party-leader session is active, load that party's members so the live
+  // tally and result block can render candidate names (reuses `candidates`).
+  useEffect(() => {
+    if (activeLeaderPartyId) {
+      getPartyMembers(eventId, activeLeaderPartyId).then(setCandidates);
+    }
+  }, [activeLeaderPartyId, eventId]);
 
   // ─── Action handlers ──────────────────────────────────────────
 
@@ -172,6 +213,64 @@ export function VoteManager({
           setConfirmDialog((prev) => ({ ...prev, open: false }));
         });
       },
+    });
+  }
+
+  // Party-leader: open the nomination dialog and load the party's members.
+  function handleHoldLeaderElection(party: PartyLite) {
+    setLeaderDialog({
+      open: true,
+      party,
+      members: [],
+      selectedIds: [],
+      loading: true,
+    });
+    getPartyMembers(eventId, party.id).then((members) => {
+      setLeaderDialog((prev) =>
+        prev.party?.id === party.id
+          ? { ...prev, members, loading: false }
+          : prev
+      );
+    });
+  }
+
+  function toggleLeaderNominee(id: string) {
+    setLeaderDialog((prev) => {
+      const has = prev.selectedIds.includes(id);
+      // Cap at 5 nominees; ignore further picks once full.
+      if (!has && prev.selectedIds.length >= 5) return prev;
+      return {
+        ...prev,
+        selectedIds: has
+          ? prev.selectedIds.filter((x) => x !== id)
+          : [...prev.selectedIds, id],
+      };
+    });
+  }
+
+  function handleOpenLeaderElection() {
+    if (!currentAgendaItem || !leaderDialog.party) return;
+    const party = leaderDialog.party;
+    const candidateIds = leaderDialog.selectedIds;
+    startTransition(async () => {
+      const result = await openVote(
+        eventId,
+        currentAgendaItem.id,
+        "party_leader",
+        { candidateIds, partyId: party.id }
+      );
+      if (result.success) {
+        toast.success(`${party.name} leader election is now open!`);
+        setLeaderDialog({
+          open: false,
+          party: null,
+          members: [],
+          selectedIds: [],
+          loading: false,
+        });
+      } else {
+        toast.error(result.error);
+      }
     });
   }
 
@@ -240,6 +339,174 @@ export function VoteManager({
     });
   }
 
+  // ─── Reusable party-leader elements (shared by both render branches) ──
+
+  // The list of parties with a "Hold Election" action. Rendered in the
+  // no-session branch and (as "hold the next party's") after a revealed
+  // party-leader result, so the organiser can run each party in sequence.
+  const partyLeaderList =
+    parties.length > 0 ? (
+      <div className="space-y-3">
+        <div className="flex items-center gap-1.5 text-sm font-medium text-gray-700">
+          <Crown className="size-4 text-[#FF9933]" />
+          Party Leader Elections
+        </div>
+        <p className="text-xs text-gray-500">
+          Each party elects its own leader — only that party&apos;s members can
+          vote. Hold one election at a time.
+        </p>
+        <div className="space-y-2">
+          {parties.map((party) => (
+            <div
+              key={party.id}
+              className="flex items-center justify-between rounded-lg border bg-white p-3"
+            >
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-gray-800 truncate">
+                  {party.name}
+                </p>
+                <p className="text-xs text-gray-500">
+                  {party.member_count} member
+                  {party.member_count === 1 ? "" : "s"}
+                  {party.party_leader_id && (
+                    <span className="ml-1 inline-flex items-center gap-1 text-amber-700">
+                      · <Crown className="size-3 text-amber-500" />
+                      Leader elected
+                    </span>
+                  )}
+                </p>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={isPending || party.member_count < 2}
+                onClick={() => handleHoldLeaderElection(party)}
+              >
+                <Vote className="size-3.5 mr-1" />
+                {party.party_leader_id ? "Re-elect" : "Hold Election"}
+              </Button>
+            </div>
+          ))}
+        </div>
+      </div>
+    ) : null;
+
+  // The nomination dialog (pick 3–5 nominees → open the vote).
+  const partyLeaderDialog = (
+    <Dialog
+      open={leaderDialog.open}
+      onOpenChange={(open) =>
+        setLeaderDialog((prev) =>
+          open
+            ? { ...prev, open }
+            : {
+                open: false,
+                party: null,
+                members: [],
+                selectedIds: [],
+                loading: false,
+              }
+        )
+      }
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>
+            {leaderDialog.party
+              ? `Hold ${leaderDialog.party.name} Leader Election`
+              : "Hold Party Leader Election"}
+          </DialogTitle>
+          <DialogDescription>
+            Choose 3–5 nominees from this party. Only this party&apos;s members
+            will be able to vote.
+          </DialogDescription>
+        </DialogHeader>
+
+        {leaderDialog.loading ? (
+          <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
+            <Loader2 className="mr-2 size-4 animate-spin" />
+            Loading members...
+          </div>
+        ) : leaderDialog.members.length === 0 ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">
+            This party has no members to nominate.
+          </p>
+        ) : (
+          <div className="max-h-72 space-y-1.5 overflow-y-auto pr-1">
+            {leaderDialog.members.map((m) => {
+              const checked = leaderDialog.selectedIds.includes(m.id);
+              const atCap = !checked && leaderDialog.selectedIds.length >= 5;
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  disabled={atCap}
+                  onClick={() => toggleLeaderNominee(m.id)}
+                  className={cn(
+                    "flex w-full items-center justify-between rounded-lg border-2 p-3 text-left transition-all",
+                    checked
+                      ? "border-[#FF9933] bg-[#FF9933]/5"
+                      : "border-gray-200 bg-white hover:border-gray-300",
+                    atCap && "opacity-50"
+                  )}
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-gray-800">
+                      {m.full_name}
+                    </p>
+                    <p className="truncate text-xs text-gray-500">
+                      {m.school_name}
+                    </p>
+                  </div>
+                  <div
+                    className={cn(
+                      "ml-2 flex size-5 shrink-0 items-center justify-center rounded-full border-2",
+                      checked
+                        ? "border-[#FF9933] bg-[#FF9933]"
+                        : "border-gray-300 bg-white"
+                    )}
+                  >
+                    {checked && <CheckCircle2 className="size-3.5 text-white" />}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        <DialogFooter>
+          <span className="mr-auto self-center text-xs text-muted-foreground">
+            {leaderDialog.selectedIds.length} selected
+          </span>
+          <Button
+            variant="outline"
+            onClick={() =>
+              setLeaderDialog({
+                open: false,
+                party: null,
+                members: [],
+                selectedIds: [],
+                loading: false,
+              })
+            }
+          >
+            Cancel
+          </Button>
+          <Button
+            disabled={
+              isPending ||
+              leaderDialog.selectedIds.length < 3 ||
+              leaderDialog.selectedIds.length > 5
+            }
+            onClick={handleOpenLeaderElection}
+          >
+            {isPending ? "Opening..." : "Open Election"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+
   // ─── If not a voting agenda type and no active session, don't render ─
 
   if (!showVoteControls && !voteSession) return null;
@@ -258,6 +525,11 @@ export function VoteManager({
                 <Vote className="size-4" />
                 {voteSession.vote_type === "speaker_election"
                   ? "Speaker Election"
+                  : voteSession.vote_type === "party_leader"
+                  ? `${
+                      parties.find((p) => p.id === activeLeaderPartyId)?.name ??
+                      "Party"
+                    } Leader Election`
                   : "Bill Vote"}
               </CardTitle>
               <Badge
@@ -320,7 +592,10 @@ export function VoteManager({
                   let label = tally.vote_value;
                   let barColor = "bg-gray-400";
 
-                  if (voteSession.vote_type === "speaker_election") {
+                  if (
+                    voteSession.vote_type === "speaker_election" ||
+                    voteSession.vote_type === "party_leader"
+                  ) {
                     const candidate = candidates.find(
                       (c) => c.id === tally.vote_value
                     );
@@ -453,6 +728,45 @@ export function VoteManager({
                       </div>
                     );
                   })()}
+
+                {/* Party-leader election result: elected leader + tie runoff */}
+                {isRevealed &&
+                  voteSession.vote_type === "party_leader" &&
+                  (() => {
+                    const nameOf = (id: string) =>
+                      candidates.find((c) => c.id === id)?.full_name ?? id;
+                    const outcome = computeElectionOutcome("party_leader", tallies);
+                    const partyName =
+                      parties.find((p) => p.id === activeLeaderPartyId)?.name ??
+                      "Party";
+                    return (
+                      <div className="mt-3 space-y-2 rounded-lg border p-3 text-sm">
+                        {outcome.partyLeaderId && (
+                          <div className="flex items-center gap-2 font-semibold text-amber-700">
+                            <Crown className="size-4 text-amber-500" />
+                            {partyName} Leader: {nameOf(outcome.partyLeaderId)}
+                          </div>
+                        )}
+                        {outcome.tie && (
+                          <div className="space-y-2 rounded-md border border-amber-300 bg-amber-50 p-2">
+                            <div className="font-medium text-amber-800">
+                              Tie for {partyName} Leader (
+                              {outcome.tie.tiedCount} votes each):{" "}
+                              {outcome.tie.tiedCandidateIds.map(nameOf).join(", ")}
+                            </div>
+                            <Button
+                              size="sm"
+                              disabled={isPending}
+                              onClick={handleRunoff}
+                              className="w-full"
+                            >
+                              Open 60-second runoff
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
               </div>
             )}
 
@@ -491,6 +805,15 @@ export function VoteManager({
                 candidates={candidates}
               />
             )}
+
+            {/* After a party-leader result is revealed, let the organiser run
+                the next party's election (a new session is allowed once the
+                previous one is revealed). */}
+            {isRevealed &&
+              voteSession.vote_type === "party_leader" &&
+              partyLeaderList && (
+                <div className="border-t pt-4">{partyLeaderList}</div>
+              )}
           </CardContent>
         </Card>
 
@@ -523,6 +846,9 @@ export function VoteManager({
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* Party-Leader nomination dialog (re-elect / next party after reveal) */}
+        {partyLeaderDialog}
       </>
     );
   }
@@ -627,6 +953,9 @@ export function VoteManager({
               )}
             </div>
           )}
+
+          {/* Party Leader Elections — available during any agenda item */}
+          {partyLeaderList}
         </CardContent>
       </Card>
 
@@ -657,6 +986,9 @@ export function VoteManager({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Party-Leader nomination dialog: pick 3–5 nominees, then open the vote */}
+      {partyLeaderDialog}
     </>
   );
 }
@@ -704,15 +1036,20 @@ function FloorCapture({ sessionId, voteType, candidates }: FloorCaptureProps) {
     [candidates]
   );
 
+  // Candidate ballots (speaker + party-leader) resolve a participant name; bills
+  // resolve a fixed aye/nay/abstain label.
+  const isCandidateBallot =
+    voteType === "speaker_election" || voteType === "party_leader";
+
   const labelForValue = useCallback(
     (value: string) => {
-      if (voteType === "speaker_election") return candidateName(value);
+      if (isCandidateBallot) return candidateName(value);
       if (value === "aye") return "AYE";
       if (value === "nay") return "NO";
       if (value === "abstain") return "ABSTAIN";
       return value;
     },
-    [voteType, candidateName]
+    [isCandidateBallot, candidateName]
   );
 
   const refresh = useCallback(async () => {
@@ -1010,7 +1347,7 @@ function FloorCapture({ sessionId, voteType, candidates }: FloorCaptureProps) {
           <div className="space-y-3">
             <div className="space-y-1.5">
               <Label htmlFor="floor-correct-value">New value</Label>
-              {voteType === "speaker_election" ? (
+              {isCandidateBallot ? (
                 <Select
                   value={editValue}
                   onValueChange={(v) => setEditValue(v ?? "")}
@@ -1127,7 +1464,7 @@ function RollCallRow({
 
         {/* Quick vote controls (only when not mid-confirm) */}
         {!confirming &&
-          (voteType === "speaker_election" ? (
+          (voteType === "speaker_election" || voteType === "party_leader" ? (
             <Select
               onValueChange={(v: string | null) => {
                 if (v) onPick(v);

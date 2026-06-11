@@ -54,6 +54,54 @@ export interface VoteResults {
   tie?: ElectionTie | null;
 }
 
+// ─── Tally helper ───────────────────────────────────────────────
+//
+// Builds the vote tally for a session. Party-leader elections run one party at
+// a time, but the tally must NEVER mix two parties even if they happened to
+// share an agenda_item_id: for vote_type === "party_leader" we count ONLY votes
+// cast by members of config.partyId. speaker_election / bill_vote tallies are
+// unscoped (every checked-in participant is eligible).
+async function buildTallies(
+  supabase: Awaited<ReturnType<typeof createServiceClient>>,
+  session: Pick<VoteSession, "agenda_item_id" | "vote_type" | "event_id" | "config">
+): Promise<{ tallies: VoteTally[]; totalVotes: number }> {
+  const { data: votes } = await supabase
+    .from("votes")
+    .select("vote_value, participant_id")
+    .eq("agenda_item_id", session.agenda_item_id)
+    .eq("vote_type", session.vote_type);
+
+  let scoped = votes ?? [];
+
+  if (session.vote_type === "party_leader") {
+    const cfg = (session.config ?? {}) as { partyId?: string };
+    if (cfg.partyId) {
+      // Fetch the members of the party whose leader is being elected, then keep
+      // only votes cast by those members. One query, no per-vote round-trips.
+      const { data: members } = await supabase
+        .from("participants")
+        .select("id")
+        .eq("event_id", session.event_id)
+        .eq("party_id", cfg.partyId);
+      const memberIds = new Set((members ?? []).map((m) => m.id));
+      scoped = scoped.filter(
+        (v) => v.participant_id != null && memberIds.has(v.participant_id)
+      );
+    }
+  }
+
+  const tallyMap: Record<string, number> = {};
+  scoped.forEach((v) => {
+    tallyMap[v.vote_value] = (tallyMap[v.vote_value] || 0) + 1;
+  });
+
+  const tallies: VoteTally[] = Object.entries(tallyMap)
+    .map(([vote_value, count]) => ({ vote_value, count }))
+    .sort((a, b) => b.count - a.count);
+
+  return { tallies, totalVotes: scoped.length };
+}
+
 // ─── Open Vote ──────────────────────────────────────────────────
 
 export async function openVote(
@@ -188,22 +236,11 @@ export async function revealResults(
     })
     .eq("id", sessionId);
 
-  // Get tallies
-  const { data: votes } = await supabase
-    .from("votes")
-    .select("vote_value")
-    .eq("agenda_item_id", session.agenda_item_id)
-    .eq("vote_type", session.vote_type);
-
-  // Count votes by value
-  const tallyMap: Record<string, number> = {};
-  (votes ?? []).forEach((v) => {
-    tallyMap[v.vote_value] = (tallyMap[v.vote_value] || 0) + 1;
-  });
-
-  const tallies: VoteTally[] = Object.entries(tallyMap)
-    .map(([vote_value, count]) => ({ vote_value, count }))
-    .sort((a, b) => b.count - a.count);
+  // Get tallies (party-leader tallies are scoped to the party's own members).
+  const { tallies, totalVotes } = await buildTallies(supabase, session);
+  const tallyMap: Record<string, number> = Object.fromEntries(
+    tallies.map((t) => [t.vote_value, t.count])
+  );
 
   // Count total participants for this event
   const { count: totalParticipants } = await supabase
@@ -212,7 +249,6 @@ export async function revealResults(
     .eq("event_id", session.event_id)
     .eq("checked_in", true);
 
-  const totalVotes = (votes ?? []).length;
   const winner = tallies.length > 0 ? tallies[0].vote_value : null;
 
   // If bill vote, update bill record with vote counts
@@ -416,21 +452,8 @@ export async function getVoteResults(
     return { success: false, error: "Vote session not found" };
   }
 
-  // Get tallies
-  const { data: votes } = await supabase
-    .from("votes")
-    .select("vote_value")
-    .eq("agenda_item_id", session.agenda_item_id)
-    .eq("vote_type", session.vote_type);
-
-  const tallyMap: Record<string, number> = {};
-  (votes ?? []).forEach((v) => {
-    tallyMap[v.vote_value] = (tallyMap[v.vote_value] || 0) + 1;
-  });
-
-  const tallies: VoteTally[] = Object.entries(tallyMap)
-    .map(([vote_value, count]) => ({ vote_value, count }))
-    .sort((a, b) => b.count - a.count);
+  // Get tallies (party-leader tallies are scoped to the party's own members).
+  const { tallies, totalVotes } = await buildTallies(supabase, session);
 
   const { count: totalParticipants } = await supabase
     .from("participants")
@@ -438,7 +461,6 @@ export async function getVoteResults(
     .eq("event_id", session.event_id)
     .eq("checked_in", true);
 
-  const totalVotes = (votes ?? []).length;
   const winner = tallies.length > 0 ? tallies[0].vote_value : null;
   const outcome = computeElectionOutcome(session.vote_type, tallies);
 
@@ -635,6 +657,26 @@ export async function getPartyMembers(
   return data;
 }
 
+// ─── Vote candidates by id (ballot rendering) ───────────────────
+// Returns the specific candidate participants on a ballot, given the session's
+// config.candidateIds. Used by the participant ballot for party-leader (and any
+// candidate ballot) so it shows exactly the nominees the organiser picked —
+// not a whole party roster.
+export async function getVoteCandidates(
+  candidateIds: string[]
+): Promise<VoteCandidate[]> {
+  const ids = candidateIds.filter((x) => typeof x === "string" && x.length > 0);
+  if (ids.length === 0) return [];
+  const supabase = await createServiceClient();
+  const { data, error } = await supabase
+    .from("participants")
+    .select("id, full_name, school_name, party_side, parliament_role")
+    .in("id", ids)
+    .order("full_name");
+  if (error || !data) return [];
+  return data;
+}
+
 // ─── Open a tie-runoff ──────────────────────────────────────────
 // Opens a fresh election (same vote_type) restricted to ONLY the tied
 // candidates, so the organiser can break a Speaker/Deputy/Party-Leader tie with
@@ -656,19 +698,9 @@ export async function openRunoff(
   if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
 
   // Re-derive the tie from the current tally so the runoff ballot is exactly
-  // the tied candidates (no trust in client-supplied ids).
-  const { data: votes } = await supabase
-    .from("votes")
-    .select("vote_value")
-    .eq("agenda_item_id", session.agenda_item_id)
-    .eq("vote_type", session.vote_type);
-  const tallyMap: Record<string, number> = {};
-  (votes ?? []).forEach((v) => {
-    tallyMap[v.vote_value] = (tallyMap[v.vote_value] || 0) + 1;
-  });
-  const tallies: VoteTally[] = Object.entries(tallyMap)
-    .map(([vote_value, count]) => ({ vote_value, count }))
-    .sort((a, b) => b.count - a.count);
+  // the tied candidates (no trust in client-supplied ids). Party-leader tallies
+  // are scoped to the party's own members.
+  const { tallies } = await buildTallies(supabase, session);
   const outcome = computeElectionOutcome(session.vote_type, tallies);
   if (!outcome.tie || outcome.tie.tiedCandidateIds.length < 2) {
     return { success: false, error: "No tie to run off — nothing to do." };

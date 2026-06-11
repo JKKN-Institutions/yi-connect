@@ -80,6 +80,8 @@ export function VoteNowCard({ eventId, participantId }: VoteNowCardProps) {
                 <p className="text-xs text-gray-600 mt-0.5">
                   {voteSession.vote_type === "speaker_election"
                     ? "Speaker Election is open"
+                    : voteSession.vote_type === "party_leader"
+                    ? "Party Leader election is open"
                     : "Bill voting is open"}
                 </p>
               </div>

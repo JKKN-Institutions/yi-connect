@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   addParticipant,
+  quickAddWalkIn,
   deleteParticipant,
   checkInParticipant,
   checkOutParticipant,
@@ -43,6 +44,7 @@ import {
   Download,
   Loader2,
   UserCheck,
+  Zap,
 } from "lucide-react";
 import { CsvImport } from "@/components/yip/csv-import";
 import { WhatsAppSendCodes } from "@/components/yip/whatsapp-send-codes";
@@ -139,6 +141,29 @@ export function ParticipantsClient({
     home_state: "",
   });
 
+  // Quick Add Walk-in: a single late arrival, auto-assigned party + seat +
+  // committee server-side (works even when allocation is locked).
+  const [quickOpen, setQuickOpen] = useState(false);
+  const [quickLoading, setQuickLoading] = useState(false);
+  const [quickError, setQuickError] = useState("");
+  const [quickResult, setQuickResult] = useState<{
+    party_side: string;
+    party_name: string | null;
+    constituency_name: string;
+    constituency_state: string;
+    committee_name: string;
+    access_code: string;
+  } | null>(null);
+  const [quickForm, setQuickForm] = useState({
+    full_name: "",
+    school_name: "",
+    class: 10,
+    phone: "",
+    email: "",
+    city: "",
+    home_state: "",
+  });
+
   // Filtered & sorted list
   const displayedParticipants = useMemo(() => {
     let filtered = participants;
@@ -216,6 +241,49 @@ export function ParticipantsClient({
       setError(result.error);
     }
     setLoading(false);
+  }
+
+  async function handleQuickAdd() {
+    if (!quickForm.full_name.trim() || !quickForm.school_name.trim()) {
+      setQuickError("Name and school are required");
+      return;
+    }
+
+    setQuickLoading(true);
+    setQuickError("");
+    setQuickResult(null);
+
+    const result = await quickAddWalkIn(eventId, {
+      full_name: quickForm.full_name.trim(),
+      school_name: quickForm.school_name.trim(),
+      class: quickForm.class,
+      phone: quickForm.phone.trim() || undefined,
+      email: quickForm.email.trim() || undefined,
+      city: quickForm.city.trim() || undefined,
+      home_state: quickForm.home_state.trim() || undefined,
+    });
+
+    if (result.success) {
+      // Keep the dialog open to show what was auto-assigned; reset the form so
+      // the organizer can immediately add the next walk-in.
+      setQuickResult({
+        ...result.data.assignment,
+        access_code: result.data.access_code,
+      });
+      setQuickForm({
+        full_name: "",
+        school_name: "",
+        class: 10,
+        phone: "",
+        email: "",
+        city: "",
+        home_state: "",
+      });
+      router.refresh();
+    } else {
+      setQuickError(result.error);
+    }
+    setQuickLoading(false);
   }
 
   async function handleDelete(participantId: string) {
@@ -389,6 +457,185 @@ export function ParticipantsClient({
           {/* Send each student's access code to their phone via the connected
               Yi WhatsApp number (bridge service). Re-sends are deduped. */}
           <WhatsAppSendCodes eventId={eventId} />
+
+          {/* Quick Add Walk-in — create a single late arrival and auto-assign
+              party + constituency + committee in one click. Works even after
+              allocation is locked (writes one row; never re-runs the engine). */}
+          <Dialog
+            open={quickOpen}
+            onOpenChange={(open) => {
+              setQuickOpen(open);
+              if (!open) {
+                setQuickError("");
+                setQuickResult(null);
+              }
+            }}
+          >
+            <DialogTrigger
+              render={<Button variant="outline" size="sm" />}
+            >
+              <Zap className="size-4" />
+              Quick Add Walk-in
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Quick Add Walk-in</DialogTitle>
+                <DialogDescription>
+                  Add a late arrival. Party, constituency and committee are
+                  assigned automatically — no need to unlock allocation.
+                </DialogDescription>
+              </DialogHeader>
+
+              {quickError && (
+                <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700">
+                  {quickError}
+                </div>
+              )}
+
+              {quickResult && (
+                <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-xs text-green-800">
+                  <p className="font-medium">Walk-in added &amp; auto-assigned:</p>
+                  <ul className="mt-1.5 space-y-0.5">
+                    <li>
+                      Bench:{" "}
+                      <span className="font-medium">
+                        {quickResult.party_side === "ruling" ? "Ruling" : "Opposition"}
+                      </span>
+                      {quickResult.party_name ? ` — ${quickResult.party_name}` : ""}
+                    </li>
+                    <li>
+                      Constituency:{" "}
+                      <span className="font-medium">
+                        {quickResult.constituency_name}
+                        {quickResult.constituency_state
+                          ? `, ${quickResult.constituency_state}`
+                          : ""}
+                      </span>
+                    </li>
+                    <li>
+                      Committee:{" "}
+                      <span className="font-medium">{quickResult.committee_name}</span>
+                    </li>
+                    <li>
+                      Access code:{" "}
+                      <code className="rounded bg-white px-1 py-0.5 font-mono">
+                        {quickResult.access_code}
+                      </code>
+                    </li>
+                  </ul>
+                </div>
+              )}
+
+              <div className="space-y-3">
+                <div>
+                  <Label htmlFor="quick-name">Full Name *</Label>
+                  <Input
+                    id="quick-name"
+                    value={quickForm.full_name}
+                    onChange={(e) =>
+                      setQuickForm((prev) => ({ ...prev, full_name: e.target.value }))
+                    }
+                    placeholder="Student full name"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="quick-school">School Name *</Label>
+                  <Input
+                    id="quick-school"
+                    value={quickForm.school_name}
+                    onChange={(e) =>
+                      setQuickForm((prev) => ({ ...prev, school_name: e.target.value }))
+                    }
+                    placeholder="School name"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="quick-class">Class *</Label>
+                  <select
+                    id="quick-class"
+                    value={quickForm.class}
+                    onChange={(e) =>
+                      setQuickForm((prev) => ({ ...prev, class: Number(e.target.value) }))
+                    }
+                    className="flex h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                  >
+                    {[9, 10, 11, 12].map((c) => (
+                      <option key={c} value={c}>
+                        Class {c}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label htmlFor="quick-phone">Phone</Label>
+                    <Input
+                      id="quick-phone"
+                      value={quickForm.phone}
+                      onChange={(e) =>
+                        setQuickForm((prev) => ({ ...prev, phone: e.target.value }))
+                      }
+                      placeholder="Phone number"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="quick-email">Email</Label>
+                    <Input
+                      id="quick-email"
+                      type="email"
+                      value={quickForm.email}
+                      onChange={(e) =>
+                        setQuickForm((prev) => ({ ...prev, email: e.target.value }))
+                      }
+                      placeholder="Email"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label htmlFor="quick-city">City</Label>
+                    <Input
+                      id="quick-city"
+                      value={quickForm.city}
+                      onChange={(e) =>
+                        setQuickForm((prev) => ({ ...prev, city: e.target.value }))
+                      }
+                      placeholder="City"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="quick-state">Home State</Label>
+                    <Input
+                      id="quick-state"
+                      value={quickForm.home_state}
+                      onChange={(e) =>
+                        setQuickForm((prev) => ({ ...prev, home_state: e.target.value }))
+                      }
+                      placeholder="Home state"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <DialogFooter>
+                <DialogClose render={<Button variant="outline" />}>
+                  Done
+                </DialogClose>
+                <Button
+                  className="bg-[#FF9933] text-white hover:bg-[#E68A2E]"
+                  onClick={handleQuickAdd}
+                  disabled={quickLoading}
+                >
+                  {quickLoading ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Zap className="size-4" />
+                  )}
+                  {quickLoading ? "Adding..." : "Add & Auto-assign"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger

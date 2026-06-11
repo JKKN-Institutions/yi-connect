@@ -4,6 +4,11 @@ import { createClient, createServiceClient } from "@/lib/yip/supabase/server";
 import { generateAccessCode } from "@/lib/yip/access-code";
 import { logAuditAction } from "@/lib/yip/audit/log-action";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
+import { COMMITTEES } from "@/lib/yip/constants";
+import {
+  CONSTITUENCIES,
+  PROMINENT_CONSTITUENCIES,
+} from "@/lib/yip/data/constituencies";
 import { revalidatePath } from "next/cache";
 import type { Database } from "@/types/yip/database";
 
@@ -139,6 +144,255 @@ export async function addParticipant(
     return {
       success: true,
       data: { id: participant.id, access_code: participant.access_code },
+    };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Unknown error",
+    };
+  }
+}
+
+// ─── Quick Add Walk-in (auto-assign) ──────────────────────────────
+//
+// Director ruling: a late walk-in is created AND auto-assigned in one shot so
+// the organizer doesn't have to hand-pick a balanced slot during a live event.
+// Unlike runAllocationAction (the bulk engine), this writes ONE participant and
+// works even when allocation is LOCKED — it never touches anyone else's row and
+// never re-runs the engine, so no unlock is required.
+//
+// Assignment rules (all computed from the CURRENT roster, not the engine):
+//   • Party  — the bench (ruling/opposition) with FEWER current members; within
+//              that bench, the party (yip.parties) with the fewest members. If
+//              parties exist we set party_id + party_side + party_number;
+//              otherwise just party_side.
+//   • Seat   — first constituency (PROMINENT first, then full list) whose
+//              (name,state) is NOT already used in this event AND whose state is
+//              not the event's host state (host-state exclusion).
+//   • Cmte   — the committee with the FEWEST current members (event.committee_topics
+//              if set, else the default COMMITTEES).
+//   • Role   — plain "mp".
+
+interface QuickAddData {
+  full_name: string;
+  school_name: string;
+  class: number;
+  phone?: string;
+  email?: string;
+  city?: string;
+  home_state?: string;
+}
+
+interface QuickAddAssignment {
+  party_side: PartySide;
+  party_name: string | null;
+  constituency_name: string;
+  constituency_state: string;
+  committee_name: string;
+}
+
+/** Read committee names from an event's committee_topics (array OR object of
+ * values), falling back to the default COMMITTEES. Mirrors the array/object
+ * tolerance the allocation action + yuva-assignments already apply. */
+function committeesFromTopics(topics: unknown): string[] {
+  if (Array.isArray(topics) && topics.length > 0) {
+    return topics.map(String).filter((s) => s.trim().length > 0);
+  }
+  if (topics && typeof topics === "object") {
+    const vals = Object.values(topics as Record<string, unknown>)
+      .map(String)
+      .filter((s) => s.trim().length > 0);
+    if (vals.length > 0) return vals;
+  }
+  return [...COMMITTEES];
+}
+
+export async function quickAddWalkIn(
+  eventId: string,
+  data: QuickAddData
+): Promise<ActionResult<{ id: string; access_code: string; assignment: QuickAddAssignment }>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
+  if (!data.full_name?.trim() || !data.school_name?.trim()) {
+    return { success: false, error: "Name and school are required" };
+  }
+  if (!data.class || data.class < 9 || data.class > 12) {
+    return { success: false, error: "Class must be between 9 and 12" };
+  }
+
+  const supabase = await createServiceClient();
+
+  try {
+    // ── Event context: host state + committee config ──
+    const { data: event, error: eventErr } = await supabase
+      .from("events")
+      .select("id, state, committee_topics")
+      .eq("id", eventId)
+      .single();
+
+    if (eventErr || !event) {
+      return { success: false, error: "Event not found" };
+    }
+    const hostState = (event.state ?? "").trim().toLowerCase();
+    const committeeNames = committeesFromTopics(
+      (event as { committee_topics?: unknown }).committee_topics
+    );
+
+    // ── Current roster (only the columns the auto-assign needs) ──
+    const { data: roster, error: rosterErr } = await supabase
+      .from("participants")
+      .select("party_side, party_id, constituency_name, constituency_state, committee_name")
+      .eq("event_id", eventId);
+
+    if (rosterErr) {
+      return { success: false, error: rosterErr.message };
+    }
+    const existing = roster ?? [];
+
+    // ── Party: pick the bench with fewer members ──
+    const rulingCount = existing.filter((p) => p.party_side === "ruling").length;
+    const oppositionCount = existing.filter((p) => p.party_side === "opposition").length;
+    // Tie → ruling (matches the engine's ~55% ruling-leaning default).
+    const chosenSide: PartySide = oppositionCount < rulingCount ? "opposition" : "ruling";
+
+    // Within the chosen bench, find the party (if any) with the fewest members.
+    const { data: parties, error: partyErr } = await supabase
+      .from("parties")
+      .select("id, name, party_number, side")
+      .eq("event_id", eventId)
+      .eq("side", chosenSide);
+
+    if (partyErr) {
+      return { success: false, error: partyErr.message };
+    }
+
+    let party_id: string | null = null;
+    let party_number: number | null = null;
+    let party_name: string | null = null;
+    if (parties && parties.length > 0) {
+      const memberCount = new Map<string, number>();
+      for (const p of existing) {
+        if (p.party_id) memberCount.set(p.party_id, (memberCount.get(p.party_id) ?? 0) + 1);
+      }
+      // Smallest party on this bench; ties broken by party_number for determinism.
+      const sorted = [...parties].sort((a, b) => {
+        const ca = memberCount.get(a.id) ?? 0;
+        const cb = memberCount.get(b.id) ?? 0;
+        if (ca !== cb) return ca - cb;
+        return a.party_number - b.party_number;
+      });
+      const chosen = sorted[0];
+      party_id = chosen.id;
+      party_number = chosen.party_number;
+      party_name = chosen.name;
+    }
+
+    // ── Constituency: first free seat (prominent first) not in the host state ──
+    const usedSeats = new Set(
+      existing
+        .filter((p) => p.constituency_name)
+        .map((p) => `${p.constituency_name}|${p.constituency_state ?? ""}`)
+    );
+    const seatPool = [...PROMINENT_CONSTITUENCIES, ...CONSTITUENCIES];
+    let constituency_name = "";
+    let constituency_state = "";
+    for (const c of seatPool) {
+      if (hostState && c.state.trim().toLowerCase() === hostState) continue;
+      const key = `${c.name}|${c.state}`;
+      if (usedSeats.has(key)) continue;
+      constituency_name = c.name;
+      constituency_state = c.state;
+      break;
+    }
+    // Fallback (pool exhausted by exclusions/usage): any non-host seat, else any.
+    if (!constituency_name) {
+      const fallback =
+        seatPool.find((c) => !hostState || c.state.trim().toLowerCase() !== hostState) ??
+        seatPool[0];
+      constituency_name = fallback.name;
+      constituency_state = fallback.state;
+    }
+
+    // ── Committee: the one with the fewest current members ──
+    const committeeCount = new Map<string, number>();
+    for (const name of committeeNames) committeeCount.set(name, 0);
+    for (const p of existing) {
+      if (p.committee_name && committeeCount.has(p.committee_name)) {
+        committeeCount.set(p.committee_name, (committeeCount.get(p.committee_name) ?? 0) + 1);
+      }
+    }
+    let committee_name = committeeNames[0];
+    let lowest = Infinity;
+    for (const name of committeeNames) {
+      const c = committeeCount.get(name) ?? 0;
+      if (c < lowest) {
+        lowest = c;
+        committee_name = name;
+      }
+    }
+
+    // ── Write the single participant ──
+    const accessCode = await generateUniqueCode(supabase, eventId, new Set());
+
+    const { data: participant, error } = await supabase
+      .from("participants")
+      .insert({
+        event_id: eventId,
+        full_name: data.full_name.trim(),
+        school_name: data.school_name.trim(),
+        class: data.class,
+        phone: data.phone?.trim() || null,
+        email: data.email?.trim() || null,
+        city: data.city?.trim() || null,
+        home_state: data.home_state?.trim() || null,
+        access_code: accessCode,
+        party_side: chosenSide,
+        party_id,
+        party_number,
+        parliament_role: "mp",
+        constituency_name,
+        constituency_state,
+        committee_name,
+      })
+      .select("id, access_code")
+      .single();
+
+    if (error || !participant) {
+      return { success: false, error: error?.message ?? "Failed to add walk-in" };
+    }
+
+    await logAuditAction({
+      action_type: "create",
+      target_table: "participants",
+      target_id: participant.id,
+      target_event_id: eventId,
+      metadata: {
+        quick_add: true,
+        party_side: chosenSide,
+        party_name,
+        constituency_name,
+        constituency_state,
+        committee_name,
+      },
+    });
+
+    revalidatePath(`/yip/dashboard/events/${eventId}/participants`);
+    revalidatePath(`/yip/dashboard/events/${eventId}/control`);
+    return {
+      success: true,
+      data: {
+        id: participant.id,
+        access_code: participant.access_code,
+        assignment: {
+          party_side: chosenSide,
+          party_name,
+          constituency_name,
+          constituency_state,
+          committee_name,
+        },
+      },
     };
   } catch (err) {
     return {

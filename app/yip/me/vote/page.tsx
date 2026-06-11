@@ -19,6 +19,7 @@ import { useVoteSession } from "@/lib/yip/hooks/use-vote-session";
 import {
   castVote,
   getSpeakerCandidates,
+  getVoteCandidates,
   hasParticipantVoted,
   type VoteCandidate,
 } from "@/app/yip/actions/voting";
@@ -84,6 +85,16 @@ export default function VotePage() {
 
       if (voteSession.vote_type === "speaker_election") {
         const data = await getSpeakerCandidates(session.eventId);
+        setCandidates(data);
+      }
+
+      if (voteSession.vote_type === "party_leader") {
+        // Candidates are the nominees the organiser picked (config.candidateIds).
+        const cfg = (voteSession.config ?? {}) as { candidateIds?: unknown };
+        const ids = Array.isArray(cfg.candidateIds)
+          ? cfg.candidateIds.filter((x): x is string => typeof x === "string")
+          : [];
+        const data = await getVoteCandidates(ids);
         setCandidates(data);
       }
 
@@ -233,18 +244,25 @@ export default function VotePage() {
     );
   }
 
-  // ─── Speaker Election ─────────────────────────────────────────
+  // ─── Candidate ballot (Speaker election + Party-Leader election) ──
+  // Both render an identical candidate grid; vote_value is the candidate id.
 
-  if (voteSession.vote_type === "speaker_election") {
+  if (
+    voteSession.vote_type === "speaker_election" ||
+    voteSession.vote_type === "party_leader"
+  ) {
+    const isPartyLeader = voteSession.vote_type === "party_leader";
     return (
       <div className="space-y-5">
         <div>
           <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
             <Vote className="size-5 text-[#FF9933]" />
-            Vote for Speaker
+            {isPartyLeader ? "Vote for Party Leader" : "Vote for Speaker"}
           </h1>
           <p className="text-sm text-gray-500 mt-1">
-            Select one candidate to be the Speaker of the House
+            {isPartyLeader
+              ? "Select one candidate to be your party's leader"
+              : "Select one candidate to be the Speaker of the House"}
           </p>
         </div>
 
@@ -252,6 +270,9 @@ export default function VotePage() {
         <Card className="border-[#FF9933]/20 bg-[#FF9933]/5">
           <CardContent className="pt-4 pb-4">
             <p className="text-sm text-gray-700">
+              {isPartyLeader
+                ? "Only members of your party can vote in this election. "
+                : ""}
               Tap on a candidate to select them, then press &quot;Cast Vote&quot;
               to confirm. Your vote is secret and cannot be changed once cast.
             </p>

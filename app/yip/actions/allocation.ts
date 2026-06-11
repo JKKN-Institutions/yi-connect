@@ -40,7 +40,7 @@ export async function runAllocationAction(
   // Fetch event — check lock
   const { data: event } = await supabase
     .from("events")
-    .select("id, allocation_locked, committee_topics")
+    .select("id, allocation_locked, committee_topics, state")
     .eq("id", eventId)
     .single();
 
@@ -93,6 +93,9 @@ export async function runAllocationAction(
   const result = runAllocation({
     participants: allocationInput,
     committees: customCommittees,
+    // Exclude the host chapter's own state from the constituency pool
+    // (e.g. an Erode/Tamil Nadu event won't hand out TN seats).
+    excludeState: (event as { state?: string | null }).state ?? undefined,
   });
 
   // Write results back to database — batch update each participant

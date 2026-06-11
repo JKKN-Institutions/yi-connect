@@ -33,7 +33,10 @@ import { logYuvaAudit } from "@/lib/yuva/audit";
 import { getYuvaAccess, type YuvaAccess } from "@/lib/yuva/auth/yuva-access";
 import { CAPACITY_DEFAULT, YUVA_APP, ROLE_MENTOR } from "@/lib/yuva/constants";
 import { sendYuvaEmail } from "@/lib/yuva/email";
-import { scheduleChangeEmail } from "@/lib/yuva/email-templates";
+import {
+  runCancelledEmail,
+  scheduleChangeEmail,
+} from "@/lib/yuva/email-templates";
 import {
   canTransitionRun,
   runStatusLabel,
@@ -866,6 +869,149 @@ export async function unpublishRun(input: {
     entity_id: run.id,
     chapter: run.chapter,
     meta: { note: "existing applicants keep status-page access" },
+  });
+  revalidateRunPaths(run.id);
+  return { success: true, data: { id: run.id } };
+}
+
+// ─── cancelRun (cancel after cohort starts — notify students, no certs) ────
+
+// Statuses from which a run may be cancelled (decision 2026-06-11): a
+// chapter/coordinator can cancel a draft/published run AND one whose cohort
+// has started (applications_closed / in_progress). A completed/certified run
+// is final and can't be un-finished — matches lib/yuva/run-machine.ts ALLOWED.
+const CANCELLABLE_STATUSES = [
+  "draft",
+  "published",
+  "applications_closed",
+  "in_progress",
+] as const;
+
+const cancelRunSchema = z.object({
+  runId: uuid,
+  /** Optional chapter-supplied reason, recorded in the audit log. */
+  reason: z.string().trim().max(2000).optional(),
+});
+
+export type CancelRunInput = z.infer<typeof cancelRunSchema>;
+
+/**
+ * Cancel a run: mark it 'cancelled', keep every record, email the enrolled
+ * students, issue no certificates. Certificates are already gated to
+ * status='completed' (issueCertificates) so a cancelled run inherently can't
+ * issue any — no change is needed there.
+ *
+ * The transition is a compare-and-swap: claim the row ONLY if its current
+ * status is still cancellable. A 0-row result means the run finished or was
+ * already cancelled meanwhile — report it, never silently succeed.
+ */
+export async function cancelRun(
+  input: CancelRunInput
+): Promise<ActionResult<{ id: string }>> {
+  const parsed = cancelRunSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid cancellation.",
+    };
+  }
+  const { runId, reason } = parsed.data;
+
+  const gate = await gateRun(runId);
+  if (!gate.ok) return { success: false, error: gate.error };
+  const { svc, run } = gate;
+
+  // Fail-closed: the machine is the source of truth for which statuses can
+  // move to cancelled.
+  if (!canTransitionRun(run.status, "cancelled")) {
+    return {
+      success: false,
+      error: `A ${runStatusLabel(run.status).toLowerCase()} run can't be cancelled.`,
+    };
+  }
+
+  const { data: updated, error } = await svc
+    .from("runs")
+    .update({ status: "cancelled", updated_at: new Date().toISOString() })
+    .eq("id", run.id)
+    .in("status", [...CANCELLABLE_STATUSES])
+    .select("id");
+  if (error) return { success: false, error: error.message };
+  if (!updated || updated.length === 0) {
+    return {
+      success: false,
+      error: "The run changed status meanwhile — reload and try again.",
+    };
+  }
+
+  // Notify enrolled students (best-effort; the cancellation already stuck).
+  // Pre-cohort (applications_closed with no cohort formed yet) this is a no-op.
+  let notified = 0;
+  try {
+    const { data: enrollments } = await svc
+      .from("enrollments")
+      .select("person_id")
+      .eq("run_id", run.id)
+      .neq("status", "dropped");
+    const personIds = [
+      ...new Set((enrollments ?? []).map((e) => e.person_id)),
+    ];
+
+    if (personIds.length > 0) {
+      const { data: program } = await svc
+        .from("programs")
+        .select("title")
+        .eq("id", run.program_id)
+        .maybeSingle();
+      const programName = program?.title ?? "your Yi Youth Academy program";
+
+      const { data: academy } = await svc
+        .from("academies")
+        .select("display_name")
+        .eq("id", run.academy_id)
+        .maybeSingle();
+      const academyName = academy?.display_name ?? `Yi ${run.chapter}`;
+
+      const dir = await createDirService();
+      const { data: people } = await dir
+        .schema("yi_directory")
+        .from("people")
+        .select("id, email, full_name")
+        .in("id", personIds);
+
+      for (const person of people ?? []) {
+        if (!person.email) continue;
+        const rendered = runCancelledEmail({
+          studentName: person.full_name ?? "there",
+          programName,
+          academyName,
+        });
+        const res = await sendYuvaEmail({
+          to: person.email,
+          emailType: "run_cancelled",
+          subject: rendered.subject,
+          html: rendered.html,
+          text: rendered.text,
+          dedupeKey: `run_cancelled:${run.id}:${person.id}`,
+          meta: { run_id: run.id },
+        });
+        if (res.ok) notified += 1;
+      }
+    }
+  } catch (e) {
+    console.error("[yuva-runs] cancelRun student notification failed:", e);
+  }
+
+  await logYuvaAudit({
+    action: "cancel",
+    entity: "runs",
+    entity_id: run.id,
+    chapter: run.chapter,
+    meta: {
+      previous_status: run.status,
+      reason: reason ?? null,
+      students_notified: notified,
+    },
   });
   revalidateRunPaths(run.id);
   return { success: true, data: { id: run.id } };

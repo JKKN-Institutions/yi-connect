@@ -16,6 +16,12 @@ async function main() {
     endDate: "20 Mar 2026",
     certificateNo: "YYA-2026-0001",
     issuedOn: "11 Jun 2026",
+    // Configurable signatories (decision 2026-06-11) — 3 blocks, names on line.
+    signatories: [
+      { label: "Chapter Chair", name: "R. Kumar" },
+      { label: "Faculty Coordinator", name: "Dr. S. Iyer" },
+      { label: "Yi YUVA Lead", name: "M. Anand" },
+    ],
   };
 
   // Try with a real remote logo first (layout check); fall back to no-logo.

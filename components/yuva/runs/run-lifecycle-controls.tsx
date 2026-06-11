@@ -9,9 +9,10 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCheck, DoorClosed, Loader2, Undo2 } from "lucide-react";
+import { Ban, CheckCheck, DoorClosed, Loader2, Undo2 } from "lucide-react";
 import toast from "react-hot-toast";
 import {
+  cancelRun,
   closeApplications,
   completeRun,
   unpublishRun,
@@ -28,9 +29,20 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import type { RunStatus } from "@/lib/yuva/constants";
 
-type PendingAction = "close" | "unpublish" | "complete" | null;
+type PendingAction = "close" | "unpublish" | "complete" | "cancel" | null;
+
+// Statuses from which a run can be cancelled (mirrors the server action /
+// run-machine ALLOWED map). A completed/certified run is final.
+const CANCELLABLE = new Set<RunStatus>([
+  "draft",
+  "published",
+  "applications_closed",
+  "in_progress",
+]);
 
 export function RunLifecycleControls({
   runId,
@@ -41,6 +53,7 @@ export function RunLifecycleControls({
 }) {
   const router = useRouter();
   const [pending, setPending] = useState<PendingAction>(null);
+  const [cancelReason, setCancelReason] = useState("");
 
   async function run(
     action: Exclude<PendingAction, null>,
@@ -177,6 +190,73 @@ export function RunLifecycleControls({
                 }
               >
                 Complete run
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+
+      {CANCELLABLE.has(status) && (
+        <AlertDialog
+          onOpenChange={(open) => {
+            if (!open) setCancelReason("");
+          }}
+        >
+          <AlertDialogTrigger asChild>
+            <Button
+              variant="outline"
+              disabled={pending !== null}
+              className="border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800"
+            >
+              {pending === "cancel" ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Ban className="size-4" />
+              )}
+              Cancel run
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Cancel this run?</AlertDialogTitle>
+              <AlertDialogDescription>
+                The run is marked cancelled and the cohort will not continue.
+                All records are kept and no certificates are issued. This
+                notifies all enrolled students by email and cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="space-y-1.5">
+              <Label htmlFor="cancel-reason" className="text-sm">
+                Reason (optional)
+              </Label>
+              <Textarea
+                id="cancel-reason"
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                placeholder="Why is this run being cancelled? (kept in the audit log)"
+                maxLength={2000}
+                rows={3}
+                disabled={pending !== null}
+              />
+            </div>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Keep run</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-red-600 hover:bg-red-700 focus-visible:ring-red-600"
+                onClick={() => {
+                  const reason = cancelReason.trim();
+                  run(
+                    "cancel",
+                    () =>
+                      cancelRun({
+                        runId,
+                        ...(reason ? { reason } : {}),
+                      }),
+                    "Run cancelled — enrolled students have been notified"
+                  );
+                }}
+              >
+                Cancel run
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

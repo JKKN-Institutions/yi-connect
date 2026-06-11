@@ -48,6 +48,17 @@ test("legal transitions are all allowed", () => {
   );
   assert(canTransitionRun("in_progress", "completed"), "in_progress → completed");
   assert(canTransitionRun("completed", "certified"), "completed → certified");
+  // Cancel after the cohort has started (decision 2026-06-11): a run can be
+  // cancelled from applications_closed and in_progress too — records are kept,
+  // students notified, no certificates issued.
+  assert(
+    canTransitionRun("applications_closed", "cancelled"),
+    "applications_closed → cancelled (cancel after applications closed)"
+  );
+  assert(
+    canTransitionRun("in_progress", "cancelled"),
+    "in_progress → cancelled (cancel after cohort started)"
+  );
 });
 
 // ─── canTransitionRun: ILLEGAL transitions ──────────────────────────
@@ -60,18 +71,19 @@ test("illegal transitions are rejected", () => {
     !canTransitionRun("applications_closed", "published"),
     "applications_closed → published rejected (no reopen)"
   );
-  assert(
-    !canTransitionRun("applications_closed", "cancelled"),
-    "applications_closed → cancelled rejected (cancel only from draft/published)"
-  );
-  assert(
-    !canTransitionRun("in_progress", "cancelled"),
-    "in_progress → cancelled rejected"
-  );
   assert(!canTransitionRun("in_progress", "draft"), "in_progress → draft rejected");
   assert(
     !canTransitionRun("completed", "in_progress"),
     "completed → in_progress rejected"
+  );
+  // A finished run can't be un-finished into cancelled (records are final).
+  assert(
+    !canTransitionRun("completed", "cancelled"),
+    "completed → cancelled rejected (can't un-finish a completed run)"
+  );
+  assert(
+    !canTransitionRun("certified", "cancelled"),
+    "certified → cancelled rejected (can't un-finish a certified run)"
   );
   assert(!canTransitionRun("certified", "completed"), "certified is terminal");
   assert(!canTransitionRun("certified", "draft"), "certified → draft rejected");

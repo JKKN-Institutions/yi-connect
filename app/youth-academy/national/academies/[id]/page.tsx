@@ -19,6 +19,7 @@ import { AcademyActiveToggle } from "@/components/yuva/academies/active-toggle";
 import { AcademyForm } from "@/components/yuva/academies/academy-form";
 import { LogoUpload } from "@/components/yuva/academies/logo-upload";
 import { QualitativeNotesEditor } from "@/components/yuva/academies/qualitative-notes-editor";
+import { SignatoriesEditor } from "@/components/yuva/academies/signatories-editor";
 import { fetchAcademyById } from "@/components/yuva/academies/data";
 import { getAcademyCompliance } from "@/app/youth-academy/actions/national-reports";
 import { ComplianceStrip } from "@/components/yuva/national/dashboard/compliance-strip";
@@ -150,6 +151,22 @@ export default async function NationalAcademyDetailPage({
         <QualitativeNotesEditor
           academyId={academy.id}
           initialNotes={academy.qualitative_notes}
+          canEdit
+        />
+      </section>
+
+      <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 className="mb-2 font-semibold text-slate-900">
+          Certificate signatures
+        </h2>
+        <p className="mb-3 text-xs text-slate-400">
+          Up to 3 signature blocks printed on completion certificates. Leave
+          empty to use the default blocks (Chapter Chair · Institution
+          Coordinator). Names are optional.
+        </p>
+        <SignatoriesEditor
+          academyId={academy.id}
+          initialSignatories={academy.signatories}
           canEdit
         />
       </section>

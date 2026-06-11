@@ -203,6 +203,23 @@ ${cta(input.portalUrl, "Log in to get started")}`
   return { subject, html, text };
 }
 
+export function runCancelledEmail(input: {
+  studentName: string;
+  programName: string;
+  academyName: string;
+}): RenderedEmail {
+  const subject = `Programme cancelled — ${input.programName}`;
+  const text = `Hi ${input.studentName},\n\nWe're sorry to let you know that ${input.programName} at ${input.academyName} has been cancelled, and the cohort will not continue.\n\nWe know this is disappointing, and we're sorry for the change. Your place and your records remain with us, and we would be glad to welcome you to a future Yi Youth Academy programme.\n\nThank you for your understanding.\n\nYi Youth Academy\nYoung Indians · CII`;
+  const html = shell(
+    "Programme cancelled",
+    `<p>Hi ${escapeHtml(input.studentName)},</p>
+<p>We're sorry to let you know that <strong>${escapeHtml(input.programName)}</strong> at <strong>${escapeHtml(input.academyName)}</strong> has been cancelled, and the cohort will not continue.</p>
+<p>We know this is disappointing, and we're sorry for the change. Your place and your records remain with us, and we would be glad to welcome you to a future Yi Youth Academy programme.</p>
+<p style="color:#5b6575;font-size:13px">Thank you for your understanding.</p>`
+  );
+  return { subject, html, text };
+}
+
 /** Compile-time completeness check: one template per trigger type. */
 export const TEMPLATE_BY_TYPE: Record<YuvaEmailType, (...args: never[]) => RenderedEmail> = {
   application_confirmation: applicationConfirmationEmail,
@@ -213,4 +230,5 @@ export const TEMPLATE_BY_TYPE: Record<YuvaEmailType, (...args: never[]) => Rende
   schedule_change: scheduleChangeEmail,
   mentor_invite: mentorInviteEmail,
   coordinator_invite: coordinatorInviteEmail,
+  run_cancelled: runCancelledEmail,
 };

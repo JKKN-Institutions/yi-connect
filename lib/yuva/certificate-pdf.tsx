@@ -43,6 +43,14 @@ export interface CertificatePdfProps {
   certificateNo: string;
   /** Issue date as a display string. */
   issuedOn: string;
+  /**
+   * Per-academy signature blocks (configured in the UI, decision 2026-06-11).
+   * `label` is required; `name` is optional (shown above the line if present).
+   * Rendered max 3 blocks. EMPTY array → fall back to the two generic blocks
+   * (Chapter Chair / Yi {chapter}; Institution Coordinator / {academyName}) so
+   * existing certificates do not regress.
+   */
+  signatories: { label: string; name?: string | null }[];
 }
 
 // ─── STYLES (dummy design — navy/amber Yi palette) ─────────────────
@@ -204,6 +212,14 @@ const styles = StyleSheet.create({
     borderBottomColor: NAVY,
     height: 26,
     marginBottom: 5,
+    justifyContent: "flex-end",
+  },
+  signatureName: {
+    fontSize: 11,
+    fontFamily: "Times-Italic",
+    color: NAVY,
+    textAlign: "center",
+    paddingBottom: 3,
   },
   signatureLabel: {
     fontSize: 8,
@@ -240,6 +256,27 @@ export function CertificatePDF(props: CertificatePdfProps) {
     props.startDate && props.endDate
       ? `${props.startDate} to ${props.endDate}`
       : (props.startDate ?? props.endDate ?? null);
+
+  // Configured signature blocks (decision 2026-06-11). Trim, drop entries with
+  // a blank label, cap at 3. EMPTY → fall back to the original two generic
+  // blocks so already-issued certificates do not regress.
+  const configured = (props.signatories ?? [])
+    .map((s) => ({
+      label: (s.label ?? "").trim(),
+      name: (s.name ?? "").trim() || null,
+    }))
+    .filter((s) => s.label.length > 0)
+    .slice(0, 3);
+  const signatureBlocks: { label: string; name: string | null }[] =
+    configured.length > 0
+      ? configured
+      : [
+          { label: `Chapter Chair\nYi ${props.chapter}`, name: null },
+          {
+            label: `Institution Coordinator\n${props.academyName}`,
+            name: null,
+          },
+        ];
 
   return (
     <Document
@@ -316,21 +353,20 @@ export function CertificatePDF(props: CertificatePdfProps) {
               leadership journey.
             </Text>
 
-            {/* Placeholder zone: signature blocks (dummy — Director's
-                design will define the real signatories/artwork) */}
+            {/* Signature blocks — configured per academy in the UI
+                (decision 2026-06-11); empty config falls back to the two
+                generic blocks. Name (if set) sits on the line; label below. */}
             <View style={styles.signatureRow}>
-              <View style={styles.signatureBlock}>
-                <View style={styles.signatureLine} />
-                <Text style={styles.signatureLabel}>
-                  Chapter Chair{"\n"}Yi {props.chapter}
-                </Text>
-              </View>
-              <View style={styles.signatureBlock}>
-                <View style={styles.signatureLine} />
-                <Text style={styles.signatureLabel}>
-                  Institution Coordinator{"\n"}{props.academyName}
-                </Text>
-              </View>
+              {signatureBlocks.map((block, i) => (
+                <View key={i} style={styles.signatureBlock}>
+                  <View style={styles.signatureLine}>
+                    {block.name ? (
+                      <Text style={styles.signatureName}>{block.name}</Text>
+                    ) : null}
+                  </View>
+                  <Text style={styles.signatureLabel}>{block.label}</Text>
+                </View>
+              ))}
             </View>
 
             {/* Placeholder zone: certificate number + issue date */}

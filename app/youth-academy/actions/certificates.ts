@@ -177,6 +177,7 @@ async function loadPdfContext(
   academyName: string;
   logoUrl: string | null;
   programTitle: string;
+  signatories: { label: string; name?: string | null }[];
   nameByPersonId: Map<string, string>;
   emailByPersonId: Map<string, string>;
   institutionByPersonId: Map<string, string>;
@@ -184,7 +185,10 @@ async function loadPdfContext(
   const [academyRes, programRes] = await Promise.all([
     svc
       .from("academies")
-      .select("display_name, logo_storage_path")
+      // `signatories` (jsonb, added 2026-06-11) is post-types-regen — including
+      // it in the typed select poisons the row into a SelectQueryError, so the
+      // result is read through a local typed shape below.
+      .select("display_name, logo_storage_path, signatories")
       .eq("id", run.academy_id)
       .maybeSingle(),
     svc
@@ -193,6 +197,12 @@ async function loadPdfContext(
       .eq("id", run.program_id)
       .maybeSingle(),
   ]);
+
+  const academyRow = academyRes.data as unknown as {
+    display_name: string | null;
+    logo_storage_path: string | null;
+    signatories: unknown;
+  } | null;
 
   const nameByPersonId = new Map<string, string>();
   const emailByPersonId = new Map<string, string>();
@@ -244,15 +254,40 @@ async function loadPdfContext(
   }
 
   return {
-    academyName: academyRes.data?.display_name ?? "Yi Youth Academy",
-    logoUrl: academyRes.data?.logo_storage_path
-      ? publicUrl(academyRes.data.logo_storage_path)
+    academyName: academyRow?.display_name ?? "Yi Youth Academy",
+    logoUrl: academyRow?.logo_storage_path
+      ? publicUrl(academyRow.logo_storage_path)
       : null,
     programTitle: programRes.data?.title ?? "Program",
+    // Normalize the signatories jsonb to the PDF prop shape. Null/garbage → [],
+    // which makes the renderer fall back to the generic blocks.
+    signatories: coerceSignatories(academyRow?.signatories),
     nameByPersonId,
     emailByPersonId,
     institutionByPersonId,
   };
+}
+
+/**
+ * Normalize the academy.signatories jsonb into the PDF prop shape. Defensive:
+ * any non-array / malformed value collapses to [] (renderer then falls back
+ * to the two generic signature blocks).
+ */
+function coerceSignatories(
+  raw: unknown
+): { label: string; name?: string | null }[] {
+  if (!Array.isArray(raw)) return [];
+  const out: { label: string; name?: string | null }[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const rec = item as { label?: unknown; name?: unknown };
+    const label = typeof rec.label === "string" ? rec.label.trim() : "";
+    if (!label) continue;
+    const name = typeof rec.name === "string" ? rec.name.trim() || null : null;
+    out.push({ label, name });
+    if (out.length === 3) break;
+  }
+  return out;
 }
 
 // ─── issueCertificates (manager-only, idempotent batch) ───────────────────
@@ -444,6 +479,7 @@ export async function issueCertificates(
         endDate,
         certificateNo,
         issuedOn,
+        signatories: ctx.signatories,
       });
 
       // 3. Upload to the private bucket.
@@ -615,6 +651,7 @@ export async function reissueCertificate(
       endDate: formatDate(run.end_date),
       certificateNo: cert.certificate_no,
       issuedOn: formatDate(cert.issued_at) ?? "",
+      signatories: ctx.signatories,
     });
   } catch (e) {
     return {

@@ -28,6 +28,7 @@ export type Database = {
           is_active: boolean
           logo_storage_path: string | null
           qualitative_notes: string | null
+          signatories: Json
           updated_at: string
         }
         Insert: {
@@ -43,6 +44,7 @@ export type Database = {
           is_active?: boolean
           logo_storage_path?: string | null
           qualitative_notes?: string | null
+          signatories?: Json
           updated_at?: string
         }
         Update: {
@@ -58,6 +60,7 @@ export type Database = {
           is_active?: boolean
           logo_storage_path?: string | null
           qualitative_notes?: string | null
+          signatories?: Json
           updated_at?: string
         }
         Relationships: []

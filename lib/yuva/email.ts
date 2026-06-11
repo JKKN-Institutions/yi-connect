@@ -19,7 +19,7 @@
 import { sendEmail as sendViaResend } from "@/lib/email";
 import { createServiceClient } from "@/lib/yuva/supabase/service";
 
-/** The 8 notification triggers (spec → Third-Party Services / Resend). */
+/** The notification triggers (spec → Third-Party Services / Resend). */
 export type YuvaEmailType =
   | "application_confirmation"
   | "acceptance"
@@ -28,7 +28,8 @@ export type YuvaEmailType =
   | "certificate"
   | "schedule_change"
   | "mentor_invite"
-  | "coordinator_invite";
+  | "coordinator_invite"
+  | "run_cancelled";
 
 export interface SendYuvaEmailInput {
   to: string;

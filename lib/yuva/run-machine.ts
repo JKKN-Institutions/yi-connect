@@ -18,12 +18,16 @@ import { RUN_STATUS_LABELS, type RunStatus } from "./constants";
 // (published → applications_closed → in_progress): formCohort claims it
 // atomically via compare-and-swap, auto-closing applications.
 // published → draft is unpublish (confirmation required at the UI layer).
-// cancelled is reachable only from draft/published.
+// cancelled is reachable from draft, published, applications_closed AND
+// in_progress (decision 2026-06-11: a chapter/coordinator can cancel a run
+// after the cohort has started — records are kept, enrolled students are
+// notified, no certificates issue). It is NOT reachable from completed/
+// certified — a finished run can't be un-finished.
 const ALLOWED: Record<RunStatus, RunStatus[]> = {
   draft: ["published", "cancelled"],
   published: ["applications_closed", "in_progress", "draft", "cancelled"],
-  applications_closed: ["in_progress"],
-  in_progress: ["completed"],
+  applications_closed: ["in_progress", "cancelled"],
+  in_progress: ["completed", "cancelled"],
   completed: ["certified"],
   certified: [],
   cancelled: [],

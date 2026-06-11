@@ -23,6 +23,7 @@ import {
   scheduleChangeEmail,
   mentorInviteEmail,
   coordinatorInviteEmail,
+  runCancelledEmail,
   type RenderedEmail,
 } from "../email-templates";
 import type { YuvaEmailType } from "../email";
@@ -54,6 +55,7 @@ const ALL_TYPES: YuvaEmailType[] = [
   "schedule_change",
   "mentor_invite",
   "coordinator_invite",
+  "run_cancelled",
 ];
 
 const ACCESS_CODE = "AB3K9XQZ";
@@ -98,6 +100,11 @@ const SAMPLES: Record<YuvaEmailType, RenderedEmail> = {
     coordinatorName: "Meena R",
     academyName: "KV Matric Hr Sec School",
     portalUrl: "https://yi-connect-app.vercel.app/youth-academy/login",
+  }),
+  run_cancelled: runCancelledEmail({
+    studentName: "Priya S",
+    programName: "Climate Champions 2026",
+    academyName: "KV Matric Hr Sec School",
   }),
 };
 

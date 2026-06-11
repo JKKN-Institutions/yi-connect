@@ -11,6 +11,7 @@ import "server-only";
 
 import { publicUrl } from "@/lib/yuva/storage";
 import { createServiceClient } from "@/lib/yuva/supabase/service";
+import type { Database } from "@/types/yuva/database";
 import type { AcademySummary } from "./academy-card";
 
 type Svc = Awaited<ReturnType<typeof createServiceClient>>;
@@ -37,15 +38,35 @@ const LIVE_RUN_STATUSES = new Set([
   "in_progress",
 ]);
 
+export type AcademySignatory = { label: string; name: string | null };
+
 export type AcademyRecord = AcademySummary & {
   institution_id: string | null;
   institution_other: string | null;
   coordinator_person_id: string | null;
+  /** Configured certificate signature blocks (decision 2026-06-11). */
+  signatories: AcademySignatory[];
   created_at: string;
   updated_at: string;
   runs_count: number;
   live_runs_count: number;
 };
+
+/** Normalize the academy.signatories jsonb into the typed record shape. */
+function coerceSignatories(raw: unknown): AcademySignatory[] {
+  if (!Array.isArray(raw)) return [];
+  const out: AcademySignatory[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const rec = item as { label?: unknown; name?: unknown };
+    const label = typeof rec.label === "string" ? rec.label.trim() : "";
+    if (!label) continue;
+    const name = typeof rec.name === "string" ? rec.name.trim() || null : null;
+    out.push({ label, name });
+    if (out.length === 3) break;
+  }
+  return out;
+}
 
 export type AcademyScope =
   | { kind: "all" }
@@ -60,7 +81,7 @@ export async function fetchAcademies(
   let query = svc
     .from("academies")
     .select(
-      "id, chapter, display_name, institution_id, institution_other, is_active, logo_storage_path, capacity_norm, qualitative_notes, coordinator_person_id, created_at, updated_at"
+      "id, chapter, display_name, institution_id, institution_other, is_active, logo_storage_path, capacity_norm, qualitative_notes, coordinator_person_id, created_at, updated_at, signatories"
     )
     .order("created_at", { ascending: false });
   if (scope.kind === "chapter") query = query.eq("chapter", scope.chapter);
@@ -68,8 +89,16 @@ export async function fetchAcademies(
     if (scope.ids.length === 0) return [];
     query = query.in("id", scope.ids);
   }
-  const { data: academies } = await query;
-  if (!academies || academies.length === 0) return [];
+  const { data } = await query;
+  if (!data || data.length === 0) return [];
+  // `signatories` (jsonb, added 2026-06-11) is post-types-regen — including it
+  // in the typed select poisons the row into a SelectQueryError. Read the rows
+  // through a local typed shape so the existing columns stay strongly typed
+  // and `signatories` is available for normalization below.
+  type AcademyRow = Database["yuva"]["Tables"]["academies"]["Row"] & {
+    signatories: unknown;
+  };
+  const academies = data as unknown as AcademyRow[];
 
   // Institution names (canonical master).
   const institutionIds = [
@@ -148,6 +177,7 @@ export async function fetchAcademies(
     capacity_norm: a.capacity_norm,
     qualitative_notes: a.qualitative_notes,
     coordinator_person_id: a.coordinator_person_id,
+    signatories: coerceSignatories(a.signatories),
     coordinator: a.coordinator_person_id
       ? (coordinator.get(a.coordinator_person_id) ?? null)
       : null,

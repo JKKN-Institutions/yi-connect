@@ -47,8 +47,13 @@ const YEAR_OPTIONS = [
   "Other",
 ] as const;
 
-const DECLARATION_TEXT =
-  "I confirm that the details provided in this application are accurate, and I consent to Yi Youth Academy contacting me about this program and storing my information for cohort administration.";
+// Yi-approved declaration & consent wording (Director, 2026-06-11).
+const DECLARATION_PARAGRAPHS = [
+  "I confirm that the information in this application is true and complete to the best of my knowledge, and that I am a student of the institution named above.",
+  "I understand that Young Indians (Yi) — part of the Confederation of Indian Industry (CII) — and my Yi chapter will use the details I provide (name, email, phone, institution) only to process my application, manage my participation, communicate about the program, and issue my certificate. These details will not be sold or used for unrelated purposes.",
+  "I agree to attend the scheduled sessions in good faith and complete the program requirements.",
+] as const;
+const DECLARATION_CHECKBOX_LABEL = "I have read and agree to the above.";
 
 type Step = 1 | 2 | 3;
 
@@ -482,18 +487,33 @@ export function ApplyWizard({
               )}
             </div>
 
-            <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-slate-200 p-4">
-              <Checkbox
-                checked={form.declarationAccepted}
-                onCheckedChange={(checked) =>
-                  set("declarationAccepted", checked === true)
-                }
-                className="mt-0.5"
-              />
-              <span className="text-sm leading-relaxed text-slate-600">
-                {DECLARATION_TEXT}
-              </span>
-            </label>
+            <div className="rounded-lg border border-slate-200 p-4">
+              <p className="mb-2 text-sm font-semibold text-slate-800">
+                Declaration &amp; Consent
+              </p>
+              <div className="space-y-2">
+                {DECLARATION_PARAGRAPHS.map((para, i) => (
+                  <p
+                    key={i}
+                    className="text-sm leading-relaxed text-slate-600"
+                  >
+                    {para}
+                  </p>
+                ))}
+              </div>
+              <label className="mt-3 flex cursor-pointer items-start gap-3 border-t border-slate-100 pt-3">
+                <Checkbox
+                  checked={form.declarationAccepted}
+                  onCheckedChange={(checked) =>
+                    set("declarationAccepted", checked === true)
+                  }
+                  className="mt-0.5"
+                />
+                <span className="text-sm font-medium leading-relaxed text-slate-700">
+                  {DECLARATION_CHECKBOX_LABEL}
+                </span>
+              </label>
+            </div>
             {fieldErrors.declarationAccepted && (
               <p className="text-xs text-red-600">
                 {fieldErrors.declarationAccepted}

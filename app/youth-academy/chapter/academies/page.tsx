@@ -13,6 +13,7 @@ import { getYuvaAccess } from "@/lib/yuva/auth/yuva-access";
 import { AcademyCard } from "@/components/yuva/academies/academy-card";
 import { CoordinatorAssignDialog } from "@/components/yuva/academies/coordinator-assign-dialog";
 import { QualitativeNotesEditor } from "@/components/yuva/academies/qualitative-notes-editor";
+import { SignatoriesEditor } from "@/components/yuva/academies/signatories-editor";
 import {
   fetchAcademies,
   type AcademyScope,
@@ -110,6 +111,17 @@ export default async function ChapterAcademiesPage() {
                     <QualitativeNotesEditor
                       academyId={academy.id}
                       initialNotes={academy.qualitative_notes}
+                      canEdit={canManage}
+                    />
+                  </div>
+
+                  <div>
+                    <h3 className="mb-1.5 text-sm font-semibold text-slate-700">
+                      Certificate signatures
+                    </h3>
+                    <SignatoriesEditor
+                      academyId={academy.id}
+                      initialSignatories={academy.signatories}
                       canEdit={canManage}
                     />
                   </div>

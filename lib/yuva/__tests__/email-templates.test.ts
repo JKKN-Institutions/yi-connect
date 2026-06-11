@@ -55,6 +55,7 @@ const ALL_TYPES: YuvaEmailType[] = [
   "schedule_change",
   "mentor_invite",
   "coordinator_invite",
+  "run_cancelled",
 ];
 
 const ACCESS_CODE = "AB3K9XQZ";

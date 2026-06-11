@@ -156,6 +156,22 @@ export default async function NationalAcademyDetailPage({
       </section>
 
       <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 className="mb-2 font-semibold text-slate-900">
+          Certificate signatures
+        </h2>
+        <p className="mb-3 text-xs text-slate-400">
+          Up to 3 signature blocks printed on completion certificates. Leave
+          empty to use the default blocks (Chapter Chair · Institution
+          Coordinator). Names are optional.
+        </p>
+        <SignatoriesEditor
+          academyId={academy.id}
+          initialSignatories={academy.signatories}
+          canEdit
+        />
+      </section>
+
+      <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <h2 className="mb-2 font-semibold text-slate-900">Runs</h2>
         {!runs || runs.length === 0 ? (
           <p className="text-sm text-slate-500">

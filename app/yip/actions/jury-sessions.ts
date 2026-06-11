@@ -19,6 +19,11 @@ export type ScoreableSession = {
   sequence_order: number;
   title: string;
   agenda_type: string | null;
+  // BUG-393 (current-session matching) + BUG-395 (session blurb on the jury
+  // screen). session_key links the agenda row to its session config; description
+  // is the "what you're scoring" text surfaced to jurors.
+  session_key: string | null;
+  description: string | null;
 };
 
 // ── Read helpers (used by jury UI + results) ──────────────────────
@@ -30,7 +35,7 @@ export async function getScoreableSessions(
   const supabase = await createServiceClient();
   const { data, error } = await supabase
     .from("agenda")
-    .select("id, day, sequence_order, title, agenda_type")
+    .select("id, day, sequence_order, title, agenda_type, session_key, description")
     .eq("event_id", eventId)
     .eq("is_scoreable", true)
     .order("day")
@@ -56,7 +61,7 @@ export async function getSessionsForJury(
 
   const { data: sessions } = await supabase
     .from("agenda")
-    .select("id, day, sequence_order, title, agenda_type")
+    .select("id, day, sequence_order, title, agenda_type, session_key, description")
     .eq("event_id", eventId)
     .eq("is_scoreable", true)
     .in("id", ids)

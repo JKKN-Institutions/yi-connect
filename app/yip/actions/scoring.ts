@@ -59,9 +59,7 @@ export async function getRubricForRole(
 // configured parameters (yip.session_parameters), resolved from the agenda item
 // via its session_key (preferred) or agenda_type. Returns null when the session
 // has no configured parameters (caller falls back to the role rubric).
-export async function getSessionScoringParams(
-  agendaItemId: string
-): Promise<{
+export type SessionScoringParams = {
   criteria: {
     key: string;
     label: string;
@@ -69,7 +67,11 @@ export async function getSessionScoringParams(
     kind: "evaluation" | "participation";
   }[];
   total_max: number;
-} | null> {
+};
+
+export async function getSessionScoringParams(
+  agendaItemId: string
+): Promise<SessionScoringParams | null> {
   const supabase = await createServiceClient();
   const { data: item } = await supabase
     .from("agenda")
@@ -480,7 +482,20 @@ export async function getCurrentSpeaker(
 // ─── Get All Scoreable Participants ───────────────────────────────
 // Returns all participants with roles (for scoring outside speaker queue)
 
-export async function getScoreableParticipants(eventId: string) {
+export type ScoreableParticipant = {
+  id: string;
+  full_name: string;
+  parliament_role: string | null;
+  party_side: string | null;
+  school_name: string;
+  ministry: string | null;
+  constituency_name: string | null;
+  serial_no: number | null;
+};
+
+export async function getScoreableParticipants(
+  eventId: string
+): Promise<ScoreableParticipant[]> {
   const supabase = await createServiceClient();
 
   const { data, error } = await supabase
@@ -492,5 +507,13 @@ export async function getScoreableParticipants(eventId: string) {
     .order("full_name");
 
   if (error || !data) return [];
-  return data;
+  return data as ScoreableParticipant[];
 }
+
+// Compact rubric shape consumed by the jury screen + the bootstrap action.
+// The full row is wider; the screen only reads id/criteria/total_max.
+export type ScoringRubricData = {
+  id: string;
+  criteria: unknown;
+  total_max: number;
+};

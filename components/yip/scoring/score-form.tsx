@@ -174,6 +174,35 @@ export function ScoreForm({
     };
   }, [scores, comments, juryAssignmentId, participant.id, rubricId, eventId, agendaItemId, totalScore, flags]);
 
+  // FLUSH-ON-UNMOUNT (BUG-393): when the organiser advances the house, the
+  // jury screen auto-switches the session and remounts this form (the `key`
+  // changes). A pending 500 ms autosave debounce would otherwise be cancelled
+  // by the effect above WITHOUT firing, silently dropping unsaved edits for the
+  // previous session. Snapshot the latest dirty payload in a ref and write it
+  // synchronously on teardown so in-flight input is always preserved.
+  const flushSnapshotRef = useRef<(() => void) | null>(null);
+  flushSnapshotRef.current = () => {
+    if (!dirtyRef.current) return;
+    const prev = getFromBuffer(juryAssignmentId, participant.id, agendaItemId);
+    saveToBuffer(juryAssignmentId, {
+      participantId: participant.id,
+      rubricId,
+      eventId,
+      agendaItemId,
+      criteriaScores: cleanScores,
+      totalScore,
+      comments,
+      savedAt: new Date().toISOString(),
+      status: prev?.status === "submitted" ? "submitted" : "draft",
+      ...(flags ? { flags } : {}),
+    });
+  };
+  useEffect(() => {
+    return () => {
+      flushSnapshotRef.current?.();
+    };
+  }, []);
+
   const handleScoreChange = (key: string, value: number) => {
     if (isLocked) return;
     const criterion = criteria.find((c) => c.key === key);

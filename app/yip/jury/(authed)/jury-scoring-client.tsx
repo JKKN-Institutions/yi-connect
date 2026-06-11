@@ -13,11 +13,11 @@ import {
   type CurrentSpeakerInfo,
 } from "@/app/yip/actions/scoring";
 import {
-  getSessionsForJury,
-  type ScoreableSession,
-} from "@/app/yip/actions/jury-sessions";
+  getJuryScreenBootstrap,
+  type JuryScreenBootstrap,
+} from "@/app/yip/actions/jury";
+import { type ScoreableSession } from "@/app/yip/actions/jury-sessions";
 import {
-  getScoringFlagsConfig,
   type FlagDeltas,
   type FlagKey,
 } from "@/app/yip/actions/scoring-flags";
@@ -30,6 +30,7 @@ import {
   ChevronUp,
   Lock,
   AlertTriangle,
+  Info,
 } from "lucide-react";
 import { useOfflineSync } from "@/lib/yip/hooks/use-offline-sync";
 import { OfflineSyncBadge } from "@/components/yip/scoring/offline-sync-badge";
@@ -158,6 +159,17 @@ function JuryScoringClientInner({
   );
   const [sessionsLoaded, setSessionsLoaded] = useState(false);
 
+  // BUG-393: the live agenda item maps to a "current session"; the juror may
+  // score the current session + the immediately-previous one only (catch-up).
+  // The organiser drives this — jurors no longer pick the session manually.
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [selectableSessionIds, setSelectableSessionIds] = useState<string[]>(
+    []
+  );
+  // Track the live agenda item so a realtime update can detect a genuine
+  // house-advance and auto-switch the juror to the new session.
+  const currentAgendaItemRef = useRef<string | null>(null);
+
   // Manual participant picker state
   const [showPicker, setShowPicker] = useState(false);
   const [allParticipants, setAllParticipants] = useState<Participant[]>([]);
@@ -172,8 +184,6 @@ function JuryScoringClientInner({
   const [flags, setFlags] = useState<FlagsState>(EMPTY_FLAGS);
 
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
-  // One-shot guard for the offline prefetch (roster + rubrics + session params).
-  const prefetchedRef = useRef(false);
 
   // The active participant is either the current speaker or a manually selected one
   const activeParticipant =
@@ -278,161 +288,151 @@ function JuryScoringClientInner({
     setLoading(false);
   }, [eventId, manualParticipant, loadRubricAndScore]);
 
-  // Fetch + track scores_locked on the event row (realtime aware).
-  const loadEventLock = useCallback(async () => {
-    const { data } = await supabase
-      .from("events")
-      .select("scores_locked")
-      .eq("id", eventId)
-      .single();
-    setEventLocked(Boolean(data?.scores_locked));
-  }, [eventId, supabase]);
+  // ─── Load initial data — ONE bootstrap round-trip (BUG-392) ──────
+  //
+  // Previously the screen fired ~7 server actions on load plus two fan-out
+  // loops (getRubricForRole per distinct role ~8-10, getSessionScoringParams
+  // per session ~11). Next.js serializes server actions, so that was ~25-30
+  // sequential client round-trips. getJuryScreenBootstrap returns all of it in
+  // ONE call (the fan-outs run in parallel on the server) and seeds the offline
+  // cache that every per-participant read below falls back to.
+  const applyBootstrap = useCallback(
+    (b: JuryScreenBootstrap) => {
+      setEventLocked(b.scoresLocked);
+      setCurrentSpeaker(b.currentSpeaker);
+      setFlagDeltas(b.flagDeltas);
+      setAssignedSessions(b.sessions);
+      setAllParticipants((prev) => (prev.length > 0 ? prev : b.roster));
+      setCurrentSessionId(b.currentSessionId);
+      setSelectableSessionIds(b.selectableSessionIds);
+      currentAgendaItemRef.current = b.currentAgendaItemId;
 
-  // ─── Load initial data ──────────────────────────────────────────
+      // Default the juror's session to the live current session (organiser-
+      // driven, BUG-393). Keep an existing pick only if it's still selectable.
+      setSelectedSessionId((prev) =>
+        prev && b.selectableSessionIds.includes(prev)
+          ? prev
+          : b.currentSessionId ?? b.sessions[0]?.id ?? null
+      );
+      setSessionsLoaded(true);
 
-  useEffect(() => {
-    loadCurrentSpeaker();
-    loadEventLock();
-  }, [loadCurrentSpeaker, loadEventLock]);
+      // Seed the offline cache so participant/session switches survive an
+      // outage (replaces the old explicit prefetch loop).
+      patchOfflineCache(eventId, juryAssignmentId, {
+        sessions: b.sessions,
+        roster: b.roster,
+        rubricsByRole: b.rubricsByRole,
+        sessionParams: b.sessionParams,
+        flagDeltas: b.flagDeltas,
+      });
+    },
+    [eventId, juryAssignmentId]
+  );
 
-  // Load this juror's assigned sessions; default the selection to the live
-  // session if it's one of theirs, otherwise the first assigned session.
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      let sessions: ScoreableSession[] = [];
       try {
-        sessions = await getSessionsForJury(juryAssignmentId, eventId);
-        // Cache for offline reloads (the PWA shell can serve the page offline;
-        // this gives it the juror's sessions too).
-        patchOfflineCache(eventId, juryAssignmentId, { sessions });
+        const res = await getJuryScreenBootstrap(juryAssignmentId, eventId);
+        if (cancelled) return;
+        if (res.success) {
+          applyBootstrap(res.data);
+        } else {
+          // Authorized failure (bad session) — nothing to score.
+          setSessionsLoaded(true);
+        }
       } catch {
-        // Offline — fall back to the prefetched cache.
+        // Offline at first load — rebuild from the cache of a previous online
+        // visit so the juror can still score from the buffer.
+        if (cancelled) return;
         const cache = readOfflineCache(eventId, juryAssignmentId);
-        sessions = (cache?.sessions as ScoreableSession[] | undefined) ?? [];
+        const sessions =
+          (cache?.sessions as ScoreableSession[] | undefined) ?? [];
+        const roster = (cache?.roster as Participant[] | undefined) ?? [];
+        setAssignedSessions(sessions);
+        setAllParticipants((prev) => (prev.length > 0 ? prev : roster));
+        setFlagDeltas(
+          (cache?.flagDeltas as FlagDeltas | undefined) ?? {
+            no_confidence_brought: 3,
+            walkout: -5,
+            ruckus: -3,
+            suspension: -10,
+          }
+        );
+        // Without a live agenda item offline, allow scoring any assigned
+        // session and default to the first.
+        setCurrentSessionId(sessions[0]?.id ?? null);
+        setSelectableSessionIds(sessions.map((s) => s.id));
+        setSelectedSessionId((prev) =>
+          prev && sessions.some((s) => s.id === prev)
+            ? prev
+            : sessions[0]?.id ?? null
+        );
+        setSessionsLoaded(true);
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-      if (cancelled) return;
-      setAssignedSessions(sessions);
-      setSelectedSessionId((prev) =>
-        prev && sessions.some((s) => s.id === prev)
-          ? prev
-          : sessions[0]?.id ?? null
-      );
-      setSessionsLoaded(true);
     })();
     return () => {
       cancelled = true;
     };
-  }, [juryAssignmentId, eventId]);
+    // applyBootstrap is stable via useCallback over (eventId, juryAssignmentId).
+  }, [juryAssignmentId, eventId, applyBootstrap]);
 
-  // When the selected session changes, reload the active participant's score for
-  // that session so the form reflects the right existing values.
+  // ─── Realtime auto-switch (BUG-393) ─────────────────────────────
+  // When the organiser advances the house, re-derive the live state in one
+  // round-trip and auto-switch the juror to the NEW current session. Any
+  // in-flight score for the previous session is preserved by the ScoreForm
+  // flush-on-unmount (the form remounts when scoreKey bumps), so we never
+  // silently discard unsaved input. A juror who manually picked the (still-
+  // selectable) previous session keeps their pick.
+  const refreshLiveState = useCallback(async () => {
+    let b: JuryScreenBootstrap;
+    try {
+      const res = await getJuryScreenBootstrap(juryAssignmentId, eventId);
+      if (!res.success) return;
+      b = res.data;
+    } catch {
+      // Offline — keep the current view; the cache still backs scoring.
+      return;
+    }
+
+    const advanced = b.currentAgendaItemId !== currentAgendaItemRef.current;
+
+    setEventLocked(b.scoresLocked);
+    setCurrentSpeaker(b.currentSpeaker);
+    setFlagDeltas(b.flagDeltas);
+    setAssignedSessions(b.sessions);
+    setAllParticipants((prev) => (prev.length > 0 ? prev : b.roster));
+    setCurrentSessionId(b.currentSessionId);
+    setSelectableSessionIds(b.selectableSessionIds);
+    currentAgendaItemRef.current = b.currentAgendaItemId;
+    patchOfflineCache(eventId, juryAssignmentId, {
+      sessions: b.sessions,
+      roster: b.roster,
+      rubricsByRole: b.rubricsByRole,
+      sessionParams: b.sessionParams,
+      flagDeltas: b.flagDeltas,
+    });
+
+    setSelectedSessionId((prev) => {
+      // House advanced → jump to the new current session (organiser-driven).
+      if (advanced) return b.currentSessionId ?? prev;
+      // No advance → keep the juror's pick if it's still selectable.
+      return prev && b.selectableSessionIds.includes(prev)
+        ? prev
+        : b.currentSessionId ?? b.sessions[0]?.id ?? prev;
+    });
+  }, [eventId, juryAssignmentId]);
+
+  // When the selected session changes (incl. the initial null → current-session
+  // transition from the bootstrap), reload the active participant's score for
+  // that session so the form reflects the right existing values + rubric.
   useEffect(() => {
     if (!activeParticipant || !selectedSessionId) return;
     void loadRubricAndScore(activeParticipant);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedSessionId]);
-
-  // ─── Offline prefetch (2026-06-04) ──────────────────────────────
-  // Once the juror's sessions are known, pull EVERYTHING needed to keep
-  // scoring through an outage — the roster, each distinct role's rubric, and
-  // each assigned session's scoring parameters — into localStorage. Every
-  // server call above falls back to this cache when the network is gone.
-  // Best-effort: failures here mean we were already offline; the cache from a
-  // previous online visit (if any) still applies.
-  useEffect(() => {
-    if (!sessionsLoaded || assignedSessions.length === 0) return;
-    if (prefetchedRef.current) return;
-    prefetchedRef.current = true;
-    let cancelled = false;
-    (async () => {
-      try {
-        const roster = await getScoreableParticipants(eventId);
-        if (cancelled) return;
-        // Feed the picker too — it opens instantly and works offline.
-        setAllParticipants((prev) => (prev.length > 0 ? prev : roster));
-        patchOfflineCache(eventId, juryAssignmentId, { roster });
-
-        const roles = Array.from(
-          new Set(roster.map((p) => p.parliament_role ?? "mp"))
-        );
-        const rubricPairs = await Promise.all(
-          roles.map(async (role) => {
-            try {
-              const r = await getRubricForRole(role);
-              return r.success
-                ? ([
-                    role,
-                    {
-                      id: r.data.id,
-                      criteria: r.data.criteria,
-                      total_max: r.data.total_max,
-                    },
-                  ] as const)
-                : null;
-            } catch {
-              return null;
-            }
-          })
-        );
-        const paramPairs = await Promise.all(
-          assignedSessions.map(async (s) => {
-            try {
-              const p = await getSessionScoringParams(s.id);
-              return [s.id, p] as const;
-            } catch {
-              return [s.id, null] as const;
-            }
-          })
-        );
-        if (cancelled) return;
-        patchOfflineCache(eventId, juryAssignmentId, {
-          rubricsByRole: Object.fromEntries(
-            rubricPairs.filter((x): x is NonNullable<typeof x> => x !== null)
-          ),
-          sessionParams: Object.fromEntries(paramPairs),
-        });
-      } catch {
-        // Already offline at first load — nothing to prefetch; allow a retry
-        // on the next mount.
-        prefetchedRef.current = false;
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [sessionsLoaded, assignedSessions, eventId, juryAssignmentId]);
-
-  // Load Special-Remarks delta config once. Falls back to the migration's
-  // seeded defaults if the row is missing or the call fails.
-  useEffect(() => {
-    let cancelled = false;
-    const FALLBACK_DELTAS = {
-      no_confidence_brought: 3,
-      walkout: -5,
-      ruckus: -3,
-      suspension: -10,
-    };
-    (async () => {
-      try {
-        const res = await getScoringFlagsConfig();
-        if (cancelled) return;
-        const deltas = res.success ? res.data.deltas : FALLBACK_DELTAS;
-        setFlagDeltas(deltas);
-        patchOfflineCache(eventId, juryAssignmentId, { flagDeltas: deltas });
-      } catch {
-        // Offline — cached deltas if we have them, else the seeded defaults.
-        if (cancelled) return;
-        const cache = readOfflineCache(eventId, juryAssignmentId);
-        setFlagDeltas(
-          (cache?.flagDeltas as FlagDeltas | undefined) ?? FALLBACK_DELTAS
-        );
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [eventId, juryAssignmentId]);
 
   // Hydrate flag checkboxes whenever the active participant changes.
   // We pull straight from the scores row via a typed cast — the columns
@@ -482,6 +482,12 @@ function JuryScoringClientInner({
   }, [activeParticipant, juryAssignmentId, eventId, selectedSessionId]);
 
   // ─── Realtime: watch events table for current_agenda_item_id ────
+  // Latest-callback refs so the (stable, [eventId]-keyed) channel always
+  // invokes the freshest handlers without re-subscribing on every render.
+  const refreshLiveStateRef = useRef(refreshLiveState);
+  refreshLiveStateRef.current = refreshLiveState;
+  const loadCurrentSpeakerRef = useRef(loadCurrentSpeaker);
+  loadCurrentSpeakerRef.current = loadCurrentSpeaker;
 
   useEffect(() => {
     if (channelRef.current) {
@@ -505,8 +511,9 @@ function JuryScoringClientInner({
               .scores_locked;
             setEventLocked(Boolean(next));
           }
-          // Speaker / agenda / timer state may have changed -- reload speaker.
-          loadCurrentSpeaker();
+          // The organiser may have advanced the house — re-derive the live
+          // session in one round-trip and auto-switch the juror (BUG-393).
+          void refreshLiveStateRef.current();
         }
       )
       .on(
@@ -522,7 +529,7 @@ function JuryScoringClientInner({
             payload.new &&
             (payload.new as Record<string, unknown>).status === "speaking"
           ) {
-            loadCurrentSpeaker();
+            void loadCurrentSpeakerRef.current();
           }
         }
       )
@@ -704,31 +711,74 @@ function JuryScoringClientInner({
       )}
 
 
-      {/* Session selector — only the sessions this juror is assigned to.
-          The selected session is the agenda_item every score is filed under. */}
-      {assignedSessions.length > 0 && (
-        <div className="mx-4 mt-4">
-          <label
-            htmlFor="session-select"
-            className="block text-xs font-semibold text-gray-600 mb-1"
-          >
-            Scoring session
-          </label>
-          <select
-            id="session-select"
-            value={selectedSessionId ?? ""}
-            onChange={(e) => setSelectedSessionId(e.target.value || null)}
-            className="w-full rounded-lg border-2 border-gray-200 bg-white px-3 py-3 text-sm font-medium text-gray-900 focus:border-blue-500 focus:outline-none"
-            style={{ minHeight: "48px" }}
-          >
-            {assignedSessions.map((s) => (
-              <option key={s.id} value={s.id}>
-                Day {s.day} · {s.title}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
+      {/* Session selector — organiser-driven (BUG-393). The juror scores the
+          CURRENT session by default; the only manual choice is "catch up" on
+          the immediately-previous session. Older sessions are locked. When no
+          live agenda position is known (offline / event not started) every
+          assigned session is selectable as a fallback. */}
+      {(() => {
+        // Selectable set: the {current, immediately-previous} ids from the
+        // bootstrap, mapped back to full session rows (ordered). Falls back to
+        // all assigned sessions when the live position is unknown.
+        const selectable =
+          selectableSessionIds.length > 0
+            ? assignedSessions.filter((s) =>
+                selectableSessionIds.includes(s.id)
+              )
+            : assignedSessions;
+        if (selectable.length === 0) return null;
+        return (
+          <div className="mx-4 mt-4">
+            <label
+              htmlFor="session-select"
+              className="block text-xs font-semibold text-gray-600 mb-1"
+            >
+              Scoring session
+            </label>
+            <select
+              id="session-select"
+              value={selectedSessionId ?? ""}
+              onChange={(e) => setSelectedSessionId(e.target.value || null)}
+              className="w-full rounded-lg border-2 border-gray-200 bg-white px-3 py-3 text-sm font-medium text-gray-900 focus:border-blue-500 focus:outline-none"
+              style={{ minHeight: "48px" }}
+            >
+              {selectable.map((s) => (
+                <option key={s.id} value={s.id}>
+                  Day {s.day} · {s.title}
+                  {s.id === currentSessionId ? " (current)" : " (catch-up)"}
+                </option>
+              ))}
+            </select>
+          </div>
+        );
+      })()}
+
+      {/* Session context blurb (BUG-395) — what this session is about, so the
+          juror knows what they're scoring. Sourced from the agenda row. */}
+      {(() => {
+        const active = assignedSessions.find(
+          (s) => s.id === selectedSessionId
+        );
+        if (!active) return null;
+        return (
+          <div className="mx-4 mt-3 rounded-xl border border-blue-200 bg-blue-50/60 px-4 py-3">
+            <div className="flex items-center gap-2 text-sm font-semibold text-blue-900">
+              <Info className="size-4 shrink-0" />
+              <span>{active.title}</span>
+            </div>
+            {active.description ? (
+              <p className="mt-1 text-xs leading-relaxed text-blue-800/80">
+                {active.description}
+              </p>
+            ) : (
+              <p className="mt-1 text-xs italic text-blue-800/60">
+                Day {active.day} session — score each participant on the
+                criteria below.
+              </p>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Current agenda context */}
       {currentSpeaker && !manualParticipant && (

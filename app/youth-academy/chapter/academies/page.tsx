@@ -114,6 +114,17 @@ export default async function ChapterAcademiesPage() {
                       canEdit={canManage}
                     />
                   </div>
+
+                  <div>
+                    <h3 className="mb-1.5 text-sm font-semibold text-slate-700">
+                      Certificate signatures
+                    </h3>
+                    <SignatoriesEditor
+                      academyId={academy.id}
+                      initialSignatories={academy.signatories}
+                      canEdit={canManage}
+                    />
+                  </div>
                 </div>
               </AcademyCard>
             );

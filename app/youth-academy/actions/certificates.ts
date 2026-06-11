@@ -177,6 +177,7 @@ async function loadPdfContext(
   academyName: string;
   logoUrl: string | null;
   programTitle: string;
+  signatories: { label: string; name?: string | null }[];
   nameByPersonId: Map<string, string>;
   emailByPersonId: Map<string, string>;
   institutionByPersonId: Map<string, string>;
@@ -184,7 +185,8 @@ async function loadPdfContext(
   const [academyRes, programRes] = await Promise.all([
     svc
       .from("academies")
-      .select("display_name, logo_storage_path")
+      // `signatories` is post-types-regen; loose-read it (see cast below).
+      .select("display_name, logo_storage_path, signatories")
       .eq("id", run.academy_id)
       .maybeSingle(),
     svc

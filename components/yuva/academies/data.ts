@@ -79,11 +79,8 @@ export async function fetchAcademies(
 
   let query = svc
     .from("academies")
-    // `signatories` (jsonb, added 2026-06-11) is NOT in the typed select
-    // string — including a post-types-regen column there poisons the whole
-    // row into a SelectQueryError. Selected via a loose `*`-style cast below.
     .select(
-      "id, chapter, display_name, institution_id, institution_other, is_active, logo_storage_path, capacity_norm, qualitative_notes, coordinator_person_id, signatories, created_at, updated_at" as never
+      "id, chapter, display_name, institution_id, institution_other, is_active, logo_storage_path, capacity_norm, qualitative_notes, coordinator_person_id, created_at, updated_at, signatories"
     )
     .order("created_at", { ascending: false });
   if (scope.kind === "chapter") query = query.eq("chapter", scope.chapter);
@@ -91,8 +88,16 @@ export async function fetchAcademies(
     if (scope.ids.length === 0) return [];
     query = query.in("id", scope.ids);
   }
-  const { data: academies } = await query;
-  if (!academies || academies.length === 0) return [];
+  const { data } = await query;
+  if (!data || data.length === 0) return [];
+  // `signatories` (jsonb, added 2026-06-11) is post-types-regen — including it
+  // in the typed select poisons the row into a SelectQueryError. Read the rows
+  // through a local typed shape so the existing columns stay strongly typed
+  // and `signatories` is available for normalization below.
+  type AcademyRow = Database["yuva"]["Tables"]["academies"]["Row"] & {
+    signatories: unknown;
+  };
+  const academies = data as unknown as AcademyRow[];
 
   // Institution names (canonical master).
   const institutionIds = [

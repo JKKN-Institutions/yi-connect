@@ -194,6 +194,8 @@ export type MySchedule = {
   academyName: string;
   startDate: string | null;
   endDate: string | null;
+  /** True when the program has a syllabus document attached. */
+  hasSyllabus: boolean;
   sessions: MyScheduleSession[];
   mentors: MyMentorProfile[];
 };
@@ -220,9 +222,13 @@ export async function getMySchedule(
   const [programRes, academyRes, sessionsRes] = await Promise.all([
     svc
       .from("programs")
-      .select("title, category")
+      .select("title, category, syllabus_storage_path")
       .eq("id", run.program_id)
-      .maybeSingle(),
+      .maybeSingle<{
+        title: string;
+        category: ProgramCategory;
+        syllabus_storage_path: string | null;
+      }>(),
     svc
       .from("academies")
       .select("display_name")
@@ -324,6 +330,7 @@ export async function getMySchedule(
       academyName: academyRes.data?.display_name ?? "Yi Youth Academy",
       startDate: run.start_date,
       endDate: run.end_date,
+      hasSyllabus: !!programRes.data?.syllabus_storage_path,
       sessions: sessions.map((s) => ({
         id: s.id,
         seq: s.seq,
@@ -501,6 +508,56 @@ export async function getStudentFileUrl(
   if (!signed.ok) {
     console.error("[yuva-student] sign failed:", signed.error);
     return { success: false, error: "Could not prepare the download. Try again." };
+  }
+  return { success: true, data: { url: signed.url } };
+}
+
+// ─── 5. Program syllabus (one signed URL per run) ─────────────────────────
+
+/**
+ * Mint a signed URL for the run's program-level syllabus document. Gated by
+ * the caller's LIVE enrollment in the run — resolved here, never trusted from
+ * the cookie. Returns "File not found." when the program has no syllabus, so
+ * the absence of a syllabus is indistinguishable from a missing file.
+ */
+export async function getProgramSyllabusUrl(
+  runId: string
+): Promise<ActionResult<{ url: string }>> {
+  const personId = await requirePersonId();
+  if (!personId) return { success: false, error: AUTH_ERROR };
+  if (!UUID_RE.test(runId)) return { success: false, error: FORBIDDEN_ERROR };
+
+  const svc = await createServiceClient();
+
+  // LIVE enrollment gate — the caller must hold an active/completed seat.
+  const enrollment = await findMyEnrollment(svc, personId, runId);
+  if (!enrollment) return { success: false, error: FORBIDDEN_ERROR };
+
+  const { data: run } = await svc
+    .from("runs")
+    .select("id, program_id")
+    .eq("id", runId)
+    .maybeSingle();
+  if (!run) return { success: false, error: "File not found." };
+
+  // Column not yet in the generated types (migration 20260611160000) — read
+  // it via an explicit typed maybeSingle until the conductor regenerates types.
+  const { data: program } = await svc
+    .from("programs")
+    .select("syllabus_storage_path")
+    .eq("id", run.program_id)
+    .maybeSingle<{ syllabus_storage_path: string | null }>();
+
+  const storagePath = program?.syllabus_storage_path ?? null;
+  if (!storagePath) return { success: false, error: "File not found." };
+
+  const signed = await createSignedUrl("yuva-materials", storagePath);
+  if (!signed.ok) {
+    console.error("[yuva-student] syllabus sign failed:", signed.error);
+    return {
+      success: false,
+      error: "Could not prepare the download. Try again.",
+    };
   }
   return { success: true, data: { url: signed.url } };
 }

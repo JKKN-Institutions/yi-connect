@@ -41,6 +41,7 @@ import {
   mintStudentSession,
 } from "@/lib/yuva/auth/student-session";
 import { createServiceClient } from "@/lib/yuva/supabase/service";
+import { verifyTurnstile } from "@/lib/yuva/turnstile";
 
 type Svc = Awaited<ReturnType<typeof createServiceClient>>;
 
@@ -202,7 +203,8 @@ export async function loginWithAccessCode(
 // ─── 2. Email OTP — request ────────────────────────────────────────────────
 
 export async function requestOtp(
-  email: string
+  email: string,
+  turnstileToken?: string | null
 ): Promise<ActionResult<{ message: string }>> {
   const normalized = (email ?? "").trim().toLowerCase();
 
@@ -213,6 +215,19 @@ export async function requestOtp(
   if (!EMAIL_RE.test(normalized) || normalized.length > 254) {
     return { success: false, error: "Please enter a valid email address." };
   }
+
+  // Turnstile (abuse hardening). No-op when TURNSTILE_SECRET_KEY is unset —
+  // verifyTurnstile returns true, so behaviour is unchanged until keys are
+  // added. When enforcing, a missing/invalid token is rejected before any
+  // OTP is enqueued. (Anti-enumeration is unaffected: this gate is about the
+  // challenge, not whether an enrollment exists.)
+  if (!(await verifyTurnstile(turnstileToken ?? null, ip === "unknown" ? undefined : ip))) {
+    return {
+      success: false,
+      error: "Please complete the verification and try again.",
+    };
+  }
+
   const emailKey = `email:${normalized}`;
 
   // Every request burns one row per cap key (request caps, not failure

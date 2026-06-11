@@ -7,7 +7,7 @@
  * the action returns { csv, filename }).
  */
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import toast from "react-hot-toast";
 import { Download } from "lucide-react";
 import { exportQuarterlyCsv } from "@/app/youth-academy/actions/national-reports";
@@ -22,14 +22,24 @@ const QUARTERS = [
 const FIRST_PROGRAM_YEAR = 2026;
 
 export function QuarterlyExport() {
-  const now = new Date();
-  const currentYear = now.getFullYear();
-  const [quarter, setQuarter] = useState(Math.floor(now.getMonth() / 3) + 1);
-  const [year, setYear] = useState(currentYear);
+  // The current quarter/year depend on the wall clock, which differs between
+  // the server render and the client hydration (clock + timezone). Initialise
+  // to a deterministic constant so server and client HTML match, then resolve
+  // the real "now" after mount. This avoids a hydration mismatch.
+  const [quarter, setQuarter] = useState(1);
+  const [year, setYear] = useState(FIRST_PROGRAM_YEAR);
+  const [maxYear, setMaxYear] = useState(FIRST_PROGRAM_YEAR);
   const [pending, startTransition] = useTransition();
 
+  useEffect(() => {
+    const now = new Date();
+    setQuarter(Math.floor(now.getMonth() / 3) + 1);
+    setYear(now.getFullYear());
+    setMaxYear(now.getFullYear());
+  }, []);
+
   const years: number[] = [];
-  for (let y = currentYear; y >= Math.min(FIRST_PROGRAM_YEAR, currentYear); y--) {
+  for (let y = maxYear; y >= Math.min(FIRST_PROGRAM_YEAR, maxYear); y--) {
     years.push(y);
   }
 

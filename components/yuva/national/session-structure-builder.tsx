@@ -59,12 +59,13 @@ export type SessionBuilderInitialSession = {
   expects_submission: boolean;
 };
 
+// Monotonic counter for stable client-only row keys — never Date.now()/random,
+// so list identity is deterministic and never triggers a hydration mismatch.
+let rowKeySeq = 0;
+
 function newRow(partial?: Partial<SessionRowState>): SessionRowState {
   return {
-    key:
-      typeof crypto !== "undefined" && "randomUUID" in crypto
-        ? crypto.randomUUID()
-        : `${Date.now()}-${Math.random()}`,
+    key: `session-row-${rowKeySeq++}`,
     name: "",
     durationMinutes: "60",
     learningObjective: "",

@@ -573,6 +573,7 @@ export type Database = {
           objective: string | null
           status: Database["yuva"]["Enums"]["program_status"]
           summary: string | null
+          syllabus_storage_path: string | null
           takeaways: Json
           title: string
           total_minutes: number
@@ -586,6 +587,7 @@ export type Database = {
           objective?: string | null
           status?: Database["yuva"]["Enums"]["program_status"]
           summary?: string | null
+          syllabus_storage_path?: string | null
           takeaways?: Json
           title: string
           total_minutes?: number
@@ -599,6 +601,7 @@ export type Database = {
           objective?: string | null
           status?: Database["yuva"]["Enums"]["program_status"]
           summary?: string | null
+          syllabus_storage_path?: string | null
           takeaways?: Json
           title?: string
           total_minutes?: number

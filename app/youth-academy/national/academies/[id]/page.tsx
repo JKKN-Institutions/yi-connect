@@ -19,6 +19,7 @@ import { AcademyActiveToggle } from "@/components/yuva/academies/active-toggle";
 import { AcademyForm } from "@/components/yuva/academies/academy-form";
 import { LogoUpload } from "@/components/yuva/academies/logo-upload";
 import { QualitativeNotesEditor } from "@/components/yuva/academies/qualitative-notes-editor";
+import { SignatoriesEditor } from "@/components/yuva/academies/signatories-editor";
 import { fetchAcademyById } from "@/components/yuva/academies/data";
 import { getAcademyCompliance } from "@/app/youth-academy/actions/national-reports";
 import { ComplianceStrip } from "@/components/yuva/national/dashboard/compliance-strip";

@@ -18,6 +18,7 @@ import { GraduationCap } from "lucide-react";
 import { GoogleOAuthButton } from "@/lib/auth/google-oauth-button";
 import { getStudentSession } from "@/lib/yuva/auth/student-session";
 import { StudentLoginForm } from "@/components/yuva/student/login-form";
+import { StaffLoginForm } from "@/components/yuva/staff-login-form";
 
 export const dynamic = "force-dynamic";
 
@@ -26,9 +27,9 @@ export const metadata = { title: "Sign in" };
 export default async function YouthAcademyLoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ reason?: string; redirectTo?: string }>;
+  searchParams: Promise<{ reason?: string; redirectTo?: string; error?: string }>;
 }) {
-  const { reason } = await searchParams;
+  const { reason, redirectTo, error } = await searchParams;
 
   // Already signed in as a student → portal (convenience, not a gate).
   const session = await getStudentSession();
@@ -73,10 +74,19 @@ export default async function YouthAcademyLoginPage({
             National · Chapter · Institution · Mentor
           </h2>
           <p className="mb-4 mt-1 text-sm text-slate-500">
-            Sign in with your Yi account.
+            Sign in with your email and password, or with your Yi Google
+            account.
           </p>
+          <StaffLoginForm redirectTo={redirectTo} error={error} />
+          <div className="my-4 flex items-center gap-3">
+            <span className="h-px flex-1 bg-slate-200" />
+            <span className="text-xs uppercase tracking-wide text-slate-400">
+              or
+            </span>
+            <span className="h-px flex-1 bg-slate-200" />
+          </div>
           <GoogleOAuthButton
-            redirectTo="/youth-academy"
+            redirectTo={redirectTo ?? "/youth-academy"}
             className="w-full"
             label="Continue with Google"
           />

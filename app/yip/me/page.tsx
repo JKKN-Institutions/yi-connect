@@ -27,10 +27,20 @@ import {
   FileText,
   ChevronRight,
   Megaphone,
+  Phone,
+  UserRound,
+  HeartHandshake,
 } from "lucide-react";
 import { VoteNowCard } from "./vote-now-card";
+import { LiveNowCard } from "./live-now-card";
 import { SkillProfileCard } from "@/components/yip/skill-profile-card";
 import { getSkillProfile } from "@/app/yip/actions/skill-profile";
+import {
+  getMeContacts,
+  getMyPartyRoster,
+  type MeContactInfo,
+  type MeRosterMember,
+} from "@/app/yip/actions/me-dashboard";
 
 // ─── Session parsing ─────────────────────────────────────────────
 
@@ -226,6 +236,13 @@ export default async function ParticipantPage() {
   // this person's YIP journey (all events they've participated in).
   const skillProfile = await getSkillProfile(participant.id);
 
+  // Change Request §3 — student dashboard contacts + privacy-safe roster.
+  const [contacts, partyRoster]: [MeContactInfo, MeRosterMember[]] =
+    await Promise.all([
+      getMeContacts(participant.id),
+      getMyPartyRoster(participant.id),
+    ]);
+
   const role = participant.parliament_role;
   const side = participant.party_side as "ruling" | "opposition" | null;
   const roleLabel = role ? ROLE_LABELS[role] ?? role : null;
@@ -345,8 +362,114 @@ export default async function ParticipantPage() {
         </CardContent>
       </Card>
 
+      {/* ─── LIVE NOW (realtime agenda + timer) ────────────────────── */}
+      <LiveNowCard eventId={event.id} />
+
       {/* ─── VOTE NOW (live card) ──────────────────────────────────── */}
       <VoteNowCard eventId={event.id} participantId={participant.id} />
+
+      {/* ─── YOUR YUVA & Yi CONTACT (Change Request §3) ────────────── */}
+      {(contacts.yuva.length > 0 || contacts.yi) && (
+        <Card className="border-teal-200/50 overflow-hidden">
+          <div className="h-1 w-full bg-gradient-to-r from-teal-400 to-emerald-400" />
+          <CardContent className="pt-4 pb-4">
+            <div className="flex items-center gap-2 mb-3">
+              <HeartHandshake className="size-5 text-teal-600" />
+              <h2 className="text-sm font-bold text-gray-900">
+                Your YUVA &amp; Yi Contact
+              </h2>
+            </div>
+
+            <div className="space-y-2.5">
+              {contacts.yuva.map((y, idx) => (
+                <ContactRow
+                  key={`yuva-${idx}`}
+                  name={y.volunteer_name}
+                  sub={`YUVA · ${y.scope === "party" ? "Your Party" : y.scopeName}`}
+                  phone={y.volunteer_phone}
+                  accent="teal"
+                />
+              ))}
+
+              {contacts.yi && (contacts.yi.chair_name || contacts.yi.chair_mobile) && (
+                <ContactRow
+                  name={contacts.yi.chair_name ?? "Yi Chapter Chair"}
+                  sub={`Yi Chair${contacts.yi.chapter_name ? ` · ${contacts.yi.chapter_name}` : ""}`}
+                  phone={contacts.yi.chair_mobile}
+                  accent="orange"
+                />
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ─── YOUR PARTY (privacy-safe roster — serial # + constituency only) */}
+      {side && partyRoster.length > 0 && (
+        <Card
+          className={
+            side === "ruling" ? "border-blue-200/50" : "border-red-200/50"
+          }
+        >
+          <div
+            className={`h-1 w-full bg-gradient-to-r ${
+              side === "ruling"
+                ? "from-blue-500 to-sky-400"
+                : "from-red-500 to-rose-400"
+            }`}
+          />
+          <CardContent className="pt-4 pb-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Users
+                  className={`size-5 ${side === "ruling" ? "text-blue-600" : "text-red-600"}`}
+                />
+                <h2 className="text-sm font-bold text-gray-900">
+                  Your {side === "ruling" ? "Ruling" : "Opposition"} Party
+                </h2>
+              </div>
+              <span className="text-xs text-gray-400">
+                {partyRoster.length} members
+              </span>
+            </div>
+
+            <div className="divide-y divide-gray-100">
+              {partyRoster.map((m) => (
+                <div
+                  key={m.id}
+                  className={`flex items-center gap-3 py-2 ${m.isSelf ? "rounded-md bg-amber-50 px-2 -mx-2" : ""}`}
+                >
+                  <span
+                    className={`inline-flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+                      side === "ruling"
+                        ? "bg-blue-100 text-blue-700"
+                        : "bg-red-100 text-red-700"
+                    }`}
+                  >
+                    {m.serial_no != null ? `#${m.serial_no}` : "—"}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm text-gray-700 truncate">
+                      {m.constituency_name
+                        ? `${m.constituency_name}${m.constituency_state ? `, ${m.constituency_state}` : ""}`
+                        : "Constituency not assigned"}
+                    </p>
+                  </div>
+                  {m.isSelf && (
+                    <span className="shrink-0 rounded-full bg-amber-400 px-2 py-0.5 text-[10px] font-semibold text-white">
+                      You
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <p className="mt-3 text-[11px] text-gray-400">
+              Contact details are private. Reach members through your YUVA.
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {/* ─── QUESTION HOUR ────────────────────────────────────────── */}
       <Card className="border-cyan-200/50 overflow-hidden">
@@ -804,6 +927,52 @@ function DetailItem({
         <Icon className="size-3.5 text-gray-400 shrink-0" />
         <p className="text-sm font-medium text-gray-800 truncate">{value}</p>
       </div>
+    </div>
+  );
+}
+
+// ─── Contact Row (YUVA / Yi chair, tap-to-call) ──────────────────
+
+function ContactRow({
+  name,
+  sub,
+  phone,
+  accent,
+}: {
+  name: string;
+  sub: string;
+  phone: string | null;
+  accent: "teal" | "orange";
+}) {
+  const ring =
+    accent === "teal"
+      ? "bg-teal-100 text-teal-700"
+      : "bg-[#FF9933]/15 text-[#E68A2E]";
+
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-lg border border-gray-100 bg-gray-50/60 px-3 py-2.5">
+      <div className="flex items-center gap-2.5 min-w-0">
+        <span
+          className={`flex size-9 shrink-0 items-center justify-center rounded-full ${ring}`}
+        >
+          <UserRound className="size-4" />
+        </span>
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-gray-900 truncate">{name}</p>
+          <p className="text-[11px] text-gray-500 truncate">{sub}</p>
+        </div>
+      </div>
+      {phone ? (
+        <a
+          href={`tel:${phone}`}
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-green-50 px-3 py-1.5 text-sm font-medium text-green-700 hover:bg-green-100 transition-colors"
+        >
+          <Phone className="size-4" />
+          Call
+        </a>
+      ) : (
+        <span className="shrink-0 text-[11px] text-gray-400">No phone</span>
+      )}
     </div>
   );
 }

@@ -9,7 +9,10 @@
  */
 
 import { MINISTRIES, COMMITTEES } from "@/lib/yip/constants";
-import { CONSTITUENCIES } from "@/lib/yip/data/constituencies";
+import {
+  CONSTITUENCIES,
+  PROMINENT_CONSTITUENCIES,
+} from "@/lib/yip/data/constituencies";
 
 // ─── Types ──────────────────────────────────────────────────────────
 
@@ -24,6 +27,12 @@ export interface AllocationParticipant {
 export interface AllocationInput {
   participants: AllocationParticipant[];
   committees?: string[]; // custom committee names, defaults to COMMITTEES
+  // The event's host/chapter state (e.g. "Tamil Nadu" for an Erode event).
+  // Constituencies from this state are excluded from the pool entirely, so the
+  // rule generalises across chapters: Erode excludes TN, Mizoram excludes
+  // Mizoram, etc. Optional — when absent, only each student's home_state is
+  // avoided (legacy behaviour).
+  excludeState?: string;
 }
 
 export interface ParticipantAssignment {
@@ -120,47 +129,25 @@ export function runAllocation(input: AllocationInput): AllocationResult {
     (a, b) => b[1].length - a[1].length
   );
 
-  if (sortedSchools.length === 1) {
-    // Only 1 school — random 50/50 split
-    const shuffled = shuffle(sortedSchools[0][1]);
-    const halfPoint = Math.ceil(shuffled.length * 0.55);
-    for (let i = 0; i < shuffled.length; i++) {
-      get(shuffled[i].id).party_side = i < halfPoint ? "ruling" : "opposition";
-    }
-  } else {
-    // School with most students → Ruling
-    // School with 2nd most → Opposition
-    // Remaining: alternate to balance
-
-    // Assign first school to ruling
-    for (const p of sortedSchools[0][1]) {
-      get(p.id).party_side = "ruling";
-    }
-    // Assign second school to opposition
-    for (const p of sortedSchools[1][1]) {
-      get(p.id).party_side = "opposition";
-    }
-
-    // Track running counts
-    let rulingCount = sortedSchools[0][1].length;
-    let oppositionCount = sortedSchools[1][1].length;
-
-    // Remaining schools: assign to whichever side is smaller to balance toward ~55/45
-    for (let i = 2; i < sortedSchools.length; i++) {
-      const schoolStudents = sortedSchools[i][1];
-      const totalSoFar = rulingCount + oppositionCount;
-      const targetRuling = Math.ceil((totalSoFar + schoolStudents.length) * 0.55);
-
-      if (rulingCount < targetRuling) {
-        for (const p of schoolStudents) {
-          get(p.id).party_side = "ruling";
-        }
-        rulingCount += schoolStudents.length;
+  // Spread each school ACROSS both benches instead of assigning a whole school
+  // to one side. Previously the largest school went entirely to Ruling, the 2nd
+  // to Opposition, etc. — so classmates never debated each other and one school
+  // could dominate a bench. Now we walk students school-by-school (largest
+  // school first) and place each one on whichever bench keeps the house closest
+  // to the ~55% Ruling target. Because the balance is re-evaluated per student,
+  // a big school's members alternate between benches and end up split ~55/45.
+  const RULING_TARGET = 0.55;
+  let rulingCount = 0;
+  let oppositionCount = 0;
+  for (const [, schoolStudents] of sortedSchools) {
+    for (const p of shuffle(schoolStudents)) {
+      const projectedTotal = rulingCount + oppositionCount + 1;
+      if (rulingCount < Math.round(projectedTotal * RULING_TARGET)) {
+        get(p.id).party_side = "ruling";
+        rulingCount += 1;
       } else {
-        for (const p of schoolStudents) {
-          get(p.id).party_side = "opposition";
-        }
-        oppositionCount += schoolStudents.length;
+        get(p.id).party_side = "opposition";
+        oppositionCount += 1;
       }
     }
   }
@@ -252,20 +239,39 @@ export function runAllocation(input: AllocationInput): AllocationResult {
 
   // ── Step 5: Constituency Assignment ───────────────────────────────
 
-  const shuffledConstituencies = shuffle([...CONSTITUENCIES]);
+  // Build the candidate pool. PROMINENT constituencies (well-known cities across
+  // regions) come first so MPs get recognisable seats for debate; the rest of
+  // CONSTITUENCIES follows as fallback. The event's host state (excludeState) is
+  // dropped from the pool entirely — this generalises "exclude Tamil Nadu" to
+  // whatever chapter is hosting. Duplicates (a prominent seat also in the full
+  // list) are de-duplicated by name+state.
+  const excludeState = input.excludeState?.trim().toLowerCase() || "";
+  const keepState = (c: { state: string }) =>
+    !excludeState || c.state.toLowerCase() !== excludeState;
+  const seenSeat = new Set<string>();
+  const orderedPool: { name: string; state: string }[] = [];
+  for (const c of [
+    ...shuffle(PROMINENT_CONSTITUENCIES.filter(keepState)),
+    ...shuffle(CONSTITUENCIES.filter(keepState)),
+  ]) {
+    const seatKey = `${c.name}|${c.state}`;
+    if (seenSeat.has(seatKey)) continue;
+    seenSeat.add(seatKey);
+    orderedPool.push(c);
+  }
   const usedConstituencyIndices = new Set<number>();
 
   for (const p of participants) {
     const assignment = get(p.id);
     const homeState = p.home_state?.trim().toLowerCase() || "";
 
-    // Find a constituency not from participant's home state
+    // Pass 1: a seat not from the participant's own home state, from the pool
+    // (prominent first). The host-state exclusion is already baked into the pool.
     let assigned = false;
-    for (let i = 0; i < shuffledConstituencies.length; i++) {
+    for (let i = 0; i < orderedPool.length; i++) {
       if (usedConstituencyIndices.has(i)) continue;
-      const c = shuffledConstituencies[i];
+      const c = orderedPool[i];
       if (homeState && c.state.toLowerCase() === homeState) continue;
-
       assignment.constituency_name = c.name;
       assignment.constituency_state = c.state;
       usedConstituencyIndices.add(i);
@@ -273,11 +279,11 @@ export function runAllocation(input: AllocationInput): AllocationResult {
       break;
     }
 
-    // Fallback: if we ran out of non-home-state constituencies, use any available
+    // Pass 2: ran out of non-home-state seats — take any remaining pool seat.
     if (!assigned) {
-      for (let i = 0; i < shuffledConstituencies.length; i++) {
+      for (let i = 0; i < orderedPool.length; i++) {
         if (usedConstituencyIndices.has(i)) continue;
-        const c = shuffledConstituencies[i];
+        const c = orderedPool[i];
         assignment.constituency_name = c.name;
         assignment.constituency_state = c.state;
         usedConstituencyIndices.add(i);
@@ -286,9 +292,13 @@ export function runAllocation(input: AllocationInput): AllocationResult {
       }
     }
 
-    // Extreme edge case: more participants than constituencies (543)
+    // Pass 3: more participants than the available pool (e.g. tiny single-state
+    // pool after exclusion). Reuse a random seat from the full list so everyone
+    // still gets a constituency.
     if (!assigned) {
-      const fallback = CONSTITUENCIES[Math.floor(Math.random() * CONSTITUENCIES.length)];
+      const fallbackPool = CONSTITUENCIES.filter(keepState);
+      const source = fallbackPool.length > 0 ? fallbackPool : CONSTITUENCIES;
+      const fallback = source[Math.floor(Math.random() * source.length)];
       assignment.constituency_name = fallback.name;
       assignment.constituency_state = fallback.state;
     }
@@ -316,9 +326,21 @@ export function runAllocation(input: AllocationInput): AllocationResult {
 
   // Track committee assignments for balance
   const committeeAssignments: Map<number, { ruling: string[]; opposition: string[] }> = new Map();
+  // Per-committee headcount of each school, so we can spread schools across
+  // committees (not just keep committee sizes even).
+  const committeeSchoolCount: Map<number, Map<string, number>> = new Map();
   for (let i = 0; i < committeeNames.length; i++) {
     committeeAssignments.set(i, { ruling: [], opposition: [] });
+    committeeSchoolCount.set(i, new Map());
   }
+  const schoolKeyOf = new Map(
+    participants.map((p) => [p.id, p.school_name.trim().toLowerCase()])
+  );
+  const bumpSchool = (committeeIdx: number, pid: string) => {
+    const sk = schoolKeyOf.get(pid) ?? "";
+    const m = committeeSchoolCount.get(committeeIdx)!;
+    m.set(sk, (m.get(sk) ?? 0) + 1);
+  };
 
   // First: assign ministers to their matching committee if possible
   const alreadyAssignedToCommittee = new Set<string>();
@@ -335,6 +357,7 @@ export function runAllocation(input: AllocationInput): AllocationResult {
       assignment.committee_name = committeeNames[hintIdx];
       const side = assignment.party_side;
       committeeAssignments.get(hintIdx)![side].push(p.id);
+      bumpSchool(hintIdx, p.id);
       alreadyAssignedToCommittee.add(p.id);
     }
   }
@@ -353,20 +376,30 @@ export function runAllocation(input: AllocationInput): AllocationResult {
     side: "ruling" | "opposition"
   ) {
     for (const p of pool) {
-      // Find committee with smallest count for this side
+      const sk = schoolKeyOf.get(p.id) ?? "";
+      // Pick the committee that (1) has the fewest students from THIS student's
+      // school, then (2) is smallest overall. This spreads each school across
+      // committees while keeping committee sizes even.
       let bestIdx = 0;
-      let bestCount = Infinity;
+      let bestSchoolCount = Infinity;
+      let bestTotal = Infinity;
       for (let i = 0; i < committeeNames.length; i++) {
+        const schoolCount = committeeSchoolCount.get(i)!.get(sk) ?? 0;
         const totalInCommittee =
           committeeAssignments.get(i)!.ruling.length +
           committeeAssignments.get(i)!.opposition.length;
-        if (totalInCommittee < bestCount) {
-          bestCount = totalInCommittee;
+        if (
+          schoolCount < bestSchoolCount ||
+          (schoolCount === bestSchoolCount && totalInCommittee < bestTotal)
+        ) {
+          bestSchoolCount = schoolCount;
+          bestTotal = totalInCommittee;
           bestIdx = i;
         }
       }
       get(p.id).committee_name = committeeNames[bestIdx];
       committeeAssignments.get(bestIdx)![side].push(p.id);
+      bumpSchool(bestIdx, p.id);
     }
   }
 

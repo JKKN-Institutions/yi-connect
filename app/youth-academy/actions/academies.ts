@@ -938,3 +938,62 @@ export async function updateQualitativeNotes(input: {
   revalidateAcademyPaths(academy.id);
   return { success: true, data: { id: academy.id } };
 }
+
+// ─── updateAcademySignatories (CHAPTER + national — certificate signatures) ─
+// Signatory NAMES are chapter knowledge (decision 2026-06-11: "choose later in
+// the UI"), so the own-chapter admin / coordinator may set them, not just
+// national — gateChapterSurface enforces exactly canManageAcademy.
+
+const signatoriesSchema = z
+  .array(
+    z.object({
+      label: z.string().trim().min(1, "Each signature needs a label.").max(80),
+      name: z.string().trim().max(120).optional().nullable(),
+    })
+  )
+  .max(3, "A certificate can show at most 3 signatures.");
+
+export async function updateAcademySignatories(
+  academyId: string,
+  signatories: { label: string; name?: string | null }[]
+): Promise<ActionResult<{ id: string; count: number }>> {
+  const parsed = signatoriesSchema.safeParse(signatories);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid signatures.",
+    };
+  }
+
+  const gate = await gateChapterSurface(academyId);
+  if (!gate.ok) return { success: false, error: gate.error };
+  const { academy } = gate;
+
+  // Normalize: trim (zod already trims), drop empty optional names to null.
+  const clean = parsed.data.map((s) => ({
+    label: s.label,
+    name: s.name?.trim() ? s.name.trim() : null,
+  }));
+
+  const svc = await createServiceClient();
+  const { error } = await svc
+    .from("academies")
+    // `signatories` is a jsonb column added 2026-06-11 (post-types-regen) —
+    // loose-cast the update payload until types are regenerated.
+    .update({
+      signatories: clean,
+      updated_at: new Date().toISOString(),
+    } as never)
+    .eq("id", academy.id);
+  if (error) return { success: false, error: error.message };
+
+  await logYuvaAudit({
+    action: "update_signatories",
+    entity: "academies",
+    entity_id: academy.id,
+    chapter: academy.chapter,
+    meta: { count: clean.length, labels: clean.map((s) => s.label) },
+  });
+  revalidateAcademyPaths(academy.id);
+  return { success: true, data: { id: academy.id, count: clean.length } };
+}

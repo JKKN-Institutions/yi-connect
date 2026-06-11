@@ -11,9 +11,9 @@ type VoteSessionLike = {
 
 /**
  * Validate a vote_value against the session.
- * - bill_vote        → must be aye | nay | abstain
- * - speaker_election → must be one of config.candidateIds
- * - any other type   → allowed (unknown poll types are not constrained here)
+ * - bill_vote                       → must be aye | nay | abstain
+ * - speaker_election / party_leader → must be one of config.candidateIds
+ * - any other type                  → allowed (unknown poll types are not constrained here)
  */
 export function validateVoteValue(
   session: VoteSessionLike,
@@ -28,7 +28,13 @@ export function validateVoteValue(
       : { ok: false, error: "Invalid bill vote — must be Aye, Nay, or Abstain" };
   }
 
-  if (session.vote_type === "speaker_election") {
+  // Candidate ballots (Speaker election and Party-Leader election) both store
+  // the chosen candidate's participant id in vote_value, constrained to the
+  // session's config.candidateIds.
+  if (
+    session.vote_type === "speaker_election" ||
+    session.vote_type === "party_leader"
+  ) {
     const cfg = (session.config ?? {}) as { candidateIds?: unknown };
     const ids = Array.isArray(cfg.candidateIds)
       ? cfg.candidateIds.filter((x): x is string => typeof x === "string")

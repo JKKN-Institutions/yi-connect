@@ -185,7 +185,9 @@ async function loadPdfContext(
   const [academyRes, programRes] = await Promise.all([
     svc
       .from("academies")
-      // `signatories` is post-types-regen; loose-read it (see cast below).
+      // `signatories` (jsonb, added 2026-06-11) is post-types-regen — including
+      // it in the typed select poisons the row into a SelectQueryError, so the
+      // result is read through a local typed shape below.
       .select("display_name, logo_storage_path, signatories")
       .eq("id", run.academy_id)
       .maybeSingle(),
@@ -195,6 +197,12 @@ async function loadPdfContext(
       .eq("id", run.program_id)
       .maybeSingle(),
   ]);
+
+  const academyRow = academyRes.data as unknown as {
+    display_name: string | null;
+    logo_storage_path: string | null;
+    signatories: unknown;
+  } | null;
 
   const nameByPersonId = new Map<string, string>();
   const emailByPersonId = new Map<string, string>();

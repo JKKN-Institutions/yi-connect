@@ -101,6 +101,11 @@ const SAMPLES: Record<YuvaEmailType, RenderedEmail> = {
     academyName: "KV Matric Hr Sec School",
     portalUrl: "https://yi-connect-app.vercel.app/youth-academy/login",
   }),
+  run_cancelled: runCancelledEmail({
+    studentName: "Priya S",
+    programName: "Climate Champions 2026",
+    academyName: "KV Matric Hr Sec School",
+  }),
 };
 
 // ─── Completeness ──────────────────────────────────────────────────────────

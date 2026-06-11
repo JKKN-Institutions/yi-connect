@@ -168,6 +168,8 @@ export async function fetchAcademies(
     capacity_norm: a.capacity_norm,
     qualitative_notes: a.qualitative_notes,
     coordinator_person_id: a.coordinator_person_id,
+    // `signatories` jsonb is post-types-regen — loose-read until regenerated.
+    signatories: coerceSignatories((a as { signatories?: unknown }).signatories),
     coordinator: a.coordinator_person_id
       ? (coordinator.get(a.coordinator_person_id) ?? null)
       : null,

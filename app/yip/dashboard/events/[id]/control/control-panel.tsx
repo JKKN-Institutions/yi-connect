@@ -33,6 +33,7 @@ import {
   ListOrdered,
   Lock,
   Megaphone,
+  Pencil,
 } from "lucide-react";
 import { Switch } from "@/components/yip/ui/switch";
 import { Textarea } from "@/components/yip/ui/textarea";
@@ -40,7 +41,7 @@ import { cn } from "@/lib/yip/utils";
 import { ROLE_LABELS, ROLE_COLORS, PARTY_COLORS } from "@/lib/yip/constants";
 import { useRealtimeEvent } from "@/lib/yip/hooks/use-realtime-event";
 import { useTimer } from "@/lib/yip/hooks/use-timer";
-import { advanceAgenda, startAgendaItem, skipAgendaItem, updateEventStatus } from "@/app/yip/actions/agenda";
+import { advanceAgenda, startAgendaItem, skipAgendaItem, updateEventStatus, updateAgendaItemDuration } from "@/app/yip/actions/agenda";
 import { setAllocationLocked, setScoresLocked, setRegistrationsFrozen, pushLiveBanner, clearLiveBanner } from "@/app/yip/actions/events";
 import { startTimer, stopTimer, resetTimer } from "@/app/yip/actions/timer";
 import { advanceSpeaker, skipSpeaker, generateSpeakerQueue, getSpeakerQueue } from "@/app/yip/actions/speakers";
@@ -133,6 +134,9 @@ export function ControlPanel({
     description: string;
     action: () => void;
   }>({ open: false, title: "", description: "", action: () => {} });
+  // Inline duration editing in the agenda sidebar
+  const [editingDurationId, setEditingDurationId] = useState<string | null>(null);
+  const [durationDraft, setDurationDraft] = useState<string>("");
 
   // Realtime subscription
   const { event, agendaItems, currentAgendaItem } = useRealtimeEvent(
@@ -166,6 +170,17 @@ export function ControlPanel({
     if (event?.status === "day2_live") setActiveDay(2);
     if (event?.status === "day1_live") setActiveDay(1);
   }, [event?.status]);
+
+  // Seed the timer input from the current agenda item's planned duration
+  // (minutes → seconds). The organiser can still override the value before
+  // starting. Re-seeds whenever the current item — or its duration — changes.
+  const currentItemForSeed = currentAgendaItem;
+  useEffect(() => {
+    const mins = currentItemForSeed?.duration_minutes;
+    if (mins && mins > 0) {
+      setTimerDuration(Math.min(600, mins * 60));
+    }
+  }, [currentItemForSeed?.id, currentItemForSeed?.duration_minutes]);
 
   if (!event) return null;
 
@@ -271,6 +286,34 @@ export function ControlPanel({
       const result = await skipAgendaItem(eventId, itemId);
       if (result.success) {
         toast.success("Item skipped");
+      } else {
+        toast.error(result.error);
+      }
+    });
+  }
+
+  function handleStartEditDuration(itemId: string, current: number | null) {
+    setEditingDurationId(itemId);
+    setDurationDraft(current != null ? String(current) : "");
+  }
+
+  function handleCancelEditDuration() {
+    setEditingDurationId(null);
+    setDurationDraft("");
+  }
+
+  function handleSaveDuration(itemId: string) {
+    const minutes = Number(durationDraft);
+    if (!Number.isFinite(minutes) || minutes < 1 || minutes > 600) {
+      toast.error("Duration must be between 1 and 600 minutes");
+      return;
+    }
+    startTransition(async () => {
+      const result = await updateAgendaItemDuration(itemId, minutes);
+      if (result.success) {
+        toast.success(`Duration set to ${Math.round(minutes)} min`);
+        setEditingDurationId(null);
+        setDurationDraft("");
       } else {
         toast.error(result.error);
       }
@@ -843,62 +886,119 @@ export function ControlPanel({
                     AGENDA_STATUS_ICON[status] ?? AGENDA_STATUS_ICON.upcoming;
                   const isCurrent = item.id === currentItemId;
 
+                  const canJump =
+                    isLive &&
+                    !isCurrent &&
+                    status !== "completed" &&
+                    status !== "skipped";
+                  const isEditing = editingDurationId === item.id;
+
                   return (
-                    <button
+                    <div
                       key={item.id}
-                      onClick={() => {
-                        if (
-                          isLive &&
-                          !isCurrent &&
-                          status !== "completed" &&
-                          status !== "skipped"
-                        ) {
-                          handleJumpToItem(item.id, item.title);
-                        }
-                      }}
-                      disabled={
-                        !isLive ||
-                        isCurrent ||
-                        status === "completed" ||
-                        status === "skipped"
-                      }
                       className={cn(
-                        "flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors",
+                        "flex items-start gap-2 rounded-md px-2 py-1.5 text-sm transition-colors",
                         isCurrent
                           ? "bg-green-50 ring-1 ring-green-300"
                           : status === "completed"
                             ? "opacity-60"
                             : status === "skipped"
                               ? "opacity-40"
-                              : "hover:bg-gray-50",
-                        !isLive && "cursor-default"
+                              : "hover:bg-gray-50"
                       )}
                     >
-                      <span
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (canJump) handleJumpToItem(item.id, item.title);
+                        }}
+                        disabled={!canJump}
                         className={cn(
-                          "mt-0.5 shrink-0 text-sm leading-none",
-                          statusInfo.className
+                          "flex min-w-0 flex-1 items-start gap-2 text-left",
+                          canJump ? "cursor-pointer" : "cursor-default"
                         )}
                       >
-                        {statusInfo.icon}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p
+                        <span
                           className={cn(
-                            "truncate text-xs font-medium",
-                            status === "skipped" && "line-through",
-                            isCurrent && "text-green-800"
+                            "mt-0.5 shrink-0 text-sm leading-none",
+                            statusInfo.className
                           )}
                         >
-                          {item.title}
-                        </p>
-                        {item.duration_minutes && (
-                          <p className="text-[10px] text-muted-foreground">
-                            {item.duration_minutes} min
+                          {statusInfo.icon}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p
+                            className={cn(
+                              "truncate text-xs font-medium",
+                              status === "skipped" && "line-through",
+                              isCurrent && "text-green-800"
+                            )}
+                          >
+                            {item.title}
                           </p>
-                        )}
-                      </div>
-                    </button>
+                          {!isEditing && (
+                            <p className="text-[10px] text-muted-foreground">
+                              {item.duration_minutes
+                                ? `${item.duration_minutes} min`
+                                : "No duration set"}
+                            </p>
+                          )}
+                        </div>
+                      </button>
+                      {/* Inline duration editor */}
+                      {isEditing ? (
+                        <div className="flex shrink-0 items-center gap-1">
+                          <Input
+                            type="number"
+                            min={1}
+                            max={600}
+                            value={durationDraft}
+                            autoFocus
+                            onChange={(e) => setDurationDraft(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") handleSaveDuration(item.id);
+                              if (e.key === "Escape") handleCancelEditDuration();
+                            }}
+                            className="h-6 w-14 px-1 text-center text-xs"
+                            aria-label={`Duration in minutes for ${item.title}`}
+                          />
+                          <Button
+                            type="button"
+                            size="xs"
+                            variant="default"
+                            disabled={isPending}
+                            onClick={() => handleSaveDuration(item.id)}
+                          >
+                            <Check className="size-3" />
+                          </Button>
+                          <Button
+                            type="button"
+                            size="xs"
+                            variant="outline"
+                            disabled={isPending}
+                            onClick={handleCancelEditDuration}
+                          >
+                            ✕
+                          </Button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleStartEditDuration(
+                              item.id,
+                              item.duration_minutes
+                            )
+                          }
+                          disabled={isPending}
+                          className="mt-0.5 shrink-0 rounded p-1 text-muted-foreground hover:bg-gray-200 hover:text-gray-700"
+                          aria-label={`Edit duration for ${item.title}`}
+                          title="Edit planned duration"
+                        >
+                          <Pencil className="size-3" />
+                        </button>
+                      )}
+                    </div>
                   );
                 })}
                 {dayItems.length === 0 && (

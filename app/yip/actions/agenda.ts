@@ -186,6 +186,45 @@ export async function skipAgendaItem(
   return { success: true, data: null };
 }
 
+// ─── Update Agenda Item Duration ──────────────────────────────────
+// Lets the organiser edit an agenda item's planned duration (minutes)
+// at any time. The control panel seeds the live timer from this value.
+
+export async function updateAgendaItemDuration(
+  agendaItemId: string,
+  durationMinutes: number
+): Promise<ActionResult> {
+  const supabase = await createServiceClient();
+
+  // Look up the event this item belongs to so we can gate on it.
+  const { data: item, error: itemErr } = await supabase
+    .from("agenda")
+    .select("event_id")
+    .eq("id", agendaItemId)
+    .single();
+
+  if (itemErr || !item) return { success: false, error: "Agenda item not found" };
+
+  const access = await getYipEventAccess(item.event_id);
+  if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
+
+  // Validate: positive integer minutes, sane upper bound (10 hours).
+  const minutes = Math.round(durationMinutes);
+  if (!Number.isFinite(minutes) || minutes < 1 || minutes > 600) {
+    return { success: false, error: "Duration must be between 1 and 600 minutes" };
+  }
+
+  const { error } = await supabase
+    .from("agenda")
+    .update({ duration_minutes: minutes })
+    .eq("id", agendaItemId);
+
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/yip/dashboard/events/${item.event_id}/control`);
+  return { success: true, data: null };
+}
+
 // ─── Update Event Status ──────────────────────────────────────────
 
 export async function updateEventStatus(

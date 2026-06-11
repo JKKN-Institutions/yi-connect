@@ -33,7 +33,10 @@ import { logYuvaAudit } from "@/lib/yuva/audit";
 import { getYuvaAccess, type YuvaAccess } from "@/lib/yuva/auth/yuva-access";
 import { CAPACITY_DEFAULT, YUVA_APP, ROLE_MENTOR } from "@/lib/yuva/constants";
 import { sendYuvaEmail } from "@/lib/yuva/email";
-import { scheduleChangeEmail } from "@/lib/yuva/email-templates";
+import {
+  runCancelledEmail,
+  scheduleChangeEmail,
+} from "@/lib/yuva/email-templates";
 import {
   canTransitionRun,
   runStatusLabel,

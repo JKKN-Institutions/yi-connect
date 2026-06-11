@@ -48,6 +48,17 @@ test("legal transitions are all allowed", () => {
   );
   assert(canTransitionRun("in_progress", "completed"), "in_progress → completed");
   assert(canTransitionRun("completed", "certified"), "completed → certified");
+  // Cancel after the cohort has started (decision 2026-06-11): a run can be
+  // cancelled from applications_closed and in_progress too — records are kept,
+  // students notified, no certificates issued.
+  assert(
+    canTransitionRun("applications_closed", "cancelled"),
+    "applications_closed → cancelled (cancel after applications closed)"
+  );
+  assert(
+    canTransitionRun("in_progress", "cancelled"),
+    "in_progress → cancelled (cancel after cohort started)"
+  );
 });
 
 // ─── canTransitionRun: ILLEGAL transitions ──────────────────────────

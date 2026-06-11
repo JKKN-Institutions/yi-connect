@@ -26,6 +26,7 @@ import {
   Megaphone,
   UserCog,
   Boxes,
+  Handshake,
 } from "lucide-react";
 
 const TABS = [
@@ -39,6 +40,7 @@ const TABS = [
   { label: "Allocation", href: "/allocation", icon: Shuffle },
   { label: "Jury", href: "/jury", icon: Scale },
   { label: "Volunteers", href: "/volunteers", icon: Shield },
+  { label: "YUVA Desks", href: "/yuva", icon: Handshake },
   { label: "Branding", href: "/branding", icon: ShieldCheck },
   { label: "Topics", href: "/topics", icon: Megaphone },
   { label: "Questions", href: "/questions", icon: MessageSquare },

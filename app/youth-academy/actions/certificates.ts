@@ -254,17 +254,14 @@ async function loadPdfContext(
   }
 
   return {
-    academyName: academyRes.data?.display_name ?? "Yi Youth Academy",
-    logoUrl: academyRes.data?.logo_storage_path
-      ? publicUrl(academyRes.data.logo_storage_path)
+    academyName: academyRow?.display_name ?? "Yi Youth Academy",
+    logoUrl: academyRow?.logo_storage_path
+      ? publicUrl(academyRow.logo_storage_path)
       : null,
     programTitle: programRes.data?.title ?? "Program",
-    // `signatories` is a jsonb column added 2026-06-11 (post-types-regen);
-    // read via a loose cast and normalize to the PDF prop shape. Null/garbage
-    // → [], which makes the renderer fall back to the generic blocks.
-    signatories: coerceSignatories(
-      (academyRes.data as { signatories?: unknown } | null)?.signatories
-    ),
+    // Normalize the signatories jsonb to the PDF prop shape. Null/garbage → [],
+    // which makes the renderer fall back to the generic blocks.
+    signatories: coerceSignatories(academyRow?.signatories),
     nameByPersonId,
     emailByPersonId,
     institutionByPersonId,

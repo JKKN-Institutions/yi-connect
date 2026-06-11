@@ -10,6 +10,19 @@ type ActionResult<T = null> =
   | { success: true; data: T }
   | { success: false; error: string };
 
+/** Map raw Postgres unique-violations to messages an organizer can act on. */
+function friendlyDbError(error: { code?: string; message: string }): string {
+  if (error.code === "23505") {
+    if (error.message.includes("party_number")) {
+      return "That party number is already taken in this event (numbers are shared across both benches). Pick a different number.";
+    }
+    if (error.message.includes("name")) {
+      return "A party with that name already exists in this event.";
+    }
+  }
+  return error.message;
+}
+
 export type Party = {
   id: string;
   event_id: string;
@@ -67,7 +80,7 @@ export async function createParty(input: {
     .select()
     .single();
 
-  if (error) return { success: false, error: error.message };
+  if (error) return { success: false, error: friendlyDbError(error) };
   revalidatePath(`/yip/dashboard/events/${input.event_id}/parties`);
   return { success: true, data: data as Party };
 }
@@ -98,7 +111,25 @@ export async function updateParty(
     .select()
     .single();
 
-  if (error) return { success: false, error: error.message };
+  if (error) return { success: false, error: friendlyDbError(error) };
+
+  // Keep the denormalized party_side / party_number on assigned participants
+  // in sync when the party moves bench or is renumbered (BUG-401).
+  if (data && (input.side !== undefined || input.party_number !== undefined)) {
+    const { error: syncError } = await supabase
+      .from("participants")
+      .update({ party_side: data.side, party_number: data.party_number })
+      .eq("party_id", id)
+      .eq("event_id", data.event_id);
+    if (syncError) {
+      return {
+        success: false,
+        error: `Party was updated but its members could not be moved with it (${syncError.message}). Please retry.`,
+      };
+    }
+    revalidatePath(`/yip/dashboard/events/${data.event_id}/participants`);
+  }
+
   if (data) revalidatePath(`/yip/dashboard/events/${data.event_id}/parties`);
   return { success: true, data: data as Party };
 }

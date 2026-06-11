@@ -15,6 +15,7 @@ import {
   Flag,
   Crown,
   ArrowLeft,
+  ArrowRightLeft,
   Users,
   Hash,
 } from "lucide-react";
@@ -78,17 +79,30 @@ export function PartiesClient({
   const [assignOpen, setAssignOpen] = useState<string | null>(null);
   const [picked, setPicked] = useState<Set<string>>(new Set());
 
-  function nextPartyNumber(side: "ruling" | "opposition"): number {
-    const nums = parties
-      .filter((p) => p.side === side)
-      .map((p) => p.party_number);
+  // Party numbers are unique per EVENT (across both benches) — see
+  // parties_event_id_party_number_key. Computing per-side suggested numbers
+  // that already exist on the other bench and the insert failed (BUG-388).
+  function nextPartyNumber(): number {
+    const nums = parties.map((p) => p.party_number);
     let n = 1;
     while (nums.includes(n)) n += 1;
     return n;
   }
 
+  // Existing events name parties "Party A", "Party B", … by number.
+  // Suggest the matching name; the organizer can still overwrite it.
+  function suggestedPartyName(n: number): string {
+    const lettered =
+      n >= 1 && n <= 26 ? `Party ${String.fromCharCode(64 + n)}` : `Party ${n}`;
+    if (!parties.some((p) => p.name === lettered)) return lettered;
+    const numbered = `Party ${n}`;
+    if (!parties.some((p) => p.name === numbered)) return numbered;
+    return "";
+  }
+
   function openCreate(side: "ruling" | "opposition") {
-    setForm({ ...EMPTY_FORM, side, party_number: nextPartyNumber(side) });
+    const n = nextPartyNumber();
+    setForm({ ...EMPTY_FORM, side, party_number: n, name: suggestedPartyName(n) });
     setCreating(true);
     setEditing(null);
     setError(null);
@@ -171,6 +185,25 @@ export function PartiesClient({
       }
       setParties((prev) => prev.filter((x) => x.id !== p.id));
       setFlash(`Removed ${p.name}`);
+      setTimeout(() => setFlash(null), 2500);
+    });
+  }
+
+  /** Move a party (and its assigned members) to the other bench. BUG-401. */
+  function handleMove(p: Party) {
+    const target: "ruling" | "opposition" =
+      p.side === "ruling" ? "opposition" : "ruling";
+    startTransition(async () => {
+      const res = await updateParty(p.id, { side: target });
+      if (!res.success) {
+        setError(res.error);
+        return;
+      }
+      setError(null);
+      setParties((prev) => prev.map((x) => (x.id === p.id ? res.data : x)));
+      setFlash(
+        `Moved ${p.name} to the ${target === "ruling" ? "Ruling" : "Opposition"} Bench`
+      );
       setTimeout(() => setFlash(null), 2500);
     });
   }
@@ -274,28 +307,36 @@ export function PartiesClient({
         <Card className="border-[#FF9933]/30">
           <CardHeader>
             <CardTitle className="text-lg">
-              {editing ? `Edit: ${editing.name}` : `New ${form.side === "ruling" ? "Ruling" : "Opposition"} Party`}
+              {editing ? `Edit: ${editing.name}` : `Add Party to ${form.side === "ruling" ? "Ruling" : "Opposition"} Bench`}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className="text-xs font-medium text-[#1a1a3e]/70">Side *</label>
-                <select
-                  value={form.side}
-                  disabled={!!editing}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      side: e.target.value as "ruling" | "opposition",
-                      party_number: nextPartyNumber(e.target.value as "ruling" | "opposition"),
-                    })
-                  }
-                  className="w-full border border-input rounded-md px-3 py-2 text-sm"
-                >
-                  <option value="ruling">Ruling Bench</option>
-                  <option value="opposition">Opposition Bench</option>
-                </select>
+                {editing ? (
+                  // Editable while editing so a party can be moved between
+                  // benches (BUG-401). Members move with the party.
+                  <select
+                    value={form.side}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        side: e.target.value as "ruling" | "opposition",
+                      })
+                    }
+                    className="w-full border border-input rounded-md px-3 py-2 text-sm"
+                  >
+                    <option value="ruling">Ruling Bench</option>
+                    <option value="opposition">Opposition Bench</option>
+                  </select>
+                ) : (
+                  // Pre-assigned from the bench whose "Add Party" was clicked
+                  // — no manual side choice when adding (BUG-388).
+                  <div className="w-full border border-input rounded-md px-3 py-2 text-sm bg-gray-50 text-[#1a1a3e]/80">
+                    {form.side === "ruling" ? "Ruling Bench" : "Opposition Bench"}
+                  </div>
+                )}
               </div>
               <div>
                 <label className="text-xs font-medium text-[#1a1a3e]/70">Party Number *</label>
@@ -303,9 +344,20 @@ export function PartiesClient({
                   type="number"
                   min={1}
                   value={form.party_number}
-                  onChange={(e) =>
-                    setForm({ ...form, party_number: parseInt(e.target.value) || 1 })
-                  }
+                  onChange={(e) => {
+                    const n = parseInt(e.target.value) || 1;
+                    setForm((f) => ({
+                      ...f,
+                      party_number: n,
+                      // Auto-populate the name from the number while adding,
+                      // unless the organizer already typed their own name.
+                      name:
+                        !editing &&
+                        (f.name === "" || f.name === suggestedPartyName(f.party_number))
+                          ? suggestedPartyName(n)
+                          : f.name,
+                    }));
+                  }}
                 />
               </div>
               <div>
@@ -371,7 +423,9 @@ export function PartiesClient({
                 className="bg-[#FF9933] hover:bg-[#FF9933]/90 text-white"
               >
                 {pending && <Loader2 className="size-4 mr-2 animate-spin" />}
-                {editing ? "Save Changes" : "Create Party"}
+                {editing
+                  ? "Save Changes"
+                  : `Add Party to ${form.side === "ruling" ? "Ruling" : "Opposition"}`}
               </Button>
             </div>
           </CardContent>
@@ -450,6 +504,8 @@ export function PartiesClient({
           onCreate={() => openCreate("ruling")}
           onEdit={openEdit}
           onDelete={handleDelete}
+          onMove={handleMove}
+          movePending={pending}
           onAssign={openAssign}
           onElect={handleElectLeader}
           canDelete={canDelete}
@@ -462,6 +518,8 @@ export function PartiesClient({
           onCreate={() => openCreate("opposition")}
           onEdit={openEdit}
           onDelete={handleDelete}
+          onMove={handleMove}
+          movePending={pending}
           onAssign={openAssign}
           onElect={handleElectLeader}
           canDelete={canDelete}
@@ -479,6 +537,8 @@ function PartyBench({
   onCreate,
   onEdit,
   onDelete,
+  onMove,
+  movePending = false,
   onAssign,
   onElect,
   canDelete = true,
@@ -490,10 +550,13 @@ function PartyBench({
   onCreate: () => void;
   onEdit: (p: Party) => void;
   onDelete: (p: Party) => void;
+  onMove: (p: Party) => void;
+  movePending?: boolean;
   onAssign: (partyId: string) => void;
   onElect: (partyId: string, participantId: string) => void;
   canDelete?: boolean;
 }) {
+  const moveLabel = color === "blue" ? "Move to Opposition" : "Move to Ruling";
   const accentBg = color === "blue" ? "bg-blue-50" : "bg-red-50";
   const accentBorder = color === "blue" ? "border-blue-200" : "border-red-200";
   const accentText = color === "blue" ? "text-blue-700" : "text-red-700";
@@ -553,6 +616,16 @@ function PartyBench({
                   </div>
                 </div>
                 <div className="flex gap-1">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => onMove(p)}
+                    disabled={movePending}
+                    title={`${moveLabel} Bench — assigned members move with the party`}
+                  >
+                    <ArrowRightLeft className="size-3 mr-1" />
+                    {moveLabel}
+                  </Button>
                   <Button size="icon" variant="ghost" onClick={() => onEdit(p)}>
                     <Pencil className="size-4" />
                   </Button>

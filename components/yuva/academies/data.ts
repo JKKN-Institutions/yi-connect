@@ -11,6 +11,7 @@ import "server-only";
 
 import { publicUrl } from "@/lib/yuva/storage";
 import { createServiceClient } from "@/lib/yuva/supabase/service";
+import type { Database } from "@/types/yuva/database";
 import type { AcademySummary } from "./academy-card";
 
 type Svc = Awaited<ReturnType<typeof createServiceClient>>;

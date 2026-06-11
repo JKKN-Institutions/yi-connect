@@ -79,8 +79,11 @@ export async function fetchAcademies(
 
   let query = svc
     .from("academies")
+    // `signatories` (jsonb, added 2026-06-11) is NOT in the typed select
+    // string — including a post-types-regen column there poisons the whole
+    // row into a SelectQueryError. Selected via a loose `*`-style cast below.
     .select(
-      "id, chapter, display_name, institution_id, institution_other, is_active, logo_storage_path, capacity_norm, qualitative_notes, coordinator_person_id, signatories, created_at, updated_at"
+      "id, chapter, display_name, institution_id, institution_other, is_active, logo_storage_path, capacity_norm, qualitative_notes, coordinator_person_id, signatories, created_at, updated_at" as never
     )
     .order("created_at", { ascending: false });
   if (scope.kind === "chapter") query = query.eq("chapter", scope.chapter);

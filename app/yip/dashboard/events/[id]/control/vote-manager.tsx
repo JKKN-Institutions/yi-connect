@@ -46,10 +46,12 @@ import {
   openVote,
   closeVote,
   revealResults,
+  openRunoff,
   getSpeakerCandidates,
   getEventBills,
   type VoteCandidate,
 } from "@/app/yip/actions/voting";
+import { computeElectionOutcome } from "@/lib/yip/election-outcome";
 import {
   getFloorPanel,
   castFloorVote,
@@ -208,6 +210,27 @@ export function VoteManager({
           const result = await revealResults(voteSession.id);
           if (result.success) {
             toast.success("Results revealed!");
+          } else {
+            toast.error(result.error);
+          }
+          setConfirmDialog((prev) => ({ ...prev, open: false }));
+        });
+      },
+    });
+  }
+
+  function handleRunoff() {
+    if (!voteSession) return;
+    setConfirmDialog({
+      open: true,
+      title: "Open 60-second runoff",
+      description:
+        "Open a fresh 60-second vote between only the tied candidates to break the tie. Start the timer for 60 seconds once it opens.",
+      action: () => {
+        startTransition(async () => {
+          const result = await openRunoff(voteSession.id);
+          if (result.success) {
+            toast.success("Runoff opened — only the tied candidates are on the ballot.");
           } else {
             toast.error(result.error);
           }
@@ -384,6 +407,52 @@ export function VoteManager({
                     })()}
                   </div>
                 )}
+
+                {/* Speaker election result: Speaker (#1) + Deputy Speakers (#2,#3) */}
+                {isRevealed &&
+                  voteSession.vote_type === "speaker_election" &&
+                  (() => {
+                    const nameOf = (id: string) =>
+                      candidates.find((c) => c.id === id)?.full_name ?? id;
+                    const outcome = computeElectionOutcome("speaker_election", tallies);
+                    return (
+                      <div className="mt-3 space-y-2 rounded-lg border p-3 text-sm">
+                        {outcome.speakerId && (
+                          <div className="flex items-center gap-2 font-semibold text-amber-700">
+                            <Crown className="size-4 text-amber-500" />
+                            Speaker: {nameOf(outcome.speakerId)}
+                          </div>
+                        )}
+                        {outcome.deputyIds.length > 0 && (
+                          <div className="text-gray-700">
+                            Deputy Speaker
+                            {outcome.deputyIds.length > 1 ? "s" : ""}:{" "}
+                            {outcome.deputyIds.map(nameOf).join(", ")}
+                          </div>
+                        )}
+                        {outcome.tie && (
+                          <div className="space-y-2 rounded-md border border-amber-300 bg-amber-50 p-2">
+                            <div className="font-medium text-amber-800">
+                              Tie for the{" "}
+                              {outcome.tie.seat === "speaker"
+                                ? "Speaker seat"
+                                : "2nd Deputy Speaker seat"}{" "}
+                              ({outcome.tie.tiedCount} votes each):{" "}
+                              {outcome.tie.tiedCandidateIds.map(nameOf).join(", ")}
+                            </div>
+                            <Button
+                              size="sm"
+                              disabled={isPending}
+                              onClick={handleRunoff}
+                              className="w-full"
+                            >
+                              Open 60-second runoff
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
               </div>
             )}
 

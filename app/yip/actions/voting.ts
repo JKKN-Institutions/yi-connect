@@ -4,6 +4,11 @@ import { createServiceClient } from "@/lib/yip/supabase/server";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { requireParticipantSession } from "@/lib/yip/auth/yip-session";
 import { validateVoteValue } from "@/lib/yip/vote-validate";
+import {
+  computeElectionOutcome,
+  type VoteTally,
+  type ElectionTie,
+} from "@/lib/yip/election-outcome";
 import type { Tables, Json } from "@/types/yip/database";
 
 type VoteSession = Tables<{ schema: "yip" }, "vote_sessions">;
@@ -32,17 +37,21 @@ export interface VoteSessionWithDetails extends VoteSession {
   } | null;
 }
 
-export interface VoteTally {
-  vote_value: string;
-  count: number;
-}
-
 export interface VoteResults {
   session: VoteSession;
   tallies: VoteTally[];
   totalVotes: number;
   totalParticipants: number;
   winner?: string | null;
+  // Speaker election only: #1 = Speaker, next 2 = Deputy Speakers (Director
+  // ruling). Empty when a tie blocks a clean designation (see `tie`).
+  speakerId?: string | null;
+  deputySpeakerIds?: string[];
+  // Party-leader election only: the elected leader's participant id.
+  partyLeaderId?: string | null;
+  // Present when an exact tie at a seat boundary needs a runoff. When set, no
+  // roles/party-leader are written — the organiser opens a runoff first.
+  tie?: ElectionTie | null;
 }
 
 // ─── Open Vote ──────────────────────────────────────────────────
@@ -50,8 +59,17 @@ export interface VoteResults {
 export async function openVote(
   eventId: string,
   agendaItemId: string,
-  voteType: "speaker_election" | "bill_vote",
-  config?: { candidateIds?: string[]; billId?: string }
+  voteType: "speaker_election" | "bill_vote" | "party_leader",
+  config?: {
+    candidateIds?: string[];
+    billId?: string;
+    // party_leader only: the party whose leader is being elected. Voting is
+    // restricted to that party's own members.
+    partyId?: string;
+    // Marks a session opened as a tie runoff (UI hint only).
+    isRunoff?: boolean;
+    runoffOf?: string;
+  }
 ): Promise<ActionResult<{ sessionId: string }>> {
   const access = await getYipEventAccess(eventId);
   if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
@@ -216,12 +234,50 @@ export async function revealResults(
       .eq("id", session.bill_id);
   }
 
+  // Designate seats from the tally and persist what is unambiguously decided.
+  const outcome = computeElectionOutcome(session.vote_type, tallies);
+
+  if (session.vote_type === "speaker_election" && outcome.speakerId) {
+    // A Speaker was decided (no Speaker-seat tie). Reset all current Speaker /
+    // Deputy candidates for this event to plain MP, then assign the winners.
+    // Scoped to speaker/deputy_speaker so PM / LoP / ministers are untouched.
+    await supabase
+      .from("participants")
+      .update({ parliament_role: "mp" })
+      .eq("event_id", session.event_id)
+      .in("parliament_role", ["speaker", "deputy_speaker"]);
+    await supabase
+      .from("participants")
+      .update({ parliament_role: "speaker" })
+      .eq("id", outcome.speakerId);
+    if (outcome.deputyIds.length > 0) {
+      await supabase
+        .from("participants")
+        .update({ parliament_role: "deputy_speaker" })
+        .in("id", outcome.deputyIds);
+    }
+  }
+
+  if (session.vote_type === "party_leader" && outcome.partyLeaderId) {
+    const cfg = (session.config ?? {}) as { partyId?: string };
+    if (cfg.partyId) {
+      await supabase
+        .from("parties")
+        .update({ party_leader_id: outcome.partyLeaderId })
+        .eq("id", cfg.partyId);
+    }
+  }
+
   const results: VoteResults = {
     session: { ...session, status: "revealed" },
     tallies,
     totalVotes,
     totalParticipants: totalParticipants ?? 0,
     winner,
+    speakerId: outcome.speakerId,
+    deputySpeakerIds: outcome.deputyIds,
+    partyLeaderId: outcome.partyLeaderId,
+    tie: outcome.tie,
   };
 
   return { success: true, data: results };
@@ -261,6 +317,26 @@ export async function castVote(
   // Reject junk / non-candidate values before they pollute the tally.
   const valid = validateVoteValue(session, voteValue);
   if (!valid.ok) return { success: false, error: valid.error };
+
+  // Party-leader elections are party-scoped: only members of the party whose
+  // leader is being elected may vote. (Director ruling: each party elects its
+  // own leader, party members only.)
+  if (session.vote_type === "party_leader") {
+    const cfg = (session.config ?? {}) as { partyId?: string };
+    if (cfg.partyId) {
+      const { data: voter } = await supabase
+        .from("participants")
+        .select("party_id")
+        .eq("id", participantId)
+        .single();
+      if (!voter || voter.party_id !== cfg.partyId) {
+        return {
+          success: false,
+          error: "Only members of this party can vote for its leader",
+        };
+      }
+    }
+  }
 
   // Check if already voted (via unique constraint)
   const { data: existingVote } = await supabase
@@ -364,6 +440,7 @@ export async function getVoteResults(
 
   const totalVotes = (votes ?? []).length;
   const winner = tallies.length > 0 ? tallies[0].vote_value : null;
+  const outcome = computeElectionOutcome(session.vote_type, tallies);
 
   return {
     success: true,
@@ -371,6 +448,10 @@ export async function getVoteResults(
       session,
       tallies,
       totalVotes,
+      speakerId: outcome.speakerId,
+      deputySpeakerIds: outcome.deputyIds,
+      partyLeaderId: outcome.partyLeaderId,
+      tie: outcome.tie,
       totalParticipants: totalParticipants ?? 0,
       winner,
     },
@@ -492,4 +573,115 @@ export async function hasParticipantVoted(
     .maybeSingle();
 
   return { success: true, data: { hasVoted: Boolean(existing) } };
+}
+
+// ─── Parties (for Party-Leader elections) ───────────────────────
+
+export interface PartyLite {
+  id: string;
+  name: string;
+  side: string;
+  party_number: number;
+  party_leader_id: string | null;
+  member_count: number;
+}
+
+export async function getEventParties(
+  eventId: string
+): Promise<PartyLite[]> {
+  const supabase = await createServiceClient();
+  const { data: parties } = await supabase
+    .from("parties")
+    .select("id, name, side, party_number, party_leader_id")
+    .eq("event_id", eventId)
+    .order("party_number");
+  if (!parties) return [];
+
+  // Member count per party (for the organiser's nomination UI).
+  const { data: members } = await supabase
+    .from("participants")
+    .select("party_id")
+    .eq("event_id", eventId);
+  const counts: Record<string, number> = {};
+  (members ?? []).forEach((m) => {
+    if (m.party_id) counts[m.party_id] = (counts[m.party_id] ?? 0) + 1;
+  });
+
+  return parties.map((p) => ({
+    id: p.id,
+    name: p.name,
+    side: p.side,
+    party_number: p.party_number,
+    party_leader_id: p.party_leader_id,
+    member_count: counts[p.id] ?? 0,
+  }));
+}
+
+// ─── Party-Leader candidates (members of one party) ─────────────
+// The organiser/YUVA nominates 3–5 of these on the floor; the chosen ids go
+// into the party_leader vote session's config.candidateIds.
+export async function getPartyMembers(
+  eventId: string,
+  partyId: string
+): Promise<VoteCandidate[]> {
+  const supabase = await createServiceClient();
+  const { data, error } = await supabase
+    .from("participants")
+    .select("id, full_name, school_name, party_side, parliament_role")
+    .eq("event_id", eventId)
+    .eq("party_id", partyId)
+    .order("full_name");
+  if (error || !data) return [];
+  return data;
+}
+
+// ─── Open a tie-runoff ──────────────────────────────────────────
+// Opens a fresh election (same vote_type) restricted to ONLY the tied
+// candidates, so the organiser can break a Speaker/Deputy/Party-Leader tie with
+// a short 60-second vote (Director ruling). The original session must already
+// be revealed (it is — the tie is surfaced at reveal time).
+export async function openRunoff(
+  revealedSessionId: string
+): Promise<ActionResult<{ sessionId: string }>> {
+  const supabase = await createServiceClient();
+
+  const { data: session } = await supabase
+    .from("vote_sessions")
+    .select("*")
+    .eq("id", revealedSessionId)
+    .single();
+  if (!session) return { success: false, error: "Vote session not found" };
+
+  const access = await getYipEventAccess(session.event_id);
+  if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
+
+  // Re-derive the tie from the current tally so the runoff ballot is exactly
+  // the tied candidates (no trust in client-supplied ids).
+  const { data: votes } = await supabase
+    .from("votes")
+    .select("vote_value")
+    .eq("agenda_item_id", session.agenda_item_id)
+    .eq("vote_type", session.vote_type);
+  const tallyMap: Record<string, number> = {};
+  (votes ?? []).forEach((v) => {
+    tallyMap[v.vote_value] = (tallyMap[v.vote_value] || 0) + 1;
+  });
+  const tallies: VoteTally[] = Object.entries(tallyMap)
+    .map(([vote_value, count]) => ({ vote_value, count }))
+    .sort((a, b) => b.count - a.count);
+  const outcome = computeElectionOutcome(session.vote_type, tallies);
+  if (!outcome.tie || outcome.tie.tiedCandidateIds.length < 2) {
+    return { success: false, error: "No tie to run off — nothing to do." };
+  }
+
+  const cfg = (session.config ?? {}) as { partyId?: string };
+  return openVote(session.event_id, session.agenda_item_id, session.vote_type as
+    | "speaker_election"
+    | "bill_vote"
+    | "party_leader", {
+    candidateIds: outcome.tie.tiedCandidateIds,
+    partyId: cfg.partyId,
+    isRunoff: true,
+    runoffOf: revealedSessionId,
+  });
 }

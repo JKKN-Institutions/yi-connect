@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   addParticipant,
@@ -66,6 +66,8 @@ type Participant = {
 
 type SortKey = "full_name" | "school_name" | "class";
 
+type CheckInFilter = "all" | "in" | "out";
+
 export function ParticipantsClient({
   eventId,
   participants: initialParticipants,
@@ -87,9 +89,44 @@ export function ParticipantsClient({
   const [sortAsc, setSortAsc] = useState(true);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [checkingIn, setCheckingIn] = useState<Set<string>>(new Set());
+  const [checkInFilter, setCheckInFilter] = useState<CheckInFilter>("all");
+  // Optimistic check-in overrides: applied instantly on click so the row
+  // flips without waiting for the server action + route refresh (BUG-399/387).
+  const [checkInOverrides, setCheckInOverrides] = useState<
+    Record<string, { checked_in: boolean; checked_in_at: string | null }>
+  >({});
+
+  // Roster with optimistic check-in state applied
+  const participants = useMemo(
+    () =>
+      initialParticipants.map((p) =>
+        checkInOverrides[p.id] ? { ...p, ...checkInOverrides[p.id] } : p
+      ),
+    [initialParticipants, checkInOverrides]
+  );
+
+  // Prune overrides once the refreshed server roster confirms them, so a
+  // later change made elsewhere isn't masked by stale optimistic state.
+  useEffect(() => {
+    setCheckInOverrides((prev) => {
+      const entries = Object.entries(prev);
+      if (entries.length === 0) return prev;
+      const next: typeof prev = {};
+      let changed = false;
+      for (const [id, o] of entries) {
+        const server = initialParticipants.find((p) => p.id === id);
+        if (server && !!server.checked_in === o.checked_in) {
+          changed = true; // server caught up — drop the override
+        } else {
+          next[id] = o;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [initialParticipants]);
 
   // Derived: checked-in count
-  const checkedInCount = initialParticipants.filter((p) => p.checked_in).length;
+  const checkedInCount = participants.filter((p) => p.checked_in).length;
 
   // Form state
   const [formData, setFormData] = useState({
@@ -104,7 +141,14 @@ export function ParticipantsClient({
 
   // Filtered & sorted list
   const displayedParticipants = useMemo(() => {
-    let filtered = initialParticipants;
+    let filtered = participants;
+
+    // Check-in filter
+    if (checkInFilter === "in") {
+      filtered = filtered.filter((p) => p.checked_in);
+    } else if (checkInFilter === "out") {
+      filtered = filtered.filter((p) => !p.checked_in);
+    }
 
     // Search filter
     if (search.trim()) {
@@ -126,7 +170,7 @@ export function ParticipantsClient({
       }
       return sortAsc ? cmp : -cmp;
     });
-  }, [initialParticipants, search, sortKey, sortAsc]);
+  }, [participants, checkInFilter, search, sortKey, sortAsc]);
 
   function handleSort(key: SortKey) {
     if (sortKey === key) {
@@ -192,15 +236,35 @@ export function ParticipantsClient({
   }
 
   async function handleToggleCheckIn(participant: Participant) {
+    // Guard against rapid double-clicks while a toggle is in flight —
+    // without this a second click would immediately undo the first (BUG-387).
+    if (checkingIn.has(participant.id)) return;
     setCheckingIn((prev) => new Set(prev).add(participant.id));
 
-    const result = participant.checked_in
+    const wasCheckedIn = !!participant.checked_in;
+
+    // Optimistic flip: the row responds instantly; reverted on error.
+    setCheckInOverrides((prev) => ({
+      ...prev,
+      [participant.id]: {
+        checked_in: !wasCheckedIn,
+        checked_in_at: wasCheckedIn ? null : new Date().toISOString(),
+      },
+    }));
+
+    const result = wasCheckedIn
       ? await checkOutParticipant(participant.id, eventId)
       : await checkInParticipant(participant.id, eventId);
 
     if (result.success) {
       router.refresh();
     } else {
+      // Revert the optimistic flip
+      setCheckInOverrides((prev) => {
+        const next = { ...prev };
+        delete next[participant.id];
+        return next;
+      });
       alert(result.error);
     }
 
@@ -212,17 +276,36 @@ export function ParticipantsClient({
   }
 
   async function handleBulkCheckInAll() {
-    const unchecked = initialParticipants
+    const unchecked = participants
       .filter((p) => !p.checked_in)
       .map((p) => p.id);
 
     if (unchecked.length === 0) return;
 
     setLoading(true);
+
+    // Optimistic: mark all unchecked rows as checked in immediately
+    const now = new Date().toISOString();
+    setCheckInOverrides((prev) => {
+      const next = { ...prev };
+      for (const id of unchecked) {
+        next[id] = { checked_in: true, checked_in_at: now };
+      }
+      return next;
+    });
+
     const result = await bulkCheckIn(unchecked, eventId);
     if (result.success) {
       router.refresh();
     } else {
+      // Revert the optimistic bulk flip
+      setCheckInOverrides((prev) => {
+        const next = { ...prev };
+        for (const id of unchecked) {
+          delete next[id];
+        }
+        return next;
+      });
       alert(result.error);
     }
     setLoading(false);
@@ -244,7 +327,7 @@ export function ParticipantsClient({
       "Checked In",
       "Checked In At",
     ];
-    const rows = initialParticipants.map((p) => [
+    const rows = participants.map((p) => [
       p.full_name,
       p.school_name,
       p.class.toString(),
@@ -466,15 +549,42 @@ export function ParticipantsClient({
         </div>
       </div>
 
-      {/* Search bar */}
-      <div className="relative max-w-sm">
-        <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-gray-400" />
-        <Input
-          placeholder="Search by name or school..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="pl-8"
-        />
+      {/* Search bar + check-in filter */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative max-w-sm flex-1 basis-64">
+          <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-gray-400" />
+          <Input
+            placeholder="Search by name or school..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-8"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          {(
+            [
+              { key: "all", label: "All", count: participants.length },
+              { key: "in", label: "Checked in", count: checkedInCount },
+              {
+                key: "out",
+                label: "Not checked in",
+                count: participants.length - checkedInCount,
+              },
+            ] as const
+          ).map((opt) => (
+            <button
+              key={opt.key}
+              onClick={() => setCheckInFilter(opt.key)}
+              className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
+                checkInFilter === opt.key
+                  ? "bg-[#1a1a3e] text-white border-[#1a1a3e]"
+                  : "bg-white text-[#1a1a3e]/70 border-[#1a1a3e]/10 hover:border-[#1a1a3e]/30"
+              }`}
+            >
+              {opt.label} ({opt.count})
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Table */}
@@ -629,11 +739,13 @@ export function ParticipantsClient({
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed bg-white py-16 text-center">
           <Users className="mb-4 size-12 text-gray-300" />
           <h3 className="text-sm font-medium text-gray-700">
-            {search ? "No participants match your search" : "No participants yet"}
+            {search || checkInFilter !== "all"
+              ? "No participants match your filters"
+              : "No participants yet"}
           </h3>
           <p className="mt-1 text-xs text-gray-500">
-            {search
-              ? "Try a different search term"
+            {search || checkInFilter !== "all"
+              ? "Try a different search term or filter"
               : "Add students individually or import from CSV"}
           </p>
         </div>

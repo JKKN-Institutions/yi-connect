@@ -251,10 +251,38 @@ async function loadPdfContext(
       ? publicUrl(academyRes.data.logo_storage_path)
       : null,
     programTitle: programRes.data?.title ?? "Program",
+    // `signatories` is a jsonb column added 2026-06-11 (post-types-regen);
+    // read via a loose cast and normalize to the PDF prop shape. Null/garbage
+    // → [], which makes the renderer fall back to the generic blocks.
+    signatories: coerceSignatories(
+      (academyRes.data as { signatories?: unknown } | null)?.signatories
+    ),
     nameByPersonId,
     emailByPersonId,
     institutionByPersonId,
   };
+}
+
+/**
+ * Normalize the academy.signatories jsonb into the PDF prop shape. Defensive:
+ * any non-array / malformed value collapses to [] (renderer then falls back
+ * to the two generic signature blocks).
+ */
+function coerceSignatories(
+  raw: unknown
+): { label: string; name?: string | null }[] {
+  if (!Array.isArray(raw)) return [];
+  const out: { label: string; name?: string | null }[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const rec = item as { label?: unknown; name?: unknown };
+    const label = typeof rec.label === "string" ? rec.label.trim() : "";
+    if (!label) continue;
+    const name = typeof rec.name === "string" ? rec.name.trim() || null : null;
+    out.push({ label, name });
+    if (out.length === 3) break;
+  }
+  return out;
 }
 
 // ─── issueCertificates (manager-only, idempotent batch) ───────────────────

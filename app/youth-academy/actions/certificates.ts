@@ -171,7 +171,7 @@ async function gateCertificate(certificateId: string): Promise<CertGate> {
 
 async function loadPdfContext(
   svc: Svc,
-  run: { academy_id: string; program_id: string },
+  run: { id: string; academy_id: string; program_id: string },
   personIds: string[]
 ): Promise<{
   academyName: string;
@@ -179,6 +179,7 @@ async function loadPdfContext(
   programTitle: string;
   nameByPersonId: Map<string, string>;
   emailByPersonId: Map<string, string>;
+  institutionByPersonId: Map<string, string>;
 }> {
   const [academyRes, programRes] = await Promise.all([
     svc
@@ -195,6 +196,7 @@ async function loadPdfContext(
 
   const nameByPersonId = new Map<string, string>();
   const emailByPersonId = new Map<string, string>();
+  const institutionByPersonId = new Map<string, string>();
   if (personIds.length > 0) {
     const dir = await createDirService();
     const { data: people } = await dir
@@ -206,6 +208,39 @@ async function loadPdfContext(
       if (p.full_name) nameByPersonId.set(p.id, p.full_name);
       if (p.email) emailByPersonId.set(p.id, p.email);
     }
+
+    // Institution name (certificate "of [Institution]" clause): each student's
+    // application in this run carries either institution_id (→ yi.institutions)
+    // or free-text institution_other. Resilient — absent ⇒ clause omitted.
+    const { data: apps } = await svc
+      .from("applications")
+      .select("person_id, institution_id, institution_other")
+      .eq("run_id", run.id)
+      .in("person_id", personIds);
+    const instIds = [
+      ...new Set(
+        (apps ?? [])
+          .map((a) => a.institution_id)
+          .filter((v): v is string => !!v)
+      ),
+    ];
+    const instNameById = new Map<string, string>();
+    if (instIds.length > 0) {
+      const { data: insts } = await dir
+        .schema("yi")
+        .from("institutions")
+        .select("id, name")
+        .in("id", instIds);
+      for (const i of insts ?? []) if (i.name) instNameById.set(i.id, i.name);
+    }
+    for (const a of apps ?? []) {
+      if (!a.person_id) continue;
+      const name =
+        (a.institution_id && instNameById.get(a.institution_id)) ||
+        a.institution_other ||
+        null;
+      if (name) institutionByPersonId.set(a.person_id, name);
+    }
   }
 
   return {
@@ -216,6 +251,7 @@ async function loadPdfContext(
     programTitle: programRes.data?.title ?? "Program",
     nameByPersonId,
     emailByPersonId,
+    institutionByPersonId,
   };
 }
 
@@ -398,6 +434,8 @@ export async function issueCertificates(
         ctx.nameByPersonId.get(enrollment.person_id) ?? "Student";
       const buffer = await renderCertificatePdfBuffer({
         studentName,
+        institutionName:
+          ctx.institutionByPersonId.get(enrollment.person_id) ?? null,
         programName: ctx.programTitle,
         academyName: ctx.academyName,
         logoUrl: ctx.logoUrl,
@@ -567,6 +605,8 @@ export async function reissueCertificate(
   try {
     buffer = await renderCertificatePdfBuffer({
       studentName,
+      institutionName:
+        ctx.institutionByPersonId.get(enrollment.person_id) ?? null,
       programName: ctx.programTitle,
       academyName: ctx.academyName,
       logoUrl: ctx.logoUrl,

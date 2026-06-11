@@ -8,6 +8,7 @@ import { renderCertificatePdfBuffer } from "../certificate-pdf";
 async function main() {
   const base = {
     studentName: "Ananya Krishnamurthy",
+    institutionName: "Kongu Engineering College",
     programName: "Young Entrepreneurs Bootcamp — Cohort 1",
     academyName: "Yi Erode Youth Academy",
     chapter: "Erode",

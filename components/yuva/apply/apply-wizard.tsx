@@ -487,18 +487,33 @@ export function ApplyWizard({
               )}
             </div>
 
-            <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-slate-200 p-4">
-              <Checkbox
-                checked={form.declarationAccepted}
-                onCheckedChange={(checked) =>
-                  set("declarationAccepted", checked === true)
-                }
-                className="mt-0.5"
-              />
-              <span className="text-sm leading-relaxed text-slate-600">
-                {DECLARATION_TEXT}
-              </span>
-            </label>
+            <div className="rounded-lg border border-slate-200 p-4">
+              <p className="mb-2 text-sm font-semibold text-slate-800">
+                Declaration &amp; Consent
+              </p>
+              <div className="space-y-2">
+                {DECLARATION_PARAGRAPHS.map((para, i) => (
+                  <p
+                    key={i}
+                    className="text-sm leading-relaxed text-slate-600"
+                  >
+                    {para}
+                  </p>
+                ))}
+              </div>
+              <label className="mt-3 flex cursor-pointer items-start gap-3 border-t border-slate-100 pt-3">
+                <Checkbox
+                  checked={form.declarationAccepted}
+                  onCheckedChange={(checked) =>
+                    set("declarationAccepted", checked === true)
+                  }
+                  className="mt-0.5"
+                />
+                <span className="text-sm font-medium leading-relaxed text-slate-700">
+                  {DECLARATION_CHECKBOX_LABEL}
+                </span>
+              </label>
+            </div>
             {fieldErrors.declarationAccepted && (
               <p className="text-xs text-red-600">
                 {fieldErrors.declarationAccepted}

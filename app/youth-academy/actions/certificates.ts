@@ -646,6 +646,7 @@ export async function reissueCertificate(
       endDate: formatDate(run.end_date),
       certificateNo: cert.certificate_no,
       issuedOn: formatDate(cert.issued_at) ?? "",
+      signatories: ctx.signatories,
     });
   } catch (e) {
     return {

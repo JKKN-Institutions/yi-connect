@@ -1,0 +1,227 @@
+"use server";
+
+import { createServiceClient } from "@/lib/yip/supabase/server";
+
+/**
+ * Participant-facing reads for the student dashboard (Change Request §3).
+ *
+ * The student (participant) session is a custom cookie, NOT a Supabase auth
+ * session — so the organizer-gated helpers (getYipEventAccess) deny it. These
+ * reads use the service-role client directly, but every query is scoped to the
+ * participant's OWN event / party so a student can only ever see their own
+ * data. Mirrors how the dashboard page itself reads via createServiceClient.
+ */
+
+// ─── YUVA + Yi contact ───────────────────────────────────────────
+
+export type MeYuvaContact = {
+  /** "party" | "committee" — which assignment matched the student */
+  scope: "party" | "committee";
+  /** Party or committee display name the YUVA is handling */
+  scopeName: string;
+  volunteer_name: string;
+  volunteer_phone: string | null;
+};
+
+export type MeYiContact = {
+  chapter_name: string | null;
+  chair_name: string | null;
+  chair_mobile: string | null;
+  chair_email: string | null;
+};
+
+export type MeContactInfo = {
+  yuva: MeYuvaContact[];
+  yi: MeYiContact | null;
+};
+
+// yip.yuva_assignments is not in the generated DB types yet — a narrow local
+// cast keeps tsc happy without a types regen (the typed `.from()` overloads
+// resolve the unknown table name to `never` otherwise).
+type RawYuvaRow = {
+  id: string;
+  volunteer_id: string;
+  party_id: string | null;
+  committee_name: string | null;
+};
+
+type ServiceClient = Awaited<ReturnType<typeof createServiceClient>>;
+
+type AnyTable = {
+  select: (cols?: string) => AnyTable;
+  eq: (col: string, val: unknown) => AnyTable;
+  then: Promise<{
+    data: RawYuvaRow[] | null;
+    error: { message: string } | null;
+  }>["then"];
+};
+
+function yuvaTable(supabase: ServiceClient): AnyTable {
+  return (supabase as unknown as { from: (t: string) => AnyTable }).from(
+    "yuva_assignments"
+  );
+}
+
+/**
+ * The YUVA volunteer(s) handling THIS student's party and/or committee, plus
+ * the event's chapter (Yi) chair contact when available.
+ *
+ * Matching:
+ *   participant.party_id        → yuva_assignments.party_id
+ *   participant.committee_name  → yuva_assignments.committee_name
+ *
+ * Scoped strictly to the participant's own event + own party/committee.
+ */
+export async function getMeContacts(
+  participantId: string
+): Promise<MeContactInfo> {
+  const supabase = await createServiceClient();
+
+  // 1. Resolve the participant (own row only).
+  const { data: participant } = await supabase
+    .from("participants")
+    .select("id, event_id, party_id, committee_name")
+    .eq("id", participantId)
+    .maybeSingle();
+
+  if (!participant) return { yuva: [], yi: null };
+
+  // 2. YUVA assignments for the participant's event, then keep only the rows
+  //    that match the student's own party_id or committee_name.
+  const { data: rows } = await yuvaTable(supabase)
+    .select("id, volunteer_id, party_id, committee_name")
+    .eq("event_id", participant.event_id);
+
+  const all = (rows ?? []) as RawYuvaRow[];
+
+  const matched = all.filter((r) => {
+    if (participant.party_id && r.party_id === participant.party_id) return true;
+    if (
+      participant.committee_name &&
+      r.committee_name &&
+      r.committee_name === participant.committee_name
+    )
+      return true;
+    return false;
+  });
+
+  let yuva: MeYuvaContact[] = [];
+
+  if (matched.length > 0) {
+    const volunteerIds = [...new Set(matched.map((r) => r.volunteer_id))];
+    const { data: vols } = await supabase
+      .from("volunteers")
+      .select("id, full_name, phone")
+      .in("id", volunteerIds);
+
+    const volById = new Map(
+      (vols ?? []).map((v) => [
+        v.id,
+        v as { id: string; full_name: string; phone: string | null },
+      ])
+    );
+
+    yuva = matched.map((r) => {
+      const isParty = !!(participant.party_id && r.party_id === participant.party_id);
+      return {
+        scope: isParty ? ("party" as const) : ("committee" as const),
+        scopeName: isParty
+          ? "Your Party"
+          : r.committee_name ?? participant.committee_name ?? "Your Committee",
+        volunteer_name: volById.get(r.volunteer_id)?.full_name ?? "(unknown)",
+        volunteer_phone: volById.get(r.volunteer_id)?.phone ?? null,
+      };
+    });
+  }
+
+  // 3. Yi / chapter chair contact (cross-schema read into yi.chapters via the
+  //    event's yi_chapter_id). Degrade gracefully when not linked.
+  let yi: MeYiContact | null = null;
+
+  const { data: event } = await supabase
+    .from("events")
+    .select("yi_chapter_id")
+    .eq("id", participant.event_id)
+    .maybeSingle();
+
+  const chapterId = (event as { yi_chapter_id?: string | null } | null)
+    ?.yi_chapter_id;
+
+  if (chapterId) {
+    const { data: chapter } = await supabase
+      .schema("yi")
+      .from("chapters")
+      .select("name, chair_name, chair_mobile, chair_email")
+      .eq("id", chapterId)
+      .maybeSingle();
+
+    if (chapter) {
+      const c = chapter as {
+        name: string | null;
+        chair_name: string | null;
+        chair_mobile: string | null;
+        chair_email: string | null;
+      };
+      // Only surface a Yi contact card if at least a name or a contact exists.
+      if (c.chair_name || c.chair_mobile || c.chair_email) {
+        yi = {
+          chapter_name: c.name,
+          chair_name: c.chair_name,
+          chair_mobile: c.chair_mobile,
+          chair_email: c.chair_email,
+        };
+      }
+    }
+  }
+
+  return { yuva, yi };
+}
+
+// ─── Privacy-safe party roster ───────────────────────────────────
+
+export type MeRosterMember = {
+  id: string;
+  /** Participant serial number (displayed as #N) */
+  serial_no: number | null;
+  constituency_name: string | null;
+  constituency_state: string | null;
+  /** Whether this row is the requesting student (to highlight "You") */
+  isSelf: boolean;
+};
+
+/**
+ * The student's OWN party members. PRIVACY-CRITICAL (Change Request §3):
+ * returns ONLY serial number + constituency. Phone numbers and school names
+ * are NEVER fetched — the SELECT below deliberately omits `phone`,
+ * `parent_phone`, `email`, and `school_name`.
+ */
+export async function getMyPartyRoster(
+  participantId: string
+): Promise<MeRosterMember[]> {
+  const supabase = await createServiceClient();
+
+  const { data: me } = await supabase
+    .from("participants")
+    .select("id, event_id, party_id")
+    .eq("id", participantId)
+    .maybeSingle();
+
+  if (!me || !me.party_id) return [];
+
+  // NOTE: SELECT is intentionally limited to non-PII columns. Do NOT add
+  // phone / parent_phone / email / school_name here.
+  const { data: members } = await supabase
+    .from("participants")
+    .select("id, serial_no, constituency_name, constituency_state")
+    .eq("event_id", me.event_id)
+    .eq("party_id", me.party_id)
+    .order("serial_no", { ascending: true });
+
+  return (members ?? []).map((m) => ({
+    id: m.id,
+    serial_no: m.serial_no,
+    constituency_name: m.constituency_name,
+    constituency_state: m.constituency_state,
+    isSelf: m.id === participantId,
+  }));
+}

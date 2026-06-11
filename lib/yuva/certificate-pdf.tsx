@@ -1,11 +1,11 @@
 /**
  * Yi Youth Academy — e-certificate PDF (Phase 14).
  *
- * ⚠️ DESIGN FILE PENDING FROM THE DIRECTOR — this is the clean DUMMY design
- * for the v1 build. Placeholder zones (per spec Assumptions): student name,
- * program name, academy display name + logo, dates, certificate number,
- * signature blocks. Swap the layout for the Director's design file when it
- * arrives; the props contract below should survive the swap.
+ * Body copy is the Yi-approved "Certificate of Completion" wording (2026-06-11).
+ * Variable zones filled per student at issue time: student name, institution,
+ * program name, dates, issue date, certificate number. A bespoke designer
+ * background can later replace the layout — the props contract below survives
+ * the swap (it's the data the system fills in).
  *
  * Donor pattern: lib/yi-future/consent-pdf.tsx (@react-pdf/renderer,
  * renderToBuffer, Node runtime). Rendered server-side at issue time inside
@@ -27,6 +27,8 @@ import {
 // ─── PUBLIC PROPS ───────────────────────────────────────────────────
 export interface CertificatePdfProps {
   studentName: string;
+  /** Student's institution name (their college). Null → "of …" clause omitted. */
+  institutionName: string | null;
   programName: string;
   /** Academy display name, e.g. "Yi Erode Youth Academy". */
   academyName: string;
@@ -51,7 +53,7 @@ const SLATE = "#5b6478";
 const styles = StyleSheet.create({
   page: {
     backgroundColor: "#ffffff",
-    padding: 28,
+    padding: 20,
     fontFamily: "Helvetica",
     color: NAVY,
   },
@@ -59,14 +61,14 @@ const styles = StyleSheet.create({
     flex: 1,
     borderWidth: 2,
     borderColor: NAVY,
-    padding: 6,
+    padding: 5,
   },
   innerFrame: {
     flex: 1,
     borderWidth: 1,
     borderColor: AMBER,
-    paddingVertical: 28,
-    paddingHorizontal: 48,
+    paddingVertical: 16,
+    paddingHorizontal: 40,
     alignItems: "center",
   },
   watermark: {
@@ -112,34 +114,34 @@ const styles = StyleSheet.create({
     width: 120,
     borderBottomWidth: 1.5,
     borderBottomColor: AMBER,
-    marginVertical: 12,
+    marginVertical: 8,
   },
   certTitle: {
-    fontSize: 26,
+    fontSize: 22,
     fontFamily: "Times-Bold",
     color: NAVY,
     letterSpacing: 3,
     textTransform: "uppercase",
   },
   certSubtitle: {
-    fontSize: 10,
+    fontSize: 9,
     color: SLATE,
     letterSpacing: 1.5,
-    marginTop: 4,
+    marginTop: 3,
     textTransform: "uppercase",
   },
   presentedTo: {
     fontSize: 10,
     color: SLATE,
-    marginTop: 20,
+    marginTop: 12,
     letterSpacing: 1,
   },
   studentName: {
-    fontSize: 30,
+    fontSize: 24,
     fontFamily: "Times-BoldItalic",
     color: NAVY,
-    marginTop: 8,
-    paddingBottom: 6,
+    marginTop: 4,
+    paddingBottom: 4,
     borderBottomWidth: 1,
     borderBottomColor: SLATE,
     paddingHorizontal: 24,
@@ -148,26 +150,49 @@ const styles = StyleSheet.create({
   bodyText: {
     fontSize: 11,
     color: "#27314a",
-    marginTop: 16,
+    marginTop: 10,
     textAlign: "center",
-    lineHeight: 1.6,
-    maxWidth: 520,
+    lineHeight: 1.5,
+    maxWidth: 620,
+  },
+  bodyPara: {
+    fontSize: 10,
+    color: "#27314a",
+    marginTop: 7,
+    textAlign: "center",
+    lineHeight: 1.5,
+    maxWidth: 620,
+  },
+  congrats: {
+    fontSize: 10,
+    fontFamily: "Times-Italic",
+    color: SLATE,
+    marginTop: 8,
+    textAlign: "center",
+    lineHeight: 1.4,
+    maxWidth: 620,
+  },
+  issueLine: {
+    fontSize: 10,
+    color: NAVY,
+    marginTop: 8,
+  },
+  issueLabel: {
+    fontFamily: "Helvetica-Bold",
+  },
+  bold: {
+    fontFamily: "Helvetica-Bold",
+    color: NAVY,
   },
   programName: {
     fontFamily: "Helvetica-Bold",
     color: NAVY,
   },
-  datesLine: {
-    fontSize: 10,
-    color: SLATE,
-    marginTop: 6,
-  },
   signatureRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignSelf: "stretch",
-    marginTop: "auto",
-    paddingTop: 24,
+    marginTop: 28,
   },
   signatureBlock: {
     width: 170,
@@ -213,7 +238,7 @@ const styles = StyleSheet.create({
 export function CertificatePDF(props: CertificatePdfProps) {
   const dateRange =
     props.startDate && props.endDate
-      ? `${props.startDate} – ${props.endDate}`
+      ? `${props.startDate} to ${props.endDate}`
       : (props.startDate ?? props.endDate ?? null);
 
   return (
@@ -249,19 +274,47 @@ export function CertificatePDF(props: CertificatePdfProps) {
             <Text style={styles.certTitle}>Certificate</Text>
             <Text style={styles.certSubtitle}>of Completion</Text>
 
-            {/* Placeholder zone: student name */}
+            {/* Variable zone: student name */}
             <Text style={styles.presentedTo}>This is to certify that</Text>
             <Text style={styles.studentName}>{props.studentName}</Text>
 
-            {/* Placeholder zones: program name + dates */}
+            {/* Approved body copy (variable zones: institution, program, dates) */}
             <Text style={styles.bodyText}>
-              has successfully completed the program{" "}
-              <Text style={styles.programName}>{props.programName}</Text>
-              {" "}conducted by {props.academyName}.
+              {props.institutionName ? (
+                <>
+                  of <Text style={styles.bold}>{props.institutionName}</Text>{" "}
+                </>
+              ) : null}
+              has successfully completed the{" "}
+              <Text style={styles.programName}>{props.programName}</Text>{" "}
+              Certificate Program conducted by{" "}
+              <Text style={styles.bold}>Yi YUVA</Text> through the{" "}
+              <Text style={styles.bold}>{props.academyName}</Text>
+              {dateRange ? (
+                <>
+                  {" "}from <Text style={styles.bold}>{dateRange}</Text>
+                </>
+              ) : null}
+              .
             </Text>
-            {dateRange ? (
-              <Text style={styles.datesLine}>Program dates: {dateRange}</Text>
-            ) : null}
+            <Text style={styles.bodyPara}>
+              The participant has successfully completed all requirements of the
+              program and demonstrated commitment to learning, leadership, and
+              personal development throughout the course.
+            </Text>
+            <Text style={styles.bodyPara}>
+              In recognition of this achievement, this Certificate of Completion
+              is hereby awarded.
+            </Text>
+            <Text style={styles.issueLine}>
+              <Text style={styles.issueLabel}>Date of Issue: </Text>
+              {props.issuedOn}
+            </Text>
+            <Text style={styles.congrats}>
+              We congratulate {props.studentName} on this accomplishment and wish
+              them continued success in their academic, professional, and
+              leadership journey.
+            </Text>
 
             {/* Placeholder zone: signature blocks (dummy — Director's
                 design will define the real signatories/artwork) */}
@@ -286,7 +339,7 @@ export function CertificatePDF(props: CertificatePdfProps) {
                 Certificate No: {props.certificateNo}
               </Text>
               <Text style={styles.footerText}>
-                Issued on {props.issuedOn} · Yi Youth Academy
+                Young Indians · Yi YUVA · CII
               </Text>
             </View>
           </View>

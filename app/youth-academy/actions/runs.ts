@@ -934,7 +934,7 @@ export async function cancelRun(
     .from("runs")
     .update({ status: "cancelled", updated_at: new Date().toISOString() })
     .eq("id", run.id)
-    .in("status", CANCELLABLE_STATUSES as unknown as string[])
+    .in("status", [...CANCELLABLE_STATUSES])
     .select("id");
   if (error) return { success: false, error: error.message };
   if (!updated || updated.length === 0) {

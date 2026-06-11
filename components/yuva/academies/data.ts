@@ -37,15 +37,35 @@ const LIVE_RUN_STATUSES = new Set([
   "in_progress",
 ]);
 
+export type AcademySignatory = { label: string; name: string | null };
+
 export type AcademyRecord = AcademySummary & {
   institution_id: string | null;
   institution_other: string | null;
   coordinator_person_id: string | null;
+  /** Configured certificate signature blocks (decision 2026-06-11). */
+  signatories: AcademySignatory[];
   created_at: string;
   updated_at: string;
   runs_count: number;
   live_runs_count: number;
 };
+
+/** Normalize the academy.signatories jsonb into the typed record shape. */
+function coerceSignatories(raw: unknown): AcademySignatory[] {
+  if (!Array.isArray(raw)) return [];
+  const out: AcademySignatory[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const rec = item as { label?: unknown; name?: unknown };
+    const label = typeof rec.label === "string" ? rec.label.trim() : "";
+    if (!label) continue;
+    const name = typeof rec.name === "string" ? rec.name.trim() || null : null;
+    out.push({ label, name });
+    if (out.length === 3) break;
+  }
+  return out;
+}
 
 export type AcademyScope =
   | { kind: "all" }

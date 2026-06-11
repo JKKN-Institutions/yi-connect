@@ -43,6 +43,14 @@ export interface CertificatePdfProps {
   certificateNo: string;
   /** Issue date as a display string. */
   issuedOn: string;
+  /**
+   * Per-academy signature blocks (configured in the UI, decision 2026-06-11).
+   * `label` is required; `name` is optional (shown above the line if present).
+   * Rendered max 3 blocks. EMPTY array → fall back to the two generic blocks
+   * (Chapter Chair / Yi {chapter}; Institution Coordinator / {academyName}) so
+   * existing certificates do not regress.
+   */
+  signatories: { label: string; name?: string | null }[];
 }
 
 // ─── STYLES (dummy design — navy/amber Yi palette) ─────────────────

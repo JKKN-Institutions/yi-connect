@@ -9,9 +9,10 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCheck, DoorClosed, Loader2, Undo2 } from "lucide-react";
+import { Ban, CheckCheck, DoorClosed, Loader2, Undo2 } from "lucide-react";
 import toast from "react-hot-toast";
 import {
+  cancelRun,
   closeApplications,
   completeRun,
   unpublishRun,
@@ -28,9 +29,20 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import type { RunStatus } from "@/lib/yuva/constants";
 
-type PendingAction = "close" | "unpublish" | "complete" | null;
+type PendingAction = "close" | "unpublish" | "complete" | "cancel" | null;
+
+// Statuses from which a run can be cancelled (mirrors the server action /
+// run-machine ALLOWED map). A completed/certified run is final.
+const CANCELLABLE = new Set<RunStatus>([
+  "draft",
+  "published",
+  "applications_closed",
+  "in_progress",
+]);
 
 export function RunLifecycleControls({
   runId,
@@ -41,6 +53,7 @@ export function RunLifecycleControls({
 }) {
   const router = useRouter();
   const [pending, setPending] = useState<PendingAction>(null);
+  const [cancelReason, setCancelReason] = useState("");
 
   async function run(
     action: Exclude<PendingAction, null>,

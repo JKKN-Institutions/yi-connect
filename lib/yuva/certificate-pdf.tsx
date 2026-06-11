@@ -212,6 +212,14 @@ const styles = StyleSheet.create({
     borderBottomColor: NAVY,
     height: 26,
     marginBottom: 5,
+    justifyContent: "flex-end",
+  },
+  signatureName: {
+    fontSize: 11,
+    fontFamily: "Times-Italic",
+    color: NAVY,
+    textAlign: "center",
+    paddingBottom: 3,
   },
   signatureLabel: {
     fontSize: 8,

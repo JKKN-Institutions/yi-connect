@@ -23,6 +23,7 @@ import {
   scheduleChangeEmail,
   mentorInviteEmail,
   coordinatorInviteEmail,
+  runCancelledEmail,
   type RenderedEmail,
 } from "../email-templates";
 import type { YuvaEmailType } from "../email";

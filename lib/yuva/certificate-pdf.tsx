@@ -257,6 +257,27 @@ export function CertificatePDF(props: CertificatePdfProps) {
       ? `${props.startDate} to ${props.endDate}`
       : (props.startDate ?? props.endDate ?? null);
 
+  // Configured signature blocks (decision 2026-06-11). Trim, drop entries with
+  // a blank label, cap at 3. EMPTY → fall back to the original two generic
+  // blocks so already-issued certificates do not regress.
+  const configured = (props.signatories ?? [])
+    .map((s) => ({
+      label: (s.label ?? "").trim(),
+      name: (s.name ?? "").trim() || null,
+    }))
+    .filter((s) => s.label.length > 0)
+    .slice(0, 3);
+  const signatureBlocks: { label: string; name: string | null }[] =
+    configured.length > 0
+      ? configured
+      : [
+          { label: `Chapter Chair\nYi ${props.chapter}`, name: null },
+          {
+            label: `Institution Coordinator\n${props.academyName}`,
+            name: null,
+          },
+        ];
+
   return (
     <Document
       title={`Certificate ${props.certificateNo} — ${props.studentName}`}

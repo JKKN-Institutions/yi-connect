@@ -23,6 +23,7 @@ import { logYuvaAudit } from "@/lib/yuva/audit";
 import { sendYuvaEmail } from "@/lib/yuva/email";
 import { applicationConfirmationEmail } from "@/lib/yuva/email-templates";
 import { createServiceClient } from "@/lib/yuva/supabase/service";
+import { verifyTurnstile } from "@/lib/yuva/turnstile";
 
 const APP_URL =
   process.env.NEXT_PUBLIC_APP_URL ?? "https://yi-connect-app.vercel.app";
@@ -108,6 +109,9 @@ const applySchema = z
     declarationAccepted: z
       .boolean()
       .refine((v) => v === true, "Please accept the declaration to continue."),
+    /** Cloudflare Turnstile token. Optional/back-compatible; only verified
+     *  server-side when TURNSTILE_SECRET_KEY is set (else a no-op). */
+    turnstileToken: z.string().nullable().optional().default(null),
   })
   .superRefine((v, ctx) => {
     if (!v.institutionId && !v.institutionOther?.trim()) {
@@ -177,6 +181,17 @@ export async function submitApplication(
   const svc = await createServiceClient();
   const ip = await callerIp();
   const sinceIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+  // 0) Turnstile (abuse hardening). No-op when TURNSTILE_SECRET_KEY is unset
+  //    — verifyTurnstile returns true, so behaviour is unchanged until keys
+  //    are added. When enforcing, a missing/invalid token is rejected before
+  //    any DB read.
+  if (!(await verifyTurnstile(v.turnstileToken ?? null, ip ?? undefined))) {
+    return {
+      success: false,
+      error: "Please complete the verification and try again.",
+    };
+  }
 
   // 1) Rate caps — all fail CLOSED on a definite over-cap count.
   const { count: emailCount } = await svc

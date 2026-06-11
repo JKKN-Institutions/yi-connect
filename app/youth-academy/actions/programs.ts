@@ -20,7 +20,7 @@ import { z } from "zod";
 import { requireYuvaNational } from "@/lib/yuva/auth/require-national";
 import { createServiceClient } from "@/lib/yuva/supabase/service";
 import { logYuvaAudit } from "@/lib/yuva/audit";
-import { uploadBase64 } from "@/lib/yuva/storage";
+import { uploadBase64, removeObject } from "@/lib/yuva/storage";
 import { PROGRAM_CATEGORIES } from "@/lib/yuva/constants";
 import type { ActionResult } from "@/lib/yuva/action-result";
 
@@ -72,6 +72,19 @@ const DOCUMENT_CONTENT_TYPES = new Set([
   "image/jpeg",
   "application/zip",
 ]);
+
+// Allowed syllabus content types → file extension (one syllabus per program).
+const SYLLABUS_CONTENT_TYPES: Record<string, string> = {
+  "application/pdf": "pdf",
+  "application/msword": "doc",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+    "docx",
+  "application/vnd.ms-powerpoint": "ppt",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation":
+    "pptx",
+  "image/png": "png",
+  "image/jpeg": "jpg",
+};
 
 // ~6 MB raw file ≈ 8M base64 chars (server-action body limit is 10 MB).
 const MAX_BASE64_CHARS = 8_000_000;
@@ -344,6 +357,136 @@ export async function uploadSessionDocument(input: {
   revalidatePath(`${PROGRAMS_PATH}/${idParsed.data}`);
 
   return { success: true, data: { path } };
+}
+
+/**
+ * Attach (or replace) the program's single syllabus document. Uploads the
+ * base64 file to the private `yuva-materials` bucket at a STABLE key —
+ * `program/{programId}/syllabus.{ext}` — and stores the path on the program.
+ * Replacing simply overwrites (upsert + column update); a prior syllabus with
+ * a different extension is best-effort removed so a stale object never lingers.
+ */
+export async function uploadProgramSyllabus(
+  programId: string,
+  fileBase64: string,
+  contentType: string
+): Promise<ActionResult<{ path: string }>> {
+  const gate = await requireYuvaNational();
+  if (!gate.ok) return { success: false, error: gate.error };
+
+  const idParsed = uuidSchema.safeParse(programId);
+  if (!idParsed.success) return { success: false, error: "Invalid program id" };
+
+  if (!fileBase64 || fileBase64.length > MAX_BASE64_CHARS) {
+    return {
+      success: false,
+      error: "Syllabus must be a non-empty file of at most 6 MB",
+    };
+  }
+  const ext = SYLLABUS_CONTENT_TYPES[contentType];
+  if (!ext) {
+    return {
+      success: false,
+      error:
+        "Unsupported file type — upload a PDF, Word, PowerPoint or image (PNG/JPG) file",
+    };
+  }
+
+  const svc = await createServiceClient();
+  const { data: program, error: programError } = await svc
+    .from("programs")
+    .select("id, syllabus_storage_path")
+    .eq("id", idParsed.data)
+    .maybeSingle<{ id: string; syllabus_storage_path: string | null }>();
+  if (programError) return { success: false, error: programError.message };
+  if (!program) return { success: false, error: "Program not found" };
+
+  const path = `program/${idParsed.data}/syllabus.${ext}`;
+
+  const uploaded = await uploadBase64(
+    "yuva-materials",
+    path,
+    fileBase64,
+    contentType
+  );
+  if (!uploaded.ok) return { success: false, error: uploaded.error };
+
+  // Column not yet in the generated types (migration 20260611160000) — cast
+  // the update payload until the conductor regenerates types.
+  const { error: updateError } = await svc
+    .from("programs")
+    .update({
+      syllabus_storage_path: path,
+      updated_at: new Date().toISOString(),
+    } as never)
+    .eq("id", idParsed.data);
+  if (updateError) return { success: false, error: updateError.message };
+
+  // Drop a prior syllabus that used a different extension (stale object).
+  const prior = program.syllabus_storage_path;
+  if (prior && prior !== path) {
+    await removeObject("yuva-materials", prior);
+  }
+
+  await logYuvaAudit({
+    action: "upload_syllabus",
+    entity: "programs",
+    entity_id: idParsed.data,
+    meta: { path, content_type: contentType },
+  });
+  revalidatePath(PROGRAMS_PATH);
+  revalidatePath(`${PROGRAMS_PATH}/${idParsed.data}`);
+
+  return { success: true, data: { path } };
+}
+
+/**
+ * Remove the program's syllabus — clears the column and best-effort deletes
+ * the stored object. Idempotent (no-op when none is attached).
+ */
+export async function removeProgramSyllabus(
+  programId: string
+): Promise<ActionResult<null>> {
+  const gate = await requireYuvaNational();
+  if (!gate.ok) return { success: false, error: gate.error };
+
+  const idParsed = uuidSchema.safeParse(programId);
+  if (!idParsed.success) return { success: false, error: "Invalid program id" };
+
+  const svc = await createServiceClient();
+  const { data: program, error: programError } = await svc
+    .from("programs")
+    .select("id, syllabus_storage_path")
+    .eq("id", idParsed.data)
+    .maybeSingle<{ id: string; syllabus_storage_path: string | null }>();
+  if (programError) return { success: false, error: programError.message };
+  if (!program) return { success: false, error: "Program not found" };
+
+  const prior = program.syllabus_storage_path;
+
+  const { error: updateError } = await svc
+    .from("programs")
+    .update({
+      syllabus_storage_path: null,
+      updated_at: new Date().toISOString(),
+    } as never)
+    .eq("id", idParsed.data);
+  if (updateError) return { success: false, error: updateError.message };
+
+  if (prior) {
+    await removeObject("yuva-materials", prior);
+  }
+
+  await logYuvaAudit({
+    action: "remove_syllabus",
+    entity: "programs",
+    entity_id: idParsed.data,
+    meta: { path: prior },
+  });
+  revalidatePath(PROGRAMS_PATH);
+  revalidatePath(`${PROGRAMS_PATH}/${idParsed.data}`);
+
+  return { success: true, data: null };
 }
 
 /**

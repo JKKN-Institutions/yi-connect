@@ -65,6 +65,16 @@ export default async function ProgramEditorPage({
     notFound();
   }
 
+  // syllabus_storage_path is not yet in the generated types (migration
+  // 20260611160000) — read it as a separate typed query so the main select
+  // string stays valid against the current types.
+  const { data: syllabusRow } = await svc
+    .from("programs")
+    .select("syllabus_storage_path")
+    .eq("id", id)
+    .maybeSingle<{ syllabus_storage_path: string | null }>();
+  const syllabusStoragePath = syllabusRow?.syllabus_storage_path ?? null;
+
   const sessions = sessionsRes.data ?? [];
   const runsCount = runsRes.count ?? 0;
   const takeaways = Array.isArray(program.takeaways)
@@ -128,6 +138,7 @@ export default async function ProgramEditorPage({
             objective: program.objective ?? "",
             summary: program.summary ?? "",
             takeaways,
+            syllabusStoragePath,
           }}
         />
       </section>

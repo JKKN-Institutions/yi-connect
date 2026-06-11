@@ -11,11 +11,14 @@
  */
 
 import Link from "next/link";
-import { ArrowLeft, GraduationCap, Users } from "lucide-react";
+import { redirect } from "next/navigation";
+import { ArrowLeft, Download, FileText, GraduationCap, Users } from "lucide-react";
 import {
   getMyProgress,
   getMySchedule,
+  getProgramSyllabusUrl,
 } from "@/app/youth-academy/actions/student";
+import { Button } from "@/components/ui/button";
 import { Forbidden403 } from "@/app/youth-academy/_components/Forbidden403";
 import { CategoryBadge } from "@/components/yuva/national/category-badge";
 import { formatDateRange } from "@/components/yuva/public/format";
@@ -80,6 +83,37 @@ export default async function StudentProgramPage({
           {dates && <span className="text-slate-400"> · {dates}</span>}
         </p>
       </div>
+
+      {/* ── Program syllabus ── */}
+      {schedule.hasSyllabus && (
+        <section className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex items-center gap-3">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
+              <FileText className="size-5" />
+            </span>
+            <div>
+              <p className="text-sm font-semibold text-slate-900">
+                Program syllabus
+              </p>
+              <p className="text-xs text-slate-500">
+                The full syllabus document for this program.
+              </p>
+            </div>
+          </div>
+          <form
+            action={async () => {
+              "use server";
+              const res = await getProgramSyllabusUrl(runId);
+              if (res.success) redirect(res.data.url);
+            }}
+          >
+            <Button type="submit" variant="outline" size="sm">
+              <Download className="size-4" />
+              Download
+            </Button>
+          </form>
+        </section>
+      )}
 
       {/* ── Progress ── */}
       {progress && (

@@ -119,6 +119,20 @@ export default async function ChapterDashboardPage() {
                     </span>
                     <RunStatusBadge status={run.status} />
                   </Link>
+                  <div className="flex items-center gap-3 px-2 pb-1.5 text-xs">
+                    <Link
+                      href={`/youth-academy/chapter/runs/${run.id}/applications`}
+                      className="font-medium text-emerald-700 underline-offset-2 hover:underline"
+                    >
+                      Review applications
+                    </Link>
+                    <Link
+                      href={`/youth-academy/chapter/runs/${run.id}/cohort`}
+                      className="font-medium text-emerald-700 underline-offset-2 hover:underline"
+                    >
+                      Manage cohort
+                    </Link>
+                  </div>
                 </li>
               ))}
             </ul>
@@ -129,9 +143,17 @@ export default async function ChapterDashboardPage() {
             <Inbox className="size-4 text-amber-600" />
             <h2 className="font-semibold">Applications</h2>
           </div>
-          <p className="mt-1 text-sm text-slate-400">
-            Review queue and cohort formation — coming soon.
+          <p className="mt-1 text-sm text-slate-500">
+            {activeRuns.length === 0
+              ? "Open a run to review applications and form its cohort."
+              : "Open a run above to review its application queue and form the cohort."}
           </p>
+          <Link
+            href="/youth-academy/chapter/runs"
+            className="mt-2 inline-block text-xs font-medium text-emerald-700 underline-offset-2 hover:underline"
+          >
+            Go to runs →
+          </Link>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-5">
           <div className="flex items-center gap-2 text-slate-700">

@@ -29,6 +29,7 @@ import {
   submitApplication,
   type SubmitApplicationData,
 } from "@/app/youth-academy/actions/apply";
+import { YuvaTurnstile } from "@/components/yuva/turnstile";
 import {
   InstitutionSearch,
   type InstitutionValue,
@@ -126,6 +127,9 @@ export function ApplyWizard({
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [serverError, setServerError] = useState<string | null>(null);
   const [result, setResult] = useState<SubmitApplicationData | null>(null);
+  // Turnstile token (null until solved). With no site key the widget renders
+  // nothing and this stays null — the server treats it as a no-op.
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
@@ -225,6 +229,7 @@ export function ApplyWizard({
         motivation: form.motivation.trim(),
         membershipClaim: form.membershipClaim as "member" | "want_to_join",
         declarationAccepted: form.declarationAccepted,
+        turnstileToken,
       });
       if (res.success) {
         setResult(res.data);
@@ -519,6 +524,10 @@ export function ApplyWizard({
                 {fieldErrors.declarationAccepted}
               </p>
             )}
+
+            {/* Abuse hardening — renders nothing unless a Turnstile site key
+                is configured (NEXT_PUBLIC_TURNSTILE_SITE_KEY). */}
+            <YuvaTurnstile onToken={setTurnstileToken} />
           </>
         )}
 

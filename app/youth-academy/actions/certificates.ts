@@ -474,6 +474,7 @@ export async function issueCertificates(
         endDate,
         certificateNo,
         issuedOn,
+        signatories: ctx.signatories,
       });
 
       // 3. Upload to the private bucket.

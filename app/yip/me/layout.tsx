@@ -1,7 +1,8 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { LogOut } from "lucide-react";
+import { LogOut, MessageSquare } from "lucide-react";
+import { CHAT_ENABLED } from "@/lib/yip/chat-config";
 
 interface ParticipantSession {
   type: "participant";
@@ -62,13 +63,27 @@ export default async function ParticipantLayout({
             </div>
           </div>
 
-          <Link
-            href="/yip/join"
-            className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
-            title="Exit"
-          >
-            <LogOut className="size-4" />
-          </Link>
+          <div className="flex shrink-0 items-center gap-1">
+            {/* Chat entry point — only rendered when the chat flag is ON.
+                Flag off (the default) → no link, nothing changes for students. */}
+            {CHAT_ENABLED && (
+              <Link
+                href="/yip/me/chat"
+                className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-[#FF9933] hover:bg-[#FF9933]/10 transition-colors"
+                title="Community chat"
+              >
+                <MessageSquare className="size-4" />
+                <span className="hidden sm:inline">Chat</span>
+              </Link>
+            )}
+            <Link
+              href="/yip/join"
+              className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
+              title="Exit"
+            >
+              <LogOut className="size-4" />
+            </Link>
+          </div>
         </div>
       </header>
 

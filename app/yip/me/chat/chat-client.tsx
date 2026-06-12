@@ -95,6 +95,14 @@ export function ChatClient({
             body,
           })
         }
+        // Announcements are read-only for students — organisers broadcast,
+        // students listen. The server rejects student posts regardless; this
+        // hides the composer so nobody hits that error.
+        readOnlyNote={
+          view.channel.kind === "announcement"
+            ? "Announcements are read-only. Only organisers can post here."
+            : undefined
+        }
         onReport={report}
       />
     );
@@ -241,6 +249,8 @@ interface ThreadProps {
     | { success: true; data: ChatMessage }
     | { success: false; error: string }
   >;
+  /** When set, the composer is replaced by this read-only note. */
+  readOnlyNote?: string;
   /** Report a message to the organisers (hidden on the student's own messages). */
   onReport?: (
     messageId: string
@@ -254,6 +264,7 @@ function Thread({
   onBack,
   load,
   send,
+  readOnlyNote,
   onReport,
 }: ThreadProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -398,7 +409,13 @@ function Thread({
         </p>
       )}
 
-      {/* Composer */}
+      {/* Composer (or a read-only note for announcement channels) */}
+      {readOnlyNote ? (
+        <p className="flex items-center justify-center gap-1.5 border-t border-gray-100 pt-3 pb-1 text-center text-xs text-gray-400">
+          <Megaphone className="size-3.5 shrink-0" />
+          {readOnlyNote}
+        </p>
+      ) : (
       <div className="flex items-end gap-2 border-t border-gray-100 pt-3">
         <textarea
           value={draft}
@@ -426,6 +443,7 @@ function Thread({
           )}
         </Button>
       </div>
+      )}
     </div>
   );
 }

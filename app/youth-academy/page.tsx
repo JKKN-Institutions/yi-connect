@@ -130,6 +130,39 @@ export default async function YouthAcademyLandingPage({
         </div>
       </header>
 
+      {/* ── About the Academy ────────────────────────────────────────── */}
+      <section className="border-b border-slate-200 bg-white">
+        <div className="mx-auto max-w-3xl px-6 py-14">
+          <p className="text-sm font-semibold uppercase tracking-widest text-amber-600">
+            About the Academy
+          </p>
+          <h2 className="mt-2 text-2xl font-bold text-slate-900 sm:text-3xl">
+            A thought, leadership &amp; action space
+          </h2>
+          <div className="mt-5 space-y-4 text-base leading-relaxed text-slate-600">
+            <p>
+              The Yi Youth Academy is an open-access platform for students
+              within the Yi YUVA network. It serves as a dedicated intellectual
+              and leadership space within partner Institutions of Higher
+              Education (IHEs), designed to nurture responsible youth leadership
+              aligned with Yi&rsquo;s nation-building agenda.
+            </p>
+            <p>
+              More than a conventional classroom or laboratory, the Academy is a
+              space for thought, leadership, and action &mdash; driven by ideas,
+              dialogue, collaboration, and measurable outcomes.
+            </p>
+            <p>
+              Through cohort-based certificate programs, students gain exposure
+              to entrepreneurship, innovation, leadership, and Yi&rsquo;s
+              nation-building initiatives. The Academy empowers young leaders to
+              develop future-ready skills, build meaningful networks, and
+              contribute actively to India&rsquo;s growth and development.
+            </p>
+          </div>
+        </div>
+      </section>
+
       {/* ── Programs grid ────────────────────────────────────────────── */}
       <section id="programs" className="mx-auto max-w-6xl px-6 py-14">
         <div className="flex flex-wrap items-end justify-between gap-4">

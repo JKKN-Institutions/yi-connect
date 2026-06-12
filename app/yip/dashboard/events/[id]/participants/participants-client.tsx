@@ -60,6 +60,8 @@ type Participant = {
   home_state: string | null;
   party_side: string | null;
   parliament_role: string | null;
+  constituency_name: string | null;
+  constituency_state: string | null;
   committee_name: string | null;
   access_code: string;
   checked_in: boolean | null;
@@ -870,6 +872,7 @@ export function ParticipantsClient({
                 </TableHead>
                 <TableHead>Party</TableHead>
                 <TableHead>Role</TableHead>
+                <TableHead>Constituency</TableHead>
                 <TableHead>Committee</TableHead>
                 <TableHead>Access Code</TableHead>
                 <TableHead className="w-10" />
@@ -933,6 +936,18 @@ export function ParticipantsClient({
                       </Badge>
                     ) : (
                       <span className="text-gray-400">--</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {p.constituency_name ? (
+                      <span className="text-xs">
+                        {p.constituency_name}
+                        {p.constituency_state
+                          ? `, ${p.constituency_state}`
+                          : ""}
+                      </span>
+                    ) : (
+                      <span className="text-gray-400">—</span>
                     )}
                   </TableCell>
                   <TableCell>

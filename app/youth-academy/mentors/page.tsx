@@ -13,6 +13,7 @@ import Link from "next/link";
 import { ArrowLeft, Users } from "lucide-react";
 import { YUVA_APP, ROLE_MENTOR } from "@/lib/yuva/constants";
 import { publicUrl } from "@/lib/yuva/storage";
+import { PartnerLogos } from "@/components/yuva/partner-logos";
 import { createServiceClient as createYuvaService } from "@/lib/yuva/supabase/service";
 // yip server module's Database type includes the yi_directory schema (donor
 // cross-schema access path — app/yip/actions/chapter-roles.ts).
@@ -104,17 +105,24 @@ export default async function PublicMentorNetworkPage() {
             <ArrowLeft className="size-4" />
             Yi Youth Academy
           </Link>
-          <p className="mt-4 text-sm font-semibold tracking-widest text-amber-600 uppercase">
-            Yi YUVA · Young Indians · CII
-          </p>
-          <h1 className="mt-2 text-3xl font-bold text-slate-900 sm:text-4xl">
+          <PartnerLogos variant="onLight" className="mt-4" />
+          <h1 className="mt-4 text-3xl font-bold text-slate-900 sm:text-4xl">
             Mentor YUVA Network
           </h1>
-          <p className="mt-3 max-w-2xl text-slate-600">
-            Industry leaders, founders and practitioners who deliver Yi Youth
-            Academy sessions across the YUVA network — invited by Yi chapters,
-            open to anyone with expertise to share.
-          </p>
+          <div className="mt-4 max-w-3xl space-y-3 text-slate-600">
+            <p>
+              The Mentor YUVA Network is the backbone of the Yi Youth Academy,
+              connecting students with industry leaders, entrepreneurs,
+              professionals, academicians, and Yi members who mentor and inspire
+              future leaders.
+            </p>
+            <p>
+              Through mentoring, expert interactions, coaching, and career
+              conversations, students gain real-world insights, leadership
+              skills, professional networks, and guidance to become responsible
+              changemakers.
+            </p>
+          </div>
         </div>
       </header>
 

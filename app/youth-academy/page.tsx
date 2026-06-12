@@ -22,6 +22,7 @@ import {
 } from "@/components/yuva/public/data";
 import { AcademyNetworkSection } from "@/components/yuva/public/academy-network-section";
 import { PublicRunCard } from "@/components/yuva/public/run-card";
+import { PartnerLogos } from "@/components/yuva/partner-logos";
 
 export const dynamic = "force-dynamic";
 
@@ -99,10 +100,8 @@ export default async function YouthAcademyLandingPage({
       {/* ── Hero ─────────────────────────────────────────────────────── */}
       <header className="bg-[#0f2557] text-white">
         <div className="mx-auto max-w-6xl px-6 py-16 sm:py-20">
-          <p className="text-sm font-semibold tracking-widest text-amber-400 uppercase">
-            Yi YUVA · Young Indians · CII
-          </p>
-          <h1 className="mt-3 max-w-3xl text-4xl font-bold leading-tight sm:text-5xl">
+          <PartnerLogos variant="onDark" />
+          <h1 className="mt-5 max-w-3xl text-4xl font-bold leading-tight sm:text-5xl">
             Yi Youth Academy
           </h1>
           <p className="mt-4 max-w-2xl text-lg text-slate-200">

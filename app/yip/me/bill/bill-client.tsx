@@ -26,9 +26,14 @@ import {
   Users,
   Shield,
   Loader2,
+  Upload,
+  Download,
+  Trash2,
+  FolderOpen,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PARTY_COLORS } from "@/lib/yip/constants";
+import { formatBytes } from "@/lib/yip/media";
 import {
   saveBillDraft,
   submitBill,
@@ -36,6 +41,13 @@ import {
   getBillCommitteeMembers,
   type BillCommitteeMember,
 } from "@/app/yip/actions/bills";
+import {
+  uploadBillDocument,
+  listMyCommitteeBillDocuments,
+  participantBillDocumentUrl,
+  deleteMyBillDocument,
+  type BillDocumentRow,
+} from "@/app/yip/actions/bill-documents";
 import type { Tables } from "@/types/yip/database";
 
 type Bill = Tables<{ schema: "yip" }, "bills">;
@@ -325,16 +337,22 @@ export function BillClient({
   }
 
   if (participant?.parliament_role !== "bill_committee") {
+    // Bill DRAFTING is bill-committee-only, but the Committee Documents
+    // repository is for every participant with a committee assignment — so
+    // the documents card still renders below the restricted notice.
     return (
-      <div className="flex flex-col items-center justify-center py-12">
-        <Shield className="size-10 text-gray-300 mb-3" />
-        <p className="font-medium text-gray-700">Access Restricted</p>
-        <p className="text-sm text-gray-500 mt-1 text-center">
-          Only Bill Committee members can access this page.
-          <br />
-          Your role:{" "}
-          {participant?.parliament_role?.replace(/_/g, " ") || "Not assigned"}
-        </p>
+      <div className="space-y-5">
+        <div className="flex flex-col items-center justify-center py-12">
+          <Shield className="size-10 text-gray-300 mb-3" />
+          <p className="font-medium text-gray-700">Access Restricted</p>
+          <p className="text-sm text-gray-500 mt-1 text-center">
+            Only Bill Committee members can access bill drafting.
+            <br />
+            Your role:{" "}
+            {participant?.parliament_role?.replace(/_/g, " ") || "Not assigned"}
+          </p>
+        </div>
+        <CommitteeDocumentsSection session={session} />
       </div>
     );
   }
@@ -643,6 +661,9 @@ export function BillClient({
         </Card>
       )}
 
+      {/* Committee Documents */}
+      <CommitteeDocumentsSection session={session} />
+
       {/* Submit Confirmation Dialog */}
       <Dialog open={confirmSubmit} onOpenChange={setConfirmSubmit}>
         <DialogContent>
@@ -672,5 +693,277 @@ export function BillClient({
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+// ─── Committee Documents (supporting docs / drawings for the bill) ──────────
+// Server-gated repository: uploads/list/downloads all go through the actions
+// in app/yip/actions/bill-documents.ts (private bucket, signed URLs). Delete
+// is uploader-self-only. Mirror of the server's limits for early feedback.
+
+const DOC_MAX_FILE_BYTES = 4 * 1024 * 1024; // server + bucket enforce too
+const DOC_MAX_DESCRIPTION_CHARS = 500;
+const DOC_ACCEPT =
+  "application/pdf,image/png,image/jpeg,image/webp,image/heic,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation";
+
+function CommitteeDocumentsSection({
+  session,
+}: {
+  session: ParticipantSession;
+}) {
+  const [docsLoading, setDocsLoading] = useState(true);
+  const [committeeName, setCommitteeName] = useState<string | null>(null);
+  const [docs, setDocs] = useState<BillDocumentRow[]>([]);
+  const [file, setFile] = useState<File | null>(null);
+  const [description, setDescription] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [busyDocId, setBusyDocId] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  async function loadDocs() {
+    const result = await listMyCommitteeBillDocuments(
+      session.eventId,
+      session.id
+    );
+    if (result.success) {
+      setCommitteeName(result.data.committeeName);
+      setDocs(result.data.docs);
+    } else {
+      toast.error(result.error);
+    }
+    setDocsLoading(false);
+  }
+
+  // Load on mount for the server-provided session (same idiom as the bill
+  // loader above).
+  useEffect(() => {
+    loadDocs();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const selected = e.target.files?.[0] ?? null;
+    if (selected && selected.size > DOC_MAX_FILE_BYTES) {
+      toast.error("4 MB max — compress the photo or PDF and try again.");
+      e.target.value = "";
+      setFile(null);
+      return;
+    }
+    setFile(selected);
+  }
+
+  function readAsBase64(f: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        // readAsDataURL → "data:<mime>;base64,<data>" — keep only the data.
+        const comma = result.indexOf(",");
+        resolve(comma >= 0 ? result.slice(comma + 1) : result);
+      };
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(f);
+    });
+  }
+
+  async function handleUpload() {
+    if (!file) {
+      toast.error("Choose a file to upload");
+      return;
+    }
+    if (file.size > DOC_MAX_FILE_BYTES) {
+      toast.error("4 MB max — compress the photo or PDF and try again.");
+      return;
+    }
+    if (description.trim().length > DOC_MAX_DESCRIPTION_CHARS) {
+      toast.error(`Description is too long — ${DOC_MAX_DESCRIPTION_CHARS} characters max.`);
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const fileBase64 = await readAsBase64(file);
+      const result = await uploadBillDocument(session.eventId, session.id, {
+        fileBase64,
+        fileName: file.name,
+        contentType: file.type,
+        description: description.trim(),
+      });
+      if (result.success) {
+        toast.success("Document uploaded");
+        setFile(null);
+        setDescription("");
+        if (fileInputRef.current) fileInputRef.current.value = "";
+        await loadDocs();
+      } else {
+        toast.error(result.error);
+      }
+    } catch {
+      toast.error("Could not read the file. Try again.");
+    }
+    setUploading(false);
+  }
+
+  async function handleView(docId: string) {
+    setBusyDocId(docId);
+    const result = await participantBillDocumentUrl(docId, session.id);
+    setBusyDocId(null);
+    if (result.success) {
+      window.open(result.data.url, "_blank", "noopener,noreferrer");
+    } else {
+      toast.error(result.error);
+    }
+  }
+
+  async function handleDelete(docId: string) {
+    setBusyDocId(docId);
+    const result = await deleteMyBillDocument(docId, session.id);
+    setBusyDocId(null);
+    if (result.success) {
+      toast.success("Document deleted");
+      setDocs((prev) => prev.filter((d) => d.id !== docId));
+    } else {
+      toast.error(result.error);
+    }
+  }
+
+  return (
+    <Card>
+      <CardContent className="pt-4 pb-5 space-y-4">
+        <div>
+          <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
+            <FolderOpen className="size-4 text-[#FF9933]" />
+            Committee Documents
+          </h3>
+          <p className="text-xs text-gray-400 mt-0.5">
+            Supporting documents and drawings for your committee&apos;s bill
+            {committeeName ? ` — ${committeeName}` : ""}
+          </p>
+        </div>
+
+        {docsLoading ? (
+          <div className="flex items-center justify-center py-6">
+            <Loader2 className="size-5 text-gray-300 animate-spin" />
+          </div>
+        ) : !committeeName ? (
+          <p className="text-sm text-gray-400 py-2">
+            You&apos;ll see this once you&apos;re assigned to a committee.
+          </p>
+        ) : (
+          <>
+            {/* Document list */}
+            {docs.length === 0 ? (
+              <p className="text-sm text-gray-400 py-1">
+                No documents yet — upload the first one below.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {docs.map((doc) => (
+                  <div
+                    key={doc.id}
+                    className="rounded-md border border-gray-100 bg-gray-50 px-3 py-2 flex items-start gap-2"
+                  >
+                    <FileText className="size-4 text-gray-400 mt-0.5 shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-gray-800 truncate">
+                        {doc.file_name}
+                      </p>
+                      {doc.description && (
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          {doc.description}
+                        </p>
+                      )}
+                      <p className="text-[11px] text-gray-400 mt-0.5">
+                        {doc.uploader_name} · {formatBytes(doc.file_size_bytes)}{" "}
+                        · {new Date(doc.created_at).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={busyDocId === doc.id}
+                        onClick={() => handleView(doc.id)}
+                        className="h-7 px-2"
+                      >
+                        {busyDocId === doc.id ? (
+                          <Loader2 className="size-3.5 animate-spin" />
+                        ) : (
+                          <Download className="size-3.5" />
+                        )}
+                      </Button>
+                      {doc.uploaded_by === session.id && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={busyDocId === doc.id}
+                          onClick={() => handleDelete(doc.id)}
+                          className="h-7 px-2 text-red-500 hover:text-red-600"
+                        >
+                          <Trash2 className="size-3.5" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Upload form */}
+            <div className="rounded-lg border border-dashed border-gray-200 p-3 space-y-3">
+              <div>
+                <Label htmlFor="doc-file" className="text-sm font-medium">
+                  Upload a document
+                </Label>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  PDF, image (PNG/JPG/WebP/HEIC), Word or PowerPoint — 4 MB max
+                </p>
+                <Input
+                  id="doc-file"
+                  ref={fileInputRef}
+                  type="file"
+                  accept={DOC_ACCEPT}
+                  onChange={handleFileChange}
+                  disabled={uploading}
+                  className="mt-1.5"
+                />
+              </div>
+              <div>
+                <Label htmlFor="doc-description" className="text-sm font-medium">
+                  Short description
+                </Label>
+                <Textarea
+                  id="doc-description"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="What is this document? (e.g., poster draft, research notes)"
+                  maxLength={DOC_MAX_DESCRIPTION_CHARS}
+                  disabled={uploading}
+                  className="mt-1.5"
+                  rows={2}
+                />
+              </div>
+              <Button
+                onClick={handleUpload}
+                disabled={uploading || !file}
+                className="w-full bg-[#FF9933] hover:bg-[#E68A2E]"
+              >
+                {uploading ? (
+                  <>
+                    <Loader2 className="size-4 mr-1.5 animate-spin" />
+                    Uploading...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="size-4 mr-1.5" />
+                    Upload Document
+                  </>
+                )}
+              </Button>
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 }

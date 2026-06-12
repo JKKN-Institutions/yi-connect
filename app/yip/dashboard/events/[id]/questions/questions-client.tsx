@@ -23,6 +23,7 @@ import {
   Check,
   X,
   Inbox,
+  CalendarClock,
 } from "lucide-react";
 import { cn } from "@/lib/yip/utils";
 import { MINISTRIES, PARTY_COLORS } from "@/lib/yip/constants";
@@ -33,6 +34,7 @@ import {
   setQueueOrder,
   bulkApprove,
   bulkReject,
+  setQuestionsDeadline,
 } from "@/app/yip/actions/questions";
 import type { QuestionWithSubmitter } from "@/app/yip/actions/questions";
 import { toast } from "sonner";
@@ -60,14 +62,48 @@ const STATUS_BADGES: Record<string, { label: string; className: string }> = {
 interface QuestionsClientProps {
   eventId: string;
   initialQuestions: QuestionWithSubmitter[];
+  /** events.questions_close_at — student submissions close at this time. */
+  initialCloseAt: string | null;
+}
+
+/** ISO (UTC) → value for <input type="datetime-local"> in the viewer's zone. */
+function toLocalInputValue(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 export function QuestionsClient({
   eventId,
   initialQuestions,
+  initialCloseAt,
 }: QuestionsClientProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [closeAt, setCloseAt] = useState<string | null>(initialCloseAt);
+  const [closeAtDraft, setCloseAtDraft] = useState<string>(
+    toLocalInputValue(initialCloseAt)
+  );
+  const [savingDeadline, setSavingDeadline] = useState(false);
+
+  async function saveDeadline(nextIso: string | null) {
+    setSavingDeadline(true);
+    const result = await setQuestionsDeadline(eventId, nextIso);
+    setSavingDeadline(false);
+    if (result.success) {
+      setCloseAt(nextIso);
+      setCloseAtDraft(toLocalInputValue(nextIso));
+      toast.success(
+        nextIso
+          ? "Submission deadline saved"
+          : "Deadline removed — submissions stay open"
+      );
+    } else {
+      toast.error(result.error);
+    }
+  }
   const [questions, setQuestions] =
     useState<QuestionWithSubmitter[]>(initialQuestions);
   const [activeTab, setActiveTab] = useState<FilterTab>("all");
@@ -244,6 +280,59 @@ export function QuestionsClient({
 
   return (
     <div className="space-y-4">
+      {/* Question-submission deadline (handbook: collect questions ≥4 days
+          before the session). submitQuestion enforces this cutoff. */}
+      <Card>
+        <CardContent className="flex flex-col gap-2 pt-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2">
+            <CalendarClock className="size-4 text-[#FF9933]" />
+            <div>
+              <p className="text-sm font-medium text-gray-800">
+                Question submission deadline
+              </p>
+              <p className="text-xs text-gray-500">
+                {closeAt
+                  ? `Students can submit until ${new Date(closeAt).toLocaleString()}`
+                  : "No deadline set — students can submit any time"}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Input
+              type="datetime-local"
+              value={closeAtDraft}
+              onChange={(e) => setCloseAtDraft(e.target.value)}
+              className="h-8 w-52 text-xs"
+              aria-label="Question submission deadline"
+            />
+            <Button
+              size="sm"
+              disabled={savingDeadline || !closeAtDraft}
+              onClick={() => {
+                const d = new Date(closeAtDraft);
+                if (Number.isNaN(d.getTime())) {
+                  toast.error("Pick a valid date and time");
+                  return;
+                }
+                saveDeadline(d.toISOString());
+              }}
+            >
+              Save
+            </Button>
+            {closeAt && (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={savingDeadline}
+                onClick={() => saveDeadline(null)}
+              >
+                Clear
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Stats Bar */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatCard

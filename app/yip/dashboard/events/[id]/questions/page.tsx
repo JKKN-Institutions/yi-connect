@@ -29,5 +29,11 @@ export default async function QuestionsPage({
   // Fetch all questions with submitter info
   const questions = await getQuestions(id);
 
-  return <QuestionsClient eventId={id} initialQuestions={questions} />;
+  return (
+    <QuestionsClient
+      eventId={id}
+      initialQuestions={questions}
+      initialCloseAt={event.questions_close_at ?? null}
+    />
+  );
 }

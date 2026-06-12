@@ -41,7 +41,16 @@ import { cn } from "@/lib/yip/utils";
 import { ROLE_LABELS, ROLE_COLORS, PARTY_COLORS } from "@/lib/yip/constants";
 import { useRealtimeEvent } from "@/lib/yip/hooks/use-realtime-event";
 import { useTimer } from "@/lib/yip/hooks/use-timer";
-import { advanceAgenda, startAgendaItem, skipAgendaItem, updateEventStatus, updateAgendaItemDuration } from "@/app/yip/actions/agenda";
+import { advanceAgenda, startAgendaItem, skipAgendaItem, updateEventStatus, updateAgendaItemDuration, updateAgendaItemSubTimers } from "@/app/yip/actions/agenda";
+import {
+  getSubTimers,
+  formatSubTimerSeconds,
+  SUB_TIMER_MAX_ENTRIES,
+  SUB_TIMER_LABEL_MAX,
+  SUB_TIMER_MIN_SECONDS,
+  SUB_TIMER_MAX_SECONDS,
+  type SubTimer,
+} from "@/lib/yip/sub-timers";
 import { setAllocationLocked, setScoresLocked, setRegistrationsFrozen, pushLiveBanner, clearLiveBanner } from "@/app/yip/actions/events";
 import { startTimer, stopTimer, resetTimer } from "@/app/yip/actions/timer";
 import { advanceSpeaker, skipSpeaker, generateSpeakerQueue, getSpeakerQueue } from "@/app/yip/actions/speakers";
@@ -137,6 +146,19 @@ export function ControlPanel({
   // Inline duration editing in the agenda sidebar
   const [editingDurationId, setEditingDurationId] = useState<string | null>(null);
   const [durationDraft, setDurationDraft] = useState<string>("");
+  // Sub-phase timer presets (timer card) — inline editor + per-button pending.
+  // The editor is keyed to the agenda item id it was opened for, so it
+  // closes by itself when the current item changes (presets are per-item;
+  // a stale draft must not save onto a new item).
+  const [subTimerEditItemId, setSubTimerEditItemId] = useState<string | null>(
+    null
+  );
+  const [subTimerDraft, setSubTimerDraft] = useState<
+    { label: string; seconds: string }[]
+  >([]);
+  const [pendingSubTimerIdx, setPendingSubTimerIdx] = useState<number | null>(
+    null
+  );
 
   // Realtime subscription
   const { event, agendaItems, currentAgendaItem } = useRealtimeEvent(
@@ -191,6 +213,15 @@ export function ControlPanel({
 
   // Filter agenda items by active day
   const dayItems = agendaItems.filter((i) => i.day === activeDay);
+
+  // Sub-phase presets for the current item: config.sub_timers override →
+  // agenda_type defaults → [] (resolved + shape-validated in the lib helper).
+  const subTimers: SubTimer[] = currentAgendaItem
+    ? getSubTimers(currentAgendaItem.agenda_type, currentAgendaItem.config)
+    : [];
+  // Editor open only while the current item matches the one it was opened for.
+  const editingSubTimers =
+    currentAgendaItem != null && subTimerEditItemId === currentAgendaItem.id;
 
   // Current speaker info
   const currentSpeaker = speakers.find((s) => s.status === "speaking");
@@ -347,6 +378,111 @@ export function ControlPanel({
       const result = await resetTimer(eventId);
       if (result.success) {
         toast.success("Timer reset");
+      } else {
+        toast.error(result.error);
+      }
+    });
+  }
+
+  // ─── Sub-phase preset handlers ────────────────────────────────
+
+  function handleFireSubTimer(index: number, preset: SubTimer) {
+    if (!currentAgendaItem) return;
+    const label = `${currentAgendaItem.title} — ${preset.label}`;
+    setPendingSubTimerIdx(index);
+    startTransition(async () => {
+      const result = await startTimer(eventId, preset.seconds, label);
+      if (result.success) {
+        toast.success(
+          `${preset.label} timer started (${formatSubTimerSeconds(preset.seconds)})`
+        );
+      } else {
+        toast.error(result.error);
+      }
+      setPendingSubTimerIdx(null);
+    });
+  }
+
+  function handleStartEditSubTimers() {
+    if (!currentAgendaItem) return;
+    setSubTimerDraft(
+      subTimers.length > 0
+        ? subTimers.map((t) => ({ label: t.label, seconds: String(t.seconds) }))
+        : [{ label: "", seconds: "60" }]
+    );
+    setSubTimerEditItemId(currentAgendaItem.id);
+  }
+
+  function handleSubTimerDraftChange(
+    index: number,
+    field: "label" | "seconds",
+    value: string
+  ) {
+    setSubTimerDraft((prev) =>
+      prev.map((row, i) => (i === index ? { ...row, [field]: value } : row))
+    );
+  }
+
+  function handleAddSubTimerRow() {
+    setSubTimerDraft((prev) =>
+      prev.length >= SUB_TIMER_MAX_ENTRIES
+        ? prev
+        : [...prev, { label: "", seconds: "60" }]
+    );
+  }
+
+  function handleRemoveSubTimerRow(index: number) {
+    setSubTimerDraft((prev) =>
+      prev.length <= 1 ? prev : prev.filter((_, i) => i !== index)
+    );
+  }
+
+  function handleSaveSubTimers() {
+    if (!currentAgendaItem) return;
+    const itemId = currentAgendaItem.id;
+    const cleaned: SubTimer[] = [];
+    for (const row of subTimerDraft) {
+      const label = row.label.trim();
+      const seconds = Math.round(Number(row.seconds));
+      if (!label || label.length > SUB_TIMER_LABEL_MAX) {
+        toast.error(`Each preset needs a label (max ${SUB_TIMER_LABEL_MAX} characters)`);
+        return;
+      }
+      if (
+        !Number.isInteger(seconds) ||
+        seconds < SUB_TIMER_MIN_SECONDS ||
+        seconds > SUB_TIMER_MAX_SECONDS
+      ) {
+        toast.error(
+          `Each duration must be ${SUB_TIMER_MIN_SECONDS}–${SUB_TIMER_MAX_SECONDS} seconds`
+        );
+        return;
+      }
+      cleaned.push({ label, seconds });
+    }
+    if (cleaned.length < 1 || cleaned.length > SUB_TIMER_MAX_ENTRIES) {
+      toast.error(`Provide between 1 and ${SUB_TIMER_MAX_ENTRIES} presets`);
+      return;
+    }
+    startTransition(async () => {
+      const result = await updateAgendaItemSubTimers(eventId, itemId, cleaned);
+      if (result.success) {
+        toast.success("Sub-phase presets saved");
+        setSubTimerEditItemId(null);
+      } else {
+        toast.error(result.error);
+      }
+    });
+  }
+
+  function handleResetSubTimers() {
+    if (!currentAgendaItem) return;
+    const itemId = currentAgendaItem.id;
+    startTransition(async () => {
+      const result = await updateAgendaItemSubTimers(eventId, itemId, null);
+      if (result.success) {
+        toast.success("Presets reset to defaults");
+        setSubTimerEditItemId(null);
       } else {
         toast.error(result.error);
       }
@@ -644,6 +780,136 @@ export function ControlPanel({
                   </div>
                 </div>
               </div>
+
+              {/* Sub-phase timer presets — one-tap short timers for the
+                  current agenda item (e.g. Question 1:00 / Answer 1:30).
+                  Per-item overrides live in agenda.config.sub_timers. */}
+              {currentAgendaItem &&
+                (subTimers.length > 0 || editingSubTimers) && (
+                  <div className="mt-4 border-t pt-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                        <Timer className="size-3.5" />
+                        Sub-phase presets
+                        <span className="truncate font-normal">
+                          — {currentAgendaItem.title}
+                        </span>
+                      </p>
+                      {!editingSubTimers && (
+                        <button
+                          type="button"
+                          onClick={handleStartEditSubTimers}
+                          disabled={isPending}
+                          className="shrink-0 rounded p-1 text-muted-foreground hover:bg-gray-200 hover:text-gray-700"
+                          aria-label="Edit sub-phase presets"
+                          title="Edit sub-phase presets"
+                        >
+                          <Pencil className="size-3" />
+                        </button>
+                      )}
+                    </div>
+                    {!editingSubTimers ? (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {subTimers.map((preset, i) => (
+                          <Button
+                            key={`${preset.label}-${i}`}
+                            size="sm"
+                            variant="outline"
+                            disabled={isPending || !isLive}
+                            onClick={() => handleFireSubTimer(i, preset)}
+                          >
+                            <Play className="size-3" />
+                            {pendingSubTimerIdx === i
+                              ? "Starting…"
+                              : `${preset.label} · ${formatSubTimerSeconds(preset.seconds)}`}
+                          </Button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="mt-2 space-y-2">
+                        {subTimerDraft.map((row, i) => (
+                          <div key={i} className="flex items-center gap-1.5">
+                            <Input
+                              value={row.label}
+                              maxLength={SUB_TIMER_LABEL_MAX}
+                              placeholder="Label"
+                              onChange={(e) =>
+                                handleSubTimerDraftChange(i, "label", e.target.value)
+                              }
+                              className="h-7 flex-1 text-xs"
+                              aria-label={`Preset ${i + 1} label`}
+                            />
+                            <Input
+                              type="number"
+                              min={SUB_TIMER_MIN_SECONDS}
+                              max={SUB_TIMER_MAX_SECONDS}
+                              value={row.seconds}
+                              onChange={(e) =>
+                                handleSubTimerDraftChange(i, "seconds", e.target.value)
+                              }
+                              className="h-7 w-20 text-center text-xs"
+                              aria-label={`Preset ${i + 1} seconds`}
+                            />
+                            <span className="text-[10px] text-muted-foreground">
+                              sec
+                            </span>
+                            <Button
+                              type="button"
+                              size="xs"
+                              variant="outline"
+                              disabled={isPending || subTimerDraft.length <= 1}
+                              onClick={() => handleRemoveSubTimerRow(i)}
+                              aria-label={`Remove preset ${i + 1}`}
+                            >
+                              ✕
+                            </Button>
+                          </div>
+                        ))}
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <Button
+                            type="button"
+                            size="xs"
+                            variant="outline"
+                            disabled={
+                              isPending ||
+                              subTimerDraft.length >= SUB_TIMER_MAX_ENTRIES
+                            }
+                            onClick={handleAddSubTimerRow}
+                          >
+                            + Add
+                          </Button>
+                          <Button
+                            type="button"
+                            size="xs"
+                            disabled={isPending}
+                            onClick={handleSaveSubTimers}
+                          >
+                            <Check className="size-3" />
+                            Save
+                          </Button>
+                          <Button
+                            type="button"
+                            size="xs"
+                            variant="outline"
+                            disabled={isPending}
+                            onClick={handleResetSubTimers}
+                          >
+                            Reset to defaults
+                          </Button>
+                          <Button
+                            type="button"
+                            size="xs"
+                            variant="outline"
+                            disabled={isPending}
+                            onClick={() => setSubTimerEditItemId(null)}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
             </CardContent>
           </Card>
 

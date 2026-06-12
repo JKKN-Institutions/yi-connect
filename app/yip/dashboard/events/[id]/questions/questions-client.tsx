@@ -26,7 +26,7 @@ import {
   CalendarClock,
 } from "lucide-react";
 import { cn } from "@/lib/yip/utils";
-import { MINISTRIES, PARTY_COLORS } from "@/lib/yip/constants";
+import { MINISTRIES } from "@/lib/yip/constants";
 import {
   approveQuestion,
   rejectQuestion,
@@ -43,9 +43,18 @@ import { toast } from "sonner";
 
 type FilterTab = "all" | "submitted" | "approved" | "starred" | "rejected";
 
+type Bench = "ruling" | "opposition";
+type BenchFilter = "all" | Bench;
+
 function getMinistryLabel(key: string): string {
   const found = MINISTRIES.find((m) => m.key === key);
   return found ? found.label : key;
+}
+
+/** Which bench the question came from (null = unknown/no submitter). */
+function getBench(q: QuestionWithSubmitter): Bench | null {
+  const side = q.submitter?.party_side;
+  return side === "ruling" || side === "opposition" ? side : null;
 }
 
 const STATUS_BADGES: Record<string, { label: string; className: string }> = {
@@ -55,6 +64,19 @@ const STATUS_BADGES: Record<string, { label: string; className: string }> = {
   asked: { label: "Asked", className: "bg-amber-100 text-amber-700" },
   answered: { label: "Answered", className: "bg-emerald-100 text-emerald-700" },
   skipped: { label: "Skipped", className: "bg-gray-100 text-gray-500" },
+};
+
+// Bench colors deliberately distinct from the STATUS_BADGES palette
+// (green/red/blue/amber): saffron-orange for Ruling, indigo for Opposition.
+const BENCH_BADGES: Record<Bench, { label: string; className: string }> = {
+  ruling: {
+    label: "Ruling",
+    className: "bg-orange-100 text-orange-800 border border-orange-200",
+  },
+  opposition: {
+    label: "Opposition",
+    className: "bg-indigo-100 text-indigo-700 border border-indigo-200",
+  },
 };
 
 // ─── Component ──────────────────────────────────────────────────
@@ -107,6 +129,7 @@ export function QuestionsClient({
   const [questions, setQuestions] =
     useState<QuestionWithSubmitter[]>(initialQuestions);
   const [activeTab, setActiveTab] = useState<FilterTab>("all");
+  const [benchFilter, setBenchFilter] = useState<BenchFilter>("all");
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   // ─── Stats ──────────────────────────────────────────────────
@@ -122,7 +145,9 @@ export function QuestionsClient({
 
   // ─── Filtered list ──────────────────────────────────────────
 
+  // Status and bench are independent dimensions — both must match.
   const filtered = questions.filter((q) => {
+    if (benchFilter !== "all" && getBench(q) !== benchFilter) return false;
     if (activeTab === "all") return true;
     if (activeTab === "starred") return q.question_type === "starred";
     return q.status === activeTab;
@@ -278,6 +303,20 @@ export function QuestionsClient({
     },
   ];
 
+  const BENCH_TABS: { key: BenchFilter; label: string; count: number }[] = [
+    { key: "all", label: "All benches", count: stats.total },
+    {
+      key: "ruling",
+      label: "Ruling",
+      count: questions.filter((q) => getBench(q) === "ruling").length,
+    },
+    {
+      key: "opposition",
+      label: "Opposition",
+      count: questions.filter((q) => getBench(q) === "opposition").length,
+    },
+  ];
+
   return (
     <div className="space-y-4">
       {/* Question-submission deadline (handbook: collect questions ≥4 days
@@ -361,25 +400,47 @@ export function QuestionsClient({
         />
       </div>
 
-      {/* Filter Tabs */}
-      <div className="flex gap-1 overflow-x-auto">
-        {TABS.map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
-            className={cn(
-              "shrink-0 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-              activeTab === tab.key
-                ? "bg-gray-900 text-white"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-            )}
-          >
-            {tab.label}
-            {tab.count !== undefined && (
+      {/* Filter Tabs — status (row 1) × bench (row 2) compose */}
+      <div className="space-y-2">
+        <div className="flex gap-1 overflow-x-auto">
+          {TABS.map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={cn(
+                "shrink-0 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                activeTab === tab.key
+                  ? "bg-gray-900 text-white"
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              )}
+            >
+              {tab.label}
+              {tab.count !== undefined && (
+                <span className="ml-1.5 text-xs opacity-70">{tab.count}</span>
+              )}
+            </button>
+          ))}
+        </div>
+        <div
+          className="flex gap-1 overflow-x-auto"
+          aria-label="Filter questions by bench"
+        >
+          {BENCH_TABS.map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setBenchFilter(tab.key)}
+              className={cn(
+                "shrink-0 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                benchFilter === tab.key
+                  ? "bg-gray-900 text-white"
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              )}
+            >
+              {tab.label}
               <span className="ml-1.5 text-xs opacity-70">{tab.count}</span>
-            )}
-          </button>
-        ))}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Bulk Actions */}
@@ -438,7 +499,7 @@ export function QuestionsClient({
                   </TableHead>
                   <TableHead className="w-8">#</TableHead>
                   <TableHead>Student</TableHead>
-                  <TableHead>Party</TableHead>
+                  <TableHead>Bench</TableHead>
                   <TableHead>Constituency</TableHead>
                   <TableHead>Ministry</TableHead>
                   <TableHead className="min-w-[200px]">Question</TableHead>
@@ -453,10 +514,7 @@ export function QuestionsClient({
                   const status = q.status ?? "submitted";
                   const statusBadge =
                     STATUS_BADGES[status] ?? STATUS_BADGES.submitted;
-                  const partySide = q.submitter?.party_side as
-                    | "ruling"
-                    | "opposition"
-                    | null;
+                  const bench = getBench(q);
 
                   return (
                     <TableRow key={q.id}>
@@ -480,18 +538,17 @@ export function QuestionsClient({
                         {q.submitter?.full_name ?? "Unknown"}
                       </TableCell>
 
-                      {/* Party Badge */}
+                      {/* Bench Badge */}
                       <TableCell>
-                        {partySide && (
-                          <span
-                            className={cn(
-                              "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium",
-                              PARTY_COLORS[partySide]?.badge ??
-                                "bg-gray-500 text-white"
-                            )}
+                        {bench ? (
+                          <Badge
+                            variant="secondary"
+                            className={`text-[10px] ${BENCH_BADGES[bench].className}`}
                           >
-                            {partySide === "ruling" ? "Ruling" : "Opp."}
-                          </span>
+                            {BENCH_BADGES[bench].label}
+                          </Badge>
+                        ) : (
+                          <span className="text-xs text-gray-400">—</span>
                         )}
                       </TableCell>
 
@@ -606,11 +663,15 @@ export function QuestionsClient({
           <CardContent className="py-12 text-center">
             <Inbox className="mx-auto size-12 text-gray-300 mb-3" />
             <p className="text-gray-500 font-medium">
-              {activeTab === "all"
+              {activeTab === "all" && benchFilter === "all"
                 ? "No questions submitted yet"
-                : `No ${activeTab} questions`}
+                : `No ${activeTab === "all" ? "" : `${activeTab} `}questions${
+                    benchFilter === "all"
+                      ? ""
+                      : ` from the ${BENCH_BADGES[benchFilter].label} bench`
+                  }`}
             </p>
-            {activeTab === "all" && (
+            {activeTab === "all" && benchFilter === "all" && (
               <p className="text-sm text-gray-400 mt-1">
                 Share the link with participants to collect questions.
               </p>

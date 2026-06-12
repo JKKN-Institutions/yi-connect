@@ -16,10 +16,10 @@ You score **six components**, each in its own session as the event reaches it:
 
 | Component | Out of | What you're judging (in one line) |
 |---|---|---|
-| **MUPI / Opening Speech** | 15 | The student's opening remarks on the matter of urgent public importance |
+| **MUPI / Opening Speech** | 15 | Their opening speech — research & constituency understanding, relevance to the Central Agenda, delivery |
 | **Question Hour** | 20 | Quality of the question asked — or of the minister's answer |
 | **Zero Hour** | 15 | How well they raise and argue an urgent matter |
-| **Political Acumen** | 10 | Political awareness, strategy, and grasp of how Parliament works |
+| **Political Acumen** | 10 | Coalition building, parliamentary strategy, negotiation, and floor presence |
 | **Committee** | 15 | Their contribution in committee discussion and bill drafting |
 | **Bill Presentation** | 15 | How well they present and defend their committee's bill |
 

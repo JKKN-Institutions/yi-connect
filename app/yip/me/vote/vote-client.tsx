@@ -63,11 +63,25 @@ export function VoteClient({
       return;
     }
 
+    // New session (e.g. a runoff) — a pick made in the previous round must not
+    // carry over (validateVoteValue would reject it with a confusing toast).
+    setSelectedValue(null);
+
     async function loadData() {
       if (!voteSession || !session) return;
 
       if (voteSession.vote_type === "speaker_election") {
-        const data = await getSpeakerCandidates(session.eventId);
+        // The session's config.candidateIds is the authoritative ballot —
+        // after a round-1 reveal the tied candidates' roles are reset to mp,
+        // so the role-based speaker lookup would render the WRONG runoff
+        // ballot. Fall back to roles only for sessions without config.
+        const cfg = (voteSession.config ?? {}) as { candidateIds?: unknown };
+        const ids = Array.isArray(cfg.candidateIds)
+          ? cfg.candidateIds.filter((x): x is string => typeof x === "string")
+          : [];
+        const data = ids.length
+          ? await getVoteCandidates(ids)
+          : await getSpeakerCandidates(session.eventId);
         setCandidates(data);
       }
 
@@ -96,10 +110,11 @@ export function VoteClient({
 
       // Check if already voted — via server action (votes are RLS-sealed until
       // reveal, so the browser client can't read them during an open session).
+      // MUST also reset to false: when a runoff session replaces round 1 on
+      // this same mounted page, a sticky `true` would lock round-1 voters out
+      // of the runoff they are entitled to vote in.
       const votedRes = await hasParticipantVoted(voteSession.id, session.id);
-      if (votedRes.success && votedRes.data.hasVoted) {
-        setHasVoted(true);
-      }
+      setHasVoted(votedRes.success && votedRes.data.hasVoted);
 
       setLoadingCandidates(false);
     }

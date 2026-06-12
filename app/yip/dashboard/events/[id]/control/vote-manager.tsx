@@ -48,6 +48,7 @@ import {
   revealResults,
   openRunoff,
   getSpeakerCandidates,
+  getVoteCandidates,
   getEventBills,
   getEventParties,
   getPartyMembers,
@@ -139,15 +140,32 @@ export function VoteManager({
       ? ((voteSession.config ?? {}) as { partyId?: string }).partyId ?? null
       : null;
 
-  // Fetch candidates or bills when agenda type warrants it
+  // Fetch candidates or bills when agenda type warrants it.
+  // For speaker elections the ACTIVE session's config.candidateIds is the
+  // authoritative ballot — after a round-1 reveal a deputy runoff's tied pair
+  // have parliament_role reset to mp, so the role-based lookup would render
+  // the wrong roll-call list and leave result names unresolved. Prefer the
+  // session config; fall back to roles when no session carries one.
   useEffect(() => {
     if (agendaType === "speaker_election") {
-      getSpeakerCandidates(eventId).then(setCandidates);
+      const cfg =
+        voteSession?.vote_type === "speaker_election"
+          ? ((voteSession.config ?? {}) as { candidateIds?: unknown })
+          : {};
+      const ids = Array.isArray(cfg.candidateIds)
+        ? cfg.candidateIds.filter((x): x is string => typeof x === "string")
+        : [];
+      if (ids.length > 0) {
+        getVoteCandidates(ids).then(setCandidates);
+      } else {
+        getSpeakerCandidates(eventId).then(setCandidates);
+      }
     }
     if (agendaType === "bill_presentation") {
       getEventBills(eventId).then(setBills);
     }
-  }, [agendaType, eventId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agendaType, eventId, voteSession?.id]);
 
   // Parties are always available to the organiser (party-leader elections can be
   // held during any agenda item).

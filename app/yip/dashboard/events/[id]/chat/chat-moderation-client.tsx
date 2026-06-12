@@ -3,7 +3,7 @@
 /**
  * Chat moderation client — organiser surface for the YIP community chat.
  *
- * ⚠️ CHILD SAFETY: every action this client calls is independently flag-gated
+ * Every action this client calls is independently flag-gated
  * and canManage-gated on the server (app/yip/actions/chat.ts). This component
  * is presentation only — it holds no authority.
  */

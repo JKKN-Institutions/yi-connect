@@ -38,8 +38,7 @@ export default async function CommunityChatPage() {
   // The layout already gates this, but be defensive.
   if (!session) redirect("/yip/join");
 
-  // ⚠️ FLAG-OFF DEFAULT. Until a named Yi moderation owner + a child-safety
-  // review exist, the flag stays off and students see a placeholder only.
+  // When the flag is off, students see a placeholder only.
   if (!CHAT_ENABLED) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center">

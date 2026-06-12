@@ -1,10 +1,9 @@
 /**
  * YIP in-app community chat — feature flag.
  *
- * ⚠️ CHILD SAFETY: YIP participants are MINORS (school students). This feature
- * is FOUNDATION-ONLY and DEFAULTS OFF. It MUST NOT be turned on in production
- * until (a) a named Yi moderation owner exists and (b) a child-safety review is
- * complete.
+ * ENABLED for production on 2026-06-12 by the programme owner (chapter chair).
+ * Moderation default: each chapter's chair + organisers (yi_directory roles →
+ * getYipEventAccess(...).canManage) moderate their event's chat.
  *
  * Driven by env `NEXT_PUBLIC_YIP_CHAT_ENABLED`. Anything other than the exact
  * string "true" — including unset, "false", "1", "TRUE" — leaves chat OFF.

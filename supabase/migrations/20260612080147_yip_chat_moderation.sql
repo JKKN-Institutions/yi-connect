@@ -1,9 +1,8 @@
 -- YIP in-app community chat — MODERATION layer (pre-event security sweep).
 --
--- ⚠️ CHILD SAFETY: YIP participants are MINORS (school students, Classes 9-12).
--- The chat feature remains behind NEXT_PUBLIC_YIP_CHAT_ENABLED (defaults OFF).
--- This migration adds the moderation primitives the locked product ruling
--- requires before the flag can ever be turned on:
+-- The chat feature sits behind NEXT_PUBLIC_YIP_CHAT_ENABLED (enabled in prod
+-- 2026-06-12). This migration adds the moderation primitives — moderators are
+-- the chapter chair + organisers (canManage):
 --   * freeze a channel        → chat_channels.frozen_at
 --   * student report button   → chat_messages.reported_at / reported_by_participant_id
 --   * mute a student          → yip.chat_mutes (one row per event+participant)
@@ -13,8 +12,7 @@
 -- operational job. Soft-deleted messages (deleted_at) are part of the audit
 -- trail and follow the same retention window.
 --
--- Additive DDL only. NOT yet applied to prod — this file is written ahead of
--- review; apply via Management API when the moderation PR lands.
+-- Additive DDL only. APPLIED to prod 2026-06-12 via the Management API.
 
 -- ─── 1. Channel freeze ──────────────────────────────────────────
 -- frozen_at non-null ⇒ the channel is paused: no new posts are accepted by the

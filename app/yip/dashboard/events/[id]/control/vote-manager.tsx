@@ -48,13 +48,17 @@ import {
   revealResults,
   openRunoff,
   getSpeakerCandidates,
+  getVoteCandidates,
   getEventBills,
   getEventParties,
   getPartyMembers,
   type VoteCandidate,
   type PartyLite,
 } from "@/app/yip/actions/voting";
-import { computeElectionOutcome } from "@/lib/yip/election-outcome";
+import {
+  computeElectionOutcome,
+  computeDeputyRunoffOutcome,
+} from "@/lib/yip/election-outcome";
 import {
   getFloorPanel,
   castFloorVote,
@@ -136,15 +140,32 @@ export function VoteManager({
       ? ((voteSession.config ?? {}) as { partyId?: string }).partyId ?? null
       : null;
 
-  // Fetch candidates or bills when agenda type warrants it
+  // Fetch candidates or bills when agenda type warrants it.
+  // For speaker elections the ACTIVE session's config.candidateIds is the
+  // authoritative ballot — after a round-1 reveal a deputy runoff's tied pair
+  // have parliament_role reset to mp, so the role-based lookup would render
+  // the wrong roll-call list and leave result names unresolved. Prefer the
+  // session config; fall back to roles when no session carries one.
   useEffect(() => {
     if (agendaType === "speaker_election") {
-      getSpeakerCandidates(eventId).then(setCandidates);
+      const cfg =
+        voteSession?.vote_type === "speaker_election"
+          ? ((voteSession.config ?? {}) as { candidateIds?: unknown })
+          : {};
+      const ids = Array.isArray(cfg.candidateIds)
+        ? cfg.candidateIds.filter((x): x is string => typeof x === "string")
+        : [];
+      if (ids.length > 0) {
+        getVoteCandidates(ids).then(setCandidates);
+      } else {
+        getSpeakerCandidates(eventId).then(setCandidates);
+      }
     }
     if (agendaType === "bill_presentation") {
       getEventBills(eventId).then(setBills);
     }
-  }, [agendaType, eventId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agendaType, eventId, voteSession?.id]);
 
   // Parties are always available to the organiser (party-leader elections can be
   // held during any agenda item).
@@ -683,13 +704,35 @@ export function VoteManager({
                   </div>
                 )}
 
-                {/* Speaker election result: Speaker (#1) + Deputy Speakers (#2,#3) */}
+                {/* Speaker election result: Speaker (#1) + Deputy Speakers (#2,#3).
+                    A DEPUTY-seat runoff must not be read as a Speaker election —
+                    its winner takes the open deputy seat (the server reveal writes
+                    the authoritative roles; this block mirrors that reading). */}
                 {isRevealed &&
                   voteSession.vote_type === "speaker_election" &&
                   (() => {
                     const nameOf = (id: string) =>
                       candidates.find((c) => c.id === id)?.full_name ?? id;
-                    const outcome = computeElectionOutcome("speaker_election", tallies);
+                    const cfg = (voteSession.config ?? {}) as {
+                      isRunoff?: boolean;
+                      runoffSeat?: string;
+                      openDeputySeats?: number;
+                    };
+                    const outcome =
+                      cfg.isRunoff && cfg.runoffSeat === "deputy"
+                        ? (() => {
+                            const dep = computeDeputyRunoffOutcome(
+                              tallies,
+                              cfg.openDeputySeats ?? 1
+                            );
+                            return {
+                              speakerId: null,
+                              deputyIds: dep.deputyIds,
+                              partyLeaderId: null,
+                              tie: dep.tie,
+                            };
+                          })()
+                        : computeElectionOutcome("speaker_election", tallies);
                     return (
                       <div className="mt-3 space-y-2 rounded-lg border p-3 text-sm">
                         {outcome.speakerId && (

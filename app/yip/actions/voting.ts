@@ -6,13 +6,48 @@ import { requireParticipantSession } from "@/lib/yip/auth/yip-session";
 import { validateVoteValue } from "@/lib/yip/vote-validate";
 import {
   computeElectionOutcome,
+  computeDeputyRunoffOutcome,
+  fillDeputiesFromParent,
   type VoteTally,
   type ElectionTie,
+  type ElectionOutcome,
 } from "@/lib/yip/election-outcome";
 import type { Tables, Json } from "@/types/yip/database";
 
 type VoteSession = Tables<{ schema: "yip" }, "vote_sessions">;
 type Vote = Tables<{ schema: "yip" }, "votes">;
+
+// ─── Untyped votes access (session_id not in generated types yet) ───
+// yip.votes gained `session_id` in migration 20260612100000_yip_votes_session_scope,
+// but types/yip/database.ts is not regenerated alongside (the supabase CLI
+// appends a version banner that corrupts the generated file). Narrow,
+// file-local accessor for the votes table only — the app/yip/actions/chat.ts
+// pattern. Every other table in this file stays fully typed.
+type VoteRowLite = { id?: string; vote_value: string; participant_id: string | null };
+type VotesPgError = { code?: string; message: string };
+type VotesTable = {
+  select: (cols: string) => VotesTable;
+  insert: (row: Record<string, unknown>) => Promise<{ error: VotesPgError | null }>;
+  eq: (col: string, val: unknown) => VotesTable;
+  is: (col: string, val: unknown) => VotesTable;
+  maybeSingle: () => Promise<{ data: VoteRowLite | null; error: VotesPgError | null }>;
+  then: Promise<{ data: VoteRowLite[] | null; error: VotesPgError | null }>["then"];
+};
+function votesTable(
+  sb: Awaited<ReturnType<typeof createServiceClient>>
+): VotesTable {
+  return (sb as unknown as { from: (t: string) => VotesTable }).from("votes");
+}
+
+// Shape of vote_sessions.config relevant to runoffs (stored by openRunoff).
+type RunoffConfig = {
+  partyId?: string;
+  candidateIds?: string[];
+  isRunoff?: boolean;
+  runoffOf?: string;
+  runoffSeat?: "speaker" | "deputy" | "party_leader";
+  openDeputySeats?: number;
+};
 
 type ActionResult<T = null> =
   | { success: true; data: T }
@@ -63,15 +98,33 @@ export interface VoteResults {
 // unscoped (every checked-in participant is eligible).
 async function buildTallies(
   supabase: Awaited<ReturnType<typeof createServiceClient>>,
-  session: Pick<VoteSession, "agenda_item_id" | "vote_type" | "event_id" | "config">
+  session: Pick<
+    VoteSession,
+    "id" | "agenda_item_id" | "vote_type" | "event_id" | "config"
+  >
 ): Promise<{ tallies: VoteTally[]; totalVotes: number }> {
-  const { data: votes } = await supabase
-    .from("votes")
+  // Votes are scoped to THIS session (migration 20260612100000): a runoff on
+  // the same agenda item must never count round-1 ballots.
+  const { data: votes } = await votesTable(supabase)
     .select("vote_value, participant_id")
-    .eq("agenda_item_id", session.agenda_item_id)
-    .eq("vote_type", session.vote_type);
+    .eq("session_id", session.id);
 
   let scoped = votes ?? [];
+
+  // LEGACY fallback: ballots cast before the session_id migration (or rows the
+  // backfill could not unambiguously attribute) have session_id NULL. If this
+  // session has no scoped ballots at all, fall back to the old agenda-item
+  // query restricted to NULL session_id, so previously-revealed historical
+  // results don't go blank. Post-migration ballots always carry session_id,
+  // so they can never leak into another session through this path.
+  if (scoped.length === 0) {
+    const { data: legacy } = await votesTable(supabase)
+      .select("vote_value, participant_id")
+      .eq("agenda_item_id", session.agenda_item_id)
+      .eq("vote_type", session.vote_type)
+      .is("session_id", null);
+    scoped = legacy ?? [];
+  }
 
   if (session.vote_type === "party_leader") {
     const cfg = (session.config ?? {}) as { partyId?: string };
@@ -102,6 +155,78 @@ async function buildTallies(
   return { tallies, totalVotes: scoped.length };
 }
 
+// ─── Outcome resolution (runoff-aware) ──────────────────────────
+//
+// A runoff session re-runs ONE contested seat among only the tied candidates,
+// so its tally must not be read with the plain "top 1 = Speaker" rule: a
+// deputy-seat runoff's winner takes the open DEPUTY seat (the round-1 Speaker
+// stays), and a speaker-seat runoff still owes its remaining deputy seats to
+// the round-1 standings. Party-leader runoffs need no special handling —
+// "top 1 wins" is already the right reading of a runoff among the tied.
+async function resolveOutcome(
+  supabase: Awaited<ReturnType<typeof createServiceClient>>,
+  session: VoteSession,
+  tallies: VoteTally[]
+): Promise<ElectionOutcome> {
+  const cfg = (session.config ?? {}) as RunoffConfig;
+
+  if (!cfg.isRunoff || session.vote_type !== "speaker_election") {
+    return computeElectionOutcome(session.vote_type, tallies);
+  }
+
+  // Parent (round-1) tallies, loaded at most once and only when needed.
+  let parentTallies: VoteTally[] | null = null;
+  const loadParent = async (): Promise<VoteTally[]> => {
+    if (parentTallies) return parentTallies;
+    parentTallies = [];
+    if (cfg.runoffOf) {
+      const { data: parent } = await supabase
+        .from("vote_sessions")
+        .select("*")
+        .eq("id", cfg.runoffOf)
+        .maybeSingle();
+      if (parent) {
+        parentTallies = (await buildTallies(supabase, parent)).tallies;
+      }
+    }
+    return parentTallies;
+  };
+
+  // openRunoff stores runoffSeat; for runoff sessions created before this fix,
+  // re-derive the contested seat from the parent's tally (the tie surfaced at
+  // the parent's reveal).
+  let seat = cfg.runoffSeat;
+  if (!seat) {
+    seat = computeElectionOutcome("speaker_election", await loadParent()).tie
+      ?.seat;
+  }
+
+  if (seat === "deputy") {
+    const openSeats =
+      cfg.openDeputySeats ??
+      Math.max(
+        1,
+        2 -
+          computeElectionOutcome("speaker_election", await loadParent())
+            .deputyIds.length
+      );
+    const dep = computeDeputyRunoffOutcome(tallies, openSeats);
+    return {
+      speakerId: null,
+      deputyIds: dep.deputyIds,
+      partyLeaderId: null,
+      tie: dep.tie,
+    };
+  }
+
+  // Speaker-seat runoff (or seat underivable — same safe reading: the runoff
+  // ranks the previously top-tied, so its winner IS the Speaker). Any deputy
+  // seat the runoff ranking leaves open is filled from round-1 standings.
+  const out = computeElectionOutcome("speaker_election", tallies);
+  if (!out.speakerId) return out; // the runoff itself tied again
+  return fillDeputiesFromParent(out, await loadParent(), cfg.candidateIds ?? []);
+}
+
 // ─── Open Vote ──────────────────────────────────────────────────
 
 export async function openVote(
@@ -114,9 +239,14 @@ export async function openVote(
     // party_leader only: the party whose leader is being elected. Voting is
     // restricted to that party's own members.
     partyId?: string;
-    // Marks a session opened as a tie runoff (UI hint only).
+    // Marks a session opened as a tie runoff (set by openRunoff).
     isRunoff?: boolean;
     runoffOf?: string;
+    // Which seat the runoff contests — reveal logic depends on it (a deputy
+    // runoff must never crown a Speaker).
+    runoffSeat?: "speaker" | "deputy" | "party_leader";
+    // Deputy runoffs only: how many deputy seats are still open (1 or 2).
+    openDeputySeats?: number;
   }
 ): Promise<ActionResult<{ sessionId: string }>> {
   const access = await getYipEventAccess(eventId);
@@ -271,7 +401,8 @@ export async function revealResults(
   }
 
   // Designate seats from the tally and persist what is unambiguously decided.
-  const outcome = computeElectionOutcome(session.vote_type, tallies);
+  // Runoff sessions resolve against the seat they contest (config.runoffSeat).
+  const outcome = await resolveOutcome(supabase, session, tallies);
 
   if (session.vote_type === "speaker_election" && outcome.speakerId) {
     // A Speaker was decided (no Speaker-seat tie). Reset all current Speaker /
@@ -292,6 +423,21 @@ export async function revealResults(
         .update({ parliament_role: "deputy_speaker" })
         .in("id", outcome.deputyIds);
     }
+  }
+
+  // Deputy-seat runoff: the Speaker (and any clearly-won deputies) were
+  // written at the round-1 reveal — add only the runoff-won deputy seat(s),
+  // with NO role reset. (Only a deputy-runoff outcome has a null speakerId
+  // with non-empty deputyIds.)
+  if (
+    session.vote_type === "speaker_election" &&
+    !outcome.speakerId &&
+    outcome.deputyIds.length > 0
+  ) {
+    await supabase
+      .from("participants")
+      .update({ parliament_role: "deputy_speaker" })
+      .in("id", outcome.deputyIds);
   }
 
   if (session.vote_type === "party_leader" && outcome.partyLeaderId) {
@@ -374,11 +520,11 @@ export async function castVote(
     }
   }
 
-  // Check if already voted (via unique constraint)
-  const { data: existingVote } = await supabase
-    .from("votes")
+  // Check if already voted — in THIS session. A round-1 voter must be able to
+  // vote again in a runoff session on the same agenda item.
+  const { data: existingVote } = await votesTable(supabase)
     .select("id")
-    .eq("agenda_item_id", session.agenda_item_id)
+    .eq("session_id", session.id)
     .eq("participant_id", participantId)
     .maybeSingle();
 
@@ -389,10 +535,11 @@ export async function castVote(
     };
   }
 
-  // Cast the vote
-  const { error } = await supabase.from("votes").insert({
+  // Cast the vote, stamped with its session.
+  const { error } = await votesTable(supabase).insert({
     event_id: session.event_id,
     agenda_item_id: session.agenda_item_id,
+    session_id: session.id,
     participant_id: participantId,
     vote_type: session.vote_type,
     vote_value: voteValue,
@@ -462,7 +609,7 @@ export async function getVoteResults(
     .eq("checked_in", true);
 
   const winner = tallies.length > 0 ? tallies[0].vote_value : null;
-  const outcome = computeElectionOutcome(session.vote_type, tallies);
+  const outcome = await resolveOutcome(supabase, session, tallies);
 
   return {
     success: true,
@@ -531,7 +678,7 @@ export async function getLiveVoteCounts(
 
   const { data: session } = await supabase
     .from("vote_sessions")
-    .select("agenda_item_id, vote_type")
+    .select("id, agenda_item_id, vote_type")
     .eq("id", sessionId)
     .single();
 
@@ -539,11 +686,21 @@ export async function getLiveVoteCounts(
     return { success: false, error: "Session not found" };
   }
 
-  const { data: votes } = await supabase
-    .from("votes")
+  // Session-scoped live count, with the same legacy NULL-session fallback as
+  // buildTallies (this also powers reads on pre-migration sessions).
+  const { data: scopedVotes } = await votesTable(supabase)
     .select("vote_value")
-    .eq("agenda_item_id", session.agenda_item_id)
-    .eq("vote_type", session.vote_type);
+    .eq("session_id", session.id);
+
+  let votes = scopedVotes ?? [];
+  if (votes.length === 0) {
+    const { data: legacy } = await votesTable(supabase)
+      .select("vote_value")
+      .eq("agenda_item_id", session.agenda_item_id)
+      .eq("vote_type", session.vote_type)
+      .is("session_id", null);
+    votes = legacy ?? [];
+  }
 
   const tallyMap: Record<string, number> = {};
   (votes ?? []).forEach((v) => {
@@ -578,7 +735,7 @@ export async function hasParticipantVoted(
 
   const { data: session } = await supabase
     .from("vote_sessions")
-    .select("event_id, agenda_item_id")
+    .select("event_id")
     .eq("id", sessionId)
     .maybeSingle();
   if (!session) return { success: false, error: "Vote session not found" };
@@ -587,10 +744,11 @@ export async function hasParticipantVoted(
   const sess = await requireParticipantSession(participantId, session.event_id);
   if (!sess.ok) return { success: false, error: sess.error };
 
-  const { data: existing } = await supabase
-    .from("votes")
+  // Scoped to THIS session: a round-1 vote must not read as "voted" in a
+  // runoff session on the same agenda item.
+  const { data: existing } = await votesTable(supabase)
     .select("id")
-    .eq("agenda_item_id", session.agenda_item_id)
+    .eq("session_id", sessionId)
     .eq("participant_id", participantId)
     .maybeSingle();
 
@@ -699,14 +857,27 @@ export async function openRunoff(
 
   // Re-derive the tie from the current tally so the runoff ballot is exactly
   // the tied candidates (no trust in client-supplied ids). Party-leader tallies
-  // are scoped to the party's own members.
+  // are scoped to the party's own members; runoff sessions resolve against the
+  // seat they contest (so a re-runoff of a deputy runoff stays a deputy runoff).
   const { tallies } = await buildTallies(supabase, session);
-  const outcome = computeElectionOutcome(session.vote_type, tallies);
+  const outcome = await resolveOutcome(supabase, session, tallies);
   if (!outcome.tie || outcome.tie.tiedCandidateIds.length < 2) {
     return { success: false, error: "No tie to run off — nothing to do." };
   }
 
-  const cfg = (session.config ?? {}) as { partyId?: string };
+  const cfg = (session.config ?? {}) as RunoffConfig;
+
+  // Deputy runoffs need to know how many deputy seats are still open. The
+  // already-decided deputies counted here depend on what kind of session the
+  // tie surfaced in: a deputy-runoff outcome lists only its newly-won seats
+  // (subtract from its own open count); every other outcome lists all of them.
+  const openDeputySeats =
+    outcome.tie.seat !== "deputy"
+      ? undefined
+      : cfg.isRunoff && cfg.runoffSeat === "deputy"
+        ? Math.max(1, (cfg.openDeputySeats ?? 1) - outcome.deputyIds.length)
+        : Math.max(1, 2 - outcome.deputyIds.length);
+
   return openVote(session.event_id, session.agenda_item_id, session.vote_type as
     | "speaker_election"
     | "bill_vote"
@@ -715,5 +886,7 @@ export async function openRunoff(
     partyId: cfg.partyId,
     isRunoff: true,
     runoffOf: revealedSessionId,
+    runoffSeat: outcome.tie.seat,
+    openDeputySeats,
   });
 }

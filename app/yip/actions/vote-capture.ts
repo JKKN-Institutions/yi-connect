@@ -22,6 +22,26 @@ type ActionResult<T> =
   | { success: true; data: T }
   | { success: false; error: string };
 
+// ─── Untyped votes access (session_id not in generated types yet) ───
+// yip.votes gained `session_id` in migration 20260612100000 but the generated
+// DB types are not regenerated alongside (CLI banner corruption). File-local
+// narrow accessor — the app/yip/actions/chat.ts pattern.
+type VotesPgError = { code?: string; message: string };
+type VotesTable = {
+  select: (cols: string) => VotesTable;
+  insert: (row: Record<string, unknown>) => Promise<{ error: VotesPgError | null }>;
+  eq: (col: string, val: unknown) => VotesTable;
+  then: Promise<{
+    data: Record<string, unknown>[] | null;
+    error: VotesPgError | null;
+  }>["then"];
+};
+function votesTable(
+  sb: Awaited<ReturnType<typeof createServiceClient>>
+): VotesTable {
+  return (sb as unknown as { from: (t: string) => VotesTable }).from("votes");
+}
+
 interface KioskOption {
   value: string;
   label: string;
@@ -141,23 +161,22 @@ export async function getKioskState(
     title = "Vote";
   }
 
-  const agendaItemId = voteSession.agenda_item_id;
-
-  // Roster + the ids that have already voted for this agenda item.
+  // Roster + the ids that have already voted in THIS session. Session-scoped
+  // — never agenda-item-scoped — so a runoff's pending list starts clean
+  // instead of treating every round-1 voter as already done.
   const [{ data: roster }, { data: castVotes }] = await Promise.all([
     supabase
       .from("participants")
       .select("id, full_name, serial_no, constituency_name")
       .eq("event_id", eventId)
       .order("serial_no", { ascending: true, nullsFirst: false }),
-    supabase
-      .from("votes")
+    votesTable(supabase)
       .select("participant_id")
-      .eq("agenda_item_id", agendaItemId),
+      .eq("session_id", voteSession.id),
   ]);
 
   const votedIds = new Set(
-    (castVotes ?? []).map((v) => v.participant_id)
+    (castVotes ?? []).map((v) => v.participant_id as string)
   );
 
   const pending: KioskPendingVoter[] = (roster ?? [])
@@ -232,11 +251,13 @@ export async function castKioskVote(
     return { success: false, error: "Student not found for this event" };
   }
 
-  // INSERT-ONLY. A repeat is mapped to already_voted via the unique constraint;
-  // we never update an existing vote.
-  const { error } = await supabase.from("votes").insert({
+  // INSERT-ONLY. A repeat in the SAME session is mapped to already_voted via
+  // the per-session unique index (votes_session_participant_key); we never
+  // update an existing vote. A round-1 vote never blocks a runoff cast.
+  const { error } = await votesTable(supabase).insert({
     event_id: eventId,
     agenda_item_id: voteSession.agenda_item_id,
+    session_id: voteSession.id,
     participant_id: participantId,
     vote_type: voteSession.vote_type,
     vote_value: voteValue,

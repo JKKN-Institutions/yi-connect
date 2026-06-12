@@ -53,21 +53,45 @@ export function useVoteSession(
 
     // If tracking votes and session exists, fetch tallies
     if (options?.trackVotes && data) {
-      fetchTallies(data.agenda_item_id, data.vote_type);
+      fetchTallies(data);
     }
   }, [eventId, supabase, options?.trackVotes]);
 
-  // Fetch vote tallies
+  // Fetch vote tallies — scoped to THIS session (yip.votes.session_id,
+  // migration 20260612100000) so a runoff never counts round-1 ballots.
+  // session_id is not in the generated DB types yet (CLI banner corruption
+  // blocks regeneration), hence the narrow untyped query.
   const fetchTallies = useCallback(
-    async (agendaItemId: string, voteType: string) => {
-      const { data: votes } = await supabase
-        .from("votes")
+    async (s: Pick<VoteSession, "id" | "agenda_item_id" | "vote_type">) => {
+      type VotesQuery = {
+        select: (cols: string) => VotesQuery;
+        eq: (col: string, val: string) => VotesQuery;
+        is: (col: string, val: null) => VotesQuery;
+        then: Promise<{ data: { vote_value: string }[] | null }>["then"];
+      };
+      const votes_ = (supabase as unknown as { from: (t: string) => VotesQuery })
+        .from;
+
+      const { data: scoped } = await votes_("votes")
         .select("vote_value")
-        .eq("agenda_item_id", agendaItemId)
-        .eq("vote_type", voteType);
+        .eq("session_id", s.id);
+
+      let votes = scoped ?? [];
+
+      // LEGACY fallback: pre-migration ballots have session_id NULL. If this
+      // session has no scoped ballots, fall back to the old agenda-item query
+      // (NULL-session rows only) so historical revealed results don't go blank.
+      if (votes.length === 0) {
+        const { data: legacy } = await votes_("votes")
+          .select("vote_value")
+          .eq("agenda_item_id", s.agenda_item_id)
+          .eq("vote_type", s.vote_type)
+          .is("session_id", null);
+        votes = legacy ?? [];
+      }
 
       const tallyMap: Record<string, number> = {};
-      (votes ?? []).forEach((v) => {
+      votes.forEach((v) => {
         tallyMap[v.vote_value] = (tallyMap[v.vote_value] || 0) + 1;
       });
 
@@ -76,7 +100,7 @@ export function useVoteSession(
         .sort((a, b) => b.count - a.count);
 
       setTallies(newTallies);
-      setTotalVotes((votes ?? []).length);
+      setTotalVotes(votes.length);
     },
     [supabase]
   );
@@ -109,7 +133,7 @@ export function useVoteSession(
 
             // Fetch tallies when session changes
             if (options?.trackVotes) {
-              fetchTallies(updated.agenda_item_id, updated.vote_type);
+              fetchTallies(updated);
             }
           }
           if (payload.eventType === "DELETE") {
@@ -145,18 +169,21 @@ export function useVoteSession(
     }
 
     const channel = supabase
-      .channel(`yip:votes-live:${session.agenda_item_id}`)
+      .channel(`yip:votes-live:${session.id}`)
       .on(
         "postgres_changes",
         {
           event: "INSERT",
           schema: "yip",
           table: "votes",
+          // Trigger-only: kept on agenda_item_id (not session_id) so it also
+          // fires for legacy NULL-session inserts during the migration window.
+          // The actual scoping happens inside fetchTallies.
           filter: `agenda_item_id=eq.${session.agenda_item_id}`,
         },
         () => {
           // Re-fetch tallies on new vote
-          fetchTallies(session.agenda_item_id, session.vote_type);
+          fetchTallies(session);
         }
       )
       .subscribe();

@@ -7,9 +7,12 @@ import Image from "next/image";
  * Used at the top of every /yip route via app/yip/layout.tsx.
  * Indian Parliament colors: saffron (#FF9933), white, green (#138808).
  *
- * Logo order (chair direction, 2026-06-12): Yi + the official
- * "Young Indians Parliament 2026" wordmark on the left; on the right
- * Thalir, Bharat One, and CII LAST (right-most).
+ * Logo order (national team direction — Pradeep, national call
+ * 2026-06-12), left → right: Yi → Bharat One → YIP 2026 wordmark →
+ * CII LAST (right-most). The Thalir logo was REMOVED from the header
+ * per the same direction (it named exactly these four logos).
+ * Below the `sm` breakpoint only Yi + the wordmark show to avoid
+ * overflow; Bharat One and CII are hidden.
  */
 export function YipBrandHeader(): React.JSX.Element {
   return (
@@ -31,38 +34,32 @@ export function YipBrandHeader(): React.JSX.Element {
             className="h-10 w-auto"
             priority
           />
-          {/* Official YIP 2026 wordmark (from the Yi handbook) on a white
-              chip so the tricolor lettering stays legible over the saffron
-              end of the gradient. */}
+          {/* Bharat One — "One Bharat, One Spirit". White-bg logo on a small
+              rounded chip. Hidden below sm to avoid overflow. */}
+          <Image
+            src="/yip/logos/bharat-one-logo.png"
+            alt="One Bharat, One Spirit"
+            width={269}
+            height={187}
+            className="hidden h-8 w-auto rounded bg-white p-0.5 shadow-sm ring-1 ring-black/5 sm:block"
+          />
+          {/* Official YIP 2026 wordmark (from the Yi handbook) — transparent
+              PNG sitting directly on the tricolor gradient (chip removed per
+              national-team direction). */}
           <Image
             src="/yip/logos/yip-2026-wordmark.png"
             alt="Young Indians Parliament 2026"
             width={416}
             height={118}
             priority
-            className="h-9 w-auto rounded bg-white/90 px-1.5 py-1 shadow-sm ring-1 ring-black/5 sm:h-10"
+            className="h-9 w-auto sm:h-10"
           />
         </Link>
 
         <div className="hidden items-center gap-3 sm:flex">
-          <Image
-            src="/yip/logos/thalir-logo.png"
-            alt="Thalir — Yi's school program"
-            width={56}
-            height={32}
-            className="h-8 w-auto"
-          />
-          {/* Bharat One — "One Bharat, One Spirit". White-bg logo on a small
-              rounded chip. */}
-          <Image
-            src="/yip/logos/bharat-one-logo.png"
-            alt="One Bharat, One Spirit"
-            width={269}
-            height={187}
-            className="h-8 w-auto rounded bg-white p-0.5 shadow-sm ring-1 ring-black/5"
-          />
-          {/* CII — last, right-most (chair direction). White chip keeps the
-              purple mark legible over the green end of the gradient. */}
+          {/* CII — last, right-most (national-team direction). White chip
+              keeps the purple mark legible over the green end of the
+              gradient. */}
           <Image
             src="/yip/logos/cii-logo.png"
             alt="CII — Confederation of Indian Industry"

@@ -54,7 +54,10 @@ import {
   type VoteCandidate,
   type PartyLite,
 } from "@/app/yip/actions/voting";
-import { computeElectionOutcome } from "@/lib/yip/election-outcome";
+import {
+  computeElectionOutcome,
+  computeDeputyRunoffOutcome,
+} from "@/lib/yip/election-outcome";
 import {
   getFloorPanel,
   castFloorVote,
@@ -683,13 +686,35 @@ export function VoteManager({
                   </div>
                 )}
 
-                {/* Speaker election result: Speaker (#1) + Deputy Speakers (#2,#3) */}
+                {/* Speaker election result: Speaker (#1) + Deputy Speakers (#2,#3).
+                    A DEPUTY-seat runoff must not be read as a Speaker election —
+                    its winner takes the open deputy seat (the server reveal writes
+                    the authoritative roles; this block mirrors that reading). */}
                 {isRevealed &&
                   voteSession.vote_type === "speaker_election" &&
                   (() => {
                     const nameOf = (id: string) =>
                       candidates.find((c) => c.id === id)?.full_name ?? id;
-                    const outcome = computeElectionOutcome("speaker_election", tallies);
+                    const cfg = (voteSession.config ?? {}) as {
+                      isRunoff?: boolean;
+                      runoffSeat?: string;
+                      openDeputySeats?: number;
+                    };
+                    const outcome =
+                      cfg.isRunoff && cfg.runoffSeat === "deputy"
+                        ? (() => {
+                            const dep = computeDeputyRunoffOutcome(
+                              tallies,
+                              cfg.openDeputySeats ?? 1
+                            );
+                            return {
+                              speakerId: null,
+                              deputyIds: dep.deputyIds,
+                              partyLeaderId: null,
+                              tie: dep.tie,
+                            };
+                          })()
+                        : computeElectionOutcome("speaker_election", tallies);
                     return (
                       <div className="mt-3 space-y-2 rounded-lg border p-3 text-sm">
                         {outcome.speakerId && (

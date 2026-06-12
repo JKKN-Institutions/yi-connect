@@ -8,6 +8,27 @@ type ActionResult<T = null> =
   | { success: true; data: T }
   | { success: false; error: string };
 
+// ─── Untyped votes access (session_id not in generated types yet) ───
+// yip.votes gained `session_id` in migration 20260612100000 but the generated
+// DB types are not regenerated alongside (CLI banner corruption). File-local
+// narrow accessor — the app/yip/actions/chat.ts pattern; everything else in
+// this file stays typed.
+type VotesPgError = { code?: string; message: string };
+type VotesRaw = Record<string, unknown>;
+type VotesTable = {
+  select: (cols: string) => VotesTable;
+  insert: (row: Record<string, unknown>) => Promise<{ error: VotesPgError | null }>;
+  eq: (col: string, val: unknown) => VotesTable;
+  maybeSingle: () => Promise<{ data: VotesRaw | null; error: VotesPgError | null }>;
+  single: () => Promise<{ data: VotesRaw | null; error: VotesPgError | null }>;
+  then: Promise<{ data: VotesRaw[] | null; error: VotesPgError | null }>["then"];
+};
+function votesTable(
+  sb: Awaited<ReturnType<typeof createServiceClient>>
+): VotesTable {
+  return (sb as unknown as { from: (t: string) => VotesTable }).from("votes");
+}
+
 // ─── Panel shapes ───────────────────────────────────────────────
 
 export interface FloorVolunteerCount {
@@ -103,16 +124,25 @@ export async function getFloorPanel(
 
   const roster = participants ?? [];
 
-  // Votes already cast for THIS agenda item (one row per participant).
-  const { data: votes } = await service
-    .from("votes")
+  // Votes already cast in THIS session (one row per participant). Session-
+  // scoped — never agenda-item-scoped — so a runoff's roll call starts from a
+  // clean slate instead of treating every round-1 voter as already done.
+  // No legacy NULL-session fallback here: this is a live capture console, not
+  // a historical results reader.
+  const { data: votes } = await votesTable(service)
     .select(
       "id, participant_id, vote_value, entry_method, recorded_by_volunteer_id, recorded_by_user"
     )
-    .eq("agenda_item_id", session.agenda_item_id)
-    .eq("vote_type", session.vote_type);
+    .eq("session_id", session.id);
 
-  const voteRows = votes ?? [];
+  const voteRows = (votes ?? []) as Array<{
+    id: string;
+    participant_id: string;
+    vote_value: string;
+    entry_method: string;
+    recorded_by_volunteer_id: string | null;
+    recorded_by_user: string | null;
+  }>;
   const votedIds = new Set(voteRows.map((v) => v.participant_id));
 
   // Channels: counts grouped by entry_method.
@@ -230,11 +260,11 @@ export async function castFloorVote(
     return { success: false, error: "Participant not found for this event" };
   }
 
-  // Insert-only finality (mirror castVote): a pre-existing row → already_voted.
-  const { data: existingVote } = await service
-    .from("votes")
+  // Insert-only finality (mirror castVote): a pre-existing row IN THIS SESSION
+  // → already_voted. Round-1 votes never block a runoff entry.
+  const { data: existingVote } = await votesTable(service)
     .select("id")
-    .eq("agenda_item_id", session.agenda_item_id)
+    .eq("session_id", session.id)
     .eq("participant_id", participantId)
     .maybeSingle();
 
@@ -242,9 +272,10 @@ export async function castFloorVote(
     return { success: true, data: { status: "already_voted" } };
   }
 
-  const { error } = await service.from("votes").insert({
+  const { error } = await votesTable(service).insert({
     event_id: session.event_id,
     agenda_item_id: session.agenda_item_id,
+    session_id: session.id,
     participant_id: participantId,
     vote_type: session.vote_type,
     vote_value: voteValue,
@@ -272,13 +303,20 @@ export async function correctFloorVote(
   const service = await createServiceClient();
 
   // Load the vote → resolve its session → gate.
-  const { data: vote } = await service
-    .from("votes")
-    .select("id, vote_value, entry_method, agenda_item_id, event_id")
+  const { data: voteRaw } = await votesTable(service)
+    .select("id, vote_value, entry_method, agenda_item_id, event_id, session_id")
     .eq("id", voteId)
     .single();
 
-  if (!vote) return { success: false, error: "Vote not found" };
+  if (!voteRaw) return { success: false, error: "Vote not found" };
+  const vote = voteRaw as {
+    id: string;
+    vote_value: string;
+    entry_method: string;
+    agenda_item_id: string;
+    event_id: string;
+    session_id: string | null;
+  };
 
   // A student's own cast is inviolable — corrections only for manual entries.
   if (vote.entry_method === "self") {
@@ -288,14 +326,22 @@ export async function correctFloorVote(
     };
   }
 
-  // Find the live session for this agenda item; correction needs it OPEN.
-  const { data: session } = await service
-    .from("vote_sessions")
-    .select("id, event_id, status")
-    .eq("agenda_item_id", vote.agenda_item_id)
-    .order("opened_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  // Resolve the session this vote belongs to; correction needs THAT session
+  // OPEN (a runoff being open must not unlock corrections of round-1 entries).
+  // Legacy NULL-session rows fall back to the latest session on the agenda item.
+  const { data: session } = vote.session_id
+    ? await service
+        .from("vote_sessions")
+        .select("id, event_id, status")
+        .eq("id", vote.session_id)
+        .maybeSingle()
+    : await service
+        .from("vote_sessions")
+        .select("id, event_id, status")
+        .eq("agenda_item_id", vote.agenda_item_id)
+        .order("opened_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
   if (!session) return { success: false, error: "Vote session not found" };
 

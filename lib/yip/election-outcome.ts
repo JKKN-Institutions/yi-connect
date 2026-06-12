@@ -89,3 +89,98 @@ export function computeElectionOutcome(
 
   return out; // bill_vote / unknown — no seat designation
 }
+
+// ─── Runoff-seat helpers ────────────────────────────────────────
+//
+// A runoff session re-runs ONE contested seat among only the tied candidates
+// (Director ruling 2026-06-11). Its tally must therefore NOT be interpreted
+// with the plain "top 1 = Speaker" rule: a deputy-seat runoff's winner takes
+// the open DEPUTY seat, and a speaker-seat runoff still owes its deputies to
+// the round-1 standings. These pure helpers encode that.
+
+/**
+ * Outcome of a runoff for the open deputy seat(s).
+ * Takes the top `openSeats` candidates from the runoff tally; a tie across the
+ * last open seat is reported (and only the clearly-ahead are awarded).
+ * Never designates a Speaker — the Speaker was settled in round 1.
+ */
+export function computeDeputyRunoffOutcome(
+  runoffTallies: VoteTally[],
+  openSeats: number
+): { deputyIds: string[]; tie: ElectionTie | null } {
+  if (runoffTallies.length === 0 || openSeats <= 0) {
+    return { deputyIds: [], tie: null };
+  }
+  if (runoffTallies.length <= openSeats) {
+    // Everyone fits — uncontested.
+    return { deputyIds: runoffTallies.map((t) => t.vote_value), tie: null };
+  }
+  const boundary = runoffTallies[openSeats - 1].count;
+  if (runoffTallies[openSeats].count === boundary) {
+    // Still tied across the last open seat: award the clearly-ahead, re-runoff the rest.
+    return {
+      deputyIds: runoffTallies
+        .filter((t) => t.count > boundary)
+        .map((t) => t.vote_value),
+      tie: {
+        seat: "deputy",
+        tiedCount: boundary,
+        tiedCandidateIds: runoffTallies
+          .filter((t) => t.count === boundary)
+          .map((t) => t.vote_value),
+      },
+    };
+  }
+  return {
+    deputyIds: runoffTallies.slice(0, openSeats).map((t) => t.vote_value),
+    tie: null,
+  };
+}
+
+/**
+ * After a SPEAKER-seat runoff designates the Speaker (and ranks the other
+ * previously-tied candidates as deputies), fill any deputy seat still open
+ * from the round-1 standings — excluding the runoff candidates, who were
+ * already ranked by the runoff itself. A tie at the fill boundary (within the
+ * round-1 list, where counts are comparable) is reported for another runoff.
+ */
+export function fillDeputiesFromParent(
+  outcome: ElectionOutcome,
+  parentTallies: VoteTally[],
+  runoffCandidateIds: string[]
+): ElectionOutcome {
+  // Nothing to fill while the speaker seat itself is unresolved or a deputy
+  // tie inside the runoff already occupies the boundary.
+  if (!outcome.speakerId || outcome.tie) return outcome;
+  const need = 2 - outcome.deputyIds.length;
+  if (need <= 0) return outcome;
+
+  const exclude = new Set(runoffCandidateIds);
+  const rest = parentTallies.filter((t) => !exclude.has(t.vote_value));
+  if (rest.length === 0) return outcome;
+
+  if (rest.length <= need) {
+    return { ...outcome, deputyIds: [...outcome.deputyIds, ...rest.map((t) => t.vote_value)] };
+  }
+  const boundary = rest[need - 1].count;
+  if (rest[need].count === boundary) {
+    return {
+      ...outcome,
+      deputyIds: [
+        ...outcome.deputyIds,
+        ...rest.filter((t) => t.count > boundary).map((t) => t.vote_value),
+      ],
+      tie: {
+        seat: "deputy",
+        tiedCount: boundary,
+        tiedCandidateIds: rest
+          .filter((t) => t.count === boundary)
+          .map((t) => t.vote_value),
+      },
+    };
+  }
+  return {
+    ...outcome,
+    deputyIds: [...outcome.deputyIds, ...rest.slice(0, need).map((t) => t.vote_value)],
+  };
+}

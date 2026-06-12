@@ -511,7 +511,14 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
                     tallies.length > 0 && (
                       <div className="space-y-2">
                         <p className="text-lg text-gray-500 uppercase tracking-widest">
-                          Elected Speaker
+                          {/* A deputy-seat runoff elects a Deputy Speaker —
+                              never relabel its winner as the Speaker. */}
+                          {((voteSession.config ?? {}) as {
+                            isRunoff?: boolean;
+                            runoffSeat?: string;
+                          }).runoffSeat === "deputy"
+                            ? "Elected Deputy Speaker"
+                            : "Elected Speaker"}
                         </p>
                         <p className="text-5xl font-black text-amber-400">
                           {(() => {

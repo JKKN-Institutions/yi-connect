@@ -1,6 +1,7 @@
 "use server";
 
 import { createServiceClient } from "@/lib/yip/supabase/server";
+import { revalidatePath } from "next/cache";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { requireParticipantSession } from "@/lib/yip/auth/yip-session";
 import type { Tables, Database } from "@/types/yip/database";
@@ -113,6 +114,36 @@ export type QuestionWithSubmitter = Question & {
     parliament_role: string | null;
   } | null;
 };
+
+// ─── Set / clear the question-submission deadline ──────────────────
+// Handbook p22: Question Hour questions are collected from all students at
+// least 4 days before the session. submitQuestion enforces
+// events.questions_close_at; this is the organiser-facing setter for it.
+// Pass null to remove the deadline (submissions stay open).
+export async function setQuestionsDeadline(
+  eventId: string,
+  closeAtIso: string | null
+): Promise<ActionResult> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
+
+  if (closeAtIso !== null && Number.isNaN(new Date(closeAtIso).getTime())) {
+    return { success: false, error: "Invalid date/time" };
+  }
+
+  const supabase = await createServiceClient();
+  const { error } = await supabase
+    .from("events")
+    .update({ questions_close_at: closeAtIso })
+    .eq("id", eventId);
+
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/yip/dashboard/events/${eventId}/questions`);
+  return { success: true, data: null };
+}
 
 export async function getQuestions(
   eventId: string

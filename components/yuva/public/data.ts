@@ -421,6 +421,7 @@ export type PublicAcademy = {
   display_name: string;
   chapter: string;
   institution_name: string | null;
+  city: string | null;
   logo_url: string | null;
 };
 
@@ -441,13 +442,15 @@ export async function fetchActiveAcademiesPublic(): Promise<PublicAcademy[]> {
     ),
   ];
   const institutionName = new Map<string, string>();
+  const institutionCity = new Map<string, string | null>();
   if (institutionIds.length > 0) {
     const { data } = await yiSchema(svc)
       .from("institutions")
-      .select("id, name")
+      .select("id, name, city")
       .in("id", institutionIds);
     for (const row of data ?? []) {
       institutionName.set(String(row.id), String(row.name));
+      institutionCity.set(String(row.id), (row.city as string | null) ?? null);
     }
   }
 
@@ -458,6 +461,9 @@ export async function fetchActiveAcademiesPublic(): Promise<PublicAcademy[]> {
     institution_name: a.institution_id
       ? (institutionName.get(a.institution_id) ?? null)
       : (a.institution_other ?? null),
+    city: a.institution_id
+      ? (institutionCity.get(a.institution_id) ?? null)
+      : null,
     logo_url: a.logo_storage_path
       ? `${publicUrl(a.logo_storage_path)}?v=${encodeURIComponent(a.updated_at)}`
       : null,

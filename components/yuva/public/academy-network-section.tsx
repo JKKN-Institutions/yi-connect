@@ -58,11 +58,14 @@ export function AcademyNetworkSection({
                   <h3 className="truncate text-sm font-semibold text-slate-900">
                     {academy.display_name}
                   </h3>
-                  <p className="truncate text-xs text-slate-500">
+                  {academy.institution_name ? (
+                    <p className="truncate text-xs text-slate-600">
+                      {academy.institution_name}
+                      {academy.city ? `, ${academy.city}` : ""}
+                    </p>
+                  ) : null}
+                  <p className="truncate text-xs text-slate-400">
                     Yi {academy.chapter}
-                    {academy.institution_name
-                      ? ` · ${academy.institution_name}`
-                      : ""}
                   </p>
                 </div>
               </div>

@@ -3,11 +3,10 @@
 /**
  * YIP in-app community chat — server actions (FOUNDATION).
  *
- * ⚠️ CHILD SAFETY: YIP participants are MINORS (school students, Classes 9-12).
  * Every action in this file no-ops when the feature flag is OFF
- * (NEXT_PUBLIC_YIP_CHAT_ENABLED !== "true"), and the flag DEFAULTS OFF. This
- * feature MUST NOT be enabled in production until (a) a named Yi moderation
- * owner exists and (b) a child-safety review is complete.
+ * (NEXT_PUBLIC_YIP_CHAT_ENABLED !== "true"). Enabled in production 2026-06-12.
+ * Moderators (per programme policy): the chapter chair + chapter organisers
+ * from the Yi directory — i.e. getYipEventAccess(...).canManage.
  *
  * Authorization model:
  *   - The chat tables (yip.chat_channels / yip.chat_messages) are
@@ -477,7 +476,7 @@ export async function postChannelMessage(args: {
     return { success: false, error: "You don't have access to this channel." };
   }
 
-  // Announcements are organiser-broadcast only (child-safety review GAP 2):
+  // Announcements are organiser-broadcast only:
   // students keep READ access (channelVisibleToParticipant is unchanged) but
   // can never post into them. The organiser path is modPostAnnouncement.
   if (channel.kind === "announcement") {

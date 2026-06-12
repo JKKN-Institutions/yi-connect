@@ -10,8 +10,8 @@ import { ChatModerationClient } from "./chat-moderation-client";
 /**
  * Chat moderation — organiser-only oversight of the in-app community chat.
  *
- * ⚠️ CHILD SAFETY: participants are MINORS. This page is the moderation owner's
- * surface (chapter organiser = getYipEventAccess(...).canManage): channel
+ * This page is the moderators' surface (default: the chapter chair +
+ * organisers from the Yi directory) (chapter organiser = getYipEventAccess(...).canManage): channel
  * freeze/unfreeze, message removal, the student-report queue, DM oversight
  * (read-only student↔YUVA threads) and mutes. It is gated by canManage —
  * view-only roles are denied (FAIL CLOSED).
@@ -53,9 +53,8 @@ export default async function ChatModerationPage({
           Community chat is not enabled
         </h1>
         <p className="mt-2 max-w-sm text-sm text-[#1a1a3e]/50">
-          The in-app chat (and this moderation panel) is switched off. It stays
-          off until a named Yi moderation owner exists and the child-safety
-          review is complete.
+          The in-app chat (and this moderation panel) is switched off. Set
+          NEXT_PUBLIC_YIP_CHAT_ENABLED=true and redeploy to turn it on.
         </p>
       </div>
     );

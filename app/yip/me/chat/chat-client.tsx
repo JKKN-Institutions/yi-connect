@@ -10,6 +10,8 @@ import {
   Landmark,
   UserCircle2,
   Loader2,
+  Flag,
+  PauseCircle,
 } from "lucide-react";
 import { Card } from "@/components/yip/ui/card";
 import { Button } from "@/components/yip/ui/button";
@@ -20,6 +22,7 @@ import {
   postChannelMessage,
   postDmToYuva,
   listYuvaContacts,
+  reportMessage,
   type ChatChannel,
   type ChatMessage,
   type YuvaContact,
@@ -58,7 +61,7 @@ export function ChatClient({
     (async () => {
       setLoadingList(true);
       const [chRes, yuvaRes] = await Promise.all([
-        listChannels(eventId),
+        listChannels(eventId, participantId),
         listYuvaContacts(participantId),
       ]);
       if (!active) return;
@@ -72,6 +75,9 @@ export function ChatClient({
     };
   }, [eventId, participantId]);
 
+  const report = (messageId: string) =>
+    reportMessage({ participantId, eventId, messageId });
+
   if (view.kind === "channel") {
     return (
       <Thread
@@ -79,7 +85,9 @@ export function ChatClient({
         subtitle={labelForKind(view.channel.kind)}
         participantId={participantId}
         onBack={() => setView({ kind: "list" })}
-        load={() => listMessages({ channelId: view.channel.id })}
+        load={() =>
+          listMessages({ channelId: view.channel.id, participantId })
+        }
         send={(body) =>
           postChannelMessage({
             participantId,
@@ -87,6 +95,7 @@ export function ChatClient({
             body,
           })
         }
+        onReport={report}
       />
     );
   }
@@ -107,6 +116,7 @@ export function ChatClient({
         send={(body) =>
           postDmToYuva(participantId, view.volunteer.volunteerId, body)
         }
+        onReport={report}
       />
     );
   }
@@ -165,6 +175,12 @@ export function ChatClient({
                         {labelForKind(ch.kind)}
                       </span>
                     </span>
+                    {ch.frozenAt && (
+                      <span className="flex shrink-0 items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-500">
+                        <PauseCircle className="size-3" />
+                        Paused
+                      </span>
+                    )}
                   </button>
                 );
               })
@@ -225,6 +241,10 @@ interface ThreadProps {
     | { success: true; data: ChatMessage }
     | { success: false; error: string }
   >;
+  /** Report a message to the organisers (hidden on the student's own messages). */
+  onReport?: (
+    messageId: string
+  ) => Promise<{ success: true; data: null } | { success: false; error: string }>;
 }
 
 function Thread({
@@ -234,12 +254,14 @@ function Thread({
   onBack,
   load,
   send,
+  onReport,
 }: ThreadProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [pending, startTransition] = useTransition();
+  const [reportedIds, setReportedIds] = useState<Set<string>>(new Set());
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const refresh = useCallback(async () => {
@@ -276,6 +298,16 @@ function Thread({
     });
   }
 
+  async function handleReport(messageId: string) {
+    if (!onReport || reportedIds.has(messageId)) return;
+    const res = await onReport(messageId);
+    if (res.success) {
+      setReportedIds((prev) => new Set(prev).add(messageId));
+    } else {
+      setError(res.error);
+    }
+  }
+
   const visible = messages.filter((m) => !m.deletedAt);
 
   return (
@@ -310,6 +342,7 @@ function Thread({
             const mine =
               m.senderKind === "student" &&
               m.senderParticipantId === participantId;
+            const reported = reportedIds.has(m.id);
             return (
               <div
                 key={m.id}
@@ -333,6 +366,24 @@ function Thread({
                   <span className="whitespace-pre-wrap break-words">
                     {m.body}
                   </span>
+                  {!mine && onReport && (
+                    <span className="mt-1 flex justify-end">
+                      {reported ? (
+                        <span className="text-[10px] font-medium text-gray-400">
+                          Reported
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => handleReport(m.id)}
+                          className="flex items-center gap-1 text-[10px] text-gray-400 transition-colors hover:text-red-500"
+                          aria-label="Report this message"
+                        >
+                          <Flag className="size-2.5" />
+                          Report
+                        </button>
+                      )}
+                    </span>
+                  )}
                 </div>
               </div>
             );

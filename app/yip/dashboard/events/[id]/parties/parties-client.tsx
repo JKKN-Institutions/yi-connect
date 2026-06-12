@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Badge } from "@/components/yip/ui/badge";
 import { Button } from "@/components/yip/ui/button";
@@ -18,6 +19,8 @@ import {
   ArrowRightLeft,
   Users,
   Hash,
+  Wand2,
+  Lock,
 } from "lucide-react";
 import {
   createParty,
@@ -25,8 +28,11 @@ import {
   deleteParty,
   assignParticipantsToParty,
   electPartyLeader,
+  formParties,
   type Party,
+  type FormPartiesSummary,
 } from "@/app/yip/actions/parties";
+import { splitBenchParties } from "@/lib/yip/party-formation";
 
 type Participant = {
   id: string;
@@ -61,6 +67,8 @@ export function PartiesClient({
   initialParties,
   participants,
   canDelete = true,
+  canManage = false,
+  allocationLocked = false,
 }: {
   eventId: string;
   eventName: string;
@@ -68,7 +76,12 @@ export function PartiesClient({
   participants: Participant[];
   /** Chair/national/regional only. Organisers cannot delete records. */
   canDelete?: boolean;
+  /** Organiser-or-above. Gates the auto Form Parties tool (server re-checks). */
+  canManage?: boolean;
+  /** When locked, role & party changes are disabled. */
+  allocationLocked?: boolean;
 }) {
+  const router = useRouter();
   const [parties, setParties] = useState(initialParties);
   const [editing, setEditing] = useState<Party | null>(null);
   const [creating, setCreating] = useState(false);
@@ -78,6 +91,32 @@ export function PartiesClient({
   const [flash, setFlash] = useState<string | null>(null);
   const [assignOpen, setAssignOpen] = useState<string | null>(null);
   const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [formPartyCount, setFormPartyCount] = useState(5);
+  const [formResult, setFormResult] = useState<FormPartiesSummary | null>(null);
+
+  function handleFormParties() {
+    const rulingN = participants.filter((p) => p.party_side === "ruling").length;
+    const oppositionN = participants.filter((p) => p.party_side === "opposition").length;
+    const split = splitBenchParties(formPartyCount, rulingN, oppositionN);
+    const ok = confirm(
+      `Creates ${formPartyCount} parties and distributes all ${participants.length} students across them with school spread; bench split ${split.ruling} Ruling / ${split.opposition} Opposition. Continue?`
+    );
+    if (!ok) return;
+    startTransition(async () => {
+      const res = await formParties(eventId, formPartyCount);
+      if (!res.success) {
+        setError(res.error);
+        return;
+      }
+      setError(null);
+      setParties(res.data.parties);
+      setFormResult(res.data);
+      setFlash(`Formed ${res.data.parties.length} parties`);
+      setTimeout(() => setFlash(null), 2500);
+      // Refresh server props so member counts on the party cards are live.
+      router.refresh();
+    });
+  }
 
   // Party numbers are unique per EVENT (across both benches) — see
   // parties_event_id_party_number_key. Computing per-side suggested numbers
@@ -300,6 +339,20 @@ export function PartiesClient({
         <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
           {error}
         </div>
+      )}
+
+      {/* Auto Form Parties (organiser tool) */}
+      {canManage && (
+        <FormPartiesCard
+          participants={participants}
+          parties={parties}
+          allocationLocked={allocationLocked}
+          partyCount={formPartyCount}
+          onPartyCountChange={setFormPartyCount}
+          onRun={handleFormParties}
+          pending={pending}
+          result={formResult}
+        />
       )}
 
       {/* Form */}
@@ -526,6 +579,141 @@ export function PartiesClient({
         />
       </div>
     </div>
+  );
+}
+
+function FormPartiesCard({
+  participants,
+  parties,
+  allocationLocked,
+  partyCount,
+  onPartyCountChange,
+  onRun,
+  pending,
+  result,
+}: {
+  participants: Participant[];
+  parties: Party[];
+  allocationLocked: boolean;
+  partyCount: number;
+  onPartyCountChange: (n: number) => void;
+  onRun: () => void;
+  pending: boolean;
+  result: FormPartiesSummary | null;
+}) {
+  const rulingN = participants.filter((p) => p.party_side === "ruling").length;
+  const oppositionN = participants.filter((p) => p.party_side === "opposition").length;
+  const missingBench = participants.length - rulingN - oppositionN;
+  const anyMembers = participants.some((p) => p.party_id != null);
+
+  // Mirror of the server-side refusals so the organiser sees WHY up front
+  // (the server action re-checks everything — this is display only).
+  let blocked: string | null = null;
+  if (parties.length > 0) {
+    blocked = anyMembers
+      ? "Parties already formed — delete existing parties first to use auto-form."
+      : `This event already has ${parties.length} part${
+          parties.length === 1 ? "y" : "ies"
+        } with no members — delete them first to use auto-form.`;
+  } else if (allocationLocked) {
+    blocked = "Unlock allocation first — party changes are locked.";
+  } else if (participants.length === 0) {
+    blocked = "No participants registered yet.";
+  } else if (missingBench > 0) {
+    blocked = `${missingBench} of ${participants.length} students have no bench (ruling/opposition) yet — run Allocation first.`;
+  }
+
+  const split = !blocked
+    ? splitBenchParties(partyCount, rulingN, oppositionN)
+    : null;
+
+  return (
+    <Card className="border-[#138808]/30">
+      <CardHeader>
+        <CardTitle className="text-lg flex items-center gap-2">
+          <Wand2 className="size-4 text-[#138808]" />
+          Form Parties
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <p className="text-sm text-[#1a1a3e]/70">
+          Automatically creates the parties and distributes every student across
+          them — party sizes stay balanced and classmates from the same school
+          are spread out (handbook model; the chair sets the party count).
+        </p>
+
+        {blocked ? (
+          <div className="flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-800">
+            <Lock className="size-4 mt-0.5 shrink-0" />
+            <span>{blocked}</span>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-end gap-4">
+            <div>
+              <label className="text-xs font-medium text-[#1a1a3e]/70 block mb-1">
+                Number of parties
+              </label>
+              <select
+                value={partyCount}
+                onChange={(e) => onPartyCountChange(parseInt(e.target.value))}
+                className="border border-input rounded-md px-3 py-2 text-sm"
+                disabled={pending}
+              >
+                {[2, 3, 4, 5, 6, 7, 8].map((n) => (
+                  <option key={n} value={n}>
+                    {n} parties
+                  </option>
+                ))}
+              </select>
+            </div>
+            {split && (
+              <div className="text-xs text-[#1a1a3e]/60 pb-2.5">
+                Bench split: <span className="font-medium text-blue-700">{split.ruling} Ruling</span>
+                {" / "}
+                <span className="font-medium text-red-700">{split.opposition} Opposition</span>
+                {" · "}
+                {participants.length} students ({rulingN}/{oppositionN})
+              </div>
+            )}
+            <Button
+              onClick={onRun}
+              disabled={pending}
+              className="bg-[#138808] hover:bg-[#138808]/90 text-white"
+            >
+              {pending && <Loader2 className="size-4 mr-2 animate-spin" />}
+              Form {partyCount} Parties
+            </Button>
+          </div>
+        )}
+
+        {result && (
+          <div className="rounded-lg border border-[#138808]/20 bg-[#138808]/5 p-3 space-y-2">
+            <div className="text-sm font-medium text-[#1a1a3e]">
+              Done — {result.parties.length} parties formed (
+              {result.benchSplit.ruling} Ruling / {result.benchSplit.opposition}{" "}
+              Opposition)
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {result.counts.map((c) => (
+                <Badge
+                  key={c.name}
+                  variant="secondary"
+                  className={`text-[11px] ${
+                    c.side === "ruling" ? "bg-blue-50 text-blue-700" : "bg-red-50 text-red-700"
+                  }`}
+                >
+                  {c.name}: {c.members}
+                </Badge>
+              ))}
+            </div>
+            <div className="text-xs text-[#1a1a3e]/60">
+              Max students from one school in a single party:{" "}
+              {result.maxSameSchoolPerParty}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

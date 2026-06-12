@@ -73,6 +73,34 @@ function readBridgeLastError(status: unknown): string | null {
   return null;
 }
 
+// The v2 bridge (whatsapp-service/src) reports the connection state under
+// `state`; lib/whatsapp/api-client.ts's frozen StatusResponse type still says
+// `status`, so reading `.status` yields undefined and the dialog sits on
+// "Waiting for the WhatsApp bridge…" forever even while the bridge is at
+// qr_ready with a live QR. The value union is identical on both sides
+// (whatsapp-service/src/whatsapp.ts ConnectionState) — only the key moved.
+// Read `state` first with a `status` fallback through the same narrow local
+// cast as readBridgeLastError; anything unrecognised maps to "disconnected".
+const BRIDGE_STATES = new Set<YipWaState["status"]>([
+  "disconnected",
+  "connecting",
+  "qr_ready",
+  "authenticated",
+  "ready",
+]);
+
+function readBridgeStatus(status: unknown): YipWaState["status"] {
+  if (status && typeof status === "object") {
+    const v =
+      (status as { state?: unknown }).state ??
+      (status as { status?: unknown }).status;
+    if (typeof v === "string" && BRIDGE_STATES.has(v as YipWaState["status"])) {
+      return v as YipWaState["status"];
+    }
+  }
+  return "disconnected";
+}
+
 // ─── 1. Bridge state ──────────────────────────────────────────────
 // Mirrors the Railway status into our YipWaState. When the service isn't
 // configured we report a benign "not configured" state (success:true) so the UI
@@ -104,7 +132,7 @@ export async function getYipWhatsAppState(
       success: true,
       data: {
         configured: true,
-        status: status.status,
+        status: readBridgeStatus(status),
         qrCode: status.qrCode,
         error: status.error,
         lastError: readBridgeLastError(status),
@@ -151,7 +179,7 @@ export async function connectYipWhatsApp(
       success: true,
       data: {
         configured: true,
-        status: status.status,
+        status: readBridgeStatus(status),
         qrCode: status.qrCode,
         error: status.error,
         lastError: readBridgeLastError(status),

@@ -3,6 +3,14 @@
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { revalidatePath } from "next/cache";
+import type { Json } from "@/types/yip/database";
+import {
+  type SubTimer,
+  SUB_TIMER_MAX_ENTRIES,
+  SUB_TIMER_LABEL_MAX,
+  SUB_TIMER_MIN_SECONDS,
+  SUB_TIMER_MAX_SECONDS,
+} from "@/lib/yip/sub-timers";
 
 // Gated writes run on the service client AFTER getYipEventAccess() (yip.* tables
 // have RLS read-only for `authenticated`; the capability check is the gate).
@@ -222,6 +230,95 @@ export async function updateAgendaItemDuration(
   if (error) return { success: false, error: error.message };
 
   revalidatePath(`/yip/dashboard/events/${item.event_id}/control`);
+  return { success: true, data: null };
+}
+
+// ─── Update Agenda Item Sub-Timers ────────────────────────────────
+// Per-item sub-phase timer presets (e.g. Question Hour: Question 60s /
+// Answer 90s / Follow-up 30s), stored in agenda.config.sub_timers. The
+// Control panel renders them as one-tap timer buttons for the current
+// item. Pass null to clear the override back to the agenda_type defaults.
+
+export async function updateAgendaItemSubTimers(
+  eventId: string,
+  agendaItemId: string,
+  subTimers: SubTimer[] | null
+): Promise<ActionResult> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
+  const supabase = await createServiceClient();
+
+  // Verify the agenda item belongs to this event (no cross-event IDOR) and
+  // read its existing config so we merge instead of clobbering other keys.
+  const { data: item, error: itemErr } = await supabase
+    .from("agenda")
+    .select("id, event_id, config")
+    .eq("id", agendaItemId)
+    .eq("event_id", eventId)
+    .single();
+
+  if (itemErr || !item) {
+    return { success: false, error: "Agenda item not found for this event" };
+  }
+
+  // Validate + normalize the payload (untrusted client input).
+  let cleaned: SubTimer[] | null = null;
+  if (subTimers !== null) {
+    if (
+      !Array.isArray(subTimers) ||
+      subTimers.length < 1 ||
+      subTimers.length > SUB_TIMER_MAX_ENTRIES
+    ) {
+      return {
+        success: false,
+        error: `Provide between 1 and ${SUB_TIMER_MAX_ENTRIES} sub-timers`,
+      };
+    }
+    cleaned = [];
+    for (const t of subTimers) {
+      const label = typeof t?.label === "string" ? t.label.trim() : "";
+      const seconds =
+        typeof t?.seconds === "number" ? Math.round(t.seconds) : NaN;
+      if (!label || label.length > SUB_TIMER_LABEL_MAX) {
+        return {
+          success: false,
+          error: `Each label must be 1–${SUB_TIMER_LABEL_MAX} characters`,
+        };
+      }
+      if (
+        !Number.isInteger(seconds) ||
+        seconds < SUB_TIMER_MIN_SECONDS ||
+        seconds > SUB_TIMER_MAX_SECONDS
+      ) {
+        return {
+          success: false,
+          error: `Each duration must be ${SUB_TIMER_MIN_SECONDS}–${SUB_TIMER_MAX_SECONDS} seconds`,
+        };
+      }
+      cleaned.push({ label, seconds });
+    }
+  }
+
+  // Merge into existing config — preserve any other keys living in the JSONB.
+  const existing =
+    item.config && typeof item.config === "object" && !Array.isArray(item.config)
+      ? (item.config as Record<string, unknown>)
+      : {};
+  const nextConfig: Record<string, unknown> = { ...existing };
+  if (cleaned === null) {
+    delete nextConfig.sub_timers;
+  } else {
+    nextConfig.sub_timers = cleaned;
+  }
+
+  const { error } = await supabase
+    .from("agenda")
+    .update({ config: nextConfig as Json })
+    .eq("id", agendaItemId);
+
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/yip/dashboard/events/${eventId}/control`);
   return { success: true, data: null };
 }
 

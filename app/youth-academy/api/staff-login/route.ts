@@ -36,7 +36,17 @@ function backToLogin(
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const origin = request.nextUrl.origin;
-  const form = await request.formData();
+
+  // A malformed / non-form body (empty POST, JSON, a stray bot probe) makes
+  // request.formData() throw — fall through to the friendly login redirect
+  // instead of surfacing an unhandled 500.
+  let form: FormData;
+  try {
+    form = await request.formData();
+  } catch {
+    return backToLogin(origin, "missing", "/youth-academy");
+  }
+
   const email = String(form.get("email") ?? "").trim();
   const password = String(form.get("password") ?? "");
   const redirectTo = safeRedirect(

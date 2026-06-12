@@ -69,8 +69,13 @@ export function useVoteSession(
         is: (col: string, val: null) => VotesQuery;
         then: Promise<{ data: { vote_value: string }[] | null }>["then"];
       };
-      const votes_ = (supabase as unknown as { from: (t: string) => VotesQuery })
-        .from;
+      // NOTE: keep `from` bound to the client — assigning the bare method and
+      // calling it detached loses `this` and throws "Cannot read properties of
+      // undefined (reading 'rest')" at runtime (caught in live QA 2026-06-12).
+      const votesClient = supabase as unknown as {
+        from: (t: string) => VotesQuery;
+      };
+      const votes_ = (t: string) => votesClient.from(t);
 
       const { data: scoped } = await votes_("votes")
         .select("vote_value")

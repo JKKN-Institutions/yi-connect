@@ -4,6 +4,7 @@ import { createServiceClient } from "@/lib/yip/supabase/server";
 import { logAuditAction } from "@/lib/yip/audit/log-action";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { revalidatePath } from "next/cache";
+import { planPartyFormation } from "@/lib/yip/party-formation";
 import type { PartySide } from "@/lib/yip/constants";
 
 type ActionResult<T = null> =
@@ -195,6 +196,220 @@ export async function assignParticipantsToParty(
   revalidatePath(`/yip/dashboard/events/${party.event_id}/parties`);
   revalidatePath(`/yip/dashboard/events/${party.event_id}/participants`);
   return { success: true, data: { assigned: participantIds.length } };
+}
+
+export type FormPartiesSummary = {
+  /** Full created rows (for client state refresh). */
+  parties: Party[];
+  /** Per-party member counts, in creation order (ruling first). */
+  counts: Array<{ name: string; side: PartySide; members: number }>;
+  benchSplit: { ruling: number; opposition: number };
+  maxSameSchoolPerParty: number;
+};
+
+/**
+ * Auto-form N parties for an event and distribute every participant across
+ * them (school-spread, sizes balanced — see lib/yip/party-formation.ts).
+ *
+ * Refusals (fail closed):
+ *  - caller cannot manage the event;
+ *  - partyCount is not an integer in 2..8;
+ *  - allocation is locked (lock = no role/party changes);
+ *  - the event already has parties — INCLUDING empty ones. We deliberately do
+ *    NOT auto-delete empty parties here: deleting records is a chair-only
+ *    capability (canDelete) and an "empty" party may already carry an
+ *    organiser-entered manifesto/symbol. The organiser is told to delete
+ *    existing parties first (chair can, via the Parties tab).
+ *  - any participant has no bench (party_side) yet — allocation must run first.
+ */
+export async function formParties(
+  eventId: string,
+  partyCount: number
+): Promise<ActionResult<FormPartiesSummary>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
+  if (!Number.isInteger(partyCount) || partyCount < 2 || partyCount > 8) {
+    return { success: false, error: "Party count must be a whole number between 2 and 8." };
+  }
+
+  const supabase = await createServiceClient();
+
+  const { data: event, error: eventError } = await supabase
+    .from("events")
+    .select("id, allocation_locked")
+    .eq("id", eventId)
+    .single();
+  if (eventError || !event) {
+    return { success: false, error: "Event not found" };
+  }
+  if (event.allocation_locked) {
+    return {
+      success: false,
+      error: "Unlock allocation first — party changes are locked.",
+    };
+  }
+
+  const { data: existingParties, error: partiesError } = await supabase
+    .from("parties")
+    .select("id")
+    .eq("event_id", eventId);
+  if (partiesError) {
+    return { success: false, error: partiesError.message };
+  }
+
+  const { data: participants, error: participantsError } = await supabase
+    .from("participants")
+    .select("id, party_side, school_name")
+    .eq("event_id", eventId)
+    .order("full_name");
+  if (participantsError) {
+    return { success: false, error: participantsError.message };
+  }
+  if (!participants || participants.length === 0) {
+    return { success: false, error: "No participants registered for this event" };
+  }
+
+  if (existingParties && existingParties.length > 0) {
+    const { count: memberCount } = await supabase
+      .from("participants")
+      .select("id", { count: "exact", head: true })
+      .eq("event_id", eventId)
+      .not("party_id", "is", null);
+    if ((memberCount ?? 0) > 0) {
+      return {
+        success: false,
+        error: "Parties already formed — delete existing parties first.",
+      };
+    }
+    return {
+      success: false,
+      error: `This event already has ${existingParties.length} part${
+        existingParties.length === 1 ? "y" : "ies"
+      } with no members — delete them first, then run Form Parties.`,
+    };
+  }
+
+  const missingSide = participants.filter((p) => p.party_side == null).length;
+  if (missingSide > 0) {
+    return {
+      success: false,
+      error: `${missingSide} participant${missingSide === 1 ? " has" : "s have"} no bench (ruling/opposition) yet — run Allocation first.`,
+    };
+  }
+
+  const plan = planPartyFormation({
+    partyCount,
+    participants: participants.map((p) => ({
+      id: p.id,
+      partySide: p.party_side as "ruling" | "opposition",
+      schoolName: p.school_name,
+    })),
+  });
+
+  // Create the parties: ruling bench numbered first, then opposition.
+  // Names follow the existing "Party A".."Party H" convention by number.
+  const partyRows: Array<{
+    event_id: string;
+    side: PartySide;
+    party_number: number;
+    name: string;
+    manifesto: string[];
+  }> = [];
+  let nextNumber = 1;
+  for (let i = 0; i < plan.benchSplit.ruling; i++) {
+    partyRows.push({
+      event_id: eventId,
+      side: "ruling",
+      party_number: nextNumber,
+      name: `Party ${String.fromCharCode(64 + nextNumber)}`,
+      manifesto: [],
+    });
+    nextNumber += 1;
+  }
+  for (let i = 0; i < plan.benchSplit.opposition; i++) {
+    partyRows.push({
+      event_id: eventId,
+      side: "opposition",
+      party_number: nextNumber,
+      name: `Party ${String.fromCharCode(64 + nextNumber)}`,
+      manifesto: [],
+    });
+    nextNumber += 1;
+  }
+
+  const { data: created, error: insertError } = await supabase
+    .from("parties")
+    .insert(partyRows)
+    .select();
+  if (insertError || !created) {
+    return {
+      success: false,
+      error: friendlyDbError(insertError ?? { message: "Failed to create parties" }),
+    };
+  }
+
+  // Map (side, benchIndex) → created party. party_number encodes the order:
+  // ruling benchIndex i → number i+1; opposition benchIndex j → ruling+j+1.
+  const byNumber = new Map(created.map((p) => [p.party_number, p]));
+  const partyFor = (side: "ruling" | "opposition", benchIndex: number) =>
+    byNumber.get(side === "ruling" ? benchIndex + 1 : plan.benchSplit.ruling + benchIndex + 1);
+
+  // Batch the participant writes: one UPDATE per party (not per student).
+  const idsByPartyId = new Map<string, string[]>();
+  for (const a of plan.assignments) {
+    const party = partyFor(a.side, a.benchIndex);
+    if (!party) continue; // unreachable: every planned party was just created
+    if (!idsByPartyId.has(party.id)) idsByPartyId.set(party.id, []);
+    idsByPartyId.get(party.id)!.push(a.participantId);
+  }
+
+  const updateErrors: string[] = [];
+  for (const party of created) {
+    const ids = idsByPartyId.get(party.id) ?? [];
+    if (ids.length === 0) continue; // an empty party (bench smaller than its party count)
+    const { error: updateError } = await supabase
+      .from("participants")
+      .update({
+        party_id: party.id,
+        party_number: party.party_number,
+        party_side: party.side,
+      })
+      .in("id", ids)
+      .eq("event_id", eventId);
+    if (updateError) {
+      updateErrors.push(`${party.name}: ${updateError.message}`);
+    }
+  }
+  if (updateErrors.length > 0) {
+    return {
+      success: false,
+      error: `Parties were created but some members could not be assigned (${updateErrors.join(
+        "; "
+      )}). Delete the parties and run Form Parties again.`,
+    };
+  }
+
+  revalidatePath(`/yip/dashboard/events/${eventId}/parties`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/participants`);
+
+  return {
+    success: true,
+    data: {
+      parties: created.map((p) => ({
+        ...p,
+        manifesto: Array.isArray(p.manifesto) ? p.manifesto : [],
+      })) as Party[],
+      counts: created.map((p) => ({
+        name: p.name,
+        side: p.side as PartySide,
+        members: (idsByPartyId.get(p.id) ?? []).length,
+      })),
+      benchSplit: plan.benchSplit,
+      maxSameSchoolPerParty: plan.maxSameSchoolPerParty,
+    },
+  };
 }
 
 export async function electPartyLeader(

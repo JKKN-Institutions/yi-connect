@@ -44,6 +44,8 @@ export default async function PartiesPage({
       initialParties={parties}
       participants={participants ?? []}
       canDelete={access.canDelete}
+      canManage={access.canManage}
+      allocationLocked={event.allocation_locked ?? false}
     />
   );
 }

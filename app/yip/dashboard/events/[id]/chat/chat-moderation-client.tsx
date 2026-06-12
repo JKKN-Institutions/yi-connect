@@ -24,6 +24,8 @@ import {
   Volume2,
   UserCircle2,
   RefreshCw,
+  PlusCircle,
+  Send,
 } from "lucide-react";
 import { Button } from "@/components/yip/ui/button";
 import { cn } from "@/lib/yip/utils";
@@ -38,6 +40,8 @@ import {
   freezeChannel,
   unfreezeChannel,
   deleteMessage,
+  seedChatChannels,
+  modPostAnnouncement,
   type ModChannel,
   type ModMessage,
   type ModDmThread,
@@ -82,6 +86,14 @@ export function ChatModerationClient({
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
+  // Channel seeding (idempotent — safe to re-run to top up after new
+  // parties/committees) + the organiser announcement composer.
+  const [seedNotice, setSeedNotice] = useState<string | null>(null);
+  const [announcementDraft, setAnnouncementDraft] = useState("");
+  const [announcementNotice, setAnnouncementNotice] = useState<string | null>(
+    null
+  );
+
   const refreshAll = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -109,6 +121,41 @@ export function ChatModerationClient({
         | { success: true }
         | { success: false; error: string };
       if (!res.success) setError(res.error);
+      await refreshAll();
+    });
+  }
+
+  function handleSeed() {
+    startTransition(async () => {
+      setError(null);
+      setSeedNotice(null);
+      const res = await seedChatChannels(eventId);
+      if (res.success) {
+        const { created, skipped, total } = res.data;
+        setSeedNotice(
+          `Created ${created} channel${created === 1 ? "" : "s"}, ` +
+            `skipped ${skipped} already existing (${total} total).`
+        );
+      } else {
+        setError(res.error);
+      }
+      await refreshAll();
+    });
+  }
+
+  function handlePostAnnouncement(channelId: string) {
+    const body = announcementDraft.trim();
+    if (!body) return;
+    startTransition(async () => {
+      setError(null);
+      setAnnouncementNotice(null);
+      const res = await modPostAnnouncement(eventId, channelId, body);
+      if (res.success) {
+        setAnnouncementDraft("");
+        setAnnouncementNotice("Announcement posted.");
+      } else {
+        setError(res.error);
+      }
       await refreshAll();
     });
   }
@@ -200,9 +247,108 @@ export function ChatModerationClient({
         <>
           {tab === "channels" && (
             <div className="space-y-2">
+              {seedNotice && (
+                <p className="rounded-lg bg-[#138808]/10 px-3 py-2 text-xs text-[#138808]">
+                  {seedNotice}
+                </p>
+              )}
+
               {channels.length === 0 ? (
-                <Empty text="No channels yet. Channels are created per party / committee when chat is set up for the event." />
+                /* No channels yet → the prominent setup path (GAP 1). */
+                <div className="flex flex-col items-center rounded-xl border border-dashed border-[#1a1a3e]/10 bg-white px-4 py-10 text-center">
+                  <div className="flex size-12 items-center justify-center rounded-2xl bg-[#FF9933]/10">
+                    <MessagesSquare className="size-6 text-[#FF9933]" />
+                  </div>
+                  <p className="mt-3 text-sm font-medium text-[#1a1a3e]">
+                    No channels yet
+                  </p>
+                  <p className="mt-1 max-w-sm text-xs text-[#1a1a3e]/50">
+                    Create one channel per party, one per committee, and an
+                    organiser-only Announcements channel. Safe to re-run later —
+                    it only adds what&apos;s missing.
+                  </p>
+                  <Button
+                    className="mt-4"
+                    disabled={pending}
+                    onClick={handleSeed}
+                  >
+                    {pending ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <PlusCircle className="size-4" />
+                    )}
+                    Create channels
+                  </Button>
+                </div>
               ) : (
+                <>
+                  {/* Organiser announcement composer (GAP 2) — announcements
+                      are read-only for students; this is the only post path. */}
+                  {(() => {
+                    const annCh = channels.find(
+                      (c) => c.kind === "announcement"
+                    );
+                    if (!annCh) return null;
+                    return (
+                      <div className="space-y-2 rounded-xl border border-[#1a1a3e]/5 bg-white px-3 py-3 shadow-sm">
+                        <div className="flex items-center gap-2">
+                          <Megaphone className="size-4 text-[#FF9933]" />
+                          <span className="text-sm font-medium text-[#1a1a3e]">
+                            Post an announcement
+                          </span>
+                          <span className="text-[10px] text-[#1a1a3e]/40">
+                            students can read but not reply
+                          </span>
+                        </div>
+                        <textarea
+                          value={announcementDraft}
+                          onChange={(e) => setAnnouncementDraft(e.target.value)}
+                          rows={2}
+                          maxLength={2000}
+                          placeholder="Write an announcement for all participants…"
+                          className="w-full resize-none rounded-lg border border-[#1a1a3e]/10 px-3 py-2 text-sm focus:border-[#FF9933] focus:outline-none focus:ring-1 focus:ring-[#FF9933]"
+                        />
+                        <div className="flex items-center justify-between gap-2">
+                          {announcementNotice ? (
+                            <span className="text-xs text-[#138808]">
+                              {announcementNotice}
+                            </span>
+                          ) : (
+                            <span />
+                          )}
+                          <Button
+                            size="sm"
+                            disabled={pending || !announcementDraft.trim()}
+                            onClick={() => handlePostAnnouncement(annCh.id)}
+                          >
+                            {pending ? (
+                              <Loader2 className="size-3.5 animate-spin" />
+                            ) : (
+                              <Send className="size-3.5" />
+                            )}
+                            Post
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Idempotent top-up after new parties/committees appear. */}
+                  <div className="flex justify-end">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={pending}
+                      onClick={handleSeed}
+                    >
+                      <PlusCircle className="size-3.5" /> Create missing
+                      channels
+                    </Button>
+                  </div>
+                </>
+              )}
+
+              {channels.length > 0 &&
                 channels.map((ch) => {
                   const Icon = KIND_ICON[ch.kind];
                   return (
@@ -257,8 +403,7 @@ export function ChatModerationClient({
                       </Button>
                     </div>
                   );
-                })
-              )}
+                })}
             </div>
           )}
 

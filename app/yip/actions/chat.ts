@@ -75,7 +75,9 @@ type AnyTable = {
     cols?: string,
     opts?: { count?: "exact"; head?: boolean }
   ) => AnyTable;
-  insert: (row: Record<string, unknown>) => AnyTable;
+  insert: (
+    row: Record<string, unknown> | Record<string, unknown>[]
+  ) => AnyTable;
   update: (row: Record<string, unknown>) => AnyTable;
   delete: () => AnyTable;
   eq: (col: string, val: unknown) => AnyTable;
@@ -473,6 +475,13 @@ export async function postChannelMessage(args: {
   const p = await loadParticipantChatRow(sb, args.participantId, eventId);
   if (!p || !channelVisibleToParticipant(channel, p)) {
     return { success: false, error: "You don't have access to this channel." };
+  }
+
+  // Announcements are organiser-broadcast only (child-safety review GAP 2):
+  // students keep READ access (channelVisibleToParticipant is unchanged) but
+  // can never post into them. The organiser path is modPostAnnouncement.
+  if (channel.kind === "announcement") {
+    return { success: false, error: "Only organisers can post announcements." };
   }
 
   // Moderation state — enforced server-side, FAIL CLOSED.
@@ -1160,4 +1169,214 @@ export async function listReportedMessages(
     success: true,
     data: await hydrateModMessages(sb, eventId, data ?? []),
   };
+}
+
+// ─── 14. Moderation: seed the event's channels ──────────────────
+// Child-safety review GAP 1: there was no channel-creation path at all, so
+// flipping the flag would have shown students an empty chat. This action
+// creates the standard channel set for an event:
+//   * one `party` channel per yip.parties row (name = the party's name),
+//   * one `committee` channel per DISTINCT trimmed non-empty
+//     participants.committee_name,
+//   * one `announcement` channel ("Announcements").
+// IDEMPOTENT: there is no DB unique constraint on (event, kind, binding), so
+// dedupe happens HERE — existing channels are read first and any desired
+// channel that already exists (same kind + same party_id / trimmed committee
+// name; any announcement channel counts) is skipped. Re-running after new
+// parties/committees appear tops up the set and never duplicates.
+
+export interface SeedChannelsSummary {
+  created: number;
+  skipped: number;
+  total: number;
+}
+
+/** Identity of a channel for idempotency purposes (not exported — sync). */
+function channelKey(
+  kind: string,
+  partyId: string | null,
+  committeeName: string | null
+): string {
+  if (kind === "party") return `party|${partyId ?? ""}`;
+  if (kind === "committee") return `committee|${(committeeName ?? "").trim()}`;
+  return "announcement";
+}
+
+export async function seedChatChannels(
+  eventId: string
+): Promise<ActionResult<SeedChannelsSummary>> {
+  if (!CHAT_ENABLED) return { success: false, error: DISABLED };
+  const gate = await requireManage(eventId);
+  if (!gate.ok) return { success: false, error: gate.error };
+
+  const sb = await createServiceClient();
+
+  // What already exists for this event (the dedupe baseline).
+  const { data: existingRows, error: existingErr } = (await table(
+    sb,
+    "chat_channels"
+  )
+    .select("id, kind, party_id, committee_name")
+    .eq("event_id", eventId)) as {
+    data: RawAny[] | null;
+    error: PgError | null;
+  };
+  if (existingErr) return { success: false, error: existingErr.message };
+
+  const existing = new Set<string>();
+  for (const r of existingRows ?? []) {
+    existing.add(
+      channelKey(
+        String(r.kind),
+        (r.party_id as string | null) ?? null,
+        (r.committee_name as string | null) ?? null
+      )
+    );
+  }
+
+  // Desired set: parties …
+  const { data: partyRows, error: partyErr } = (await table(sb, "parties")
+    .select("id, name")
+    .eq("event_id", eventId)
+    .order("name", { ascending: true })) as {
+    data: RawAny[] | null;
+    error: PgError | null;
+  };
+  if (partyErr) return { success: false, error: partyErr.message };
+
+  // … committees (distinct trimmed non-empty committee_name) …
+  const { data: pcRows, error: pcErr } = (await table(sb, "participants")
+    .select("committee_name")
+    .eq("event_id", eventId)
+    .not("committee_name", "is", null)) as {
+    data: RawAny[] | null;
+    error: PgError | null;
+  };
+  if (pcErr) return { success: false, error: pcErr.message };
+
+  const committeeNames = [
+    ...new Set(
+      (pcRows ?? [])
+        .map((r) => String(r.committee_name ?? "").trim())
+        .filter((name) => name.length > 0)
+    ),
+  ].sort();
+
+  // … and one announcements channel.
+  type DesiredChannel = {
+    kind: ChatChannel["kind"];
+    party_id: string | null;
+    committee_name: string | null;
+    name: string;
+  };
+  const desired: DesiredChannel[] = [
+    ...(partyRows ?? []).map(
+      (p): DesiredChannel => ({
+        kind: "party",
+        party_id: String(p.id),
+        committee_name: null,
+        name: String(p.name),
+      })
+    ),
+    ...committeeNames.map(
+      (name): DesiredChannel => ({
+        kind: "committee",
+        party_id: null,
+        committee_name: name,
+        name,
+      })
+    ),
+    {
+      kind: "announcement",
+      party_id: null,
+      committee_name: null,
+      name: "Announcements",
+    },
+  ];
+
+  const toInsert = desired.filter(
+    (d) => !existing.has(channelKey(d.kind, d.party_id, d.committee_name))
+  );
+
+  if (toInsert.length > 0) {
+    const { error } = (await table(sb, "chat_channels").insert(
+      toInsert.map((d) => ({ event_id: eventId, ...d }))
+    )) as { data: RawAny[] | null; error: PgError | null };
+    if (error) return { success: false, error: error.message };
+  }
+
+  return {
+    success: true,
+    data: {
+      created: toInsert.length,
+      skipped: desired.length - toInsert.length,
+      total: desired.length,
+    },
+  };
+}
+
+// ─── 15. Moderation: post an announcement ───────────────────────
+// Child-safety review GAP 2(b): the organiser broadcast path. Strictly scoped
+// to kind="announcement" channels of the gated event — organisers gain NO way
+// to post into party/committee channels or DMs through this action.
+
+export async function modPostAnnouncement(
+  eventId: string,
+  channelId: string,
+  body: string
+): Promise<ActionResult<ChatMessage>> {
+  if (!CHAT_ENABLED) return { success: false, error: DISABLED };
+  const gate = await requireManage(eventId);
+  if (!gate.ok) return { success: false, error: gate.error };
+
+  const text = (body ?? "").trim();
+  if (!text) return { success: false, error: "Announcement cannot be empty." };
+  if (text.length > 2000) {
+    return {
+      success: false,
+      error: "Announcement is too long (max 2000 chars).",
+    };
+  }
+  if (!channelId) return { success: false, error: "Missing channel." };
+
+  const sb = await createServiceClient();
+
+  // The channel must belong to the event the caller is authorised on AND be
+  // an announcement channel — both checks FAIL CLOSED.
+  const { data: ch } = (await table(sb, "chat_channels")
+    .select("id, event_id, kind")
+    .eq("id", channelId)
+    .maybeSingle()) as { data: RawAny | null; error: PgError | null };
+  if (!ch || String(ch.event_id) !== eventId) {
+    return { success: false, error: "Channel not found." };
+  }
+  if (String(ch.kind) !== "announcement") {
+    return {
+      success: false,
+      error: "Organisers can only post in the announcements channel.",
+    };
+  }
+
+  // Audit identity: the acting auth user is stamped on the row (sender_user).
+  const userId = await getAuthUserId();
+  if (!userId) return { success: false, error: "Not signed in." };
+
+  const { data, error } = (await table(sb, "chat_messages")
+    .insert({
+      event_id: eventId,
+      channel_id: channelId,
+      sender_kind: "admin",
+      sender_participant_id: null,
+      sender_volunteer_id: null,
+      sender_user: userId,
+      dm_to_volunteer_id: null,
+      body: text,
+    })
+    .select(MSG_COLS)
+    .single()) as { data: RawAny | null; error: PgError | null };
+
+  if (error || !data) {
+    return { success: false, error: error?.message ?? "Failed to post." };
+  }
+  return { success: true, data: toMessage(data) };
 }

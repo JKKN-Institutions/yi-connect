@@ -2,10 +2,14 @@ import Link from "next/link";
 import Image from "next/image";
 
 /**
- * YIP Brand Header — saffron bar with Yi + Thalir logos and program title.
+ * YIP Brand Header — saffron bar with the programme logos.
  *
  * Used at the top of every /yip route via app/yip/layout.tsx.
  * Indian Parliament colors: saffron (#FF9933), white, green (#138808).
+ *
+ * Logo order (chair direction, 2026-06-12): Yi + the official
+ * "Young Indians Parliament 2026" wordmark on the left; on the right
+ * Thalir, Bharat One, and CII LAST (right-most).
  */
 export function YipBrandHeader(): React.JSX.Element {
   return (
@@ -27,38 +31,45 @@ export function YipBrandHeader(): React.JSX.Element {
             className="h-10 w-auto"
             priority
           />
-          <div className="flex flex-col leading-tight">
-            <span className="font-[var(--font-heading)] text-lg font-bold tracking-tight text-slate-900 sm:text-xl">
-              YIP
-            </span>
-            <span className="text-[10px] uppercase tracking-wider text-slate-700 sm:text-xs">
-              Young Indians Parliament
-            </span>
-          </div>
+          {/* Official YIP 2026 wordmark (from the Yi handbook) on a white
+              chip so the tricolor lettering stays legible over the saffron
+              end of the gradient. */}
+          <Image
+            src="/yip/logos/yip-2026-wordmark.png"
+            alt="Young Indians Parliament 2026"
+            width={416}
+            height={118}
+            priority
+            className="h-9 w-auto rounded bg-white/90 px-1.5 py-1 shadow-sm ring-1 ring-black/5 sm:h-10"
+          />
         </Link>
 
-        <div className="flex items-center gap-3">
+        <div className="hidden items-center gap-3 sm:flex">
           <Image
             src="/yip/logos/thalir-logo.png"
             alt="Thalir — Yi's school program"
             width={56}
             height={32}
-            className="hidden h-8 w-auto sm:block"
+            className="h-8 w-auto"
           />
-          <div className="hidden flex-col items-end gap-1 sm:flex">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-700 sm:text-xs">
-              By Yi · CII
-            </span>
-            {/* Bharat One — "One Bharat, One Spirit" (replaces the former
-                "Bharat Rising" tagline). White-bg logo on a small rounded chip. */}
-            <Image
-              src="/yip/logos/bharat-one-logo.png"
-              alt="One Bharat, One Spirit"
-              width={269}
-              height={187}
-              className="h-8 w-auto rounded bg-white p-0.5 shadow-sm ring-1 ring-black/5"
-            />
-          </div>
+          {/* Bharat One — "One Bharat, One Spirit". White-bg logo on a small
+              rounded chip. */}
+          <Image
+            src="/yip/logos/bharat-one-logo.png"
+            alt="One Bharat, One Spirit"
+            width={269}
+            height={187}
+            className="h-8 w-auto rounded bg-white p-0.5 shadow-sm ring-1 ring-black/5"
+          />
+          {/* CII — last, right-most (chair direction). White chip keeps the
+              purple mark legible over the green end of the gradient. */}
+          <Image
+            src="/yip/logos/cii-logo.png"
+            alt="CII — Confederation of Indian Industry"
+            width={2329}
+            height={709}
+            className="h-8 w-auto rounded bg-white px-1.5 py-1 shadow-sm ring-1 ring-black/5"
+          />
         </div>
       </div>
     </header>

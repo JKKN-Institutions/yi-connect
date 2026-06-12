@@ -22,15 +22,25 @@ import {
   ThumbsUp,
   ThumbsDown,
   Landmark,
+  FolderOpen,
+  Download,
+  Trash2,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/yip/utils";
 import { PARTY_COLORS } from "@/lib/yip/constants";
+import { formatBytes } from "@/lib/yip/media";
 import { toast } from "sonner";
 import {
   approveBill,
   rejectBill,
   type BillWithMembers,
 } from "@/app/yip/actions/bills";
+import {
+  organiserBillDocumentUrl,
+  organiserDeleteBillDocument,
+  type BillDocumentRow,
+} from "@/app/yip/actions/bill-documents";
 
 // ─── Status Config ──────────────────────────────────────────────
 
@@ -75,9 +85,17 @@ const STATUS_CONFIG: Record<
 interface BillsClientProps {
   eventId: string;
   initialBills: BillWithMembers[];
+  initialDocuments: BillDocumentRow[];
+  /** Chair-only (getYipEventAccess.canDelete) — gates the Delete buttons. */
+  canDelete: boolean;
 }
 
-export function BillsClient({ eventId, initialBills }: BillsClientProps) {
+export function BillsClient({
+  eventId,
+  initialBills,
+  initialDocuments,
+  canDelete,
+}: BillsClientProps) {
   const router = useRouter();
   const [bills, setBills] = useState(initialBills);
   const [isPending, startTransition] = useTransition();
@@ -179,6 +197,12 @@ export function BillsClient({ eventId, initialBills }: BillsClientProps) {
           isPending={isPending}
         />
       </div>
+
+      {/* Committee Documents */}
+      <CommitteeDocumentsSection
+        initialDocuments={initialDocuments}
+        canDelete={canDelete}
+      />
 
       {/* Confirmation Dialog */}
       <Dialog
@@ -437,6 +461,178 @@ function BillColumn({
           </div>
         )}
       </CardContent>
+    </Card>
+  );
+}
+
+// ─── Committee Documents Section ────────────────────────────────
+// All committees' supporting documents, grouped by committee. Downloads go
+// through organiserBillDocumentUrl (signed URL on the private bucket).
+// Delete renders ONLY when the viewer canDelete (chair-only capability) and
+// is re-gated server-side in organiserDeleteBillDocument.
+
+function CommitteeDocumentsSection({
+  initialDocuments,
+  canDelete,
+}: {
+  initialDocuments: BillDocumentRow[];
+  canDelete: boolean;
+}) {
+  const [documents, setDocuments] = useState(initialDocuments);
+  const [busyDocId, setBusyDocId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<BillDocumentRow | null>(
+    null
+  );
+  const [isPending, startTransition] = useTransition();
+
+  // Group by committee_name (rows arrive committee-sorted from the server).
+  const grouped = new Map<string, BillDocumentRow[]>();
+  for (const doc of documents) {
+    const list = grouped.get(doc.committee_name) ?? [];
+    list.push(doc);
+    grouped.set(doc.committee_name, list);
+  }
+
+  async function handleDownload(docId: string) {
+    setBusyDocId(docId);
+    const result = await organiserBillDocumentUrl(docId);
+    setBusyDocId(null);
+    if (result.success) {
+      window.open(result.data.url, "_blank", "noopener,noreferrer");
+    } else {
+      toast.error(result.error);
+    }
+  }
+
+  function confirmDelete() {
+    const target = deleteTarget;
+    if (!target) return;
+    startTransition(async () => {
+      const result = await organiserDeleteBillDocument(target.id);
+      if (result.success) {
+        toast.success("Document deleted");
+        setDocuments((prev) => prev.filter((d) => d.id !== target.id));
+      } else {
+        toast.error(result.error);
+      }
+      setDeleteTarget(null);
+    });
+  }
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base flex items-center gap-2">
+          <FolderOpen className="size-4 text-[#FF9933]" />
+          Committee Documents
+        </CardTitle>
+        <p className="text-sm text-gray-500">
+          Supporting documents and drawings uploaded by committee members
+        </p>
+      </CardHeader>
+      <CardContent className="pb-5">
+        {documents.length === 0 ? (
+          <div className="py-6 text-center">
+            <FolderOpen className="mx-auto size-8 text-gray-200 mb-2" />
+            <p className="text-sm text-gray-500">No documents uploaded yet</p>
+          </div>
+        ) : (
+          <div className="space-y-5">
+            {[...grouped.entries()].map(([committee, docs]) => (
+              <div key={committee}>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-1.5 mb-2">
+                  <Users className="size-3" />
+                  {committee}
+                  <span className="font-normal normal-case tracking-normal text-gray-400">
+                    · {docs.length} {docs.length === 1 ? "file" : "files"}
+                  </span>
+                </p>
+                <div className="space-y-2">
+                  {docs.map((doc) => (
+                    <div
+                      key={doc.id}
+                      className="rounded-md border border-gray-100 bg-gray-50 px-3 py-2 flex items-start gap-2"
+                    >
+                      <FileText className="size-4 text-gray-400 mt-0.5 shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-gray-800 truncate">
+                          {doc.file_name}
+                        </p>
+                        {doc.description && (
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            {doc.description}
+                          </p>
+                        )}
+                        <p className="text-[11px] text-gray-400 mt-0.5">
+                          {doc.uploader_name} ·{" "}
+                          {formatBytes(doc.file_size_bytes)} ·{" "}
+                          {new Date(doc.created_at).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={busyDocId === doc.id}
+                          onClick={() => handleDownload(doc.id)}
+                          className="h-7 px-2"
+                        >
+                          {busyDocId === doc.id ? (
+                            <Loader2 className="size-3.5 animate-spin" />
+                          ) : (
+                            <Download className="size-3.5" />
+                          )}
+                        </Button>
+                        {canDelete && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            disabled={isPending}
+                            onClick={() => setDeleteTarget(doc)}
+                            className="h-7 px-2 text-red-500 hover:text-red-600"
+                          >
+                            <Trash2 className="size-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+
+      {/* Delete confirmation (chair-only path) */}
+      <Dialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Document</DialogTitle>
+            <DialogDescription>
+              Delete &quot;{deleteTarget?.file_name}&quot; uploaded by{" "}
+              {deleteTarget?.uploader_name}? This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={isPending}
+              onClick={confirmDelete}
+            >
+              {isPending ? "Deleting..." : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

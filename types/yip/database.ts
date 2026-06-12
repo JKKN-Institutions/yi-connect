@@ -1003,6 +1003,66 @@ export type Database = {
           },
         ]
       }
+      bill_documents: {
+        Row: {
+          committee_name: string
+          content_type: string
+          created_at: string
+          description: string
+          event_id: string
+          file_name: string
+          file_path: string
+          file_size_bytes: number
+          id: string
+          is_mock: boolean
+          updated_at: string
+          uploaded_by: string
+        }
+        Insert: {
+          committee_name: string
+          content_type: string
+          created_at?: string
+          description?: string
+          event_id: string
+          file_name: string
+          file_path: string
+          file_size_bytes?: number
+          id?: string
+          is_mock?: boolean
+          updated_at?: string
+          uploaded_by: string
+        }
+        Update: {
+          committee_name?: string
+          content_type?: string
+          created_at?: string
+          description?: string
+          event_id?: string
+          file_name?: string
+          file_path?: string
+          file_size_bytes?: number
+          id?: string
+          is_mock?: boolean
+          updated_at?: string
+          uploaded_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bill_documents_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bill_documents_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "participants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bills: {
         Row: {
           created_at: string | null
@@ -1157,6 +1217,190 @@ export type Database = {
             columns: ["event_id"]
             isOneToOne: false
             referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_channels: {
+        Row: {
+          committee_name: string | null
+          created_at: string
+          event_id: string
+          frozen_at: string | null
+          id: string
+          kind: string
+          name: string
+          party_id: string | null
+        }
+        Insert: {
+          committee_name?: string | null
+          created_at?: string
+          event_id: string
+          frozen_at?: string | null
+          id?: string
+          kind: string
+          name: string
+          party_id?: string | null
+        }
+        Update: {
+          committee_name?: string | null
+          created_at?: string
+          event_id?: string
+          frozen_at?: string | null
+          id?: string
+          kind?: string
+          name?: string
+          party_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_channels_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_channels_party_id_fkey"
+            columns: ["party_id"]
+            isOneToOne: false
+            referencedRelation: "parties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_messages: {
+        Row: {
+          body: string
+          channel_id: string | null
+          created_at: string
+          deleted_at: string | null
+          deleted_by: string | null
+          dm_to_volunteer_id: string | null
+          event_id: string
+          id: string
+          reported_at: string | null
+          reported_by_participant_id: string | null
+          sender_kind: string
+          sender_participant_id: string | null
+          sender_user: string | null
+          sender_volunteer_id: string | null
+        }
+        Insert: {
+          body: string
+          channel_id?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
+          dm_to_volunteer_id?: string | null
+          event_id: string
+          id?: string
+          reported_at?: string | null
+          reported_by_participant_id?: string | null
+          sender_kind: string
+          sender_participant_id?: string | null
+          sender_user?: string | null
+          sender_volunteer_id?: string | null
+        }
+        Update: {
+          body?: string
+          channel_id?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
+          dm_to_volunteer_id?: string | null
+          event_id?: string
+          id?: string
+          reported_at?: string | null
+          reported_by_participant_id?: string | null
+          sender_kind?: string
+          sender_participant_id?: string | null
+          sender_user?: string | null
+          sender_volunteer_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_messages_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "chat_channels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_messages_dm_to_volunteer_id_fkey"
+            columns: ["dm_to_volunteer_id"]
+            isOneToOne: false
+            referencedRelation: "volunteers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_messages_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_messages_reported_by_participant_id_fkey"
+            columns: ["reported_by_participant_id"]
+            isOneToOne: false
+            referencedRelation: "participants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_messages_sender_participant_id_fkey"
+            columns: ["sender_participant_id"]
+            isOneToOne: false
+            referencedRelation: "participants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_messages_sender_volunteer_id_fkey"
+            columns: ["sender_volunteer_id"]
+            isOneToOne: false
+            referencedRelation: "volunteers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_mutes: {
+        Row: {
+          created_at: string
+          event_id: string
+          id: string
+          muted_by: string | null
+          participant_id: string
+          reason: string | null
+        }
+        Insert: {
+          created_at?: string
+          event_id: string
+          id?: string
+          muted_by?: string | null
+          participant_id: string
+          reason?: string | null
+        }
+        Update: {
+          created_at?: string
+          event_id?: string
+          id?: string
+          muted_by?: string | null
+          participant_id?: string
+          reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_mutes_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_mutes_participant_id_fkey"
+            columns: ["participant_id"]
+            isOneToOne: false
+            referencedRelation: "participants"
             referencedColumns: ["id"]
           },
         ]
@@ -3150,6 +3394,7 @@ export type Database = {
           recorded_by_user: string | null
           recorded_by_volunteer_id: string | null
           recorded_via_volunteer_id: string | null
+          session_id: string | null
           vote_type: string
           vote_value: string
         }
@@ -3163,6 +3408,7 @@ export type Database = {
           recorded_by_user?: string | null
           recorded_by_volunteer_id?: string | null
           recorded_via_volunteer_id?: string | null
+          session_id?: string | null
           vote_type: string
           vote_value: string
         }
@@ -3176,6 +3422,7 @@ export type Database = {
           recorded_by_user?: string | null
           recorded_by_volunteer_id?: string | null
           recorded_via_volunteer_id?: string | null
+          session_id?: string | null
           vote_type?: string
           vote_value?: string
         }
@@ -3209,10 +3456,66 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "votes_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "vote_sessions"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "yip_votes_event_fkey"
             columns: ["event_id"]
             isOneToOne: false
             referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      yuva_assignments: {
+        Row: {
+          committee_name: string | null
+          created_at: string
+          event_id: string
+          id: string
+          party_id: string | null
+          volunteer_id: string
+        }
+        Insert: {
+          committee_name?: string | null
+          created_at?: string
+          event_id: string
+          id?: string
+          party_id?: string | null
+          volunteer_id: string
+        }
+        Update: {
+          committee_name?: string | null
+          created_at?: string
+          event_id?: string
+          id?: string
+          party_id?: string | null
+          volunteer_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "yuva_assignments_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "yuva_assignments_party_id_fkey"
+            columns: ["party_id"]
+            isOneToOne: false
+            referencedRelation: "parties"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "yuva_assignments_volunteer_id_fkey"
+            columns: ["volunteer_id"]
+            isOneToOne: false
+            referencedRelation: "volunteers"
             referencedColumns: ["id"]
           },
         ]

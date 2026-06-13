@@ -39,13 +39,14 @@ export async function getGovernmentBills(
   if (!gate.ok) return { success: false, error: gate.error };
 
   const supabase = await createServiceClient();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("bills")
     .select("id, title, objective, status, party_side, votes_for, votes_against, votes_abstain")
     .eq("event_id", eventId)
     .eq("party_side", "ruling")
     .order("created_at", { ascending: false });
 
+  if (error) return { success: false, error: error.message };
   return { success: true, data: (data ?? []) as GovBill[] };
 }
 
@@ -66,6 +67,21 @@ export async function moveNoConfidence(
 
   const supabase = await createServiceClient();
   const p = gate.participant;
+
+  // One active No-Confidence Motion per LoP — don't let it flood the Speaker's queue.
+  const { data: existing } = await supabase
+    .from("motions")
+    .select("status")
+    .eq("event_id", eventId)
+    .eq("raised_by_id", p.id)
+    .eq("motion_type", "no_confidence");
+  const active = (existing ?? []).filter(
+    (x) => !["resolved", "rejected"].includes((x as { status: string }).status)
+  ).length;
+  if (active >= 1) {
+    return { success: false, error: "You already have a No-Confidence Motion before the House." };
+  }
+
   const { data, error } = await supabase
     .from("motions")
     .insert({

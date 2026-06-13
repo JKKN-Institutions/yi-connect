@@ -7,15 +7,17 @@ export function OppositionClient({
   eventId,
   participantId,
   initialBills,
+  loadError,
 }: {
   eventId: string;
   participantId: string;
   initialBills: GovBill[];
+  loadError?: string | null;
 }) {
   const [subject, setSubject] = useState("");
   const [details, setDetails] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(loadError ?? null);
   const [moved, setMoved] = useState(false);
 
   async function submit() {

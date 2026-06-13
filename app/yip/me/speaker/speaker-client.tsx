@@ -48,7 +48,12 @@ export function SpeakerClient({
     const r = await fn();
     setBusy(null);
     if (!r.success) setError(r.error ?? "Action failed");
-    await refresh();
+    try {
+      await refresh();
+    } catch {
+      setError("Couldn't refresh — reload the page.");
+    }
+    return r;
   }
 
   const pending = motions.filter((m) => m.status === "submitted");
@@ -92,7 +97,10 @@ export function SpeakerClient({
                     onClick={() =>
                       run(m.id, () =>
                         speakerRejectMotion(eventId, participantId, m.id, rejecting[m.id].trim())
-                      ).then(() => setRejecting((s) => { const n = { ...s }; delete n[m.id]; return n; }))
+                      ).then((r) => {
+                        if (r.success)
+                          setRejecting((s) => { const n = { ...s }; delete n[m.id]; return n; });
+                      })
                     }
                     className="flex-1 rounded-lg bg-red-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
                   >

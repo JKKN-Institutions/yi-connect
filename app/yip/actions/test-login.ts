@@ -181,6 +181,13 @@ export async function loginAsStudent(
     .single();
 
   if (!p) return { success: false, error: "Participant not found" };
+  // SECURITY: only mint a session for MOCK/demo participants. Without this, this
+  // action grants a valid session for ANY participant id — including a real
+  // Speaker / PM / Minister — letting anyone who obtains the action id
+  // impersonate a leader and act through the role gates. (Caught by ultracheck.)
+  if (!p.is_mock) {
+    return { success: false, error: "One-click login is only available for demo (mock) accounts." };
+  }
 
   const cookieStore = await cookies();
   cookieStore.set(
@@ -209,12 +216,16 @@ export async function loginAsJury(
   const supabase = await createServiceClient();
   const { data: j } = await supabase
     .from("jury_assignments")
-    .select("id, jury_name, event_id, is_active")
+    .select("id, jury_name, event_id, is_active, is_mock")
     .eq("id", juryAssignmentId)
     .single();
 
   if (!j) return { success: false, error: "Jury not found" };
   if (!j.is_active) return { success: false, error: "Jury deactivated" };
+  // SECURITY: demo login is for mock jurors only (see loginAsStudent).
+  if (!j.is_mock) {
+    return { success: false, error: "One-click login is only available for demo (mock) accounts." };
+  }
 
   const cookieStore = await cookies();
   cookieStore.set(

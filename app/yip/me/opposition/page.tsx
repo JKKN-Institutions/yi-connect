@@ -60,6 +60,7 @@ export default async function OppositionPage() {
       eventId={session.eventId}
       participantId={participant.id}
       initialBills={billsResult.success ? billsResult.data : []}
+      loadError={billsResult.success ? null : billsResult.error}
     />
   );
 }

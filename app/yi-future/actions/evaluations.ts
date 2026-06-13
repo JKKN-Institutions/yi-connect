@@ -49,6 +49,16 @@ export async function getOtherJurorEvalsForTeam(input: {
   teamId: string;
   eventId: string;
 }): Promise<OtherJurorEvalRow[]> {
+  // SECURITY: bind the caller to the juryId they claim. Without this, anyone
+  // who knew a juryId that had submitted could read every other juror's
+  // scores/comments — a confidentiality breach against the anti-bias design.
+  const session = await readSession();
+  const isThatJury = session?.type === "jury" && session.id === input.juryId;
+  if (!isThatJury) {
+    const adminAccess = await resolveFutureAccessOrNull();
+    if (!adminAccess?.isNational) return [];
+  }
+
   const svc = await createServiceClient();
 
   // Gate: caller must have their own submitted eval for this team+event
@@ -130,10 +140,12 @@ export async function saveEvaluation(input: {
   const isThatJury =
     session?.type === "jury" && session.id === input.juryId;
   if (!isThatJury) {
+    // Admin override (unlock / corrections) is NATIONAL-ONLY. A chapter chair
+    // must not inject or overwrite scores — that would let chapter A's admin
+    // tamper with chapter B's jury results. The legitimate scorer is the jury
+    // via their own session above.
     const adminAccess = await resolveFutureAccessOrNull();
-    const isAdmin =
-      !!adminAccess &&
-      (adminAccess.isNational || adminAccess.chapterIds.length > 0);
+    const isAdmin = !!adminAccess && adminAccess.isNational;
     if (!isAdmin) {
       return {
         ok: false,

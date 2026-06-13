@@ -52,7 +52,9 @@ export async function createMentor(
   input: { chapterId: string; editionId: string },
   formData: FormData
 ): Promise<ActionResult> {
-  await requireAuth();
+  // Scope to the chapter the mentor is created in — a chair of chapter A must
+  // not create mentors under chapter B.
+  await requireChapterAdmin(input.chapterId);
   const full_name = String(formData.get("full_name") ?? "").trim();
   const title = String(formData.get("title") ?? "").trim() || null;
   const organization =

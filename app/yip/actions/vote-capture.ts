@@ -3,6 +3,7 @@
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { requireVolunteerSession } from "@/lib/yip/auth/yip-session";
 import { validateVoteValue } from "@/lib/yip/vote-validate";
+import { matchesDesk, type DeskAssignment } from "@/lib/yip/yuva-desk";
 
 /**
  * Floor-voting kiosk capture actions.
@@ -40,6 +41,40 @@ function votesTable(
   sb: Awaited<ReturnType<typeof createServiceClient>>
 ): VotesTable {
   return (sb as unknown as { from: (t: string) => VotesTable }).from("votes");
+}
+
+// yuva_assignments is not in the generated types — narrow accessor (file-local).
+type RawAssignmentRow = {
+  party_id: string | null;
+  committee_name: string | null;
+};
+type YuvaAssignTable = {
+  select: (cols: string) => YuvaAssignTable;
+  eq: (col: string, val: unknown) => YuvaAssignTable;
+  then: Promise<{
+    data: RawAssignmentRow[] | null;
+    error: VotesPgError | null;
+  }>["then"];
+};
+function yuvaAssignTable(
+  sb: Awaited<ReturnType<typeof createServiceClient>>
+): YuvaAssignTable {
+  return (sb as unknown as { from: (t: string) => YuvaAssignTable }).from(
+    "yuva_assignments"
+  );
+}
+
+/** The caller volunteer's desk assignments (parties + committees) for an event. */
+async function callerDeskAssignments(
+  sb: Awaited<ReturnType<typeof createServiceClient>>,
+  eventId: string,
+  volunteerId: string
+): Promise<DeskAssignment[]> {
+  const { data } = await yuvaAssignTable(sb)
+    .select("party_id, committee_name")
+    .eq("event_id", eventId)
+    .eq("volunteer_id", volunteerId);
+  return (data ?? []) as DeskAssignment[];
 }
 
 interface KioskOption {
@@ -82,6 +117,31 @@ export async function getKioskState(
 
   const supabase = await createServiceClient();
 
+  // Desk scope: this volunteer only sees/serves their OWN party / committee
+  // students (product-owner decision 2026-06-13). A volunteer with no desk
+  // assignment therefore sees an empty list and cannot relay any votes.
+  const assignments = await callerDeskAssignments(
+    supabase,
+    eventId,
+    session.volunteerId
+  );
+
+  // Desk roster — party_id + committee_name are needed to apply the scope.
+  const { data: rosterAll } = await supabase
+    .from("participants")
+    .select(
+      "id, full_name, serial_no, constituency_name, party_id, committee_name"
+    )
+    .eq("event_id", eventId)
+    .order("serial_no", { ascending: true, nullsFirst: false });
+
+  const deskRoster = (rosterAll ?? []).filter((p) =>
+    matchesDesk(
+      { party_id: p.party_id, committee_name: p.committee_name },
+      assignments
+    )
+  );
+
   // The event's currently-open vote session (if any).
   const { data: voteSession } = await supabase
     .from("vote_sessions")
@@ -92,19 +152,14 @@ export async function getKioskState(
     .limit(1)
     .maybeSingle();
 
-  // No open session → nothing to vote on; turnout is zero against the roster.
+  // No open session → nothing to vote on; turnout is zero against the desk.
   if (!voteSession) {
-    const { count: eligible } = await supabase
-      .from("participants")
-      .select("*", { count: "exact", head: true })
-      .eq("event_id", eventId);
-
     return {
       success: true,
       data: {
         active: null,
         pending: [],
-        turnout: { cast: 0, eligible: eligible ?? 0 },
+        turnout: { cast: 0, eligible: deskRoster.length },
       },
     };
   }
@@ -161,25 +216,19 @@ export async function getKioskState(
     title = "Vote";
   }
 
-  // Roster + the ids that have already voted in THIS session. Session-scoped
-  // — never agenda-item-scoped — so a runoff's pending list starts clean
-  // instead of treating every round-1 voter as already done.
-  const [{ data: roster }, { data: castVotes }] = await Promise.all([
-    supabase
-      .from("participants")
-      .select("id, full_name, serial_no, constituency_name")
-      .eq("event_id", eventId)
-      .order("serial_no", { ascending: true, nullsFirst: false }),
-    votesTable(supabase)
-      .select("participant_id")
-      .eq("session_id", voteSession.id),
-  ]);
+  // Ids that have already voted in THIS session. Session-scoped — never
+  // agenda-item-scoped — so a runoff's pending list starts clean instead of
+  // treating every round-1 voter as already done.
+  const { data: castVotes } = await votesTable(supabase)
+    .select("participant_id")
+    .eq("session_id", voteSession.id);
 
   const votedIds = new Set(
     (castVotes ?? []).map((v) => v.participant_id as string)
   );
 
-  const pending: KioskPendingVoter[] = (roster ?? [])
+  // Pending + turnout are scoped to THIS volunteer's desk.
+  const pending: KioskPendingVoter[] = deskRoster
     .filter((p) => !votedIds.has(p.id))
     .map((p) => ({
       participantId: p.id,
@@ -187,6 +236,8 @@ export async function getKioskState(
       fullName: p.full_name,
       constituencyName: p.constituency_name,
     }));
+
+  const deskCast = deskRoster.filter((p) => votedIds.has(p.id)).length;
 
   return {
     success: true,
@@ -199,8 +250,8 @@ export async function getKioskState(
       },
       pending,
       turnout: {
-        cast: votedIds.size,
-        eligible: (roster ?? []).length,
+        cast: deskCast,
+        eligible: deskRoster.length,
       },
     },
   };
@@ -239,16 +290,36 @@ export async function castKioskVote(
   const valid = validateVoteValue(voteSession, voteValue);
   if (!valid.ok) return { success: false, error: valid.error };
 
-  // Verify the participant belongs to this event before recording on their behalf.
+  // Verify the participant belongs to this event AND is in THIS volunteer's
+  // desk before recording on their behalf. The kiosk list is already filtered
+  // to the desk, but the server is the real gate (yip.votes INSERT is open to
+  // public, so a forged participantId must be rejected here).
   const { data: participant } = await supabase
     .from("participants")
-    .select("id")
+    .select("id, party_id, committee_name")
     .eq("id", participantId)
     .eq("event_id", eventId)
     .maybeSingle();
 
   if (!participant) {
     return { success: false, error: "Student not found for this event" };
+  }
+
+  const assignments = await callerDeskAssignments(
+    supabase,
+    eventId,
+    session.volunteerId
+  );
+  if (
+    !matchesDesk(
+      {
+        party_id: participant.party_id,
+        committee_name: participant.committee_name,
+      },
+      assignments
+    )
+  ) {
+    return { success: false, error: "That student is not at your desk." };
   }
 
   // INSERT-ONLY. A repeat in the SAME session is mapped to already_voted via

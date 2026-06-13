@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
 import { readSession } from "@/app/yi-future/actions/auth";
+import { resolveFutureAccessOrNull } from "@/lib/yi-future/auth/require-access";
 import type { ActionResult } from "./editions";
 import {
   computeMentorTotal,

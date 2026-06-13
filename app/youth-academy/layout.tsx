@@ -7,7 +7,11 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
+const APP_URL =
+  process.env.NEXT_PUBLIC_APP_URL ?? "https://yi-connect-app.vercel.app";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(APP_URL),
   title: {
     default: "Yi Youth Academy | Yi YUVA",
     template: "%s · Yi Youth Academy",
@@ -24,6 +28,10 @@ export const metadata: Metadata = {
     "India",
   ],
   authors: [{ name: "Yi YUVA" }],
+  icons: {
+    icon: [{ url: "/youth-academy/academy-icon.png", type: "image/png" }],
+    apple: [{ url: "/youth-academy/academy-icon.png", type: "image/png" }],
+  },
   openGraph: {
     title: "Yi Youth Academy · Yi YUVA",
     description:
@@ -31,6 +39,21 @@ export const metadata: Metadata = {
     type: "website",
     locale: "en_IN",
     siteName: "Yi Youth Academy",
+    images: [
+      {
+        url: "/youth-academy/academy-og.jpg",
+        width: 1200,
+        height: 630,
+        alt: "Yi Youth Academy",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Yi Youth Academy · Yi YUVA",
+    description:
+      "Cohort-based certificate programs for students in the Yi YUVA network.",
+    images: ["/youth-academy/academy-og.jpg"],
   },
   robots: {
     index: true,

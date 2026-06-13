@@ -11,7 +11,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { GraduationCap, Sparkles, Users } from "lucide-react";
+import { BookOpen, GraduationCap, Sparkles, Users } from "lucide-react";
 import {
   CATEGORY_LABELS,
   PROGRAM_CATEGORIES,
@@ -134,6 +134,13 @@ export default async function YouthAcademyLandingPage({
             >
               <Users className="size-4" />
               Meet our mentors
+            </Link>
+            <Link
+              href="/youth-academy/guide"
+              className="inline-flex items-center gap-2 rounded-lg border border-white/30 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-white/10"
+            >
+              <BookOpen className="size-4" />
+              How it works
             </Link>
           </div>
           {/* "An initiative of" — governing-body endorsement strip. */}

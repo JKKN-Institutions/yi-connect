@@ -81,7 +81,14 @@ async function sendViaResend(input: {
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        from: "Future 6.0 <hello@yifuture-platform.vercel.app>",
+        // Must be a Resend-VERIFIED sending domain. The shared production
+        // Resend account (MyJKKN) has jkkn.ai verified; the previous
+        // hardcoded `hello@yifuture-platform.vercel.app` was NOT a verified
+        // domain, so Resend rejected every Future 6.0 email. Env-overridable
+        // so the from-name can be tuned without a redeploy.
+        from:
+          process.env.YI_FUTURE_FROM_EMAIL ??
+          "Yi YUVA Future 6.0 <noreply@jkkn.ai>",
         to: [input.to],
         subject: input.subject,
         text: input.text,

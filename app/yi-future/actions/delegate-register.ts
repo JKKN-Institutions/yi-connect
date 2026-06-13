@@ -2,6 +2,7 @@
 
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
 import { generateAccessCode } from "@/lib/yi-future/access-code";
+import { notifyRegistrationConfirmed } from "./emails";
 
 // ─── TYPES ──────────────────────────────────────────────────────────
 
@@ -328,7 +329,7 @@ export async function registerDelegate(
   const access_code = await uniqueAccessCode(svc);
   const nowIso = new Date().toISOString();
 
-  const { error: insertErr } = await svc
+  const { data: inserted, error: insertErr } = (await svc
     .schema("future")
     .from("delegates")
     .insert({
@@ -357,7 +358,12 @@ export async function registerDelegate(
       points: input.preferred_track_slug ? 20 : 10,
       badges: input.preferred_track_slug ? ["joined", "track_matched"] : ["joined"],
       profile_completion_pct: 100,
-    } as never);
+    } as never)
+    .select("id")
+    .single()) as {
+    data: { id: string } | null;
+    error: { code?: string; message?: string } | null;
+  };
 
   if (insertErr) {
     if (insertErr.code === "23505") {
@@ -409,6 +415,21 @@ export async function registerDelegate(
       } as never,
       { onConflict: "email" }
     );
+
+  // Fire the registration-confirmation email (delivers the access code so a
+  // delegate who closes the thank-you tab still has it). Non-blocking: a
+  // notification failure must NEVER fail a registration that already
+  // committed — the row exists and the code is shown on the thank-you page.
+  if (inserted?.id) {
+    try {
+      await notifyRegistrationConfirmed(inserted.id);
+    } catch (e) {
+      console.warn(
+        "[register] registration email failed:",
+        e instanceof Error ? e.message : String(e)
+      );
+    }
+  }
 
   return {
     ok: true,

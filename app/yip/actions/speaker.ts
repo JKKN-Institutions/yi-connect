@@ -156,6 +156,12 @@ export async function speakerRecordMotionVote(
     return { success: false, error: "This motion is not open for a vote." };
   }
 
+  // Validate the tally — a forged call could send negatives / non-integers, and
+  // 'resolved' is terminal with no re-open path, so a bad result would strand.
+  if (![votes.for, votes.against, votes.abstain].every((n) => Number.isInteger(n) && n >= 0)) {
+    return { success: false, error: "Vote counts must be whole, non-negative numbers." };
+  }
+
   // Majority decides; a tie is rejected (Speaker's casting-vote convention) —
   // matches the organiser recordMotionVote.
   const outcome = votes.for > votes.against ? "passed" : "rejected";

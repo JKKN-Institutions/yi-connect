@@ -92,6 +92,9 @@ export async function getMinistryDesk(
     .select("id, question_text, directed_to_ministry, status, answer_summary")
     .eq("event_id", eventId);
   if (!all) qQuery = qQuery.eq("directed_to_ministry", ministry as MinistryType);
+  // Only organiser-vetted questions are answerable — never surface 'submitted'
+  // (un-approved) or 'rejected' questions to the minister (moderation bypass).
+  qQuery = qQuery.in("status", ["approved", "asked", "answered"]);
   const { data: questions } = await qQuery.order("created_at", { ascending: false });
 
   let mQuery = supabase
@@ -144,25 +147,33 @@ export async function ministerAnswerQuestion(
 ): Promise<ActionResult> {
   const text = answer.trim();
   if (text.length < 3) return { success: false, error: "Answer is too short." };
+  if (text.length > 2000)
+    return { success: false, error: "Answer is too long (max 2000 characters)." };
 
-  // Pre-gate (role) + load the question to learn its ministry.
+  // Pre-gate (role) + load the question to learn its ministry + status.
   const pre = await requireLeadershipRole(participantId, eventId, MINISTRY_ANSWER_ROLES);
   if (!pre.ok) return { success: false, error: pre.error };
   const svc = await createServiceClient();
   const { data: q } = await svc
     .from("questions")
-    .select("id, directed_to_ministry")
+    .select("id, directed_to_ministry, status")
     .eq("id", questionId)
     .eq("event_id", eventId)
     .maybeSingle();
   if (!q) return { success: false, error: "Question not found for this event" };
+  // Answer only organiser-vetted questions, and NEVER mutate status here — the
+  // organiser owns the live Question-Hour queue/projector (advanceQuestion /
+  // markAnswered). The minister writes ONLY the answer text. (Caught by ultracheck.)
+  if (!q.status || !["approved", "asked", "answered"].includes(q.status)) {
+    return { success: false, error: "This question isn't open for an answer yet." };
+  }
 
   const match = await assertMinistryMatch(eventId, participantId, q.directed_to_ministry);
   if (!match.ok) return { success: false, error: match.error };
 
   const { error } = await match.supabase
     .from("questions")
-    .update({ answer_summary: text, status: "answered" })
+    .update({ answer_summary: text })
     .eq("id", questionId)
     .eq("event_id", eventId);
   if (error) return { success: false, error: error.message };
@@ -180,17 +191,23 @@ export async function ministerRespondToMotion(
 ): Promise<ActionResult> {
   const text = response.trim();
   if (text.length < 3) return { success: false, error: "Response is too short." };
+  if (text.length > 2000)
+    return { success: false, error: "Response is too long (max 2000 characters)." };
 
   const pre = await requireLeadershipRole(participantId, eventId, MINISTRY_ANSWER_ROLES);
   if (!pre.ok) return { success: false, error: pre.error };
   const svc = await createServiceClient();
   const { data: m } = await svc
     .from("motions")
-    .select("id, directed_to_ministry")
+    .select("id, directed_to_ministry, status")
     .eq("id", motionId)
     .eq("event_id", eventId)
     .maybeSingle();
   if (!m) return { success: false, error: "Motion not found for this event" };
+  // Don't respond once the Speaker/organiser has closed the motion.
+  if (["resolved", "rejected"].includes(m.status)) {
+    return { success: false, error: "This motion is closed." };
+  }
 
   const match = await assertMinistryMatch(eventId, participantId, m.directed_to_ministry);
   if (!match.ok) return { success: false, error: match.error };

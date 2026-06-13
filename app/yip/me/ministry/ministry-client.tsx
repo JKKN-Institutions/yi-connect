@@ -51,7 +51,11 @@ export function MinistryClient({
       setError(r.error ?? "Action failed");
     } else {
       setDrafts((d) => { const n = { ...d }; delete n[key]; return n; });
-      await refresh();
+      try {
+        await refresh();
+      } catch {
+        setError("Couldn't refresh — reload the page.");
+      }
     }
   }
 

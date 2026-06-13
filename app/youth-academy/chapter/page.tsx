@@ -18,6 +18,9 @@ import {
 } from "@/components/yuva/academies/data";
 import { fetchRuns, runScopeFromAccess } from "@/components/yuva/runs/data";
 import { RunStatusBadge } from "@/components/yuva/runs/run-status-badge";
+import { GUIDES, type GuideLane } from "@/lib/yuva/guide/content";
+import { getCompletedSteps, logGuideEvent } from "@/lib/yuva/guide/actions";
+import { NextStepWidget } from "@/app/youth-academy/_components/GuideSurfacing";
 
 export const metadata = { title: "Chapter dashboard" };
 
@@ -39,6 +42,15 @@ export default async function ChapterDashboardPage() {
     : access.isNational
       ? "Youth Academy — all chapters"
       : "Your academy";
+
+  // Proactive "next step" — the chapter/coordinator setup checklist, surfaced
+  // where they land (the guide page itself holds the full checklist).
+  const guideLane: GuideLane = access.chapterAdminOf
+    ? "chapter_admin"
+    : access.coordinatorAcademyIds.length > 0
+      ? "coordinator"
+      : "chapter_admin";
+  const guideCompleted = await getCompletedSteps(guideLane);
 
   return (
     <main className="mx-auto max-w-5xl space-y-6 p-6">
@@ -64,6 +76,12 @@ export default async function ChapterDashboardPage() {
           </Button>
         </div>
       </div>
+
+      <NextStepWidget
+        guide={GUIDES[guideLane]}
+        completed={guideCompleted}
+        onEvent={logGuideEvent}
+      />
 
       {academies.length === 0 ? (
         <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center">

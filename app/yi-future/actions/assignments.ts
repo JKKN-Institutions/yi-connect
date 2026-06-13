@@ -2,18 +2,17 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { createClient, createServiceClient } from "@/lib/yi-future/supabase/server";
+import { createServiceClient } from "@/lib/yi-future/supabase/server";
+import { requireFutureNationalAdmin } from "@/lib/yi-future/auth/require-access";
 import type { Database } from "@/types/yi-future/database";
 import type { ActionResult } from "./editions";
 
 type TrackHostRole = Database["future"]["Enums"]["track_host_role"];
 
+// National-only: assigning chapters to tracks is national config. Was
+// login-only — any logged-in user could re-host any chapter on any track.
 async function requireAdmin(): Promise<void> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/yi-future/login");
+  await requireFutureNationalAdmin();
 }
 
 // ─── ASSIGN CHAPTER TO TRACK ─────────────────────────────────────────

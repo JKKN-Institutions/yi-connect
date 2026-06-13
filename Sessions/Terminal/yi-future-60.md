@@ -2,7 +2,7 @@
 session_name: "yi future 6.0"
 directory: "/Users/omm/PROJECTS/yi-connect"
 created: 2026-05-25
-last_active: 2026-05-29
+last_active: 2026-05-28
 status: active
 tags:
   - session
@@ -163,7 +163,6 @@ _No decisions recorded yet._
 - **[21:07] Session ended**
 - **[21:31] Session ended**
 - **[21:41] Session ended**
-- **[22:40] Session ended**
-- **[06:32] Session ended**
+- **[22:03] Session ended**
 ## Related Sessions
 _No related session notes yet. Sessions working in this directory will auto-link here._

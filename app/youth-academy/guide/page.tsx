@@ -20,10 +20,24 @@ import {
 } from "@/lib/yuva/guide/content";
 import { detectGuideLane } from "@/lib/yuva/guide/detect-lane";
 import { GuideView } from "@/app/youth-academy/_components/GuideView";
+import {
+  getCompletedSteps,
+  toggleStep,
+  logGuideEvent,
+} from "@/lib/yuva/guide/actions";
 
 export const dynamic = "force-dynamic";
 
 export const metadata = { title: "How to use the platform" };
+
+/** The Supabase-authed lanes that get the persisted setup checklist. Students
+ *  (cookie session) and applicants (anonymous) get the plain guide. */
+const STAFF_LANES: GuideLane[] = [
+  "national",
+  "chapter_admin",
+  "coordinator",
+  "mentor",
+];
 
 /** Where "Back" returns to, per lane. */
 const LANE_HOME: Record<GuideLane, string> = {
@@ -51,6 +65,13 @@ export default async function YouthAcademyGuidePage({
       : ownLane;
 
   const content = GUIDES[lane];
+
+  // Checklist + saved progress is a staff setup aid, and only on the viewer's
+  // OWN lane (previewing another lane stays read-only).
+  const trackProgress = lane === ownLane && STAFF_LANES.includes(ownLane);
+  const initialCompleted = trackProgress
+    ? await getCompletedSteps(lane)
+    : undefined;
 
   return (
     <main className="min-h-screen bg-slate-50">
@@ -110,7 +131,13 @@ export default async function YouthAcademyGuidePage({
           </a>
         </div>
 
-        <GuideView content={content} />
+        <GuideView
+          content={content}
+          trackProgress={trackProgress}
+          initialCompleted={initialCompleted}
+          onToggleStep={toggleStep}
+          onEvent={logGuideEvent}
+        />
       </div>
     </main>
   );

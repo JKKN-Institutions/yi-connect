@@ -569,3 +569,115 @@ export function guidePdfFilename(lane: GuideLane): string {
 export function isGuideLane(v: string | null | undefined): v is GuideLane {
   return !!v && (GUIDE_LANES as readonly string[]).includes(v);
 }
+
+/* ── Adoption layer: progress + instrumentation (all OPTIONAL) ─────────────
+ * Pure helpers + types only (no I/O) so this stays importable from client AND
+ * server. A renderer with no progress/event props just shows the plain guide.
+ * ────────────────────────────────────────────────────────────────────────── */
+
+/** Stable key for one step within a lane: "<sectionIndex>:<stepIndex>". Index-
+ *  based so editing a step's text never shifts a saved completion (only
+ *  reordering would — the guide's order is stable). */
+export function stepKey(sectionIndex: number, stepIndex: number): string {
+  return `${sectionIndex}:${stepIndex}`;
+}
+
+/** Every step key in a lane, in order — the full checklist for that lane. */
+export function laneStepKeys(content: GuideContent): string[] {
+  return content.sections.flatMap((s, si) =>
+    s.steps.map((_, i) => stepKey(si, i))
+  );
+}
+
+export type LaneProgress = {
+  total: number;
+  done: number;
+  /** 0–100, for a progress bar. */
+  percent: number;
+  complete: boolean;
+};
+
+export function laneProgress(
+  content: GuideContent,
+  completed: ReadonlySet<string>
+): LaneProgress {
+  const keys = laneStepKeys(content);
+  const done = keys.filter((k) => completed.has(k)).length;
+  const total = keys.length;
+  return {
+    total,
+    done,
+    percent: total === 0 ? 0 : Math.round((done / total) * 100),
+    complete: total > 0 && done === total,
+  };
+}
+
+export type NextStep = {
+  sectionIndex: number;
+  sectionHeading: string;
+  stepIndex: number;
+  key: string;
+  step: GuideStep;
+};
+
+/** The viewer's next unfinished step (for resume + nudges), or null if done. */
+export function nextUndoneStep(
+  content: GuideContent,
+  completed: ReadonlySet<string>
+): NextStep | null {
+  for (let si = 0; si < content.sections.length; si++) {
+    const s = content.sections[si];
+    for (let i = 0; i < s.steps.length; i++) {
+      const key = stepKey(si, i);
+      if (!completed.has(key)) {
+        return { sectionIndex: si, sectionHeading: s.heading, stepIndex: i, key, step: s.steps[i] };
+      }
+    }
+  }
+  return null;
+}
+
+/* ── Instrumentation ──────────────────────────────────────────────────── */
+
+export type GuideEventName =
+  | "guide_open"
+  | "lane_switch"
+  | "step_link_click"
+  | "step_complete"
+  | "step_uncomplete"
+  | "lane_complete"
+  | "pdf_download"
+  | "nudge_click"
+  | "guide_dismiss";
+
+export type GuideSurface = "page" | "drawer" | "launcher" | "nudge" | "widget";
+
+export type GuideEvent = {
+  name: GuideEventName;
+  persona: GuideLane;
+  surface: GuideSurface;
+  stepKey?: string;
+  context?: string;
+};
+
+/** Runtime allow-lists — logGuideEvent is a public endpoint; validate against
+ *  these before insert so a caller can't poison the metrics table. */
+export const GUIDE_EVENT_NAMES: readonly GuideEventName[] = [
+  "guide_open",
+  "lane_switch",
+  "step_link_click",
+  "step_complete",
+  "step_uncomplete",
+  "lane_complete",
+  "pdf_download",
+  "nudge_click",
+  "guide_dismiss",
+] as const;
+
+export const GUIDE_SURFACES: readonly GuideSurface[] = [
+  "page",
+  "drawer",
+  "launcher",
+  "nudge",
+  "widget",
+] as const;

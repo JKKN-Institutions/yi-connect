@@ -26,14 +26,20 @@ export default async function ParticipantScoringDetailPage({
     );
   }
 
+  // Scores / leaderboard / metrics are national/super-admin-only (2026-06-13).
+  const access = await getYipEventAccess(id);
+  if (!access.canViewScores) {
+    return (
+      <Forbidden403 reason="Scores and results are visible to national/super-admins only." />
+    );
+  }
+
   const detail = await getParticipantScoringDetail(id, participantId);
   if (!detail) {
     return (
       <Forbidden403 reason="This participant's scoring detail isn't available — they may not belong to this event, or your role may not include access." />
     );
   }
-
-  const access = await getYipEventAccess(id);
 
   return (
     <ParticipantDetailClient

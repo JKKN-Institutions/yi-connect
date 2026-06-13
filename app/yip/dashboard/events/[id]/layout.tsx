@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/yip/supabase/server";
 import { getEvent } from "@/app/yip/actions/events";
+import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { EventTabNav } from "./event-tab-nav";
 import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
 
@@ -31,6 +32,10 @@ export default async function EventLayout({
     );
   }
 
+  // Scoring / Committees / Results tabs are national/super-admin-only
+  // (2026-06-13) — hide them for chapter / regional roles.
+  const access = await getYipEventAccess(id);
+
   return (
     <div>
       {/* Event Header */}
@@ -39,7 +44,11 @@ export default async function EventLayout({
       </div>
 
       {/* Tab Navigation */}
-      <EventTabNav eventId={id} eventStatus={event.status} />
+      <EventTabNav
+        eventId={id}
+        eventStatus={event.status}
+        canViewScores={access.canViewScores}
+      />
 
       {/* Tab Content */}
       <div className="mt-4">{children}</div>

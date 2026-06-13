@@ -25,7 +25,14 @@ export default async function CommitteeScoringPage({
     );
   }
 
+  // Scores / committee metrics are national/super-admin-only (2026-06-13).
   const access = await getYipEventAccess(id);
+  if (!access.canViewScores) {
+    return (
+      <Forbidden403 reason="Scores and results are visible to national/super-admins only." />
+    );
+  }
+
   const res = await getCommitteeScoring(id);
   const committees = res.success ? res.data : [];
 

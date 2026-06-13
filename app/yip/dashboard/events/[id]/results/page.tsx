@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/yip/supabase/server";
 import { getEvent } from "@/app/yip/actions/events";
 import { getResults } from "@/app/yip/actions/results";
+import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { ResultsClient } from "./results-client";
 import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
 
@@ -23,6 +24,14 @@ export default async function ResultsPage({
   if (!event) {
     return (
       <Forbidden403 reason="You don't have access to this event's results. The event may have been deleted, or your role may not include this event's chapter or zone." />
+    );
+  }
+
+  // Scores / leaderboard / metrics are national/super-admin-only (2026-06-13).
+  const access = await getYipEventAccess(id);
+  if (!access.canViewScores) {
+    return (
+      <Forbidden403 reason="Scores and results are visible to national/super-admins only." />
     );
   }
 

@@ -40,9 +40,12 @@ const ZERO: CommitteeDimensions = {
 export async function getCommitteeScoring(
   eventId: string
 ): Promise<ActionResult<CommitteeRow[]>> {
+  // Committee scoring metrics are national/super-admin-only (2026-06-13) —
+  // same gate as the scoring leaderboard / results. Organisers may RUN
+  // committee scoring (upsert, canManage) but NOT read the metrics.
   const access = await getYipEventAccess(eventId);
-  if (!access.canView) {
-    return { success: false, error: "Not authorized to view this event" };
+  if (!access.canViewScores) {
+    return { success: false, error: "Not authorized to view scores" };
   }
   const supabase = await createServiceClient();
 

@@ -60,8 +60,10 @@ export async function getParticipantScoringDetail(
   eventId: string,
   participantId: string
 ): Promise<ParticipantScoringDetail | null> {
+  // Per-participant scoring drill-down (every juror's score + computed result)
+  // is national/super-admin-only (2026-06-13) — same gate as the leaderboard.
   const access = await getYipEventAccess(eventId);
-  if (!access.canView) return null;
+  if (!access.canViewScores) return null;
 
   const supabase = await createServiceClient();
 

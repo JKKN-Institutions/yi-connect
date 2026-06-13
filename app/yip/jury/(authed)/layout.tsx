@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { getYipSession } from "@/lib/yip/auth/yip-session";
 import Link from "next/link";
 import { Scale, History, LogOut } from "lucide-react";
 import { GuideLauncher } from "@/components/yip/guide";
@@ -30,11 +31,9 @@ export default async function JuryLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const cookieStore = await cookies();
-  const raw = cookieStore.get("yip_session")?.value;
-  const session = parseJurySession(raw);
+  const session = await getYipSession();
 
-  if (!session) {
+  if (!session || session.type !== "jury") {
     redirect("/yip/join");
   }
 

@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { getYipSession } from "@/lib/yip/auth/yip-session";
 import Link from "next/link";
 import { LogOut, MessageSquare } from "lucide-react";
 import { CHAT_ENABLED } from "@/lib/yip/chat-config";
@@ -38,11 +39,9 @@ export default async function ParticipantLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const cookieStore = await cookies();
-  const raw = cookieStore.get("yip_session")?.value;
-  const session = parseParticipantSession(raw);
+  const session = await getYipSession();
 
-  if (!session) {
+  if (!session || session.type !== "participant") {
     redirect("/yip/join");
   }
 

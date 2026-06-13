@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { getYipSession } from "@/lib/yip/auth/yip-session";
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import {
   ROLE_LABELS,
@@ -110,11 +111,9 @@ const PARTY_GRADIENTS = {
 // ─── Page Component ──────────────────────────────────────────────
 
 export default async function ParticipantPage() {
-  const cookieStore = await cookies();
-  const raw = cookieStore.get("yip_session")?.value;
-  const session = parseSession(raw);
+  const session = await getYipSession();
 
-  if (!session) {
+  if (!session || session.type !== "participant") {
     redirect("/yip/join");
   }
 

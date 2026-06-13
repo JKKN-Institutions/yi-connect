@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { getYipSession } from "@/lib/yip/auth/yip-session";
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { getMyFeedback } from "@/app/yip/actions/feedback";
 import { FeedbackFormClient } from "./feedback-form-client";
@@ -44,9 +45,8 @@ function formatDateTime(iso: string) {
 }
 
 export default async function ParticipantFeedbackPage() {
-  const cookieStore = await cookies();
-  const session = parseSession(cookieStore.get("yip_session")?.value);
-  if (!session) redirect("/yip/join");
+  const session = await getYipSession();
+  if (!session || session.type !== "participant") redirect("/yip/join");
 
   const supabase = await createServiceClient();
 

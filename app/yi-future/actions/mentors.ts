@@ -110,7 +110,7 @@ export async function updateMentor(
   id: string,
   formData: FormData
 ): Promise<ActionResult> {
-  await requireAuth();
+  await requireMentorChapterAdmin(id);
   const full_name = String(formData.get("full_name") ?? "").trim();
   const title = String(formData.get("title") ?? "").trim() || null;
   const organization =
@@ -161,7 +161,7 @@ export async function regenerateMentorAccessCode(
 
 // ─── DELETE ─────────────────────────────────────────────────────────
 export async function deleteMentor(id: string): Promise<ActionResult> {
-  await requireAuth();
+  await requireMentorChapterAdmin(id);
   const svc = await createServiceClient();
 
   // Remove any team assignments first

@@ -11,6 +11,8 @@ import {
   type Rubric,
 } from "@/lib/yi-future/rubric";
 import { sendPushToSubject } from "@/app/yi-future/actions/push";
+import { readSession } from "./auth";
+import { resolveFutureAccessOrNull } from "@/lib/yi-future/auth/require-access";
 
 type EvaluationStatus = Database["future"]["Enums"]["evaluation_status"];
 
@@ -118,6 +120,28 @@ export async function saveEvaluation(input: {
   recommendation?: "strongly_recommend" | "recommend" | "not_recommended" | null;
   submit: boolean;
 }): Promise<ActionResult> {
+  // SECURITY: the caller must BE the jury they claim to be. Previously this
+  // accepted any caller-supplied juryId and only checked that a jury_team
+  // assignment row existed — so anyone who knew a juryId UUID could submit or
+  // overwrite scores for any team. Bind identity two ways:
+  //   1. The jury access-code session (cookie) whose id === input.juryId, OR
+  //   2. A Yi Future admin (unlock / corrections on behalf of a jury).
+  const session = await readSession();
+  const isThatJury =
+    session?.type === "jury" && session.id === input.juryId;
+  if (!isThatJury) {
+    const adminAccess = await resolveFutureAccessOrNull();
+    const isAdmin =
+      !!adminAccess &&
+      (adminAccess.isNational || adminAccess.chapterIds.length > 0);
+    if (!isAdmin) {
+      return {
+        ok: false,
+        error: "You are not authorized to score as this jury member.",
+      };
+    }
+  }
+
   // Validate jury-team assignment (conflict check)
   const svc = await createServiceClient();
   const { data: assign } = await svc

@@ -2,15 +2,16 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { createClient, createServiceClient } from "@/lib/yi-future/supabase/server";
+import { createServiceClient } from "@/lib/yi-future/supabase/server";
+import { requireFutureNationalAdmin } from "@/lib/yi-future/auth/require-access";
 import type { ActionResult } from "./editions";
 
+// National-only: the chapter list is national config. createChapter,
+// updateChapter and setChapterActive all write yi.chapters via the service
+// client, so they must be gated to national admins (a delegate could
+// otherwise inject chapters or archive any chapter = DoS). Fails CLOSED.
 async function requireAdmin(): Promise<void> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/yi-future/login");
+  await requireFutureNationalAdmin();
 }
 
 // ─── CREATE (national admin) ────────────────────────────────────────

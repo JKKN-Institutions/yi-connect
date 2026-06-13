@@ -1,28 +1,40 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
-import { createClient, createServiceClient } from "@/lib/yi-future/supabase/server";
+import { createServiceClient } from "@/lib/yi-future/supabase/server";
 import { readSession } from "./auth";
+import { requireChapterAdmin } from "@/lib/yi-future/auth/require-access";
 import type { ActionResult } from "./editions";
 import type { Database } from "@/types/yi-future/database";
 import { sendPushToSubject } from "@/app/yi-future/actions/push";
 
 type ConsentStatus = Database["future"]["Enums"]["consent_status"];
 
+/**
+ * Resolve the host chapter for a consent letter: consent_letters → delegate →
+ * chapter_id. Used to scope approve/reject to the delegate's chapter admin.
+ */
+async function chapterIdForConsentLetter(
+  svc: Awaited<ReturnType<typeof createServiceClient>>,
+  letterId: string
+): Promise<string | null> {
+  const { data } = await svc
+    .schema("future")
+    .from("consent_letters")
+    .select("delegate_id, delegates(chapter_id)")
+    .eq("id", letterId)
+    .maybeSingle();
+  const row = data as unknown as {
+    delegate_id: string | null;
+    delegates: { chapter_id: string | null } | null;
+  } | null;
+  return row?.delegates?.chapter_id ?? null;
+}
+
 async function requireDelegate(): Promise<string | null> {
   const session = await readSession();
   if (!session || session.type !== "delegate") return null;
   return session.id;
-}
-
-async function requireAdmin(): Promise<string> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/yi-future/login");
-  return user.id;
 }
 
 function isValidUrl(raw: string): boolean {
@@ -132,8 +144,12 @@ export async function submitConsent(
 export async function approveConsent(
   id: string
 ): Promise<ActionResult> {
-  const userId = await requireAdmin();
   const svc = await createServiceClient();
+  // SECURITY: chapter-scoped — only the admin of the delegate's chapter (or a
+  // national admin) may approve. Was login-only, letting any delegate approve
+  // any consent letter. Resolve the letter's chapter, then gate on it.
+  const chapterId = await chapterIdForConsentLetter(svc, id);
+  const { userId } = await requireChapterAdmin(chapterId);
   const { error } = await svc
     .schema("future")
     .from("consent_letters")
@@ -175,8 +191,10 @@ export async function rejectConsent(
   id: string,
   reason: string | null
 ): Promise<ActionResult> {
-  await requireAdmin();
   const svc = await createServiceClient();
+  // SECURITY: chapter-scoped — same gate as approveConsent.
+  const chapterId = await chapterIdForConsentLetter(svc, id);
+  await requireChapterAdmin(chapterId);
   const { error } = await svc
     .schema("future")
     .from("consent_letters")

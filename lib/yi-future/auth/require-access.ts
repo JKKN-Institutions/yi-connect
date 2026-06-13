@@ -68,7 +68,10 @@ async function resolveFutureAccess(): Promise<FutureAccess | null> {
       .schema("yi_directory" as never)
       .from("role_assignments" as never)
       .select("role, is_active")
-      .eq("person_id" as never, person.id as never);
+      .eq("person_id" as never, person.id as never)
+      // Scope to this app + platform-wide roles so a same-named role in
+      // another vertical can never grant Yi Future national access.
+      .in("app" as never, ["future", "platform"] as never);
     const roles =
       (rolesRaw as unknown as { role: string; is_active: boolean }[] | null) ??
       [];
@@ -93,6 +96,18 @@ async function resolveFutureAccess(): Promise<FutureAccess | null> {
     .filter((c): c is string => !!c);
 
   return { userId: user.id, isNational, chapterIds };
+}
+
+/**
+ * Non-redirecting variant of the resolver, exported for actions that must make
+ * their own policy decision (e.g. "caller is the assigned jury OR a Future
+ * admin") and return a structured error instead of bouncing to /forbidden.
+ * Returns null when not logged in via Supabase Auth (access-code sessions are
+ * NOT Supabase users, so a jury member resolves to null here — that's expected;
+ * the caller falls back to the access-code session check).
+ */
+export async function resolveFutureAccessOrNull(): Promise<FutureAccess | null> {
+  return resolveFutureAccess();
 }
 
 /**

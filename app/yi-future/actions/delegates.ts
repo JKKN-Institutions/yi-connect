@@ -54,7 +54,9 @@ export async function createDelegate(
   input: { chapterId: string; editionId: string },
   formData: FormData
 ): Promise<ActionResult> {
-  await requireAuth();
+  // Scope to the chapter the delegate is being created in — a chair of
+  // chapter A must not create delegates under chapter B.
+  await requireChapterAdmin(input.chapterId);
   const full_name = String(formData.get("full_name") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim() || null;
   const phone = String(formData.get("phone") ?? "").trim() || null;
@@ -125,7 +127,7 @@ export async function updateDelegate(
   id: string,
   formData: FormData
 ): Promise<ActionResult> {
-  await requireAuth();
+  await requireDelegateChapterAdmin(id);
   const full_name = String(formData.get("full_name") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim() || null;
   const phone = String(formData.get("phone") ?? "").trim() || null;

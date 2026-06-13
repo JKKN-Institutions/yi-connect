@@ -1,7 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient, createServiceClient } from "@/lib/yi-future/supabase/server";
+import { createServiceClient } from "@/lib/yi-future/supabase/server";
+import { requireChapterAdmin } from "@/lib/yi-future/auth/require-access";
 import type { ActionResult } from "./editions";
 
 export type PostEventInput = {
@@ -24,13 +25,22 @@ export type PostEventReportRow = {
   submitted_at: string | null;
 };
 
-async function requireUser(): Promise<{ userId: string } | null> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return null;
-  return { userId: user.id };
+/**
+ * Resolve the host chapter for an event (events.chapter_id). National-level
+ * events (chapter_id IS NULL) return null — only national admins can author
+ * their post-event reports, which requireChapterAdmin(null) enforces.
+ */
+async function hostChapterIdForEvent(
+  svc: Awaited<ReturnType<typeof createServiceClient>>,
+  eventId: string
+): Promise<string | null> {
+  const { data } = await svc
+    .schema("future")
+    .from("events")
+    .select("chapter_id")
+    .eq("id", eventId)
+    .maybeSingle();
+  return (data as { chapter_id: string | null } | null)?.chapter_id ?? null;
 }
 
 /**
@@ -76,11 +86,16 @@ export async function saveDraft(
   eventId: string,
   input: PostEventInput
 ): Promise<ActionResult> {
-  const user = await requireUser();
-  if (!user) return { ok: false, error: "Login required." };
   if (!eventId) return { ok: false, error: "Event id is required." };
 
   const svc = await createServiceClient();
+
+  // SECURITY: host/chapter-scoped — only the host chapter's admin (or a
+  // national admin) may author this event's report. Was login-only, letting
+  // any delegate overwrite any chapter's report. Resolve the host chapter,
+  // then gate; requireChapterAdmin redirects to /forbidden on deny.
+  const hostChapterId = await hostChapterIdForEvent(svc, eventId);
+  const { userId } = await requireChapterAdmin(hostChapterId);
 
   // Check existing
   const existing = await getPostEventReport(eventId);
@@ -143,7 +158,7 @@ export async function saveDraft(
       .from("post_event_reports")
       .insert({
         event_id: eventId,
-        authored_by: user.userId,
+        authored_by: userId,
         turnout_count: turnout,
         key_moments: keyMoments,
         press_coverage_links: links,
@@ -161,9 +176,12 @@ export async function saveDraft(
  * Flip status to 'submitted' and stamp `submitted_at`.
  */
 export async function submit(eventId: string): Promise<ActionResult> {
-  const user = await requireUser();
-  if (!user) return { ok: false, error: "Login required." };
   if (!eventId) return { ok: false, error: "Event id is required." };
+
+  const svcGate = await createServiceClient();
+  // SECURITY: host/chapter-scoped — same gate as saveDraft.
+  const hostChapterId = await hostChapterIdForEvent(svcGate, eventId);
+  await requireChapterAdmin(hostChapterId);
 
   const existing = await getPostEventReport(eventId);
   if (!existing) {

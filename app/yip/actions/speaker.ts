@@ -130,7 +130,9 @@ export async function speakerRejectMotion(
       speaker_ruling: "rejected",
       speaker_note: speakerNote,
       ruled_at: now,
-      ruled_by: r.speakerId,
+      // ruled_by FKs to auth.users(id); a participant (Speaker) has no auth
+      // row, so leave null (ruling recorded via speaker_ruling/speaker_note).
+      ruled_by: null,
       resolved_at: now,
     })
     .eq("id", motionId)

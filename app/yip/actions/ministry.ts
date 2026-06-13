@@ -123,6 +123,12 @@ async function assertMinistryMatch(
 ): Promise<{ ok: true; supabase: Awaited<ReturnType<typeof createServiceClient>> } | { ok: false; error: string }> {
   const gate = await requireLeadershipRole(participantId, eventId, MINISTRY_ANSWER_ROLES);
   if (!gate.ok) return { ok: false, error: gate.error };
+  // The ministry desk only handles ministry-directed items. An undirected item
+  // (e.g. a no_confidence motion with null ministry) is never answerable here —
+  // reject before the match so a null ministry can't equal a null target.
+  if (!itemMinistry) {
+    return { ok: false, error: "This item is not directed to a ministry." };
+  }
   const role = gate.participant.parliament_role ?? "";
   if (!isAllMinistries(role) && itemMinistry !== gate.participant.ministry) {
     return { ok: false, error: "That item is not directed to your ministry." };

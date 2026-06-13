@@ -1,10 +1,19 @@
 /**
  * In-app adaptive guide — authored content for all four YIP personas.
  *
- * Adapted from docs/yip-guides/*.md (chapter-agnostic source). Rewritten at a
- * 12th-grade reading level for a phone drawer. Event-scoped organiser links use
- * the literal `:eventId` token (resolved at render time); student /me, jury, and
- * volunteer links read the session and never need a token.
+ * Adapted from docs/yip-guides/*.md (chapter-agnostic source) and rewritten at
+ * a 12th-grade reading level. One ACTION per step; every step that points at a
+ * real page carries its own deep-link (`step.link`) so the guide doubles as a
+ * launchpad. Event-scoped organiser links use the literal `:eventId` token
+ * (resolved at render time); student / jury / volunteer links read the session
+ * and never need a token.
+ *
+ * Operating decisions reflected here (locked 2026-06-13):
+ *   - Scores, the leaderboard and Results are **super-admin only**. Organisers
+ *     run the floor and lock scoring from Control, but they do NOT open the
+ *     Scoring or Results dashboards or compute/publish results themselves.
+ *   - A committee bill can be uploaded by **one** committee member — the first
+ *     person to submit locks it for the whole committee.
  *
  * Plain data module — NO "use server". Safe to import from client + server.
  */
@@ -15,202 +24,289 @@ const organiser: PersonaGuide = {
   persona: "organiser",
   title: "Organiser Guide",
   tagline:
-    "You run the live floor — setup, elections, chat, jury and results — for your chapter's 2-day parliament.",
+    "You run the live floor — setup, elections, chat and jury — for your chapter's 2-day parliament.",
   pdfPath: "/yip/guides/organiser.pdf",
+  journey: [
+    "Sign in",
+    "Finish setup",
+    "Rehearse",
+    "Run Day 1",
+    "Run Day 2",
+    "Wrap up",
+  ],
   sections: [
     {
       id: "what-youre-running",
       title: "What you're running",
-      summary:
-        "YIP is a **2-day mock parliament** for school students (Classes 9–12). Your students play Speaker, Prime Minister, Ministers and MPs and debate real topics while a jury scores them out of **/100**. On Day 2 the scores become a leaderboard and awards.",
-      tips: [
-        "Your job: finish the setup checklist, run the floor from the **Control** tab, run the elections, watch the chat, keep the jury scoring, and publish results.",
-        "Every event-specific detail — dates, party count, jury, contacts — is on your printed **cover sheet**. Nothing is pre-done for your event.",
+      steps: [
+        {
+          action: "Understand the event: a 2-day mock parliament for Classes 9–12.",
+          detail:
+            "Your students play Speaker, Prime Minister, Ministers and MPs and debate real topics while a jury scores them out of **/100**.",
+        },
+        {
+          action: "Know your job: finish setup, run the floor, run elections, watch chat, keep the jury scoring.",
+          detail:
+            "You drive everything from the **Control** tab. Day 2 ends with awards and certificates.",
+        },
+        {
+          action: "Keep your printed cover sheet next to you.",
+          tip: "Every event-specific detail — dates, party count, jury, contacts — is on it. Nothing is pre-done for your event.",
+        },
       ],
     },
     {
       id: "logging-in",
       title: "Logging in",
-      summary:
-        "Sign in with your chapter's organiser email and password (or **Continue with Google**). You land on **My Events** — tap your event's card to go inside.",
       steps: [
-        "Go to **/yip/login**.",
-        "Type your **Email** and **Password**, then tap **Sign in**.",
-        "On **My Events**, tap your event's card.",
+        {
+          action: "Go to the sign-in page and enter your organiser email and password.",
+          detail: "You can also tap **Continue with Google** with your chapter account.",
+          link: { label: "Open My Events", href: "/yip/dashboard" },
+        },
+        {
+          action: "On **My Events**, tap your event's card to go inside.",
+          tip: "Don't see your event? Hard refresh (Ctrl/Cmd + Shift + R) and sign in again. **Never create a duplicate event** — call the tech-on-call instead.",
+        },
+        {
+          action: "Remember every organiser account can do everything here.",
+          detail: "You are also a **chat moderator** by default.",
+        },
       ],
-      tips: [
-        "Don't see your event? Hard refresh (Ctrl/Cmd + Shift + R) and sign in again. **Never create a duplicate event** — call the tech-on-call instead.",
-        "Every organiser account can do everything here, and is also a **chat moderator**.",
-      ],
-      links: [{ label: "Open My Events", href: "/yip/dashboard" }],
     },
     {
       id: "setup-checklist",
       title: "Before the event: setup checklist",
-      summary:
-        "Work through these **in order** — each step depends on the one before. Finish all of them before your rehearsal.",
       steps: [
-        "**Participants** — check every registered student is listed; each row shows their 6-character access code (this goes on their badge).",
-        "**Allocation** — run it. It splits the house into Government and Opposition, fills the leadership (Speaker candidates, PM, Cabinet, Leader of Opposition) and gives everyone a constituency.",
-        "**Parties** — tap **Form Parties** and choose your party count (2–8; handbook standard is 7–8). Allocation must be run first.",
-        "**Topics** — pick the debate topics for your event.",
-        "**Questions** — students submit Question Hour questions from their phones; you approve the ones you want live.",
-        "**Volunteers** — add your YUVA volunteers and **set an access code for each** (no code = can't log in).",
-        "**Jury** — add each juror by **email**; they sign in with email on the join page.",
-        "**Chat** — tap **Create channels** (one per party, one per committee, plus read-only Announcements). Form parties first.",
-      ],
-      tips: [
-        "Seeing **zero constituencies from your own state** is on purpose (the host state is excluded). Don't 'fix' it.",
-        "Re-running Allocation or Form Parties reshuffles **everyone** — only do it for a deliberate full redo.",
-      ],
-      links: [
-        { label: "Open Participants", href: "/yip/dashboard/events/:eventId/participants" },
-        { label: "Open Allocation", href: "/yip/dashboard/events/:eventId/allocation" },
-        { label: "Open Parties", href: "/yip/dashboard/events/:eventId/parties" },
-        { label: "Open Topics", href: "/yip/dashboard/events/:eventId/topics" },
-        { label: "Open Questions", href: "/yip/dashboard/events/:eventId/questions" },
-        { label: "Open Volunteers", href: "/yip/dashboard/events/:eventId/volunteers" },
-        { label: "Open Jury", href: "/yip/dashboard/events/:eventId/jury" },
-        { label: "Open Chat", href: "/yip/dashboard/events/:eventId/chat" },
+        {
+          action: "Open **Participants** and check every registered student is listed.",
+          detail: "Each row shows their 6-character access code — this goes on their badge.",
+          link: { label: "Open Participants", href: "/yip/dashboard/events/:eventId/participants" },
+        },
+        {
+          action: "Open **Allocation** and run it.",
+          detail:
+            "It splits the house into Government and Opposition, fills the leadership (Speaker candidates, PM, Cabinet, Leader of Opposition) and gives everyone a constituency.",
+          tip: "Seeing **zero constituencies from your own state** is on purpose — the host state is excluded. Don't 'fix' it.",
+          link: { label: "Open Allocation", href: "/yip/dashboard/events/:eventId/allocation" },
+        },
+        {
+          action: "Open **Parties**, tap **Form Parties**, and choose your party count.",
+          detail: "2–8 parties; the handbook standard is 7–8. Allocation must be run first.",
+          tip: "Re-running Allocation or Form Parties reshuffles **everyone** — only do it for a deliberate full redo.",
+          link: { label: "Open Parties", href: "/yip/dashboard/events/:eventId/parties" },
+        },
+        {
+          action: "Open **Topics** and pick the debate topics for your event.",
+          link: { label: "Open Topics", href: "/yip/dashboard/events/:eventId/topics" },
+        },
+        {
+          action: "Open **Questions** and approve the Question Hour questions you want live.",
+          detail: "Students submit these from their phones before the event.",
+          link: { label: "Open Questions", href: "/yip/dashboard/events/:eventId/questions" },
+        },
+        {
+          action: "Open **Volunteers**, add your YUVA volunteers, and set an access code for each.",
+          tip: "No code = they can't log in. Set one for every volunteer.",
+          link: { label: "Open Volunteers", href: "/yip/dashboard/events/:eventId/volunteers" },
+        },
+        {
+          action: "Open **Jury** and add each juror by **email**.",
+          detail: "Jurors sign in with that email on the join page — never your login.",
+          link: { label: "Open Jury", href: "/yip/dashboard/events/:eventId/jury" },
+        },
+        {
+          action: "Open **Chat** and tap **Create channels**.",
+          detail: "One channel per party, one per committee, plus a read-only Announcements channel. Form parties first.",
+          link: { label: "Open Chat", href: "/yip/dashboard/events/:eventId/chat" },
+        },
       ],
     },
     {
       id: "rehearsal",
       title: "Run a rehearsal first",
-      summary:
-        "About a week before Day 1, do a full dry-run with a few organisers, volunteers, a juror and some test students. It catches the surprises while there's still time to fix them.",
       steps: [
-        "Log in on every organiser account your chapter uses.",
-        "Open **Control**, start a timer, fire a sub-phase preset.",
-        "Run one practice party-leader election end to end (Hold → Open → vote on a phone → Close → Reveal).",
-        "Have a volunteer log in and confirm their **Vote Kiosk** wakes when the vote opens.",
-        "Have a juror sign in and submit one practice score.",
-        "Open the **projector view** on the real hall projector.",
-        "Send a chat message, **report** it from a student phone, and clear it from the **Reported** queue.",
+        {
+          action: "About a week before Day 1, do a full dry-run with a few helpers and test students.",
+          detail: "It catches the surprises while there's still time to fix them.",
+        },
+        {
+          action: "Log in on every organiser account, open **Control**, start a timer, and fire a sub-phase preset.",
+          link: { label: "Open Control", href: "/yip/dashboard/events/:eventId/control" },
+        },
+        {
+          action: "Run one practice party-leader election end to end.",
+          detail: "Hold → Open → vote on a phone → Close → Reveal.",
+        },
+        {
+          action: "Have a volunteer confirm their **Vote Kiosk** wakes when the vote opens, and a juror submit one practice score.",
+        },
+        {
+          action: "Open the **projector view** on the real hall projector, then test a chat report end to end.",
+          detail: "Send a message, report it from a student phone, and clear it from the Reported queue.",
+        },
       ],
-      links: [{ label: "Open Control", href: "/yip/dashboard/events/:eventId/control" }],
     },
     {
       id: "running-day-1",
       title: "Running Day 1",
-      summary:
-        "The **Control** tab is your cockpit. Tap **Start Day 1**, then drive the agenda with **Next** (advance everyone) and **Skip** (jump an item). Every student, jury and projector screen follows what you do.",
       steps: [
-        "Tap **Start Day 1** and confirm. The event goes live.",
-        "Use the timer card (it auto-fills from each item's planned time) — usually just tap **Start**.",
-        "Run the **Speaker Election** when that item is current; winner becomes Speaker, next two become Deputy Speakers.",
-        "Run the **party-leader elections**, one party at a time, during the formation items.",
-        "Reach the first scored session (Matters of Urgent Public Importance) — confirm the jury are scoring.",
-        "After the last item, tap **End Day 1**.",
+        {
+          action: "Open **Control** — this is your cockpit — and tap **Start Day 1**.",
+          detail: "Every student, jury and projector screen follows what you do here.",
+          link: { label: "Open Control", href: "/yip/dashboard/events/:eventId/control" },
+        },
+        {
+          action: "Drive the agenda with **Next** (advance everyone) and **Skip** (jump an item).",
+          tip: "If the agenda sidebar is empty when you first open Control, call the tech-on-call **before** event morning — not on the day.",
+        },
+        {
+          action: "Use the timer card — it auto-fills from each item's planned time, so usually just tap **Start**.",
+          tip: "For fast sessions, one-tap **sub-phase preset** buttons appear under the timer (Question / Answer / Speech / Rebuttal).",
+        },
+        {
+          action: "Run the **Speaker Election** when that item is current.",
+          detail: "The winner becomes Speaker; the next two become Deputy Speakers.",
+        },
+        {
+          action: "Run the **party-leader elections**, one party at a time, during the formation items.",
+        },
+        {
+          action: "Reach the first scored session (Matters of Urgent Public Importance) and confirm the jury are scoring, then tap **End Day 1** after the last item.",
+        },
       ],
-      tips: [
-        "If the agenda sidebar is empty when you first open Control, call the tech-on-call **before** event morning, not on the day.",
-        "For fast sessions, one-tap **sub-phase preset** buttons appear under the timer (Question / Answer / Speech / Rebuttal etc.).",
-      ],
-      links: [{ label: "Open Control", href: "/yip/dashboard/events/:eventId/control" }],
     },
     {
       id: "running-day-2",
       title: "Running Day 2",
-      summary:
-        "Tap **Start Day 2** and run the same way. Day 2 adds Question Hour, Zero Hour, the central debate and the bill votes — then you compute and publish results.",
       steps: [
-        "**Question Hour** — the console shows each question, who asked it, and the ministry to answer. Tap **Mark Answered** when done; the queue is the questions you approved earlier.",
-        "**Zero Hour** — students raise urgent matters via **Raise a Motion** on their phones; review them in the **Motions** tab and call students to speak.",
-        "**Bill Presentation & Voting** — each committee presents; the house votes Aye/No; the reveal shows BILL PASSED or BILL REJECTED.",
-        "Lock scores and compute results (see Results & Awards), then show the awards on the projector.",
-        "After the National Anthem, tap **Complete Event**.",
-      ],
-      links: [
-        { label: "Open Control", href: "/yip/dashboard/events/:eventId/control" },
-        { label: "Open Motions", href: "/yip/dashboard/events/:eventId/motions" },
-        { label: "Open Bills", href: "/yip/dashboard/events/:eventId/bills" },
+        {
+          action: "Tap **Start Day 2** in Control and run the same way.",
+          detail: "Day 2 adds Question Hour, Zero Hour, the central debate and the bill votes.",
+          link: { label: "Open Control", href: "/yip/dashboard/events/:eventId/control" },
+        },
+        {
+          action: "Run **Question Hour** — the console shows each question, who asked it, and the ministry to answer.",
+          detail: "Tap **Mark Answered** when done. The queue is the questions you approved earlier.",
+        },
+        {
+          action: "Run **Zero Hour** — students raise urgent matters via **Raise a Motion**; review them in the **Motions** tab.",
+          link: { label: "Open Motions", href: "/yip/dashboard/events/:eventId/motions" },
+        },
+        {
+          action: "Run **Bill Presentation & Voting** — each committee presents and the house votes Aye/No.",
+          detail: "The reveal shows BILL PASSED or BILL REJECTED.",
+          link: { label: "Open Bills", href: "/yip/dashboard/events/:eventId/bills" },
+        },
+        {
+          action: "After the National Anthem, tap **Complete Event**.",
+          tip: "Computing and publishing the leaderboard is done by the super-admin (see Jury & scoring oversight), not from here.",
+        },
       ],
     },
     {
       id: "elections-and-voting",
       title: "Elections & voting",
-      summary:
-        "All voting runs from the **Digital Voting** card on the Control Panel. The moment you open a vote, an orange **VOTE NOW** card appears on every eligible student's phone.",
       steps: [
-        "**Speaker election** — Open → students vote (you see a live tally they can't) → **Close Voting** → **Reveal Results**.",
-        "**Party-leader elections** — tap **Hold Election** per party, pick 3–5 nominees, **Open** → only that party votes → Close → Reveal.",
-        "**Bill votes** — **Open Bill Vote**; students choose Aye / Nay / Abstain; Close → Reveal shows the result.",
-        "**Tie?** A banner offers **Open 60-second runoff** — only tied candidates, and everyone votes again.",
+        {
+          action: "Run all voting from the **Digital Voting** card on the Control Panel.",
+          detail: "The moment you open a vote, an orange **VOTE NOW** card appears on every eligible student's phone.",
+          link: { label: "Open Control", href: "/yip/dashboard/events/:eventId/control" },
+        },
+        {
+          action: "Speaker election: Open → students vote → **Close Voting** → **Reveal Results**.",
+          detail: "You see a live tally during voting that students can't.",
+        },
+        {
+          action: "Party-leader elections: tap **Hold Election** per party, pick 3–5 nominees, Open → only that party votes → Close → Reveal.",
+        },
+        {
+          action: "Bill votes: tap **Open Bill Vote**; students choose Aye / Nay / Abstain; Close → Reveal shows the result.",
+        },
+        {
+          action: "Tie? A banner offers **Open 60-second runoff** — only tied candidates, everyone votes again.",
+          tip: "**Known quirk:** after Open / Close / Reveal the panel sometimes doesn't update. **Refresh the page** — the action already happened. **Do not click the button twice.**",
+        },
+        {
+          action: "Students without phones: use the **roll-call list** or a volunteer's **Vote Kiosk**.",
+          detail: "A wrong entry can be fixed with **Correct Vote** — a reason is required and logged.",
+        },
       ],
-      tips: [
-        "**Known quirk — read twice:** after Open / Close / Reveal the panel sometimes doesn't update on its own. **Refresh the page** — the action already happened. **Do not click the button twice.**",
-        "Students without phones: use the **roll-call list** to record their spoken vote, or let a YUVA volunteer's **Vote Kiosk** capture it. A wrong entry can be fixed with **Correct Vote** (a reason is required and logged).",
-      ],
-      links: [{ label: "Open Control", href: "/yip/dashboard/events/:eventId/control" }],
     },
     {
       id: "chat-moderation",
       title: "Chat moderation",
-      summary:
-        "The **Chat** tab is your moderation console. Every organiser is a moderator — agree who watches it during sessions.",
       steps: [
-        "**Channels** — read any channel (one per party, one per committee, plus Announcements). **Delete** a message or **Freeze** a channel to stop posting; unfreeze when done.",
-        "**Reported** — every message a student reports lands here. Delete it and/or mute the sender.",
-        "**Direct messages** — oversight of student-to-YUVA mentor DMs. There are **no student-to-student DMs**.",
-        "**Muted students** — see who's muted and unmute them.",
-        "Use the **Announcements** composer for schedule changes and 'results in 10 minutes' calls (students can read it, not post).",
+        {
+          action: "Open the **Chat** tab — your moderation console.",
+          detail: "Every organiser is a moderator. Agree who watches it during each session.",
+          link: { label: "Open Chat", href: "/yip/dashboard/events/:eventId/chat" },
+        },
+        {
+          action: "Use **Channels** to read any channel, **Delete** a message, or **Freeze** a channel to stop posting.",
+          detail: "One channel per party, one per committee, plus Announcements. Unfreeze when done.",
+        },
+        {
+          action: "Watch the **Reported** queue — every message a student reports lands here.",
+          detail: "Delete it and/or mute the sender. **Muted students** lists who's muted so you can unmute them.",
+        },
+        {
+          action: "Use the **Announcements** composer for schedule changes and 'results in 10 minutes' calls.",
+          detail: "Students can read Announcements but not post. There are **no student-to-student DMs** — only student-to-YUVA mentor DMs, which you oversee.",
+          tip: "Brief students on Day 1: be respectful, organisers see everything, and the report button is there for a reason.",
+        },
       ],
-      tips: [
-        "Brief students on Day 1: be respectful, organisers see everything, and the report button is there for a reason.",
-      ],
-      links: [{ label: "Open Chat", href: "/yip/dashboard/events/:eventId/chat" }],
     },
     {
       id: "jury-and-scoring",
       title: "Jury & scoring oversight",
-      summary:
-        "Jurors score on **their own phones** with email sign-in — never your login. The **Scoring** tab shows you live progress so you can chase anyone who's behind.",
       steps: [
-        "Glance at the **Scoring** tab after each scored session — it shows how many scores are in, per session.",
-        "Chase jurors who are behind **before** the next session starts.",
-        "If the hall Wi-Fi drops, jurors keep scoring; their phones sync automatically when it's back — don't panic over a 'syncing' badge.",
-        "When all scoring is done, turn **Scores locked** ON in Control (this blocks all jury submissions). Unlock if a juror still needs to finish.",
-      ],
-      tips: [
-        "Each student is scored out of **/100**: six juror components total 90, plus an automatic position bonus (max 10) the system adds for leadership roles. Jurors never add the bonus.",
-        "Jurors can only score the **current** session and the **immediately-previous** one — so they can finish a sheet after you advance, but not go further back.",
-      ],
-      links: [
-        { label: "Open Scoring", href: "/yip/dashboard/events/:eventId/scoring" },
-        { label: "Open Control", href: "/yip/dashboard/events/:eventId/control" },
-      ],
-    },
-    {
-      id: "results-and-awards",
-      title: "Results, awards & certificates",
-      summary:
-        "Late on Day 2, after the last scored session: lock scores, compute the results, check them with a human eye, then publish so students and jury can see them.",
-      steps: [
-        "Confirm the **Scoring** tab shows all expected scores, then turn **Scores locked** ON in Control.",
-        "Open **Results** and tap **Compute Results**.",
-        "**Sanity-check before publishing** — the leaderboard (/100) and the award winners. Ties are handled (co-winners are shown).",
-        "Tap **Publish** (you can unpublish to correct something, then publish again).",
-        "Use the **Certificates** tab to generate participation and award certificates.",
-        "Show the leaderboard on the big screen via **Open Projector View** for the ceremony.",
-      ],
-      links: [
-        { label: "Open Results", href: "/yip/dashboard/events/:eventId/results" },
-        { label: "Open Certificates", href: "/yip/dashboard/events/:eventId/certificates" },
+        {
+          action: "Make sure jurors score on **their own phones** with email sign-in — never your login.",
+          detail: "Each student is scored out of **/100**: six juror components total 90, plus an automatic position bonus (max 10) the system adds for leadership roles.",
+        },
+        {
+          action: "Chase any juror who is behind **before** the next session starts.",
+          detail: "Jurors can only score the **current** session and the **immediately-previous** one, so they shouldn't fall behind.",
+        },
+        {
+          action: "If the hall Wi-Fi drops, let jurors keep scoring — their phones sync automatically when it's back.",
+          tip: "Don't panic over a 'syncing' badge.",
+        },
+        {
+          action: "When all scoring is done, turn **Scores locked** ON in Control.",
+          detail: "This blocks all jury submissions. Unlock it if a juror still needs to finish.",
+          link: { label: "Open Control", href: "/yip/dashboard/events/:eventId/control" },
+        },
+        {
+          action: "Leave computing and publishing the leaderboard to the super-admin.",
+          detail:
+            "The Scoring and Results dashboards, and the **Compute / Publish** steps, are **super-admin only**. As an organiser your job is to lock scoring at the right moment — the super-admin produces the leaderboard, awards and certificates.",
+        },
       ],
     },
     {
       id: "troubleshooting",
       title: "Troubleshooting & who to contact",
-      summary:
-        "Golden rule: **refresh first, fully-close-and-reopen second, call the tech-on-call** if it's still blocking the event. The tech-on-call and event admin are on your cover sheet.",
-      tips: [
-        "**Open/Close/Reveal did nothing?** The known quirk — refresh; the action already went through. Don't click again.",
-        "**A device looks stale?** Refresh; if the student installed the app, have them fully close and reopen it.",
-        "**Can't log in with a code?** Re-check the 6 characters (`0` vs `O`, `1` vs `I`). Volunteers with an empty code field can't log in — set one.",
-        "**VOTE NOW didn't appear?** Confirm the vote is open in Control; have the student reopen the app, or capture the vote via roll-call / kiosk.",
-        "**Jury scores not coming in?** Check **Scores locked** isn't ON, and the juror used the email you registered. Offline scores sync later.",
-        "**Locked out / forgot password?** Passwords can't be looked up — ask the tech-on-call to reset.",
+      steps: [
+        {
+          action: "Golden rule: refresh first, fully close-and-reopen second, call the tech-on-call if it's still blocking.",
+          detail: "The tech-on-call and event admin are on your cover sheet.",
+        },
+        {
+          action: "Open/Close/Reveal did nothing? Refresh — the action already went through. Don't click again.",
+        },
+        {
+          action: "A device looks stale, or VOTE NOW didn't appear? Have the student reopen the app and confirm the vote is open in Control.",
+          detail: "If they installed the app, have them fully close and reopen it. Otherwise capture the vote via roll-call / kiosk.",
+        },
+        {
+          action: "Can't log in with a code? Re-check the 6 characters (`0` vs `O`, `1` vs `I`).",
+          detail: "Volunteers with an empty code field can't log in — set one.",
+        },
+        {
+          action: "Locked out or forgot password? Ask the tech-on-call to reset it — passwords can't be looked up.",
+        },
       ],
     },
   ],
@@ -222,110 +318,153 @@ const student: PersonaGuide = {
   tagline:
     "You're a Member of Parliament for two days — debate, ask questions, draft a bill and vote, all from your phone.",
   pdfPath: "/yip/guides/student.pdf",
+  journey: [
+    "Join with your code",
+    "Open your dashboard",
+    "Ask & debate",
+    "Vote on the floor",
+    "Your certificate",
+  ],
   sections: [
     {
       id: "join-with-your-code",
       title: "Join with your code",
-      summary:
-        "Bring your phone, **fully charged**, both days. Everything — voting, questions, chat — happens on it. No email or password needed.",
       steps: [
-        "Go to **/yip/join**.",
-        "Type the **6-character access code printed on your badge** into the **Your Access Code** box.",
-        "Tap **Enter Parliament**.",
+        {
+          action: "Bring your phone, **fully charged**, on both days.",
+          detail: "Everything — voting, questions, chat — happens on it. No email or password needed.",
+        },
+        {
+          action: "Go to the **Join** page and type the 6-character access code printed on your badge.",
+          detail: "Type it into the **Your Access Code** box, then tap **Enter Parliament**.",
+          tip: "Lost your badge? The registration desk has your code.",
+          link: { label: "Go to Join", href: "/yip/join" },
+        },
+        {
+          action: "If asked, tap **Install Yi Connect** so it opens like a real app.",
+          tip: "No phone? No problem — a YUVA volunteer or organiser will record your vote for you.",
+        },
       ],
-      tips: [
-        "Lost your badge? The registration desk has your code.",
-        "If asked, tap **Install Yi Connect** so it opens like a real app.",
-        "No phone? No problem — a YUVA volunteer or organiser will record your vote for you.",
-      ],
-      links: [{ label: "Go to Join", href: "/yip/join" }],
     },
     {
       id: "your-dashboard",
       title: "Your dashboard",
-      summary:
-        "Your home screen shows your role, party, school and constituency, plus a **Live Now** card that tells you what the house is doing right now — it updates by itself.",
-      tips: [
-        "**Live Now** shows the current agenda item and the countdown timer.",
-        "**Your party roster** lists your party members; **Your YUVA & Yi Contact** shows who's there to help you.",
-      ],
-      links: [
-        { label: "Open My Dashboard", href: "/yip/me" },
-        { label: "Open My Journey", href: "/yip/me/journey" },
+      steps: [
+        {
+          action: "Open **My Dashboard** to see your role, party, school and constituency.",
+          detail: "The **Live Now** card tells you what the house is doing right now — it updates by itself.",
+          link: { label: "Open My Dashboard", href: "/yip/me" },
+        },
+        {
+          action: "Check **Your party roster** and **Your YUVA & Yi Contact** cards.",
+          detail: "The roster lists your party members; the contact card shows who's there to help you.",
+        },
+        {
+          action: "Open **My Journey** any time to see your progress through the event.",
+          link: { label: "Open My Journey", href: "/yip/me/journey" },
+        },
       ],
     },
     {
       id: "ask-a-question",
       title: "Ask a Question (Question Hour)",
-      summary:
-        "Submit your Question Hour questions before the event. Organisers approve them; if yours is approved, you may be called to ask it live.",
       steps: [
-        "Open **Questions** and tap **Submit**.",
-        "Write your question (at least **20 characters**) and pick the **ministry** it's for.",
-        "Submit up to **3 questions** — don't wait for the deadline; submissions close before the event.",
+        {
+          action: "Open **Questions** and tap **Submit** before the event.",
+          detail: "Organisers approve questions; if yours is approved you may be called to ask it live.",
+          link: { label: "Open Questions", href: "/yip/me/questions" },
+        },
+        {
+          action: "Write your question (at least **20 characters**) and pick the **ministry** it's for.",
+        },
+        {
+          action: "Submit up to **3 questions** — don't wait for the deadline.",
+          tip: "Submissions close before the event starts.",
+        },
       ],
-      links: [{ label: "Open Questions", href: "/yip/me/questions" }],
     },
     {
       id: "debate-and-motions",
       title: "Debate & raising a motion",
-      summary:
-        "During **Zero Hour** you can raise an urgent public matter for the house. Submit it before the deadline shown, and you may be called to speak.",
       steps: [
-        "Open **Raise a Motion** from your dashboard.",
-        "Write your urgent matter and submit it **before the deadline**.",
+        {
+          action: "During **Zero Hour**, open **Raise a Motion** from your dashboard.",
+          detail: "You can raise an urgent public matter for the house.",
+          link: { label: "Open Motions", href: "/yip/me/motion" },
+        },
+        {
+          action: "Write your urgent matter and submit it **before the deadline** shown.",
+          tip: "If it's accepted, you may be called to speak.",
+        },
       ],
-      links: [{ label: "Open Motions", href: "/yip/me/motion" }],
     },
     {
       id: "draft-your-bill",
       title: "Draft your committee bill",
-      summary:
-        "If you're on a bill committee, you draft and submit your committee's bill from your phone. Later, the whole house votes on it.",
       steps: [
-        "Open **Bill Drafting** (committee members only).",
-        "Write and submit your committee's bill with your team.",
+        {
+          action: "If you're on a bill committee, open **Bill Drafting** to write your committee's bill.",
+          detail: "Work it out together with your committee team.",
+          link: { label: "Open Bill", href: "/yip/me/bill" },
+        },
+        {
+          action: "Have **one** committee member upload the final bill.",
+          tip: "Only the **first** person to submit locks the bill for the whole committee — agree who uploads, so you don't clash. Later, the whole house votes on it.",
+        },
       ],
-      links: [{ label: "Open Bill", href: "/yip/me/bill" }],
     },
     {
       id: "voting",
       title: "Voting on the floor",
-      summary:
-        "An orange **VOTE NOW** card appears the moment a vote opens — Speaker election, your party-leader election, or a bill vote. Tap it, pick your choice, done.",
       steps: [
-        "When **VOTE NOW** appears, tap it.",
-        "Pick your choice — you'll see **'Your vote has been recorded.'**",
-        "Vote **once** — that's your ballot.",
+        {
+          action: "When the orange **VOTE NOW** card appears, tap it.",
+          detail: "It pops up the moment a vote opens — Speaker election, your party-leader election, or a bill vote.",
+          link: { label: "Open Vote", href: "/yip/me/vote" },
+        },
+        {
+          action: "Pick your choice — you'll see **'Your vote has been recorded.'**",
+          detail: "Vote **once** — that's your ballot.",
+          tip: "No phone, or it's not working? A YUVA volunteer captures your vote — you still pick your own choice.",
+        },
       ],
-      tips: [
-        "No phone, or it's not working? A YUVA volunteer captures your vote — you still pick your own choice.",
-      ],
-      links: [{ label: "Open Vote", href: "/yip/me/vote" }],
     },
     {
       id: "chat-rules",
       title: "Chat rules",
-      summary:
-        "You have a **party** channel and a **committee** channel, plus a read-only **Announcements** channel (read it — schedule changes land there).",
-      tips: [
-        "Need help privately? Use **Message a YUVA mentor**. There are **no student-to-student DMs**.",
-        "**Be respectful** — organisers see every message. See something off? Use the **report** button; don't reply to it.",
-        "Misuse gets your messages deleted and you muted.",
+      steps: [
+        {
+          action: "Open **Chat** to reach your **party** channel and your **committee** channel.",
+          detail: "There's also a read-only **Announcements** channel — read it, schedule changes land there.",
+          link: { label: "Open Chat", href: "/yip/me/chat" },
+        },
+        {
+          action: "Need help privately? Use **Message a YUVA mentor**.",
+          detail: "There are **no student-to-student DMs**.",
+        },
+        {
+          action: "Be respectful — organisers see every message.",
+          tip: "See something off? Use the **report** button; don't reply to it. Misuse gets your messages deleted and you muted.",
+        },
       ],
-      links: [{ label: "Open Chat", href: "/yip/me/chat" }],
     },
     {
       id: "certificate-and-help",
       title: "Your certificate & getting help",
-      summary:
-        "After results are published you can see how you did, and a participation (or award) certificate is generated for you. Share your feedback to tell us how the event went.",
-      tips: [
-        "If something looks stuck, fully **close and reopen** the app — don't just refresh. Still stuck? Show a YUVA volunteer or organiser.",
-      ],
-      links: [
-        { label: "Open My Journey", href: "/yip/me/journey" },
-        { label: "Share Feedback", href: "/yip/me/feedback" },
+      steps: [
+        {
+          action: "After results are published, open **My Journey** to see how you did.",
+          detail: "A participation (or award) certificate is generated for you.",
+          link: { label: "Open My Journey", href: "/yip/me/journey" },
+        },
+        {
+          action: "Share how the event went on the **Feedback** page.",
+          link: { label: "Share Feedback", href: "/yip/me/feedback" },
+        },
+        {
+          action: "If something looks stuck, fully **close and reopen** the app — don't just refresh.",
+          tip: "Still stuck? Show a YUVA volunteer or organiser.",
+        },
       ],
     },
   ],
@@ -337,62 +476,92 @@ const volunteer: PersonaGuide = {
   tagline:
     "Your phone is a roving voting booth — when a vote opens, students without phones vote through you.",
   pdfPath: "/yip/guides/volunteer.pdf",
+  journey: [
+    "Log in with your code",
+    "Open the kiosk",
+    "Capture votes",
+    "Help students",
+  ],
   sections: [
     {
       id: "what-a-yuva-does",
       title: "What a YUVA does",
-      summary:
-        "You're the floor team. Your main job is the **Vote Kiosk** — capturing votes from students who don't have a phone — plus helping students log in and find their way.",
+      steps: [
+        {
+          action: "Be the floor team — your main job is the **Vote Kiosk**.",
+          detail: "You capture votes from students who don't have a phone, plus help students log in and find their way.",
+        },
+      ],
     },
     {
       id: "log-in",
       title: "Log in with your code",
-      summary:
-        "You have your **own 6-character access code** from the organisers — it is **not** a student code. After you log in, your screen becomes a **Vote Kiosk**.",
       steps: [
-        "Go to **/yip/join**.",
-        "Type your code into the **Your Access Code** box and tap **Enter Parliament**.",
-        "Your screen shows **Vote Kiosk** with **'Waiting for the organizer to open a vote…'** — that's correct. Keep it open.",
+        {
+          action: "Go to the **Join** page and type your **own 6-character access code** into the **Your Access Code** box.",
+          detail: "It is **not** a student code — the organisers give you your own. Then tap **Enter Parliament**.",
+          link: { label: "Go to Join", href: "/yip/join" },
+        },
+        {
+          action: "Confirm your screen shows **Vote Kiosk** with 'Waiting for the organizer to open a vote…'.",
+          tip: "That's correct — keep it open.",
+        },
       ],
-      links: [{ label: "Go to Join", href: "/yip/join" }],
     },
     {
       id: "run-the-kiosk",
       title: "Run a voting kiosk",
-      summary:
-        "When the organisers open a vote, your screen **wakes up by itself** — no refresh needed. Then capture each student's vote, one at a time.",
       steps: [
-        "**Find the student** — search the list by serial number or name and tap them.",
-        "**Hand them the phone** (or hold it where they can see) — they pick their own choice.",
-        "Tap **Confirm**. The screen returns to the list for the next student.",
+        {
+          action: "When the organisers open a vote, your screen **wakes up by itself** — no refresh needed.",
+          link: { label: "Open Kiosk", href: "/yip/volunteer" },
+        },
+        {
+          action: "Find the student — search the list by serial number or name and tap them.",
+          tip: "If a student already voted on their own phone, the list tells you — they can't vote twice.",
+        },
+        {
+          action: "Hand them the phone so they pick their own choice, then tap **Confirm**.",
+          detail: "The screen returns to the list for the next student.",
+        },
+        {
+          action: "When voting closes, leave the screen on 'Waiting…' for the next vote.",
+        },
       ],
-      tips: [
-        "When voting closes, your screen goes back to 'Waiting…' — leave it open for the next vote.",
-        "If a student already voted on their own phone, the list tells you — they can't vote twice.",
-      ],
-      links: [{ label: "Open Kiosk", href: "/yip/volunteer" }],
     },
     {
       id: "etiquette",
       title: "Rules of the booth",
-      summary:
-        "The ballot is secret and the student decides. Keep it clean and fair.",
-      tips: [
-        "One student at a time. **The student picks — never pick for them.**",
-        "Don't announce or discuss anyone's choice.",
-        "Made a mistake? Tell an organiser immediately — they can correct a vote (with a logged reason). Don't try to fix it yourself.",
+      steps: [
+        {
+          action: "One student at a time — **the student picks, never pick for them**.",
+          detail: "The ballot is secret and the student decides.",
+        },
+        {
+          action: "Don't announce or discuss anyone's choice.",
+        },
+        {
+          action: "Made a mistake? Tell an organiser immediately — don't try to fix it yourself.",
+          tip: "They can correct a vote with a logged reason.",
+        },
       ],
     },
     {
       id: "helping-students",
       title: "Helping students & messages",
-      summary:
-        "Between votes you help students log in, point them to the **Live Now** card when they ask 'what's happening', and walk lost students to the help desk. Students can also message you privately.",
-      tips: [
-        "Login typos are usually `0` vs `O` and `1` vs `I` — codes are on their badges.",
-        "Students can message you via **'Message a YUVA mentor'**, but **you can't reply in the app**. Handle it in person or pass it to an organiser.",
-        "Anything worrying in a message (bullying, a student in distress) → straight to an organiser.",
-        "If your screen looks stuck, fully close and reopen the app, then log in again with your code.",
+      steps: [
+        {
+          action: "Between votes, help students log in and point them to the **Live Now** card.",
+          detail: "Login typos are usually `0` vs `O` and `1` vs `I` — codes are on their badges.",
+        },
+        {
+          action: "Students can message you via **'Message a YUVA mentor'**, but you **can't reply in the app**.",
+          detail: "Handle it in person or pass it to an organiser.",
+          tip: "Anything worrying in a message (bullying, a student in distress) → straight to an organiser.",
+        },
+        {
+          action: "If your screen looks stuck, fully close and reopen the app, then log in again with your code.",
+        },
       ],
     },
   ],
@@ -404,77 +573,116 @@ const jury: PersonaGuide = {
   tagline:
     "You watch and score each participant out of /100 on your own phone — the screen follows the house for you.",
   pdfPath: "/yip/guides/jury.pdf",
+  journey: [
+    "Sign in with email",
+    "Learn the rubric",
+    "Score each speaker",
+    "Check your history",
+  ],
   sections: [
     {
       id: "sign-in",
       title: "Signing in with email",
-      summary:
-        "You score on **your own phone** — never an organiser's login. Sign in with the **email the organisers registered for you**.",
       steps: [
-        "Go to **/yip/join**.",
-        "Tap **'Jury member? Sign in with email'** and sign in with your registered email.",
-        "You land on the scoring screen.",
+        {
+          action: "Go to **Jury Sign-in** and sign in with the **email the organisers registered for you**.",
+          detail: "You score on **your own phone** — never an organiser's login.",
+          link: { label: "Go to Jury Sign-in", href: "/yip/jury/login" },
+        },
+        {
+          action: "Land on the scoring screen and you're ready.",
+        },
       ],
-      links: [{ label: "Go to Jury Sign-in", href: "/yip/jury/login" }],
     },
     {
       id: "the-rubric",
       title: "The /100 workbook rubric",
-      summary:
-        "You score **six components** on the official **Yi 2026 Evaluation Workbook**, each in its own session as the event reaches it. Together they total **90 from you**.",
-      tips: [
-        "**MUPI / Opening Speech (15)** — research, relevance to the Central Agenda, and delivery.",
-        "**Question Hour (20)** — quality of the question asked, or of the minister's answer.",
-        "**Zero Hour (15)** — how well they raise and argue an urgent matter.",
-        "**Political Acumen (10)** — coalition building, strategy, negotiation, floor presence.",
-        "**Committee (15)** — contribution in committee discussion and bill drafting.",
-        "**Bill Presentation (15)** — how well they present and defend their committee's bill.",
-        "The last **10 (Position Points)** is added **automatically by the system** for leadership roles — **never add it yourself**.",
+      steps: [
+        {
+          action: "Score **six components** on the official **Yi 2026 Evaluation Workbook**.",
+          detail: "Each appears in its own session as the event reaches it. Together your six total **90**.",
+          link: { label: "Open Scoring", href: "/yip/jury" },
+        },
+        {
+          action: "MUPI / Opening Speech (15) — research, relevance to the Central Agenda, and delivery.",
+        },
+        {
+          action: "Question Hour (20) — quality of the question asked, or of the minister's answer.",
+        },
+        {
+          action: "Zero Hour (15) — how well they raise and argue an urgent matter.",
+        },
+        {
+          action: "Political Acumen (10) — coalition building, strategy, negotiation, floor presence.",
+        },
+        {
+          action: "Committee (15) and Bill Presentation (15) — committee contribution, and presenting and defending the bill.",
+        },
+        {
+          action: "Never add the last 10 (Position Points) yourself.",
+          tip: "The system adds Position Points (max 10) automatically for leadership roles.",
+        },
       ],
-      links: [{ label: "Open Scoring", href: "/yip/jury" }],
     },
     {
       id: "scoring-a-speaker",
       title: "Scoring a speaker",
-      summary:
-        "The screen **follows the house** — the session you're scoring is pre-set by the organiser and switches automatically when the house moves on. The current speaker appears on their own.",
       steps: [
-        "Watch the current speaker — they appear on the screen automatically.",
-        "Score them against the component for the current session.",
-        "Need someone specific? Search by number, constituency, or name.",
+        {
+          action: "Watch the current speaker — they appear on your screen automatically.",
+          detail: "The screen follows the house; the session you're scoring switches by itself when the house moves on.",
+          link: { label: "Open Scoring", href: "/yip/jury" },
+        },
+        {
+          action: "Score them against the component for the current session.",
+          detail: "Need someone specific? Search by number, constituency, or name.",
+        },
+        {
+          action: "Finish the previous session after the house advances if you need to.",
+          tip: "You can only go **one** session back, so don't fall more than a session behind. You can edit a score until scoring is locked.",
+        },
       ],
-      tips: [
-        "You can **finish the previous session** after the house advances — but only that one, so don't fall more than a session behind.",
-        "You can edit a score until the organisers lock scoring at the end.",
-      ],
-      links: [{ label: "Open Scoring", href: "/yip/jury" }],
     },
     {
       id: "offline-and-sync",
       title: "Offline scoring & sync",
-      summary:
-        "If the hall Wi-Fi drops, keep scoring exactly as normal. Your scores are saved on your phone and **sync automatically** when the connection returns.",
-      tips: [
-        "A small sync badge shows the status — ignore it and keep going.",
-        "If something looks stuck, fully close and reopen the tab or app, then sign in again. Your submitted scores are safe.",
+      steps: [
+        {
+          action: "If the hall Wi-Fi drops, keep scoring exactly as normal.",
+          detail: "Your scores are saved on your phone and **sync automatically** when the connection returns.",
+          tip: "A small sync badge shows the status — ignore it and keep going.",
+        },
+        {
+          action: "If something looks stuck, fully close and reopen the tab or app, then sign in again.",
+          detail: "Your submitted scores are safe.",
+        },
       ],
     },
     {
       id: "your-history",
       title: "Your scoring history",
-      summary:
-        "Your **History** screen lists the scores you've already submitted, so you can confirm you haven't missed anyone before the next session starts.",
-      links: [{ label: "Open History", href: "/yip/jury/history" }],
+      steps: [
+        {
+          action: "Open **History** to confirm you haven't missed anyone before the next session starts.",
+          detail: "It lists every score you've already submitted.",
+          link: { label: "Open History", href: "/yip/jury/history" },
+        },
+      ],
     },
     {
       id: "fairness-rules",
       title: "Fairness rules",
-      summary:
-        "Your scores feed a shared leaderboard, so consistency and discretion matter.",
-      tips: [
-        "**Don't share scores aloud** — not with students, jurors, or anyone within earshot. Angle your screen away.",
-        "Score **every** student you observe in a session — gaps hurt the leaderboard's fairness.",
-        "Unsure about a rubric line? Quietly ask an organiser between sessions, not mid-speech.",
+      steps: [
+        {
+          action: "Don't share scores aloud — angle your screen away.",
+          detail: "Your scores feed a shared leaderboard, so discretion matters.",
+        },
+        {
+          action: "Score **every** student you observe in a session — gaps hurt the leaderboard's fairness.",
+        },
+        {
+          action: "Unsure about a rubric line? Quietly ask an organiser between sessions, not mid-speech.",
+        },
       ],
     },
   ],

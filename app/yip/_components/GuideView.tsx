@@ -165,9 +165,19 @@ export function GuideView({ guides, persona, eventId }: GuideViewProps) {
           </h2>
           <ol className="space-y-3">
             {section.steps.map((step, i) => {
-              const href = step.link
+              const resolved = step.link
                 ? resolveGuideHref(step.link.href, eventId)
                 : null
+              // On the standalone /yip/guide page an organiser has no single
+              // event in context, so event-scoped (`:eventId`) links can't
+              // resolve. Rather than hide the button, send the organiser to
+              // My Events — they pick an event there, then reach the tab.
+              // Other lanes' links never use the token, so they resolve as-is.
+              const href =
+                resolved ??
+                (step.link && persona === "organiser"
+                  ? "/yip/dashboard"
+                  : null)
               return (
                 <li
                   key={i}

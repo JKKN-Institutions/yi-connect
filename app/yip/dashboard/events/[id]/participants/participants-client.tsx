@@ -47,7 +47,6 @@ import {
   Zap,
 } from "lucide-react";
 import { CsvImport } from "@/components/yip/csv-import";
-import { WhatsAppSendCodes } from "@/components/yip/whatsapp-send-codes";
 import { EmailSendCodes } from "@/components/yip/email-send-codes";
 
 type Participant = {
@@ -457,12 +456,11 @@ export function ParticipantsClient({
             Export CSV
           </Button>
 
-          {/* Send each student's access code to their phone via the connected
-              Yi WhatsApp number (bridge service). Re-sends are deduped. */}
-          <WhatsAppSendCodes eventId={eventId} />
-
           {/* Email each student's access code via Resend — the reliable channel
-              (every participant has an email; no bridge to connect). */}
+              (every participant has an email; no bridge to connect). The
+              WhatsApp Codes button was removed 2026-06-13 while the Railway
+              bridge is down (headless-Chrome crash after scan); the
+              WhatsAppSendCodes component is kept for when the bridge is fixed. */}
           <EmailSendCodes eventId={eventId} />
 
           {/* Quick Add Walk-in — create a single late arrival and auto-assign

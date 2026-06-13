@@ -21,7 +21,13 @@ import {
   StyleSheet,
   renderToBuffer,
 } from "@react-pdf/renderer";
-import { GUIDES, type GuideLane, type GuideContent } from "@/lib/yuva/guide/content";
+import {
+  GUIDES,
+  GUIDE_GLOSSARY,
+  PLANNED_LOCALE_NOTE,
+  type GuideLane,
+  type GuideContent,
+} from "@/lib/yuva/guide/content";
 
 const APP_URL =
   process.env.NEXT_PUBLIC_APP_URL ?? "https://yi-connect-app.vercel.app";
@@ -144,6 +150,26 @@ const styles = StyleSheet.create({
     color: "#334155",
   },
   helpLabel: { fontFamily: "Helvetica-Bold", color: NAVY },
+
+  whyBox: { marginTop: 12, backgroundColor: AMBER_BG, borderRadius: 8, padding: 10 },
+  whyText: { fontSize: 11, fontFamily: "Helvetica-Bold", color: "#1e293b" },
+  startLink: {
+    marginTop: 6,
+    fontSize: 10,
+    fontFamily: "Helvetica-Bold",
+    color: AMBER,
+    textDecoration: "underline",
+  },
+  glossaryHeading: {
+    fontSize: 13,
+    fontFamily: "Helvetica-Bold",
+    color: NAVY,
+    marginTop: 18,
+    marginBottom: 4,
+  },
+  termWord: { fontSize: 11, fontFamily: "Helvetica-Bold", color: "#1e293b", marginTop: 6 },
+  termDef: { fontSize: 10, color: SLATE, marginTop: 1 },
+  localeNote: { marginTop: 16, fontSize: 9, color: "#94a3b8", textAlign: "center" },
 });
 
 function GuideDocument({ content }: { content: GuideContent }) {
@@ -158,6 +184,13 @@ function GuideDocument({ content }: { content: GuideContent }) {
         <Text style={styles.title}>How to use Yi Youth Academy</Text>
         <Text style={styles.laneLabel}>{safe(content.label)}</Text>
         <Text style={styles.tagline}>{safe(content.tagline)}</Text>
+
+        <View style={styles.whyBox} wrap={false}>
+          <Text style={styles.whyText}>{safe(content.whyItMatters)}</Text>
+          <Link src={absUrl(content.startHere.href)} style={styles.startLink}>
+            {`${safe(content.startHere.label)} ->`}
+          </Link>
+        </View>
 
         <View style={styles.journeyBox}>
           <Text style={styles.journeyLabel}>Your journey at a glance</Text>
@@ -219,12 +252,24 @@ function GuideDocument({ content }: { content: GuideContent }) {
           </View>
         )}
 
+        <View>
+          <Text style={styles.glossaryHeading}>Words to know</Text>
+          {GUIDE_GLOSSARY.map((t, i) => (
+            <View key={i} wrap={false}>
+              <Text style={styles.termWord}>{safe(t.term)}</Text>
+              <Text style={styles.termDef}>{safe(t.def)}</Text>
+            </View>
+          ))}
+        </View>
+
         <View style={styles.help}>
           <Text>
             <Text style={styles.helpLabel}>Need help? </Text>
             {safe(content.help)}
           </Text>
         </View>
+
+        <Text style={styles.localeNote}>{safe(PLANNED_LOCALE_NOTE)}</Text>
       </Page>
     </Document>
   );

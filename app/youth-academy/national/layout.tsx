@@ -18,6 +18,7 @@ const NAV_LINKS = [
   { href: "/youth-academy/national", label: "Dashboard" },
   { href: "/youth-academy/national/programs", label: "Programs" },
   { href: "/youth-academy/national/academies", label: "Academies" },
+  { href: "/youth-academy/guide", label: "Guide" },
 ];
 
 export default async function NationalLayout({

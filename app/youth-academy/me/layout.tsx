@@ -11,7 +11,7 @@
 
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Award, ClipboardList, GraduationCap, Home, MessagesSquare } from "lucide-react";
+import { Award, BookOpen, ClipboardList, GraduationCap, Home, MessagesSquare } from "lucide-react";
 import { getStudentSession } from "@/lib/yuva/auth/student-session";
 import { SignOutButton } from "@/components/yuva/student/sign-out-button";
 
@@ -74,6 +74,13 @@ export default async function StudentPortalLayout({
           >
             <MessagesSquare className="size-3.5" />
             Messages
+          </Link>
+          <Link
+            href="/youth-academy/guide"
+            className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-medium text-slate-200 transition-colors hover:bg-white/10 hover:text-white"
+          >
+            <BookOpen className="size-3.5" />
+            Guide
           </Link>
         </nav>
       </header>

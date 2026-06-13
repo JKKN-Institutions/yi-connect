@@ -9,7 +9,7 @@
  */
 
 import Link from "next/link";
-import { GraduationCap } from "lucide-react";
+import { BookOpen, GraduationCap } from "lucide-react";
 import { getYuvaAccess } from "@/lib/yuva/auth/yuva-access";
 import { Forbidden403 } from "@/app/youth-academy/_components/Forbidden403";
 
@@ -65,6 +65,13 @@ export default async function MentorLayout({
               className="hover:text-slate-900"
             >
               Public network
+            </Link>
+            <Link
+              href="/youth-academy/guide"
+              className="inline-flex items-center gap-1.5 hover:text-slate-900"
+            >
+              <BookOpen className="size-3.5" />
+              Guide
             </Link>
           </nav>
         </div>

@@ -6,7 +6,7 @@
  */
 
 import Link from "next/link";
-import { Building2, CalendarClock, Inbox, Users } from "lucide-react";
+import { BookOpen, Building2, CalendarClock, Inbox, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getYuvaAccess } from "@/lib/yuva/auth/yuva-access";
 import {
@@ -49,12 +49,20 @@ export default async function ChapterDashboardPage() {
             Cohort-based certificate programs for the Yi YUVA network.
           </p>
         </div>
-        <Button asChild variant="outline">
-          <Link href="/youth-academy/chapter/academies">
-            <Building2 className="size-4" />
-            Academy &amp; coordinator
-          </Link>
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button asChild variant="ghost">
+            <Link href="/youth-academy/guide">
+              <BookOpen className="size-4" />
+              Guide
+            </Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href="/youth-academy/chapter/academies">
+              <Building2 className="size-4" />
+              Academy &amp; coordinator
+            </Link>
+          </Button>
+        </div>
       </div>
 
       {academies.length === 0 ? (

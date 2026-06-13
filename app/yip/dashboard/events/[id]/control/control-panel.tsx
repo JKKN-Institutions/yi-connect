@@ -20,7 +20,9 @@ import {
   Pause,
   RotateCcw,
   SkipForward,
+  ChevronLeft,
   ChevronRight,
+  Undo2,
   Check,
   Clock,
   Users,
@@ -41,7 +43,7 @@ import { cn } from "@/lib/yip/utils";
 import { ROLE_LABELS, ROLE_COLORS, PARTY_COLORS } from "@/lib/yip/constants";
 import { useRealtimeEvent } from "@/lib/yip/hooks/use-realtime-event";
 import { useTimer } from "@/lib/yip/hooks/use-timer";
-import { advanceAgenda, startAgendaItem, skipAgendaItem, updateEventStatus, updateAgendaItemDuration, updateAgendaItemSubTimers } from "@/app/yip/actions/agenda";
+import { advanceAgenda, goToPreviousAgendaItem, resetAgenda, startAgendaItem, skipAgendaItem, updateEventStatus, updateAgendaItemDuration, updateAgendaItemSubTimers } from "@/app/yip/actions/agenda";
 import {
   getSubTimers,
   formatSubTimerSeconds,
@@ -93,6 +95,12 @@ interface ControlPanelProps {
   initialEvent: Event;
   initialAgendaItems: AgendaItem[];
   initialSpeakers: SpeakerWithParticipant[];
+  /**
+   * Chair (chapter_admin) or national/super-admin only. Gates the backward
+   * agenda controls (Previous / Reset), which rewind everyone's live screen
+   * and are therefore a stronger privilege than ordinary organising.
+   */
+  canControlAgendaBackward: boolean;
   stats: {
     totalParticipants: number;
     checkedIn: number;
@@ -126,6 +134,7 @@ export function ControlPanel({
   initialEvent,
   initialAgendaItems,
   initialSpeakers,
+  canControlAgendaBackward,
   stats,
 }: ControlPanelProps) {
   const router = useRouter();
@@ -142,6 +151,10 @@ export function ControlPanel({
     title: string;
     description: string;
     action: () => void;
+    /** Optional override for the confirm button label (default "Confirm"). */
+    confirmLabel?: string;
+    /** Render the confirm button in destructive (red) style. */
+    destructive?: boolean;
   }>({ open: false, title: "", description: "", action: () => {} });
   // Inline duration editing in the agenda sidebar
   const [editingDurationId, setEditingDurationId] = useState<string | null>(null);
@@ -290,6 +303,45 @@ export function ControlPanel({
       } else {
         toast.error(result.error);
       }
+    });
+  }
+
+  // Chair / national only. Reversible (it just moves the pointer back one
+  // step), so it fires directly without a confirmation dialog.
+  function handlePreviousAgenda() {
+    startTransition(async () => {
+      const result = await goToPreviousAgendaItem(eventId);
+      if (result.success) {
+        toast.success("Moved back to the previous agenda item");
+        router.refresh();
+      } else {
+        toast.error(result.error);
+      }
+    });
+  }
+
+  // Chair / national only. Destructive (rewinds the WHOLE agenda for every
+  // screen), so it confirms first via the shared dialog.
+  function handleResetAgenda() {
+    setConfirmDialog({
+      open: true,
+      title: "Reset the agenda?",
+      description:
+        "This sends the whole agenda back to the start — every screen (students, jury, projector) returns to the beginning. Votes and scores already recorded are kept; only the agenda position resets. Continue?",
+      confirmLabel: "Yes, reset agenda",
+      destructive: true,
+      action: () => {
+        startTransition(async () => {
+          const result = await resetAgenda(eventId);
+          if (result.success) {
+            toast.success("Agenda reset to the start");
+            router.refresh();
+          } else {
+            toast.error(result.error);
+          }
+          setConfirmDialog((prev) => ({ ...prev, open: false }));
+        });
+      },
     });
   }
 
@@ -659,7 +711,32 @@ export function ControlPanel({
                     <h2 className="text-2xl font-bold text-gray-900">
                       {currentAgendaItem.title}
                     </h2>
-                    <div className="flex shrink-0 gap-1.5">
+                    <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
+                      {/* Backward controls — chair / national only. Rendered
+                          as cautious secondary actions vs the primary Next. */}
+                      {canControlAgendaBackward && (
+                        <>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={isPending}
+                            onClick={handlePreviousAgenda}
+                          >
+                            <ChevronLeft className="size-4" />
+                            Previous
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={isPending}
+                            onClick={handleResetAgenda}
+                            className="border-red-300 text-red-700 hover:bg-red-50 hover:text-red-800"
+                          >
+                            <Undo2 className="size-4" />
+                            Reset
+                          </Button>
+                        </>
+                      )}
                       <Button
                         variant="outline"
                         size="sm"
@@ -1395,10 +1472,13 @@ export function ControlPanel({
               Cancel
             </Button>
             <Button
+              variant={confirmDialog.destructive ? "destructive" : "default"}
               disabled={isPending}
               onClick={confirmDialog.action}
             >
-              {isPending ? "Processing..." : "Confirm"}
+              {isPending
+                ? "Processing..."
+                : confirmDialog.confirmLabel ?? "Confirm"}
             </Button>
           </DialogFooter>
         </DialogContent>

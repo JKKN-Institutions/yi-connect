@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/yip/supabase/server";
 import { getEvent } from "@/app/yip/actions/events";
+import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
 import { ControlPanel } from "./control-panel";
 import { PositionsAssignmentCard } from "@/components/yip/positions-assignment-card";
@@ -29,6 +30,12 @@ export default async function ControlPage({
       <Forbidden403 reason="You don't have access to this event's live control panel. The event may have been deleted, or your role may not include this event's chapter or zone." />
     );
   }
+
+  // Backward agenda controls (Previous / Reset) are CHAIR / NATIONAL only.
+  // Ordinary chapter organisers can advance the agenda but not rewind it.
+  const access = await getYipEventAccess(id);
+  const canControlAgendaBackward =
+    access.role === "super_admin" || access.role === "chapter_admin";
 
   // Fetch agenda items
   const { data: agendaItems } = await supabase
@@ -100,6 +107,7 @@ export default async function ControlPage({
         initialEvent={event}
         initialAgendaItems={agendaItems ?? []}
         initialSpeakers={currentSpeakers ?? []}
+        canControlAgendaBackward={canControlAgendaBackward}
         stats={{
           totalParticipants: participantRes.count ?? 0,
           checkedIn: checkedInRes.count ?? 0,

@@ -97,7 +97,7 @@ type Participant = {
   full_name: string;
   parliament_role: string | null;
   party_side: string | null;
-  school_name: string;
+  // No school_name — jurors must never receive it (school-blind scoring).
   ministry?: string | null;
   constituency_name?: string | null;
   serial_no?: number | null;

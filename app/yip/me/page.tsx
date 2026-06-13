@@ -27,6 +27,7 @@ import {
   FileText,
   ChevronRight,
   Megaphone,
+  Gavel,
   Phone,
   Mail,
   UserRound,
@@ -248,6 +249,7 @@ export default async function ParticipantPage() {
   const side = participant.party_side as "ruling" | "opposition" | null;
   const roleLabel = role ? ROLE_LABELS[role] ?? role : null;
   const roleGradient = role ? ROLE_GRADIENTS[role] ?? "from-gray-500 to-gray-400" : "";
+  const isPresiding = role === "speaker" || role === "deputy_speaker";
   const partyGradient = side ? PARTY_GRADIENTS[side] : "";
 
   return (
@@ -368,6 +370,27 @@ export default async function ParticipantPage() {
 
       {/* ─── VOTE NOW (live card) ──────────────────────────────────── */}
       <VoteNowCard eventId={event.id} participantId={participant.id} />
+
+      {/* ─── PRESIDING OFFICER — MOTION QUEUE (Speaker / Deputy Speaker) ─ */}
+      {isPresiding && (
+        <Link href="/yip/me/speaker" className="block">
+          <Card className="border-amber-300/60 overflow-hidden transition-shadow hover:shadow-md">
+            <div className="h-1 w-full bg-gradient-to-r from-amber-500 to-yellow-400" />
+            <CardContent className="flex items-center gap-3 pt-4 pb-4">
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-amber-100">
+                <Gavel className="size-5 text-amber-700" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h2 className="text-sm font-bold text-gray-900">Preside — Motion Queue</h2>
+                <p className="text-xs text-gray-500">
+                  Admit, reject and put motions to the House
+                </p>
+              </div>
+              <ChevronRight className="size-5 shrink-0 text-gray-400" />
+            </CardContent>
+          </Card>
+        </Link>
+      )}
 
       {/* ─── YOUR YUVA & ORGANISER CONTACT ─────────────────────────── */}
       {(contacts.yuva.length > 0 || contacts.organisers.length > 0) && (

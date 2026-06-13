@@ -17,6 +17,8 @@ import {
   BookOpen,
 } from "lucide-react";
 import { cn } from "@/lib/yip/utils";
+import { GuideLauncher } from "@/components/yip/guide";
+import { GUIDES } from "@/lib/yip/guide/content";
 
 const navItems = [
   { label: "My Events", href: "/yip/dashboard", icon: CalendarDays },
@@ -37,8 +39,16 @@ export function DashboardShell({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
 
+  // Event-scoped organiser deep links ("Open Allocation" etc.) need the current
+  // event id; derive it from the URL so one launcher works on every page.
+  const eventMatch = pathname.match(/\/events\/([^/]+)/);
+  const eventId = eventMatch ? eventMatch[1] : null;
+
   return (
     <div className="flex min-h-screen bg-[#FEFCF6]">
+      {/* Floating Help — organiser lane. Bottom-left (bug-reporter FAB is right). */}
+      <GuideLauncher guide={GUIDES.organiser} eventId={eventId} variant="fab" />
+
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div
@@ -137,6 +147,13 @@ export function DashboardShell({
                   </Link>
                 );
               })}
+              {/* Guide — opens the organiser lane drawer (not a route). */}
+              <GuideLauncher
+                guide={GUIDES.organiser}
+                eventId={eventId}
+                variant="navlink"
+                className="rounded-xl px-3 py-3 text-[13px] text-[#1a1a3e]/50 hover:bg-[#1a1a3e]/[0.03] hover:text-[#1a1a3e]/80"
+              />
             </div>
           </nav>
 

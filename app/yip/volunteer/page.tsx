@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import { getYipSession } from "@/lib/yip/auth/yip-session";
 import { KioskClient } from "./kiosk-client";
+import { GuideLauncher } from "@/components/yip/guide";
+import { GUIDES } from "@/lib/yip/guide/content";
 
 export default async function VolunteerKioskPage() {
   const session = await getYipSession();
@@ -30,12 +32,20 @@ export default async function VolunteerKioskPage() {
             <p className="text-sm font-semibold text-[#1a1a3e]">Vote Kiosk</p>
             <p className="text-xs text-[#1a1a3e]/45">{session.name}</p>
           </div>
+          <GuideLauncher
+            guide={GUIDES.volunteer}
+            variant="navlink"
+            className="ml-auto w-auto rounded-lg px-3 py-2 text-[#FF9933] hover:bg-[#FF9933]/10 hover:text-[#FF9933]"
+          />
         </div>
       </header>
 
       <main className="mx-auto w-full max-w-md flex-1 px-4 py-5">
         <KioskClient eventId={session.eventId} volunteerName={session.name} />
       </main>
+
+      {/* Floating Help — volunteer lane */}
+      <GuideLauncher guide={GUIDES.volunteer} variant="fab" />
     </div>
   );
 }

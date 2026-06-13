@@ -53,6 +53,14 @@ export interface CertificatePdfProps {
   signatories: { label: string; name?: string | null }[];
 }
 
+// Yi Youth Academy program brand lockup. Sourced as an absolute HTTPS URL
+// (the same pattern the per-academy `logoUrl` already uses successfully in
+// this renderer) so it survives Vercel serverless — `public/` filesystem
+// reads are not reliably traced into server functions.
+const BRAND_LOGO_URL = `${
+  process.env.NEXT_PUBLIC_APP_URL ?? "https://yi-connect-app.vercel.app"
+}/youth-academy/academy-logo.jpg`;
+
 // ─── STYLES (dummy design — navy/amber Yi palette) ─────────────────
 const NAVY = "#0f2557";
 const AMBER = "#F5A623";
@@ -87,6 +95,13 @@ const styles = StyleSheet.create({
     height: 200,
     opacity: 0.05,
     objectFit: "contain",
+  },
+  brandMast: {
+    width: 150,
+    height: 74,
+    objectFit: "contain",
+    alignSelf: "center",
+    marginBottom: 6,
   },
   headerRow: {
     flexDirection: "row",
@@ -291,6 +306,9 @@ export function CertificatePDF(props: CertificatePdfProps) {
             {props.logoUrl ? (
               <Image src={props.logoUrl} style={styles.watermark} fixed />
             ) : null}
+
+            {/* Program brand masthead (Yi Youth Academy lockup) */}
+            <Image src={BRAND_LOGO_URL} style={styles.brandMast} />
 
             {/* Placeholder zone: academy display name + logo */}
             <View style={styles.headerRow}>

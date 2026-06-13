@@ -9,6 +9,7 @@
  * zero public mentors ⇒ branded empty state.
  */
 
+import Image from "next/image";
 import Link from "next/link";
 import { ArrowLeft, Users } from "lucide-react";
 import { YUVA_APP, ROLE_MENTOR } from "@/lib/yuva/constants";
@@ -100,10 +101,17 @@ export default async function PublicMentorNetworkPage() {
         <div className="mx-auto max-w-6xl px-6 py-10">
           <Link
             href="/youth-academy"
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-slate-900"
+            className="inline-flex items-center gap-2 text-slate-600 transition-opacity hover:opacity-80"
+            aria-label="Back to Yi Youth Academy"
           >
             <ArrowLeft className="size-4" />
-            Yi Youth Academy
+            <Image
+              src="/youth-academy/academy-logo.jpg"
+              alt="Yi Youth Academy"
+              width={1200}
+              height={593}
+              className="h-9 w-auto"
+            />
           </Link>
           <PartnerLogos variant="onLight" className="mt-4" />
           <h1 className="mt-4 text-3xl font-bold text-slate-900 sm:text-4xl">

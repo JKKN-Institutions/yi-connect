@@ -9,6 +9,7 @@
  * active-academies showcase → Mentor YUVA Network link card.
  */
 
+import Image from "next/image";
 import Link from "next/link";
 import { GraduationCap, Sparkles, Users } from "lucide-react";
 import {
@@ -100,11 +101,20 @@ export default async function YouthAcademyLandingPage({
       {/* ── Hero ─────────────────────────────────────────────────────── */}
       <header className="bg-[#0f2557] text-white">
         <div className="mx-auto max-w-6xl px-6 py-16 sm:py-20">
-          <PartnerLogos variant="onDark" />
-          <h1 className="mt-5 max-w-3xl text-4xl font-bold leading-tight sm:text-5xl">
-            Yi Youth Academy
-          </h1>
-          <p className="mt-4 max-w-2xl text-lg text-slate-200">
+          {/* Academy brand mark — the logo carries the name visually; the
+              <h1> below is sr-only so the heading is not read twice. */}
+          <div className="inline-flex rounded-2xl bg-white px-6 py-4 shadow-sm">
+            <Image
+              src="/youth-academy/academy-logo.jpg"
+              alt="Yi Youth Academy"
+              width={1200}
+              height={593}
+              priority
+              className="h-14 w-auto sm:h-20"
+            />
+          </div>
+          <h1 className="sr-only">Yi Youth Academy</h1>
+          <p className="mt-6 max-w-2xl text-lg text-slate-200">
             A thought, leadership and action space inside your campus —
             cohort-based certificate programs in Entrepreneurship, Innovation
             &amp; Learning, delivered by Yi chapters and the Mentor YUVA
@@ -125,6 +135,13 @@ export default async function YouthAcademyLandingPage({
               <Users className="size-4" />
               Meet our mentors
             </Link>
+          </div>
+          {/* "An initiative of" — governing-body endorsement strip. */}
+          <div className="mt-12">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-300/80">
+              An initiative of
+            </p>
+            <PartnerLogos variant="onDark" />
           </div>
         </div>
       </header>

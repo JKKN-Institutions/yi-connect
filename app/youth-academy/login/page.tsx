@@ -13,8 +13,8 @@
  * portal (signature verified server-side, not just cookie presence).
  */
 
+import Image from "next/image";
 import { redirect } from "next/navigation";
-import { GraduationCap } from "lucide-react";
 import { GoogleOAuthButton } from "@/lib/auth/google-oauth-button";
 import { getStudentSession } from "@/lib/yuva/auth/student-session";
 import { StudentLoginForm } from "@/components/yuva/student/login-form";
@@ -39,13 +39,16 @@ export default async function YouthAcademyLoginPage({
     <main className="min-h-screen bg-slate-50 px-6 py-12">
       <div className="mx-auto w-full max-w-md space-y-6">
         <div className="text-center">
-          <span className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-[#0f2557] text-white">
-            <GraduationCap className="size-6" />
-          </span>
-          <h1 className="mt-3 text-2xl font-bold text-slate-900">
-            Yi Youth Academy
-          </h1>
-          <p className="mt-1 text-sm text-slate-500">Sign in to continue</p>
+          <Image
+            src="/youth-academy/academy-logo.jpg"
+            alt="Yi Youth Academy"
+            width={1200}
+            height={593}
+            priority
+            className="mx-auto h-16 w-auto"
+          />
+          <h1 className="sr-only">Yi Youth Academy</h1>
+          <p className="mt-3 text-sm text-slate-500">Sign in to continue</p>
         </div>
 
         {reason === "session" && (

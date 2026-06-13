@@ -8,6 +8,7 @@ import {
   ChevronDownIcon,
   LightbulbIcon,
   ArrowRightIcon,
+  ExternalLinkIcon,
 } from "lucide-react"
 
 import { cn } from "@/lib/yip/utils"
@@ -15,11 +16,17 @@ import { Button } from "@/components/yip/ui/button"
 import {
   type PersonaGuide,
   type GuideSection,
+  type GuideStep,
   resolveGuideHref,
 } from "@/lib/yip/guide/types"
 
 /**
  * GuideDrawer — the slide-over reading panel for the in-app adaptive guide.
+ *
+ * Renders the per-step model: each section is a list of step cards, and every
+ * step that has a `link` shows its own "Take me there →" button (event-scoped
+ * links hide when no event is in context). A header link opens the full guide
+ * page (/yip/guide) for the same persona.
  *
  * Responsive behaviour:
  *  - Desktop (>= sm): a right-anchored, full-height panel ~440px wide that
@@ -54,6 +61,66 @@ function renderInline(text: string): React.ReactNode {
   )
 }
 
+function StepCard({
+  step,
+  index,
+  eventId,
+  onNavigate,
+}: {
+  step: GuideStep
+  index: number
+  eventId?: string | null
+  onNavigate: () => void
+}) {
+  // Event-scoped links hide when no event is in context.
+  const href = step.link ? resolveGuideHref(step.link.href, eventId) : null
+
+  return (
+    <li className="flex gap-3">
+      <span
+        aria-hidden
+        className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-[#FF9933]/15 text-xs font-semibold text-[#b35e00]"
+      >
+        {index + 1}
+      </span>
+      <div className="min-w-0 flex-1 space-y-2">
+        <p className="text-[0.9rem] font-medium leading-relaxed text-foreground">
+          {renderInline(step.action)}
+        </p>
+        {step.detail && (
+          <p className="text-[0.85rem] leading-relaxed text-muted-foreground">
+            {renderInline(step.detail)}
+          </p>
+        )}
+        {step.tip && (
+          <div className="flex gap-2.5 rounded-lg bg-[#138808]/8 px-3 py-2.5">
+            <LightbulbIcon
+              aria-hidden
+              className="mt-0.5 size-4 shrink-0 text-[#138808]"
+            />
+            <span className="text-[0.85rem] leading-relaxed text-foreground/90">
+              {renderInline(step.tip)}
+            </span>
+          </div>
+        )}
+        {step.link && href && (
+          <Button
+            size="lg"
+            variant="outline"
+            className="h-11 w-full justify-between border-[#FF9933]/40 text-[0.9rem] font-medium hover:bg-[#FF9933]/10 hover:text-foreground"
+            render={
+              <Link href={href} onClick={onNavigate}>
+                <span>{step.link.label}</span>
+                <ArrowRightIcon className="size-4 text-[#FF9933]" />
+              </Link>
+            }
+          />
+        )}
+      </div>
+    </li>
+  )
+}
+
 function SectionCard({
   section,
   eventId,
@@ -67,12 +134,6 @@ function SectionCard({
 }) {
   const [expanded, setExpanded] = React.useState(defaultOpen)
   const bodyId = `guide-section-${section.id}`
-
-  // Only links with a resolvable href survive (event-scoped links hide when no
-  // event is in context).
-  const links = (section.links ?? [])
-    .map((link) => ({ link, href: resolveGuideHref(link.href, eventId) }))
-    .filter((x): x is { link: (typeof x)["link"]; href: string } => x.href !== null)
 
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-card">
@@ -102,67 +163,19 @@ function SectionCard({
       {expanded && (
         <div
           id={bodyId}
-          className="space-y-4 border-t border-border/70 px-4 pb-4 pt-3.5"
+          className="border-t border-border/70 px-4 pb-4 pt-3.5"
         >
-          <p className="text-[0.9rem] leading-relaxed text-muted-foreground">
-            {renderInline(section.summary)}
-          </p>
-
-          {section.steps && section.steps.length > 0 && (
-            <ol className="space-y-2.5">
-              {section.steps.map((step, i) => (
-                <li key={i} className="flex gap-3">
-                  <span
-                    aria-hidden
-                    className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-[#FF9933]/15 text-xs font-semibold text-[#b35e00]"
-                  >
-                    {i + 1}
-                  </span>
-                  <span className="pt-0.5 text-[0.9rem] leading-relaxed text-foreground">
-                    {renderInline(step)}
-                  </span>
-                </li>
-              ))}
-            </ol>
-          )}
-
-          {section.tips && section.tips.length > 0 && (
-            <div className="space-y-2">
-              {section.tips.map((tip, i) => (
-                <div
-                  key={i}
-                  className="flex gap-2.5 rounded-lg bg-[#138808]/8 px-3 py-2.5"
-                >
-                  <LightbulbIcon
-                    aria-hidden
-                    className="mt-0.5 size-4 shrink-0 text-[#138808]"
-                  />
-                  <span className="text-[0.85rem] leading-relaxed text-foreground/90">
-                    {renderInline(tip)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {links.length > 0 && (
-            <div className="flex flex-col gap-2 pt-0.5">
-              {links.map(({ link, href }, i) => (
-                <Button
-                  key={i}
-                  size="lg"
-                  variant="outline"
-                  className="h-11 w-full justify-between border-[#FF9933]/40 text-[0.9rem] font-medium hover:bg-[#FF9933]/10 hover:text-foreground"
-                  render={
-                    <Link href={href} onClick={onNavigate}>
-                      <span>{link.label}</span>
-                      <ArrowRightIcon className="size-4 text-[#FF9933]" />
-                    </Link>
-                  }
-                />
-              ))}
-            </div>
-          )}
+          <ol className="space-y-4">
+            {section.steps.map((step, i) => (
+              <StepCard
+                key={i}
+                step={step}
+                index={i}
+                eventId={eventId}
+                onNavigate={onNavigate}
+              />
+            ))}
+          </ol>
         </div>
       )}
     </div>
@@ -261,17 +274,33 @@ export function GuideDrawer({ guide, eventId, open, onClose }: GuideDrawerProps)
             </Button>
           </div>
 
-          <Button
-            size="sm"
-            variant="outline"
-            className="mt-3.5 h-9 gap-2 border-[#FF9933]/40 bg-background/70 px-3 text-[0.8rem] font-medium hover:bg-[#FF9933]/10 hover:text-foreground"
-            render={
-              <a href={guide.pdfPath} download target="_blank" rel="noopener noreferrer">
-                <DownloadIcon className="size-3.5 text-[#FF9933]" />
-                Download PDF
-              </a>
-            }
-          />
+          <div className="mt-3.5 flex flex-wrap items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-9 gap-2 border-[#FF9933]/40 bg-background/70 px-3 text-[0.8rem] font-medium hover:bg-[#FF9933]/10 hover:text-foreground"
+              render={
+                <Link
+                  href={`/yip/guide?persona=${guide.persona}`}
+                  onClick={onClose}
+                >
+                  <ExternalLinkIcon className="size-3.5 text-[#FF9933]" />
+                  Open full guide
+                </Link>
+              }
+            />
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-9 gap-2 border-[#FF9933]/40 bg-background/70 px-3 text-[0.8rem] font-medium hover:bg-[#FF9933]/10 hover:text-foreground"
+              render={
+                <a href={guide.pdfPath} download target="_blank" rel="noopener noreferrer">
+                  <DownloadIcon className="size-3.5 text-[#FF9933]" />
+                  Download PDF
+                </a>
+              }
+            />
+          </div>
         </div>
 
         {/* Body */}

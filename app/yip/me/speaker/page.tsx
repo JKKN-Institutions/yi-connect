@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { getYipSession } from "@/lib/yip/auth/yip-session";
 import Link from "next/link";
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { ROLE_LABELS } from "@/lib/yip/constants";
@@ -29,8 +30,8 @@ function parseSession(raw: string | undefined): ParticipantSession | null {
 
 export default async function SpeakerPage() {
   const cookieStore = await cookies();
-  const session = parseSession(cookieStore.get("yip_session")?.value);
-  if (!session) redirect("/yip/join");
+  const session = await getYipSession();
+  if (!session || session.type !== "participant") redirect("/yip/join");
 
   const supabase = await createServiceClient();
   const { data: participant } = await supabase

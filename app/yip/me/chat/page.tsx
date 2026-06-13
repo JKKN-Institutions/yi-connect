@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { getYipSession } from "@/lib/yip/auth/yip-session";
 import { MessageSquare } from "lucide-react";
 import { CHAT_ENABLED } from "@/lib/yip/chat-config";
 import { ChatClient } from "./chat-client";
@@ -32,11 +33,10 @@ function parseSession(raw: string | undefined): ParticipantSession | null {
 }
 
 export default async function CommunityChatPage() {
-  const cookieStore = await cookies();
-  const session = parseSession(cookieStore.get("yip_session")?.value);
+  const session = await getYipSession();
 
   // The layout already gates this, but be defensive.
-  if (!session) redirect("/yip/join");
+  if (!session || session.type !== "participant") redirect("/yip/join");
 
   // When the flag is off, students see a placeholder only.
   if (!CHAT_ENABLED) {

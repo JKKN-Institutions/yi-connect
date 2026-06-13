@@ -1,6 +1,7 @@
 import "server-only";
 
 import { cookies } from "next/headers";
+import { createHmac, timingSafeEqual } from "node:crypto";
 
 /**
  * Server-side reader for the `yip_session` cookie used by access-code logins
@@ -23,12 +24,71 @@ export type YipSession =
   // roving kiosks — `id` is the volunteers.id row for this event.
   | { type: "volunteer"; id: string; name: string; eventId: string };
 
-export async function getYipSession(): Promise<YipSession | null> {
-  const store = await cookies();
-  const raw = store.get("yip_session")?.value;
-  if (!raw) return null;
+export const YIP_SESSION_COOKIE = "yip_session";
+
+export const YIP_SESSION_COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "lax" as const,
+  maxAge: 60 * 60 * 24, // 24 hours
+  path: "/",
+};
+
+/**
+ * HMAC signing key. A dedicated YIP_SESSION_SECRET if set, otherwise the
+ * always-present service-role key (server-only, high-entropy). The fallback
+ * means signing works with ZERO new env config — no missing-secret prod outage
+ * — while a dedicated secret can be introduced later for decoupling.
+ */
+function getSessionSecret(): string {
+  return (
+    process.env.YIP_SESSION_SECRET ||
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    ""
+  );
+}
+
+function hmac(json: string, secret: string): string {
+  return createHmac("sha256", secret).update(json).digest("base64url");
+}
+
+/**
+ * Serialize + HMAC-sign a session payload into the cookie value:
+ *   base64url(json) "." base64url(HMAC-SHA256(json, secret))
+ * Compatible with parseSessionCookie() in lib/supabase/middleware.ts, which
+ * coarse-decodes the left half for edge route gating — the authoritative
+ * signature verify is verifyYipSessionValue() / getYipSession() below.
+ */
+export function signYipSessionValue(
+  payload: YipSession,
+  secret: string = getSessionSecret()
+): string {
+  if (!secret) throw new Error("No YIP session signing key configured");
+  const json = JSON.stringify(payload);
+  return Buffer.from(json, "utf8").toString("base64url") + "." + hmac(json, secret);
+}
+
+/**
+ * Verify a signed cookie value. Returns the payload, or null on ANY failure
+ * (missing/forged signature, bad base64/JSON, wrong shape). Fail closed.
+ * LEGACY UNSIGNED cookies are REJECTED — signing is mandatory, so a tampered or
+ * hand-crafted cookie can no longer impersonate a participant/jury/volunteer.
+ */
+export function verifyYipSessionValue(
+  raw: string | undefined | null,
+  secret: string = getSessionSecret()
+): YipSession | null {
+  if (!raw || !secret) return null;
+  const dot = raw.indexOf(".");
+  if (dot <= 0 || dot === raw.length - 1) return null; // unsigned / malformed
+  const encoded = raw.slice(0, dot);
+  const providedSig = raw.slice(dot + 1);
   try {
-    const p = JSON.parse(raw);
+    const json = Buffer.from(encoded, "base64url").toString("utf8");
+    const a = Buffer.from(providedSig);
+    const b = Buffer.from(hmac(json, secret));
+    if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
+    const p = JSON.parse(json);
     if (
       (p?.type === "jury" || p?.type === "participant" || p?.type === "volunteer") &&
       p.id &&
@@ -41,6 +101,17 @@ export async function getYipSession(): Promise<YipSession | null> {
   } catch {
     return null;
   }
+}
+
+/** Mint + set the signed session cookie (next/headers jar). */
+export async function mintYipSession(payload: YipSession): Promise<void> {
+  const store = await cookies();
+  store.set(YIP_SESSION_COOKIE, signYipSessionValue(payload), YIP_SESSION_COOKIE_OPTIONS);
+}
+
+export async function getYipSession(): Promise<YipSession | null> {
+  const store = await cookies();
+  return verifyYipSessionValue(store.get(YIP_SESSION_COOKIE)?.value);
 }
 
 /**

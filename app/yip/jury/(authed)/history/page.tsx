@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { getYipSession } from "@/lib/yip/auth/yip-session";
 import {
   getScoresForJury,
   getSessionScoringParams,
@@ -27,11 +28,9 @@ function parseJurySession(raw: string | undefined): JurySession | null {
 }
 
 export default async function JuryHistoryPage() {
-  const cookieStore = await cookies();
-  const raw = cookieStore.get("yip_session")?.value;
-  const session = parseJurySession(raw);
+  const session = await getYipSession();
 
-  if (!session) {
+  if (!session || session.type !== "jury") {
     redirect("/yip/join");
   }
 

@@ -6,6 +6,7 @@ import {
   createServiceClient,
 } from "@/lib/yip/supabase/server";
 import { DEMO_ORG_EMAIL, DEMO_ORG_PASSWORD } from "@/lib/yip/demo-credentials";
+import { mintYipSession } from "@/lib/yip/auth/yip-session";
 
 type ActionResult<T = null> =
   | { success: true; data: T }
@@ -189,23 +190,12 @@ export async function loginAsStudent(
     return { success: false, error: "One-click login is only available for demo (mock) accounts." };
   }
 
-  const cookieStore = await cookies();
-  cookieStore.set(
-    "yip_session",
-    JSON.stringify({
-      type: "participant",
-      id: p.id,
-      name: p.full_name,
-      eventId: p.event_id,
-    }),
-    {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 60 * 60 * 24,
-      path: "/",
-    }
-  );
+  await mintYipSession({
+    type: "participant",
+    id: p.id,
+    name: p.full_name,
+    eventId: p.event_id,
+  });
 
   return { success: true, data: { redirect: "/me" } };
 }
@@ -227,23 +217,12 @@ export async function loginAsJury(
     return { success: false, error: "One-click login is only available for demo (mock) accounts." };
   }
 
-  const cookieStore = await cookies();
-  cookieStore.set(
-    "yip_session",
-    JSON.stringify({
-      type: "jury",
-      id: j.id,
-      name: j.jury_name,
-      eventId: j.event_id,
-    }),
-    {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 60 * 60 * 24,
-      path: "/",
-    }
-  );
+  await mintYipSession({
+    type: "jury",
+    id: j.id,
+    name: j.jury_name,
+    eventId: j.event_id,
+  });
 
   return { success: true, data: { redirect: "/jury" } };
 }

@@ -9,6 +9,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { signYipSessionValue } from '@/lib/yip/auth/yip-session';
 
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
@@ -239,7 +240,7 @@ async function setModuleCookies(
       .single();
 
     if (yipParticipant) {
-      response.cookies.set('yip_session', JSON.stringify({
+      response.cookies.set('yip_session', signYipSessionValue({
         type: 'participant',
         id: yipParticipant.id,
         name: yipParticipant.full_name,

@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isPlatformSuperAdmin } from "@/lib/yi/auth/yi-directory-roles";
+import { getYipSession } from "@/lib/yip/auth/yip-session";
 
 function parseSession(raw: string | undefined): Record<string, unknown> | null {
   if (!raw) return null;
@@ -44,7 +45,7 @@ export default async function SmartHomePage() {
   if (yifuture?.type === "mentor") redirect("/yi-future/mentor");
   if (yifuture?.type === "jury") redirect("/yi-future/jury");
 
-  const yip = parseSession(cookieStore.get("yip_session")?.value);
+  const yip = await getYipSession();
   if (yip?.type === "participant") redirect("/yip/me");
   if (yip?.type === "jury") redirect("/yip/jury");
 

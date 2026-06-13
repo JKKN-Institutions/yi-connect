@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { getYipSession } from "@/lib/yip/auth/yip-session";
 import Link from "next/link";
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { getMinistryDesk } from "@/app/yip/actions/ministry";
@@ -32,8 +33,8 @@ const MINISTRY_ROLES = [
 
 export default async function MinistryPage() {
   const cookieStore = await cookies();
-  const session = parseSession(cookieStore.get("yip_session")?.value);
-  if (!session) redirect("/yip/join");
+  const session = await getYipSession();
+  if (!session || session.type !== "participant") redirect("/yip/join");
 
   const supabase = await createServiceClient();
   const { data: participant } = await supabase

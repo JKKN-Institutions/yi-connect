@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { getYipSession } from "@/lib/yip/auth/yip-session";
 import Link from "next/link";
 import { Badge } from "@/components/yip/ui/badge";
 import { Card, CardContent } from "@/components/yip/ui/card";
@@ -36,10 +37,8 @@ function parseSession(raw: string | undefined): ParticipantSession | null {
 }
 
 export default async function JourneyPage() {
-  const cookieStore = await cookies();
-  const raw = cookieStore.get("yip_session")?.value;
-  const session = parseSession(raw);
-  if (!session) redirect("/yip/join");
+  const session = await getYipSession();
+  if (!session || session.type !== "participant") redirect("/yip/join");
 
   const personId = await getPersonIdForParticipant(session.id);
   if (!personId) {

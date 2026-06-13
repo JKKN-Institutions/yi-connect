@@ -1,8 +1,8 @@
 "use server";
 
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient, createServiceClient } from "@/lib/yip/supabase/server";
+import { mintYipSession } from "@/lib/yip/auth/yip-session";
 import { logAuditAction } from "@/lib/yip/audit/log-action";
 
 // ─── Access Code Validation (unauthenticated) ──────────────────────
@@ -63,24 +63,12 @@ export async function validateAccessCode(
     .single();
 
   if (participant && !pError) {
-    // Set session cookie
-    const cookieStore = await cookies();
-    cookieStore.set(
-      "yip_session",
-      JSON.stringify({
-        type: "participant",
-        id: participant.id,
-        name: participant.full_name,
-        eventId: participant.event_id,
-      }),
-      {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        maxAge: 60 * 60 * 24, // 24 hours
-        path: "/",
-      }
-    );
+    await mintYipSession({
+      type: "participant",
+      id: participant.id,
+      name: participant.full_name,
+      eventId: participant.event_id,
+    });
 
     return {
       type: "participant",
@@ -112,23 +100,12 @@ export async function validateAccessCode(
     }
 
     // Set session cookie
-    const cookieStore = await cookies();
-    cookieStore.set(
-      "yip_session",
-      JSON.stringify({
-        type: "jury",
-        id: jury.id,
-        name: jury.jury_name,
-        eventId: jury.event_id,
-      }),
-      {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        maxAge: 60 * 60 * 24, // 24 hours
-        path: "/",
-      }
-    );
+    await mintYipSession({
+      type: "jury",
+      id: jury.id,
+      name: jury.jury_name,
+      eventId: jury.event_id,
+    });
 
     return {
       type: "jury",
@@ -149,23 +126,12 @@ export async function validateAccessCode(
     .single();
 
   if (volunteer && !vError) {
-    const cookieStore = await cookies();
-    cookieStore.set(
-      "yip_session",
-      JSON.stringify({
-        type: "volunteer",
-        id: volunteer.id,
-        name: volunteer.full_name,
-        eventId: volunteer.event_id,
-      }),
-      {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        maxAge: 60 * 60 * 24, // 24 hours
-        path: "/",
-      }
-    );
+    await mintYipSession({
+      type: "volunteer",
+      id: volunteer.id,
+      name: volunteer.full_name,
+      eventId: volunteer.event_id,
+    });
 
     return {
       type: "volunteer",
@@ -240,23 +206,12 @@ export async function juryLoginByEmail(
 
   // Set the SAME session cookie shape as access-code login so /yip/jury/*
   // is agnostic to login method.
-  const cookieStore = await cookies();
-  cookieStore.set(
-    "yip_session",
-    JSON.stringify({
-      type: "jury",
-      id: jury.id,
-      name: jury.jury_name,
-      eventId: jury.event_id,
-    }),
-    {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 60 * 60 * 24, // 24 hours
-      path: "/",
-    }
-  );
+  await mintYipSession({
+    type: "jury",
+    id: jury.id,
+    name: jury.jury_name,
+    eventId: jury.event_id,
+  });
 
   await logAuditAction({
     action_type: "login",

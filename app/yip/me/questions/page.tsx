@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { getYipSession } from "@/lib/yip/auth/yip-session";
 import { QuestionsClient, type ParticipantSession } from "./questions-client";
 
 // The yip_session cookie is httpOnly (set by app/yip/actions/auth.ts), so it
@@ -25,10 +26,9 @@ function parseSession(raw: string | undefined): ParticipantSession | null {
 }
 
 export default async function QuestionsPage() {
-  const cookieStore = await cookies();
-  const session = parseSession(cookieStore.get("yip_session")?.value);
+  const session = await getYipSession();
 
-  if (!session) {
+  if (!session || session.type !== "participant") {
     redirect("/yip/join");
   }
 

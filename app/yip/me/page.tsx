@@ -28,6 +28,7 @@ import {
   ChevronRight,
   Megaphone,
   Phone,
+  Mail,
   UserRound,
   HeartHandshake,
 } from "lucide-react";
@@ -368,15 +369,15 @@ export default async function ParticipantPage() {
       {/* ─── VOTE NOW (live card) ──────────────────────────────────── */}
       <VoteNowCard eventId={event.id} participantId={participant.id} />
 
-      {/* ─── YOUR YUVA & Yi CONTACT (Change Request §3) ────────────── */}
-      {(contacts.yuva.length > 0 || contacts.yi) && (
+      {/* ─── YOUR YUVA & ORGANISER CONTACT ─────────────────────────── */}
+      {(contacts.yuva.length > 0 || contacts.organisers.length > 0) && (
         <Card className="border-teal-200/50 overflow-hidden">
           <div className="h-1 w-full bg-gradient-to-r from-teal-400 to-emerald-400" />
           <CardContent className="pt-4 pb-4">
             <div className="flex items-center gap-2 mb-3">
               <HeartHandshake className="size-5 text-teal-600" />
               <h2 className="text-sm font-bold text-gray-900">
-                Your YUVA &amp; Yi Contact
+                Your YUVA &amp; Organiser Contact
               </h2>
             </div>
 
@@ -391,14 +392,16 @@ export default async function ParticipantPage() {
                 />
               ))}
 
-              {contacts.yi && (contacts.yi.chair_name || contacts.yi.chair_mobile) && (
+              {contacts.organisers.map((o, idx) => (
                 <ContactRow
-                  name={contacts.yi.chair_name ?? "Yi Chapter Chair"}
-                  sub={`Yi Chair${contacts.yi.chapter_name ? ` · ${contacts.yi.chapter_name}` : ""}`}
-                  phone={contacts.yi.chair_mobile}
+                  key={`org-${idx}`}
+                  name={o.organiser_name}
+                  sub={`Chapter Organiser${o.chapter_name ? ` · ${o.chapter_name}` : ""}`}
+                  phone={o.organiser_phone}
+                  email={o.organiser_email}
                   accent="orange"
                 />
-              )}
+              ))}
             </div>
           </CardContent>
         </Card>
@@ -931,17 +934,19 @@ function DetailItem({
   );
 }
 
-// ─── Contact Row (YUVA / Yi chair, tap-to-call) ──────────────────
+// ─── Contact Row (YUVA / organiser, tap-to-call or email) ────────
 
 function ContactRow({
   name,
   sub,
   phone,
+  email,
   accent,
 }: {
   name: string;
   sub: string;
-  phone: string | null;
+  phone?: string | null;
+  email?: string | null;
   accent: "teal" | "orange";
 }) {
   const ring =
@@ -970,8 +975,16 @@ function ContactRow({
           <Phone className="size-4" />
           Call
         </a>
+      ) : email ? (
+        <a
+          href={`mailto:${email}`}
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 hover:bg-blue-100 transition-colors"
+        >
+          <Mail className="size-4" />
+          Email
+        </a>
       ) : (
-        <span className="shrink-0 text-[11px] text-gray-400">No phone</span>
+        <span className="shrink-0 text-[11px] text-gray-400">No contact</span>
       )}
     </div>
   );

@@ -12,7 +12,7 @@ import { createServiceClient } from "@/lib/yip/supabase/server";
  * data. Mirrors how the dashboard page itself reads via createServiceClient.
  */
 
-// ─── YUVA + Yi contact ───────────────────────────────────────────
+// ─── YUVA + chapter-organiser contact ────────────────────────────
 
 export type MeYuvaContact = {
   /** "party" | "committee" — which assignment matched the student */
@@ -23,16 +23,16 @@ export type MeYuvaContact = {
   volunteer_phone: string | null;
 };
 
-export type MeYiContact = {
+export type MeOrganiserContact = {
   chapter_name: string | null;
-  chair_name: string | null;
-  chair_mobile: string | null;
-  chair_email: string | null;
+  organiser_name: string;
+  organiser_phone: string | null;
+  organiser_email: string | null;
 };
 
 export type MeContactInfo = {
   yuva: MeYuvaContact[];
-  yi: MeYiContact | null;
+  organisers: MeOrganiserContact[];
 };
 
 // yip.yuva_assignments is not in the generated DB types yet — a narrow local
@@ -64,7 +64,7 @@ function yuvaTable(supabase: ServiceClient): AnyTable {
 
 /**
  * The YUVA volunteer(s) handling THIS student's party and/or committee, plus
- * the event's chapter (Yi) chair contact when available.
+ * the event chapter's organiser contact(s) when available.
  *
  * Matching:
  *   participant.party_id        → yuva_assignments.party_id
@@ -84,7 +84,7 @@ export async function getMeContacts(
     .eq("id", participantId)
     .maybeSingle();
 
-  if (!participant) return { yuva: [], yi: null };
+  if (!participant) return { yuva: [], organisers: [] };
 
   // 2. YUVA assignments for the participant's event, then keep only the rows
   //    that match the student's own party_id or committee_name.
@@ -134,47 +134,56 @@ export async function getMeContacts(
     });
   }
 
-  // 3. Yi / chapter chair contact (cross-schema read into yi.chapters via the
-  //    event's yi_chapter_id). Degrade gracefully when not linked.
-  let yi: MeYiContact | null = null;
+  // 3. Chapter ORGANISER contact(s) — the canonical chapter contact for a
+  //    student (replaces the chapter chair; product-owner decision 2026-06-13).
+  //    Sourced from yi_directory.role_assignments (app='yip',
+  //    role='chapter_organizer', is_active) for the event's chapter, joined to
+  //    yi_directory.people for name + email + phone. Mirrors listChapterRoles
+  //    in app/yip/actions/chapter-roles.ts. Degrades to [] when none provisioned.
+  let organisers: MeOrganiserContact[] = [];
 
   const { data: event } = await supabase
     .from("events")
-    .select("yi_chapter_id")
+    .select("chapter_name")
     .eq("id", participant.event_id)
     .maybeSingle();
 
-  const chapterId = (event as { yi_chapter_id?: string | null } | null)
-    ?.yi_chapter_id;
+  const chapterName = (event as { chapter_name?: string | null } | null)
+    ?.chapter_name;
 
-  if (chapterId) {
-    const { data: chapter } = await supabase
-      .schema("yi")
-      .from("chapters")
-      .select("name, chair_name, chair_mobile, chair_email")
-      .eq("id", chapterId)
-      .maybeSingle();
+  if (chapterName) {
+    const { data: roleRows } = await supabase
+      .schema("yi_directory")
+      .from("role_assignments")
+      .select("person:people!inner(full_name, email, phone)")
+      .eq("app", "yip")
+      .eq("role", "chapter_organizer")
+      .eq("yi_chapter", chapterName)
+      .eq("is_active", true);
 
-    if (chapter) {
-      const c = chapter as {
-        name: string | null;
-        chair_name: string | null;
-        chair_mobile: string | null;
-        chair_email: string | null;
-      };
-      // Only surface a Yi contact card if at least a name or a contact exists.
-      if (c.chair_name || c.chair_mobile || c.chair_email) {
-        yi = {
-          chapter_name: c.name,
-          chair_name: c.chair_name,
-          chair_mobile: c.chair_mobile,
-          chair_email: c.chair_email,
+    organisers = (roleRows ?? [])
+      .map((r) => {
+        const p = (
+          r as unknown as {
+            person: {
+              full_name: string | null;
+              email: string | null;
+              phone: string | null;
+            };
+          }
+        ).person;
+        return {
+          chapter_name: chapterName,
+          organiser_name: p?.full_name?.trim() || "Chapter Organiser",
+          organiser_phone: p?.phone ?? null,
+          organiser_email: p?.email ?? null,
         };
-      }
-    }
+      })
+      // Keep only rows with at least one reachable channel (phone or email).
+      .filter((o) => o.organiser_phone || o.organiser_email);
   }
 
-  return { yuva, yi };
+  return { yuva, organisers };
 }
 
 // ─── Privacy-safe party roster ───────────────────────────────────

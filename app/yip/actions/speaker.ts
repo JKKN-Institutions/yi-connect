@@ -96,7 +96,10 @@ export async function speakerAdmitMotion(
       speaker_ruling: "admitted",
       speaker_note: speakerNote ?? null,
       ruled_at: new Date().toISOString(),
-      ruled_by: r.speakerId,
+      // motions.ruled_by FKs to auth.users(id); a participant (Speaker) has no
+      // auth user, so writing the participant id violates the FK. Leave null —
+      // the ruling is recorded via speaker_ruling / speaker_note / ruled_at.
+      ruled_by: null,
     })
     .eq("id", motionId)
     .eq("event_id", eventId);

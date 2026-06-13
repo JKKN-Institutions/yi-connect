@@ -5,13 +5,10 @@ import { redirect } from "next/navigation";
 import { createClient, createServiceClient } from "@/lib/yi-future/supabase/server";
 import type { ActionResult } from "./editions";
 import { TEAM_SIZE_MAX } from "@/lib/yi-future/constants";
+import { requireFutureAdmin } from "@/lib/yi-future/auth/require-access";
 
 async function requireAuth(): Promise<void> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/yi-future/login");
+  await requireFutureAdmin();
 }
 
 // ─── ADD MEMBER ─────────────────────────────────────────────────────

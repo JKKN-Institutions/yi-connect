@@ -6,16 +6,13 @@ import { createClient, createServiceClient } from "@/lib/yi-future/supabase/serv
 import type { Database } from "@/types/yi-future/database";
 import type { ActionResult } from "./editions";
 import { CORE_TEAM_ROLES } from "@/lib/yi-future/constants";
+import { requireFutureAdmin } from "@/lib/yi-future/auth/require-access";
 
 type CoreTeamRole = Database["future"]["Enums"]["user_role"];
 
 async function requireAuth(): Promise<string> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/yi-future/login");
-  return user.id;
+  const access = await requireFutureAdmin();
+  return access.userId;
 }
 
 function isCoreRole(x: string): x is CoreTeamRole {

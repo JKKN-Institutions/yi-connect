@@ -5,13 +5,32 @@ import { redirect } from "next/navigation";
 import { createClient, createServiceClient } from "@/lib/yi-future/supabase/server";
 import { generateAccessCode } from "@/lib/yi-future/access-code";
 import type { ActionResult } from "./editions";
+import {
+  requireFutureAdmin,
+  requireChapterAdmin,
+} from "@/lib/yi-future/auth/require-access";
 
 async function requireAuth(): Promise<void> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/yi-future/login");
+  await requireFutureAdmin();
+}
+
+/**
+ * Chapter-scoped gate for takeover-grade actions (regenerate access code,
+ * delete) — a chair of chapter A must not act on chapter B's delegate. Looks
+ * up the target delegate's chapter, then requires admin of THAT chapter (or
+ * national). Fails closed: a delegate with no chapter resolves to null → deny.
+ */
+async function requireDelegateChapterAdmin(id: string): Promise<void> {
+  const svc = await createServiceClient();
+  const { data } = await svc
+    .schema("future")
+    .from("delegates")
+    .select("chapter_id")
+    .eq("id", id)
+    .maybeSingle();
+  await requireChapterAdmin(
+    (data as { chapter_id: string | null } | null)?.chapter_id ?? null
+  );
 }
 
 async function uniqueAccessCode(
@@ -143,7 +162,7 @@ export async function updateDelegate(
 
 // ─── REGENERATE ACCESS CODE ─────────────────────────────────────────
 export async function regenerateAccessCode(id: string): Promise<ActionResult> {
-  await requireAuth();
+  await requireDelegateChapterAdmin(id);
   const svc = await createServiceClient();
   const access_code = await uniqueAccessCode(svc);
   const { error } = await svc
@@ -158,7 +177,7 @@ export async function regenerateAccessCode(id: string): Promise<ActionResult> {
 
 // ─── DELETE DELEGATE ────────────────────────────────────────────────
 export async function deleteDelegate(id: string): Promise<ActionResult> {
-  await requireAuth();
+  await requireDelegateChapterAdmin(id);
   const svc = await createServiceClient();
   // Guard: don't delete if on a team (FK has cascade but we'd rather ask the admin to remove first)
   const { count } = await svc

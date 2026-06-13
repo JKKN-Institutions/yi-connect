@@ -5,16 +5,13 @@ import { redirect } from "next/navigation";
 import { createClient, createServiceClient } from "@/lib/yi-future/supabase/server";
 import type { Database } from "@/types/yi-future/database";
 import type { ActionResult } from "./editions";
+import { requireFutureAdmin } from "@/lib/yi-future/auth/require-access";
 
 type DeliverablePhase = Database["future"]["Enums"]["deliverable_phase"];
 type SubmissionStatus = Database["future"]["Enums"]["submission_status"];
 
 async function requireAuth(): Promise<void> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/yi-future/login");
+  await requireFutureAdmin();
 }
 
 const PHASE_A_FIELDS = ["problem_definition_url"] as const;

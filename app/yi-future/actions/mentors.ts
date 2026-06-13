@@ -5,13 +5,30 @@ import { redirect } from "next/navigation";
 import { createClient, createServiceClient } from "@/lib/yi-future/supabase/server";
 import { generateAccessCode } from "@/lib/yi-future/access-code";
 import type { ActionResult } from "./editions";
+import {
+  requireFutureAdmin,
+  requireChapterAdmin,
+} from "@/lib/yi-future/auth/require-access";
 
 async function requireAuth(): Promise<void> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/yi-future/login");
+  await requireFutureAdmin();
+}
+
+/**
+ * Chapter-scoped gate for the takeover-grade mentor action (regenerate access
+ * code) — a chair of chapter A must not regenerate chapter B's mentor code.
+ */
+async function requireMentorChapterAdmin(id: string): Promise<void> {
+  const svc = await createServiceClient();
+  const { data } = await svc
+    .schema("future")
+    .from("mentors")
+    .select("chapter_id")
+    .eq("id", id)
+    .maybeSingle();
+  await requireChapterAdmin(
+    (data as { chapter_id: string | null } | null)?.chapter_id ?? null
+  );
 }
 
 async function uniqueAccessCode(
@@ -129,7 +146,7 @@ export async function updateMentor(
 export async function regenerateMentorAccessCode(
   id: string
 ): Promise<ActionResult> {
-  await requireAuth();
+  await requireMentorChapterAdmin(id);
   const svc = await createServiceClient();
   const access_code = await uniqueAccessCode(svc);
   const { error } = await svc

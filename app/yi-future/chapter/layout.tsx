@@ -1,5 +1,4 @@
-import { redirect } from "next/navigation";
-import { createClient } from "@/lib/yi-future/supabase/server";
+import { requireFutureAdmin } from "@/lib/yi-future/auth/require-access";
 import { AdminShell, type NavItem } from "@/components/yi-future/admin/AdminShell";
 
 const NAV: NavItem[] = [
@@ -27,11 +26,9 @@ export default async function ChapterLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/yi-future/login");
+  // Defense-in-depth: block non-admins (delegates) from loading the admin
+  // shell. Server actions are independently gated, but this stops the UI too.
+  await requireFutureAdmin();
 
   return (
     <AdminShell title="Chapter Admin" roleLabel="Chapter" items={NAV}>

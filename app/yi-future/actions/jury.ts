@@ -7,15 +7,12 @@ import { generateAccessCode } from "@/lib/yi-future/access-code";
 import type { Database } from "@/types/yi-future/database";
 import type { ActionResult } from "./editions";
 import { JURY_ARCHETYPES } from "@/lib/yi-future/constants";
+import { requireFutureAdmin } from "@/lib/yi-future/auth/require-access";
 
 type JuryArchetype = Database["future"]["Enums"]["jury_archetype"];
 
 async function requireAuth(): Promise<void> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/yi-future/login");
+  await requireFutureAdmin();
 }
 
 function isArchetype(x: string): x is JuryArchetype {

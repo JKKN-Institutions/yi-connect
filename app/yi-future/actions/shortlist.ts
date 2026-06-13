@@ -9,14 +9,11 @@ import {
   rankTeams,
   type CriteriaScores,
 } from "@/lib/yi-future/rubric";
+import { requireFutureAdmin } from "@/lib/yi-future/auth/require-access";
 
 async function requireAuth(): Promise<string> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/yi-future/login");
-  return user.id;
+  const access = await requireFutureAdmin();
+  return access.userId;
 }
 
 /**

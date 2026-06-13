@@ -13,18 +13,15 @@ import {
   NATIONAL_DAY2_SECTIONS,
   NATIONAL_DAY2_SECTION_LABELS,
 } from "@/lib/yi-future/constants";
+import { requireFutureAdmin } from "@/lib/yi-future/auth/require-access";
 
 type EventType = Database["future"]["Enums"]["event_type"];
 type ChapterFinalSection =
   Database["future"]["Enums"]["chapter_final_section"];
 
 async function requireAuth(): Promise<string> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/yi-future/login");
-  return user.id;
+  const access = await requireFutureAdmin();
+  return access.userId;
 }
 
 // ─── CREATE CHAPTER FINAL ───────────────────────────────────────────

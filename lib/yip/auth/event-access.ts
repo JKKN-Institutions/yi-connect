@@ -160,7 +160,9 @@ export async function getYipEventAccess(eventId: string): Promise<YipEventAccess
         a.role === "chapter_admin" &&
         norm(a.yi_chapter) === chapName
     );
-    if (isExplicitAdmin) return FULL("chapter_admin", "chapter_admin_role");
+    // Chapter CHAIR sees scores/results (owner decision 2026-06-13: "chapter
+    // chair + super-admin"); ordinary organisers + regional stay canViewScores:false.
+    if (isExplicitAdmin) return FULL("chapter_admin", "chapter_admin_role", true);
 
     // 3b. chair_email fallback → full. Whoever logs in with the chapter's
     //     registered chair_email is the admin when no explicit role exists.
@@ -176,7 +178,7 @@ export async function getYipEventAccess(eventId: string): Promise<YipEventAccess
     const chairEmail = norm(chapter?.chair_email);
     const myEmail = norm(roles.email);
     if (chairEmail && myEmail && chairEmail === myEmail) {
-      return FULL("chapter_admin", "chapter_admin_email");
+      return FULL("chapter_admin", "chapter_admin_email", true);
     }
 
     // 3c. chapter_organizer → manage but NOT delete.

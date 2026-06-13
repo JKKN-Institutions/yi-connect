@@ -245,7 +245,38 @@ export async function uploadBillDocument(
     };
   }
 
-  // Cap per committee so one committee cannot fill the bucket.
+  // ONE-UPLOADER-PER-COMMITTEE lock (product ruling 2026-06-13): the first
+  // member of a committee who uploads becomes the sole uploader for that
+  // committee + event. Everyone else can VIEW/download but cannot upload.
+  // Best-effort guard — see the race note at the bottom of this file. The
+  // existing doc is the lock; if it belongs to someone else, reject.
+  const { data: existingLockDoc, error: lockError } = await supabase
+    .from("bill_documents")
+    .select("uploaded_by")
+    .eq("event_id", eventId)
+    .eq("committee_name", participant.committee_name)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (lockError) {
+    return { success: false, error: "Could not check who submits for your committee. Try again." };
+  }
+  if (existingLockDoc && existingLockDoc.uploaded_by !== participantId) {
+    // Look up the locking uploader's name for a clear, calm message.
+    const { data: lockUploader } = await supabase
+      .from("participants")
+      .select("full_name")
+      .eq("id", existingLockDoc.uploaded_by)
+      .maybeSingle();
+    const lockName = lockUploader?.full_name ?? "another committee member";
+    return {
+      success: false,
+      error: `Your committee's bill documents are submitted by ${lockName} — only they can upload for your committee. You can view and download what they've added.`,
+    };
+  }
+
+  // Cap per committee (now effectively the single locked uploader's cap) so
+  // one committee cannot fill the bucket.
   const { count, error: countError } = await supabase
     .from("bill_documents")
     .select("*", { count: "exact", head: true })
@@ -307,12 +338,23 @@ export async function uploadBillDocument(
  * Also returns the caller's committee_name so the client can render the
  * "not assigned yet" state without reading participants from the browser
  * (yip.participants is column-revoked for anon/authenticated).
+ *
+ * One-uploader-per-committee (2026-06-13): also returns `canUpload` (true
+ * when there are no docs yet, OR the locking uploader IS the caller) and
+ * `lockedUploaderName` (the sole uploader's name, or null when unlocked) so
+ * the UI can show "submitted by X" and disable the upload form for everyone
+ * but that uploader. Viewing/downloading stays open to all members.
  */
 export async function listMyCommitteeBillDocuments(
   eventId: string,
   participantId: string
 ): Promise<
-  ActionResult<{ committeeName: string | null; docs: BillDocumentRow[] }>
+  ActionResult<{
+    committeeName: string | null;
+    docs: BillDocumentRow[];
+    canUpload: boolean;
+    lockedUploaderName: string | null;
+  }>
 > {
   const sess = await requireParticipantSession(participantId, eventId);
   if (!sess.ok) return { success: false, error: sess.error };
@@ -328,7 +370,15 @@ export async function listMyCommitteeBillDocuments(
     return { success: false, error: "Participant not found for this event." };
   }
   if (!participant.committee_name) {
-    return { success: true, data: { committeeName: null, docs: [] } };
+    return {
+      success: true,
+      data: {
+        committeeName: null,
+        docs: [],
+        canUpload: false,
+        lockedUploaderName: null,
+      },
+    };
   }
 
   const { data, error } = await supabase
@@ -339,11 +389,22 @@ export async function listMyCommitteeBillDocuments(
     .order("created_at", { ascending: false });
   if (error) return { success: false, error: error.message };
 
+  const docs = ((data ?? []) as unknown as JoinedDocRow[]).map(toRow);
+
+  // The lock is the EARLIEST doc's uploader. `docs` is newest-first, so the
+  // last entry is the earliest. No docs → unlocked → anyone can become the
+  // uploader. Caller owns the lock → can keep uploading (up to the cap).
+  const lockDoc = docs.length > 0 ? docs[docs.length - 1] : null;
+  const canUpload = !lockDoc || lockDoc.uploaded_by === participantId;
+  const lockedUploaderName = lockDoc ? lockDoc.uploader_name : null;
+
   return {
     success: true,
     data: {
       committeeName: participant.committee_name,
-      docs: ((data ?? []) as unknown as JoinedDocRow[]).map(toRow),
+      docs,
+      canUpload,
+      lockedUploaderName,
     },
   };
 }
@@ -497,3 +558,16 @@ export async function organiserDeleteBillDocument(
   revalidateDocPaths(doc.event_id);
   return { success: true, data: null };
 }
+
+// ─── Race-condition note (one-uploader-per-committee) ───────────────────────
+// The lock in uploadBillDocument is a per-REQUEST check, not a DB constraint.
+// If two committee members upload in the same instant, BOTH may read "no
+// existing doc" and both inserts can succeed — leaving a committee with two
+// distinct uploaders for a brief window. At this scale (one committee = a
+// handful of students who must coordinate in person anyway) that's acceptable;
+// the very next upload by either of them re-reads the earliest doc and the
+// lock settles deterministically on whichever row sorts first by created_at.
+// A stricter guarantee would be a partial-unique constraint keyed on
+// (event_id, committee_name, uploaded_by) backed by a "one distinct
+// uploaded_by per (event_id, committee_name)" rule — e.g. a trigger or an
+// exclusion constraint — but that's optional and not warranted here.

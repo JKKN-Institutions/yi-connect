@@ -714,6 +714,10 @@ function CommitteeDocumentsSection({
   const [docsLoading, setDocsLoading] = useState(true);
   const [committeeName, setCommitteeName] = useState<string | null>(null);
   const [docs, setDocs] = useState<BillDocumentRow[]>([]);
+  const [canUpload, setCanUpload] = useState(false);
+  const [lockedUploaderName, setLockedUploaderName] = useState<string | null>(
+    null
+  );
   const [file, setFile] = useState<File | null>(null);
   const [description, setDescription] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -728,6 +732,8 @@ function CommitteeDocumentsSection({
     if (result.success) {
       setCommitteeName(result.data.committeeName);
       setDocs(result.data.docs);
+      setCanUpload(result.data.canUpload);
+      setLockedUploaderName(result.data.lockedUploaderName);
     } else {
       toast.error(result.error);
     }

@@ -114,6 +114,143 @@ export async function advanceAgenda(
   return { success: true, data: { nextItemId: nextItem?.id ?? null } };
 }
 
+// ─── Go To Previous Agenda Item ───────────────────────────────────
+// Reverses advanceAgenda by one step within the current day: un-advances
+// the current item (status back to `upcoming`), re-activates the item
+// immediately before it (status `in_progress`), and points
+// events.current_agenda_item_id at the previous item.
+//
+// CHAIR / NATIONAL ONLY — moving the agenda BACKWARD is a stronger
+// privilege than ordinary organising (it rewinds everyone's live screen),
+// so an ordinary chapter_organizer is rejected even though they canManage.
+
+const AGENDA_BACKWARD_DENIED =
+  "Only the chapter chair or a national admin can move the agenda backward.";
+
+export async function goToPreviousAgendaItem(
+  eventId: string
+): Promise<ActionResult<{ previousItemId: string }>> {
+  const access = await getYipEventAccess(eventId);
+  if (access.role !== "super_admin" && access.role !== "chapter_admin") {
+    return { success: false, error: AGENDA_BACKWARD_DENIED };
+  }
+  const supabase = await createServiceClient();
+
+  // Get current event
+  const { data: event, error: eventErr } = await supabase
+    .from("events")
+    .select("id, current_agenda_item_id, status")
+    .eq("id", eventId)
+    .single();
+
+  if (eventErr || !event) {
+    return { success: false, error: "Event not found" };
+  }
+
+  if (!event.current_agenda_item_id) {
+    return { success: false, error: "Already at the first item." };
+  }
+
+  // Get all agenda items ordered by day + sequence (mirror advanceAgenda)
+  const { data: items, error: itemsErr } = await supabase
+    .from("agenda")
+    .select("*")
+    .eq("event_id", eventId)
+    .order("day")
+    .order("sequence_order");
+
+  if (itemsErr || !items || items.length === 0) {
+    return { success: false, error: "No agenda items found" };
+  }
+
+  // Determine the current day from event status (same rule as advanceAgenda)
+  const currentDay = event.status === "day2_live" ? 2 : 1;
+  const dayItems = items.filter((i) => i.day === currentDay);
+
+  // Find current item index within the current day's ordered items
+  const currentIdx = dayItems.findIndex(
+    (i) => i.id === event.current_agenda_item_id
+  );
+
+  // No current item in this day, or it's the first item → nothing before it.
+  if (currentIdx <= 0) {
+    return { success: false, error: "Already at the first item." };
+  }
+
+  const currentItem = dayItems[currentIdx];
+  const previousItem = dayItems[currentIdx - 1];
+
+  // Un-advance the current item: status back to `upcoming`, clear its
+  // start/end timestamps so it reads as "not started" again.
+  await supabase
+    .from("agenda")
+    .update({
+      status: "upcoming",
+      actual_start: null,
+      actual_end: null,
+    })
+    .eq("id", currentItem.id);
+
+  // Re-activate the previous item: status `in_progress`, clear any end
+  // timestamp set when it was previously completed, set a fresh start.
+  await supabase
+    .from("agenda")
+    .update({
+      status: "in_progress",
+      actual_start: new Date().toISOString(),
+      actual_end: null,
+    })
+    .eq("id", previousItem.id);
+
+  // Point the event back at the previous item
+  await supabase
+    .from("events")
+    .update({ current_agenda_item_id: previousItem.id })
+    .eq("id", eventId);
+
+  revalidatePath(`/yip/dashboard/events/${eventId}/control`);
+  return { success: true, data: { previousItemId: previousItem.id } };
+}
+
+// ─── Reset Agenda ─────────────────────────────────────────────────
+// Sends the WHOLE agenda back to the start: every agenda item for this
+// event returns to `upcoming` and events.current_agenda_item_id is cleared.
+// Only moves the agenda pointer + item statuses — does NOT touch votes,
+// scores, questions, motions, or bills.
+//
+// CHAIR / NATIONAL ONLY (same gate as goToPreviousAgendaItem).
+
+export async function resetAgenda(eventId: string): Promise<ActionResult> {
+  const access = await getYipEventAccess(eventId);
+  if (access.role !== "super_admin" && access.role !== "chapter_admin") {
+    return { success: false, error: AGENDA_BACKWARD_DENIED };
+  }
+  const supabase = await createServiceClient();
+
+  // Every agenda item for this event → upcoming, clear start/end timestamps.
+  const { error: agendaErr } = await supabase
+    .from("agenda")
+    .update({
+      status: "upcoming",
+      actual_start: null,
+      actual_end: null,
+    })
+    .eq("event_id", eventId);
+
+  if (agendaErr) return { success: false, error: agendaErr.message };
+
+  // Clear the live pointer so no item is current.
+  const { error: eventErr } = await supabase
+    .from("events")
+    .update({ current_agenda_item_id: null })
+    .eq("id", eventId);
+
+  if (eventErr) return { success: false, error: eventErr.message };
+
+  revalidatePath(`/yip/dashboard/events/${eventId}/control`);
+  return { success: true, data: null };
+}
+
 // ─── Start Specific Agenda Item ───────────────────────────────────
 
 export async function startAgendaItem(

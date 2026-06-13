@@ -311,6 +311,10 @@ export async function listResources(
 export async function getResourceSignedUrl(
   filePath: string
 ): Promise<{ url: string | null; error?: string }> {
+  // SECURITY: client-reachable action. Require a valid Yi Future session so an
+  // anonymous caller cannot mint signed URLs for arbitrary paths in the bucket.
+  const session = await readSession();
+  if (!session) return { url: null, error: "Sign in to open resources." };
   if (!filePath) return { url: null, error: "Missing path." };
   const svc = await createServiceClient();
   try {

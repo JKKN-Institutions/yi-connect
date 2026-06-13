@@ -9,6 +9,7 @@ import {
   checkInParticipant,
   checkOutParticipant,
   bulkCheckIn,
+  markSpeechFinished,
 } from "@/app/yip/actions/participants";
 import { ROLE_LABELS, PARTY_COLORS } from "@/lib/yip/constants";
 import { Button } from "@/components/yip/ui/button";
@@ -66,6 +67,9 @@ type Participant = {
   access_code: string;
   checked_in: boolean | null;
   checked_in_at: string | null;
+  // Not in generated DB types yet; present at runtime via getEventParticipants
+  // (.select("*") on the service client). Read defensively.
+  speech_finished?: boolean | null;
 };
 
 type SortKey = "full_name" | "school_name" | "class";
@@ -99,14 +103,25 @@ export function ParticipantsClient({
   const [checkInOverrides, setCheckInOverrides] = useState<
     Record<string, { checked_in: boolean; checked_in_at: string | null }>
   >({});
+  // Optimistic speech-finished overrides + in-flight set (mirror check-in).
+  const [speechOverrides, setSpeechOverrides] = useState<
+    Record<string, boolean>
+  >({});
+  const [savingSpeech, setSavingSpeech] = useState<Set<string>>(new Set());
 
   // Roster with optimistic check-in state applied
   const participants = useMemo(
     () =>
-      initialParticipants.map((p) =>
-        checkInOverrides[p.id] ? { ...p, ...checkInOverrides[p.id] } : p
-      ),
-    [initialParticipants, checkInOverrides]
+      initialParticipants.map((p) => {
+        let row = checkInOverrides[p.id]
+          ? { ...p, ...checkInOverrides[p.id] }
+          : p;
+        if (speechOverrides[p.id] !== undefined) {
+          row = { ...row, speech_finished: speechOverrides[p.id] };
+        }
+        return row;
+      }),
+    [initialParticipants, checkInOverrides, speechOverrides]
   );
 
   // Prune overrides once the refreshed server roster confirms them, so a
@@ -123,6 +138,26 @@ export function ParticipantsClient({
           changed = true; // server caught up — drop the override
         } else {
           next[id] = o;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [initialParticipants]);
+
+  // Prune speech overrides once the server roster confirms them (so a later
+  // change made by a desk volunteer isn't masked by stale optimistic state).
+  useEffect(() => {
+    setSpeechOverrides((prev) => {
+      const entries = Object.entries(prev);
+      if (entries.length === 0) return prev;
+      const next: typeof prev = {};
+      let changed = false;
+      for (const [id, v] of entries) {
+        const server = initialParticipants.find((p) => p.id === id);
+        if (server && !!server.speech_finished === v) {
+          changed = true;
+        } else {
+          next[id] = v;
         }
       }
       return changed ? next : prev;
@@ -339,6 +374,33 @@ export function ParticipantsClient({
     }
 
     setCheckingIn((prev) => {
+      const next = new Set(prev);
+      next.delete(participant.id);
+      return next;
+    });
+  }
+
+  async function handleToggleSpeech(participant: Participant) {
+    if (savingSpeech.has(participant.id)) return;
+    setSavingSpeech((prev) => new Set(prev).add(participant.id));
+
+    const wasDone = !!participant.speech_finished;
+    setSpeechOverrides((prev) => ({ ...prev, [participant.id]: !wasDone }));
+
+    const result = await markSpeechFinished(participant.id, eventId, !wasDone);
+
+    if (result.success) {
+      router.refresh();
+    } else {
+      setSpeechOverrides((prev) => {
+        const next = { ...prev };
+        delete next[participant.id];
+        return next;
+      });
+      alert(result.error);
+    }
+
+    setSavingSpeech((prev) => {
       const next = new Set(prev);
       next.delete(participant.id);
       return next;
@@ -877,6 +939,7 @@ export function ParticipantsClient({
                 <TableHead>Role</TableHead>
                 <TableHead>Constituency</TableHead>
                 <TableHead>Committee</TableHead>
+                <TableHead>Speech</TableHead>
                 <TableHead>Access Code</TableHead>
                 <TableHead className="w-10" />
               </TableRow>
@@ -959,6 +1022,36 @@ export function ParticipantsClient({
                     ) : (
                       <span className="text-gray-400">--</span>
                     )}
+                  </TableCell>
+                  <TableCell>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleToggleSpeech(p);
+                      }}
+                      disabled={savingSpeech.has(p.id)}
+                      className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition-colors hover:bg-gray-50 disabled:opacity-50"
+                      title={
+                        p.speech_finished
+                          ? "Speech done — click to undo"
+                          : "Mark 90-sec speech finished"
+                      }
+                    >
+                      {savingSpeech.has(p.id) ? (
+                        <Loader2 className="size-3.5 animate-spin text-gray-400" />
+                      ) : p.speech_finished ? (
+                        <span className="size-2.5 rounded-full bg-green-500" />
+                      ) : (
+                        <span className="size-2.5 rounded-full bg-gray-300" />
+                      )}
+                      <span
+                        className={
+                          p.speech_finished ? "text-green-700" : "text-gray-500"
+                        }
+                      >
+                        {p.speech_finished ? "Done" : "Pending"}
+                      </span>
+                    </button>
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">

@@ -811,4 +811,45 @@ export async function setParliamentRole(
   return { success: true, data: null };
 }
 
+// ─── Mark 90-second Speech Finished (organiser) ───────────────────
+// canManage-gated, mirrors checkInParticipant. Reversible. The desk-scoped
+// volunteer equivalent lives in app/yip/actions/volunteer-desk.ts.
+// speech_finished is not in the generated DB types yet — narrow untyped update.
+
+export async function markSpeechFinished(
+  participantId: string,
+  eventId: string,
+  finished: boolean
+): Promise<ActionResult<null>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
+  const supabase = await createServiceClient();
+
+  const { error } = await (
+    supabase as unknown as {
+      from: (t: string) => {
+        update: (row: Record<string, unknown>) => {
+          eq: (c: string, v: unknown) => {
+            eq: (
+              c: string,
+              v: unknown
+            ) => Promise<{ error: { message: string } | null }>;
+          };
+        };
+      };
+    }
+  )
+    .from("participants")
+    .update({ speech_finished: finished })
+    .eq("id", participantId)
+    .eq("event_id", eventId);
+
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/yip/dashboard/events/${eventId}/participants`);
+  return { success: true, data: null };
+}
+
 

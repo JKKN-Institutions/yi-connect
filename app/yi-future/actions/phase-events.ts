@@ -9,16 +9,13 @@ import {
   PHASE_EVENT_TYPES_BY_PHASE,
   type Phase,
 } from "@/lib/yi-future/constants";
+import { requireFutureAdmin } from "@/lib/yi-future/auth/require-access";
 
 type PhaseEventType = Database["future"]["Enums"]["phase_event_type"];
 
 async function requireAuth(): Promise<string> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/yi-future/login");
-  return user.id;
+  const access = await requireFutureAdmin();
+  return access.userId;
 }
 
 function parseDuration(raw: string): number | null {

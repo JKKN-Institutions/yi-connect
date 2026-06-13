@@ -1,6 +1,6 @@
 "use server";
 
-import { createClient } from "@/lib/yi-future/supabase/server";
+import { requireFutureNationalAdmin } from "@/lib/yi-future/auth/require-access";
 import { sendPushToSubject } from "./push";
 import type { PushSubjectType } from "./push-types";
 
@@ -32,14 +32,12 @@ export type DevPushResult =
 export async function sendDevTestPush(
   input: DevPushInput
 ): Promise<DevPushResult> {
+  // National-admin gate OUTSIDE the try: requireFutureNationalAdmin redirects
+  // on denial (throws NEXT_REDIRECT), which must propagate — a try/catch here
+  // would swallow it and fail open. Previously this was login-only, letting any
+  // user push arbitrary notifications to anyone (phishing vector).
+  await requireFutureNationalAdmin();
   try {
-    // Admin gate: must have a Supabase Auth user.
-    const supabase = await createClient();
-    const { data, error: authErr } = await supabase.auth.getUser();
-    if (authErr || !data?.user) {
-      return { ok: false, error: "admin auth required" };
-    }
-
     // Validate inputs.
     const title = (input.title ?? "").trim();
     const body = (input.body ?? "").trim();

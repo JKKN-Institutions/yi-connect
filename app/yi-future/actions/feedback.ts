@@ -6,15 +6,12 @@ import { createClient, createServiceClient } from "@/lib/yi-future/supabase/serv
 import type { Database } from "@/types/yi-future/database";
 import type { ActionResult } from "./editions";
 import { sendPushToSubject } from "@/app/yi-future/actions/push";
+import { requireFutureAdmin } from "@/lib/yi-future/auth/require-access";
 
 type Phase = Database["future"]["Enums"]["phase"];
 
 async function requireAuth(): Promise<void> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/yi-future/login");
+  await requireFutureAdmin();
 }
 
 /**

@@ -11,14 +11,11 @@ import {
   type EditionStage,
 } from "@/lib/yi-future/stage-machine";
 import { TEAM_SIZE_MIN } from "@/lib/yi-future/constants";
+import { requireFutureAdmin } from "@/lib/yi-future/auth/require-access";
 
 async function requireAuth(): Promise<string> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/yi-future/login");
-  return user.id;
+  const access = await requireFutureAdmin();
+  return access.userId;
 }
 
 type PhaseKey = "phase_a" | "phase_b" | "phase_c";

@@ -5,13 +5,30 @@ import { redirect } from "next/navigation";
 import { createClient, createServiceClient } from "@/lib/yi-future/supabase/server";
 import { generateAccessCode } from "@/lib/yi-future/access-code";
 import type { ActionResult } from "./editions";
+import {
+  requireFutureAdmin,
+  requireChapterAdmin,
+} from "@/lib/yi-future/auth/require-access";
 
 async function requireAuth(): Promise<void> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/yi-future/login");
+  await requireFutureAdmin();
+}
+
+/**
+ * Chapter-scoped gate for the takeover-grade mentor action (regenerate access
+ * code) — a chair of chapter A must not regenerate chapter B's mentor code.
+ */
+async function requireMentorChapterAdmin(id: string): Promise<void> {
+  const svc = await createServiceClient();
+  const { data } = await svc
+    .schema("future")
+    .from("mentors")
+    .select("chapter_id")
+    .eq("id", id)
+    .maybeSingle();
+  await requireChapterAdmin(
+    (data as { chapter_id: string | null } | null)?.chapter_id ?? null
+  );
 }
 
 async function uniqueAccessCode(
@@ -35,7 +52,9 @@ export async function createMentor(
   input: { chapterId: string; editionId: string },
   formData: FormData
 ): Promise<ActionResult> {
-  await requireAuth();
+  // Scope to the chapter the mentor is created in — a chair of chapter A must
+  // not create mentors under chapter B.
+  await requireChapterAdmin(input.chapterId);
   const full_name = String(formData.get("full_name") ?? "").trim();
   const title = String(formData.get("title") ?? "").trim() || null;
   const organization =
@@ -93,7 +112,7 @@ export async function updateMentor(
   id: string,
   formData: FormData
 ): Promise<ActionResult> {
-  await requireAuth();
+  await requireMentorChapterAdmin(id);
   const full_name = String(formData.get("full_name") ?? "").trim();
   const title = String(formData.get("title") ?? "").trim() || null;
   const organization =
@@ -129,7 +148,7 @@ export async function updateMentor(
 export async function regenerateMentorAccessCode(
   id: string
 ): Promise<ActionResult> {
-  await requireAuth();
+  await requireMentorChapterAdmin(id);
   const svc = await createServiceClient();
   const access_code = await uniqueAccessCode(svc);
   const { error } = await svc
@@ -144,7 +163,7 @@ export async function regenerateMentorAccessCode(
 
 // ─── DELETE ─────────────────────────────────────────────────────────
 export async function deleteMentor(id: string): Promise<ActionResult> {
-  await requireAuth();
+  await requireMentorChapterAdmin(id);
   const svc = await createServiceClient();
 
   // Remove any team assignments first

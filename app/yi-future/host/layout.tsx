@@ -1,5 +1,4 @@
-import { redirect } from "next/navigation";
-import { createClient } from "@/lib/yi-future/supabase/server";
+import { requireFutureAdmin } from "@/lib/yi-future/auth/require-access";
 import { AdminShell, type NavItem } from "@/components/yi-future/admin/AdminShell";
 
 const NAV: NavItem[] = [
@@ -34,11 +33,8 @@ export default async function HostLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/yi-future/login");
+  // Defense-in-depth: block non-admins from loading the host admin shell.
+  await requireFutureAdmin();
 
   return (
     <AdminShell title="Host Chapter" roleLabel="Host" items={NAV}>

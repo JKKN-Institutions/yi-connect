@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient, createServiceClient } from "@/lib/yi-future/supabase/server";
+import { requireFutureNationalAdmin } from "@/lib/yi-future/auth/require-access";
 import { CORE_TEAM_ROLES } from "@/lib/yi-future/constants";
 import type { Database } from "@/types/yi-future/database";
 import type { ActionResult } from "./editions";
@@ -23,7 +24,11 @@ export async function linkSelfToChapter(input: {
   chapterId: string;
   role: CoreTeamRole;
 }): Promise<ActionResult> {
-  // 1. Require a signed-in Supabase Auth user
+  // 1. NATIONAL-ONLY. This self-inserts the caller into chapter_core_team —
+  // i.e. it GRANTS chapter-admin rights. Login-only here was a privilege
+  // escalation: any delegate could make themselves a chapter_chair and then
+  // pass every other Future admin gate. Only national admins may bootstrap.
+  await requireFutureNationalAdmin();
   const supabase = await createClient();
   const {
     data: { user },

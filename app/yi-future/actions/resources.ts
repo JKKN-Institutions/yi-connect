@@ -238,6 +238,13 @@ export async function deleteResource(
 export async function listResources(
   editionId?: string
 ): Promise<ResourceRow[]> {
+  // SECURITY: this action is reachable from the client (the delegate resources
+  // page calls it from a "use client" component), so it is independently
+  // POST-able. Require a valid Yi Future access-code session — resources are
+  // edition-scoped study materials for participants, not public data.
+  const session = await readSession();
+  if (!session) return [];
+
   const svc = await createServiceClient();
 
   // If no edition supplied, find the active one.

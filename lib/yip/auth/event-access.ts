@@ -47,6 +47,14 @@ export type YipEventAccess = {
   canView: boolean;
   canManage: boolean;
   canDelete: boolean;
+  /**
+   * See scoring / leaderboard / averages / results / committee metrics.
+   * Decided 2026-06-13 (product owner): scores are visible to national /
+   * super-admins ONLY. canManage (compute / publish / correct) is unchanged —
+   * an organiser can still RUN scoring, they just cannot READ the metrics.
+   * TRUE only for the super-admin role; FALSE for regional / chapter roles.
+   */
+  canViewScores: boolean;
   role: YipRole;
   /** Machine-readable reason (for logs / Forbidden messages). */
   reason: string;
@@ -56,15 +64,26 @@ const DENY: YipEventAccess = {
   canView: false,
   canManage: false,
   canDelete: false,
+  canViewScores: false,
   role: "none",
   reason: "not_authorized",
 };
 
-/** Full control (view + manage + delete). */
-const FULL = (role: YipRole, reason: string): YipEventAccess => ({
+/**
+ * Full control (view + manage + delete). `canViewScores` defaults to FALSE and
+ * is granted ONLY from the super-admin branch — scores/leaderboard/metrics are
+ * national/super-admin-only (product-owner decision 2026-06-13). Regional and
+ * chapter FULL returns therefore keep canViewScores:false.
+ */
+const FULL = (
+  role: YipRole,
+  reason: string,
+  canViewScores = false
+): YipEventAccess => ({
   canView: true,
   canManage: true,
   canDelete: true,
+  canViewScores,
   role,
   reason,
 });
@@ -109,7 +128,9 @@ export async function getYipEventAccess(eventId: string): Promise<YipEventAccess
           a.role === "national" ||
           a.role === "super_admin")
     );
-  if (isSuper) return FULL("super_admin", "super_admin");
+  // Super-admin is the ONLY role that may see scores/leaderboard/metrics
+  // (product-owner decision 2026-06-13) — pass canViewScores=true here only.
+  if (isSuper) return FULL("super_admin", "super_admin", true);
 
   // 2. Regional admin for the event's zone → full within the zone.
   if (
@@ -170,6 +191,8 @@ export async function getYipEventAccess(eventId: string): Promise<YipEventAccess
         canView: true,
         canManage: true,
         canDelete: false,
+        // Organiser may RUN scoring (canManage) but NOT see the metrics.
+        canViewScores: false,
         role: "chapter_organizer",
         reason: "chapter_organizer",
       };

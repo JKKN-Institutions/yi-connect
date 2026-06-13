@@ -57,12 +57,17 @@ const TABS = [
   { label: "Certificates", href: "/certificates", icon: Award },
 ] as const;
 
+// Score-bearing tabs — visible to national / super-admins only (2026-06-13).
+const SCORE_TABS = new Set(["Scoring", "Committees", "Results"]);
+
 export function EventTabNav({
   eventId,
   eventStatus,
+  canViewScores = false,
 }: {
   eventId: string;
   eventStatus?: string;
+  canViewScores?: boolean;
 }) {
   const pathname = usePathname();
   const basePath = `/yip/dashboard/events/${eventId}`;
@@ -70,6 +75,10 @@ export function EventTabNav({
   const visibleTabs = TABS.filter((tab) => {
     if (tab.label === "Certificates") {
       return eventStatus === "results_published";
+    }
+    // Scoring / Committees / Results are score-bearing → super-admin only.
+    if (SCORE_TABS.has(tab.label)) {
+      return canViewScores;
     }
     return true;
   });

@@ -887,6 +887,11 @@ export type ResultWithParticipant = {
 export async function getResults(
   eventId: string
 ): Promise<ResultWithParticipant[]> {
+  // Scores / leaderboard / metrics are national/super-admin-only (2026-06-13).
+  // Organisers may RUN scoring (canManage) but NOT read the results.
+  const access = await getYipEventAccess(eventId);
+  if (!access.canViewScores) return [];
+
   const supabase = await createServiceClient();
 
   const { data, error } = await supabase
@@ -947,6 +952,10 @@ export type ScoringProgressData = {
 export async function getScoringProgress(
   eventId: string
 ): Promise<ScoringProgressData | null> {
+  // Scores / leaderboard / metrics are national/super-admin-only (2026-06-13).
+  const access = await getYipEventAccess(eventId);
+  if (!access.canViewScores) return null;
+
   const supabase = await createServiceClient();
 
   const { data: event } = await supabase

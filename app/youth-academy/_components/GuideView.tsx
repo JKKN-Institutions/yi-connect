@@ -22,9 +22,17 @@ import {
   Lightbulb,
   ChevronRight,
   ArrowRight,
+  Rocket,
+  BookText,
+  Languages,
   type LucideIcon,
 } from "lucide-react";
-import type { GuideContent, GuideLane } from "@/lib/yuva/guide/content";
+import {
+  GUIDE_GLOSSARY,
+  PLANNED_LOCALE_NOTE,
+  type GuideContent,
+  type GuideLane,
+} from "@/lib/yuva/guide/content";
 
 const LANE_ICON: Record<GuideLane, LucideIcon> = {
   applicant: Send,
@@ -51,6 +59,20 @@ export function GuideView({ content }: { content: GuideContent }) {
         </h1>
         <p className="text-base text-slate-600">{content.tagline}</p>
       </header>
+
+      {/* ── Why it matters + start here ─────────────────────────────── */}
+      <section className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
+        <p className="text-base font-medium text-slate-800">
+          {content.whyItMatters}
+        </p>
+        <Link
+          href={content.startHere.href}
+          className="mt-4 inline-flex items-center gap-2 rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-slate-900 transition-colors hover:bg-amber-400"
+        >
+          <Rocket className="size-4" />
+          {content.startHere.label}
+        </Link>
+      </section>
 
       {/* ── Journey map ─────────────────────────────────────────────── */}
       <section
@@ -157,6 +179,24 @@ export function GuideView({ content }: { content: GuideContent }) {
         </section>
       )}
 
+      {/* ── Words to know (glossary) ────────────────────────────────── */}
+      <section className="space-y-3">
+        <h2 className="flex items-center gap-2 text-lg font-bold text-slate-900">
+          <BookText className="size-5 text-[#0f2557]" />
+          Words to know
+        </h2>
+        <dl className="divide-y divide-slate-200 overflow-hidden rounded-xl border border-slate-200 bg-white">
+          {GUIDE_GLOSSARY.map((t) => (
+            <div key={t.term} className="px-4 py-3">
+              <dt className="text-sm font-semibold text-slate-900">{t.term}</dt>
+              <dd className="mt-0.5 text-sm leading-relaxed text-slate-600">
+                {t.def}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </section>
+
       {/* ── Help ────────────────────────────────────────────────────── */}
       <section className="rounded-xl border border-[#0f2557]/15 bg-[#0f2557]/5 p-4">
         <p className="text-sm text-slate-700">
@@ -164,6 +204,12 @@ export function GuideView({ content }: { content: GuideContent }) {
           {content.help}
         </p>
       </section>
+
+      {/* ── Planned-locale note ─────────────────────────────────────── */}
+      <p className="flex items-center justify-center gap-1.5 text-center text-xs text-slate-400">
+        <Languages className="size-3.5" />
+        {PLANNED_LOCALE_NOTE}
+      </p>
     </article>
   );
 }

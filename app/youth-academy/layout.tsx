@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { GuideHelpFab } from "@/app/youth-academy/_components/GuideHelpFab";
 
 export const viewport: Viewport = {
   themeColor: "#0f2557",
@@ -84,6 +85,7 @@ export default function YouthAcademyLayout({
         Skip to main content
       </a>
       <div id="youth-academy-main">{children}</div>
+      <GuideHelpFab />
     </>
   );
 }

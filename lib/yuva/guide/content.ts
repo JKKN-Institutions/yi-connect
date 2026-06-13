@@ -82,12 +82,19 @@ export type GuideSection = {
 
 export type GuideFaq = { q: string; a: string };
 
+/** One "Words to know" glossary entry. */
+export type GuideTerm = { term: string; def: string };
+
 export type GuideContent = {
   lane: GuideLane;
   /** Short label shown on chips / titles, e.g. "Student". */
   label: string;
   /** Who this lane is for — one line. */
   tagline: string;
+  /** The stake — why this lane matters to the reader, in one line. */
+  whyItMatters: string;
+  /** The single tap that drops the reader into the product to begin. */
+  startHere: GuideLink;
   /** The whole arc as a few words each — rendered as a journey map. */
   journey: string[];
   sections: GuideSection[];
@@ -100,6 +107,9 @@ const APPLICANT: GuideContent = {
   lane: "applicant",
   label: "Applying",
   tagline: "For students who want to join a Yi Youth Academy program.",
+  whyItMatters:
+    "A few minutes now puts you in front of mentors, real projects, and a certificate that proves what you did.",
+  startHere: { href: "/youth-academy", label: "Browse open programs" },
   journey: ["Find a program", "Apply", "Get confirmation", "Get accepted", "You're in"],
   sections: [
     {
@@ -170,6 +180,9 @@ const STUDENT: GuideContent = {
   lane: "student",
   label: "Student",
   tagline: "For accepted students taking part in a program.",
+  whyItMatters:
+    "This is your space — show up, do the work, and you leave with a certificate and a network.",
+  startHere: { href: "/youth-academy/me", label: "Open my portal" },
   journey: ["Get your code", "Sign in", "Attend sessions", "Submit your work", "Get your certificate"],
   sections: [
     {
@@ -251,6 +264,9 @@ const MENTOR: GuideContent = {
   lane: "mentor",
   label: "Mentor",
   tagline: "For mentors guiding the sessions of a batch.",
+  whyItMatters:
+    "Your time shapes the next batch of young leaders — the platform just keeps the logistics out of your way.",
+  startHere: { href: "/youth-academy/mentor", label: "Open my mentor area" },
   journey: ["Sign in", "Open your cohort", "Run each session", "Mark attendance", "Review student work"],
   sections: [
     {
@@ -313,6 +329,9 @@ const COORDINATOR: GuideContent = {
   lane: "coordinator",
   label: "Institution coordinator",
   tagline: "For institution coordinators running their academy's batches.",
+  whyItMatters:
+    "You keep your academy's batches running on time — the platform tracks attendance, work and certificates for you.",
+  startHere: { href: "/youth-academy/chapter/runs", label: "Open my runs" },
   journey: ["Open your runs", "Schedule sessions", "Track attendance & work", "Support certificates"],
   sections: [
     {
@@ -357,6 +376,9 @@ const CHAPTER_ADMIN: GuideContent = {
   lane: "chapter_admin",
   label: "Chapter admin",
   tagline: "For the chapter's Yi Youth Academy lead.",
+  whyItMatters:
+    "You turn a National program into a real batch your students complete — from first application to final certificate.",
+  startHere: { href: "/youth-academy/chapter", label: "Open my chapter dashboard" },
   journey: ["Your academy", "Schedule a run", "Open applications", "Form the cohort", "Deliver", "Certificates"],
   sections: [
     {
@@ -427,6 +449,9 @@ const NATIONAL: GuideContent = {
   lane: "national",
   label: "National",
   tagline: "For the Yi YUVA national team that runs the whole platform.",
+  whyItMatters:
+    "Everything chapters deliver flows from what you set up here — academies, programs, and the oversight that keeps it on track.",
+  startHere: { href: "/youth-academy/national", label: "Open the national console" },
   journey: ["Create academies", "Author programs", "Oversee delivery", "Monitor & export"],
   sections: [
     {
@@ -486,6 +511,53 @@ export const GUIDES: Record<GuideLane, GuideContent> = {
   chapter_admin: CHAPTER_ADMIN,
   national: NATIONAL,
 };
+
+/**
+ * "Words to know" — the real Yi Youth Academy jargon, defined once in plain
+ * language. Shown on every lane so a newcomer isn't tripped up by a term.
+ */
+export const GUIDE_GLOSSARY: GuideTerm[] = [
+  {
+    term: "Academy",
+    def: "A chapter's Yi Youth Academy. The National team creates it; the chapter delivers programs through it.",
+  },
+  {
+    term: "Program",
+    def: "A course authored by National — a topic plus its sessions. Chapters run batches of a program.",
+  },
+  {
+    term: "Run (batch)",
+    def: "One delivery of a program to one group of students. \"Run\" and \"batch\" mean the same thing, and a batch is fixed once it's formed.",
+  },
+  {
+    term: "Cohort",
+    def: "The group of students accepted into a run.",
+  },
+  {
+    term: "Session",
+    def: "One class within a program. Sessions are the engagements — students attend, and some ask for a piece of work.",
+  },
+  {
+    term: "Access code",
+    def: "An 8-character code emailed to accepted students. It's how a student signs in — there's no password.",
+  },
+  {
+    term: "Mentor",
+    def: "A guide assigned to a run's sessions — runs the session, marks attendance, and reviews student work.",
+  },
+  {
+    term: "Institution coordinator",
+    def: "Runs the batches of one academy. They don't edit the academy record or the mentor network.",
+  },
+  {
+    term: "Certificate",
+    def: "Issued to a student who attends enough sessions and submits the required work.",
+  },
+];
+
+/** Translation expectation — set without shipping machine-translated copy. */
+export const PLANNED_LOCALE_NOTE =
+  "A Tamil version is planned — the guide is in English for now.";
 
 /** Friendly download filename per lane, e.g. "Yi-Youth-Academy-Student-Guide.pdf". */
 export function guidePdfFilename(lane: GuideLane): string {

@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { LogOut, MessageSquare } from "lucide-react";
 import { CHAT_ENABLED } from "@/lib/yip/chat-config";
+import { GuideLauncher } from "@/components/yip/guide";
+import { GUIDES } from "@/lib/yip/guide/content";
 
 interface ParticipantSession {
   type: "participant";
@@ -76,6 +78,11 @@ export default async function ParticipantLayout({
                 <span className="hidden sm:inline">Chat</span>
               </Link>
             )}
+            <GuideLauncher
+              guide={GUIDES.student}
+              variant="navlink"
+              className="w-auto rounded-lg px-3 py-2 text-[#FF9933] hover:bg-[#FF9933]/10 hover:text-[#FF9933]"
+            />
             <Link
               href="/yip/join"
               className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
@@ -91,6 +98,9 @@ export default async function ParticipantLayout({
       <main className="flex-1 px-4 py-5 mx-auto w-full max-w-lg">
         {children}
       </main>
+
+      {/* Floating Help — student lane */}
+      <GuideLauncher guide={GUIDES.student} variant="fab" />
 
       {/* Footer */}
       <footer className="border-t border-gray-100 bg-white/50 py-4 text-center">

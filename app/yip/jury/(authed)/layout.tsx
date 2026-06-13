@@ -2,6 +2,8 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Scale, History, LogOut } from "lucide-react";
+import { GuideLauncher } from "@/components/yip/guide";
+import { GUIDES } from "@/lib/yip/guide/content";
 
 interface JurySession {
   type: "jury";
@@ -74,6 +76,11 @@ export default async function JuryLayout({
               <History className="size-5" />
               <span className="hidden sm:inline">History</span>
             </Link>
+            <GuideLauncher
+              guide={GUIDES.jury}
+              variant="navlink"
+              className="w-auto rounded-lg px-3 text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+            />
             {/* Exit — icon only, needs aria-label */}
             <Link
               href="/yip/join"
@@ -92,6 +99,9 @@ export default async function JuryLayout({
       <main className="flex-1 pb-4 mx-auto w-full max-w-lg overflow-x-hidden">
         {children}
       </main>
+
+      {/* Floating Help — jury lane */}
+      <GuideLauncher guide={GUIDES.jury} variant="fab" />
     </div>
   );
 }

@@ -48,6 +48,7 @@ import {
 } from "lucide-react";
 import { CsvImport } from "@/components/yip/csv-import";
 import { WhatsAppSendCodes } from "@/components/yip/whatsapp-send-codes";
+import { EmailSendCodes } from "@/components/yip/email-send-codes";
 
 type Participant = {
   id: string;
@@ -459,6 +460,10 @@ export function ParticipantsClient({
           {/* Send each student's access code to their phone via the connected
               Yi WhatsApp number (bridge service). Re-sends are deduped. */}
           <WhatsAppSendCodes eventId={eventId} />
+
+          {/* Email each student's access code via Resend — the reliable channel
+              (every participant has an email; no bridge to connect). */}
+          <EmailSendCodes eventId={eventId} />
 
           {/* Quick Add Walk-in — create a single late arrival and auto-assign
               party + constituency + committee in one click. Works even after

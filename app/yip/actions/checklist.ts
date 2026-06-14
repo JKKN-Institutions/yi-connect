@@ -50,7 +50,10 @@ export async function toggleChecklistItem(
       is_completed: done,
       completed_at: done ? new Date().toISOString() : null,
     })
-    .eq("id", itemId);
+    .eq("id", itemId)
+    // Scope to THIS event — without it a manager of event A could flip a
+    // checklist item belonging to event B by passing a foreign itemId (IDOR).
+    .eq("event_id", eventId);
 
   if (error) return { success: false, error: error.message };
   revalidatePath(`/yip/dashboard/events/${eventId}`);

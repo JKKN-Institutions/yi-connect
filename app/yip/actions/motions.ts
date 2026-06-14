@@ -305,6 +305,16 @@ export async function raiseMotion(input: {
   const sess = await requireParticipantSession(input.participantId, input.eventId);
   if (!sess.ok) return { success: false, error: sess.error };
 
+  // No-Confidence is the Leader of Opposition's instrument only — it must go
+  // through moveNoConfidence (which enforces the LoP role + the one-active cap),
+  // never the general student raise-a-motion path.
+  if (input.motionType === "no_confidence") {
+    return {
+      success: false,
+      error: "A No-Confidence motion can only be moved by the Leader of Opposition.",
+    };
+  }
+
   const supabase = await createServiceClient();
 
   if (!input.subject || input.subject.trim().length < 5) {
@@ -359,6 +369,9 @@ export async function getMyMotions(
   eventId: string,
   participantId: string
 ): Promise<Motion[]> {
+  // Only the student themselves may read their own motions.
+  const sess = await requireParticipantSession(participantId, eventId);
+  if (!sess.ok) return [];
   const supabase = await createServiceClient();
   const { data } = await supabase
     .from("motions")

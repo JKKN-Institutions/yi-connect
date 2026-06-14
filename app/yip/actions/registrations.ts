@@ -279,6 +279,10 @@ export async function listRegistrations(
   eventId: string,
   filter?: { status?: RegistrationStatus; batch?: string }
 ): Promise<Registration[]> {
+  // Leaks minor + parent PII (phone/email/parent_phone/raw_payload) — must be
+  // gated to a manager of THIS event, not any logged-in user.
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) return [];
   const supabase = await createServiceClient();
   let q = regs(supabase)
     .select("*")
@@ -296,6 +300,10 @@ export async function listRegistrations(
 export async function getRegistrationStats(
   eventId: string
 ): Promise<RegistrationStats> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { total: 0, pending: 0, approved: 0, rejected: 0, duplicate: 0, participants_count: 0 };
+  }
   const supabase = await createServiceClient();
   const [regsRes, partsRes] = await Promise.all([
     regs(supabase).select("status").eq("event_id", eventId),

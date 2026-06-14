@@ -332,12 +332,12 @@ export async function correctFloorVote(
   const { data: session } = vote.session_id
     ? await service
         .from("vote_sessions")
-        .select("id, event_id, status")
+        .select("id, event_id, status, vote_type, config")
         .eq("id", vote.session_id)
         .maybeSingle()
     : await service
         .from("vote_sessions")
-        .select("id, event_id, status")
+        .select("id, event_id, status, vote_type, config")
         .eq("agenda_item_id", vote.agenda_item_id)
         .order("opened_at", { ascending: false })
         .limit(1)
@@ -356,6 +356,16 @@ export async function correctFloorVote(
       error: "Corrections are only allowed while voting is open",
     };
   }
+
+  // Validate the corrected value against the session — castFloorVote validates
+  // on entry but the correction path did not, so an organiser could otherwise
+  // write a junk token (silently dropped from the tally) or a non-candidate id
+  // (a phantom in an election tally).
+  const valid = validateVoteValue(
+    { vote_type: session.vote_type, config: session.config },
+    newValue
+  );
+  if (!valid.ok) return { success: false, error: valid.error };
 
   const sb = await createClient();
   const {

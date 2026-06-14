@@ -213,25 +213,47 @@ export async function submitScore(
     return { success: true, data: { id: existing.id } };
   }
 
-  // Offline-replay rubric guard: a score buffered on a phone is replayed
-  // verbatim — if the session's scoring parameters changed in between, its
-  // criteria keys / total no longer fit and would corrupt results. Reject with
-  // the STALE_OFFLINE_SCORE marker; the flush drops the entry (it can never
-  // succeed) and the juror re-scores against the live parameters.
-  if (input.fromOfflineSync && input.agendaItemId) {
-    const params = await getSessionScoringParams(input.agendaItemId);
-    if (params && params.criteria.length > 0) {
-      const expected = new Set(params.criteria.map((c) => c.key));
-      const hasForeignKey = Object.keys(input.criteriaScores).some(
-        (k) => !expected.has(k)
+  // Validate the submitted scores against the session's live parameters for
+  // EVERY submission — not only offline replay. yip.scores has open write RLS,
+  // so this server check is the only thing stopping a juror's client (or a
+  // replayed POST with a valid session) from writing out-of-range values that
+  // distort the award ranking. (Previously this guard ran only when
+  // fromOfflineSync was set, leaving the live path unbounded.)
+  {
+    const entries = Object.entries(input.criteriaScores ?? {});
+    // Universal numeric sanity: finite, non-negative — applies even when the
+    // session has no configured parameters (role-rubric fallback).
+    const numericBad =
+      typeof input.totalScore !== "number" ||
+      !Number.isFinite(input.totalScore) ||
+      input.totalScore < 0 ||
+      entries.some(
+        ([, v]) => typeof v !== "number" || !Number.isFinite(v) || v < 0
       );
-      if (hasForeignKey || input.totalScore > params.total_max) {
-        return {
-          success: false,
-          error:
-            "STALE_OFFLINE_SCORE: the scoring sheet changed since this was saved offline — please re-score this participant",
-        };
-      }
+
+    let foreignKey = false;
+    let rangeBad = false;
+    const params = input.agendaItemId
+      ? await getSessionScoringParams(input.agendaItemId)
+      : null;
+    if (params && params.criteria.length > 0) {
+      const maxByKey = new Map(params.criteria.map((c) => [c.key, c.max_score]));
+      foreignKey = entries.some(([k]) => !maxByKey.has(k));
+      rangeBad =
+        input.totalScore > params.total_max ||
+        entries.some(([k, v]) => v > (maxByKey.get(k) ?? Infinity));
+    }
+
+    if (numericBad || foreignKey || rangeBad) {
+      return {
+        success: false,
+        // Offline replay can't succeed against changed parameters → STALE marker
+        // tells the flush to drop the buffered entry; live submits get a plain
+        // re-check message.
+        error: input.fromOfflineSync
+          ? "STALE_OFFLINE_SCORE: the scoring sheet changed since this was saved offline — please re-score this participant"
+          : "Some scores are outside the allowed range — please re-check and submit again.",
+      };
     }
   }
 

@@ -19,6 +19,7 @@
  */
 
 import { createServiceClient } from "@/lib/yip/supabase/server";
+import { requireSuperAdmin } from "@/lib/yip/auth/require-super-admin";
 import { YI_ZONES, type YiZone } from "@/lib/yip/hierarchy";
 
 const LEADERSHIP_ROLES = new Set<string>([
@@ -61,6 +62,13 @@ export async function getRegionalLeaderboard(
   zoneCode: string,
   yearId?: string
 ): Promise<RegionalLeaderboardData | null> {
+  // Named minor-student scores/ranks — scores are a super-admin-tier surface
+  // (2026-06-13 product decision: canViewScores = chair + super-admin). This
+  // page is reachable at a public URL with no auth layer, so the gate lives in
+  // the action.
+  const gate = await requireSuperAdmin();
+  if (!gate.ok) return null;
+
   const upperCode = zoneCode.toUpperCase();
   const zone = YI_ZONES.find((z) => z.code.toUpperCase() === upperCode);
   if (!zone) return null;

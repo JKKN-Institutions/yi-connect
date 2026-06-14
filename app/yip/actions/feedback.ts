@@ -2,6 +2,7 @@
 
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { requireParticipantSession } from "@/lib/yip/auth/yip-session";
+import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import type { Json } from "@/types/yip/database";
 import {
   computeNps,
@@ -210,6 +211,9 @@ export async function getMyFeedback(
   eventId: string,
   participantId: string
 ): Promise<FeedbackResponseRow | null> {
+  // Only the student themselves may read their own feedback row.
+  const sess = await requireParticipantSession(participantId, eventId);
+  if (!sess.ok) return null;
   const supabase = await createServiceClient();
   const { data } = await supabase
     .from("feedback")
@@ -226,6 +230,10 @@ export async function listFeedback(
   eventId: string,
   respondentType?: FeedbackRespondentType
 ): Promise<FeedbackResponseRow[]> {
+  // Respondent names + emails — organiser-only for THIS event. getFeedbackStats
+  // and exportFeedbackCSV both read through here, so this gate covers them too.
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) return [];
   const supabase = await createServiceClient();
   let q = supabase
     .from("feedback")
@@ -306,6 +314,8 @@ export async function getFeedbackStats(
 export async function exportFeedbackCSV(
   eventId: string
 ): Promise<{ success: true; data: { csv: string; filename: string } } | { success: false; error: string }> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
   const supabase = await createServiceClient();
 
   const { data: event } = await supabase

@@ -58,8 +58,12 @@ type RawDeskParticipant = {
   party_id: string | null;
   committee_name: string | null;
   checked_in: boolean | null;
+  checked_in_day1: boolean | null;
+  checked_in_day2: boolean | null;
   speech_finished: boolean | null;
 };
+const DESK_ROSTER_COLS =
+  "id, serial_no, full_name, constituency_name, party_id, committee_name, checked_in, checked_in_day1, checked_in_day2, speech_finished";
 type PartTable = {
   select: (cols?: string) => PartTable;
   eq: (col: string, val: unknown) => PartTable;
@@ -110,6 +114,8 @@ export type DeskRosterMember = {
   full_name: string;
   constituency_name: string | null;
   checked_in: boolean;
+  checked_in_day1: boolean;
+  checked_in_day2: boolean;
   speech_finished: boolean;
   /** which part of the desk this student matched (for grouping) */
   via: "party" | "committee";
@@ -193,9 +199,7 @@ export async function getMyDeskRoster(
 
   // NON-PII columns ONLY. Do NOT add phone / email / school / parent_phone.
   const { data: roster } = await partsTable(supabase)
-    .select(
-      "id, serial_no, full_name, constituency_name, party_id, committee_name, checked_in, speech_finished"
-    )
+    .select(DESK_ROSTER_COLS)
     .eq("event_id", eventId)
     .order("serial_no", { ascending: true, nullsFirst: false });
 
@@ -214,6 +218,8 @@ export async function getMyDeskRoster(
       full_name: m.full_name,
       constituency_name: m.constituency_name,
       checked_in: !!m.checked_in,
+      checked_in_day1: !!m.checked_in_day1,
+      checked_in_day2: !!m.checked_in_day2,
       speech_finished: !!m.speech_finished,
       via:
         m.party_id && partyIds.includes(m.party_id) ? "party" : "committee",
@@ -277,7 +283,8 @@ async function assertTargetInMyDesk(
   eventId: string,
   participantId: string
 ): Promise<
-  { ok: true; supabase: ServiceClient } | { ok: false; error: string }
+  | { ok: true; supabase: ServiceClient; target: RawDeskParticipant }
+  | { ok: false; error: string }
 > {
   const session = await requireVolunteerSession(eventId);
   if (!session.ok) return { ok: false, error: session.error };
@@ -290,9 +297,7 @@ async function assertTargetInMyDesk(
   );
 
   const { data: targetRow } = await partsTable(supabase)
-    .select(
-      "id, serial_no, full_name, constituency_name, party_id, committee_name, checked_in, speech_finished"
-    )
+    .select(DESK_ROSTER_COLS)
     .eq("id", participantId)
     .eq("event_id", eventId)
     .maybeSingle();
@@ -308,7 +313,7 @@ async function assertTargetInMyDesk(
   ) {
     return { ok: false, error: "That student is not at your desk." };
   }
-  return { ok: true, supabase };
+  return { ok: true, supabase, target: targetRow };
 }
 
 /** Desk-scoped check-in: flips the SAME checked_in column the organiser uses. */
@@ -325,6 +330,51 @@ export async function volunteerCheckInParticipant(
       checked_in: checkedIn,
       checked_in_at: checkedIn ? new Date().toISOString() : null,
     })
+    .eq("id", participantId)
+    .eq("event_id", eventId);
+
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/yip/dashboard/events/${eventId}/participants`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/control`);
+  return { success: true, data: null };
+}
+
+/**
+ * Desk-scoped two-day check-in (YA2): set Day 1 / Day 2 for a student at this
+ * volunteer's desk and recompute the derived `checked_in` (= day1 OR day2).
+ */
+export async function volunteerSetDayCheckIn(
+  eventId: string,
+  participantId: string,
+  day: 1 | 2,
+  value: boolean
+): Promise<ActionResult<null>> {
+  if (day !== 1 && day !== 2) {
+    return { success: false, error: "Day must be 1 or 2." };
+  }
+  const guard = await assertTargetInMyDesk(eventId, participantId);
+  if (!guard.ok) return { success: false, error: guard.error };
+
+  const day1 = day === 1 ? value : !!guard.target.checked_in_day1;
+  const day2 = day === 2 ? value : !!guard.target.checked_in_day2;
+  const present = day1 || day2;
+  const nowIso = new Date().toISOString();
+
+  const patch: Record<string, unknown> = {
+    checked_in: present,
+    checked_in_at: present ? nowIso : null,
+  };
+  if (day === 1) {
+    patch.checked_in_day1 = value;
+    patch.checked_in_day1_at = value ? nowIso : null;
+  } else {
+    patch.checked_in_day2 = value;
+    patch.checked_in_day2_at = value ? nowIso : null;
+  }
+
+  const { error } = await partsWrite(guard.supabase)
+    .update(patch)
     .eq("id", participantId)
     .eq("event_id", eventId);
 

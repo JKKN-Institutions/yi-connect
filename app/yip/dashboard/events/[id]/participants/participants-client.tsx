@@ -6,8 +6,7 @@ import {
   addParticipant,
   quickAddWalkIn,
   deleteParticipant,
-  checkInParticipant,
-  checkOutParticipant,
+  setDayCheckIn,
   bulkCheckIn,
   markSpeechFinished,
 } from "@/app/yip/actions/participants";
@@ -67,6 +66,8 @@ type Participant = {
   access_code: string;
   checked_in: boolean | null;
   checked_in_at: string | null;
+  checked_in_day1?: boolean | null;
+  checked_in_day2?: boolean | null;
   // Not in generated DB types yet; present at runtime via getEventParticipants
   // (.select("*") on the service client). Read defensively.
   speech_finished?: boolean | null;
@@ -100,8 +101,9 @@ export function ParticipantsClient({
   const [checkInFilter, setCheckInFilter] = useState<CheckInFilter>("all");
   // Optimistic check-in overrides: applied instantly on click so the row
   // flips without waiting for the server action + route refresh (BUG-399/387).
+  // Per-day (YA2); the derived `checked_in` is recomputed in the merge below.
   const [checkInOverrides, setCheckInOverrides] = useState<
-    Record<string, { checked_in: boolean; checked_in_at: string | null }>
+    Record<string, { checked_in_day1: boolean; checked_in_day2: boolean }>
   >({});
   // Optimistic speech-finished overrides + in-flight set (mirror check-in).
   const [speechOverrides, setSpeechOverrides] = useState<
@@ -113,9 +115,16 @@ export function ParticipantsClient({
   const participants = useMemo(
     () =>
       initialParticipants.map((p) => {
-        let row = checkInOverrides[p.id]
-          ? { ...p, ...checkInOverrides[p.id] }
-          : p;
+        let row = p;
+        const o = checkInOverrides[p.id];
+        if (o) {
+          row = {
+            ...row,
+            checked_in_day1: o.checked_in_day1,
+            checked_in_day2: o.checked_in_day2,
+            checked_in: o.checked_in_day1 || o.checked_in_day2,
+          };
+        }
         if (speechOverrides[p.id] !== undefined) {
           row = { ...row, speech_finished: speechOverrides[p.id] };
         }
@@ -134,7 +143,11 @@ export function ParticipantsClient({
       let changed = false;
       for (const [id, o] of entries) {
         const server = initialParticipants.find((p) => p.id === id);
-        if (server && !!server.checked_in === o.checked_in) {
+        if (
+          server &&
+          !!server.checked_in_day1 === o.checked_in_day1 &&
+          !!server.checked_in_day2 === o.checked_in_day2
+        ) {
           changed = true; // server caught up — drop the override
         } else {
           next[id] = o;
@@ -164,8 +177,10 @@ export function ParticipantsClient({
     });
   }, [initialParticipants]);
 
-  // Derived: checked-in count
+  // Derived: checked-in counts (present = either day; plus per-day)
   const checkedInCount = participants.filter((p) => p.checked_in).length;
+  const day1Count = participants.filter((p) => p.checked_in_day1).length;
+  const day2Count = participants.filter((p) => p.checked_in_day2).length;
 
   // Form state
   const [formData, setFormData] = useState({
@@ -340,31 +355,34 @@ export function ParticipantsClient({
     setTimeout(() => setCopiedId(null), 2000);
   }
 
-  async function handleToggleCheckIn(participant: Participant) {
+  async function handleToggleDay(participant: Participant, day: 1 | 2) {
     // Guard against rapid double-clicks while a toggle is in flight —
     // without this a second click would immediately undo the first (BUG-387).
+    // Keyed per participant (both day writes touch the same row).
     if (checkingIn.has(participant.id)) return;
     setCheckingIn((prev) => new Set(prev).add(participant.id));
 
-    const wasCheckedIn = !!participant.checked_in;
+    const curD1 = !!participant.checked_in_day1;
+    const curD2 = !!participant.checked_in_day2;
+    const nextD1 = day === 1 ? !curD1 : curD1;
+    const nextD2 = day === 2 ? !curD2 : curD2;
 
     // Optimistic flip: the row responds instantly; reverted on error.
     setCheckInOverrides((prev) => ({
       ...prev,
-      [participant.id]: {
-        checked_in: !wasCheckedIn,
-        checked_in_at: wasCheckedIn ? null : new Date().toISOString(),
-      },
+      [participant.id]: { checked_in_day1: nextD1, checked_in_day2: nextD2 },
     }));
 
-    const result = wasCheckedIn
-      ? await checkOutParticipant(participant.id, eventId)
-      : await checkInParticipant(participant.id, eventId);
+    const result = await setDayCheckIn(
+      participant.id,
+      eventId,
+      day,
+      day === 1 ? nextD1 : nextD2
+    );
 
     if (result.success) {
       router.refresh();
     } else {
-      // Revert the optimistic flip
       setCheckInOverrides((prev) => {
         const next = { ...prev };
         delete next[participant.id];
@@ -407,33 +425,39 @@ export function ParticipantsClient({
     });
   }
 
-  async function handleBulkCheckInAll() {
-    const unchecked = participants
-      .filter((p) => !p.checked_in)
-      .map((p) => p.id);
-
-    if (unchecked.length === 0) return;
+  async function handleBulkCheckInDay(day: 1 | 2) {
+    const targets = participants.filter((p) =>
+      day === 1 ? !p.checked_in_day1 : !p.checked_in_day2
+    );
+    const ids = targets.map((p) => p.id);
+    if (ids.length === 0) return;
 
     setLoading(true);
 
-    // Optimistic: mark all unchecked rows as checked in immediately
-    const now = new Date().toISOString();
+    // Optimistic: mark all targeted rows present for this day immediately.
     setCheckInOverrides((prev) => {
       const next = { ...prev };
-      for (const id of unchecked) {
-        next[id] = { checked_in: true, checked_in_at: now };
+      for (const p of targets) {
+        const cur = next[p.id] ?? {
+          checked_in_day1: !!p.checked_in_day1,
+          checked_in_day2: !!p.checked_in_day2,
+        };
+        next[p.id] =
+          day === 1
+            ? { ...cur, checked_in_day1: true }
+            : { ...cur, checked_in_day2: true };
       }
       return next;
     });
 
-    const result = await bulkCheckIn(unchecked, eventId);
+    const result = await bulkCheckIn(ids, eventId, day);
     if (result.success) {
       router.refresh();
     } else {
       // Revert the optimistic bulk flip
       setCheckInOverrides((prev) => {
         const next = { ...prev };
-        for (const id of unchecked) {
+        for (const id of ids) {
           delete next[id];
         }
         return next;
@@ -457,6 +481,8 @@ export function ParticipantsClient({
       "Committee",
       "Access Code",
       "Checked In",
+      "Day 1",
+      "Day 2",
       "Checked In At",
     ];
     const rows = participants.map((p) => [
@@ -472,6 +498,8 @@ export function ParticipantsClient({
       p.committee_name || "",
       p.access_code,
       p.checked_in ? "Yes" : "No",
+      p.checked_in_day1 ? "Yes" : "No",
+      p.checked_in_day2 ? "Yes" : "No",
       p.checked_in_at || "",
     ]);
 
@@ -495,19 +523,30 @@ export function ParticipantsClient({
           </h2>
           <span className="flex items-center gap-1.5 rounded-full bg-green-50 px-2.5 py-1 text-xs font-medium text-green-700">
             <UserCheck className="size-3.5" />
-            {checkedInCount} of {initialParticipants.length} checked in
+            Day 1: {day1Count} · Day 2: {day2Count} of {initialParticipants.length}
           </span>
         </div>
         <div className="flex items-center gap-2">
-          {checkedInCount < initialParticipants.length && initialParticipants.length > 0 && (
+          {day1Count < initialParticipants.length && initialParticipants.length > 0 && (
             <Button
               variant="outline"
               size="sm"
-              onClick={handleBulkCheckInAll}
+              onClick={() => handleBulkCheckInDay(1)}
               disabled={loading}
             >
               <UserCheck className="size-4" />
-              Check In All
+              Check In All · Day 1
+            </Button>
+          )}
+          {day2Count < initialParticipants.length && initialParticipants.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleBulkCheckInDay(2)}
+              disabled={loading}
+            >
+              <UserCheck className="size-4" />
+              Check In All · Day 2
             </Button>
           )}
 
@@ -907,7 +946,7 @@ export function ParticipantsClient({
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-20">Check-in</TableHead>
+                <TableHead className="w-32">Check-in (D1 / D2)</TableHead>
                 <TableHead>
                   <button
                     onClick={() => handleSort("full_name")}
@@ -956,26 +995,35 @@ export function ParticipantsClient({
                   className="cursor-pointer hover:bg-[#1a1a3e]/[0.025]"
                 >
                   <TableCell>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleToggleCheckIn(p);
-                      }}
-                      disabled={checkingIn.has(p.id)}
-                      className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition-colors hover:bg-gray-50 disabled:opacity-50"
-                      title={p.checked_in ? "Click to check out" : "Click to check in"}
-                    >
-                      {checkingIn.has(p.id) ? (
-                        <Loader2 className="size-3.5 animate-spin text-gray-400" />
-                      ) : p.checked_in ? (
-                        <span className="size-2.5 rounded-full bg-green-500" />
-                      ) : (
-                        <span className="size-2.5 rounded-full bg-gray-300" />
-                      )}
-                      <span className={p.checked_in ? "text-green-700" : "text-gray-500"}>
-                        {p.checked_in ? "In" : "Out"}
-                      </span>
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      {([1, 2] as const).map((day) => {
+                        const on =
+                          day === 1 ? !!p.checked_in_day1 : !!p.checked_in_day2;
+                        return (
+                          <button
+                            key={day}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleToggleDay(p, day);
+                            }}
+                            disabled={checkingIn.has(p.id)}
+                            className={`flex items-center gap-1 rounded-md border px-1.5 py-1 text-xs font-medium transition-colors disabled:opacity-50 ${
+                              on
+                                ? "border-green-200 bg-green-50 text-green-700"
+                                : "border-gray-200 text-gray-500 hover:bg-gray-50"
+                            }`}
+                            title={`Day ${day}: click to ${on ? "remove" : "mark present"}`}
+                          >
+                            <span
+                              className={`size-2 rounded-full ${
+                                on ? "bg-green-500" : "bg-gray-300"
+                              }`}
+                            />
+                            D{day}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </TableCell>
                   <TableCell className="font-medium">{p.full_name}</TableCell>
                   <TableCell>{p.school_name}</TableCell>

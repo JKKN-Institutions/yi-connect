@@ -74,7 +74,7 @@ const ROLE_OPTIONS = [
   { value: "chapter_admin", label: "Chapter admin (YIP chair)" },
   { value: "chapter_organizer", label: "Chapter organizer" },
   { value: "chapter_em", label: "Chapter EM" },
-  { value: "chapter_chair", label: "Chapter chair (Yi-Future)" },
+  { value: "chapter_chair", label: "Chapter Chair (chapter-wide)" },
 ];
 
 const STATUS_OPTIONS: { value: DirectoryStatusFilter; label: string }[] = [

@@ -1,13 +1,18 @@
 /**
- * Smart Guide — Yi Connect main dashboard content (PURE DATA).
+ * Smart Guide — Yi Connect chapter-management content (PURE DATA).
+ *
+ * Scope: running and growing a Yi CHAPTER — onboarding a new chapter, onboarding
+ * and approving members, and the day-to-day chapter operations (events, finance,
+ * stakeholders, communication, recognition, leadership pipeline). This guide is
+ * deliberately about chapter management only; it does NOT cover the other Yi apps
+ * (YIP, Yi-Future, YiFi, Youth Academy) — those have their own guides.
  *
  * ONE guidebook drives the full page (/user-guide), the in-app drawer (the "?"
- * Help FAB + sidebar "Guide" item) and the dashboard "next step" nudge. Authored
- * from the app's real routes — every deep-link below was verified to resolve to a
- * live page. Subsumes the old static /user-guide accordion (its Q&A folded into
- * steps + the glossary).
+ * Help FAB + sidebar "Guide" item), the dashboard "Start onboarding" launcher,
+ * and the next-step nudge. Authored from the app's real routes — every deep-link
+ * was verified to resolve to a live page.
  *
- * Lanes map to the dashboard's 8 roles:
+ * Lanes map to the chapter's operating roles:
  *   member        ← Executive Member / EC Member (default for any member)
  *   leadership    ← Chapter Chair / Co-Chair        [gated: REQUIRES.lead]
  *   vertical_head ← Vertical Head                    [open — instructional]
@@ -20,8 +25,7 @@ import type { GuideBook } from "./types";
 
 /* ────────────────────────────────────────────────────────────────────────
  * Permission keys — defined ONCE here, imported by detect-lane.ts so a
- * lane's `requires` and the `can()` check can never silently drift. A rename
- * is a compile error, not a fail-open lane.
+ * lane's `requires` and the `can()` check can never silently drift.
  * ──────────────────────────────────────────────────────────────────────── */
 export const REQUIRES = {
   /** Chapter Chair / Co-Chair level and above. */
@@ -51,15 +55,15 @@ export const GUIDES: GuideBook = {
     member: {
       persona: "member",
       title: "Member Guide",
-      tagline: "Set up your profile, find events, and make the most of your Yi membership.",
+      tagline: "Get set up as a chapter member and make the most of Yi.",
       whyItMatters:
         "A complete profile and steady participation lift your engagement score and get you matched to the right volunteer roles.",
       startHere: { label: "Open my dashboard", href: "/dashboard" },
-      journey: ["Set up your profile", "Find events", "Join in", "Recognise others", "Grow in Yi"],
+      journey: ["Finish your setup", "Find events", "Join in", "Recognise others", "Grow in Yi"],
       sections: [
         {
-          id: "profile",
-          title: "Set up your profile",
+          id: "onboarding",
+          title: "Finish setting up your account",
           steps: [
             {
               action: "Complete your **profile** — photo, contact, skills, company and availability.",
@@ -146,19 +150,26 @@ export const GUIDES: GuideBook = {
     leadership: {
       persona: "leadership",
       title: "Chapter Leadership Guide",
-      tagline: "Run your chapter — members, events, money, stakeholders, communication and the leadership pipeline.",
+      tagline: "Onboard your members and run your chapter — events, money, stakeholders, communication and the leadership pipeline.",
       whyItMatters:
-        "Your chapter's roster, events and reports are what national sees. Keeping them current is how your chapter gets recognised.",
-      startHere: { label: "Open my dashboard", href: "/dashboard" },
+        "Your chapter's roster, events and reports are what national sees. Keeping them current — starting with onboarding members — is how your chapter gets recognised.",
+      startHere: { label: "Review membership requests", href: "/member-requests" },
       requires: REQUIRES.lead,
-      journey: ["Build the roster", "Run events", "Manage money", "Engage stakeholders", "Communicate", "Build leaders"],
+      journey: ["Onboard members", "Run events", "Manage money", "Engage stakeholders", "Communicate", "Build leaders"],
       sections: [
         {
-          id: "roster",
-          title: "Build your member roster",
+          id: "onboard-members",
+          title: "Onboard your members",
           steps: [
             {
-              action: "Add a **new member** — they get an invite email to set up their account.",
+              action: "**Review and approve membership requests** — new applicants land here first.",
+              detail:
+                "Someone applies at the public join page; you approve them here, which whitelists their email and assigns them to your chapter so they can sign in.",
+              tip: "Approve promptly — an applicant can't log in until you do.",
+              link: { label: "Open membership requests", href: "/member-requests" },
+            },
+            {
+              action: "Add a **member directly** — they get an invite email to set up their account.",
               detail: "Fill in email, name and membership type.",
               link: { label: "Add a member", href: "/members/new" },
             },
@@ -375,13 +386,33 @@ export const GUIDES: GuideBook = {
     national: {
       persona: "national",
       title: "National & Admin Guide",
-      tagline: "Oversee chapters — benchmark performance, broadcast, sync data, and steward awards and succession.",
+      tagline: "Onboard new chapters and oversee the chapter network — admins, benchmarks, broadcasts and data sync.",
       whyItMatters:
-        "You see across every chapter. Accurate benchmarks and timely broadcasts are how the network stays aligned.",
-      startHere: { label: "Open the national hub", href: "/national" },
+        "You set up the chapters and admins everything else runs on. Onboarding a chapter correctly is what lets its team start operating.",
+      startHere: { label: "Manage chapters", href: "/admin/chapters" },
       requires: REQUIRES.national,
-      journey: ["National hub", "Benchmark", "Broadcast", "Sync data", "Oversee awards & succession"],
+      journey: ["Onboard a chapter", "Set up admins", "Benchmark", "Broadcast", "Oversee awards & succession"],
       sections: [
+        {
+          id: "onboard-chapter",
+          title: "Onboard a new chapter",
+          steps: [
+            {
+              action: "**Create a new chapter** — name, region and feature configuration.",
+              detail: "Creating the chapter is what lets its members and leaders be added and start operating.",
+              link: { label: "Create a chapter", href: "/admin/chapters/new" },
+            },
+            {
+              action: "Review and edit **existing chapters** from the chapters list.",
+              link: { label: "Manage chapters", href: "/admin/chapters" },
+            },
+            {
+              action: "**Invite admins and users** and assign their roles.",
+              detail: "Set up each new chapter's chair and core team so they can run it.",
+              link: { label: "Invite a user", href: "/admin/users/invite" },
+            },
+          ],
+        },
         {
           id: "hub",
           title: "National command center",
@@ -394,7 +425,7 @@ export const GUIDES: GuideBook = {
         },
         {
           id: "benchmark",
-          title: "Benchmark & compare",
+          title: "Benchmark & compare chapters",
           steps: [
             {
               action: "Compare chapters with **benchmarks**.",
@@ -408,25 +439,15 @@ export const GUIDES: GuideBook = {
         },
         {
           id: "broadcast",
-          title: "Broadcast to chapters",
+          title: "Broadcast & sync",
           steps: [
             {
               action: "Send a **broadcast** to chapters.",
               link: { label: "Open broadcasts", href: "/national/broadcasts" },
             },
-          ],
-        },
-        {
-          id: "sync",
-          title: "Data & settings",
-          steps: [
             {
-              action: "Run **data sync** between chapters and national systems.",
+              action: "Run **data sync** between chapters and national systems, and adjust national settings.",
               link: { label: "Open sync", href: "/national/sync" },
-            },
-            {
-              action: "Adjust **national settings**.",
-              link: { label: "Open national settings", href: "/national/settings" },
             },
           ],
         },
@@ -450,6 +471,8 @@ export const GUIDES: GuideBook = {
   },
 
   glossary: [
+    { term: "Membership request", def: "A new person's application to join the chapter — a leader approves it before the person can sign in." },
+    { term: "Chapter onboarding", def: "Setting up a new chapter (creating it, then adding its chair, core team and members) so it can start operating." },
     { term: "Engagement score", def: "A member's activity level — from event attendance, committee work, volunteering and profile completeness." },
     { term: "Health score", def: "How strong a stakeholder relationship is — based on recent interactions, collaborations and contact frequency." },
     { term: "RSVP", def: "Registering whether you will attend an event, so organisers can plan." },

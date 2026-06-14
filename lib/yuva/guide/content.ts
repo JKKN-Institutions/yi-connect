@@ -637,6 +637,41 @@ export function nextUndoneStep(
   return null;
 }
 
+/* ── Onboarding entry (Start / Resume / Replay) ───────────────────────────
+ * The start-vs-resume-vs-replay decision is derived PURELY from saved progress,
+ * never a "first login" flag — that is what lets someone who SKIPPED onboarding
+ * pick it up later (non-empty-but-incomplete set → "resume"). */
+export type OnboardingKind = "start" | "resume" | "replay";
+export type OnboardingCta = {
+  kind: OnboardingKind;
+  label: string;
+  remaining: number;
+  target: NextStep | null;
+  complete: boolean;
+};
+
+export function onboardingCta(
+  content: GuideContent,
+  completed: ReadonlySet<string>
+): OnboardingCta {
+  const lp = laneProgress(content, completed);
+  const next = nextUndoneStep(content, completed);
+  if (lp.done === 0) {
+    return { kind: "start", label: "Start onboarding", remaining: lp.total, target: next, complete: false };
+  }
+  if (next) {
+    return { kind: "resume", label: "Resume onboarding", remaining: lp.total - lp.done, target: next, complete: false };
+  }
+  return { kind: "replay", label: "Replay walkthrough", remaining: 0, target: nextUndoneStep(content, new Set()), complete: true };
+}
+
+/** Synthetic progress key marking that a viewer saw a module's first-entry
+ *  welcome. Stored in guide_progress (so it syncs across devices) but excluded
+ *  from laneStepKeys, so it never inflates lane progress or becomes a next step. */
+export function welcomeSeenKey(moduleKey: string): string {
+  return `__welcome__:${moduleKey}`;
+}
+
 /* ── Instrumentation ──────────────────────────────────────────────────── */
 
 export type GuideEventName =

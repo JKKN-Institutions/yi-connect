@@ -14,6 +14,9 @@ import type { Database } from "@/types/yi-future/database";
 import { PhaseTracker, type PhaseEventStatus } from "@/components/yi-future/phase/PhaseTracker";
 import { PushSubscribe } from "@/components/yi-future/pwa/PushSubscribe";
 import { TrackIcon } from "@/components/yi-future/TrackIcon";
+import { NextStepWidget } from "@/components/yi-future/guide";
+import { GUIDES } from "@/lib/yi-future/guide/content";
+import { getCompletedSteps, logGuideEvent } from "@/lib/yi-future/guide/actions";
 
 type CoreTeamRole = Database["future"]["Enums"]["user_role"];
 
@@ -316,8 +319,16 @@ export default async function ChapterDashboard() {
     await advanceEditionStage({ editionId: ctx!.editionId });
   }
 
+  const guideCompleted = await getCompletedSteps("chapter");
+
   return (
     <div className="space-y-6">
+      <NextStepWidget
+        guide={GUIDES.lanes.chapter}
+        basePath="/yi-future/guide"
+        completed={guideCompleted}
+        onEvent={logGuideEvent}
+      />
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <div className="flex items-center gap-2 text-xs text-navy/50 font-semibold tracking-widest uppercase">

@@ -6,6 +6,7 @@
  */
 
 import { Suspense } from 'react'
+import Link from 'next/link'
 import { getUserProfile, getCurrentMemberId } from '@/lib/auth'
 import { UserMenu } from '@/components/navigation/user-menu'
 import { NotificationBell } from '@/components/communication/notification-bell'
@@ -56,17 +57,30 @@ export function DashboardHeader() {
 
       <header className="sticky top-0 z-30 bg-background border-b">
         <div className="flex items-center justify-between px-4 lg:px-6 py-3 lg:py-4">
-        {/* Left side - Brand on mobile, Chapter Switcher on desktop */}
+        {/* Left side - Brand (→ cross-app hub) + Chapter Switcher on desktop */}
         <div className="flex items-center gap-2">
-          {/* Mobile Brand */}
-          <div className="lg:hidden flex items-center gap-2">
+          {/* Mobile Brand → /hub */}
+          <Link
+            href="/hub"
+            aria-label="Go to the Yi hub"
+            className="lg:hidden flex items-center gap-2"
+          >
             <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
               <span className="text-lg font-bold text-primary">Yi</span>
             </div>
             <span className="text-base font-bold">Yi Connect</span>
-          </div>
+          </Link>
 
-          {/* Desktop Chapter Switcher */}
+          {/* Desktop: compact brand → /hub, then the Chapter Switcher */}
+          <Link
+            href="/hub"
+            aria-label="Go to the Yi hub"
+            className="hidden lg:flex items-center"
+          >
+            <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+              <span className="text-lg font-bold text-primary">Yi</span>
+            </div>
+          </Link>
           <div className="hidden lg:block">
             <ChapterSwitcher />
           </div>

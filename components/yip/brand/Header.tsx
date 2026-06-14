@@ -14,7 +14,9 @@ import Image from "next/image";
  * Below the `sm` breakpoint only Yi + the wordmark show to avoid
  * overflow; Bharat One and CII are hidden.
  */
-export function YipBrandHeader(): React.JSX.Element {
+export function YipBrandHeader({
+  homeHref = "/yip",
+}: { homeHref?: string } = {}): React.JSX.Element {
   return (
     <header
       aria-label="YIP — Young Indians Parliament header"
@@ -22,7 +24,7 @@ export function YipBrandHeader(): React.JSX.Element {
     >
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6">
         <Link
-          href="/yip"
+          href={homeHref}
           aria-label="YIP home"
           className="flex items-center gap-3"
         >

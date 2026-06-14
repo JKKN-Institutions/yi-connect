@@ -33,7 +33,7 @@ export default async function ChapterLayout({
     <div className="min-h-screen bg-slate-50">
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
-          <Link href="/youth-academy/chapter" className="flex items-center gap-2">
+          <Link href="/hub" className="flex items-center gap-2">
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-900">
               <GraduationCap className="size-4 text-amber-400" />
             </span>

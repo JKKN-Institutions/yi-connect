@@ -33,21 +33,29 @@ export async function forgotPassword(
     }
   }
 
-  const supabase = await createServerSupabaseClient()
-
-  const { error } = await supabase.auth.resetPasswordForEmail(validation.data.email, {
-    redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/reset-password`,
+  // Branded per-app reset email (admin.generateLink + our own Resend send),
+  // not Supabase's generic platform-wide template. See lib/auth/branded-password-reset.
+  const { ok, error } = await sendBrandedPasswordReset(validation.data.email, {
+    appName: 'Yi Connect',
+    tagline: 'Young Indians · Nation Building',
+    fromEmail: process.env.FROM_EMAIL || 'Yi Connect <noreply@jkkn.ai>',
+    headerColor: 'linear-gradient(135deg, #1e40af 0%, #3b82f6 100%)',
+    accentColor: '#3b82f6',
+    baseUrl: appBaseUrl(),
+    resetPath: '/reset-password',
   })
 
-  if (error) {
+  if (!ok) {
     return {
-      message: 'Failed to send reset email. Please try again.',
+      message: error ?? 'Failed to send reset email. Please try again.',
     }
   }
 
+  // Generic success message regardless of whether the email is registered
+  // (no account-enumeration).
   return {
     success: true,
-    message: 'Password reset email sent! Please check your inbox.',
+    message: 'If an account exists for that email, a password reset link is on its way.',
   }
 }
 

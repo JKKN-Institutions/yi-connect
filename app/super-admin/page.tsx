@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getCurrentPersonRoles } from "@/lib/yi/auth/yi-directory-roles";
+import { signOut } from "@/app/actions/auth";
 
 export const metadata = {
   title: "Super Admin · Yi Connect",

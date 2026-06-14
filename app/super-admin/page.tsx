@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getCurrentPersonRoles } from "@/lib/yi/auth/yi-directory-roles";
+import { signOut } from "@/app/actions/auth";
 
 export const metadata = {
   title: "Super Admin · Yi Connect",
@@ -44,6 +45,13 @@ const MODULES: ModuleCard[] = [
     accent: "hover:border-[#FD7215]/50",
   },
   {
+    title: "Youth Academy",
+    desc: "Academies, runs, students, and chapter delivery across Yi YUVA.",
+    href: "/youth-academy/national",
+    icon: "🎓",
+    accent: "hover:border-[#229434]/50",
+  },
+  {
     title: "Directory",
     desc: "People, roles, and cross-app identity across every Yi module.",
     href: "/admin/directory",
@@ -75,9 +83,19 @@ export default async function SuperAdminPage() {
               Super Admin
             </span>
           </div>
-          {me?.email && (
-            <span className="text-sm text-gray-500">{me.email}</span>
-          )}
+          <div className="flex items-center gap-4">
+            {me?.email && (
+              <span className="text-sm text-gray-500">{me.email}</span>
+            )}
+            <form action={signOut}>
+              <button
+                type="submit"
+                className="text-sm font-medium text-gray-500 hover:text-[#000066]"
+              >
+                Sign out
+              </button>
+            </form>
+          </div>
         </div>
       </header>
 

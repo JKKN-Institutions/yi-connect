@@ -315,10 +315,18 @@ export async function submitScore(
       reason: input.status === "submitted" ? "Score submitted" : "Draft updated",
     });
   } else {
-    // Insert new score
+    // Insert new score. Concurrent-reconnect race fix (rehearsal 2026-06-14):
+    // two near-simultaneous writes for the same (juror, participant, session) —
+    // e.g. the 10s offline flush firing while the juror also taps Submit — both
+    // read no existing row (above) then both INSERT, and the 2nd hits the
+    // scores_jaid_pid_aid_key unique violation (returned as a failure, leaving
+    // the entry stuck in the offline buffer). Upsert on that key turns the loser
+    // into an idempotent UPDATE instead of a 23505 error (proven at 140-scale).
     const { data: newScore, error: insertError } = await supabase
       .from("scores")
-      .insert(scoreData)
+      .upsert(scoreData, {
+        onConflict: "jury_assignment_id,participant_id,agenda_item_id",
+      })
       .select("id")
       .single();
 

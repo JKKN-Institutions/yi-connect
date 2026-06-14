@@ -1,8 +1,97 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { isPlatformSuperAdmin } from "@/lib/yi/auth/yi-directory-roles";
+import {
+  isPlatformSuperAdmin,
+  getCurrentPersonRoles,
+} from "@/lib/yi/auth/yi-directory-roles";
 import { getYipSession } from "@/lib/yip/auth/yip-session";
+
+// Admin-tier roles per app (excludes pure participant roles like delegate /
+// participant). Cross-app platform tiers are handled earlier (Priority 0).
+const FUTURE_ADMIN_ROLES = [
+  "future_super_admin",
+  "future_admin",
+  "national_admin",
+  "regional_admin",
+  "chapter_admin",
+  "platform_admin",
+];
+const YUVA_ADMIN_ROLES = [
+  "yuva_super_admin",
+  "yuva_admin",
+  "chapter_admin",
+  "institution_coordinator",
+];
+const YIP_ADMIN_ROLES = [
+  "yip_super_admin",
+  "national",
+  "regional_admin",
+  "chapter_admin",
+  "chapter_organizer",
+];
+
+type ModuleTile = {
+  title: string;
+  desc: string;
+  href: string;
+  icon: string;
+  accent: string;
+};
+
+/**
+ * "Pick your module" hub — shown when a signed-in admin holds roles in MORE
+ * than one module, so the app entry never silently drops them into one view or
+ * (worse) bounces them to the public YiFi landing. Tiles link to each module's
+ * own entry, which self-routes to the right dashboard.
+ */
+function ModuleHub({
+  email,
+  tiles,
+}: {
+  email: string | null;
+  tiles: ModuleTile[];
+}) {
+  return (
+    <main className="min-h-screen bg-[#f4f4f5] flex flex-col items-center justify-center px-4 py-12">
+      <div className="w-full max-w-2xl">
+        <div className="text-center mb-8">
+          <h1 className="text-2xl md:text-3xl font-bold text-[#000066]">
+            Welcome back
+          </h1>
+          <p className="mt-2 text-sm text-gray-500">
+            {email ? `Signed in as ${email}. ` : ""}Choose where you&apos;d like
+            to go.
+          </p>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          {tiles.map((m) => (
+            <Link
+              key={m.href}
+              href={m.href}
+              className={`block rounded-2xl bg-white border border-gray-200 p-5 shadow-sm transition-all hover:shadow-md ${m.accent}`}
+            >
+              <div className="text-3xl mb-2">{m.icon}</div>
+              <div className="font-semibold text-[#000066]">{m.title}</div>
+              <div className="mt-1 text-xs text-gray-500 leading-relaxed">
+                {m.desc}
+              </div>
+            </Link>
+          ))}
+        </div>
+        <div className="text-center mt-8">
+          <Link
+            href="/logout"
+            className="text-xs text-gray-400 hover:text-gray-600"
+          >
+            Sign out
+          </Link>
+        </div>
+      </div>
+    </main>
+  );
+}
 
 function parseSession(raw: string | undefined): Record<string, unknown> | null {
   if (!raw) return null;

@@ -5,6 +5,8 @@ import { readSession } from "@/app/yi-future/actions/auth";
 import { TEAM_SIZE_MIN, TEAM_SIZE_MAX } from "@/lib/yi-future/constants";
 import { getVapidPublicKey } from "@/lib/yi-future/vapid";
 import PushSubscribeButton from "@/components/yi-future/push/PushSubscribeButton";
+import { ModuleWelcome } from "@/components/yi-future/guide/module-welcome";
+import { logGuideEvent } from "@/lib/yi-future/guide/actions";
 
 type DelegateView = {
   id: string;
@@ -96,6 +98,17 @@ export default async function DelegateHome() {
 
   return (
     <div className="space-y-6">
+      {/* First-entry welcome — delegates sign in with an access-code cookie (no
+          Supabase user), so seen-state falls back to localStorage; the
+          welcome_shown event still logs via the service client. */}
+      <ModuleWelcome
+        moduleKey="delegate-home"
+        persona="delegate"
+        title="Welcome to Yi Future 6.0"
+        body="This is your home base — your team, submissions, journey, and results all live here. Here's a quick tour of how it works."
+        cta={{ label: "Show me how", href: "/yi-future/guide?persona=delegate" }}
+        onEvent={logGuideEvent}
+      />
       <div>
         <h1 className="text-2xl font-bold text-navy">Hi {me.full_name}</h1>
         <p className="mt-1 text-sm text-navy/60">

@@ -14,6 +14,9 @@ import type { Database } from "@/types/yi-future/database";
 import { PhaseTracker, type PhaseEventStatus } from "@/components/yi-future/phase/PhaseTracker";
 import { PushSubscribe } from "@/components/yi-future/pwa/PushSubscribe";
 import { TrackIcon } from "@/components/yi-future/TrackIcon";
+import { GUIDES } from "@/lib/yi-future/guide/content";
+import { getCompletedSteps, logGuideEvent } from "@/lib/yi-future/guide/actions";
+import { OnboardingLauncher } from "@/components/yi-future/guide/onboarding-launcher";
 
 type CoreTeamRole = Database["future"]["Enums"]["user_role"];
 
@@ -311,6 +314,9 @@ export default async function ChapterDashboard() {
   // Next-stage peek
   const nextPeek = await peekNextStage(ctx.editionId);
 
+  // Onboarding launcher progress (chapter lane — Supabase-auth admins).
+  const guideCompleted = await getCompletedSteps("chapter");
+
   async function advanceAction() {
     "use server";
     await advanceEditionStage({ editionId: ctx!.editionId });
@@ -332,7 +338,15 @@ export default async function ChapterDashboard() {
             <p className="mt-1 text-sm text-navy/60">{ctx.chapterCity}</p>
           )}
         </div>
-        <PushSubscribe />
+        <div className="flex flex-wrap items-center gap-2">
+          <OnboardingLauncher
+            content={GUIDES.lanes.chapter}
+            persona="chapter"
+            completed={guideCompleted}
+            onEvent={logGuideEvent}
+          />
+          <PushSubscribe />
+        </div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">

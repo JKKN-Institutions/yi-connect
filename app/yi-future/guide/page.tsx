@@ -22,6 +22,11 @@ import { resolveFutureAccessOrNull } from "@/lib/yi-future/auth/require-access";
 import { readSession } from "@/app/yi-future/actions/auth";
 import { GUIDES } from "@/lib/yi-future/guide/content";
 import { isGuidePersona, type GuidePersona } from "@/lib/yi-future/guide/types";
+import {
+  getCompletedSteps,
+  toggleStep,
+  logGuideEvent,
+} from "@/lib/yi-future/guide/actions";
 import { GuideView } from "@/app/yi-future/_components/GuideView";
 
 export const dynamic = "force-dynamic";
@@ -80,6 +85,11 @@ export default async function YiFutureGuidePage({
     ? requestedRaw
     : ownPersona;
 
+  // Saved checklist progress for the VIEWED lane. Persists only for Supabase
+  // Auth users (national / chapter admins); access-code lanes resolve to [] and
+  // the checklist still works in-session (graceful degradation).
+  const completed = await getCompletedSteps(persona);
+
   return (
     <main className="min-h-screen bg-[#FEFCF6]">
       {/* Gold top accent */}
@@ -110,7 +120,17 @@ export default async function YiFutureGuidePage({
       </header>
 
       <div className="mx-auto max-w-3xl px-6 py-8">
-        <GuideView guides={GUIDES} persona={persona} />
+        {/* key={persona} remounts on a ?persona= switch so the progress useState
+            re-seeds from the new lane's `completed` (stale-checkbox guard). */}
+        <GuideView
+          key={persona}
+          guides={GUIDES}
+          persona={persona}
+          trackProgress
+          initialCompleted={completed}
+          onToggleStep={toggleStep}
+          onEvent={logGuideEvent}
+        />
       </div>
     </main>
   );

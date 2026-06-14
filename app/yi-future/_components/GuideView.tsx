@@ -35,14 +35,21 @@ import {
   ArrowRight,
   Printer,
   BookOpen,
+  Check,
+  CheckCircle2,
   type LucideIcon,
 } from "lucide-react";
 
 import {
   type GuideBook,
   type GuidePersona,
+  type GuideEvent,
   GUIDE_PERSONAS,
+  laneProgress,
+  nextUndoneStep,
+  stepKey,
 } from "@/lib/yi-future/guide/types";
+import { useGuideProgress } from "@/lib/yi-future/guide/use-progress";
 
 const PERSONA_ICON: Record<GuidePersona, LucideIcon> = {
   national: ShieldCheck,
@@ -76,15 +83,67 @@ function renderInline(text: string): React.ReactNode {
   );
 }
 
+/** Strip **bold** markers for plain inline text (resume label + a11y labels). */
+function plain(s: string): string {
+  return s.split("**").join("");
+}
+
 interface GuideViewProps {
   guides: GuideBook;
   persona: GuidePersona;
+  /** Adoption layer (all OPTIONAL — off → the plain guide). When set, each step
+   *  becomes a persisted checkbox + a progress bar appears and events fire. */
+  trackProgress?: boolean;
+  initialCompleted?: string[];
+  onToggleStep?: (
+    persona: GuidePersona,
+    stepKey: string,
+    done: boolean
+  ) => Promise<unknown> | void;
+  onEvent?: (event: GuideEvent) => Promise<unknown> | void;
 }
 
-export function GuideView({ guides, persona }: GuideViewProps) {
+export function GuideView({
+  guides,
+  persona,
+  trackProgress = false,
+  initialCompleted,
+  onToggleStep,
+  onEvent,
+}: GuideViewProps) {
   const router = useRouter();
   const content = guides.lanes[persona];
   const Icon = PERSONA_ICON[persona];
+
+  // ── Adoption hook — every hook runs before any early return (there is none
+  // here, but keep the rule so a future refactor can't break it). ───────────
+  const { completed, toggle, emit } = useGuideProgress({
+    persona,
+    surface: "page",
+    initialCompleted,
+    onToggle: onToggleStep,
+    onEvent,
+  });
+
+  // guide_open once (ref-guarded so StrictMode's dev double-invoke can't dupe).
+  const opened = React.useRef(false);
+  React.useEffect(() => {
+    if (opened.current) return;
+    opened.current = true;
+    emit({ name: "guide_open", surface: "page" });
+  }, [emit]);
+
+  const lp = laneProgress(content, completed);
+  const next = trackProgress ? nextUndoneStep(content, completed) : null;
+
+  // lane_complete on the transition to all-done.
+  const wasComplete = React.useRef(lp.complete);
+  React.useEffect(() => {
+    if (trackProgress && lp.complete && !wasComplete.current) {
+      emit({ name: "lane_complete", surface: "page" });
+    }
+    wasComplete.current = lp.complete;
+  }, [trackProgress, lp.complete, emit]);
 
   return (
     <div className="space-y-10">
@@ -101,7 +160,12 @@ export function GuideView({ guides, persona }: GuideViewProps) {
               <button
                 key={p}
                 type="button"
-                onClick={() => router.push(`/yi-future/guide?persona=${p}`)}
+                onClick={() => {
+                  if (p !== persona) {
+                    emit({ name: "lane_switch", surface: "page", context: p });
+                  }
+                  router.push(`/yi-future/guide?persona=${p}`);
+                }}
                 aria-pressed={active}
                 className={
                   active
@@ -156,6 +220,47 @@ export function GuideView({ guides, persona }: GuideViewProps) {
         )}
       </header>
 
+      {/* ── Progress (checklist — only when tracking) ───────────────── */}
+      {trackProgress && lp.total > 0 && (
+        <section
+          aria-label="Your progress"
+          className="rounded-2xl border border-[#1a1a3e]/10 bg-white p-5 shadow-sm"
+        >
+          {lp.complete ? (
+            <p className="flex items-center gap-2 text-sm font-semibold text-[#1a1a3e]">
+              <CheckCircle2 className="size-5 text-emerald-600" />
+              You&apos;ve completed this guide — you&apos;re all set up.
+            </p>
+          ) : (
+            <>
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold text-[#1a1a3e]">
+                  Your setup
+                </p>
+                <span className="text-sm text-[#1a1a3e]/50">
+                  {lp.done} of {lp.total} done
+                </span>
+              </div>
+              <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#1a1a3e]/10">
+                <div
+                  className="h-full rounded-full bg-[#1a1a3e] transition-all"
+                  style={{ width: `${lp.percent}%` }}
+                />
+              </div>
+              {next && (
+                <a
+                  href={`#step-${next.sectionIndex}-${next.stepIndex}`}
+                  className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-[#1a1a3e] hover:underline"
+                >
+                  Resume — next: {plain(next.step.action)}
+                  <ArrowRight className="size-3.5" />
+                </a>
+              )}
+            </>
+          )}
+        </section>
+      )}
+
       {/* ── Journey strip ───────────────────────────────────────────── */}
       <section
         aria-label="Your journey at a glance"
@@ -189,44 +294,80 @@ export function GuideView({ guides, persona }: GuideViewProps) {
             {section.title}
           </h2>
           <ol className="space-y-3">
-            {section.steps.map((step, i) => (
-              <li
-                key={i}
-                className="flex gap-4 rounded-xl border border-[#1a1a3e]/10 bg-white p-4 shadow-sm"
-              >
-                <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[#F5A623]/20 text-sm font-bold text-[#1a1a3e]">
-                  {i + 1}
-                </span>
-                <div className="min-w-0 flex-1 space-y-2">
-                  <p className="font-medium leading-snug text-[#1a1a3e]">
-                    {renderInline(step.action)}
-                  </p>
-                  {step.detail && (
-                    <p className="text-sm leading-relaxed text-[#1a1a3e]/55">
-                      {renderInline(step.detail)}
-                    </p>
-                  )}
-                  {step.tip && (
-                    <p className="flex items-start gap-2 rounded-lg bg-[#F5A623]/10 px-3 py-2 text-sm text-[#1a1a3e]/80">
-                      <Lightbulb
-                        className="mt-0.5 size-4 shrink-0 text-[#F5A623]"
-                        aria-hidden
-                      />
-                      <span>{renderInline(step.tip)}</span>
-                    </p>
-                  )}
-                  {step.link && (
-                    <Link
-                      href={step.link.href}
-                      className="mt-1 inline-flex items-center gap-1.5 rounded-lg bg-[#1a1a3e] px-3.5 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#1a1a3e]/90 print:hidden"
+            {section.steps.map((step, i) => {
+              const key = stepKey(sIdx, i);
+              const done = trackProgress && completed.has(key);
+              return (
+                <li
+                  id={`step-${sIdx}-${i}`}
+                  key={i}
+                  className="flex scroll-mt-24 gap-4 rounded-xl border border-[#1a1a3e]/10 bg-white p-4 shadow-sm"
+                >
+                  {trackProgress ? (
+                    <button
+                      type="button"
+                      role="checkbox"
+                      aria-checked={done}
+                      aria-label={`${plain(step.action)} — ${done ? "done" : "not done"}`}
+                      onClick={() => toggle(key)}
+                      className={
+                        done
+                          ? "flex size-7 shrink-0 items-center justify-center rounded-full bg-[#1a1a3e] text-white"
+                          : "flex size-7 shrink-0 items-center justify-center rounded-full bg-[#F5A623]/20 text-sm font-bold text-[#1a1a3e] transition-colors hover:bg-[#F5A623]/35"
+                      }
                     >
-                      {step.link.label}
-                      <ArrowRight className="size-3.5" />
-                    </Link>
+                      {done ? <Check className="size-4" /> : i + 1}
+                    </button>
+                  ) : (
+                    <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[#F5A623]/20 text-sm font-bold text-[#1a1a3e]">
+                      {i + 1}
+                    </span>
                   )}
-                </div>
-              </li>
-            ))}
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <p
+                      className={
+                        done
+                          ? "font-medium leading-snug text-[#1a1a3e]/40 line-through"
+                          : "font-medium leading-snug text-[#1a1a3e]"
+                      }
+                    >
+                      {renderInline(step.action)}
+                    </p>
+                    {step.detail && (
+                      <p className="text-sm leading-relaxed text-[#1a1a3e]/55">
+                        {renderInline(step.detail)}
+                      </p>
+                    )}
+                    {step.tip && (
+                      <p className="flex items-start gap-2 rounded-lg bg-[#F5A623]/10 px-3 py-2 text-sm text-[#1a1a3e]/80">
+                        <Lightbulb
+                          className="mt-0.5 size-4 shrink-0 text-[#F5A623]"
+                          aria-hidden
+                        />
+                        <span>{renderInline(step.tip)}</span>
+                      </p>
+                    )}
+                    {step.link && (
+                      <Link
+                        href={step.link.href}
+                        onClick={() =>
+                          emit({
+                            name: "step_link_click",
+                            surface: "page",
+                            stepKey: key,
+                            context: step.link!.href,
+                          })
+                        }
+                        className="mt-1 inline-flex items-center gap-1.5 rounded-lg bg-[#1a1a3e] px-3.5 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#1a1a3e]/90 print:hidden"
+                      >
+                        {step.link.label}
+                        <ArrowRight className="size-3.5" />
+                      </Link>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
           </ol>
         </section>
       ))}

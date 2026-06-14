@@ -75,6 +75,7 @@ export function VoteClient({
     async function loadData() {
       if (!voteSession || !session) return;
 
+      try {
       if (voteSession.vote_type === "speaker_election") {
         // The session's config.candidateIds is the authoritative ballot —
         // after a round-1 reveal the tied candidates' roles are reset to mp,
@@ -129,8 +130,13 @@ export function VoteClient({
       // of the runoff they are entitled to vote in.
       const votedRes = await hasParticipantVoted(voteSession.id, session.id);
       setHasVoted(votedRes.success && votedRes.data.hasVoted);
-
-      setLoadingCandidates(false);
+      } catch {
+        // Offline / network error while loading the ballot — leave candidates
+        // empty rather than hanging on a spinner forever. The offline banner +
+        // the cast guard cover the "you can't vote right now" messaging.
+      } finally {
+        setLoadingCandidates(false);
+      }
     }
 
     loadData();
@@ -149,7 +155,29 @@ export function VoteClient({
     }
 
     startTransition(async () => {
-      const result = await castVote(voteSession.id, session.id, selectedValue);
+      // Auto-retry transient network failures — flaky venue wifi where
+      // navigator.onLine still reports "online" so the guard above didn't trip.
+      // A THROWN error means the request never reached the server (network) →
+      // retry with backoff. A structured { success: false } is a real logical
+      // error → surface it immediately (handled below).
+      let result: Awaited<ReturnType<typeof castVote>> | null = null;
+      const backoffMs = [400, 1200]; // up to 3 attempts total
+      for (let attempt = 0; attempt <= backoffMs.length; attempt++) {
+        try {
+          result = await castVote(voteSession.id, session.id, selectedValue);
+          break;
+        } catch {
+          if (attempt < backoffMs.length) {
+            await new Promise((r) => setTimeout(r, backoffMs[attempt]));
+            continue;
+          }
+          toast.error(
+            "Couldn't reach the server. Check your connection and try again — or ask a volunteer to record your vote at the desk."
+          );
+          return;
+        }
+      }
+      if (!result) return;
 
       if (result.success) {
         if (result.data.status === "success") {

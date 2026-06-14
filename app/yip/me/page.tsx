@@ -36,6 +36,7 @@ import {
 } from "lucide-react";
 import { VoteClient } from "./vote/vote-client";
 import { LiveNowCard } from "./live-now-card";
+import { OfflineStaleNote } from "./offline-stale-note";
 import { SkillProfileCard } from "@/components/yip/skill-profile-card";
 import { getSkillProfile } from "@/app/yip/actions/skill-profile";
 import {
@@ -367,6 +368,9 @@ export default async function ParticipantPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Offline staleness stamp — only renders when the student is offline */}
+      <OfflineStaleNote renderedAt={new Date().toISOString()} />
 
       {/* ─── LIVE NOW (realtime agenda + timer) ────────────────────── */}
       <LiveNowCard eventId={event.id} />

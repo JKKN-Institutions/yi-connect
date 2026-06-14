@@ -139,6 +139,15 @@ export function VoteClient({
   function handleCastVote() {
     if (!voteSession || !session || !selectedValue) return;
 
+    // Voting needs a live connection (open-session check + immutable, atomic
+    // anti-double-vote happen server-side). Offline, the cast would fail
+    // silently — surface it clearly instead. The global offline banner already
+    // signals the state; this prevents a confusing dead tap.
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      toast.error("You're offline — reconnect to the internet to vote.");
+      return;
+    }
+
     startTransition(async () => {
       const result = await castVote(voteSession.id, session.id, selectedValue);
 

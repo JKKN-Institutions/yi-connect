@@ -1073,6 +1073,8 @@ export type Database = {
           is_mock: boolean
           lead_drafter: string | null
           objective: string | null
+          opposition_response: string | null
+          opposition_response_at: string | null
           party_side: Database["public"]["Enums"]["party_side"]
           policy_researcher: string | null
           presenter_1: string | null
@@ -1095,6 +1097,8 @@ export type Database = {
           is_mock?: boolean
           lead_drafter?: string | null
           objective?: string | null
+          opposition_response?: string | null
+          opposition_response_at?: string | null
           party_side: Database["public"]["Enums"]["party_side"]
           policy_researcher?: string | null
           presenter_1?: string | null
@@ -1117,6 +1121,8 @@ export type Database = {
           is_mock?: boolean
           lead_drafter?: string | null
           objective?: string | null
+          opposition_response?: string | null
+          opposition_response_at?: string | null
           party_side?: Database["public"]["Enums"]["party_side"]
           policy_researcher?: string | null
           presenter_1?: string | null

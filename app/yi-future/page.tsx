@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/yi-future/supabase/server";
 import { readSession } from "@/app/yi-future/actions/auth";
+import { resolveFutureAccessOrNull } from "@/lib/yi-future/auth/require-access";
 import { BrandStrip } from "@/components/yi-future/brand/BrandHeader";
 import { BRAND } from "@/lib/yi-future/constants";
 

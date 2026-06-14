@@ -259,17 +259,22 @@ export async function computeResults(
 
   const { data: agendaRows } = await supabase
     .from("agenda")
-    .select("id, agenda_type, session_key")
+    .select("id, agenda_type, session_key, is_scoreable")
     .eq("event_id", eventId);
-  // Map agenda_item_id → { agenda_type, session_key } so per-session config can
-  // be resolved by session_key FIRST (1:1), falling back to agenda_type.
+  // Map agenda_item_id → { agenda_type, session_key, is_scoreable } so per-session
+  // config can be resolved by session_key FIRST (1:1), falling back to agenda_type,
+  // and so non-scoreable sessions can be excluded from aggregation (Bug A).
   const agendaById = new Map<
     string,
-    { agenda_type: string | null; session_key: string | null }
+    { agenda_type: string | null; session_key: string | null; is_scoreable: boolean }
   >(
     (agendaRows ?? []).map((a) => [
       a.id,
-      { agenda_type: a.agenda_type, session_key: a.session_key },
+      {
+        agenda_type: a.agenda_type,
+        session_key: a.session_key,
+        is_scoreable: a.is_scoreable === true,
+      },
     ])
   );
 
@@ -332,8 +337,19 @@ export async function computeResults(
   const resultRows: ResultRow[] = [];
 
   for (const participant of participants) {
-    const pScores = scoresByParticipant.get(participant.id);
-    if (!pScores || pScores.length === 0) continue;
+    // Bug A fix (rehearsal 2026-06-14): only is_scoreable sessions count toward
+    // results — matches the jury UI, which exposes only is_scoreable sessions
+    // (jury-sessions.ts). Excludes stray/leftover/test scores on non-scoreable
+    // sessions (and null-agenda rows) that would otherwise inflate the additive
+    // 'sum' total and silently mis-rank a participant. Proven at 140-scale: a
+    // single stray 100-max score pinned a mid-rank participant at the /100 clamp,
+    // jumping them from rank 69 to rank 1.
+    const pScores = (scoresByParticipant.get(participant.id) ?? []).filter(
+      (s) =>
+        s.agenda_item_id != null &&
+        agendaById.get(s.agenda_item_id)?.is_scoreable === true
+    );
+    if (pScores.length === 0) continue;
 
     // Per-session aggregation, driven by the global scoring settings (admin
     // Scoring Rules screen — nothing hardcoded). Each scoreable agenda item

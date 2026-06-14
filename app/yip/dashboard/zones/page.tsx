@@ -3,8 +3,13 @@ import { getZoneSummary, listOrganizerProfiles } from "@/app/yip/actions/hierarc
 import { Badge } from "@/components/yip/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/yip/ui/card";
 import { MapPin, Users, Trophy, ArrowUpRight, Globe, Crown } from "lucide-react";
+import { canViewYipNationalRollup } from "@/lib/yip/auth/event-access";
+import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
 
 export default async function ZonesNationalPage() {
+  if (!(await canViewYipNationalRollup())) {
+    return <Forbidden403 reason="The national zones overview is for national and regional admins." />;
+  }
   const [summary, national] = await Promise.all([
     getZoneSummary(),
     listOrganizerProfiles({ role: "national" }),

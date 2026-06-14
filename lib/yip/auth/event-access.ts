@@ -203,3 +203,24 @@ export async function getYipEventAccess(eventId: string): Promise<YipEventAccess
 
   return DENY;
 }
+
+/**
+ * National-rollup pages (zones overview, schools directory, topics) show
+ * cross-chapter aggregates. Gate to YIP national / super-admins OR any regional
+ * admin (decision 2026-06-14) — not chapter organisers.
+ */
+const NATIONAL_OR_REGIONAL_YIP_ROLES = [
+  "yip_super_admin",
+  "national",
+  "regional_admin",
+];
+export async function canViewYipNationalRollup(): Promise<boolean> {
+  const me = await getCurrentPersonRoles();
+  if (!me) return false;
+  return me.assignments.some((a) => {
+    if (!a.is_active) return false;
+    // Platform / cross-app super-admins are always allowed.
+    if (a.role === "platform_super_admin" || a.role === "super_admin") return true;
+    return a.app === "yip" && NATIONAL_OR_REGIONAL_YIP_ROLES.includes(a.role);
+  });
+}

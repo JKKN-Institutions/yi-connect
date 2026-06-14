@@ -2,6 +2,7 @@
 
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { requireVolunteerSession } from "@/lib/yip/auth/yip-session";
+import { assertCheckedInForVote } from "@/lib/yip/vote-eligibility";
 import { validateVoteValue } from "@/lib/yip/vote-validate";
 import { matchesDesk, type DeskAssignment } from "@/lib/yip/yuva-desk";
 
@@ -332,6 +333,15 @@ export async function castKioskVote(
   ) {
     return { success: false, error: "That student is not at your desk." };
   }
+
+  // Only students checked in for this vote's day may cast — same rule as the
+  // self path (interview 2026-06-14). Check the student in first if needed.
+  const elig = await assertCheckedInForVote(
+    supabase,
+    participantId,
+    voteSession.agenda_item_id
+  );
+  if (!elig.ok) return { success: false, error: elig.error };
 
   // INSERT-ONLY. A repeat in the SAME session is mapped to already_voted via
   // the per-session unique index (votes_session_participant_key); we never

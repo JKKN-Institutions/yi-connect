@@ -12,6 +12,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { forgotPasswordSchema } from '@/lib/validations/auth'
+import { sendBrandedPasswordReset, appBaseUrl } from '@/lib/auth/branded-password-reset'
 import type { FormState } from '@/types'
 
 /**

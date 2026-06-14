@@ -5,14 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient, createServiceClient } from "@/lib/yi-future/supabase/server";
 import { generateAccessCode } from "@/lib/yi-future/access-code";
 import type { ActionResult } from "./editions";
-import {
-  requireFutureAdmin,
-  requireChapterAdmin,
-} from "@/lib/yi-future/auth/require-access";
-
-async function requireAuth(): Promise<void> {
-  await requireFutureAdmin();
-}
+import { requireChapterAdmin } from "@/lib/yi-future/auth/require-access";
 
 /**
  * Chapter-scoped gate for the takeover-grade mentor action (regenerate access
@@ -184,11 +177,28 @@ export async function deleteMentor(id: string): Promise<ActionResult> {
 }
 
 // ─── ASSIGN / UNASSIGN MENTOR ↔ TEAM ────────────────────────────────
+async function requireTeamChapterAdmin(teamId: string): Promise<boolean> {
+  const svc = await createServiceClient();
+  const { data } = await svc
+    .schema("future")
+    .from("teams")
+    .select("chapter_id")
+    .eq("id", teamId)
+    .maybeSingle();
+  if (!data) return false;
+  // Chapter-scope: chair of team A's chapter must not manage team B's mentors.
+  // requireChapterAdmin fails closed (null chapter → denied) and redirects.
+  await requireChapterAdmin((data as { chapter_id: string | null }).chapter_id);
+  return true;
+}
+
 export async function assignMentorToTeam(
   mentorId: string,
   teamId: string
 ): Promise<ActionResult> {
-  await requireAuth();
+  if (!(await requireTeamChapterAdmin(teamId))) {
+    return { ok: false, error: "Team not found." };
+  }
   const svc = await createServiceClient();
   const { error } = await svc
     .schema("future")
@@ -206,7 +216,9 @@ export async function unassignMentorFromTeam(
   mentorId: string,
   teamId: string
 ): Promise<ActionResult> {
-  await requireAuth();
+  if (!(await requireTeamChapterAdmin(teamId))) {
+    return { ok: false, error: "Team not found." };
+  }
   const svc = await createServiceClient();
   const { error } = await svc
     .schema("future")

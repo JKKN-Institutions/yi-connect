@@ -3,6 +3,7 @@
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { requireParticipantSession } from "@/lib/yip/auth/yip-session";
+import { assertCheckedInForVote } from "@/lib/yip/vote-eligibility";
 import { validateVoteValue } from "@/lib/yip/vote-validate";
 import {
   computeElectionOutcome,
@@ -520,6 +521,14 @@ export async function castVote(
       data: { status: "closed" },
     };
   }
+
+  // Only students checked in for this vote's day may cast (interview 2026-06-14).
+  const elig = await assertCheckedInForVote(
+    supabase,
+    participantId,
+    session.agenda_item_id
+  );
+  if (!elig.ok) return { success: false, error: elig.error };
 
   // Reject junk / non-candidate values before they pollute the tally.
   const valid = validateVoteValue(session, voteValue);

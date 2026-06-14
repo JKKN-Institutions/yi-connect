@@ -3,6 +3,7 @@
 import { createClient, createServiceClient } from "@/lib/yip/supabase/server";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { validateVoteValue } from "@/lib/yip/vote-validate";
+import { assertCheckedInForVote } from "@/lib/yip/vote-eligibility";
 
 type ActionResult<T = null> =
   | { success: true; data: T }
@@ -259,6 +260,15 @@ export async function castFloorVote(
   if (!participant) {
     return { success: false, error: "Participant not found for this event" };
   }
+
+  // Only students checked in for this vote's day may be recorded (interview
+  // 2026-06-14) — same rule as the self + kiosk paths.
+  const elig = await assertCheckedInForVote(
+    service,
+    participantId,
+    session.agenda_item_id
+  );
+  if (!elig.ok) return { success: false, error: elig.error };
 
   // Insert-only finality (mirror castVote): a pre-existing row IN THIS SESSION
   // → already_voted. Round-1 votes never block a runoff entry.

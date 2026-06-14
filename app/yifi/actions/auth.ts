@@ -64,12 +64,18 @@ export async function loginOrganiser(
 }
 
 export async function requestPasswordReset(email: string) {
-  const supabase = await createClient();
-  const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/yifi/login?reset=true`,
+  // Branded YiFi reset email (admin.generateLink + our Resend send). The link
+  // lands on /yifi/login?token_hash=...&type=recovery, where the login page's
+  // reset view verifies the token and lets the organiser set a new password.
+  return sendBrandedPasswordReset(email, {
+    appName: "YiFi",
+    tagline: "Organiser Portal",
+    fromEmail: process.env.YIFI_FROM_EMAIL || "YiFi <noreply@jkkn.ai>",
+    headerColor: "#000066",
+    accentColor: "#FD7215",
+    baseUrl: appBaseUrl(),
+    resetPath: "/yifi/login",
   });
-  if (error) return { ok: false, error: error.message };
-  return { ok: true };
 }
 
 export async function logoutOrganiser() {

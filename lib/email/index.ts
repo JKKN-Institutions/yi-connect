@@ -28,6 +28,8 @@ export interface EmailOptions {
   html: string
   text?: string
   replyTo?: string
+  /** Per-send From override (e.g. a per-app branded sender). Falls back to FROM_EMAIL. */
+  from?: string
 }
 
 export interface EmailResult {

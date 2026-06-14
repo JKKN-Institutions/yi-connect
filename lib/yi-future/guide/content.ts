@@ -1160,6 +1160,5 @@ export const GUIDES: GuideBook = {
       "term": "Outcome",
       "def": "Your decision after interviewing a candidate: Offered, Shortlisted, Follow-up, or No fit. This tracks your hiring progress and helps the chapter coordinate results."
     }
-  ],
-  "plannedLocaleNote": "A Tamil version is planned — English only for now."
+  ]
 };

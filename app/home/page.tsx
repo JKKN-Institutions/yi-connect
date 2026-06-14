@@ -7,6 +7,7 @@ import {
   getCurrentPersonRoles,
 } from "@/lib/yi/auth/yi-directory-roles";
 import { getYipSession } from "@/lib/yip/auth/yip-session";
+import { signOut } from "@/app/actions/auth";
 
 // Admin-tier roles per app (excludes pure participant roles like delegate /
 // participant). Cross-app platform tiers are handled earlier (Priority 0).

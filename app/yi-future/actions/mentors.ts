@@ -223,7 +223,9 @@ export async function unassignMentorFromTeam(
   mentorId: string,
   teamId: string
 ): Promise<ActionResult> {
-  await requireAuth();
+  if (!(await requireTeamChapterAdmin(teamId))) {
+    return { ok: false, error: "Team not found." };
+  }
   const svc = await createServiceClient();
   const { error } = await svc
     .schema("future")

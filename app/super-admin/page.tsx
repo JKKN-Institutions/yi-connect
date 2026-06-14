@@ -83,9 +83,19 @@ export default async function SuperAdminPage() {
               Super Admin
             </span>
           </div>
-          {me?.email && (
-            <span className="text-sm text-gray-500">{me.email}</span>
-          )}
+          <div className="flex items-center gap-4">
+            {me?.email && (
+              <span className="text-sm text-gray-500">{me.email}</span>
+            )}
+            <form action={signOut}>
+              <button
+                type="submit"
+                className="text-sm font-medium text-gray-500 hover:text-[#000066]"
+              >
+                Sign out
+              </button>
+            </form>
+          </div>
         </div>
       </header>
 

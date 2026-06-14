@@ -2,6 +2,9 @@ import Link from "next/link";
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
 import { PushSubscribe } from "@/components/yi-future/pwa/PushSubscribe";
 import { NudgeButton } from "./whatsapp-outreach/SendButton";
+import { NextStepWidget } from "@/components/yi-future/guide";
+import { GUIDES } from "@/lib/yi-future/guide/content";
+import { getCompletedSteps, logGuideEvent } from "@/lib/yi-future/guide/actions";
 
 type ChapterRow = {
   id: string;
@@ -142,9 +145,16 @@ export default async function NationalDashboard() {
   const totalDelegates = delegates.length;
   const activeChaptersCount = rows.filter((r) => r.count > 0).length;
   const zeroChapters = rows.filter((r) => r.count === 0).length;
+  const guideCompleted = await getCompletedSteps("national");
 
   return (
     <div className="space-y-6">
+      <NextStepWidget
+        guide={GUIDES.lanes.national}
+        basePath="/yi-future/guide"
+        completed={guideCompleted}
+        onEvent={logGuideEvent}
+      />
       <div className="flex items-start justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-navy">National Dashboard</h2>

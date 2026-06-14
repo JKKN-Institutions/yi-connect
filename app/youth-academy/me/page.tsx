@@ -10,6 +10,7 @@
 
 import { redirect } from "next/navigation";
 import { GraduationCap } from "lucide-react";
+import { ModuleWelcome } from "@/app/youth-academy/_components/ModuleWelcome";
 import {
   getMyPrograms,
   getMyProgress,

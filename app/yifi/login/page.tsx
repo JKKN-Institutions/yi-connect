@@ -1,11 +1,12 @@
 "use client";
 
-import { Suspense, useState, useTransition } from "react";
+import { Suspense, useEffect, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { loginOrganiser, requestPasswordReset } from "@/app/yifi/actions/auth";
+import { createClient } from "@/lib/yifi/supabase/client";
 
-type View = "login" | "forgot" | "reset-sent" | "choose";
+type View = "login" | "forgot" | "reset-sent" | "reset" | "choose";
 
 export default function YiFiLoginPage() {
   return (

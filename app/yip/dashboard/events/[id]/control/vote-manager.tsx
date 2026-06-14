@@ -606,8 +606,15 @@ export function VoteManager({
                     totalVotes > 0
                       ? Math.round((tally.count / totalVotes) * 100)
                       : 0;
+                  // Only crown an UNAMBIGUOUS single leader. On a tie (top count
+                  // shared by >1 option) the outcome is "tie → runoff", so
+                  // highlighting one tied candidate as the winner is wrong.
+                  const topCount = tallies[0]?.count ?? 0;
                   const isWinner =
-                    isRevealed && tally.count === tallies[0].count;
+                    isRevealed &&
+                    topCount > 0 &&
+                    tally.count === topCount &&
+                    tallies.filter((t) => t.count === topCount).length === 1;
 
                   // Determine label and color
                   let label = tally.vote_value;

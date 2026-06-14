@@ -82,12 +82,14 @@ function ModuleHub({
           ))}
         </div>
         <div className="text-center mt-8">
-          <Link
-            href="/logout"
-            className="text-xs text-gray-400 hover:text-gray-600"
-          >
-            Sign out
-          </Link>
+          <form action={signOut}>
+            <button
+              type="submit"
+              className="text-xs text-gray-400 hover:text-gray-600"
+            >
+              Sign out
+            </button>
+          </form>
         </div>
       </div>
     </main>

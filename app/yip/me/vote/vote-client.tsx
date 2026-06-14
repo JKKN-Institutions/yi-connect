@@ -51,6 +51,7 @@ export function VoteClient({
   const [loadingCandidates, setLoadingCandidates] = useState(true);
   const [billTitle, setBillTitle] = useState<string | null>(null);
   const [billObjective, setBillObjective] = useState<string | null>(null);
+  const [motionSubject, setMotionSubject] = useState<string | null>(null);
 
   const eventId = session?.eventId ?? "";
   const { session: voteSession, isOpen, isClosed, isRevealed, loading } =
@@ -106,6 +107,15 @@ export function VoteClient({
           setBillTitle(bill.title);
           setBillObjective(bill.objective);
         }
+      }
+
+      if (voteSession.vote_type === "no_confidence") {
+        // The motion subject travels in the session config (set when the Speaker
+        // opens the vote) so the browser client needs no motions read.
+        const cfg = (voteSession.config ?? {}) as { motionSubject?: unknown };
+        setMotionSubject(
+          typeof cfg.motionSubject === "string" ? cfg.motionSubject : "No-Confidence Motion"
+        );
       }
 
       // Check if already voted — via server action (votes are RLS-sealed until
@@ -342,6 +352,101 @@ export function VoteClient({
         </div>
 
         {/* Cast Vote Button */}
+        <Button
+          onClick={handleCastVote}
+          disabled={isPending || !selectedValue}
+          className="w-full bg-[#FF9933] hover:bg-[#E68A2E] text-base py-6"
+          size="lg"
+        >
+          {isPending ? (
+            "Casting Vote..."
+          ) : (
+            <>
+              <Vote className="size-5 mr-2" />
+              Cast Vote
+            </>
+          )}
+        </Button>
+      </div>
+    );
+  }
+
+  // ─── No-Confidence Motion Vote ────────────────────────────────
+
+  if (voteSession.vote_type === "no_confidence") {
+    return (
+      <div className="space-y-5">
+        <div>
+          <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+            <Landmark className="size-5 text-red-600" />
+            No-Confidence Motion
+          </h1>
+          <p className="text-sm text-gray-500 mt-1">
+            A vote of the whole House on confidence in the Government
+          </p>
+        </div>
+
+        {motionSubject && (
+          <Card className="border-red-200/60 overflow-hidden">
+            <div className="h-1 w-full bg-gradient-to-r from-red-400 to-orange-400" />
+            <CardContent className="pt-4 pb-4">
+              <h2 className="text-base font-bold text-gray-900">{motionSubject}</h2>
+            </CardContent>
+          </Card>
+        )}
+
+        <Card className="border-[#FF9933]/20 bg-[#FF9933]/5">
+          <CardContent className="pt-4 pb-4">
+            <p className="text-sm text-gray-700">
+              Vote <strong>Aye</strong> to support the no-confidence motion
+              (against the Government), <strong>Nay</strong> if you have
+              confidence in the Government, or <strong>Abstain</strong>. Your
+              vote cannot be changed once cast.
+            </p>
+          </CardContent>
+        </Card>
+
+        <div className="space-y-3">
+          <button
+            onClick={() => setSelectedValue("aye")}
+            className={cn(
+              "w-full rounded-xl border-2 p-5 text-center transition-all",
+              selectedValue === "aye"
+                ? "border-green-500 bg-green-50 ring-2 ring-green-300 shadow-md"
+                : "border-gray-200 bg-white hover:border-green-200 hover:bg-green-50/50"
+            )}
+          >
+            <p className="text-2xl font-black text-green-600">AYE</p>
+            <p className="text-sm text-green-600/70 mt-1">Support the motion</p>
+          </button>
+
+          <button
+            onClick={() => setSelectedValue("nay")}
+            className={cn(
+              "w-full rounded-xl border-2 p-5 text-center transition-all",
+              selectedValue === "nay"
+                ? "border-red-500 bg-red-50 ring-2 ring-red-300 shadow-md"
+                : "border-gray-200 bg-white hover:border-red-200 hover:bg-red-50/50"
+            )}
+          >
+            <p className="text-2xl font-black text-red-600">NAY</p>
+            <p className="text-sm text-red-600/70 mt-1">Confidence in the Government</p>
+          </button>
+
+          <button
+            onClick={() => setSelectedValue("abstain")}
+            className={cn(
+              "w-full rounded-xl border-2 p-5 text-center transition-all",
+              selectedValue === "abstain"
+                ? "border-gray-500 bg-gray-50 ring-2 ring-gray-300 shadow-md"
+                : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50/50"
+            )}
+          >
+            <p className="text-2xl font-black text-gray-500">ABSTAIN</p>
+            <p className="text-sm text-gray-400 mt-1">Neither for nor against</p>
+          </button>
+        </div>
+
         <Button
           onClick={handleCastVote}
           disabled={isPending || !selectedValue}

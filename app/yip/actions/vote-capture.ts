@@ -212,6 +212,17 @@ export async function getKioskState(
           label: `#${c.serial_no ?? "—"} · ${c.full_name}`,
         }));
     }
+  } else if (voteSession.vote_type === "no_confidence") {
+    const cfg = (voteSession.config ?? {}) as { motionSubject?: unknown };
+    title =
+      typeof cfg.motionSubject === "string" ? cfg.motionSubject : "No-Confidence Motion";
+    // Same aye/nay/abstain strings the House self-cast uses, so kiosk-relayed
+    // ballots are tallied identically.
+    options = [
+      { value: "aye", label: "AYE" },
+      { value: "nay", label: "NO" },
+      { value: "abstain", label: "ABSTAIN" },
+    ];
   } else {
     title = "Vote";
   }

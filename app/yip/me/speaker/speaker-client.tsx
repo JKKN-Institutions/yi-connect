@@ -1,11 +1,14 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import {
   getSpeakerMotions,
   speakerAdmitMotion,
   speakerRejectMotion,
+  speakerOpenMotionVote,
   speakerRecordMotionVote,
+  getNoConfidenceVoteState,
+  type MotionVoteState,
 } from "@/app/yip/actions/speaker";
 import type { Motion } from "@/app/yip/actions/motions";
 import {
@@ -34,12 +37,17 @@ export function SpeakerClient({
   const [error, setError] = useState<string | null>(loadError);
   const [busy, setBusy] = useState<string | null>(null);
   const [rejecting, setRejecting] = useState<Record<string, string>>({});
-  const [votes, setVotes] = useState<Record<string, { for: string; against: string; abstain: string }>>({});
+  // Live floor-vote state for No-Confidence motions, keyed by motionId.
+  const [voteStates, setVoteStates] = useState<Record<string, MotionVoteState>>({});
 
   const refresh = useCallback(async () => {
-    const r = await getSpeakerMotions(eventId, participantId);
-    if (r.success) setMotions(r.data);
-    else setError(r.error);
+    const [m, v] = await Promise.all([
+      getSpeakerMotions(eventId, participantId),
+      getNoConfidenceVoteState(eventId, participantId),
+    ]);
+    if (m.success) setMotions(m.data);
+    else setError(m.error);
+    if (v.success) setVoteStates(v.data);
   }, [eventId, participantId]);
 
   async function run(id: string, fn: () => Promise<{ success: boolean; error?: string }>) {
@@ -58,6 +66,18 @@ export function SpeakerClient({
 
   const pending = motions.filter((m) => m.status === "submitted");
   const active = motions.filter((m) => m.status === "discussing" || m.status === "voting");
+
+  // While a motion is on the floor, poll so the live tally and any new motion
+  // state stay current without a manual refresh.
+  const hasVoting = active.some((m) => m.status === "voting");
+  useEffect(() => {
+    if (!hasVoting) return;
+    const t = setInterval(() => {
+      refresh().catch(() => {});
+    }, 5000);
+    return () => clearInterval(t);
+  }, [hasVoting, refresh]);
+
   const done = motions.filter(
     (m) => !["submitted", "discussing", "voting"].includes(m.status)
   );
@@ -144,20 +164,15 @@ export function SpeakerClient({
         {active.map((m) => (
           <MotionCard key={m.id} m={m}>
             {m.status === "voting" ? (
-              <VoteForm
-                value={votes[m.id] ?? { for: "", against: "", abstain: "" }}
+              <FloorVote
+                state={voteStates[m.id]}
                 disabled={busy === m.id}
-                onChange={(v) => setVotes((s) => ({ ...s, [m.id]: v }))}
-                onSubmit={() => {
-                  const v = votes[m.id] ?? { for: "", against: "", abstain: "" };
-                  run(m.id, () =>
-                    speakerRecordMotionVote(eventId, participantId, m.id, {
-                      for: Number(v.for) || 0,
-                      against: Number(v.against) || 0,
-                      abstain: Number(v.abstain) || 0,
-                    })
-                  );
-                }}
+                onOpen={() =>
+                  run(m.id, () => speakerOpenMotionVote(eventId, participantId, m.id))
+                }
+                onReveal={() =>
+                  run(m.id, () => speakerRecordMotionVote(eventId, participantId, m.id))
+                }
               />
             ) : (
               <p className="text-xs text-[#1a1a3e]/50">Under discussion — no vote required.</p>
@@ -233,43 +248,81 @@ function MotionCard({ m, children }: { m: Motion; children: React.ReactNode }) {
   );
 }
 
-function VoteForm({
-  value,
+/**
+ * No-Confidence floor vote. Before a vote is open the Speaker opens it; once
+ * open, the live House tally shows and the Speaker reveals the counted result.
+ */
+function FloorVote({
+  state,
   disabled,
-  onChange,
-  onSubmit,
+  onOpen,
+  onReveal,
 }: {
-  value: { for: string; against: string; abstain: string };
+  state: MotionVoteState | undefined;
   disabled: boolean;
-  onChange: (v: { for: string; against: string; abstain: string }) => void;
-  onSubmit: () => void;
+  onOpen: () => void;
+  onReveal: () => void;
 }) {
+  if (!state) {
+    return (
+      <div className="space-y-1.5">
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={onOpen}
+          className="w-full rounded-lg bg-[#138808] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+        >
+          Open floor vote
+        </button>
+        <p className="text-[11px] text-[#1a1a3e]/45">
+          The whole House votes Aye / Nay / Abstain on their phones.
+        </p>
+      </div>
+    );
+  }
+
+  const t = state.tally;
   return (
     <div className="space-y-2">
-      <div className="flex gap-2">
-        {(["for", "against", "abstain"] as const).map((k) => (
-          <label key={k} className="flex-1">
-            <span className="block text-[10px] font-semibold uppercase text-[#1a1a3e]/45">{k}</span>
-            <input
-              type="number"
-              inputMode="numeric"
-              min={0}
-              value={value[k]}
-              disabled={disabled}
-              onChange={(e) => onChange({ ...value, [k]: e.target.value })}
-              className="mt-0.5 w-full rounded-lg border-2 border-[#1a1a3e]/10 px-2 py-1.5 text-center text-sm focus:border-[#FF9933] focus:outline-none"
-            />
-          </label>
-        ))}
+      <div className="flex gap-2 text-center">
+        <Pill label="Aye" value={t.for} tone="green" />
+        <Pill label="Nay" value={t.against} tone="red" />
+        <Pill label="Abstain" value={t.abstain} tone="gray" />
       </div>
+      <p className="text-[11px] text-[#1a1a3e]/45">
+        {t.total} ballot{t.total === 1 ? "" : "s"} cast · live
+      </p>
       <button
         type="button"
         disabled={disabled}
-        onClick={onSubmit}
+        onClick={onReveal}
         className="w-full rounded-lg bg-[#FF9933] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
       >
-        Record result
+        Reveal result
       </button>
+    </div>
+  );
+}
+
+function Pill({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number;
+  tone: "green" | "red" | "gray";
+}) {
+  const cls =
+    tone === "green"
+      ? "border-green-200 bg-green-50 text-green-700"
+      : tone === "red"
+        ? "border-red-200 bg-red-50 text-red-700"
+        : "border-gray-200 bg-gray-50 text-gray-600";
+  return (
+    <div className={`flex-1 rounded-lg border px-2 py-1.5 ${cls}`}>
+      <span className="block text-[10px] font-semibold uppercase">{label}</span>
+      <span className="block text-lg font-bold">{value}</span>
     </div>
   );
 }

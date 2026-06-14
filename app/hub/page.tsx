@@ -266,37 +266,13 @@ export default async function HubPage({
 
   if (user) {
     const me = await getCurrentPersonRoles();
-    const active = (me?.assignments ?? []).filter((a) => a.is_active);
-    const hasRole = (app: string, roles: string[]) =>
-      active.some((a) => a.app === app && roles.includes(a.role));
+    const activeApps = new Set(
+      (me?.assignments ?? []).filter((a) => a.is_active).map((a) => a.app)
+    );
 
     const tiles: ModuleTile[] = [];
-    if (hasRole("future", FUTURE_ADMIN_ROLES)) {
-      tiles.push({
-        title: "Yi Future",
-        desc: "Editions, finales, delegates, and national admin.",
-        href: "/yi-future",
-        icon: "🚀",
-        accent: "hover:border-[#F5A623]/60",
-      });
-    }
-    if (hasRole("yuva", YUVA_ADMIN_ROLES)) {
-      tiles.push({
-        title: "Youth Academy",
-        desc: "Academies, runs, students, and chapter delivery.",
-        href: "/youth-academy",
-        icon: "🎓",
-        accent: "hover:border-[#229434]/60",
-      });
-    }
-    if (hasRole("yip", YIP_ADMIN_ROLES)) {
-      tiles.push({
-        title: "Yi Parliament (YIP)",
-        desc: "Parliament events, participants, and jury scoring.",
-        href: "/yip/dashboard",
-        icon: "⚖️",
-        accent: "hover:border-[#FD7215]/60",
-      });
+    for (const { app, tile } of MODULE_APPS) {
+      if (activeApps.has(app)) tiles.push(tile);
     }
 
     const { data: member } = await supabase

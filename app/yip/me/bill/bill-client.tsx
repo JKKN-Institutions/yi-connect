@@ -409,6 +409,21 @@ export function BillClient({
         </div>
       </div>
 
+      {/* Opposition's response (ruling committee sees how the Opposition replied) */}
+      {side === "ruling" && bill?.opposition_response && (
+        <Card className="border-red-200 bg-red-50/50">
+          <CardContent className="pt-4 pb-4">
+            <h3 className="text-sm font-semibold text-red-700 mb-1.5 flex items-center gap-1.5">
+              <Users className="size-4 text-red-500" />
+              Opposition&apos;s Response
+            </h3>
+            <p className="whitespace-pre-wrap text-sm text-gray-800">
+              {bill.opposition_response}
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Committee Members */}
       {members.length > 0 && (
         <Card>

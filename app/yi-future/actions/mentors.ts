@@ -5,10 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient, createServiceClient } from "@/lib/yi-future/supabase/server";
 import { generateAccessCode } from "@/lib/yi-future/access-code";
 import type { ActionResult } from "./editions";
-import {
-  requireFutureAdmin,
-  requireChapterAdmin,
-} from "@/lib/yi-future/auth/require-access";
+import { requireChapterAdmin } from "@/lib/yi-future/auth/require-access";
 
 /**
  * Chapter-scoped gate for the takeover-grade mentor action (regenerate access

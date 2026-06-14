@@ -1,7 +1,9 @@
-"use server";
-
 /**
- * Email trigger server actions for Future 6.0.
+ * Email trigger helpers for Future 6.0 — server-only module, NOT server actions.
+ *
+ * Relocated out of app/yi-future/actions/ so these are NOT independently
+ * client-invokable server actions (anti-spam defense in depth). They are called
+ * only by server-side code (e.g. delegate-register).
  *
  * Six PRD §8 triggers, each fetching the minimum data needed to compose a
  * plain-text body and delegating to sendEmail() which logs to

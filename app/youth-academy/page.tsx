@@ -24,6 +24,8 @@ import {
 import { AcademyNetworkSection } from "@/components/yuva/public/academy-network-section";
 import { PublicRunCard } from "@/components/yuva/public/run-card";
 import { PartnerLogos } from "@/components/yuva/partner-logos";
+import { redirect } from "next/navigation";
+import { getYuvaAccess } from "@/lib/yuva/auth/yuva-access";
 
 export const dynamic = "force-dynamic";
 

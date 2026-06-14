@@ -45,6 +45,13 @@ const MODULES: ModuleCard[] = [
     accent: "hover:border-[#FD7215]/50",
   },
   {
+    title: "Youth Academy",
+    desc: "Academies, runs, students, and chapter delivery across Yi YUVA.",
+    href: "/youth-academy/national",
+    icon: "🎓",
+    accent: "hover:border-[#229434]/50",
+  },
+  {
     title: "Directory",
     desc: "People, roles, and cross-app identity across every Yi module.",
     href: "/admin/directory",

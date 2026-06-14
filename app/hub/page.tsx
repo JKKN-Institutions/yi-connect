@@ -12,30 +12,6 @@ import { OAuthButtons } from "@/components/auth/oauth-buttons";
 
 export const dynamic = "force-dynamic";
 
-// Admin-tier roles per app (excludes pure participant roles like delegate /
-// participant). Cross-app platform tiers are handled earlier (Priority 0).
-const FUTURE_ADMIN_ROLES = [
-  "future_super_admin",
-  "future_admin",
-  "national_admin",
-  "regional_admin",
-  "chapter_admin",
-  "platform_admin",
-];
-const YUVA_ADMIN_ROLES = [
-  "yuva_super_admin",
-  "yuva_admin",
-  "chapter_admin",
-  "institution_coordinator",
-];
-const YIP_ADMIN_ROLES = [
-  "yip_super_admin",
-  "national",
-  "regional_admin",
-  "chapter_admin",
-  "chapter_organizer",
-];
-
 type ModuleTile = {
   title: string;
   desc: string;
@@ -43,6 +19,55 @@ type ModuleTile = {
   icon: string;
   accent: string;
 };
+
+// Every yi_directory role is a STAFF role (delegates/students sign in via
+// separate access-code / session flows), so ANY active assignment in an app
+// means the person works in that app → show its tile. Keyed by `app`, never by
+// specific role names — those drift (e.g. Yi Future uses `chapter_chair`, not
+// `chapter_admin`, and has ~6 other chapter-level role names). Each tile links
+// to the module's own entry, which self-routes by the person's tier.
+const MODULE_APPS: { app: string; tile: ModuleTile }[] = [
+  {
+    app: "future",
+    tile: {
+      title: "Yi Future",
+      desc: "Editions, finales, delegates, and chapter delivery.",
+      href: "/yi-future",
+      icon: "🚀",
+      accent: "hover:border-[#F5A623]/60",
+    },
+  },
+  {
+    app: "yuva",
+    tile: {
+      title: "Youth Academy",
+      desc: "Academies, runs, students, and chapter delivery.",
+      href: "/youth-academy",
+      icon: "🎓",
+      accent: "hover:border-[#229434]/60",
+    },
+  },
+  {
+    app: "yip",
+    tile: {
+      title: "Yi Parliament (YIP)",
+      desc: "Parliament events, participants, and jury scoring.",
+      href: "/yip/dashboard",
+      icon: "⚖️",
+      accent: "hover:border-[#FD7215]/60",
+    },
+  },
+  {
+    app: "yifi",
+    tile: {
+      title: "YiFi",
+      desc: "Registrants, routing matches, census, and vows.",
+      href: "/yifi/admin",
+      icon: "🎯",
+      accent: "hover:border-[#FD7215]/60",
+    },
+  },
+];
 
 function parseSession(
   raw: string | undefined

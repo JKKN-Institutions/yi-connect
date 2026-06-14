@@ -18,7 +18,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { X, Download, ChevronDown, Lightbulb, ArrowRight, ExternalLink, Check } from "lucide-react";
+import { X, Download, ChevronDown, Lightbulb, ArrowRight, ExternalLink, Check, AlertTriangle } from "lucide-react";
 
 import {
   type PersonaGuide,
@@ -95,6 +95,32 @@ function StepRow({
           {renderInline(step.action)}
         </p>
         {step.detail && <p className="text-[0.85rem] leading-relaxed text-muted-foreground">{renderInline(step.detail)}</p>}
+        {step.prerequisite && (
+          <div className="flex gap-2.5 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-amber-900 dark:text-amber-200">
+            <AlertTriangle aria-hidden className="mt-0.5 size-4 shrink-0" />
+            <span className="text-[0.85rem] font-medium leading-relaxed">
+              <span className="font-semibold">Required first: </span>
+              {renderInline(step.prerequisite)}
+            </span>
+          </div>
+        )}
+        {step.platforms && (step.platforms.web || step.platforms.mobile) && (
+          <div className="rounded-lg border bg-muted/40 px-3 py-2 text-[0.82rem]">
+            <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Where to find it</p>
+            {step.platforms.web && (
+              <p>
+                <span className="font-medium">On the web: </span>
+                <span className="text-muted-foreground">{renderInline(step.platforms.web)}</span>
+              </p>
+            )}
+            {step.platforms.mobile && (
+              <p>
+                <span className="font-medium">On the app: </span>
+                <span className="text-muted-foreground">{renderInline(step.platforms.mobile)}</span>
+              </p>
+            )}
+          </div>
+        )}
         {step.tip && (
           <div className="flex gap-2.5 rounded-lg bg-primary/8 px-3 py-2.5">
             <Lightbulb aria-hidden className="mt-0.5 size-4 shrink-0 text-primary" />

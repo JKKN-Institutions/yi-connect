@@ -19,7 +19,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronRight, ArrowRight, Download, Lightbulb, BookText, Check } from "lucide-react";
+import { ChevronRight, ArrowRight, Download, Lightbulb, BookText, Check, AlertTriangle } from "lucide-react";
 
 import {
   type GuideBook,
@@ -142,10 +142,56 @@ function StepCard({
           {renderInline(step.action)}
         </p>
         {step.detail && <p className="text-sm leading-relaxed text-muted-foreground">{renderInline(step.detail)}</p>}
+        {step.prerequisite && (
+          <p className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm font-medium text-amber-900 dark:text-amber-200">
+            <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />
+            <span>
+              <span className="font-semibold">Required first: </span>
+              {renderInline(step.prerequisite)}
+            </span>
+          </p>
+        )}
+        {step.platforms && (step.platforms.web || step.platforms.mobile) && (
+          <div className="rounded-lg border bg-muted/40 px-3 py-2 text-sm">
+            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Where to find it</p>
+            {step.platforms.web && (
+              <p>
+                <span className="font-medium">On the web: </span>
+                <span className="text-muted-foreground">{renderInline(step.platforms.web)}</span>
+              </p>
+            )}
+            {step.platforms.mobile && (
+              <p>
+                <span className="font-medium">On the app: </span>
+                <span className="text-muted-foreground">{renderInline(step.platforms.mobile)}</span>
+              </p>
+            )}
+          </div>
+        )}
         {step.image && (
-          <figure className="my-1 overflow-hidden rounded-lg border bg-muted/30">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={step.image.src} alt={step.image.alt} width={step.image.width} height={step.image.height} className="block h-auto w-full" />
+          <figure className="my-1">
+            <div className="relative overflow-hidden rounded-lg border bg-muted/30">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={step.image.src} alt={step.image.alt} width={step.image.width} height={step.image.height} className="block h-auto w-full" />
+              {step.image.highlight && (
+                <span
+                  aria-hidden
+                  className="pointer-events-none absolute rounded-md ring-2 ring-primary ring-offset-1 ring-offset-background"
+                  style={{
+                    left: `${step.image.highlight.x}%`,
+                    top: `${step.image.highlight.y}%`,
+                    width: `${step.image.highlight.width}%`,
+                    height: `${step.image.highlight.height}%`,
+                  }}
+                >
+                  {step.image.highlight.label && (
+                    <span className="absolute -top-6 left-0 whitespace-nowrap rounded bg-primary px-1.5 py-0.5 text-[11px] font-semibold text-primary-foreground">
+                      {step.image.highlight.label}
+                    </span>
+                  )}
+                </span>
+              )}
+            </div>
           </figure>
         )}
         {step.tip && (

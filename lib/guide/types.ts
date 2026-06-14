@@ -64,6 +64,26 @@ export interface GuideImage {
   /** Intrinsic px size — drives aspect ratio so layout doesn't jump. */
   width: number;
   height: number;
+  /**
+   * A box drawn OVER the screenshot marking the exact control the step refers
+   * to — the "tap here" annotation, but as CODE not baked into the PNG, so a
+   * re-shot screen only needs the box nudged, not re-annotated in an image
+   * editor. Coordinates are PERCENTAGES of the image (0–100) so they survive a
+   * rescale. A plain shot of a busy screen doesn't tell a newcomer where to
+   * look — if you embed an image, give it a `highlight` or don't embed it.
+   */
+  highlight?: {
+    /** % from the left edge to the box's left side. */
+    x: number;
+    /** % from the top edge to the box's top side. */
+    y: number;
+    /** box width, as % of the image width. */
+    width: number;
+    /** box height, as % of the image height. */
+    height: number;
+    /** optional caption pinned above the box, e.g. "Tap here". */
+    label?: string;
+  };
 }
 
 export interface GuideStep {
@@ -80,9 +100,28 @@ export interface GuideStep {
   detail?: string;
   /** A highlighted tip / watch-out (optional). May contain `**bold**`. */
   tip?: string;
+  /**
+   * A MUST-DO-FIRST prerequisite — stronger than `tip`: the thing that blocks
+   * everything if skipped ("Turn on notifications first", "You need your access
+   * code before you can sign in"). Rendered as a prominent "Required" callout,
+   * not a soft aside. May contain `**bold**`.
+   */
+  prerequisite?: string;
+  /**
+   * When the path differs by platform (web app vs mobile app), spell out each.
+   * The step's `link` stays the canonical web target; this just tells a phone
+   * user the different route. Omit when the path is the same everywhere — most
+   * steps don't need it.
+   */
+  platforms?: {
+    /** Where to find it on the web app, e.g. "left sidebar → Settings". */
+    web?: string;
+    /** Where to find it in the mobile app, e.g. "tap ☰ → Settings". */
+    mobile?: string;
+  };
   /** "Take me there" link to the real page this step describes (optional). */
   link?: GuideLink;
-  /** A screenshot of this moment (optional — use rarely). */
+  /** A screenshot of this moment (optional — use rarely; give it a `highlight`). */
   image?: GuideImage;
 }
 

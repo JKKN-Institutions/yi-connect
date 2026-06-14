@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { ProgramWordmark } from "@/components/yi-future/brand/BrandHeader";
-import { createClient } from "@/lib/yi-future/supabase/client";
+import { requestAdminPasswordReset } from "@/app/yi-future/actions/auth";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");

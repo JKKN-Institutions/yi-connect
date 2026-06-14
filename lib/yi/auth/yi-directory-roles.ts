@@ -343,3 +343,82 @@ export async function isRegionalAdminForZone(
   const zones = await getRegionalAdminZones(app, yi_year);
   return zones.includes(zoneCode);
 }
+
+// ─── Chapter-wide chair (cross-vertical) ────────────────────────────────
+
+/**
+ * Role names that denote a CHAPTER-WIDE chair — a person who leads the WHOLE
+ * chapter for the Yi year, across EVERY vertical (Yi Future, YIP, Youth
+ * Academy, …), not a Yi-Future-specific role.
+ *
+ * Matched by ROLE NAME ONLY, never by `app`. `chapter_chair` currently lives at
+ * `app='future'` (a load-bearing future.chapter_core_team sync artifact) and is
+ * being re-tagged to a chapter-wide `app='yi'`. Because NO other app uses these
+ * exact role names (verified against live data 2026-06-14 — YiFi's chair roles
+ * are `host_chair` / `chapter_ent_chair`, distinct names), a role-name filter is
+ * correct BEFORE and AFTER that migration: it never needs an app-specific
+ * change, so every consumer (hub, per-vertical gates) is automatically
+ * re-tag-safe. See memory project_chapter_chair_is_chapter_wide.
+ */
+export const CHAPTER_WIDE_CHAIR_ROLES = [
+  "chapter_chair",
+  "chapter_co_chair",
+] as const;
+
+/** Structural slice the chair helpers need — accepts any role-row shape. */
+type ChairRoleLike = {
+  role: string;
+  yi_chapter: string | null;
+  is_active: boolean;
+  yi_year?: number;
+};
+
+/**
+ * PURE: the distinct chapter names this person chairs (chapter-wide), from an
+ * already-fetched role list. No I/O — feed it `me.assignments` (whose
+ * `is_active` is the EFFECTIVE flag = stored flag AND within validity window),
+ * so expired/time-bounded chair seats drop out automatically.
+ *
+ * Fail closed: a chair row with a null/blank `yi_chapter` grants NO chapter — a
+ * chair with no chapter scope is meaningless and must never widen to "all
+ * chapters". `yi_year` optionally narrows to one Yi year (omitted = any year;
+ * the active flag already gates staleness).
+ */
+export function chairedChaptersFromRoles(
+  roles: ReadonlyArray<ChairRoleLike>,
+  yi_year?: number
+): string[] {
+  const chairRoles: ReadonlySet<string> = new Set(CHAPTER_WIDE_CHAIR_ROLES);
+  const chapters = new Set<string>();
+  for (const a of roles) {
+    if (!a.is_active) continue;
+    if (!chairRoles.has(a.role)) continue;
+    if (yi_year !== undefined && a.yi_year !== yi_year) continue;
+    const ch = (a.yi_chapter ?? "").trim();
+    if (ch) chapters.add(ch);
+  }
+  return Array.from(chapters);
+}
+
+/**
+ * Chapters the current session user chairs (chapter-wide). Empty array if they
+ * chair nothing or are not signed in.
+ */
+export async function getChairedChapters(yi_year?: number): Promise<string[]> {
+  const me = await getCurrentPersonRoles();
+  if (!me) return [];
+  return chairedChaptersFromRoles(me.assignments, yi_year);
+}
+
+/**
+ * True if the current user is the chapter-wide chair of `chapter`. Fail-closed
+ * on a blank target (a null/empty chapter never matches).
+ */
+export async function isChapterChairOf(
+  chapter: string,
+  yi_year?: number
+): Promise<boolean> {
+  const target = (chapter ?? "").trim();
+  if (!target) return false;
+  return (await getChairedChapters(yi_year)).includes(target);
+}

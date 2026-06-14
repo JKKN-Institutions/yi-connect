@@ -31,6 +31,7 @@
  */
 import {
   getCurrentPersonRoles,
+  chairedChaptersFromRoles,
   type RoleAssignment,
 } from "@/lib/yi/auth/yi-directory-roles";
 import { createServiceClient } from "@/lib/yuva/supabase/service";
@@ -100,11 +101,23 @@ export function resolveYuvaCaps(
   const chapterAdminRows = active.filter(
     (r) => r.app === YUVA_APP && r.role === ROLE_CHAPTER_ADMIN
   );
-  const chapterAdminOf =
+  const explicitChapterAdminOf =
     chapterAdminRows
       .map((r) => (r.yi_chapter ?? "").trim())
       .find((c) => c.length > 0) ?? null;
-  const hasNullChapterAdmin = chapterAdminRows.length > 0 && !chapterAdminOf;
+  const hasNullChapterAdmin =
+    chapterAdminRows.length > 0 && !explicitChapterAdminOf;
+
+  // ADDITIVE oversight (Director, 2026-06-14): a chapter-wide chair
+  // (chapter_chair / chapter_co_chair, matched by role name across ANY app, so
+  // re-tag-safe) gets chapter-scoped Youth Academy admin BY DEFAULT — layered
+  // on top of yuva's own chapter_admin grants, never replacing them. An
+  // explicit yuva chapter_admin row wins for the managed-chapter name;
+  // otherwise we fall back to the chaired chapter. Fail-closed is inherited:
+  // chairedChaptersFromRoles drops chair rows with a null/blank chapter, so a
+  // chair with no chapter scope grants nothing here either.
+  const chairedChapter = chairedChaptersFromRoles(active)[0] ?? null;
+  const chapterAdminOf = explicitChapterAdminOf ?? chairedChapter;
 
   const boundAcademyIds = coordinatorAcademyIds.filter(
     (id): id is string => typeof id === "string" && id.length > 0
@@ -151,7 +164,9 @@ export function resolveYuvaCaps(
   if (isNational) {
     reason = "national scope (yuva_super_admin / yuva_admin / platform tier)";
   } else if (chapterAdminOf) {
-    reason = `chapter_admin scope: ${chapterAdminOf}`;
+    reason = explicitChapterAdminOf
+      ? `chapter_admin scope: ${chapterAdminOf}`
+      : `chapter chair (chapter-wide) scope: ${chapterAdminOf}`;
   } else if (hasNullChapterAdmin) {
     reason =
       "chapter_admin role has NULL yi_chapter — fail closed, no chapter scope granted";

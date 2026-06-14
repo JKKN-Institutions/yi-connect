@@ -37,7 +37,7 @@ const GAP_LABEL: Record<GapResult["gap"], string> = {
   yi_national_admins: "yi.national_admins → yi_directory (app=future)",
   yip_organizers: "yip.organizers → yi_directory (app=yip)",
   future_chapter_core_team:
-    "future.chapter_core_team → yi_directory (app=future, role=chapter_chair)",
+    "future.chapter_core_team → yi_directory (app=future|yi, role=chapter_chair)",
 };
 
 const KIND_BADGE: Record<DriftKind, { label: string; className: string }> = {

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
 import { readSession } from "@/app/yi-future/actions/auth";
+import { resolveFutureAccessOrNull } from "@/lib/yi-future/auth/require-access";
 import type { ActionResult } from "./editions";
 
 // ─── TYPES ──────────────────────────────────────────────────────────
@@ -134,6 +135,28 @@ export async function setPreferences(
 // ─── GET PREFERENCES (returns ranked list with problem + track info) ─
 export async function getPreferences(teamId: string): Promise<PreferenceRow[]> {
   const svc = await createServiceClient();
+
+  // SECURITY: a team's ranked problem picks are competitive strategy. Bind the
+  // caller — only a delegate ON this team, or a Future national admin, may read
+  // them. (Defense in depth: today the sole caller is the team's own server
+  // page, but this is a "use server" export and must not trust its argument.)
+  const session = await readSession();
+  let authorized = false;
+  if (session?.type === "delegate") {
+    const { data: membership } = await svc
+      .schema("future")
+      .from("team_members")
+      .select("team_id")
+      .eq("team_id", teamId)
+      .eq("delegate_id", session.id)
+      .maybeSingle();
+    authorized = !!membership;
+  }
+  if (!authorized) {
+    const admin = await resolveFutureAccessOrNull();
+    authorized = !!admin?.isNational;
+  }
+  if (!authorized) return [];
 
   const { data } = await svc
     .schema("future")

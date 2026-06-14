@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
 import { readSession } from "@/app/yi-future/actions/auth";
+import { resolveFutureAccessOrNull } from "@/lib/yi-future/auth/require-access";
 import type { ActionResult } from "./editions";
 import {
   computeMentorTotal,
@@ -188,6 +189,41 @@ export async function getMentorEvaluations(
   teamId: string
 ): Promise<MentorEvaluationRecord[]> {
   const svc = await createServiceClient();
+
+  // SECURITY: a team's mentor scores + notes are sensitive. Bind the caller:
+  //  - a delegate who is a member of this team, OR
+  //  - a mentor assigned to this team (or any mentor if the team has no
+  //    assignments yet — mirrors saveMentorEvaluation's model), OR
+  //  - a Future national admin.
+  // Defense in depth: the sole caller today is the mentor server page, but this
+  // is a "use server" export and must not trust its teamId argument.
+  const session = await readSession();
+  let authorized = false;
+  if (session?.type === "delegate") {
+    const { data: membership } = await svc
+      .schema("future")
+      .from("team_members")
+      .select("team_id")
+      .eq("team_id", teamId)
+      .eq("delegate_id", session.id)
+      .maybeSingle();
+    authorized = !!membership;
+  } else if (session?.type === "mentor") {
+    const { data: assigns } = await svc
+      .schema("future")
+      .from("mentor_team_assignments")
+      .select("mentor_id")
+      .eq("team_id", teamId);
+    const list = (assigns ?? []) as { mentor_id: string }[];
+    authorized =
+      list.length === 0 || list.some((a) => a.mentor_id === session.id);
+  }
+  if (!authorized) {
+    const admin = await resolveFutureAccessOrNull();
+    authorized = !!admin?.isNational;
+  }
+  if (!authorized) return [];
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data } = await (svc as any)
     .schema("future")

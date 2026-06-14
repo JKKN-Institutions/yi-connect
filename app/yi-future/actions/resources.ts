@@ -238,6 +238,13 @@ export async function deleteResource(
 export async function listResources(
   editionId?: string
 ): Promise<ResourceRow[]> {
+  // SECURITY: this action is reachable from the client (the delegate resources
+  // page calls it from a "use client" component), so it is independently
+  // POST-able. Require a valid Yi Future access-code session — resources are
+  // edition-scoped study materials for participants, not public data.
+  const session = await readSession();
+  if (!session) return [];
+
   const svc = await createServiceClient();
 
   // If no edition supplied, find the active one.
@@ -304,6 +311,10 @@ export async function listResources(
 export async function getResourceSignedUrl(
   filePath: string
 ): Promise<{ url: string | null; error?: string }> {
+  // SECURITY: client-reachable action. Require a valid Yi Future session so an
+  // anonymous caller cannot mint signed URLs for arbitrary paths in the bucket.
+  const session = await readSession();
+  if (!session) return { url: null, error: "Sign in to open resources." };
   if (!filePath) return { url: null, error: "Missing path." };
   const svc = await createServiceClient();
   try {

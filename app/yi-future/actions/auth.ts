@@ -5,6 +5,10 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient, createServiceClient } from "@/lib/yi-future/supabase/server";
 import { SESSION_COOKIE_NAME } from "@/lib/yi-future/constants";
+import {
+  sendBrandedPasswordReset,
+  appBaseUrl,
+} from "@/lib/auth/branded-password-reset";
 
 // ─── SHARED ─────────────────────────────────────────────────────────
 type AccessCodeRole = "delegate" | "mentor" | "jury" | "partner";
@@ -37,6 +41,26 @@ export async function logoutAdmin(): Promise<void> {
   const supabase = await createClient();
   await supabase.auth.signOut();
   redirect("/yi-future/login");
+}
+
+// ─── FORGOT PASSWORD (admin accounts — branded Yi Future email) ─────
+// Yi Future admins sign in with Supabase Auth (email + password); delegates use
+// access codes and never hit this. We mint a recovery token and send a Yi YUVA
+// Future 6.0–branded email instead of Supabase's generic platform template.
+export async function requestAdminPasswordReset(
+  email: string
+): Promise<{ ok: boolean; error?: string }> {
+  return sendBrandedPasswordReset(email, {
+    appName: "Yi YUVA Future 6.0",
+    tagline: "From Opinions to Impact",
+    fromEmail:
+      process.env.YI_FUTURE_FROM_EMAIL ||
+      "Yi YUVA Future 6.0 <noreply@jkkn.ai>",
+    headerColor: "#1a1a3e",
+    accentColor: "#F5A623",
+    baseUrl: appBaseUrl(),
+    resetPath: "/yi-future/access/reset-password",
+  });
 }
 
 // ─── VALIDATE ACCESS CODE (delegate/mentor/jury/partner) ────────────

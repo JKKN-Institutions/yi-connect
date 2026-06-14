@@ -17,12 +17,22 @@ export default function ResetPasswordPage() {
   const [exchanging, setExchanging] = useState(false);
 
   useEffect(() => {
+    // Supports both link formats: ?code=... (Supabase-template / PKCE) and
+    // ?token_hash=...&type=recovery (our branded email — see
+    // lib/auth/branded-password-reset, verified client-side via verifyOtp).
     const code = searchParams.get("code");
-    if (!code) return;
+    const tokenHash = searchParams.get("token_hash");
+    const otpType = searchParams.get("type");
+    if (!code && !tokenHash) return;
     setExchanging(true);
     const supabase = createClient();
-    supabase.auth
-      .exchangeCodeForSession(code)
+    const verify = code
+      ? supabase.auth.exchangeCodeForSession(code)
+      : supabase.auth.verifyOtp({
+          type: (otpType as "recovery") || "recovery",
+          token_hash: tokenHash as string,
+        });
+    verify
       .then(({ error: err }) => {
         if (err) setError("Reset link expired or invalid. Request a new one.");
         setExchanging(false);

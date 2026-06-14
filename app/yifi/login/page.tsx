@@ -1,11 +1,12 @@
 "use client";
 
-import { Suspense, useState, useTransition } from "react";
+import { Suspense, useEffect, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { loginOrganiser, requestPasswordReset } from "@/app/yifi/actions/auth";
+import { createClient } from "@/lib/yifi/supabase/client";
 
-type View = "login" | "forgot" | "reset-sent" | "choose";
+type View = "login" | "forgot" | "reset-sent" | "reset" | "choose";
 
 export default function YiFiLoginPage() {
   return (
@@ -19,13 +20,70 @@ function YiFiLoginPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [view, setView] = useState<View>(
-    searchParams.get("reset") === "true" ? "login" : "login"
+    searchParams.get("token_hash") ? "reset" : "login"
   );
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [roles, setRoles] = useState({ isOrganiser: false, isRegistrant: false });
+
+  // ─── Branded reset flow (token_hash from our email → set new password) ───
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [resetVerifying, setResetVerifying] = useState(
+    !!searchParams.get("token_hash")
+  );
+  const [resetReady, setResetReady] = useState(false);
+
+  useEffect(() => {
+    const tokenHash = searchParams.get("token_hash");
+    if (!tokenHash) return;
+    const supabase = createClient();
+    supabase.auth
+      .verifyOtp({
+        type: (searchParams.get("type") as "recovery") || "recovery",
+        token_hash: tokenHash,
+      })
+      .then(({ error: err }) => {
+        if (err)
+          setError("Reset link expired or invalid. Request a new one below.");
+        else setResetReady(true);
+        setResetVerifying(false);
+      })
+      .catch(() => {
+        setError("Something went wrong verifying your reset link.");
+        setResetVerifying(false);
+      });
+  }, [searchParams]);
+
+  function handleResetSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    if (newPassword.length < 6) {
+      setError("Password must be at least 6 characters.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setError("Passwords don't match.");
+      return;
+    }
+    startTransition(async () => {
+      const supabase = createClient();
+      const { error: updErr } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
+      if (updErr) {
+        setError(updErr.message);
+        return;
+      }
+      // Drop the temporary recovery session and send them to a clean login with
+      // the "password updated" banner.
+      await supabase.auth.signOut();
+      router.push("/yifi/login?reset=true");
+      router.refresh();
+    });
+  }
 
   function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -221,6 +279,88 @@ function YiFiLoginPageInner() {
             >
               Back to sign in
             </button>
+          </div>
+        )}
+
+        {view === "reset" && (
+          <div className="bg-white/5 border border-white/10 rounded-xl p-6">
+            <h1 className="text-lg font-semibold text-white text-center mb-1">
+              Set New Password
+            </h1>
+            <p className="text-white/40 text-xs text-center mb-6">
+              Choose a new password for your organiser account
+            </p>
+
+            {resetVerifying ? (
+              <div className="text-center py-6">
+                <div className="animate-spin h-7 w-7 border-2 border-white/20 border-t-[#FD7215] rounded-full mx-auto" />
+                <p className="text-white/50 text-xs mt-3">Verifying reset link…</p>
+              </div>
+            ) : resetReady ? (
+              <form onSubmit={handleResetSubmit} className="space-y-4">
+                <div>
+                  <label htmlFor="new-password" className="block text-xs font-medium text-white/60 mb-1.5">
+                    New Password
+                  </label>
+                  <input
+                    id="new-password"
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    required
+                    minLength={6}
+                    autoComplete="new-password"
+                    autoFocus
+                    placeholder="At least 6 characters"
+                    className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm placeholder:text-white/30 focus:outline-none focus:border-[#FD7215]/50 focus:ring-1 focus:ring-[#FD7215]/30"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="confirm-password" className="block text-xs font-medium text-white/60 mb-1.5">
+                    Confirm Password
+                  </label>
+                  <input
+                    id="confirm-password"
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required
+                    minLength={6}
+                    autoComplete="new-password"
+                    placeholder="Re-enter password"
+                    className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm placeholder:text-white/30 focus:outline-none focus:border-[#FD7215]/50 focus:ring-1 focus:ring-[#FD7215]/30"
+                  />
+                </div>
+
+                {error && (
+                  <div className="bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2 text-sm text-red-300">
+                    {error}
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={pending}
+                  className="w-full py-2.5 bg-[#FD7215] hover:bg-[#FD7215]/90 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors"
+                >
+                  {pending ? "Updating…" : "Update Password"}
+                </button>
+              </form>
+            ) : (
+              <>
+                {error && (
+                  <div className="bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2 text-sm text-red-300 mb-4">
+                    {error}
+                  </div>
+                )}
+                <button
+                  onClick={() => { setView("forgot"); setError(null); }}
+                  className="w-full py-2.5 bg-[#FD7215] hover:bg-[#FD7215]/90 text-white text-sm font-medium rounded-lg transition-colors"
+                >
+                  Request a new reset link
+                </button>
+              </>
+            )}
           </div>
         )}
 

@@ -28,6 +28,8 @@ export interface EmailOptions {
   html: string
   text?: string
   replyTo?: string
+  /** Per-send From override (e.g. a per-app branded sender). Falls back to FROM_EMAIL. */
+  from?: string
 }
 
 export interface EmailResult {
@@ -48,7 +50,7 @@ export async function sendEmail(options: EmailOptions): Promise<EmailResult> {
 
   try {
     const { data, error } = await client.emails.send({
-      from: FROM_EMAIL,
+      from: options.from || FROM_EMAIL,
       to: Array.isArray(options.to) ? options.to : [options.to],
       subject: options.subject,
       html: options.html,

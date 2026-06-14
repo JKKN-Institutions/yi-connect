@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
       }
 
       // Check if user has registrations in YiFi/YiFuture/YIP and set cookies
-      const response = NextResponse.redirect(new URL(next === '/dashboard' ? '/home' : next, requestUrl.origin));
+      const response = NextResponse.redirect(new URL(next === '/dashboard' ? '/hub' : next, requestUrl.origin));
       await setModuleCookies(supabase, data.user.email!, response);
       return response;
     }

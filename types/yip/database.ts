@@ -2393,6 +2393,10 @@ export type Database = {
           access_code: string
           checked_in: boolean | null
           checked_in_at: string | null
+          checked_in_day1: boolean
+          checked_in_day1_at: string | null
+          checked_in_day2: boolean
+          checked_in_day2_at: string | null
           city: string | null
           class: number
           committee_name: string | null
@@ -2426,6 +2430,10 @@ export type Database = {
           access_code: string
           checked_in?: boolean | null
           checked_in_at?: string | null
+          checked_in_day1?: boolean
+          checked_in_day1_at?: string | null
+          checked_in_day2?: boolean
+          checked_in_day2_at?: string | null
           city?: string | null
           class: number
           committee_name?: string | null
@@ -2461,6 +2469,10 @@ export type Database = {
           access_code?: string
           checked_in?: boolean | null
           checked_in_at?: string | null
+          checked_in_day1?: boolean
+          checked_in_day1_at?: string | null
+          checked_in_day2?: boolean
+          checked_in_day2_at?: string | null
           city?: string | null
           class?: number
           committee_name?: string | null

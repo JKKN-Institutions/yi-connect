@@ -653,7 +653,78 @@ export async function deleteParticipant(
   return { success: true, data: null };
 }
 
-// ─── Check In Participant ─────────────────────────────────────────
+// ─── Two-day check-in (YA2) ───────────────────────────────────────
+// A YIP event runs over two days. Attendance is tracked per day via
+// checked_in_day1 / checked_in_day2; the legacy `checked_in` is kept as the
+// derived "present on at least one day" flag (= day1 OR day2) so every existing
+// reader (voting eligibility, control-panel count, scoring) is untouched.
+
+type CheckInDay = 1 | 2;
+
+/** Set one day's check-in for a participant and recompute the derived `checked_in`. */
+async function applyDayCheckIn(
+  supabase: Awaited<ReturnType<typeof createServiceClient>>,
+  participantId: string,
+  eventId: string,
+  day: CheckInDay,
+  value: boolean
+): Promise<ActionResult<null>> {
+  const { data: cur } = await supabase
+    .from("participants")
+    .select("checked_in_day1, checked_in_day2")
+    .eq("id", participantId)
+    .eq("event_id", eventId)
+    .maybeSingle();
+  if (!cur) return { success: false, error: "Participant not found for this event" };
+
+  const day1 = day === 1 ? value : !!cur.checked_in_day1;
+  const day2 = day === 2 ? value : !!cur.checked_in_day2;
+  const present = day1 || day2;
+  const nowIso = new Date().toISOString();
+
+  const patch: Record<string, unknown> = {
+    checked_in: present,
+    checked_in_at: present ? nowIso : null,
+  };
+  if (day === 1) {
+    patch.checked_in_day1 = value;
+    patch.checked_in_day1_at = value ? nowIso : null;
+  } else {
+    patch.checked_in_day2 = value;
+    patch.checked_in_day2_at = value ? nowIso : null;
+  }
+
+  const { error } = await supabase
+    .from("participants")
+    .update(patch)
+    .eq("id", participantId)
+    .eq("event_id", eventId);
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/yip/dashboard/events/${eventId}/participants`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/control`);
+  return { success: true, data: null };
+}
+
+/** Organiser sets a participant's Day 1 / Day 2 check-in. canManage-gated. */
+export async function setDayCheckIn(
+  participantId: string,
+  eventId: string,
+  day: CheckInDay,
+  value: boolean
+): Promise<ActionResult<null>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
+  if (day !== 1 && day !== 2) {
+    return { success: false, error: "Day must be 1 or 2." };
+  }
+  const supabase = await createServiceClient();
+  return applyDayCheckIn(supabase, participantId, eventId, day, value);
+}
+
+// ─── Check In Participant (legacy = Day 1) ────────────────────────
 
 export async function checkInParticipant(
   participantId: string,
@@ -664,26 +735,10 @@ export async function checkInParticipant(
     return { success: false, error: "Not authorized to manage this event" };
   }
   const supabase = await createServiceClient();
-
-  const { error } = await supabase
-    .from("participants")
-    .update({
-      checked_in: true,
-      checked_in_at: new Date().toISOString(),
-    })
-    .eq("id", participantId)
-    .eq("event_id", eventId);
-
-  if (error) {
-    return { success: false, error: error.message };
-  }
-
-  revalidatePath(`/yip/dashboard/events/${eventId}/participants`);
-  revalidatePath(`/yip/dashboard/events/${eventId}/control`);
-  return { success: true, data: null };
+  return applyDayCheckIn(supabase, participantId, eventId, 1, true);
 }
 
-// ─── Check Out Participant ────────────────────────────────────────
+// ─── Check Out Participant (clears BOTH days) ─────────────────────
 
 export async function checkOutParticipant(
   participantId: string,
@@ -700,6 +755,10 @@ export async function checkOutParticipant(
     .update({
       checked_in: false,
       checked_in_at: null,
+      checked_in_day1: false,
+      checked_in_day1_at: null,
+      checked_in_day2: false,
+      checked_in_day2_at: null,
     })
     .eq("id", participantId)
     .eq("event_id", eventId);
@@ -713,14 +772,18 @@ export async function checkOutParticipant(
   return { success: true, data: null };
 }
 
-// ─── Bulk Check In ────────────────────────────────────────────────
+// ─── Bulk Check In (a single day for many) ────────────────────────
 
 export async function bulkCheckIn(
   participantIds: string[],
-  eventId: string
+  eventId: string,
+  day: CheckInDay = 1
 ): Promise<ActionResult<{ checkedIn: number }>> {
   if (participantIds.length === 0) {
     return { success: false, error: "No participants selected" };
+  }
+  if (day !== 1 && day !== 2) {
+    return { success: false, error: "Day must be 1 or 2." };
   }
 
   const access = await getYipEventAccess(eventId);
@@ -729,12 +792,21 @@ export async function bulkCheckIn(
   }
   const supabase = await createServiceClient();
 
+  const nowIso = new Date().toISOString();
+  // Setting a day TRUE always makes the participant present, so checked_in can
+  // be set unconditionally (no per-row read needed for a bulk check-IN).
+  const patch: Record<string, unknown> = { checked_in: true, checked_in_at: nowIso };
+  if (day === 1) {
+    patch.checked_in_day1 = true;
+    patch.checked_in_day1_at = nowIso;
+  } else {
+    patch.checked_in_day2 = true;
+    patch.checked_in_day2_at = nowIso;
+  }
+
   const { error } = await supabase
     .from("participants")
-    .update({
-      checked_in: true,
-      checked_in_at: new Date().toISOString(),
-    })
+    .update(patch)
     .eq("event_id", eventId)
     .in("id", participantIds);
 

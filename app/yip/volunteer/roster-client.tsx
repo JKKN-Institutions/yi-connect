@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import {
   getMyDeskRoster,
-  volunteerCheckInParticipant,
+  volunteerSetDayCheckIn,
   volunteerSetSpeechFinished,
   type DeskRosterMember,
 } from "@/app/yip/actions/volunteer-desk";
@@ -25,13 +25,20 @@ export function DeskRoster({ eventId }: { eventId: string }) {
     refresh();
   }, [refresh]);
 
-  async function toggleCheckIn(m: DeskRosterMember) {
+  async function toggleDay(m: DeskRosterMember, day: 1 | 2) {
     setBusy(m.id);
     setErr(null);
+    const next =
+      day === 1 ? !m.checked_in_day1 : !m.checked_in_day2;
     setRows((rs) =>
-      rs.map((x) => (x.id === m.id ? { ...x, checked_in: !x.checked_in } : x))
+      rs.map((x) => {
+        if (x.id !== m.id) return x;
+        const d1 = day === 1 ? next : x.checked_in_day1;
+        const d2 = day === 2 ? next : x.checked_in_day2;
+        return { ...x, checked_in_day1: d1, checked_in_day2: d2, checked_in: d1 || d2 };
+      })
     );
-    const r = await volunteerCheckInParticipant(eventId, m.id, !m.checked_in);
+    const r = await volunteerSetDayCheckIn(eventId, m.id, day, next);
     setBusy(null);
     if (!r.success) {
       setErr(r.error);
@@ -93,18 +100,25 @@ export function DeskRoster({ eventId }: { eventId: string }) {
             </div>
             <div className="mt-3 flex gap-2">
               <Toggle
-                on={m.checked_in}
+                on={m.checked_in_day1}
                 disabled={busy === m.id}
-                onClick={() => toggleCheckIn(m)}
-                labelOn="Checked in"
-                labelOff="Check in"
+                onClick={() => toggleDay(m, 1)}
+                labelOn="Day 1"
+                labelOff="Day 1"
+              />
+              <Toggle
+                on={m.checked_in_day2}
+                disabled={busy === m.id}
+                onClick={() => toggleDay(m, 2)}
+                labelOn="Day 2"
+                labelOff="Day 2"
               />
               <Toggle
                 on={m.speech_finished}
                 disabled={busy === m.id}
                 onClick={() => toggleSpeech(m)}
                 labelOn="Speech done"
-                labelOff="Mark speech"
+                labelOff="Speech"
               />
             </div>
           </li>

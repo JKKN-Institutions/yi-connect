@@ -5,6 +5,10 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient, createServiceClient } from "@/lib/yi-future/supabase/server";
 import { SESSION_COOKIE_NAME } from "@/lib/yi-future/constants";
+import {
+  sendBrandedPasswordReset,
+  appBaseUrl,
+} from "@/lib/auth/branded-password-reset";
 
 // ─── SHARED ─────────────────────────────────────────────────────────
 type AccessCodeRole = "delegate" | "mentor" | "jury" | "partner";

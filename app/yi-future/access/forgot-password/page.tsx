@@ -20,15 +20,9 @@ export default function ForgotPasswordPage() {
       return;
     }
     startTransition(async () => {
-      const supabase = createClient();
-      const { error: resetErr } = await supabase.auth.resetPasswordForEmail(
-        trimmed,
-        {
-          redirectTo: `${window.location.origin}/yi-future/access/reset-password`,
-        }
-      );
-      if (resetErr) {
-        setError(resetErr.message);
+      const res = await requestAdminPasswordReset(trimmed);
+      if (!res.ok) {
+        setError(res.error ?? "Could not send the reset link. Please try again.");
         return;
       }
       setSent(true);

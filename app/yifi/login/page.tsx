@@ -282,6 +282,88 @@ function YiFiLoginPageInner() {
           </div>
         )}
 
+        {view === "reset" && (
+          <div className="bg-white/5 border border-white/10 rounded-xl p-6">
+            <h1 className="text-lg font-semibold text-white text-center mb-1">
+              Set New Password
+            </h1>
+            <p className="text-white/40 text-xs text-center mb-6">
+              Choose a new password for your organiser account
+            </p>
+
+            {resetVerifying ? (
+              <div className="text-center py-6">
+                <div className="animate-spin h-7 w-7 border-2 border-white/20 border-t-[#FD7215] rounded-full mx-auto" />
+                <p className="text-white/50 text-xs mt-3">Verifying reset link…</p>
+              </div>
+            ) : resetReady ? (
+              <form onSubmit={handleResetSubmit} className="space-y-4">
+                <div>
+                  <label htmlFor="new-password" className="block text-xs font-medium text-white/60 mb-1.5">
+                    New Password
+                  </label>
+                  <input
+                    id="new-password"
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    required
+                    minLength={6}
+                    autoComplete="new-password"
+                    autoFocus
+                    placeholder="At least 6 characters"
+                    className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm placeholder:text-white/30 focus:outline-none focus:border-[#FD7215]/50 focus:ring-1 focus:ring-[#FD7215]/30"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="confirm-password" className="block text-xs font-medium text-white/60 mb-1.5">
+                    Confirm Password
+                  </label>
+                  <input
+                    id="confirm-password"
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required
+                    minLength={6}
+                    autoComplete="new-password"
+                    placeholder="Re-enter password"
+                    className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm placeholder:text-white/30 focus:outline-none focus:border-[#FD7215]/50 focus:ring-1 focus:ring-[#FD7215]/30"
+                  />
+                </div>
+
+                {error && (
+                  <div className="bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2 text-sm text-red-300">
+                    {error}
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={pending}
+                  className="w-full py-2.5 bg-[#FD7215] hover:bg-[#FD7215]/90 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors"
+                >
+                  {pending ? "Updating…" : "Update Password"}
+                </button>
+              </form>
+            ) : (
+              <>
+                {error && (
+                  <div className="bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2 text-sm text-red-300 mb-4">
+                    {error}
+                  </div>
+                )}
+                <button
+                  onClick={() => { setView("forgot"); setError(null); }}
+                  className="w-full py-2.5 bg-[#FD7215] hover:bg-[#FD7215]/90 text-white text-sm font-medium rounded-lg transition-colors"
+                >
+                  Request a new reset link
+                </button>
+              </>
+            )}
+          </div>
+        )}
+
         {view === "choose" && (
           <div className="bg-white/5 border border-white/10 rounded-xl p-6">
             <h1 className="text-lg font-semibold text-white text-center mb-1">

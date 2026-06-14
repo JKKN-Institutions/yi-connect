@@ -224,9 +224,7 @@ export function GuideView({
                       type="button"
                       role="checkbox"
                       aria-checked={done}
-                      aria-label={
-                        done ? "Mark step not done" : "Mark step done"
-                      }
+                      aria-label={`${plain(step.action)} — ${done ? "done" : "not done"}`}
                       onClick={() => toggle(key)}
                       className={
                         done

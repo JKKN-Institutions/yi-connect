@@ -1,7 +1,8 @@
 import { requireFutureAdmin } from "@/lib/yi-future/auth/require-access";
 import { AdminShell, type NavItem } from "@/components/yi-future/admin/AdminShell";
-import { GuideLauncher } from "@/components/yi-future/guide";
+import { GuideLauncher, OnboardingLauncher } from "@/components/yi-future/guide";
 import { GUIDES } from "@/lib/yi-future/guide/content";
+import { getCompletedSteps, logGuideEvent } from "@/lib/yi-future/guide/actions";
 
 const NAV: NavItem[] = [
   { label: "Overview", href: "/yi-future/chapter" },
@@ -33,12 +34,22 @@ export default async function ChapterLayout({
   // shell. Server actions are independently gated, but this stops the UI too.
   await requireFutureAdmin();
 
+  const completed = await getCompletedSteps("chapter");
+
   return (
     <>
       <AdminShell title="Chapter Admin" roleLabel="Chapter" items={NAV}>
+        <div className="mb-6">
+          <OnboardingLauncher
+            guide={GUIDES.lanes.chapter}
+            basePath="/yi-future/guide"
+            completed={completed}
+            onEvent={logGuideEvent}
+          />
+        </div>
         {children}
       </AdminShell>
-      <GuideLauncher guide={GUIDES.lanes.chapter} variant="fab" />
+      <GuideLauncher guide={GUIDES.lanes.chapter} basePath="/yi-future/guide" variant="fab" />
     </>
   );
 }

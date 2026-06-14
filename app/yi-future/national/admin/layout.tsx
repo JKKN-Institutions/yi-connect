@@ -2,8 +2,9 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/yi-future/supabase/server";
 import { AdminShell, type NavItem } from "@/components/yi-future/admin/AdminShell";
 import { isCurrentUserFutureAdmin } from "@/app/yi-future/actions/national-admins";
-import { GuideLauncher } from "@/components/yi-future/guide";
+import { GuideLauncher, OnboardingLauncher } from "@/components/yi-future/guide";
 import { GUIDES } from "@/lib/yi-future/guide/content";
+import { getCompletedSteps, logGuideEvent } from "@/lib/yi-future/guide/actions";
 
 const NAV: NavItem[] = [
   { label: "Dashboard", href: "/yi-future/national/admin" },
@@ -62,12 +63,22 @@ export default async function NationalAdminLayout({
   const { isAdmin } = await isCurrentUserFutureAdmin();
   if (!isAdmin) redirect("/yi-future/chapter");
 
+  const completed = await getCompletedSteps("national");
+
   return (
     <>
       <AdminShell title="Yi National Admin" roleLabel="National" items={NAV}>
+        <div className="mb-6">
+          <OnboardingLauncher
+            guide={GUIDES.lanes.national}
+            basePath="/yi-future/guide"
+            completed={completed}
+            onEvent={logGuideEvent}
+          />
+        </div>
         {children}
       </AdminShell>
-      <GuideLauncher guide={GUIDES.lanes.national} variant="fab" />
+      <GuideLauncher guide={GUIDES.lanes.national} basePath="/yi-future/guide" variant="fab" />
     </>
   );
 }

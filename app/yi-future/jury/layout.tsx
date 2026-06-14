@@ -21,7 +21,7 @@ export default async function JuryLayout({
       <main className="flex-1 max-w-xl w-full mx-auto px-4 py-4">
         {children}
       </main>
-      <GuideLauncher guide={GUIDES.lanes.jury} variant="fab" />
+      <GuideLauncher guide={GUIDES.lanes.jury} basePath="/yi-future/guide" variant="fab" />
     </div>
   );
 }

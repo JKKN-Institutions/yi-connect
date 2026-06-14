@@ -10,10 +10,6 @@ import {
   requireChapterAdmin,
 } from "@/lib/yi-future/auth/require-access";
 
-async function requireAuth(): Promise<void> {
-  await requireFutureAdmin();
-}
-
 /**
  * Chapter-scoped gate for the takeover-grade mentor action (regenerate access
  * code) — a chair of chapter A must not regenerate chapter B's mentor code.

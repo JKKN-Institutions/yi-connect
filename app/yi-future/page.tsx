@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/yi-future/supabase/server";
 import { readSession } from "@/app/yi-future/actions/auth";
+import { resolveFutureAccessOrNull } from "@/lib/yi-future/auth/require-access";
 import { BrandStrip } from "@/components/yi-future/brand/BrandHeader";
 import { BRAND } from "@/lib/yi-future/constants";
 
@@ -26,6 +27,14 @@ export default async function YiFuturePage() {
     data: { user },
   } = await supabase.auth.getUser();
   if (user) {
+    // Route by Future tier: national admins → the national console; chapter
+    // core-team (chairs etc.) → their chapter area; anyone else logged in →
+    // the national console (which renders its own explicit 403). This keeps a
+    // chapter chair off the national admin page. redirect() throws — must stay
+    // outside any try/catch.
+    const access = await resolveFutureAccessOrNull();
+    if (access?.isNational) redirect("/yi-future/national/admin");
+    if (access && access.chapterIds.length > 0) redirect("/yi-future/chapter");
     redirect("/yi-future/national/admin");
   }
 

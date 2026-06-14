@@ -24,7 +24,6 @@ import {
   Clock,
   AlertTriangle,
   Users,
-  Shield,
   Loader2,
   Upload,
   Download,
@@ -342,14 +341,12 @@ export function BillClient({
     // the documents card still renders below the restricted notice.
     return (
       <div className="space-y-5">
-        <div className="flex flex-col items-center justify-center py-12">
-          <Shield className="size-10 text-gray-300 mb-3" />
-          <p className="font-medium text-gray-700">Access Restricted</p>
-          <p className="text-sm text-gray-500 mt-1 text-center">
-            Only Bill Committee members can access bill drafting.
-            <br />
-            Your role:{" "}
-            {participant?.parliament_role?.replace(/_/g, " ") || "Not assigned"}
+        <div className="rounded-xl border border-[#FF9933]/20 bg-[#FF9933]/5 p-4 text-center">
+          <FileText className="mx-auto size-7 text-[#FF9933] mb-2" />
+          <p className="font-medium text-gray-800">Committee Documents</p>
+          <p className="text-sm text-gray-600 mt-1">
+            Writing the bill is handled by your party&apos;s Bill Committee. You
+            can still add supporting documents for your committee below.
           </p>
         </div>
         <CommitteeDocumentsSection session={session} />

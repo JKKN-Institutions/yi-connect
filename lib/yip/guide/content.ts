@@ -414,12 +414,34 @@ const student: PersonaGuide = {
       ],
     },
     {
+      id: "leadership-roles",
+      title: "If you hold a leadership role",
+      steps: [
+        {
+          action: "**Speaker / Deputy Speaker** — open the **Speaker's Desk** to admit or reject motions and run No-Confidence votes.",
+          detail: "When you admit a No-Confidence motion, tap **Open floor vote** so the whole house votes on their phones, watch the live tally, then **Reveal result**.",
+          link: { label: "Open Speaker's Desk", href: "/yip/me/speaker" },
+        },
+        {
+          action: "**Minister / PM / Deputy PM** — open the **Ministry Desk** to answer the questions and motions directed to your ministry.",
+          link: { label: "Open Ministry Desk", href: "/yip/me/ministry" },
+        },
+        {
+          action: "**Leader of Opposition** — open the **Opposition Desk** to move a No-Confidence motion and respond to government bills.",
+          link: { label: "Open Opposition Desk", href: "/yip/me/opposition" },
+        },
+        {
+          action: "Don't hold one of these roles? You won't see these desks — that's normal.",
+        },
+      ],
+    },
+    {
       id: "voting",
       title: "Voting on the floor",
       steps: [
         {
           action: "When the orange **VOTE NOW** card appears, tap it.",
-          detail: "It pops up the moment a vote opens — Speaker election, your party-leader election, or a bill vote.",
+          detail: "It pops up the moment a vote opens — a Speaker election, your party-leader election, a bill vote, or a No-Confidence motion.",
           link: { label: "Open Vote", href: "/yip/me/vote" },
         },
         {
@@ -474,13 +496,13 @@ const volunteer: PersonaGuide = {
   persona: "volunteer",
   title: "YUVA Volunteer Guide",
   tagline:
-    "Your phone is a roving voting booth — when a vote opens, students without phones vote through you.",
+    "You run a desk — check your students in across both days, mark their speeches, follow the house live, and capture votes from anyone without a phone.",
   pdfPath: "/yip/guides/volunteer.pdf",
   journey: [
     "Log in with your code",
-    "Open the kiosk",
-    "Capture votes",
-    "Help students",
+    "Open your desk",
+    "Check students in",
+    "Mark speeches & capture votes",
   ],
   sections: [
     {
@@ -488,8 +510,9 @@ const volunteer: PersonaGuide = {
       title: "What a YUVA does",
       steps: [
         {
-          action: "Be the floor team — your main job is the **Vote Kiosk**.",
-          detail: "You capture votes from students who don't have a phone, plus help students log in and find their way.",
+          action: "You run a **desk** for your assigned party (and committee). Your dashboard has four tabs: **Desk**, **Now**, **Students**, and **Vote**.",
+          detail: "Check your students in each day, mark when they finish their 90-second speech, follow the live agenda, and capture votes from students without a phone.",
+          link: { label: "Open your desk", href: "/yip/volunteer" },
         },
       ],
     },
@@ -503,8 +526,26 @@ const volunteer: PersonaGuide = {
           link: { label: "Go to Join", href: "/yip/join" },
         },
         {
-          action: "Confirm your screen shows **Vote Kiosk** with 'Waiting for the organizer to open a vote…'.",
-          tip: "That's correct — keep it open.",
+          action: "Confirm your screen shows your **Desk** — your assigned party/committee and your responsibilities.",
+          tip: "If it says you have no desk, ask an organiser to assign you on the **YUVA Desks** page.",
+        },
+      ],
+    },
+    {
+      id: "your-desk",
+      title: "Your desk: attendance & speeches",
+      steps: [
+        {
+          action: "Open the **Students** tab to see the students at your desk.",
+          detail: "Mark each student in on **Day 1** and **Day 2** as they arrive — tap the day toggle next to their name.",
+          link: { label: "Open Students", href: "/yip/volunteer" },
+        },
+        {
+          action: "When a student finishes their **90-second speech**, tap **Speech** to mark it done.",
+          tip: "Only the students at your desk show here — that's correct.",
+        },
+        {
+          action: "Use the **Now** tab to follow what's happening in the house live.",
         },
       ],
     },

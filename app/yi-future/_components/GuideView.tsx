@@ -1,57 +1,41 @@
 "use client";
 
 /**
- * Yi Future 6.0 full-page guide renderer.
+ * Smart Guide — full-page renderer (theme-neutral, with the adoption layer).
  *
- * Mirrors the YIP / Youth Academy GuideView, Yi-Future-branded (navy / ivory /
- * [#F5A623]). Structure:
- *   - a persona switcher (chips) so anyone signed in can view any of the six
- *     lanes — national / chapter / delegate / mentor / jury / partner;
- *   - a "why it matters" opener + a Start-here button (per lane, optional);
- *   - a Print / Save-as-PDF button (browser print — no static files to rot);
- *   - a persona badge + title + tagline;
- *   - a "YOUR JOURNEY AT A GLANCE" numbered strip built from `journey`;
- *   - numbered sections, each step a card with a number chip, action, detail,
- *     a gold tip callout, and its OWN deep-link button ("Take me there →");
- *   - a shared "Words to know" glossary + a planned-translation footer.
+ * Static guide (always): persona switcher, why-it-matters + start-here, journey
+ * strip, per-step deep-links, glossary, planned-locale footer.
  *
- * Client component: interactivity is the persona switch (a router push), the
- * print button, and the per-step links (plain <Link>s). It reads from the
- * shared data module so page, drawer and print never disagree.
+ * Adoption layer (opt-in via `trackProgress` + the server-action props): each
+ * step becomes a CHECKBOX, a per-lane progress bar + "X of N done" + completion
+ * banner appears, the next undone step is highlighted with a Resume jump, and
+ * every interaction fires a `GuideEvent` so you can MEASURE activation. With no
+ * progress props the component renders the plain guide — graceful degradation.
+ *
+ * THEME: shadcn semantic tokens (primary / muted / card / …) → inherits brand
+ * + dark mode. Swap for literal hexes only if you must hard-brand it.
  */
 
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import {
-  ShieldCheck,
-  Building2,
-  Rocket,
-  Compass,
-  Scale,
-  Handshake,
-  Lightbulb,
-  ChevronRight,
-  ArrowRight,
-  Printer,
-  BookOpen,
-  type LucideIcon,
-} from "lucide-react";
+import { ChevronRight, ArrowRight, Download, Lightbulb, BookText, Check, AlertTriangle } from "lucide-react";
 
 import {
   type GuideBook,
   type GuidePersona,
-  GUIDE_PERSONAS,
-} from "@/lib/yi-future/guide/types";
+  type GuideStep,
+  type GuideEvent,
+  resolveGuideHref,
+  stepKey,
+  laneProgress,
+  nextUndoneStep,
+} from "@/lib/yi-future/guide/types"; // ← adjust path
+import { useGuideProgress } from "@/lib/yi-future/guide/use-progress"; // ← adjust path
 
-const PERSONA_ICON: Record<GuidePersona, LucideIcon> = {
-  national: ShieldCheck,
-  chapter: Building2,
-  delegate: Rocket,
-  mentor: Compass,
-  jury: Scale,
-  partner: Handshake,
-};
+function cx(...c: Array<string | false | null | undefined>) {
+  return c.filter(Boolean).join(" ");
+}
 
 /** Short, consistent switcher-chip labels (the lane titles vary in length). */
 const PERSONA_LABEL: Record<GuidePersona, string> = {
@@ -63,11 +47,16 @@ const PERSONA_LABEL: Record<GuidePersona, string> = {
   partner: "Partner",
 };
 
-/** Tiny `**bold**` renderer (trusted static copy only). */
+/** Plain text (drop `**bold**` markers) — for aria-labels read by screen readers. */
+function stripBold(text: string): string {
+  return text.split("**").join("");
+}
+
+/** Tiny `**bold**` renderer (trusted static copy only — no other markup). */
 function renderInline(text: string): React.ReactNode {
   return text.split("**").map((part, i) =>
     i % 2 === 1 ? (
-      <strong key={i} className="font-semibold text-[#1a1a3e]">
+      <strong key={i} className="font-semibold text-foreground">
         {part}
       </strong>
     ) : (
@@ -76,94 +65,323 @@ function renderInline(text: string): React.ReactNode {
   );
 }
 
-interface GuideViewProps {
-  guides: GuideBook;
-  persona: GuidePersona;
+function StartHere({ why, href, label }: { why?: string; href?: string | null; label?: string }) {
+  if (!why && !(href && label)) return null;
+  return (
+    <div className="flex flex-col gap-3 rounded-xl border bg-[#1a1a3e]/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+      {why ? (
+        <p className="text-sm">
+          <span className="font-medium">Why this matters: </span>
+          <span className="text-muted-foreground">{why}</span>
+        </p>
+      ) : (
+        <span />
+      )}
+      {href && label && (
+        <Link
+          href={href}
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-[#1a1a3e] px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+        >
+          {label}
+          <ArrowRight className="size-4" aria-hidden />
+        </Link>
+      )}
+    </div>
+  );
 }
 
-export function GuideView({ guides, persona }: GuideViewProps) {
-  const router = useRouter();
-  const content = guides.lanes[persona];
-  const Icon = PERSONA_ICON[persona];
-
+function StepCard({
+  step,
+  index,
+  scopeId,
+  fallbackHref,
+  track,
+  done,
+  isNext,
+  onToggle,
+  onLinkClick,
+}: {
+  step: GuideStep;
+  index: number;
+  scopeId?: string | null;
+  fallbackHref: string | null;
+  track: boolean;
+  done: boolean;
+  isNext: boolean;
+  onToggle: () => void;
+  onLinkClick: () => void;
+}) {
+  const resolved = step.link ? resolveGuideHref(step.link.href, scopeId) : null;
+  const href = resolved ?? (step.link ? fallbackHref : null);
   return (
-    <div className="space-y-10">
-      {/* ── Persona switcher ─────────────────────────────────────────── */}
-      <section className="rounded-2xl border border-[#1a1a3e]/10 bg-white p-4 shadow-sm print:hidden">
-        <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#1a1a3e]/40">
-          Choose a guide
+    <li
+      className={cx(
+        "flex gap-4 rounded-xl border bg-card p-4 shadow-sm transition-colors",
+        isNext && !done && "ring-2 ring-[#1a1a3e]/40",
+        done && "opacity-70"
+      )}
+    >
+      {track ? (
+        <button
+          type="button"
+          role="checkbox"
+          aria-checked={done}
+          aria-label={`${stripBold(step.action)} — ${done ? "done" : "not done"}`}
+          onClick={onToggle}
+          className={cx(
+            "mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full border-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            done
+              ? "border-[#1a1a3e] bg-[#1a1a3e] text-white"
+              : "border-muted-foreground/30 text-muted-foreground hover:border-[#1a1a3e]"
+          )}
+        >
+          {done ? <Check className="size-4" aria-hidden /> : <span className="text-sm font-bold">{index + 1}</span>}
+        </button>
+      ) : (
+        <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[#1a1a3e]/15 text-sm font-bold text-[#1a1a3e]">
+          {index + 1}
+        </span>
+      )}
+      <div className="min-w-0 flex-1 space-y-2">
+        <p
+          className={cx(
+            "font-medium leading-snug text-foreground",
+            done && "line-through decoration-muted-foreground/40"
+          )}
+        >
+          {renderInline(step.action)}
         </p>
-        <div className="flex flex-wrap gap-2">
-          {GUIDE_PERSONAS.map((p) => {
-            const PIcon = PERSONA_ICON[p];
-            const active = p === persona;
-            return (
-              <button
-                key={p}
-                type="button"
-                onClick={() => router.push(`/yi-future/guide?persona=${p}`)}
-                aria-pressed={active}
-                className={
-                  active
-                    ? "inline-flex items-center gap-1.5 rounded-full bg-[#1a1a3e] px-3.5 py-1.5 text-sm font-semibold text-white shadow-sm"
-                    : "inline-flex items-center gap-1.5 rounded-full border border-[#1a1a3e]/15 px-3.5 py-1.5 text-sm font-medium text-[#1a1a3e]/60 transition-colors hover:border-[#F5A623]/50 hover:text-[#1a1a3e]"
-                }
-              >
-                <PIcon className="size-3.5" />
-                {PERSONA_LABEL[p]}
-              </button>
-            );
-          })}
-        </div>
-      </section>
-
-      {/* ── Who this is for + Print ──────────────────────────────────── */}
-      <header className="space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <span className="inline-flex items-center gap-2 rounded-full bg-[#F5A623]/15 px-3 py-1 text-sm font-semibold text-[#1a1a3e]">
-            <Icon className="size-4" />
-            {content.title}
-          </span>
-          <button
-            type="button"
-            onClick={() => window.print()}
-            className="inline-flex items-center gap-2 rounded-lg bg-[#1a1a3e] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#1a1a3e]/90 print:hidden"
-          >
-            <Printer className="size-4" />
-            Print / Save as PDF
-          </button>
-        </div>
-        <h1 className="text-2xl font-bold tracking-tight text-[#1a1a3e] sm:text-3xl">
-          How to use Yi Future 6.0
-        </h1>
-        <p className="text-base text-[#1a1a3e]/60">{content.tagline}</p>
-
-        {content.whyItMatters && (
-          <div className="rounded-xl border border-[#F5A623]/30 bg-[#F5A623]/8 p-4">
-            <p className="text-sm leading-relaxed text-[#1a1a3e]/80">
-              {renderInline(content.whyItMatters)}
-            </p>
-            {content.startHere && (
-              <Link
-                href={content.startHere.href}
-                className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-[#F5A623] px-3.5 py-2 text-sm font-semibold text-[#1a1a3e] transition-colors hover:bg-[#F5A623]/90"
-              >
-                {content.startHere.label}
-                <ArrowRight className="size-3.5" />
-              </Link>
+        {step.detail && <p className="text-sm leading-relaxed text-muted-foreground">{renderInline(step.detail)}</p>}
+        {step.prerequisite && (
+          <p className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm font-medium text-amber-900 dark:text-amber-200">
+            <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />
+            <span>
+              <span className="font-semibold">Required first: </span>
+              {renderInline(step.prerequisite)}
+            </span>
+          </p>
+        )}
+        {step.platforms && (step.platforms.web || step.platforms.mobile) && (
+          <div className="rounded-lg border bg-muted/40 px-3 py-2 text-sm">
+            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Where to find it</p>
+            {step.platforms.web && (
+              <p>
+                <span className="font-medium">On the web: </span>
+                <span className="text-muted-foreground">{renderInline(step.platforms.web)}</span>
+              </p>
+            )}
+            {step.platforms.mobile && (
+              <p>
+                <span className="font-medium">On the app: </span>
+                <span className="text-muted-foreground">{renderInline(step.platforms.mobile)}</span>
+              </p>
             )}
           </div>
         )}
+        {step.image && (
+          <figure className="my-1">
+            <div className="relative overflow-hidden rounded-lg border bg-muted/30">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={step.image.src} alt={step.image.alt} width={step.image.width} height={step.image.height} className="block h-auto w-full" />
+              {step.image.highlight && (
+                <span
+                  aria-hidden
+                  className="pointer-events-none absolute rounded-md ring-2 ring-[#1a1a3e] ring-offset-1 ring-offset-background"
+                  style={{
+                    left: `${step.image.highlight.x}%`,
+                    top: `${step.image.highlight.y}%`,
+                    width: `${step.image.highlight.width}%`,
+                    height: `${step.image.highlight.height}%`,
+                  }}
+                >
+                  {step.image.highlight.label && (
+                    <span className="absolute -top-6 left-0 whitespace-nowrap rounded bg-[#1a1a3e] px-1.5 py-0.5 text-[11px] font-semibold text-white">
+                      {step.image.highlight.label}
+                    </span>
+                  )}
+                </span>
+              )}
+            </div>
+          </figure>
+        )}
+        {step.tip && (
+          <p className="flex items-start gap-2 rounded-lg bg-[#1a1a3e]/8 px-3 py-2 text-sm text-foreground/90">
+            <Lightbulb className="mt-0.5 size-4 shrink-0 text-[#1a1a3e]" aria-hidden />
+            <span>{renderInline(step.tip)}</span>
+          </p>
+        )}
+        {step.link && href && (
+          <Link
+            href={href}
+            onClick={onLinkClick}
+            className="mt-1 inline-flex items-center gap-1.5 rounded-lg bg-[#1a1a3e] px-3.5 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+          >
+            {step.link.label}
+            <ArrowRight className="size-3.5" aria-hidden />
+          </Link>
+        )}
+      </div>
+    </li>
+  );
+}
+
+interface GuideViewProps {
+  guides: GuideBook;
+  persona: GuidePersona;
+  /** Lanes the viewer may switch to (permission-scoped by the page). */
+  visiblePersonas: GuidePersona[];
+  /** Current scope id, for resolving `:scopeId` deep-links. */
+  scopeId?: string | null;
+  /** Base path of the guide route, e.g. "/yip/guide" — drives the switcher URL. */
+  basePath: string;
+  /** Where scope-bound links fall back to when no scope is in context. */
+  scopeFallbackHref?: string | null;
+  /* ── adoption layer (all optional) ── */
+  /** Turn the lane into a checkable activation checklist. */
+  trackProgress?: boolean;
+  /** Step keys this user has already completed (from getCompletedSteps). */
+  initialCompleted?: string[];
+  /** Server action persisting a toggle. */
+  onToggleStep?: (persona: GuidePersona, key: string, done: boolean) => Promise<unknown> | void;
+  /** Event sink for instrumentation. */
+  onEvent?: (event: GuideEvent) => Promise<unknown> | void;
+}
+
+export function GuideView({
+  guides,
+  persona,
+  visiblePersonas,
+  scopeId,
+  basePath,
+  scopeFallbackHref = null,
+  trackProgress = false,
+  initialCompleted,
+  onToggleStep,
+  onEvent,
+}: GuideViewProps) {
+  const router = useRouter();
+  const content = guides.lanes[persona];
+  const progress = useGuideProgress({
+    persona,
+    surface: "page",
+    initialCompleted,
+    onToggle: onToggleStep,
+    onEvent,
+  });
+
+  const lp = laneProgress(content, progress.completed);
+  const next = trackProgress ? nextUndoneStep(content, progress.completed) : null;
+  const startHref = content.startHere ? resolveGuideHref(content.startHere.href, scopeId) ?? scopeFallbackHref : null;
+  const showSwitcher = visiblePersonas.length > 1;
+
+  // Fire guide_open once per lane view.
+  React.useEffect(() => {
+    progress.emit({ name: "guide_open", surface: "page" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Fire lane_complete on the false→true transition.
+  const wasComplete = React.useRef(lp.complete);
+  React.useEffect(() => {
+    if (trackProgress && lp.complete && !wasComplete.current) {
+      progress.emit({ name: "lane_complete", surface: "page" });
+    }
+    wasComplete.current = lp.complete;
+  }, [trackProgress, lp.complete, progress.emit]);
+
+  return (
+    <div className="space-y-10">
+      {/* Persona switcher */}
+      {showSwitcher && (
+        <section className="rounded-2xl border bg-card p-4 shadow-sm">
+          <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Choose a guide</p>
+          <div className="flex flex-wrap gap-2">
+            {visiblePersonas.map((p) => {
+              const active = p === persona;
+              return (
+                <button
+                  key={p}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => {
+                    progress.emit({ name: "lane_switch", surface: "page", context: p });
+                    router.push(`${basePath}?persona=${p}`);
+                  }}
+                  className={
+                    active
+                      ? "inline-flex items-center gap-1.5 rounded-full bg-[#1a1a3e] px-3.5 py-1.5 text-sm font-semibold text-white"
+                      : "inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  }
+                >
+                  {PERSONA_LABEL[p]}
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* Header + Download PDF */}
+      <header className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <span className="inline-flex items-center gap-2 rounded-full bg-[#1a1a3e]/12 px-3 py-1 text-sm font-semibold text-[#1a1a3e]">
+            {content.title}
+          </span>
+          {content.pdfPath ? (
+            <a
+              href={content.pdfPath}
+              download
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => progress.emit({ name: "pdf_download", surface: "page" })}
+              className="inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-semibold transition-colors hover:bg-muted"
+            >
+              <Download className="size-4" aria-hidden />
+              Download as PDF
+            </a>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                progress.emit({ name: "pdf_download", surface: "page" });
+                window.print();
+              }}
+              className="inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-semibold transition-colors hover:bg-muted print:hidden"
+            >
+              <Download className="size-4" aria-hidden />
+              Download / Print
+            </button>
+          )}
+        </div>
+        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">How to use Yi Future 6.0</h1>
+        <p className="text-base text-muted-foreground">{content.tagline}</p>
       </header>
 
-      {/* ── Journey strip ───────────────────────────────────────────── */}
-      <section
-        aria-label="Your journey at a glance"
-        className="rounded-2xl border border-[#1a1a3e]/10 bg-white p-5 shadow-sm"
-      >
-        <p className="mb-4 text-xs font-semibold uppercase tracking-widest text-[#F5A623]">
-          Your journey at a glance
-        </p>
+      {/* Why it matters + Start here */}
+      <StartHere why={content.whyItMatters} href={startHref} label={content.startHere?.label} />
+
+      {/* Progress bar + Resume (adoption layer) */}
+      {trackProgress && lp.total > 0 && (
+        <section className={cx("rounded-xl border p-4", lp.complete ? "border-[#1a1a3e]/40 bg-[#1a1a3e]/5" : "bg-card")}>
+          <div className="flex items-center justify-between text-sm">
+            <span className="font-medium">{lp.complete ? "You're all set up 🎉" : `${lp.done} of ${lp.total} done`}</span>
+            <span className="text-muted-foreground">{lp.percent}%</span>
+          </div>
+          <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
+            <div className="h-full rounded-full bg-[#1a1a3e] transition-all" style={{ width: `${lp.percent}%` }} />
+          </div>
+          {!lp.complete && next && (
+            <a href={`#${next.sectionId}`} className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-[#1a1a3e] hover:underline">
+              Resume: {next.sectionTitle}
+              <ArrowRight className="size-3.5" aria-hidden />
+            </a>
+          )}
+        </section>
+      )}
+
+      {/* Journey strip */}
+      <section aria-label="Your journey at a glance" className="rounded-2xl border bg-card p-5 shadow-sm">
+        <p className="mb-4 text-xs font-semibold uppercase tracking-widest text-[#1a1a3e]">Your journey at a glance</p>
         <ol className="flex flex-wrap items-center gap-x-2 gap-y-3">
           {content.journey.map((node, i) => (
             <li key={i} className="flex items-center gap-2">
@@ -171,94 +389,67 @@ export function GuideView({ guides, persona }: GuideViewProps) {
                 <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-[#1a1a3e] text-xs font-bold text-white">
                   {i + 1}
                 </span>
-                <span className="text-sm font-medium text-[#1a1a3e]/80">{node}</span>
+                <span className="text-sm font-medium text-foreground/80">{node}</span>
               </span>
-              {i < content.journey.length - 1 && (
-                <ChevronRight className="size-4 text-[#1a1a3e]/20" aria-hidden />
-              )}
+              {i < content.journey.length - 1 && <ChevronRight className="size-4 text-muted-foreground/40" aria-hidden />}
             </li>
           ))}
         </ol>
       </section>
 
-      {/* ── Step-by-step sections ───────────────────────────────────── */}
+      {/* Step-by-step sections */}
       {content.sections.map((section, sIdx) => (
-        <section key={section.id} className="space-y-4">
-          <h2 className="flex items-center gap-2 text-lg font-bold text-[#1a1a3e]">
-            <span className="text-[#F5A623]">{sIdx + 1}.</span>
+        <section key={section.id} id={section.id} className="space-y-4 scroll-mt-20">
+          <h2 className="flex items-center gap-2 text-lg font-bold">
+            <span className="text-[#1a1a3e]">{sIdx + 1}.</span>
             {section.title}
           </h2>
           <ol className="space-y-3">
-            {section.steps.map((step, i) => (
-              <li
-                key={i}
-                className="flex gap-4 rounded-xl border border-[#1a1a3e]/10 bg-white p-4 shadow-sm"
-              >
-                <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[#F5A623]/20 text-sm font-bold text-[#1a1a3e]">
-                  {i + 1}
-                </span>
-                <div className="min-w-0 flex-1 space-y-2">
-                  <p className="font-medium leading-snug text-[#1a1a3e]">
-                    {renderInline(step.action)}
-                  </p>
-                  {step.detail && (
-                    <p className="text-sm leading-relaxed text-[#1a1a3e]/55">
-                      {renderInline(step.detail)}
-                    </p>
-                  )}
-                  {step.tip && (
-                    <p className="flex items-start gap-2 rounded-lg bg-[#F5A623]/10 px-3 py-2 text-sm text-[#1a1a3e]/80">
-                      <Lightbulb
-                        className="mt-0.5 size-4 shrink-0 text-[#F5A623]"
-                        aria-hidden
-                      />
-                      <span>{renderInline(step.tip)}</span>
-                    </p>
-                  )}
-                  {step.link && (
-                    <Link
-                      href={step.link.href}
-                      className="mt-1 inline-flex items-center gap-1.5 rounded-lg bg-[#1a1a3e] px-3.5 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#1a1a3e]/90 print:hidden"
-                    >
-                      {step.link.label}
-                      <ArrowRight className="size-3.5" />
-                    </Link>
-                  )}
-                </div>
-              </li>
-            ))}
+            {section.steps.map((step, i) => {
+              const key = stepKey(section.id, step, i);
+              return (
+                <StepCard
+                  key={key}
+                  step={step}
+                  index={i}
+                  scopeId={scopeId}
+                  fallbackHref={scopeFallbackHref}
+                  track={trackProgress}
+                  done={progress.completed.has(key)}
+                  isNext={next?.key === key}
+                  onToggle={() => progress.toggle(key)}
+                  onLinkClick={() => progress.emit({ name: "step_link_click", surface: "page", stepKey: key })}
+                />
+              );
+            })}
           </ol>
         </section>
       ))}
 
-      {/* ── Glossary ────────────────────────────────────────────────── */}
-      {guides.glossary.length > 0 && (
-        <section
-          aria-label="Words to know"
-          className="rounded-2xl border border-[#1a1a3e]/10 bg-white p-5 shadow-sm"
-        >
-          <h2 className="mb-4 flex items-center gap-2 text-lg font-bold text-[#1a1a3e]">
-            <BookOpen className="size-4 text-[#F5A623]" aria-hidden />
-            Words to know
-          </h2>
-          <dl className="space-y-3">
-            {guides.glossary.map((g) => (
-              <div key={g.term} className="grid gap-1 sm:grid-cols-[10rem_1fr]">
-                <dt className="font-semibold text-[#1a1a3e]">{g.term}</dt>
-                <dd className="text-sm leading-relaxed text-[#1a1a3e]/60">
-                  {renderInline(g.def)}
-                </dd>
+      {/* Words to know (shared glossary) */}
+      {guides.glossary && guides.glossary.length > 0 && (
+        <section className="rounded-2xl border bg-card p-5 shadow-sm">
+          <div className="mb-3 flex items-center gap-2">
+            <BookText className="size-5 text-[#1a1a3e]" aria-hidden />
+            <h2 className="text-lg font-semibold">Words to know</h2>
+          </div>
+          <dl className="grid gap-x-6 gap-y-2.5 sm:grid-cols-2">
+            {guides.glossary.map(({ term, def }) => (
+              <div key={term} className="text-sm">
+                <dt className="font-medium">{term}</dt>
+                <dd className="text-muted-foreground">{def}</dd>
               </div>
             ))}
           </dl>
         </section>
       )}
 
-      {guides.plannedLocaleNote && (
-        <p className="border-t border-[#1a1a3e]/10 pt-5 text-center text-xs text-[#1a1a3e]/40">
-          {guides.plannedLocaleNote}
-        </p>
-      )}
+      {/* Footer */}
+      <p className="border-t pt-4 text-xs text-muted-foreground">
+        {showSwitcher ? "Switch roles with the buttons up top. " : ""}
+        {content.pdfPath ? "Use Download as PDF to save or share this guide. " : "Use Download / Print to save this guide. "}
+        {guides.plannedLocaleNote ?? ""}
+      </p>
     </div>
   );
 }

@@ -41,7 +41,7 @@ export default async function MentorLayout({
       <main className="flex-1 max-w-3xl w-full mx-auto px-4 py-6">
         {children}
       </main>
-      <GuideLauncher guide={GUIDES.lanes.mentor} variant="fab" />
+      <GuideLauncher guide={GUIDES.lanes.mentor} basePath="/yi-future/guide" variant="fab" />
     </div>
   );
 }

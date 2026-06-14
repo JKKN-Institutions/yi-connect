@@ -13,20 +13,39 @@
  *     default landing lane)
  *
  * Reachable by anyone; the persona switcher lets a viewer read (and print) any
- * lane, so a chapter team can hand the right guide to a delegate, mentor,
- * juror or partner. Each step carries its own deep-link button.
+ * lane. The adoption layer (checkable steps + saved progress + a guide_events
+ * funnel) is ON: it persists per Supabase-auth user (national / chapter). The
+ * access-code personas have no auth.uid(), so for them progress degrades to
+ * in-browser/ephemeral — events still log anonymously. (Director decision
+ * 2026-06-14: standard install.)
  */
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { resolveFutureAccessOrNull } from "@/lib/yi-future/auth/require-access";
 import { readSession } from "@/app/yi-future/actions/auth";
 import { GUIDES } from "@/lib/yi-future/guide/content";
-import { isGuidePersona, type GuidePersona } from "@/lib/yi-future/guide/types";
+import {
+  GUIDE_PERSONAS,
+  isGuidePersona,
+  type GuideBook,
+  type GuidePersona,
+} from "@/lib/yi-future/guide/types";
 import { GuideView } from "@/app/yi-future/_components/GuideView";
+import {
+  getCompletedSteps,
+  toggleStep,
+  logGuideEvent,
+} from "@/lib/yi-future/guide/actions";
 
 export const dynamic = "force-dynamic";
 
 export const metadata = { title: "How to use Yi Future 6.0" };
+
+const BASE_PATH = "/yi-future/guide";
+
+// Activation checklist: checkable steps + progress + instrumentation. Persists
+// per Supabase-auth user; degrades gracefully for access-code personas.
+const TRACK_PROGRESS = true;
 
 /** Where "Back" returns to, per lane. */
 const PERSONA_HOME: Record<GuidePersona, string> = {
@@ -75,10 +94,14 @@ export default async function YiFutureGuidePage({
   const { persona: requestedRaw } = await searchParams;
   const ownPersona = await detectLane();
 
-  // Anyone may switch to any lane via ?persona= — the page is instructional.
+  // Every lane is instructional (no `requires` gate) — all six are switchable.
+  const visible: GuidePersona[] = [...GUIDE_PERSONAS];
   const persona: GuidePersona = isGuidePersona(requestedRaw)
     ? requestedRaw
     : ownPersona;
+
+  // Completed steps for the active lane (empty for access-code / logged-out).
+  const completed = TRACK_PROGRESS ? await getCompletedSteps(persona) : [];
 
   return (
     <main className="min-h-screen bg-[#FEFCF6]">
@@ -110,7 +133,21 @@ export default async function YiFutureGuidePage({
       </header>
 
       <div className="mx-auto max-w-3xl px-6 py-8">
-        <GuideView guides={GUIDES} persona={persona} />
+        <GuideView
+          // Remount per lane: re-seeds progress state + the guide_open /
+          // lane_complete effect refs (a ?persona= switch is a soft nav that
+          // would otherwise reconcile this instance in place).
+          key={persona}
+          guides={GUIDES as GuideBook}
+          persona={persona}
+          visiblePersonas={visible}
+          basePath={BASE_PATH}
+          scopeFallbackHref={PERSONA_HOME[ownPersona]}
+          trackProgress={TRACK_PROGRESS}
+          initialCompleted={completed}
+          onToggleStep={toggleStep}
+          onEvent={logGuideEvent}
+        />
       </div>
     </main>
   );

@@ -25,7 +25,7 @@ export default async function DelegateLayout({
       <main className="flex-1 max-w-3xl w-full mx-auto px-4 py-6">
         {children}
       </main>
-      <GuideLauncher guide={GUIDES.lanes.delegate} variant="fab" />
+      <GuideLauncher guide={GUIDES.lanes.delegate} basePath="/yi-future/guide" variant="fab" />
     </div>
   );
 }

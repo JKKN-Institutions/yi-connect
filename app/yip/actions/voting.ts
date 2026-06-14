@@ -400,6 +400,31 @@ export async function revealResults(
       .eq("id", session.bill_id);
   }
 
+  // No-confidence motion vote: write the counted tally + outcome onto the
+  // motion (the organiser-control reveal path; the Speaker's reveal in
+  // speaker.ts does the same). config.motionId identifies the motion.
+  if (session.vote_type === "no_confidence") {
+    const cfg = (session.config ?? {}) as { motionId?: string };
+    if (cfg.motionId) {
+      const votesFor = tallyMap["aye"] || 0;
+      const votesAgainst = tallyMap["nay"] || 0;
+      const votesAbstain = tallyMap["abstain"] || 0;
+      const motionOutcome = votesFor > votesAgainst ? "passed" : "rejected";
+      await supabase
+        .from("motions")
+        .update({
+          votes_for: votesFor,
+          votes_against: votesAgainst,
+          votes_abstain: votesAbstain,
+          outcome: motionOutcome,
+          status: "resolved",
+          resolved_at: new Date().toISOString(),
+        })
+        .eq("id", cfg.motionId)
+        .eq("event_id", session.event_id);
+    }
+  }
+
   // Designate seats from the tally and persist what is unambiguously decided.
   // Runoff sessions resolve against the seat they contest (config.runoffSeat).
   const outcome = await resolveOutcome(supabase, session, tallies);

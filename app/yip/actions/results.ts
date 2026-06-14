@@ -107,6 +107,7 @@ type ResultRow = {
   hasDisciplinary: boolean; // any walkout / ruckus / suspension flag
   consistencyFloor: number; // MVP: weakest session as a 0–1 fraction of its max
   consistencySessionCount: number; // # scored sessions (MVP min-participation gate)
+  committeeLevel: number; // shared committee level (cmte+bill, /10) — Team Spirit award
   rank: number;
   award_category: string | null;
   computed_at: string;
@@ -554,6 +555,10 @@ export async function computeResults(
       hasDisciplinary,
       consistencyFloor: Math.round(consistencyFloor * 1000) / 1000,
       consistencySessionCount,
+      // Shared committee level (same for every member of a committee) — Team
+      // Spirit ranks on this so the whole top committee co-wins, matching the
+      // leaderboard's committee value (interview 2026-06-14, Bug C).
+      committeeLevel: cl ? cl.cmte + cl.bill : 0,
       rank: 0,
       award_category: null,
       computed_at: new Date().toISOString(),
@@ -672,21 +677,19 @@ export async function computeResults(
     (_p, r) => !r.hasDisciplinary,
     sumKeys(["mupi.conduct", "zero.conduct", "bill.conduct"])
   );
-  // 7. Team Spirit — committee collaboration + committee-level credit. Director
-  //    ruling: this is a TEAM award → allTied, so every member tied at the top
-  //    score co-wins (the shared committee-level credit ties a whole committee).
-  //    Innovative Ideas & Community Impact stay single-winner (they rank on
-  //    individual zero/bill/mupi scores).
+  // 7. Team Spirit — TEAM award → allTied, so every member of the top committee
+  //    co-wins. Ranks on the SHARED committee level (cmte+bill, derived from the
+  //    /60 committee score) — identical for every member of a committee — so the
+  //    award tracks the committee's leaderboard standing rather than each
+  //    member's individual juror marks (interview 2026-06-14, Bug C: the prior
+  //    per-juror score_breakdown metric could disagree with the leaderboard).
+  //    Innovative Ideas & Community Impact stay single-winner (individual scores).
   assignAward(
     resultRows,
     participantMap,
     "Team Spirit",
     all,
-    sumKeys([
-      "cmte.team_collaboration",
-      "cmte.committee_level",
-      "bill.committee_level",
-    ]),
+    (r) => r.committeeLevel,
     { allTied: true }
   );
   // 8. Innovative Ideas — Zero Hour creativity / problem-solving / policy.

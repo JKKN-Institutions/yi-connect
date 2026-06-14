@@ -54,10 +54,15 @@ const MODULES: ModuleCard[] = [
 
 export default async function SuperAdminPage() {
   const me = await getCurrentPersonRoles();
+  // Accept the platform tier (new `platform_super_admin` + legacy `super_admin`)
+  // — must match isPlatformSuperAdmin(), which /hub uses to route here, or a
+  // platform_super_admin-only user bounces /hub ↔ /super-admin forever.
   const isSuperAdmin = !!me?.assignments.some(
-    (a) => a.is_active && a.role === "super_admin"
+    (a) =>
+      a.is_active &&
+      (a.role === "super_admin" || a.role === "platform_super_admin")
   );
-  if (!isSuperAdmin) redirect("/home");
+  if (!isSuperAdmin) redirect("/hub");
 
   return (
     <main className="min-h-screen bg-gray-50">

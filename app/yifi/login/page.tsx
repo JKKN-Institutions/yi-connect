@@ -20,13 +20,70 @@ function YiFiLoginPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [view, setView] = useState<View>(
-    searchParams.get("reset") === "true" ? "login" : "login"
+    searchParams.get("token_hash") ? "reset" : "login"
   );
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [roles, setRoles] = useState({ isOrganiser: false, isRegistrant: false });
+
+  // ─── Branded reset flow (token_hash from our email → set new password) ───
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [resetVerifying, setResetVerifying] = useState(
+    !!searchParams.get("token_hash")
+  );
+  const [resetReady, setResetReady] = useState(false);
+
+  useEffect(() => {
+    const tokenHash = searchParams.get("token_hash");
+    if (!tokenHash) return;
+    const supabase = createClient();
+    supabase.auth
+      .verifyOtp({
+        type: (searchParams.get("type") as "recovery") || "recovery",
+        token_hash: tokenHash,
+      })
+      .then(({ error: err }) => {
+        if (err)
+          setError("Reset link expired or invalid. Request a new one below.");
+        else setResetReady(true);
+        setResetVerifying(false);
+      })
+      .catch(() => {
+        setError("Something went wrong verifying your reset link.");
+        setResetVerifying(false);
+      });
+  }, [searchParams]);
+
+  function handleResetSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    if (newPassword.length < 6) {
+      setError("Password must be at least 6 characters.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setError("Passwords don't match.");
+      return;
+    }
+    startTransition(async () => {
+      const supabase = createClient();
+      const { error: updErr } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
+      if (updErr) {
+        setError(updErr.message);
+        return;
+      }
+      // Drop the temporary recovery session and send them to a clean login with
+      // the "password updated" banner.
+      await supabase.auth.signOut();
+      router.push("/yifi/login?reset=true");
+      router.refresh();
+    });
+  }
 
   function handleLogin(e: React.FormEvent) {
     e.preventDefault();

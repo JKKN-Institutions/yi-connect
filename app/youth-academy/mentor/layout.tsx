@@ -12,6 +12,7 @@ import Link from "next/link";
 import { BookOpen, GraduationCap } from "lucide-react";
 import { getYuvaAccess } from "@/lib/yuva/auth/yuva-access";
 import { Forbidden403 } from "@/app/youth-academy/_components/Forbidden403";
+import { StaffSignOut } from "@/app/youth-academy/_components/StaffSignOut";
 
 export const metadata = {
   title: "Mentor",
@@ -73,6 +74,7 @@ export default async function MentorLayout({
               <BookOpen className="size-3.5" />
               Guide
             </Link>
+            <StaffSignOut className="inline-flex items-center gap-1.5 text-slate-600 hover:text-slate-900" />
           </nav>
         </div>
       </header>

@@ -3,6 +3,7 @@ import { GraduationCap } from "lucide-react";
 import { createClient } from "@/lib/yuva/supabase/server";
 import { requireYuvaNational } from "@/lib/yuva/auth/require-national";
 import { Forbidden403 } from "@/app/youth-academy/_components/Forbidden403";
+import { StaffSignOut } from "@/app/youth-academy/_components/StaffSignOut";
 
 /**
  * Yi Youth Academy — national console layout (Phase 4).
@@ -72,6 +73,7 @@ export default async function NationalLayout({
               </Link>
             ))}
           </nav>
+          <StaffSignOut className="ml-auto inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900" />
         </div>
       </header>
 

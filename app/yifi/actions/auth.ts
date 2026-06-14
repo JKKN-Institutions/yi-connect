@@ -2,6 +2,10 @@
 
 import { cookies } from "next/headers";
 import { createServiceClient, createClient } from "@/lib/yifi/supabase/server";
+import {
+  sendBrandedPasswordReset,
+  appBaseUrl,
+} from "@/lib/auth/branded-password-reset";
 
 type JoinResult =
   | { type: "member"; registrant: { id: string; full_name: string; edition_id: string } }

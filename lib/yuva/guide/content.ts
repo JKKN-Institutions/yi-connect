@@ -648,9 +648,11 @@ export type GuideEventName =
   | "lane_complete"
   | "pdf_download"
   | "nudge_click"
+  | "onboarding_start"
+  | "welcome_shown"
   | "guide_dismiss";
 
-export type GuideSurface = "page" | "drawer" | "launcher" | "nudge" | "widget";
+export type GuideSurface = "page" | "drawer" | "launcher" | "nudge" | "widget" | "welcome" | "onboarding";
 
 export type GuideEvent = {
   name: GuideEventName;

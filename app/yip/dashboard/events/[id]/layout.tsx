@@ -43,15 +43,17 @@ export default async function EventLayout({
         <h1 className="text-2xl font-bold text-gray-900">{event.name}</h1>
       </div>
 
-      {/* Tab Navigation */}
-      <EventTabNav
-        eventId={id}
-        eventStatus={event.status}
-        canViewScores={access.canViewScores}
-      />
+      {/* Vertical sidebar nav (desktop) + dropdown (mobile), beside the content */}
+      <div className="lg:flex lg:gap-6">
+        <EventTabNav
+          eventId={id}
+          eventStatus={event.status}
+          canViewScores={access.canViewScores}
+        />
 
-      {/* Tab Content */}
-      <div className="mt-4">{children}</div>
+        {/* Tab Content */}
+        <div className="min-w-0 flex-1">{children}</div>
+      </div>
     </div>
   );
 }

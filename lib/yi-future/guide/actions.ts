@@ -18,6 +18,10 @@ import {
   type GuideEvent,
 } from "@/lib/yi-future/guide/types"; // ← adjust path
 
+// This app's value for the shared guide tables' `app` discriminator column, so
+// Yi-Future progress + events never collide with another app's same-named lane.
+const APP = "future";
+
 /** Completed step keys for the current user + persona (empty if logged out). */
 export async function getCompletedSteps(persona: string): Promise<string[]> {
   try {
@@ -31,6 +35,7 @@ export async function getCompletedSteps(persona: string): Promise<string[]> {
       .from("guide_progress")
       .select("step_key")
       .eq("user_id", user.id)
+      .eq("app", APP)
       .eq("persona", persona);
     if (error) return [];
     return (data ?? []).map((r: { step_key: string }) => r.step_key);
@@ -59,8 +64,8 @@ export async function toggleStep(
       const { error } = await supabase
         .from("guide_progress")
         .upsert(
-          { user_id: user.id, persona, step_key: stepKey },
-          { onConflict: "user_id,persona,step_key", ignoreDuplicates: true }
+          { user_id: user.id, app: APP, persona, step_key: stepKey },
+          { onConflict: "user_id,app,persona,step_key", ignoreDuplicates: true }
         );
       return { ok: !error };
     }
@@ -68,6 +73,7 @@ export async function toggleStep(
       .from("guide_progress")
       .delete()
       .eq("user_id", user.id)
+      .eq("app", APP)
       .eq("persona", persona)
       .eq("step_key", stepKey);
     return { ok: !error };
@@ -94,6 +100,7 @@ export async function logGuideEvent(event: GuideEvent): Promise<void> {
     } = await supabase.auth.getUser();
     await supabase.from("guide_events").insert({
       user_id: user?.id ?? null,
+      app: APP,
       name: event.name,
       persona: event.persona,
       surface: event.surface,

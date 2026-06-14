@@ -18,6 +18,11 @@ import {
   type GuideEvent,
 } from "@/lib/guide/types"; // ← adjust path
 
+// This app's value for the shared guide tables' `app` discriminator column.
+// The same persona name can exist in more than one app's guide; `app` keeps
+// each app's progress + events in their own namespace so they never collide.
+const APP = "dashboard";
+
 /** Completed step keys for the current user + persona (empty if logged out). */
 export async function getCompletedSteps(persona: string): Promise<string[]> {
   try {
@@ -32,6 +37,7 @@ export async function getCompletedSteps(persona: string): Promise<string[]> {
       .from("guide_progress")
       .select("step_key")
       .eq("user_id", user.id)
+      .eq("app", APP)
       .eq("persona", persona);
     if (error) return [];
     return (data ?? []).map((r: { step_key: string }) => r.step_key);
@@ -59,10 +65,10 @@ export async function toggleStep(
       // RLS policy (a DO UPDATE upsert would be RLS-denied on the re-check path).
       const { error } = await supabase
         .schema("yi_connect")
-      .from("guide_progress")
+        .from("guide_progress")
         .upsert(
-          { user_id: user.id, persona, step_key: stepKey },
-          { onConflict: "user_id,persona,step_key", ignoreDuplicates: true }
+          { user_id: user.id, app: APP, persona, step_key: stepKey },
+          { onConflict: "user_id,app,persona,step_key", ignoreDuplicates: true }
         );
       return { ok: !error };
     }
@@ -71,6 +77,7 @@ export async function toggleStep(
       .from("guide_progress")
       .delete()
       .eq("user_id", user.id)
+      .eq("app", APP)
       .eq("persona", persona)
       .eq("step_key", stepKey);
     return { ok: !error };
@@ -97,6 +104,7 @@ export async function logGuideEvent(event: GuideEvent): Promise<void> {
     } = await supabase.auth.getUser();
     await supabase.schema("yi_connect").from("guide_events").insert({
       user_id: user?.id ?? null,
+      app: APP,
       name: event.name,
       persona: event.persona,
       surface: event.surface,

@@ -40,8 +40,12 @@ export interface ParticipantSession {
 
 export function VoteClient({
   initialSession,
+  embedded = false,
 }: {
   initialSession: ParticipantSession;
+  /** Rendered inline on the student dashboard (/yip/me): hides all the
+   *  non-actionable states so nothing shows until a vote is actually open. */
+  embedded?: boolean;
 }) {
   const session: ParticipantSession | null = initialSession;
   const [candidates, setCandidates] = useState<VoteCandidate[]>([]);
@@ -157,6 +161,7 @@ export function VoteClient({
   // ─── No session ───────────────────────────────────────────────
 
   if (!session) {
+    if (embedded) return null;
     return (
       <div className="flex flex-col items-center justify-center py-12">
         <AlertTriangle className="size-10 text-amber-400 mb-3" />
@@ -168,6 +173,7 @@ export function VoteClient({
   // ─── Loading ──────────────────────────────────────────────────
 
   if (loading || loadingCandidates) {
+    if (embedded) return null;
     return (
       <div className="flex flex-col items-center justify-center py-12">
         <div className="size-8 animate-spin rounded-full border-2 border-gray-300 border-t-[#FF9933]" />
@@ -179,6 +185,7 @@ export function VoteClient({
   // ─── No active vote ───────────────────────────────────────────
 
   if (!voteSession || isRevealed) {
+    if (embedded) return null;
     return (
       <div className="space-y-5">
         <div>
@@ -204,6 +211,24 @@ export function VoteClient({
   // ─── Already voted ────────────────────────────────────────────
 
   if (hasVoted) {
+    if (embedded) {
+      return (
+        <Card className="border-green-200 bg-green-50/50 overflow-hidden">
+          <CardContent className="py-4">
+            <div className="flex items-center gap-2.5">
+              <CheckCircle2 className="size-5 shrink-0 text-green-600" />
+              <div>
+                <p className="text-sm font-bold text-green-800">Vote recorded</p>
+                <p className="mt-0.5 text-xs text-green-600">
+                  Your vote has been cast.
+                  {isClosed ? " Results will be revealed shortly." : " Results will be announced."}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      );
+    }
     return (
       <div className="space-y-5">
         <div>
@@ -231,6 +256,7 @@ export function VoteClient({
   // ─── Voting closed (didn't vote in time) ──────────────────────
 
   if (isClosed && !hasVoted) {
+    if (embedded) return null;
     return (
       <div className="space-y-5">
         <div>

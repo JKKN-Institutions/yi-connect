@@ -57,7 +57,7 @@ export default async function SuperAdminPage() {
   const isSuperAdmin = !!me?.assignments.some(
     (a) => a.is_active && a.role === "super_admin"
   );
-  if (!isSuperAdmin) redirect("/home");
+  if (!isSuperAdmin) redirect("/hub");
 
   return (
     <main className="min-h-screen bg-gray-50">

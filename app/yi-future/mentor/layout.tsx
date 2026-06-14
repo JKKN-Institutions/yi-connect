@@ -2,11 +2,14 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { readSession } from "@/app/yi-future/actions/auth";
 import { RoleHeader } from "@/components/yi-future/brand/RoleHeader";
+import { GuideLauncher } from "@/components/yi-future/guide";
+import { GUIDES } from "@/lib/yi-future/guide/content";
 
 const NAV = [
   { label: "Overview", href: "/yi-future/mentor" },
   { label: "Messages", href: "/yi-future/mentor/messages" },
   { label: "Resources", href: "/yi-future/mentor/resources" },
+  { label: "Guide", href: "/yi-future/guide" },
 ];
 
 export default async function MentorLayout({
@@ -38,6 +41,7 @@ export default async function MentorLayout({
       <main className="flex-1 max-w-3xl w-full mx-auto px-4 py-6">
         {children}
       </main>
+      <GuideLauncher guide={GUIDES.lanes.mentor} variant="fab" />
     </div>
   );
 }

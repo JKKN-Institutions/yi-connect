@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/yi-future/supabase/server";
 import { AdminShell, type NavItem } from "@/components/yi-future/admin/AdminShell";
 import { isCurrentUserFutureAdmin } from "@/app/yi-future/actions/national-admins";
+import { GuideLauncher } from "@/components/yi-future/guide";
+import { GUIDES } from "@/lib/yi-future/guide/content";
 
 const NAV: NavItem[] = [
   { label: "Dashboard", href: "/yi-future/national/admin" },
@@ -30,6 +32,7 @@ const NAV: NavItem[] = [
   { label: "Connect WhatsApp", href: "/yi-future/national/admin/whatsapp-connect" },
   { label: "WhatsApp Outreach", href: "/yi-future/national/admin/whatsapp-outreach" },
   { label: "Admins", href: "/yi-future/national/admin/admins" },
+  { label: "Guide", href: "/yi-future/guide" },
   { label: "My Bug Reports", href: "/yi-future/my-bug-reports" },
 ];
 
@@ -60,8 +63,11 @@ export default async function NationalAdminLayout({
   if (!isAdmin) redirect("/yi-future/chapter");
 
   return (
-    <AdminShell title="Yi National Admin" roleLabel="National" items={NAV}>
-      {children}
-    </AdminShell>
+    <>
+      <AdminShell title="Yi National Admin" roleLabel="National" items={NAV}>
+        {children}
+      </AdminShell>
+      <GuideLauncher guide={GUIDES.lanes.national} variant="fab" />
+    </>
   );
 }

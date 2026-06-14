@@ -1,5 +1,7 @@
 import { requireFutureAdmin } from "@/lib/yi-future/auth/require-access";
 import { AdminShell, type NavItem } from "@/components/yi-future/admin/AdminShell";
+import { GuideLauncher } from "@/components/yi-future/guide";
+import { GUIDES } from "@/lib/yi-future/guide/content";
 
 const NAV: NavItem[] = [
   { label: "Overview", href: "/yi-future/chapter" },
@@ -19,6 +21,7 @@ const NAV: NavItem[] = [
   { label: "Final Event", href: "/yi-future/chapter/final" },
   { label: "Submissions", href: "/yi-future/chapter/submissions" },
   { label: "Results", href: "/yi-future/chapter/results" },
+  { label: "Guide", href: "/yi-future/guide" },
 ];
 
 export default async function ChapterLayout({
@@ -31,8 +34,11 @@ export default async function ChapterLayout({
   await requireFutureAdmin();
 
   return (
-    <AdminShell title="Chapter Admin" roleLabel="Chapter" items={NAV}>
-      {children}
-    </AdminShell>
+    <>
+      <AdminShell title="Chapter Admin" roleLabel="Chapter" items={NAV}>
+        {children}
+      </AdminShell>
+      <GuideLauncher guide={GUIDES.lanes.chapter} variant="fab" />
+    </>
   );
 }

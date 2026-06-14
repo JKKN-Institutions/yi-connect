@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import { readSession } from "@/app/yi-future/actions/auth";
 import { RoleHeader } from "@/components/yi-future/brand/RoleHeader";
+import { GuideLauncher } from "@/components/yi-future/guide";
+import { GUIDES } from "@/lib/yi-future/guide/content";
 
 export default async function JuryLayout({
   children,
@@ -19,6 +21,7 @@ export default async function JuryLayout({
       <main className="flex-1 max-w-xl w-full mx-auto px-4 py-4">
         {children}
       </main>
+      <GuideLauncher guide={GUIDES.lanes.jury} variant="fab" />
     </div>
   );
 }

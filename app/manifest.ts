@@ -13,7 +13,7 @@ export default function manifest(): MetadataRoute.Manifest {
     short_name: 'Yi Connect',
     description:
       'Young Indians platform — chapter management, national events, YiFi, YiFuture, YIP. One app for everything Yi.',
-    start_url: '/home',
+    start_url: '/hub',
     scope: '/',
     display: 'standalone',
     orientation: 'portrait-primary',

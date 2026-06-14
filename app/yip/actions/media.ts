@@ -32,6 +32,10 @@ export async function listMedia(
   eventId: string,
   filter?: { kind?: MediaKind; visibility?: MediaVisibility }
 ): Promise<EventMedia[]> {
+  // Service-role read returns ALL visibilities (incl. organizer_only / yi_internal),
+  // so it must be gated to a manager of this event.
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) return [];
   const supabase = await createServiceClient();
   let q = supabase
     .from("media")
@@ -344,6 +348,13 @@ export async function getMediaStats(eventId: string): Promise<{
   yi_internal: number;
   organizer_only: number;
 }> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return {
+      total: 0, total_size_bytes: 0, photos: 0, videos: 0, documents: 0,
+      public: 0, yi_internal: 0, organizer_only: 0,
+    };
+  }
   const supabase = await createServiceClient();
   const { data } = await supabase
     .from("media")

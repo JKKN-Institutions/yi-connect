@@ -178,6 +178,9 @@ export async function getMyQuestions(
   eventId: string,
   participantId: string
 ): Promise<Question[]> {
+  // Only the student themselves may read their own questions.
+  const sess = await requireParticipantSession(participantId, eventId);
+  if (!sess.ok) return [];
   const supabase = await createServiceClient();
 
   const { data, error } = await supabase

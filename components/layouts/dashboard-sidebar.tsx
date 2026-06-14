@@ -765,9 +765,16 @@ const adminNavigation: NavItem[] = [
     requiredRoles: ['Super Admin', 'National Admin', 'Executive Member', 'Chair']
   },
   {
-    name: 'User Guide',
+    // Role-aware smart guide — opens on the viewer's own lane. No requiredRoles
+    // → visible to everyone (each persona sees their relevant lane on arrival).
+    name: 'Guide',
+    href: '/user-guide',
+    icon: HelpCircle
+  },
+  {
+    name: 'Admin Docs',
     href: '/admin/docs',
-    icon: HelpCircle,
+    icon: BookOpen,
     requiredRoles: ['Super Admin', 'National Admin', 'Executive Member', 'Chair', 'Co-Chair', 'EC Member']
   }
 ];

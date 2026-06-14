@@ -37,6 +37,10 @@ import {
 import Link from 'next/link';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { WhatsAppGroupButton } from '@/components/whatsapp';
+import { GuideNudge } from '@/components/guide/guide-surfacing';
+import { GUIDES } from '@/lib/guide/content';
+import { detectLane } from '@/lib/guide/detect-lane';
+import { getCompletedSteps, logGuideEvent } from '@/lib/guide/actions';
 
 async function WelcomeSection() {
   const profile = await getUserProfile();
@@ -101,6 +105,21 @@ async function WelcomeSection() {
           : 'Complete your profile to access all features.'}
       </p>
     </div>
+  );
+}
+
+// Proactive "next step" nudge — brings the viewer's next unfinished guide step
+// to the dashboard. Renders nothing once their lane is complete.
+async function GuideNudgeSection() {
+  const { persona } = await detectLane();
+  const completed = await getCompletedSteps(persona);
+  return (
+    <GuideNudge
+      guide={GUIDES.lanes[persona]}
+      basePath="/user-guide"
+      completed={completed}
+      onEvent={logGuideEvent}
+    />
   );
 }
 
@@ -327,6 +346,11 @@ export default function DashboardPage() {
         }
       >
         <WelcomeSection />
+      </Suspense>
+
+      {/* Proactive guide nudge — next setup step (hides when the lane is done) */}
+      <Suspense fallback={null}>
+        <GuideNudgeSection />
       </Suspense>
 
       {/* Role-Based Quick Actions */}

@@ -18,6 +18,11 @@ import { AdminBottomNavbarWrapper } from '@/components/layouts/admin-bottom-navb
 import { ImpersonationBannerWrapper } from '@/components/admin/impersonation-banner-server'
 import { getCurrentUser } from '@/lib/auth'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { GuideLauncher } from '@/components/guide/guide-launcher'
+import { GUIDES } from '@/lib/guide/content'
+import { detectLane } from '@/lib/guide/detect-lane'
+import { getCompletedSteps, toggleStep, logGuideEvent } from '@/lib/guide/actions'
+import type { GuidePersona } from '@/lib/guide/types'
 
 async function SidebarWrapper() {
   const user = await getCurrentUser()
@@ -88,6 +93,15 @@ export default async function DashboardLayout({
     userRoles = userRolesData?.map((ur: { role_name: string }) => ur.role_name) || []
   }
 
+  // Resolve the viewer's smart-guide lane for the "? Help" FAB (logged-in only).
+  let guidePersona: GuidePersona | null = null
+  let guideCompleted: string[] = []
+  if (user) {
+    const lane = await detectLane()
+    guidePersona = lane.persona
+    guideCompleted = await getCompletedSteps(guidePersona)
+  }
+
   return (
     <BugReporterWrapper userProfile={userProfile}>
       <AdminChapterProvider>
@@ -119,6 +133,21 @@ export default async function DashboardLayout({
 
         {/* Activity Planner Floating Button */}
         <ActivityPlannerProvider />
+
+        {/* Smart Guide "? Help" FAB — stacked above the Activity Planner (left),
+            clear of the mobile bottom navbar. Shows a "steps remaining" badge. */}
+        {guidePersona && (
+          <GuideLauncher
+            variant="fab"
+            guide={GUIDES.lanes[guidePersona]}
+            basePath="/user-guide"
+            className="bottom-20 left-4 right-auto z-40"
+            trackProgress
+            initialCompleted={guideCompleted}
+            onToggleStep={toggleStep}
+            onEvent={logGuideEvent}
+          />
+        )}
       </AdminChapterProvider>
     </BugReporterWrapper>
   )

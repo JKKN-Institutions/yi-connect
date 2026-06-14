@@ -2,7 +2,7 @@
 
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
 import { generateAccessCode } from "@/lib/yi-future/access-code";
-import { notifyRegistrationConfirmed } from "./emails";
+import { notifyRegistrationConfirmed } from "@/lib/yi-future/email-triggers";
 
 // ─── TYPES ──────────────────────────────────────────────────────────
 

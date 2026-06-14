@@ -3,6 +3,7 @@ import { Playfair_Display, DM_Sans, JetBrains_Mono } from "next/font/google";
 import { YipBrandHeader } from "@/components/yip/brand/Header";
 import { YipBrandFooter } from "@/components/yip/brand/Footer";
 import { YipBugReporterWrapper } from "@/components/yip/bug-reporter-wrapper";
+import { OfflineIndicator } from "@/components/pwa/offline-indicator";
 
 const playfair = Playfair_Display({
   variable: "--font-heading",
@@ -97,6 +98,9 @@ export default function YipLayout({
       <a href="#yip-main" className="skip-link sr-only focus:not-sr-only">
         Skip to main content
       </a>
+      {/* Connection status — shown on every /yip dashboard (student, volunteer,
+          jury…). Reconnecting auto-syncs (jury keeps its own score-sync badge). */}
+      <OfflineIndicator message="You're offline — you can still view this page. Reconnect to sync and to vote." />
       <YipBugReporterWrapper>
         <div
           className={`${playfair.variable} ${dmSans.variable} ${jetbrainsMono.variable} flex min-h-screen flex-col bg-white antialiased`}

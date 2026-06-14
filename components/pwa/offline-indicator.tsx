@@ -11,7 +11,13 @@ import { useState, useEffect } from 'react'
 import { WifiOff, Wifi, RefreshCw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-export function OfflineIndicator() {
+export function OfflineIndicator({
+  message,
+}: {
+  /** Optional custom offline copy. Defaults to the generic message so existing
+   *  mounts (e.g. the (mobile) layout) are unchanged. */
+  message?: string
+} = {}) {
   const [isOnline, setIsOnline] = useState(true)
   const [showReconnected, setShowReconnected] = useState(false)
   const [wasOffline, setWasOffline] = useState(false)
@@ -67,7 +73,7 @@ export function OfflineIndicator() {
       ) : (
         <>
           <WifiOff className='h-4 w-4' />
-          <span>You&apos;re offline. Some features may be limited.</span>
+          <span>{message ?? "You're offline. Some features may be limited."}</span>
         </>
       )}
     </div>

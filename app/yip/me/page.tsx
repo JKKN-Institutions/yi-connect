@@ -18,7 +18,6 @@ import {
   Clock,
   MapPin,
   Calendar,
-  Star,
   GraduationCap,
   Users,
   Landmark,
@@ -33,6 +32,7 @@ import {
   Mail,
   UserRound,
   HeartHandshake,
+  Flag,
 } from "lucide-react";
 import { VoteClient } from "./vote/vote-client";
 import { LiveNowCard } from "./live-now-card";
@@ -142,29 +142,44 @@ export default async function ParticipantPage() {
     redirect("/yip/join");
   }
 
-  // Fetch results if published
+  // The student's actual party NAME (e.g. "Bharat Progressive Front"), not just
+  // the bench. party_id is the primary key; fall back to (event, party_number)
+  // since some participants carry only party_number.
+  let partyName: string | null = null;
+  if (participant.party_id) {
+    const { data: party } = await supabase
+      .from("parties")
+      .select("name")
+      .eq("id", participant.party_id)
+      .maybeSingle();
+    partyName = party?.name ?? null;
+  }
+  if (!partyName && participant.party_number != null) {
+    const { data: party } = await supabase
+      .from("parties")
+      .select("name")
+      .eq("event_id", event.id)
+      .eq("party_number", participant.party_number)
+      .maybeSingle();
+    partyName = party?.name ?? null;
+  }
+
+  // Fetch results if published. Students see their RANK + any awards only —
+  // never raw scores (avg /100 or the per-criterion breakdown).
   let result: {
-    avg_score: number | null;
     rank: number | null;
     award_category: string | null;
-    score_breakdown: Record<string, number> | null;
-    jury_count: number | null;
   } | null = null;
 
   if (event.results_published_at) {
     const { data: resultData } = await supabase
       .from("results")
-      .select("avg_score, rank, award_category, score_breakdown, jury_count")
+      .select("rank, award_category")
       .eq("event_id", event.id)
       .eq("participant_id", participant.id)
       .maybeSingle();
 
-    result = resultData
-      ? {
-          ...resultData,
-          score_breakdown: resultData.score_breakdown as Record<string, number> | null,
-        }
-      : null;
+    result = resultData ?? null;
   }
 
   // Fetch agenda items (mode aligned with handbook page 19 — party vs committee)
@@ -288,9 +303,15 @@ export default async function ParticipantPage() {
                 )}
                 {side && (
                   <span
-                    className={`inline-flex items-center rounded-full px-3 py-1.5 text-sm font-medium ${PARTY_COLORS[side].badge} shadow-sm`}
+                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium ${PARTY_COLORS[side].badge} shadow-sm`}
                   >
-                    {side === "ruling" ? "Ruling Party" : "Opposition Party"}
+                    <Flag className="size-3.5" />
+                    {partyName ?? (side === "ruling" ? "Ruling Party" : "Opposition Party")}
+                    {partyName && (
+                      <span className="font-normal opacity-80">
+                        · {side === "ruling" ? "Ruling" : "Opposition"}
+                      </span>
+                    )}
                   </span>
                 )}
               </div>
@@ -824,25 +845,19 @@ export default async function ParticipantPage() {
                   </h2>
                 </div>
 
-                <div className="flex items-center gap-6">
-                  {/* Rank */}
-                  <div className="text-center">
-                    <p className="text-4xl font-black text-amber-600">
+                {/* Rank only — raw scores are intentionally not shown to students */}
+                {result.rank != null ? (
+                  <div className="flex items-baseline gap-2">
+                    <p className="text-5xl font-black text-amber-600">
                       #{result.rank}
                     </p>
-                    <p className="text-xs text-gray-500 mt-1">Rank</p>
+                    <p className="text-sm text-gray-500">Your Rank</p>
                   </div>
-
-                  {/* Score */}
-                  <div className="text-center">
-                    <p className="text-4xl font-black text-gray-900">
-                      {result.avg_score?.toFixed(1)}
-                    </p>
-                    <p className="text-xs text-gray-500 mt-1">
-                      Avg Score ({result.jury_count} {result.jury_count === 1 ? "jury" : "juries"})
-                    </p>
-                  </div>
-                </div>
+                ) : (
+                  <p className="text-sm text-gray-600">
+                    Your rank will be announced at the Valedictory Session.
+                  </p>
+                )}
 
                 {/* Award Badges */}
                 {result.award_category && (
@@ -860,48 +875,6 @@ export default async function ParticipantPage() {
                 )}
               </div>
             </div>
-
-            {/* Score Breakdown */}
-            {result.score_breakdown &&
-              Object.keys(result.score_breakdown).length > 0 && (
-                <Card>
-                  <CardContent className="pt-5">
-                    <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                      <Star className="size-4 text-[#FF9933]" />
-                      Score Breakdown
-                    </h3>
-                    <div className="space-y-3">
-                      {Object.entries(result.score_breakdown)
-                        .filter(([, value]) => typeof value === "number")
-                        .map(([key, value]) => {
-                          const numeric = value as number;
-                          const label = key
-                            .replace(/_/g, " ")
-                            .replace(/\b\w/g, (c) => c.toUpperCase());
-                          return (
-                            <div key={key}>
-                              <div className="flex items-center justify-between text-sm mb-1">
-                                <span className="text-gray-600">{label}</span>
-                                <span className="font-semibold text-gray-900">
-                                  {numeric.toFixed(1)}
-                                </span>
-                              </div>
-                              <div className="h-2 w-full rounded-full bg-gray-100 overflow-hidden">
-                                <div
-                                  className="h-full rounded-full bg-gradient-to-r from-[#FF9933] to-[#E68A2E]"
-                                  style={{
-                                    width: `${Math.min((numeric / 30) * 100, 100)}%`,
-                                  }}
-                                />
-                              </div>
-                            </div>
-                          );
-                        }
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
           </div>
         ) : (
           <Card className="border-gray-200">

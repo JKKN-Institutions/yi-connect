@@ -975,7 +975,7 @@ export function DashboardSidebar({ userRoles }: DashboardSidebarProps) {
     <>
       {/* Mobile Menu Button - Hidden because bottom navbar is used on mobile */}
       <div className='hidden lg:hidden fixed top-0 left-0 right-0 z-50 bg-background border-b px-4 py-3 items-center justify-between'>
-        <Link href='/dashboard' className='flex items-center gap-2'>
+        <Link href='/hub' className='flex items-center gap-2'>
           <div className='h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center'>
             <span className='text-lg font-bold text-primary'>Yi</span>
           </div>
@@ -1008,13 +1008,13 @@ export function DashboardSidebar({ userRoles }: DashboardSidebarProps) {
         )}
       >
         <div className='flex flex-col h-full'>
-          {/* Logo */}
-          <div className='hidden lg:flex items-center gap-2 px-6 py-5 border-b'>
+          {/* Logo → cross-app hub */}
+          <Link href='/hub' aria-label='Go to the Yi hub' className='hidden lg:flex items-center gap-2 px-6 py-5 border-b'>
             <div className='h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center'>
               <span className='text-2xl font-bold text-primary'>Yi</span>
             </div>
             <span className='text-2xl font-bold'>Yi Connect</span>
-          </div>
+          </Link>
 
           {/* Navigation */}
           <nav className='flex-1 overflow-y-auto px-3 py-4 lg:pt-4'>

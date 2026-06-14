@@ -673,6 +673,8 @@ export const GUIDE_EVENT_NAMES: readonly GuideEventName[] = [
   "lane_complete",
   "pdf_download",
   "nudge_click",
+  "onboarding_start",
+  "welcome_shown",
   "guide_dismiss",
 ] as const;
 
@@ -682,4 +684,6 @@ export const GUIDE_SURFACES: readonly GuideSurface[] = [
   "launcher",
   "nudge",
   "widget",
+  "welcome",
+  "onboarding",
 ] as const;

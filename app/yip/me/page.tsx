@@ -34,7 +34,7 @@ import {
   UserRound,
   HeartHandshake,
 } from "lucide-react";
-import { VoteNowCard } from "./vote-now-card";
+import { VoteClient } from "./vote/vote-client";
 import { LiveNowCard } from "./live-now-card";
 import { SkillProfileCard } from "@/components/yip/skill-profile-card";
 import { getSkillProfile } from "@/app/yip/actions/skill-profile";
@@ -371,8 +371,8 @@ export default async function ParticipantPage() {
       {/* ─── LIVE NOW (realtime agenda + timer) ────────────────────── */}
       <LiveNowCard eventId={event.id} />
 
-      {/* ─── VOTE NOW (live card) ──────────────────────────────────── */}
-      <VoteNowCard eventId={event.id} participantId={participant.id} />
+      {/* ─── VOTE NOW (live ballot, inline — no navigation to /me/vote) ─ */}
+      <VoteClient initialSession={session} embedded />
 
       {/* ─── PRESIDING OFFICER — MOTION QUEUE (Speaker / Deputy Speaker) ─ */}
       {isPresiding && (

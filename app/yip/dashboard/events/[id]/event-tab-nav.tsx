@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/yip/utils";
@@ -28,6 +29,8 @@ import {
   UserCog,
   Boxes,
   Handshake,
+  PanelLeftClose,
+  PanelLeftOpen,
   type LucideIcon,
 } from "lucide-react";
 
@@ -84,6 +87,7 @@ const GROUPS: TabGroup[] = [
 
 // Score-bearing tabs — visible to national / super-admins only (2026-06-13).
 const SCORE_TABS = new Set(["Scoring", "Committees", "Results"]);
+const COLLAPSE_KEY = "yip-event-nav-collapsed";
 
 function isActive(tabHref: string, pathname: string, basePath: string) {
   const tabPath = `${basePath}${tabHref}`;
@@ -103,6 +107,28 @@ export function EventTabNav({
   const pathname = usePathname();
   const router = useRouter();
   const basePath = `/yip/dashboard/events/${eventId}`;
+
+  // Collapsed icon-rail state, remembered per browser. Default expanded on the
+  // server + first client render to avoid a hydration mismatch; sync from
+  // localStorage after mount.
+  const [collapsed, setCollapsed] = useState(false);
+  useEffect(() => {
+    try {
+      setCollapsed(localStorage.getItem(COLLAPSE_KEY) === "1");
+    } catch {
+      /* ignore */
+    }
+  }, []);
+  const toggleCollapsed = () =>
+    setCollapsed((c) => {
+      const next = !c;
+      try {
+        localStorage.setItem(COLLAPSE_KEY, next ? "1" : "0");
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
 
   const visible = (tab: Tab) => {
     // Certificates only appear once results are published.
@@ -148,16 +174,46 @@ export function EventTabNav({
         </select>
       </div>
 
-      {/* Desktop (≥ lg): vertical grouped sidebar. */}
+      {/* Desktop (≥ lg): vertical grouped sidebar, collapsible to an icon rail. */}
       <nav
         aria-label="Event sections"
-        className="hidden lg:block lg:w-56 lg:shrink-0 lg:self-start lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto lg:pr-2 scrollbar-hide"
+        className={cn(
+          "hidden lg:flex lg:flex-col lg:shrink-0 lg:self-start lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto lg:overflow-x-hidden scrollbar-hide transition-[width] duration-200",
+          collapsed ? "lg:w-14" : "lg:w-44 lg:pr-2"
+        )}
       >
+        {/* Collapse / expand toggle */}
+        <button
+          type="button"
+          onClick={toggleCollapsed}
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          title={collapsed ? "Expand" : "Collapse"}
+          className={cn(
+            "mb-1 flex h-9 w-9 items-center justify-center rounded-md text-[#1a1a3e]/40 transition-colors hover:bg-[#1a1a3e]/5 hover:text-[#1a1a3e]",
+            collapsed ? "mx-auto" : "ml-auto"
+          )}
+        >
+          {collapsed ? (
+            <PanelLeftOpen className="size-4" />
+          ) : (
+            <PanelLeftClose className="size-4" />
+          )}
+        </button>
+
         {groups.map((group) => (
-          <div key={group.title} className="mb-1.5">
-            <p className="px-3 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wider text-[#1a1a3e]/35">
-              {group.title}
-            </p>
+          <div
+            key={group.title}
+            className={cn(
+              "mb-1.5",
+              collapsed &&
+                "mt-1.5 border-t border-[#1a1a3e]/8 pt-1.5 first:mt-0 first:border-t-0 first:pt-0"
+            )}
+          >
+            {!collapsed && (
+              <p className="px-3 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wider text-[#1a1a3e]/35">
+                {group.title}
+              </p>
+            )}
             <div className="flex flex-col gap-0.5">
               {group.tabs.map((tab) => {
                 const tabPath = `${basePath}${tab.href}`;
@@ -167,15 +223,17 @@ export function EventTabNav({
                     key={tab.label}
                     href={tabPath}
                     aria-current={active ? "page" : undefined}
+                    title={collapsed ? tab.label : undefined}
                     className={cn(
-                      "flex min-h-[40px] items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors",
+                      "flex min-h-[40px] items-center rounded-md text-sm transition-colors",
+                      collapsed ? "justify-center px-0" : "gap-2.5 px-3 py-2",
                       active
                         ? "bg-[#FF9933]/10 font-semibold text-[#FF9933]"
                         : "font-medium text-[#1a1a3e]/55 hover:bg-[#1a1a3e]/5 hover:text-[#1a1a3e]"
                     )}
                   >
                     <tab.icon className="size-4 shrink-0" />
-                    {tab.label}
+                    {!collapsed && <span>{tab.label}</span>}
                   </Link>
                 );
               })}

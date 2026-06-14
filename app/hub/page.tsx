@@ -253,22 +253,12 @@ export default async function HubPage({
   // Priority 0: platform super-admins → the all-modules super-admin hub.
   if (await isPlatformSuperAdmin()) redirect("/super-admin");
 
-  // Priority 1: access-code sessions (delegate / mentor / jury / participant).
-  const yifi = parseSession(cookieStore.get("yifi_session")?.value);
-  if (yifi?.type === "member") redirect("/yifi/me");
-
-  const yifuture = parseSession(cookieStore.get("yifuture_session")?.value);
-  if (yifuture?.type === "delegate") redirect("/yi-future/me");
-  if (yifuture?.type === "mentor") redirect("/yi-future/mentor");
-  if (yifuture?.type === "jury") redirect("/yi-future/jury");
-
-  const yip = await getYipSession();
-  if (yip?.type === "participant") redirect("/yip/me");
-  if (yip?.type === "jury") redirect("/yip/jury");
-
-  // Priority 2: Supabase session → route by the modules this person holds an
-  // admin role in (yi_directory). 2+ → "pick your module" hub; exactly 1 →
-  // straight in; none → not-registered.
+  // Priority 1: a Yi-STAFF (Supabase) session WINS over any leftover access-code
+  // cookie — otherwise a stale participant cookie hijacks the hub for a staff
+  // member (Director, 2026-06-15). Route by the modules this person holds an admin
+  // role in (yi_directory): 2+ → "pick your module" hub; exactly 1 → straight in.
+  // A signed-in user with NO staff role falls THROUGH to the access-code checks
+  // below (then not-registered) — so a real participant is unaffected.
   const supabase = await createClient();
   const {
     data: { user },
@@ -313,9 +303,26 @@ export default async function HubPage({
     if (tiles.length >= 2) {
       return <ModuleHub email={me?.email ?? user.email ?? null} tiles={tiles} />;
     }
-
-    redirect("/not-registered");
+    // Signed in but no staff role → fall through to the access-code checks below.
   }
+
+  // Priority 2: access-code sessions (member / delegate / mentor / jury /
+  // participant) — reached only when there is NO Yi-staff role above, so a real
+  // student / delegate / jury still lands on their own home.
+  const yifi = parseSession(cookieStore.get("yifi_session")?.value);
+  if (yifi?.type === "member") redirect("/yifi/me");
+
+  const yifuture = parseSession(cookieStore.get("yifuture_session")?.value);
+  if (yifuture?.type === "delegate") redirect("/yi-future/me");
+  if (yifuture?.type === "mentor") redirect("/yi-future/mentor");
+  if (yifuture?.type === "jury") redirect("/yi-future/jury");
+
+  const yip = await getYipSession();
+  if (yip?.type === "participant") redirect("/yip/me");
+  if (yip?.type === "jury") redirect("/yip/jury");
+
+  // Signed in (Supabase) but neither a staff role nor an access-code identity.
+  if (user) redirect("/not-registered");
 
   // Signed out → unified login (email + password + Google).
   return <HubLogin error={error} />;

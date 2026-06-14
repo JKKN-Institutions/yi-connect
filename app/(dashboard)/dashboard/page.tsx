@@ -37,7 +37,7 @@ import {
 import Link from 'next/link';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { WhatsAppGroupButton } from '@/components/whatsapp';
-import { GuideNudge } from '@/components/guide/guide-surfacing';
+import { OnboardingLauncher } from '@/components/guide/onboarding-launcher';
 import { GUIDES } from '@/lib/guide/content';
 import { detectLane } from '@/lib/guide/detect-lane';
 import { getCompletedSteps, logGuideEvent } from '@/lib/guide/actions';
@@ -108,13 +108,14 @@ async function WelcomeSection() {
   );
 }
 
-// Proactive "next step" nudge — brings the viewer's next unfinished guide step
-// to the dashboard. Renders nothing once their lane is complete.
-async function GuideNudgeSection() {
+// Onboarding entry — an always-visible "Start / Resume / Replay onboarding"
+// control that opens the viewer's guide at their next undone step. Adapts from
+// saved progress (Start at 0 done, Resume · N left after that, Replay when done).
+async function OnboardingSection() {
   const { persona } = await detectLane();
   const completed = await getCompletedSteps(persona);
   return (
-    <GuideNudge
+    <OnboardingLauncher
       guide={GUIDES.lanes[persona]}
       basePath="/user-guide"
       completed={completed}
@@ -348,9 +349,9 @@ export default function DashboardPage() {
         <WelcomeSection />
       </Suspense>
 
-      {/* Proactive guide nudge — next setup step (hides when the lane is done) */}
+      {/* Onboarding entry — Start / Resume / Replay the guided walkthrough */}
       <Suspense fallback={null}>
-        <GuideNudgeSection />
+        <OnboardingSection />
       </Suspense>
 
       {/* Role-Based Quick Actions */}

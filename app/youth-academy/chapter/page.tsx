@@ -63,6 +63,12 @@ export default async function ChapterDashboardPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <OnboardingLauncher
+            content={GUIDES[guideLane]}
+            lane={guideLane}
+            completed={guideCompleted}
+            onEvent={logGuideEvent}
+          />
           <Button asChild variant="ghost">
             <Link href="/youth-academy/guide">
               <BookOpen className="size-4" />

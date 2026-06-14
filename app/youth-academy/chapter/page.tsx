@@ -21,6 +21,7 @@ import { RunStatusBadge } from "@/components/yuva/runs/run-status-badge";
 import { GUIDES, type GuideLane } from "@/lib/yuva/guide/content";
 import { getCompletedSteps, logGuideEvent } from "@/lib/yuva/guide/actions";
 import { NextStepWidget } from "@/app/youth-academy/_components/GuideSurfacing";
+import { OnboardingLauncher } from "@/app/youth-academy/_components/OnboardingLauncher";
 
 export const metadata = { title: "Chapter dashboard" };
 

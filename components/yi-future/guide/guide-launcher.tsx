@@ -39,9 +39,9 @@ export function GuideLauncher({
           onClick={() => setOpen(true)}
           aria-label="Open guide"
           className={cn(
-            "group fixed bottom-4 left-4 z-40 flex items-center gap-2 rounded-full bg-yi-gold px-3.5 py-3 text-navy shadow-lg",
+            "group fixed bottom-4 left-4 z-40 flex items-center gap-2 rounded-full bg-[#F5A623] px-3.5 py-3 text-[#1a1a3e] shadow-lg",
             "transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yi-gold/60 focus-visible:ring-offset-2",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F5A623]/60 focus-visible:ring-offset-2",
             className
           )}
         >
@@ -53,7 +53,7 @@ export function GuideLauncher({
           type="button"
           onClick={() => setOpen(true)}
           className={cn(
-            "flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yi-gold/50",
+            "flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F5A623]/50",
             className
           )}
         >

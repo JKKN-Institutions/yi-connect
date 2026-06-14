@@ -81,27 +81,27 @@ export default async function YiFutureGuidePage({
     : ownPersona;
 
   return (
-    <main className="min-h-screen bg-ivory">
+    <main className="min-h-screen bg-[#FEFCF6]">
       {/* Gold top accent */}
-      <div className="h-1.5 bg-yi-gold" />
+      <div className="h-1.5 bg-[#F5A623]" />
 
       {/* Header */}
-      <header className="border-b border-navy/8 bg-white">
+      <header className="border-b border-[#1a1a3e]/8 bg-white">
         <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-3 px-6 py-4">
           <Link
             href={PERSONA_HOME[ownPersona]}
-            className="inline-flex items-center gap-2 text-sm font-medium text-navy/60 transition-colors hover:text-navy"
+            className="inline-flex items-center gap-2 text-sm font-medium text-[#1a1a3e]/60 transition-colors hover:text-[#1a1a3e]"
           >
             <ArrowLeft className="size-4" />
             Back
           </Link>
           <div className="flex items-center gap-2.5">
-            <div className="flex size-8 items-center justify-center rounded-lg bg-navy">
-              <span className="text-sm font-bold text-yi-gold">F6</span>
+            <div className="flex size-8 items-center justify-center rounded-lg bg-[#1a1a3e]">
+              <span className="text-sm font-bold text-[#F5A623]">F6</span>
             </div>
             <div className="leading-tight">
-              <p className="text-sm font-bold text-navy">Yi Future 6.0</p>
-              <p className="text-[9px] font-semibold uppercase tracking-[0.25em] text-yi-gold">
+              <p className="text-sm font-bold text-[#1a1a3e]">Yi Future 6.0</p>
+              <p className="text-[9px] font-semibold uppercase tracking-[0.25em] text-[#F5A623]">
                 Young Indians
               </p>
             </div>

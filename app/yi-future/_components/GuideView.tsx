@@ -4,7 +4,7 @@
  * Yi Future 6.0 full-page guide renderer.
  *
  * Mirrors the YIP / Youth Academy GuideView, Yi-Future-branded (navy / ivory /
- * yi-gold). Structure:
+ * [#F5A623]). Structure:
  *   - a persona switcher (chips) so anyone signed in can view any of the six
  *     lanes — national / chapter / delegate / mentor / jury / partner;
  *   - a "why it matters" opener + a Start-here button (per lane, optional);
@@ -53,11 +53,21 @@ const PERSONA_ICON: Record<GuidePersona, LucideIcon> = {
   partner: Handshake,
 };
 
+/** Short, consistent switcher-chip labels (the lane titles vary in length). */
+const PERSONA_LABEL: Record<GuidePersona, string> = {
+  national: "National",
+  chapter: "Chapter",
+  delegate: "Delegate",
+  mentor: "Mentor",
+  jury: "Jury",
+  partner: "Partner",
+};
+
 /** Tiny `**bold**` renderer (trusted static copy only). */
 function renderInline(text: string): React.ReactNode {
   return text.split("**").map((part, i) =>
     i % 2 === 1 ? (
-      <strong key={i} className="font-semibold text-navy">
+      <strong key={i} className="font-semibold text-[#1a1a3e]">
         {part}
       </strong>
     ) : (
@@ -79,8 +89,8 @@ export function GuideView({ guides, persona }: GuideViewProps) {
   return (
     <div className="space-y-10">
       {/* ── Persona switcher ─────────────────────────────────────────── */}
-      <section className="rounded-2xl border border-navy/10 bg-white p-4 shadow-sm print:hidden">
-        <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-navy/40">
+      <section className="rounded-2xl border border-[#1a1a3e]/10 bg-white p-4 shadow-sm print:hidden">
+        <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#1a1a3e]/40">
           Choose a guide
         </p>
         <div className="flex flex-wrap gap-2">
@@ -95,12 +105,12 @@ export function GuideView({ guides, persona }: GuideViewProps) {
                 aria-pressed={active}
                 className={
                   active
-                    ? "inline-flex items-center gap-1.5 rounded-full bg-navy px-3.5 py-1.5 text-sm font-semibold text-white shadow-sm"
-                    : "inline-flex items-center gap-1.5 rounded-full border border-navy/15 px-3.5 py-1.5 text-sm font-medium text-navy/60 transition-colors hover:border-yi-gold/50 hover:text-navy"
+                    ? "inline-flex items-center gap-1.5 rounded-full bg-[#1a1a3e] px-3.5 py-1.5 text-sm font-semibold text-white shadow-sm"
+                    : "inline-flex items-center gap-1.5 rounded-full border border-[#1a1a3e]/15 px-3.5 py-1.5 text-sm font-medium text-[#1a1a3e]/60 transition-colors hover:border-[#F5A623]/50 hover:text-[#1a1a3e]"
                 }
               >
                 <PIcon className="size-3.5" />
-                {guides.lanes[p].title.replace(/ Guide$/, "")}
+                {PERSONA_LABEL[p]}
               </button>
             );
           })}
@@ -110,33 +120,33 @@ export function GuideView({ guides, persona }: GuideViewProps) {
       {/* ── Who this is for + Print ──────────────────────────────────── */}
       <header className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <span className="inline-flex items-center gap-2 rounded-full bg-yi-gold/15 px-3 py-1 text-sm font-semibold text-navy">
+          <span className="inline-flex items-center gap-2 rounded-full bg-[#F5A623]/15 px-3 py-1 text-sm font-semibold text-[#1a1a3e]">
             <Icon className="size-4" />
             {content.title}
           </span>
           <button
             type="button"
             onClick={() => window.print()}
-            className="inline-flex items-center gap-2 rounded-lg bg-navy px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-navy/90 print:hidden"
+            className="inline-flex items-center gap-2 rounded-lg bg-[#1a1a3e] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#1a1a3e]/90 print:hidden"
           >
             <Printer className="size-4" />
             Print / Save as PDF
           </button>
         </div>
-        <h1 className="text-2xl font-bold tracking-tight text-navy sm:text-3xl">
+        <h1 className="text-2xl font-bold tracking-tight text-[#1a1a3e] sm:text-3xl">
           How to use Yi Future 6.0
         </h1>
-        <p className="text-base text-navy/60">{content.tagline}</p>
+        <p className="text-base text-[#1a1a3e]/60">{content.tagline}</p>
 
         {content.whyItMatters && (
-          <div className="rounded-xl border border-yi-gold/30 bg-yi-gold/8 p-4">
-            <p className="text-sm leading-relaxed text-navy/80">
+          <div className="rounded-xl border border-[#F5A623]/30 bg-[#F5A623]/8 p-4">
+            <p className="text-sm leading-relaxed text-[#1a1a3e]/80">
               {renderInline(content.whyItMatters)}
             </p>
             {content.startHere && (
               <Link
                 href={content.startHere.href}
-                className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-yi-gold px-3.5 py-2 text-sm font-semibold text-navy transition-colors hover:bg-yi-gold/90"
+                className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-[#F5A623] px-3.5 py-2 text-sm font-semibold text-[#1a1a3e] transition-colors hover:bg-[#F5A623]/90"
               >
                 {content.startHere.label}
                 <ArrowRight className="size-3.5" />
@@ -149,22 +159,22 @@ export function GuideView({ guides, persona }: GuideViewProps) {
       {/* ── Journey strip ───────────────────────────────────────────── */}
       <section
         aria-label="Your journey at a glance"
-        className="rounded-2xl border border-navy/10 bg-white p-5 shadow-sm"
+        className="rounded-2xl border border-[#1a1a3e]/10 bg-white p-5 shadow-sm"
       >
-        <p className="mb-4 text-xs font-semibold uppercase tracking-widest text-yi-gold">
+        <p className="mb-4 text-xs font-semibold uppercase tracking-widest text-[#F5A623]">
           Your journey at a glance
         </p>
         <ol className="flex flex-wrap items-center gap-x-2 gap-y-3">
           {content.journey.map((node, i) => (
             <li key={i} className="flex items-center gap-2">
               <span className="flex items-center gap-2">
-                <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-navy text-xs font-bold text-white">
+                <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-[#1a1a3e] text-xs font-bold text-white">
                   {i + 1}
                 </span>
-                <span className="text-sm font-medium text-navy/80">{node}</span>
+                <span className="text-sm font-medium text-[#1a1a3e]/80">{node}</span>
               </span>
               {i < content.journey.length - 1 && (
-                <ChevronRight className="size-4 text-navy/20" aria-hidden />
+                <ChevronRight className="size-4 text-[#1a1a3e]/20" aria-hidden />
               )}
             </li>
           ))}
@@ -174,32 +184,32 @@ export function GuideView({ guides, persona }: GuideViewProps) {
       {/* ── Step-by-step sections ───────────────────────────────────── */}
       {content.sections.map((section, sIdx) => (
         <section key={section.id} className="space-y-4">
-          <h2 className="flex items-center gap-2 text-lg font-bold text-navy">
-            <span className="text-yi-gold">{sIdx + 1}.</span>
+          <h2 className="flex items-center gap-2 text-lg font-bold text-[#1a1a3e]">
+            <span className="text-[#F5A623]">{sIdx + 1}.</span>
             {section.title}
           </h2>
           <ol className="space-y-3">
             {section.steps.map((step, i) => (
               <li
                 key={i}
-                className="flex gap-4 rounded-xl border border-navy/10 bg-white p-4 shadow-sm"
+                className="flex gap-4 rounded-xl border border-[#1a1a3e]/10 bg-white p-4 shadow-sm"
               >
-                <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-yi-gold/20 text-sm font-bold text-navy">
+                <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[#F5A623]/20 text-sm font-bold text-[#1a1a3e]">
                   {i + 1}
                 </span>
                 <div className="min-w-0 flex-1 space-y-2">
-                  <p className="font-medium leading-snug text-navy">
+                  <p className="font-medium leading-snug text-[#1a1a3e]">
                     {renderInline(step.action)}
                   </p>
                   {step.detail && (
-                    <p className="text-sm leading-relaxed text-navy/55">
+                    <p className="text-sm leading-relaxed text-[#1a1a3e]/55">
                       {renderInline(step.detail)}
                     </p>
                   )}
                   {step.tip && (
-                    <p className="flex items-start gap-2 rounded-lg bg-yi-gold/10 px-3 py-2 text-sm text-navy/80">
+                    <p className="flex items-start gap-2 rounded-lg bg-[#F5A623]/10 px-3 py-2 text-sm text-[#1a1a3e]/80">
                       <Lightbulb
-                        className="mt-0.5 size-4 shrink-0 text-yi-gold"
+                        className="mt-0.5 size-4 shrink-0 text-[#F5A623]"
                         aria-hidden
                       />
                       <span>{renderInline(step.tip)}</span>
@@ -208,7 +218,7 @@ export function GuideView({ guides, persona }: GuideViewProps) {
                   {step.link && (
                     <Link
                       href={step.link.href}
-                      className="mt-1 inline-flex items-center gap-1.5 rounded-lg bg-navy px-3.5 py-2 text-sm font-semibold text-white transition-colors hover:bg-navy/90 print:hidden"
+                      className="mt-1 inline-flex items-center gap-1.5 rounded-lg bg-[#1a1a3e] px-3.5 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#1a1a3e]/90 print:hidden"
                     >
                       {step.link.label}
                       <ArrowRight className="size-3.5" />
@@ -225,17 +235,17 @@ export function GuideView({ guides, persona }: GuideViewProps) {
       {guides.glossary.length > 0 && (
         <section
           aria-label="Words to know"
-          className="rounded-2xl border border-navy/10 bg-white p-5 shadow-sm"
+          className="rounded-2xl border border-[#1a1a3e]/10 bg-white p-5 shadow-sm"
         >
-          <h2 className="mb-4 flex items-center gap-2 text-lg font-bold text-navy">
-            <BookOpen className="size-4 text-yi-gold" aria-hidden />
+          <h2 className="mb-4 flex items-center gap-2 text-lg font-bold text-[#1a1a3e]">
+            <BookOpen className="size-4 text-[#F5A623]" aria-hidden />
             Words to know
           </h2>
           <dl className="space-y-3">
             {guides.glossary.map((g) => (
               <div key={g.term} className="grid gap-1 sm:grid-cols-[10rem_1fr]">
-                <dt className="font-semibold text-navy">{g.term}</dt>
-                <dd className="text-sm leading-relaxed text-navy/60">
+                <dt className="font-semibold text-[#1a1a3e]">{g.term}</dt>
+                <dd className="text-sm leading-relaxed text-[#1a1a3e]/60">
                   {renderInline(g.def)}
                 </dd>
               </div>
@@ -245,7 +255,7 @@ export function GuideView({ guides, persona }: GuideViewProps) {
       )}
 
       {guides.plannedLocaleNote && (
-        <p className="border-t border-navy/10 pt-5 text-center text-xs text-navy/40">
+        <p className="border-t border-[#1a1a3e]/10 pt-5 text-center text-xs text-[#1a1a3e]/40">
           {guides.plannedLocaleNote}
         </p>
       )}

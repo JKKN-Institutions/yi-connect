@@ -40,7 +40,7 @@ interface GuideDrawerProps {
 function renderInline(text: string): React.ReactNode {
   return text.split("**").map((part, i) =>
     i % 2 === 1 ? (
-      <strong key={i} className="font-semibold text-navy">
+      <strong key={i} className="font-semibold text-[#1a1a3e]">
         {part}
       </strong>
     ) : (
@@ -62,26 +62,26 @@ function StepCard({
     <li className="flex gap-3">
       <span
         aria-hidden
-        className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-yi-gold/20 text-xs font-semibold text-navy"
+        className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-[#F5A623]/20 text-xs font-semibold text-[#1a1a3e]"
       >
         {index + 1}
       </span>
       <div className="min-w-0 flex-1 space-y-2">
-        <p className="text-[0.9rem] font-medium leading-relaxed text-navy">
+        <p className="text-[0.9rem] font-medium leading-relaxed text-[#1a1a3e]">
           {renderInline(step.action)}
         </p>
         {step.detail && (
-          <p className="text-[0.85rem] leading-relaxed text-navy/55">
+          <p className="text-[0.85rem] leading-relaxed text-[#1a1a3e]/55">
             {renderInline(step.detail)}
           </p>
         )}
         {step.tip && (
-          <div className="flex gap-2.5 rounded-lg bg-yi-gold/10 px-3 py-2.5">
+          <div className="flex gap-2.5 rounded-lg bg-[#F5A623]/10 px-3 py-2.5">
             <LightbulbIcon
               aria-hidden
-              className="mt-0.5 size-4 shrink-0 text-yi-gold"
+              className="mt-0.5 size-4 shrink-0 text-[#F5A623]"
             />
-            <span className="text-[0.85rem] leading-relaxed text-navy/80">
+            <span className="text-[0.85rem] leading-relaxed text-[#1a1a3e]/80">
               {renderInline(step.tip)}
             </span>
           </div>
@@ -90,10 +90,10 @@ function StepCard({
           <Link
             href={step.link.href}
             onClick={onNavigate}
-            className="flex h-11 w-full items-center justify-between rounded-lg border border-yi-gold/40 px-3.5 text-[0.9rem] font-medium text-navy transition-colors hover:bg-yi-gold/10"
+            className="flex h-11 w-full items-center justify-between rounded-lg border border-[#F5A623]/40 px-3.5 text-[0.9rem] font-medium text-[#1a1a3e] transition-colors hover:bg-[#F5A623]/10"
           >
             <span>{step.link.label}</span>
-            <ArrowRightIcon className="size-4 text-yi-gold" />
+            <ArrowRightIcon className="size-4 text-[#F5A623]" />
           </Link>
         )}
       </div>
@@ -114,7 +114,7 @@ function SectionCard({
   const bodyId = `guide-section-${section.id}`;
 
   return (
-    <div className="overflow-hidden rounded-xl border border-navy/10 bg-white">
+    <div className="overflow-hidden rounded-xl border border-[#1a1a3e]/10 bg-white">
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
@@ -122,23 +122,23 @@ function SectionCard({
         aria-controls={bodyId}
         className={cn(
           "flex min-h-[52px] w-full items-center gap-3 px-4 py-3.5 text-left transition-colors",
-          "hover:bg-navy/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yi-gold/50"
+          "hover:bg-[#1a1a3e]/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F5A623]/50"
         )}
       >
-        <span className="flex-1 text-[0.95rem] font-semibold leading-snug text-navy">
+        <span className="flex-1 text-[0.95rem] font-semibold leading-snug text-[#1a1a3e]">
           {section.title}
         </span>
         <ChevronDownIcon
           aria-hidden
           className={cn(
-            "size-5 shrink-0 text-navy/40 transition-transform duration-200",
+            "size-5 shrink-0 text-[#1a1a3e]/40 transition-transform duration-200",
             expanded && "rotate-180"
           )}
         />
       </button>
 
       {expanded && (
-        <div id={bodyId} className="border-t border-navy/8 px-4 pb-4 pt-3.5">
+        <div id={bodyId} className="border-t border-[#1a1a3e]/8 px-4 pb-4 pt-3.5">
           <ol className="space-y-4">
             {section.steps.map((step, i) => (
               <StepCard
@@ -210,7 +210,7 @@ export function GuideDrawer({ guide, open, onClose }: GuideDrawerProps) {
       {/* Panel: bottom sheet on mobile, right rail on ≥ sm */}
       <div
         className={cn(
-          "absolute flex flex-col bg-ivory shadow-2xl transition-transform duration-250 ease-out",
+          "absolute flex flex-col bg-[#FEFCF6] shadow-2xl transition-transform duration-250 ease-out",
           "inset-x-0 bottom-0 top-12 rounded-t-2xl",
           "sm:inset-y-0 sm:left-auto sm:right-0 sm:top-0 sm:w-full sm:max-w-[440px] sm:rounded-none",
           visible
@@ -219,13 +219,13 @@ export function GuideDrawer({ guide, open, onClose }: GuideDrawerProps) {
         )}
       >
         {/* Header */}
-        <div className="relative shrink-0 overflow-hidden border-b border-navy/10 bg-gradient-to-br from-yi-gold/12 via-ivory to-navy/5 px-5 pb-4 pt-5">
+        <div className="relative shrink-0 overflow-hidden border-b border-[#1a1a3e]/10 bg-gradient-to-br from-[#F5A623]/12 via-[#FEFCF6] to-[#1a1a3e]/5 px-5 pb-4 pt-5">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <h2 className="text-lg font-semibold leading-tight text-navy">
+              <h2 className="text-lg font-semibold leading-tight text-[#1a1a3e]">
                 {guide.title}
               </h2>
-              <p className="mt-1 text-[0.85rem] leading-snug text-navy/55">
+              <p className="mt-1 text-[0.85rem] leading-snug text-[#1a1a3e]/55">
                 {guide.tagline}
               </p>
             </div>
@@ -233,7 +233,7 @@ export function GuideDrawer({ guide, open, onClose }: GuideDrawerProps) {
               type="button"
               onClick={onClose}
               aria-label="Close guide"
-              className="shrink-0 rounded-md p-1.5 text-navy/60 transition-colors hover:bg-navy/5 hover:text-navy"
+              className="shrink-0 rounded-md p-1.5 text-[#1a1a3e]/60 transition-colors hover:bg-[#1a1a3e]/5 hover:text-[#1a1a3e]"
             >
               <XIcon className="size-4" />
             </button>
@@ -243,17 +243,17 @@ export function GuideDrawer({ guide, open, onClose }: GuideDrawerProps) {
             <Link
               href={`/yi-future/guide?persona=${guide.persona}`}
               onClick={onClose}
-              className="inline-flex h-9 items-center gap-2 rounded-md border border-yi-gold/40 bg-ivory/70 px-3 text-[0.8rem] font-medium text-navy transition-colors hover:bg-yi-gold/10"
+              className="inline-flex h-9 items-center gap-2 rounded-md border border-[#F5A623]/40 bg-[#FEFCF6]/70 px-3 text-[0.8rem] font-medium text-[#1a1a3e] transition-colors hover:bg-[#F5A623]/10"
             >
-              <ExternalLinkIcon className="size-3.5 text-yi-gold" />
+              <ExternalLinkIcon className="size-3.5 text-[#F5A623]" />
               Open full guide
             </Link>
             <button
               type="button"
               onClick={() => window.print()}
-              className="inline-flex h-9 items-center gap-2 rounded-md border border-yi-gold/40 bg-ivory/70 px-3 text-[0.8rem] font-medium text-navy transition-colors hover:bg-yi-gold/10"
+              className="inline-flex h-9 items-center gap-2 rounded-md border border-[#F5A623]/40 bg-[#FEFCF6]/70 px-3 text-[0.8rem] font-medium text-[#1a1a3e] transition-colors hover:bg-[#F5A623]/10"
             >
-              <PrinterIcon className="size-3.5 text-yi-gold" />
+              <PrinterIcon className="size-3.5 text-[#F5A623]" />
               Print
             </button>
           </div>

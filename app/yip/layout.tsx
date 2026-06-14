@@ -4,6 +4,7 @@ import { YipBrandHeader } from "@/components/yip/brand/Header";
 import { YipBrandFooter } from "@/components/yip/brand/Footer";
 import { YipBugReporterWrapper } from "@/components/yip/bug-reporter-wrapper";
 import { YipOfflineBanner } from "@/app/yip/_components/YipOfflineBanner";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 const playfair = Playfair_Display({
   variable: "--font-heading",
@@ -86,11 +87,18 @@ export const metadata: Metadata = {
  *
  * Pattern mirrors app/yi-future/layout.tsx (Phase D nested-mount pattern).
  */
-export default function YipLayout({
+export default async function YipLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Staff (Supabase session) → header logo returns to the cross-app /hub.
+  // Participants (jury/speaker via access-code cookie, no Supabase user) keep /yip.
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const homeHref = user ? "/hub" : "/yip";
   return (
     <>
       {/* React 19 hoists <meta>/<link> into <head> from anywhere */}
@@ -106,7 +114,7 @@ export default function YipLayout({
         <div
           className={`${playfair.variable} ${dmSans.variable} ${jetbrainsMono.variable} flex min-h-screen flex-col bg-white antialiased`}
         >
-          <YipBrandHeader />
+          <YipBrandHeader homeHref={homeHref} />
           <main id="yip-main" className="flex-1">
             {children}
           </main>

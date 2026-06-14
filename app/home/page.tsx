@@ -138,22 +138,73 @@ export default async function SmartHomePage() {
   if (yip?.type === "participant") redirect("/yip/me");
   if (yip?.type === "jury") redirect("/yip/jury");
 
-  // Priority 2: OAuth session → check if they're a chapter admin/member
+  // Priority 2: OAuth (Supabase) session → route by the modules this person
+  // actually holds an admin role in (yi_directory is the canonical source).
+  // Multiple modules → a "pick your module" hub; exactly one → straight in;
+  // none → not-registered. This is what restores a Yi-Future / Youth-Academy
+  // admin's entry — previously they fell through to the YiFi landing.
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
   if (user) {
-    // Check if they have a yi_connect member record (chapter admin/member)
+    const me = await getCurrentPersonRoles();
+    const active = (me?.assignments ?? []).filter((a) => a.is_active);
+    const hasRole = (app: string, roles: string[]) =>
+      active.some((a) => a.app === app && roles.includes(a.role));
+
+    const tiles: ModuleTile[] = [];
+    if (hasRole("future", FUTURE_ADMIN_ROLES)) {
+      tiles.push({
+        title: "Yi Future",
+        desc: "Editions, finales, delegates, and national admin.",
+        href: "/yi-future",
+        icon: "🚀",
+        accent: "hover:border-[#F5A623]/60",
+      });
+    }
+    if (hasRole("yuva", YUVA_ADMIN_ROLES)) {
+      tiles.push({
+        title: "Youth Academy",
+        desc: "Academies, runs, students, and chapter delivery.",
+        href: "/youth-academy",
+        icon: "🎓",
+        accent: "hover:border-[#229434]/60",
+      });
+    }
+    if (hasRole("yip", YIP_ADMIN_ROLES)) {
+      tiles.push({
+        title: "Yi Parliament (YIP)",
+        desc: "Parliament events, participants, and jury scoring.",
+        href: "/yip/dashboard",
+        icon: "⚖️",
+        accent: "hover:border-[#FD7215]/60",
+      });
+    }
+
+    // Chapter membership → the day-to-day chapter dashboard.
     const { data: member } = await supabase
-      .schema("yi_connect" as any)
+      .schema("yi_connect" as "public")
       .from("members")
       .select("id")
       .eq("id", user.id)
-      .single();
+      .maybeSingle();
+    if (member) {
+      tiles.push({
+        title: "Chapter Dashboard",
+        desc: "Members, events, finance, and chapter operations.",
+        href: "/dashboard",
+        icon: "🏛️",
+        accent: "hover:border-[#000066]/40",
+      });
+    }
 
-    if (member) redirect("/dashboard");
+    // One module → go straight in. Two or more → let them choose.
+    if (tiles.length === 1) redirect(tiles[0].href);
+    if (tiles.length >= 2) {
+      return <ModuleHub email={me?.email ?? user.email ?? null} tiles={tiles} />;
+    }
 
-    // Authenticated but not a member of any module — show "not registered" page
+    // Authenticated but no module role/membership — show "not registered".
     redirect("/not-registered");
   }
 

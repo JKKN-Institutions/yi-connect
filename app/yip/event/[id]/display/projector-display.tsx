@@ -433,7 +433,13 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
                       totalVotes > 0
                         ? Math.round((tally.count / totalVotes) * 100)
                         : 0;
-                    const isWinner = idx === 0 && tally.count > 0;
+                    // Only crown an UNAMBIGUOUS single leader. On a tie (top
+                    // count shared by >1 option) the outcome is "tie → runoff" —
+                    // never crown one tied candidate as winner on the projector.
+                    const isWinner =
+                      idx === 0 &&
+                      maxCount > 0 &&
+                      tallies.filter((t) => t.count === maxCount).length === 1;
 
                     // Determine label and color
                     let label = tally.vote_value;

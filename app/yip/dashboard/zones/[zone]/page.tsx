@@ -14,12 +14,17 @@ import {
   TableRow,
 } from "@/components/yip/ui/table";
 import { MapPin, Users, Trophy, CheckCircle2, ArrowLeft } from "lucide-react";
+import { canViewYipNationalRollup } from "@/lib/yip/auth/event-access";
+import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
 
 export default async function ZoneDashboardPage({
   params,
 }: {
   params: Promise<{ zone: string }>;
 }) {
+  if (!(await canViewYipNationalRollup())) {
+    return <Forbidden403 reason="Zone dashboards are for national and regional admins." />;
+  }
   const { zone: rawZone } = await params;
   const zoneCode = rawZone.toUpperCase() as YiZone;
   const zoneMeta = YI_ZONES.find((z) => z.code === zoneCode);

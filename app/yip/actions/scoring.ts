@@ -242,6 +242,18 @@ export async function submitScore(
       rangeBad =
         input.totalScore > params.total_max ||
         entries.some(([k, v]) => v > (maxByKey.get(k) ?? Infinity));
+    } else {
+      // Role-rubric fallback (no session parameters configured): still bound the
+      // total by the rubric's configured maximum so the live path is never
+      // unbounded.
+      const { data: rubric } = await supabase
+        .from("rubrics")
+        .select("total_max")
+        .eq("id", input.rubricId)
+        .maybeSingle();
+      if (typeof rubric?.total_max === "number" && input.totalScore > rubric.total_max) {
+        rangeBad = true;
+      }
     }
 
     if (numericBad || foreignKey || rangeBad) {

@@ -229,6 +229,103 @@ test("roles on OTHER apps do not leak into yuva", () => {
   );
 });
 
+// ─── Chapter-wide chair (additive cross-vertical oversight, 2026-06-14) ──
+
+test("chapter_chair (app='future') ⇒ chapter-scoped Youth Academy admin", () => {
+  // Pre-migration tag. A chapter chair is recognised by ROLE NAME, so the
+  // future tag still grants chapter-scoped yuva admin of their chapter.
+  const caps = resolveYuvaCaps(
+    [{ app: "future", role: "chapter_chair", yi_chapter: ERODE, is_active: true }],
+    []
+  );
+  assert(caps.chapterAdminOf === ERODE, "chair → chapterAdminOf = their chapter");
+  assert(!caps.isNational, "chair is NOT national");
+  assert(
+    caps.canManageAcademy({ id: "a1", chapter: ERODE }),
+    "manages own-chapter academy"
+  );
+  assert(
+    caps.canManageRun({ academy_id: "a1", chapter: ERODE }),
+    "manages own-chapter run"
+  );
+  assert(
+    !caps.canManageAcademy({ id: "a2", chapter: SALEM }),
+    "denied other-chapter academy (chapter-scoped, not national)"
+  );
+  assert(
+    !caps.canManageRun({ academy_id: "a2", chapter: SALEM }),
+    "denied other-chapter run"
+  );
+  assert(
+    /chair/i.test(caps.reason),
+    `reason names chair scope (got: "${caps.reason}")`
+  );
+});
+
+test("chapter_chair (app='yi') ⇒ same grant (re-tag-safe)", () => {
+  // Post-migration tag. Role-name matching means the helper is identical
+  // before and after the app='future'→'yi' re-tag.
+  const caps = resolveYuvaCaps(
+    [{ app: "yi", role: "chapter_chair", yi_chapter: SALEM, is_active: true }],
+    []
+  );
+  assert(caps.chapterAdminOf === SALEM, "re-tagged chair still scoped to chapter");
+  assert(
+    caps.canManageRun({ academy_id: "a1", chapter: SALEM }),
+    "manages own-chapter run after re-tag"
+  );
+});
+
+test("chapter_co_chair is also recognised", () => {
+  const caps = resolveYuvaCaps(
+    [{ app: "yi", role: "chapter_co_chair", yi_chapter: ERODE, is_active: true }],
+    []
+  );
+  assert(caps.chapterAdminOf === ERODE, "co-chair → chapterAdminOf");
+});
+
+test("inactive chair grants nothing (fail closed)", () => {
+  const caps = resolveYuvaCaps(
+    [{ app: "future", role: "chapter_chair", yi_chapter: ERODE, is_active: false }],
+    []
+  );
+  assert(caps.chapterAdminOf === null, "inactive chair ignored");
+  assert(
+    !caps.canManageRun({ academy_id: "a1", chapter: ERODE }),
+    "no run management from inactive chair"
+  );
+});
+
+test("chair with NULL chapter grants nothing (fail closed)", () => {
+  const caps = resolveYuvaCaps(
+    [{ app: "yi", role: "chapter_chair", yi_chapter: null, is_active: true }],
+    []
+  );
+  assert(caps.chapterAdminOf === null, "chair with null chapter → no scope");
+  assert(
+    !caps.canManageAcademy({ id: "a1", chapter: ERODE }),
+    "null-chapter chair cannot manage any academy"
+  );
+});
+
+test("explicit yuva chapter_admin wins over chair chapter name", () => {
+  // A person who is BOTH a chair of ERODE and an explicit yuva chapter_admin of
+  // SALEM resolves to the explicit yuva grant for the managed-chapter name (the
+  // chair layer is additive, not overriding).
+  const caps = resolveYuvaCaps(
+    [
+      { app: "future", role: "chapter_chair", yi_chapter: ERODE, is_active: true },
+      { app: "yuva", role: "chapter_admin", yi_chapter: SALEM, is_active: true },
+    ],
+    []
+  );
+  assert(caps.chapterAdminOf === SALEM, "explicit yuva chapter_admin wins");
+  assert(
+    /chapter_admin scope/.test(caps.reason),
+    `reason reflects explicit yuva grant (got: "${caps.reason}")`
+  );
+});
+
 console.log("\n═════════════════════════════════════");
 console.log("Yuva Access Resolver Test Suite — Complete");
 console.log("═════════════════════════════════════\n");

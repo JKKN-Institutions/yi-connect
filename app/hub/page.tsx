@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import {
   isPlatformSuperAdmin,
   getCurrentPersonRoles,
+  chairedChaptersFromRoles,
 } from "@/lib/yi/auth/yi-directory-roles";
 import { getYipSession } from "@/lib/yip/auth/yip-session";
 import { signOut } from "@/app/actions/auth";
@@ -68,6 +69,15 @@ const MODULE_APPS: { app: string; tile: ModuleTile }[] = [
     },
   },
 ];
+
+// A chapter-wide chair leads the whole chapter across every vertical, so they
+// get the chapter-scoped admin console of each vertical that is GENUINELY
+// chapter-partitioned BY DEFAULT (Director, 2026-06-14) — additive on top of
+// any explicit role they hold. YiFi is deliberately excluded: it is a single
+// national summit with no per-chapter slice, so auto-granting would expose
+// every founder's data nationally (decision 2026-06-14). A chair still sees
+// YiFi if they hold an explicit `yifi` role (covered by the activeApps path).
+const CHAIR_DEFAULT_APPS = new Set(["future", "yuva", "yip"]);
 
 function parseSession(
   raw: string | undefined
@@ -270,9 +280,17 @@ export default async function HubPage({
       (me?.assignments ?? []).filter((a) => a.is_active).map((a) => a.app)
     );
 
+    // A chapter-wide chair sees the chapter consoles of every chapter-
+    // partitioned vertical (CHAIR_DEFAULT_APPS), even after the chair role is
+    // re-tagged off app='future' — chairedChaptersFromRoles matches by role
+    // name, not app, so this is correct before and after that migration.
+    const isChair = chairedChaptersFromRoles(me?.assignments ?? []).length > 0;
+
     const tiles: ModuleTile[] = [];
     for (const { app, tile } of MODULE_APPS) {
-      if (activeApps.has(app)) tiles.push(tile);
+      if (activeApps.has(app) || (isChair && CHAIR_DEFAULT_APPS.has(app))) {
+        tiles.push(tile);
+      }
     }
 
     const { data: member } = await supabase

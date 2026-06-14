@@ -8,7 +8,11 @@
  *   1) yi.national_admins        → yi_directory.role_assignments(app='future')
  *   2) yip.organizers            → yi_directory.role_assignments(app='yip')
  *   3) future.chapter_core_team  → yi_directory.role_assignments(
- *                                    app='future', role='chapter_chair')
+ *                                    app IN ('future','yi'),
+ *                                    role='chapter_chair')
+ *                                  chapter_chair is being re-tagged off
+ *                                  app='future' to the chapter-wide app='yi';
+ *                                  Gap 3 accepts both during the transition.
  *
  * Auth: callers MUST gate with `isCurrentUserSuperAdmin()`. We use the
  * service client because RLS on legacy schemas is not configured for
@@ -458,7 +462,12 @@ export async function checkChapterCoreTeamDrift(): Promise<GapResult> {
     Array<{ yi_chapter: string | null; is_active: boolean }>
   >();
   for (const r of roles) {
-    if (r.app !== "future" || r.role !== "chapter_chair") continue;
+    // Dual-accept (2026-06-14): chapter_chair is being re-tagged off
+    // app='future' to the chapter-wide app='yi'. Accept BOTH so the
+    // reconciler does not flag re-tagged rows as missing (and try to recreate
+    // app='future') mid-migration. See project_chapter_chair_is_chapter_wide.
+    if (!(r.app === "future" || r.app === "yi") || r.role !== "chapter_chair")
+      continue;
     const pid = String(r.person_id);
     if (!chairRolesByPerson.has(pid)) chairRolesByPerson.set(pid, []);
     chairRolesByPerson.get(pid)!.push({
@@ -501,7 +510,7 @@ export async function checkChapterCoreTeamDrift(): Promise<GapResult> {
           legacy_summary: `${label} (no user_id)`,
           directory_summary: "—",
           suggested_action:
-            "Provision auth user, then INSERT into yi_directory + role_assignments(app='future', role='chapter_chair')",
+            "Provision auth user, then INSERT into yi_directory + role_assignments(app='yi', role='chapter_chair')",
         });
       } else {
         synced += 1;
@@ -519,7 +528,7 @@ export async function checkChapterCoreTeamDrift(): Promise<GapResult> {
         legacy_summary: label,
         directory_summary: "—",
         suggested_action:
-          "INSERT into yi_directory.people + role_assignments(app='future', role='chapter_chair')",
+          "INSERT into yi_directory.people + role_assignments(app='yi', role='chapter_chair')",
       });
       continue;
     }
@@ -537,7 +546,7 @@ export async function checkChapterCoreTeamDrift(): Promise<GapResult> {
           legacy_summary: label,
           directory_summary: "—",
           suggested_action:
-            "INSERT role_assignments(app='future', role='chapter_chair') for existing person",
+            "INSERT role_assignments(app='yi', role='chapter_chair') for existing person",
         });
       } else {
         synced += 1;
@@ -589,7 +598,12 @@ export async function checkChapterCoreTeamDrift(): Promise<GapResult> {
     }
   }
   for (const r of roles) {
-    if (r.app !== "future" || r.role !== "chapter_chair") continue;
+    // Dual-accept (2026-06-14): chapter_chair is being re-tagged off
+    // app='future' to the chapter-wide app='yi'. Accept BOTH so the
+    // reconciler does not flag re-tagged rows as missing (and try to recreate
+    // app='future') mid-migration. See project_chapter_chair_is_chapter_wide.
+    if (!(r.app === "future" || r.app === "yi") || r.role !== "chapter_chair")
+      continue;
     if (r.is_active !== true) continue;
     const pid = String(r.person_id);
     if (seenPersonIds.has(pid)) continue;

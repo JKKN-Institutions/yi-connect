@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { logoutOrganizer } from "@/app/yip/actions/auth";
@@ -15,6 +15,8 @@ import {
   School,
   Globe,
   BookOpen,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import { cn } from "@/lib/yip/utils";
 import { GuideLauncher } from "@/components/yip/guide";
@@ -28,6 +30,8 @@ const navItems = [
   { label: "Admin", href: "/yip/dashboard/admin", icon: LayoutGrid },
 ];
 
+const SHELL_COLLAPSE_KEY = "yip-shell-collapsed";
+
 export function DashboardShell({
   userEmail,
   children,
@@ -38,6 +42,29 @@ export function DashboardShell({
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
+
+  // Desktop-only collapse to an icon rail, remembered per browser. Default
+  // expanded on the server + first client render (so the default markup is
+  // byte-identical to before — collapse classes are gated on `collapsed && lg:`);
+  // sync the saved preference after mount.
+  const [collapsed, setCollapsed] = useState(false);
+  useEffect(() => {
+    try {
+      setCollapsed(localStorage.getItem(SHELL_COLLAPSE_KEY) === "1");
+    } catch {
+      /* ignore */
+    }
+  }, []);
+  const toggleCollapsed = () =>
+    setCollapsed((c) => {
+      const next = !c;
+      try {
+        localStorage.setItem(SHELL_COLLAPSE_KEY, next ? "1" : "0");
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
 
   // Event-scoped organiser deep links ("Open Allocation" etc.) need the current
   // event id; derive it from the URL so one launcher works on every page.
@@ -60,8 +87,9 @@ export function DashboardShell({
       {/* ─── Sidebar ──────────────────────────────────────────────── */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex w-[272px] flex-col transition-transform lg:static lg:translate-x-0",
-          sidebarOpen ? "translate-x-0" : "-translate-x-full"
+          "fixed inset-y-0 left-0 z-50 flex w-[272px] flex-col transition-all lg:static lg:translate-x-0",
+          sidebarOpen ? "translate-x-0" : "-translate-x-full",
+          collapsed ? "lg:w-[76px]" : "lg:w-[272px]"
         )}
       >
         {/* Tricolor left edge */}
@@ -74,7 +102,7 @@ export function DashboardShell({
         {/* Sidebar content */}
         <div className="flex flex-1 flex-col overflow-hidden border-r border-[#1a1a3e]/[0.04] bg-white">
           {/* Logo area */}
-          <div className="relative px-5 pb-4 pt-5">
+          <div className={cn("relative pb-4 pt-5", collapsed ? "px-5 lg:px-3" : "px-5")}>
             {/* Subtle dot pattern */}
             <div
               className="absolute inset-0 opacity-[0.02]"
@@ -83,14 +111,19 @@ export function DashboardShell({
                 backgroundSize: "16px 16px",
               }}
             />
-            <div className="relative flex items-center justify-between">
+            <div
+              className={cn(
+                "relative flex items-center justify-between",
+                collapsed && "lg:justify-center"
+              )}
+            >
               <Link href="/yip/dashboard" className="flex items-center gap-3">
                 <div className="relative flex h-11 w-11 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-[#FF9933] to-[#E68A2E] shadow-lg shadow-[#FF9933]/25">
                   <span className="font-[family-name:var(--font-heading)] text-xl font-bold text-white">Y</span>
                   {/* Ashoka Chakra tiny overlay */}
                   <div className="absolute -bottom-1 -right-1 h-5 w-5 rounded-full border border-white/20" />
                 </div>
-                <div>
+                <div className={cn(collapsed && "lg:hidden")}>
                   <span className="block text-[13px] font-bold tracking-wide text-[#1a1a3e]">Young Indians</span>
                   <span className="block text-[9px] font-semibold uppercase tracking-[0.25em] text-[#FF9933]">Parliament</span>
                 </div>
@@ -111,7 +144,12 @@ export function DashboardShell({
 
           {/* Navigation */}
           <nav className="flex-1 px-3 py-4">
-            <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#1a1a3e]/25">
+            <p
+              className={cn(
+                "mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#1a1a3e]/25",
+                collapsed && "lg:hidden"
+              )}
+            >
               Navigation
             </p>
             <div className="space-y-1">
@@ -125,8 +163,10 @@ export function DashboardShell({
                     key={item.href}
                     href={item.href}
                     onClick={() => setSidebarOpen(false)}
+                    title={collapsed ? item.label : undefined}
                     className={cn(
                       "group flex items-center gap-3 rounded-xl px-3 py-3 text-[13px] font-medium transition-all",
+                      collapsed && "lg:justify-center",
                       isActive
                         ? "bg-[#FF9933]/[0.08] text-[#FF9933] shadow-sm shadow-[#FF9933]/5"
                         : "text-[#1a1a3e]/50 hover:bg-[#1a1a3e]/[0.03] hover:text-[#1a1a3e]/80"
@@ -140,9 +180,14 @@ export function DashboardShell({
                     >
                       <item.icon className="size-4" />
                     </div>
-                    {item.label}
+                    <span className={cn(collapsed && "lg:hidden")}>{item.label}</span>
                     {isActive && (
-                      <div className="ml-auto h-1.5 w-1.5 rounded-full bg-[#FF9933]" />
+                      <div
+                        className={cn(
+                          "ml-auto h-1.5 w-1.5 rounded-full bg-[#FF9933]",
+                          collapsed && "lg:hidden"
+                        )}
+                      />
                     )}
                   </Link>
                 );
@@ -152,7 +197,10 @@ export function DashboardShell({
                 guide={GUIDES.organiser}
                 eventId={eventId}
                 variant="navlink"
-                className="rounded-xl px-3 py-3 text-[13px] text-[#1a1a3e]/50 hover:bg-[#1a1a3e]/[0.03] hover:text-[#1a1a3e]/80"
+                className={cn(
+                  "rounded-xl px-3 py-3 text-[13px] text-[#1a1a3e]/50 hover:bg-[#1a1a3e]/[0.03] hover:text-[#1a1a3e]/80",
+                  collapsed && "lg:justify-center lg:[&>span]:hidden"
+                )}
               />
             </div>
           </nav>
@@ -162,12 +210,16 @@ export function DashboardShell({
             <div className="relative">
               <button
                 onClick={() => setAccountOpen(!accountOpen)}
-                className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-[#1a1a3e]/[0.03]"
+                title={collapsed ? userEmail : undefined}
+                className={cn(
+                  "flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-[#1a1a3e]/[0.03]",
+                  collapsed && "lg:justify-center"
+                )}
               >
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-[#1a1a3e]/5 to-[#1a1a3e]/10">
                   <User className="size-3.5 text-[#1a1a3e]/40" />
                 </div>
-                <div className="flex-1 min-w-0">
+                <div className={cn("flex-1 min-w-0", collapsed && "lg:hidden")}>
                   <span className="block truncate text-xs font-medium text-[#1a1a3e]/60">
                     {userEmail}
                   </span>
@@ -176,7 +228,8 @@ export function DashboardShell({
                 <ChevronDown
                   className={cn(
                     "size-3.5 text-[#1a1a3e]/20 transition-transform",
-                    accountOpen && "rotate-180"
+                    accountOpen && "rotate-180",
+                    collapsed && "lg:hidden"
                   )}
                 />
               </button>
@@ -208,6 +261,15 @@ export function DashboardShell({
             className="flex h-10 w-10 items-center justify-center rounded-xl text-[#1a1a3e]/40 transition-colors hover:bg-[#1a1a3e]/5 lg:hidden"
           >
             <Menu className="size-5" />
+          </button>
+          {/* Desktop sidebar collapse toggle */}
+          <button
+            onClick={toggleCollapsed}
+            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            className="hidden h-10 w-10 items-center justify-center rounded-xl text-[#1a1a3e]/40 transition-colors hover:bg-[#1a1a3e]/5 lg:flex"
+          >
+            {collapsed ? <PanelLeftOpen className="size-5" /> : <PanelLeftClose className="size-5" />}
           </button>
 
           {/* Breadcrumb-style title */}

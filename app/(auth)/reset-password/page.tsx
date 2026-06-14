@@ -31,10 +31,14 @@ function ResetPasswordForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  // The recovery code is knowable at render time, so derive the
-  // "no code in URL" case here rather than setting state inside the effect
-  // (which would trigger react-hooks/set-state-in-effect).
+  // Two link formats are supported, both knowable at render time:
+  //  • PKCE:        ?code=...                (Supabase-template links)
+  //  • Recovery OTP: ?token_hash=...&type=recovery  (our branded email — see
+  //    lib/auth/branded-password-reset). Verified client-side via verifyOtp.
   const code = searchParams.get('code');
+  const tokenHash = searchParams.get('token_hash');
+  const otpType = searchParams.get('type');
+  const hasToken = !!code || !!tokenHash;
 
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -43,25 +47,31 @@ function ResetPasswordForm() {
     confirmPassword?: string;
   }>({});
   const [formError, setFormError] = useState<string | null>(
-    code
+    hasToken
       ? null
       : 'This reset link is missing its recovery code. Request a new one below.'
   );
   const [success, setSuccess] = useState(false);
-  // Only "exchanging" when there's actually a code to exchange.
-  const [exchanging, setExchanging] = useState(!!code);
+  // Only "exchanging" when there's actually a token to verify.
+  const [exchanging, setExchanging] = useState(hasToken);
   const [codeValid, setCodeValid] = useState(false);
   const [pending, startTransition] = useTransition();
 
-  // Exchange the recovery code from the URL for a session on mount.
-  // All setState calls live inside async callbacks, so this does not call
-  // setState synchronously within the effect body.
+  // Establish the recovery session from the URL on mount. All setState calls
+  // live inside async callbacks, so this does not call setState synchronously
+  // within the effect body.
   useEffect(() => {
-    if (!code) return;
+    if (!hasToken) return;
 
     const supabase = createBrowserSupabaseClient();
-    supabase.auth
-      .exchangeCodeForSession(code)
+    const verify = code
+      ? supabase.auth.exchangeCodeForSession(code)
+      : supabase.auth.verifyOtp({
+          type: (otpType as 'recovery') || 'recovery',
+          token_hash: tokenHash as string,
+        });
+
+    verify
       .then(({ error }) => {
         if (error) {
           setCodeValid(false);
@@ -80,7 +90,7 @@ function ResetPasswordForm() {
         );
         setExchanging(false);
       });
-  }, [code]);
+  }, [code, tokenHash, otpType, hasToken]);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

@@ -24,6 +24,8 @@ import {
 import { AcademyNetworkSection } from "@/components/yuva/public/academy-network-section";
 import { PublicRunCard } from "@/components/yuva/public/run-card";
 import { PartnerLogos } from "@/components/yuva/partner-logos";
+import { redirect } from "next/navigation";
+import { getYuvaAccess } from "@/lib/yuva/auth/yuva-access";
 
 export const dynamic = "force-dynamic";
 
@@ -66,6 +68,18 @@ export default async function YouthAcademyLandingPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  // Signed-in STAFF should land on their dashboard, not this public marketing
+  // page. The staff-login route can't read the just-set session cookie within
+  // its own request, so the forward happens here on the next request. Anonymous
+  // visitors and non-staff (incl. students, who use a separate session) fall
+  // through to the public landing below. (redirect() throws — keep it before any
+  // try/catch.)
+  const access = await getYuvaAccess();
+  if (access.isNational) redirect("/youth-academy/national");
+  if (access.chapterAdminOf !== null || access.coordinatorAcademyIds.length > 0) {
+    redirect("/youth-academy/chapter");
+  }
+
   const sp = await searchParams;
   const rawCategory = typeof sp.category === "string" ? sp.category : null;
   const activeCategory = (PROGRAM_CATEGORIES as readonly string[]).includes(

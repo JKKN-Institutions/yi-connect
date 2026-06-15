@@ -93,6 +93,7 @@ export function PartiesClient({
   const [assignOpen, setAssignOpen] = useState<string | null>(null);
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [formPartyCount, setFormPartyCount] = useState(5);
+  const [assignLeaders, setAssignLeaders] = useState(false);
   const [formResult, setFormResult] = useState<FormPartiesSummary | null>(null);
 
   function handleFormParties() {
@@ -104,7 +105,7 @@ export function PartiesClient({
     );
     if (!ok) return;
     startTransition(async () => {
-      const res = await formParties(eventId, formPartyCount);
+      const res = await formParties(eventId, formPartyCount, assignLeaders);
       if (!res.success) {
         setError(res.error);
         return;
@@ -373,6 +374,8 @@ export function PartiesClient({
           onRun={handleFormParties}
           pending={pending}
           result={formResult}
+          assignLeaders={assignLeaders}
+          onAssignLeadersChange={setAssignLeaders}
         />
       )}
 
@@ -636,6 +639,8 @@ function FormPartiesCard({
   onRun,
   pending,
   result,
+  assignLeaders,
+  onAssignLeadersChange,
 }: {
   participants: Participant[];
   parties: Party[];
@@ -645,6 +650,8 @@ function FormPartiesCard({
   onRun: () => void;
   pending: boolean;
   result: FormPartiesSummary | null;
+  assignLeaders: boolean;
+  onAssignLeadersChange: (v: boolean) => void;
 }) {
   const rulingN = participants.filter((p) => p.party_side === "ruling").length;
   const oppositionN = participants.filter((p) => p.party_side === "opposition").length;
@@ -728,6 +735,22 @@ function FormPartiesCard({
               {pending && <Loader2 className="size-4 mr-2 animate-spin" />}
               Form {partyCount} Parties
             </Button>
+            <label className="flex w-full max-w-md cursor-pointer items-start gap-2 text-left text-xs text-[#1a1a3e]/70">
+              <input
+                type="checkbox"
+                className="mt-0.5 size-4 accent-[#138808]"
+                checked={assignLeaders}
+                disabled={pending}
+                onChange={(e) => onAssignLeadersChange(e.target.checked)}
+              />
+              <span>
+                <span className="font-medium text-[#1a1a3e]">
+                  Also auto-assign a party leader for each party
+                </span>{" "}
+                — the senior-most member of each party. Optional; leave off to
+                let students elect their leaders.
+              </span>
+            </label>
           </div>
         )}
 

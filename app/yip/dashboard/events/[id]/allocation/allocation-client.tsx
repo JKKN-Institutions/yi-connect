@@ -100,7 +100,11 @@ export function AllocationClient({
   // engine only writes side-neutral constituencies + committees and students
   // form parties + pick leadership live on event day. Check it to restore the
   // full auto-allocation behaviour.
-  const [autoFormParties, setAutoFormParties] = useState(false);
+  const [autoFormParties, setAutoFormParties] = useState(true);
+  // Parliament roles + ministries are OPTIONAL (off by default): the chapter
+  // ticks this to also auto-assign PM / Deputy PM / LoP / Ministers / Speaker
+  // candidates. Off → everyone is a plain MP and the chapter assigns leaders.
+  const [assignRoles, setAssignRoles] = useState(false);
 
   const committeeNames = customCommittees && customCommittees.length > 0
     ? customCommittees
@@ -149,14 +153,19 @@ export function AllocationClient({
 
   // ── Handlers ──────────────────────────────────────────────────────
 
-  async function handleRunAllocation(autoForm: boolean) {
+  async function handleRunAllocation(autoForm: boolean, withRoles: boolean) {
     setLoading(true);
-    const result = await runAllocationAction(eventId, { assignSides: autoForm });
+    const result = await runAllocationAction(eventId, {
+      assignSides: autoForm,
+      assignRoles: withRoles,
+    });
     if (result.success) {
       toast.success(
-        autoForm
-          ? "Allocation completed successfully"
-          : "Constituencies & committees assigned — benches left blank for the day"
+        !autoForm
+          ? "Constituencies assigned — benches left blank for the day"
+          : withRoles
+            ? "Allocation completed — benches, constituencies & roles assigned"
+            : "Benches & constituencies assigned — roles left for you to assign"
       );
       router.refresh();
     } else {
@@ -253,8 +262,10 @@ export function AllocationClient({
                 ? ` across ${rulingPartyCount} ruling + ${oppositionPartyCount} opposition parties. `
                 : ". "}
               {autoFormParties
-                ? "The engine will assign parties, roles, constituencies, and committees automatically."
-                : "Constituencies and committees will be assigned; party benches and roles are left blank for students to decide on event day."}
+                ? assignRoles
+                  ? "Benches, constituencies, committees AND Parliament roles (PM, LoP, Ministers, Speaker candidates) will be assigned automatically."
+                  : "Party benches, constituencies and committees will be assigned. Parliament roles are left for you to assign."
+                : "Constituencies and committees will be assigned; party benches are left blank for students to form on event day."}
             </p>
 
             <label className="mt-5 flex max-w-md cursor-pointer items-start gap-2 text-left text-sm text-gray-600">
@@ -266,11 +277,36 @@ export function AllocationClient({
               />
               <span>
                 <span className="font-medium text-gray-700">
-                  Auto-form parties, roles &amp; leadership
+                  Auto-assign party benches (Ruling / Opposition)
                 </span>
                 <br />
-                Leave unchecked so students form parties and pick leadership
-                live on the day (recommended for chapter rounds).
+                On by default. Uncheck to leave benches blank so students form
+                parties live on the day.
+              </span>
+            </label>
+
+            <label
+              className={`mt-3 flex max-w-md items-start gap-2 text-left text-sm ${
+                autoFormParties
+                  ? "cursor-pointer text-gray-600"
+                  : "cursor-not-allowed text-gray-300"
+              }`}
+            >
+              <input
+                type="checkbox"
+                className="mt-0.5 size-4 accent-[#FF9933]"
+                checked={assignRoles}
+                disabled={!autoFormParties}
+                onChange={(e) => setAssignRoles(e.target.checked)}
+              />
+              <span>
+                <span className="font-medium">
+                  Also auto-assign Parliament roles &amp; Ministries
+                </span>
+                <br />
+                PM, Deputy PM, Leader of Opposition, Cabinet &amp; Shadow
+                Ministers, Speaker candidates. Optional — leave off to assign
+                these yourself. (Party leaders are set at Form Parties.)
               </span>
             </label>
 
@@ -292,7 +328,7 @@ export function AllocationClient({
             ) : (
               <Button
                 className="mt-6 bg-[#FF9933] text-white hover:bg-[#E68A2E]"
-                onClick={() => handleRunAllocation(autoFormParties)}
+                onClick={() => handleRunAllocation(autoFormParties, assignRoles)}
                 disabled={loading}
               >
                 {loading ? (
@@ -675,7 +711,7 @@ export function AllocationClient({
             </DialogClose>
             <Button
               className="bg-[#FF9933] text-white hover:bg-[#E68A2E]"
-              onClick={() => handleRunAllocation(true)}
+              onClick={() => handleRunAllocation(autoFormParties, assignRoles)}
               disabled={loading}
             >
               {loading ? (

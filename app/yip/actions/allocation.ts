@@ -24,19 +24,24 @@ type ActionResult<T = unknown> =
 
 export async function runAllocationAction(
   eventId: string,
-  opts?: { assignSides?: boolean }
+  opts?: { assignSides?: boolean; assignRoles?: boolean }
 ): Promise<ActionResult<AllocationResult>> {
   const access = await getYipEventAccess(eventId);
   if (!access.canManage) {
     return { success: false, error: "Not authorized to manage this event" };
   }
-  // When false, the allocation leaves the political structure blank for the
-  // students to form on event day: party_side is cleared and every participant
-  // is a plain MP (no PM/LoP/Ministers/Speakers). Only the side-neutral
-  // constituency + committee assignments are written. The engine still computes
-  // a full allocation internally; we strip the side-dependent fields here so the
-  // engine stays untouched. Defaults to true (preserves auto-allocation).
+  // assignSides (default true): when false, party benches are left blank and
+  // every participant is a plain MP — students form parties live on the day.
+  // assignRoles (default FALSE, interview 2026-06-15): Parliament roles +
+  // Ministries (PM, Deputy PM, LoP, Cabinet & Shadow Ministers, Speaker
+  // candidates) are OPTIONAL. By default the allocation assigns party benches +
+  // constituencies only (committees come from the separate assignCommittees
+  // step); the chapter opts IN to auto-assigning the parliamentary roles. The
+  // engine still computes a full allocation internally; we strip the
+  // role/ministry fields here when assignRoles is off, leaving the engine
+  // untouched. Party leaders are assigned separately at Form Parties.
   const assignSides = opts?.assignSides !== false;
+  const assignRoles = opts?.assignRoles === true;
   const supabase = await createServiceClient();
 
   // Fetch event — check lock
@@ -110,7 +115,7 @@ export async function runAllocationAction(
           | "ruling"
           | "opposition"
           | null,
-        parliament_role: (assignSides
+        parliament_role: (assignSides && assignRoles
           ? assignment.parliament_role
           : "mp") as
           | "speaker"
@@ -121,7 +126,7 @@ export async function runAllocationAction(
           | "shadow_minister"
           | "bill_committee"
           | "mp",
-        ministry: (assignSides ? assignment.ministry : null) as
+        ministry: (assignSides && assignRoles ? assignment.ministry : null) as
           | "home"
           | "finance"
           | "education"

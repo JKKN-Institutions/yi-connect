@@ -225,7 +225,10 @@ export type FormPartiesSummary = {
  */
 export async function formParties(
   eventId: string,
-  partyCount: number
+  partyCount: number,
+  // Optional (interview 2026-06-15): also auto-assign a leader for each party
+  // (the senior-most member). Off by default — the chapter/students pick leaders.
+  assignLeaders = false
 ): Promise<ActionResult<FormPartiesSummary>> {
   const access = await getYipEventAccess(eventId);
   if (!access.canManage) {
@@ -262,7 +265,7 @@ export async function formParties(
 
   const { data: participants, error: participantsError } = await supabase
     .from("participants")
-    .select("id, party_side, school_name")
+    .select("id, party_side, school_name, class, parliament_role")
     .eq("event_id", eventId)
     .order("full_name");
   if (participantsError) {
@@ -390,6 +393,32 @@ export async function formParties(
         "; "
       )}). Delete the parties and run Form Parties again.`,
     };
+  }
+
+  // Optional: auto-assign a leader for each party = the senior-most (highest
+  // class) member. Sets the party's leader pointer; only promotes a plain MP to
+  // the party_leader role (never overwrites an existing PM/LoP/minister/speaker).
+  if (assignLeaders) {
+    const classById = new Map(participants.map((p) => [p.id, p.class ?? 0]));
+    const roleById = new Map(participants.map((p) => [p.id, p.parliament_role]));
+    for (const party of created) {
+      const memberIds = idsByPartyId.get(party.id) ?? [];
+      if (memberIds.length === 0) continue;
+      const leaderId = memberIds.reduce((best, id) =>
+        (classById.get(id) ?? 0) > (classById.get(best) ?? 0) ? id : best
+      );
+      await supabase
+        .from("parties")
+        .update({ party_leader_id: leaderId })
+        .eq("id", party.id);
+      if (roleById.get(leaderId) === "mp") {
+        await supabase
+          .from("participants")
+          .update({ parliament_role: "party_leader" })
+          .eq("id", leaderId)
+          .eq("event_id", eventId);
+      }
+    }
   }
 
   // Parties now exist → assign party-balanced committees (MPs only). Best-effort:

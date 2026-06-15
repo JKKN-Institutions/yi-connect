@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/yip/ui/ca
 import { Loader2, Save, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
+import { EventDangerZone } from "@/components/yip/event-danger-zone";
 
 const LEVEL_OPTIONS = [
   { value: "chapter", label: "Chapter Level" },
@@ -395,6 +396,8 @@ export default function EditEventPage() {
           )}
         </Button>
       </div>
+
+      <EventDangerZone eventId={eventId} eventName={form.name} />
     </div>
   );
 }

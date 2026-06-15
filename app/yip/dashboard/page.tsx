@@ -4,6 +4,9 @@ import { isCurrentUserSuperAdmin } from "@/lib/yip/auth/require-super-admin";
 import { getRegionalAdminZones, getYipChapterScopes } from "@/lib/yi/auth/yi-directory-roles";
 import { Badge } from "@/components/yip/ui/badge";
 import { Plus, CalendarDays, Users, MapPin } from "lucide-react";
+import { OnboardingLauncher } from "@/components/yip/guide/onboarding-launcher";
+import { GUIDES } from "@/lib/yip/guide/content";
+import { getCompletedSteps, logGuideEvent } from "@/lib/yip/guide/actions";
 
 // Status badge color mapping with premium styling
 function statusBadge(status: string) {
@@ -131,22 +134,34 @@ export default async function DashboardPage() {
 
   const hasEvents = events && events.length > 0;
 
+  // Onboarding entry for the organiser — always visible, label derived from
+  // saved progress (Start / Resume · N left / Replay), never a first-login flag.
+  const onboardingCompleted = await getCompletedSteps("organiser");
+
   return (
     <div>
       {/* Page header */}
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="font-[family-name:var(--font-heading)] text-2xl font-bold text-[#1a1a3e]">My Events</h1>
           <p className="text-sm text-[#1a1a3e]/40">
             Manage your Young Indians Parliament events
           </p>
         </div>
-        <Link href="/yip/dashboard/events/new">
-          <button className="inline-flex items-center gap-2 rounded-xl bg-[#FF9933] px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-[#FF9933]/20 transition-all hover:bg-[#E68A2E] hover:shadow-xl hover:shadow-[#FF9933]/25 min-h-[44px]">
-            <Plus className="size-4" />
-            Create New Event
-          </button>
-        </Link>
+        <div className="flex flex-wrap items-center gap-3">
+          <OnboardingLauncher
+            guide={GUIDES.organiser}
+            persona="organiser"
+            completed={onboardingCompleted}
+            onEvent={logGuideEvent}
+          />
+          <Link href="/yip/dashboard/events/new">
+            <button className="inline-flex items-center gap-2 rounded-xl bg-[#FF9933] px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-[#FF9933]/20 transition-all hover:bg-[#E68A2E] hover:shadow-xl hover:shadow-[#FF9933]/25 min-h-[44px]">
+              <Plus className="size-4" />
+              Create New Event
+            </button>
+          </Link>
+        </div>
       </div>
 
       {/* Events list */}

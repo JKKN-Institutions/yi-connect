@@ -36,6 +36,8 @@ import {
 } from "lucide-react";
 import { VoteClient } from "./vote/vote-client";
 import { LiveNowCard } from "./live-now-card";
+import { ModuleWelcome } from "@/components/yip/guide/module-welcome";
+import { logGuideEvent } from "@/lib/yip/guide/actions";
 import { OfflineStaleNote } from "./offline-stale-note";
 import { SkillProfileCard } from "@/components/yip/skill-profile-card";
 import { getSkillProfile } from "@/app/yip/actions/skill-profile";
@@ -276,6 +278,18 @@ export default async function ParticipantPage() {
 
   return (
     <div className="space-y-5">
+      {/* First-entry welcome — students have no Supabase progress (access-code
+          cookie session), so this uses the once-per-browser localStorage
+          fallback (no seen/onSeen). Dismissible card, never blocks the page. */}
+      <ModuleWelcome
+        moduleKey="me-dashboard"
+        persona="student"
+        title="Welcome to your Parliament dashboard"
+        body="This is your home base for the two days — your **role**, **party** and what the house is doing **right now**. Tap below for a 1-minute tour."
+        cta={{ label: "Show me how", href: "/yip/guide?persona=student#your-dashboard" }}
+        onEvent={logGuideEvent}
+      />
+
       {/* ─── HERO ROLE CARD ─────────────────────────────────────── */}
       <div className="relative overflow-hidden rounded-2xl bg-white shadow-lg ring-1 ring-gray-200/60">
         {/* Decorative top bar */}

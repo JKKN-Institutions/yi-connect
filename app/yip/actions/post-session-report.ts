@@ -38,7 +38,7 @@ export async function generatePostSessionReport(
   const { data: event } = await supabase
     .from("events")
     .select(
-      "id, name, chapter_name, city, state, zone, level, status, day1_date, day2_date, central_agenda, mycii_event_registered, fee_per_participant_inr, results_published_at, allocation_locked, scores_locked"
+      "id, name, chapter_name, city, state, zone, level, status, day1_date, day2_date, central_agenda, mycii_event_registered, fee_per_participant_inr, results_published_at, allocation_locked, scores_locked, social_links, social_reach_count"
     )
     .eq("id", eventId)
     .single();
@@ -56,6 +56,7 @@ export async function generatePostSessionReport(
     checklistRes,
     questionsRes,
     promotionsOutRes,
+    chiefGuestsRes,
   ] = await Promise.all([
     supabase.from("participants").select("id, full_name, school_name, parliament_role, party_side").eq("event_id", eventId),
     supabase.from("results").select("participant_id, avg_score, jury_count, rank, award_category").eq("event_id", eventId).order("rank"),
@@ -67,6 +68,7 @@ export async function generatePostSessionReport(
     supabase.from("checklist").select("category, is_completed").eq("event_id", eventId),
     supabase.from("questions").select("id, status").eq("event_id", eventId),
     supabase.from("promotions").select("id, target_event_id").eq("source_event_id", eventId),
+    supabase.from("event_chief_guests").select("name, designation, organization, display_order").eq("event_id", eventId).order("display_order"),
   ]);
 
   const participants = participantsRes.data ?? [];
@@ -79,6 +81,8 @@ export async function generatePostSessionReport(
   const checklist = checklistRes.data ?? [];
   const questions = questionsRes.data ?? [];
   const promotions = promotionsOutRes.data ?? [];
+  const chiefGuests = chiefGuestsRes.data ?? [];
+  const socialLinks = event.social_links ?? [];
 
   // Awards rollup from award_category strings (comma-separated)
   const awardCounts = new Map<string, string[]>();
@@ -135,6 +139,20 @@ export async function generatePostSessionReport(
   push("EVENT", "Results Published", event.results_published_at ?? "NO");
   push("EVENT", "Allocation Locked", event.allocation_locked ? "YES" : "NO");
   push("EVENT", "Scores Locked", event.scores_locked ? "YES" : "NO");
+
+  // Chief guests (#11) + social coverage (#12)
+  push("CHIEF GUESTS", "Count", chiefGuests.length);
+  chiefGuests.forEach((g, i) => {
+    push(
+      "CHIEF GUESTS",
+      `Guest ${i + 1}`,
+      [g.name, g.designation, g.organization].filter(Boolean).join(" | ")
+    );
+  });
+
+  push("SOCIAL", "Total Reach", event.social_reach_count ?? "");
+  push("SOCIAL", "Post Links (count)", socialLinks.length);
+  socialLinks.forEach((link, i) => push("SOCIAL", `Post ${i + 1}`, link));
 
   push("PARTICIPATION", "Total Participants", participants.length);
   push("PARTICIPATION", "Participants Scored", summary.participants_scored);

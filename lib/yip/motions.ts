@@ -8,7 +8,9 @@ export type MotionType =
   | "no_confidence"
   | "short_duration"
   | "obituary"
-  | "laying_of_papers";
+  | "laying_of_papers"
+  | "point_of_order"
+  | "impeach_speaker";
 
 export type MotionStatus =
   | "submitted"
@@ -90,6 +92,24 @@ export const MOTION_TYPES: {
     goesToVote: false,
     needsMinistry: true,
     color: "bg-indigo-500",
+  },
+  {
+    code: "point_of_order",
+    label: "Point of Order",
+    description: "Raised when House procedure or rules are being broken. No vote — the Speaker rules on it immediately.",
+    handbookPage: 23,
+    goesToVote: false,
+    needsMinistry: false,
+    color: "bg-teal-500",
+  },
+  {
+    code: "impeach_speaker",
+    label: "Impeach the Speaker",
+    description: "Challenges the conduct of the sitting Speaker. The whole House votes — if passed, the Speaker (and Deputy) are removed and the House elects a new Speaker.",
+    handbookPage: 24,
+    goesToVote: true,
+    needsMinistry: false,
+    color: "bg-fuchsia-600",
   },
 ];
 

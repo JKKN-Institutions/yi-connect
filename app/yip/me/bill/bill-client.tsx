@@ -135,9 +135,11 @@ export function BillClient({
   committeeName: string | null;
 }) {
   const session: ParticipantSession | null = initialSession;
-  // Committee MPs draft their committee's bill. Everyone else sees the
-  // restricted notice (but still gets the documents repository below).
-  const isEligible = parliamentRole === "mp" && !!committeeName;
+  // Committee members draft their committee's bill (everyone except the Speaker
+  // Panel is on a committee). committee_name presence is the single gate; the
+  // restricted notice shows for the Speaker Panel (no committee). Documents
+  // repository below still renders for everyone.
+  const isEligible = !!committeeName;
   const [bill, setBill] = useState<Bill | null>(null);
   const [members, setMembers] = useState<BillCommitteeMember[]>([]);
   const [form, setForm] = useState<BillFormData>(EMPTY_FORM);

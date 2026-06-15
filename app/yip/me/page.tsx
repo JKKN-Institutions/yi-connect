@@ -200,9 +200,11 @@ export default async function ParticipantPage() {
   const myQuestions = questionData ?? [];
   const questionCount = myQuestions.length;
 
-  // Fetch bill data for committee members (ordinary MPs on a committee)
-  const isCommitteeMember =
-    participant.parliament_role === "mp" && !!participant.committee_name;
+  // Fetch bill data for committee members. A committee member is anyone with a
+  // committee_name — committees include everyone except the Speaker Panel (the
+  // assignCommittees engine + a DB trigger clear committee_name for presiding
+  // officers), so committee_name presence is the single source of truth.
+  const isCommitteeMember = !!participant.committee_name;
   let myBill: { id: string; title: string; status: string | null } | null = null;
 
   if (participant.committee_name) {

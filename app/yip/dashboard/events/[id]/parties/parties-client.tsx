@@ -121,7 +121,7 @@ export function PartiesClient({
 
   function handleAssignCommittees() {
     const ok = confirm(
-      "Re-assign committees: ordinary MPs are spread evenly across committees by party. Speaker, Deputy Speaker, PM, LoP, ministers and independents get NO committee. Parties are NOT changed. Continue?"
+      "Re-assign committees: students are spread evenly across committees by party (mixed committees). Only the Speaker and Deputy Speakers are excluded (they preside). Parties are NOT changed. Continue?"
     );
     if (!ok) return;
     startTransition(async () => {
@@ -376,16 +376,17 @@ export function PartiesClient({
         />
       )}
 
-      {/* Assign / Re-balance Committees (MPs only, party-balanced) */}
+      {/* Assign / Re-balance Committees (mixed cross-party, party-balanced) */}
       {canManage && (
         <Card>
           <CardContent className="pt-5 flex flex-wrap items-center justify-between gap-3">
             <div className="min-w-0">
-              <h3 className="text-sm font-bold text-[#1a1a3e]">Committees (MPs only)</h3>
+              <h3 className="text-sm font-bold text-[#1a1a3e]">Committees</h3>
               <p className="text-xs text-[#1a1a3e]/60 mt-0.5 max-w-md">
-                Spread ordinary MPs evenly across committees by party. Speaker,
-                Deputy Speaker, PM, LoP, ministers and independents are excluded.
-                Run this after forming parties; re-running won&apos;t change parties.
+                Spread students evenly across committees by party (mixed
+                committees). Only the Speaker &amp; Deputy Speakers are excluded —
+                they preside. Run after forming parties; re-running won&apos;t
+                change parties.
               </p>
             </div>
             <Button

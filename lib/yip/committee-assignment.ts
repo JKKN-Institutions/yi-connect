@@ -14,10 +14,13 @@
  * moment the 5-party balance can be computed.
  */
 
-// Only ordinary MPs sit on committees (per the chair's ruling). Everyone with a
-// leadership / presiding / ministerial / independent role is excluded.
+// Handbook model (YIP 2026, p.19): all students are grouped across parties into
+// mixed committees for bill drafting — EXCEPT the Speaker Panel (Speaker + Deputy
+// Speakers), who preside over the House and are therefore not in any committee.
+// PM, LoP, ministers, party leaders and independents all sit on a committee.
+const PRESIDING_ROLES = new Set(["speaker", "deputy_speaker"]);
 export function isCommitteeEligible(parliamentRole: string | null): boolean {
-  return parliamentRole === "mp";
+  return !PRESIDING_ROLES.has(parliamentRole ?? "");
 }
 
 export interface CommitteeParticipant {

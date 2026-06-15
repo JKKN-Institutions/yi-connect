@@ -58,6 +58,9 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
     useState<QuestionDisplayInfo | null>(null);
   const [voteCandidates, setVoteCandidates] = useState<VoteCandidateInfo[]>([]);
   const [voteBillTitle, setVoteBillTitle] = useState<string | null>(null);
+  // Subject of a motion floor vote (No-Confidence / Impeach) — carried in the
+  // session config so the projector needs no extra (RLS-gated) motions read.
+  const [motionVoteSubject, setMotionVoteSubject] = useState<string | null>(null);
   const [presentedBill, setPresentedBill] = useState<BillDisplayInfo | null>(null);
   const supabase = createClient();
 
@@ -104,6 +107,16 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
           .eq("id", voteSession.bill_id)
           .single();
         setVoteBillTitle(bill?.title ?? null);
+      }
+
+      if (
+        voteSession.vote_type === "no_confidence" ||
+        voteSession.vote_type === "impeach_speaker"
+      ) {
+        const cfg = (voteSession.config ?? {}) as { motionSubject?: unknown };
+        setMotionVoteSubject(
+          typeof cfg.motionSubject === "string" ? cfg.motionSubject : null
+        );
       }
     }
 
@@ -395,9 +408,17 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
                 <p className="text-lg text-gray-500">
                   {voteSession.vote_type === "speaker_election"
                     ? "Speaker Election"
-                    : voteBillTitle
-                      ? `Bill Vote: ${voteBillTitle}`
-                      : "Bill Vote"}
+                    : voteSession.vote_type === "impeach_speaker"
+                      ? `Impeach the Speaker${
+                          motionVoteSubject ? `: ${motionVoteSubject}` : ""
+                        }`
+                      : voteSession.vote_type === "no_confidence"
+                        ? `No-Confidence Motion${
+                            motionVoteSubject ? `: ${motionVoteSubject}` : ""
+                          }`
+                        : voteBillTitle
+                          ? `Bill Vote: ${voteBillTitle}`
+                          : "Bill Vote"}
                 </p>
               </div>
             )}

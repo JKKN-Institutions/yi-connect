@@ -2,7 +2,8 @@
 // organizer) so a junk or non-candidate value can never enter the tally.
 // Pure module (no "use server") so it can be imported by server actions.
 
-// aye / nay / abstain ballots: bill votes AND no-confidence motion votes.
+// aye / nay / abstain ballots: bill votes, no-confidence AND impeach-speaker
+// motion votes (all three are a whole-House Aye/Nay/Abstain decision).
 const AYE_NAY_ABSTAIN = new Set(["aye", "nay", "abstain"]);
 
 type VoteSessionLike = {
@@ -12,9 +13,9 @@ type VoteSessionLike = {
 
 /**
  * Validate a vote_value against the session.
- * - bill_vote / no_confidence       → must be aye | nay | abstain
- * - speaker_election / party_leader → must be one of config.candidateIds
- * - any other type                  → allowed (unknown poll types are not constrained here)
+ * - bill_vote / no_confidence / impeach_speaker → must be aye | nay | abstain
+ * - speaker_election / party_leader             → must be one of config.candidateIds
+ * - any other type                              → allowed (unknown poll types are not constrained here)
  */
 export function validateVoteValue(
   session: VoteSessionLike,
@@ -23,7 +24,11 @@ export function validateVoteValue(
   const value = (voteValue ?? "").trim();
   if (!value) return { ok: false, error: "No vote value provided" };
 
-  if (session.vote_type === "bill_vote" || session.vote_type === "no_confidence") {
+  if (
+    session.vote_type === "bill_vote" ||
+    session.vote_type === "no_confidence" ||
+    session.vote_type === "impeach_speaker"
+  ) {
     return AYE_NAY_ABSTAIN.has(value)
       ? { ok: true }
       : { ok: false, error: "Invalid vote — must be Aye, Nay, or Abstain" };

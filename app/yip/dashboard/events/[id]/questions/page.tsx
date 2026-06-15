@@ -33,6 +33,7 @@ export default async function QuestionsPage({
     <QuestionsClient
       eventId={id}
       initialQuestions={questions}
+      initialOpenAt={event.questions_open_at ?? null}
       initialCloseAt={event.questions_close_at ?? null}
     />
   );

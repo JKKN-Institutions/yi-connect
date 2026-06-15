@@ -51,12 +51,25 @@ export async function submitQuestion(
     return { success: false, error: "Question must be at least 20 characters" };
   }
 
-  // Handbook p. 22: enforce 4-day-prior cutoff using event.questions_close_at
+  // Enforce the submission window server-side: open_at <= now() <= close_at.
+  // questions_open_at = earliest accepted (event-days only); questions_close_at
+  // = handbook 4-day-prior cutoff. Either may be NULL (unbounded on that side).
   const { data: eventRow } = await supabase
     .from("events")
-    .select("questions_close_at")
+    .select("questions_open_at, questions_close_at")
     .eq("id", eventId)
     .single();
+
+  if (eventRow?.questions_open_at) {
+    const openAt = new Date(eventRow.questions_open_at);
+    if (Date.now() < openAt.getTime()) {
+      return {
+        success: false,
+        error:
+          "Question submissions are not open yet. They open at the start of the event window.",
+      };
+    }
+  }
 
   if (eventRow?.questions_close_at) {
     const closeAt = new Date(eventRow.questions_close_at);
@@ -137,6 +150,35 @@ export async function setQuestionsDeadline(
   const { error } = await supabase
     .from("events")
     .update({ questions_close_at: closeAtIso })
+    .eq("id", eventId);
+
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/yip/dashboard/events/${eventId}/questions`);
+  return { success: true, data: null };
+}
+
+// ─── Set / clear the question-submission OPEN time ─────────────────
+// Open bound for the submission window (typically the event's day-1). Mirrors
+// setQuestionsDeadline; submitQuestion enforces open_at <= now() <= close_at.
+// Pass null to remove the open bound (submissions open from the start).
+export async function setQuestionsOpen(
+  eventId: string,
+  openAtIso: string | null
+): Promise<ActionResult> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
+
+  if (openAtIso !== null && Number.isNaN(new Date(openAtIso).getTime())) {
+    return { success: false, error: "Invalid date/time" };
+  }
+
+  const supabase = await createServiceClient();
+  const { error } = await supabase
+    .from("events")
+    .update({ questions_open_at: openAtIso })
     .eq("id", eventId);
 
   if (error) return { success: false, error: error.message };

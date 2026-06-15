@@ -1705,6 +1705,7 @@ export type Database = {
           name: string
           oath_text: string | null
           questions_close_at: string | null
+          questions_open_at: string | null
           registrations_frozen: boolean | null
           results_published_at: string | null
           scores_locked: boolean | null
@@ -1746,6 +1747,7 @@ export type Database = {
           name: string
           oath_text?: string | null
           questions_close_at?: string | null
+          questions_open_at?: string | null
           registrations_frozen?: boolean | null
           results_published_at?: string | null
           scores_locked?: boolean | null
@@ -1787,6 +1789,7 @@ export type Database = {
           name?: string
           oath_text?: string | null
           questions_close_at?: string | null
+          questions_open_at?: string | null
           registrations_frozen?: boolean | null
           results_published_at?: string | null
           scores_locked?: boolean | null

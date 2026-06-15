@@ -7,6 +7,7 @@ import {
   getCurrentSpeaker,
   getRubricForRole,
   getScoreForParticipant,
+  getScoreOccurrences,
   getSessionScoringParams,
   getScoreableParticipants,
   submitScore,
@@ -143,6 +144,13 @@ function JuryScoringClientInner({
   const [rubric, setRubric] = useState<RubricData | null>(null);
   const [existingScore, setExistingScore] =
     useState<ExistingScoreData | null>(null);
+  // #4 within-session averaging: the turns this juror has recorded for the
+  // current (participant, session), and whether the form is currently capturing
+  // a NEW turn (blank form → submit creates the next occurrence).
+  const [occurrences, setOccurrences] = useState<
+    { id: string; occurrence: number; total_score: number; status: string | null }[]
+  >([]);
+  const [addingTurn, setAddingTurn] = useState(false);
   const [loading, setLoading] = useState(true);
   const [scoreKey, setScoreKey] = useState(0); // Force re-render on speaker change
   const [eventLocked, setEventLocked] = useState<boolean>(
@@ -236,6 +244,26 @@ function JuryScoringClientInner({
         } else {
           setExistingScore(null);
         }
+
+        // #4: load this juror's turns for the participant+session. A fresh load
+        // always lands on the existing turns view (never mid "add a turn").
+        setAddingTurn(false);
+        if (selectedSessionId) {
+          try {
+            setOccurrences(
+              await getScoreOccurrences(
+                juryAssignmentId,
+                participant.id,
+                eventId,
+                selectedSessionId
+              )
+            );
+          } catch {
+            setOccurrences([]);
+          }
+        } else {
+          setOccurrences([]);
+        }
       } catch {
         // OFFLINE FALLBACK (2026-06-04): the server is unreachable — resolve the
         // rubric + session params from the prefetched cache so the juror can
@@ -259,6 +287,9 @@ function JuryScoringClientInner({
           setRubric(null);
         }
         setExistingScore(null);
+        // Turns can't be read offline; keep the single-score flow (occurrence 1).
+        setOccurrences([]);
+        setAddingTurn(false);
       }
 
       setScoreKey((k) => k + 1);
@@ -628,6 +659,9 @@ function JuryScoringClientInner({
       comments: data.comments,
       status: data.status,
       flags,
+      // #4: when capturing an extra turn, the server assigns the next occurrence
+      // and inserts a fresh row instead of overwriting turn 1.
+      newTurn: addingTurn,
     });
 
     if (result.success) {
@@ -653,11 +687,42 @@ function JuryScoringClientInner({
       } catch {
         // ignore — display refresh only
       }
+
+      // #4: after saving (an edit or a new turn), refresh the turns strip and
+      // leave "add a turn" mode so the form shows the latest saved score.
+      setAddingTurn(false);
+      if (activeParticipant && selectedSessionId) {
+        try {
+          setOccurrences(
+            await getScoreOccurrences(
+              juryAssignmentId,
+              activeParticipant.id,
+              eventId,
+              selectedSessionId
+            )
+          );
+        } catch {
+          // ignore — strip refresh only
+        }
+      }
     }
 
     return result.success
       ? { success: true as const }
       : { success: false as const, error: result.error };
+  };
+
+  // #4: begin capturing a NEW turn for the current participant+session — blank
+  // the form (remount via scoreKey) and route the next submit through newTurn.
+  const startAnotherTurn = () => {
+    setExistingScore(null);
+    setAddingTurn(true);
+    setScoreKey((k) => k + 1);
+  };
+
+  const cancelAnotherTurn = () => {
+    setAddingTurn(false);
+    if (activeParticipant) void loadRubricAndScore(activeParticipant);
   };
 
   // ─── Render ─────────────────────────────────────────────────────
@@ -875,6 +940,59 @@ function JuryScoringClientInner({
           </div>
         </div>
       )}
+
+      {/* #4 turns strip — multiple scores for the same delegate in this session
+          (e.g. they spoke more than once). Each juror's turns are averaged into
+          their session mark. Hidden until a first score exists or the juror is
+          mid-adding a turn; offline (occurrences empty) keeps the single-score
+          flow. */}
+      {activeParticipant && rubric && !eventLocked &&
+        (occurrences.length > 0 || addingTurn) && (
+          <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-blue-900">
+                  {addingTurn
+                    ? "Scoring a new turn"
+                    : `Turns scored: ${occurrences.length}`}
+                </p>
+                {occurrences.length > 0 && (
+                  <p className="text-xs text-blue-700 truncate">
+                    {occurrences
+                      .map((o) => `T${o.occurrence}: ${o.total_score}`)
+                      .join(" · ")}
+                    {occurrences.length > 1 && (
+                      <>
+                        {" · avg "}
+                        {(
+                          occurrences.reduce((a, o) => a + o.total_score, 0) /
+                          occurrences.length
+                        ).toFixed(1)}
+                      </>
+                    )}
+                  </p>
+                )}
+              </div>
+              {addingTurn ? (
+                <button
+                  type="button"
+                  onClick={cancelAnotherTurn}
+                  className="shrink-0 rounded-md border border-blue-300 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100"
+                >
+                  Cancel
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={startAnotherTurn}
+                  className="shrink-0 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
+                >
+                  + Score another turn
+                </button>
+              )}
+            </div>
+          </div>
+        )}
 
       {/* Score form -- show when we have an active participant + rubric */}
       {activeParticipant && rubric ? (

@@ -363,7 +363,13 @@ export async function computeResults(
     const cl = participant.committee_name
       ? committeeLevelByName.get(participant.committee_name)
       : undefined;
-    const bySession = new Map<string, number[]>();
+    // #4 two-level averaging: group each session's scores BY JUROR. A juror's
+    // turns (occurrences) average into one per-juror mark, then the session mark
+    // is the mean of those per-juror marks — every juror counts equally no
+    // matter how many turns they scored. Backward-compatible: with one row per
+    // juror (the pre-#4 norm) each juror's mean is just that row, so the session
+    // mean is identical to the old "mean across jurors".
+    const bySessionJuror = new Map<string, Map<string, number[]>>();
     for (const s of pScores) {
       const key = s.agenda_item_id ?? "__none__";
       let value = s.total_score;
@@ -399,13 +405,23 @@ export async function computeResults(
           value = Math.max(0, Math.min(sessionMax, value));
         }
       }
-      const arr = bySession.get(key) ?? [];
+      let jurorMap = bySessionJuror.get(key);
+      if (!jurorMap) {
+        jurorMap = new Map();
+        bySessionJuror.set(key, jurorMap);
+      }
+      const arr = jurorMap.get(s.jury_assignment_id) ?? [];
       arr.push(value);
-      bySession.set(key, arr);
+      jurorMap.set(s.jury_assignment_id, arr);
     }
-    const sessionEntries = Array.from(bySession.entries()).map(
-      ([agendaItemId, vals]) => {
-        const raw = vals.reduce((a, b) => a + b, 0) / vals.length;
+    const sessionEntries = Array.from(bySessionJuror.entries()).map(
+      ([agendaItemId, jurorMap]) => {
+        // Average each juror's turns first, then average across jurors.
+        const perJurorMeans = Array.from(jurorMap.values()).map(
+          (vals) => vals.reduce((a, b) => a + b, 0) / vals.length
+        );
+        const raw =
+          perJurorMeans.reduce((a, b) => a + b, 0) / perJurorMeans.length;
         // Resolve this scored session's config 1:1: session_key FIRST (the
         // primary key — distinguishes the 3 repeated agenda_types), then fall
         // back to agenda_type for items not yet tagged with a session_key.

@@ -117,6 +117,19 @@ export function motionMeta(code: MotionType) {
   return MOTION_TYPES.find((m) => m.code === code)!;
 }
 
+// Motion types decided by a whole-House Aye/Nay/Abstain floor vote (vs a
+// Speaker-typed tally or a no-vote ruling). Single source of truth for the
+// admit→open-vote→reveal flow in both the Speaker and organiser paths.
+// impeach_speaker additionally triggers a Speaker re-election when it passes.
+export const HOUSE_VOTE_MOTION_TYPES = [
+  "no_confidence",
+  "impeach_speaker",
+] as const;
+
+export function isHouseVoteMotionType(code: string): boolean {
+  return (HOUSE_VOTE_MOTION_TYPES as readonly string[]).includes(code);
+}
+
 export const MOTION_STATUS_LABELS: Record<MotionStatus, string> = {
   submitted: "Awaiting Speaker",
   admitted: "Admitted",

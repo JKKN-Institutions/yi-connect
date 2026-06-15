@@ -141,13 +141,15 @@ export function MotionsClient({
         return;
       }
       const motion = motions.find((m) => m.id === rulingId);
-      const isNC = motion?.motion_type === "no_confidence";
+      const goesToVote =
+        motion?.motion_type === "no_confidence" ||
+        motion?.motion_type === "impeach_speaker";
       setMotions(
         motions.map((m) =>
           m.id === rulingId
             ? {
                 ...m,
-                status: isNC ? "voting" : "discussing",
+                status: goesToVote ? "voting" : "discussing",
                 speaker_ruling: "admitted",
                 speaker_note: speakerNote || null,
                 ruled_at: new Date().toISOString(),

@@ -6,6 +6,7 @@ import {
   PRESIDING_ROLES,
 } from "@/lib/yip/auth/leadership";
 import { revalidatePath } from "next/cache";
+import { isHouseVoteMotionType, HOUSE_VOTE_MOTION_TYPES } from "@/lib/yip/motions";
 import type { Motion } from "@/app/yip/actions/motions";
 
 /**
@@ -25,12 +26,10 @@ type ActionResult<T = null> =
 
 // Motion types decided by a whole-House Aye/Nay/Abstain floor vote (not a
 // Speaker-typed tally). Both reuse the exact same vote machinery; impeach adds
-// a post-pass role swap (see speakerRecordMotionVote). Keep this list as the
-// single source of truth for "this motion goes to a House vote".
-const HOUSE_VOTE_MOTIONS = ["no_confidence", "impeach_speaker"] as const;
-function isHouseVoteMotion(t: string): boolean {
-  return (HOUSE_VOTE_MOTIONS as readonly string[]).includes(t);
-}
+// a post-pass role swap (see speakerRecordMotionVote). Sourced from the shared
+// lib so the Speaker and organiser paths agree on what goes to a House vote.
+const HOUSE_VOTE_MOTIONS = HOUSE_VOTE_MOTION_TYPES;
+const isHouseVoteMotion = isHouseVoteMotionType;
 
 /** All motions for the event — the presiding officer's queue. Participant + role gated. */
 export async function getSpeakerMotions(

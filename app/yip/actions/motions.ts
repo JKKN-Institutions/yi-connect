@@ -5,6 +5,7 @@ import { logAuditAction } from "@/lib/yip/audit/log-action";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { requireParticipantSession } from "@/lib/yip/auth/yip-session";
 import { revalidatePath } from "next/cache";
+import { isHouseVoteMotionType } from "@/lib/yip/motions";
 import type { MotionType, MotionStatus } from "@/lib/yip/motions";
 
 type ActionResult<T = null> =
@@ -135,7 +136,8 @@ export async function admitMotion(
   const { error } = await supabase
     .from("motions")
     .update({
-      status: motion?.motion_type === "no_confidence" ? "voting" : "discussing",
+      status:
+        motion && isHouseVoteMotionType(motion.motion_type) ? "voting" : "discussing",
       speaker_ruling: "admitted",
       speaker_note: speakerNote ?? null,
       ruled_at: new Date().toISOString(),

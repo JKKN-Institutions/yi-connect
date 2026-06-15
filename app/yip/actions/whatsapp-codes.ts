@@ -347,8 +347,10 @@ ${eventName}
 Hi ${p.full_name}!
 Your YIP login code is: *${p.access_code}*
 
-Login: https://yi-connect-app.vercel.app/yip/join
-Keep this code private — it is your identity at the event.`;
+Login here: https://yi-connect-app.vercel.app/yip/join
+Open the link and enter your code to join.
+
+⚠️ *Do NOT share this code with anyone* — not classmates, friends or family. Anyone who has your code can sign in and act as you at the event.`;
 
     sendable.push({
       id: p.id,

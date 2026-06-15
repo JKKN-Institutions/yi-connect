@@ -85,7 +85,9 @@ Hi ${input.fullName},
 Your YIP login code is: ${input.accessCode}
 
 Sign in here: ${JOIN_URL}
-Enter your code to join. Keep this code private — it is your identity at the event.
+Open that link and enter your code to join.
+
+IMPORTANT: This code is yours alone. Do NOT share it with anyone — not classmates, friends or family. Anyone who has your code can sign in and act as you at the event.
 
 Young Indians · CII`;
   const html = `<!DOCTYPE html>
@@ -103,8 +105,12 @@ Young Indians · CII`;
       <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:18px 24px;margin:20px 0;text-align:center">
         <span style="font-family:'Courier New',Courier,monospace;font-size:30px;font-weight:bold;letter-spacing:8px;color:#c2410c">${code}</span>
       </div>
-      <p style="margin:28px 0"><a href="${JOIN_URL}" style="display:inline-block;background:#138808;color:#ffffff;padding:13px 28px;border-radius:6px;text-decoration:none;font-weight:600;font-size:15px">Sign in to YIP</a></p>
-      <p style="margin:0;color:#6b7280;font-size:13px">Keep this code private — it is your identity at the event. If you did not expect this email, you can ignore it.</p>
+      <p style="margin:28px 0 8px"><a href="${JOIN_URL}" style="display:inline-block;background:#138808;color:#ffffff;padding:13px 28px;border-radius:6px;text-decoration:none;font-weight:600;font-size:15px">Sign in to YIP</a></p>
+      <p style="margin:0 0 20px;color:#6b7280;font-size:13px">Or open <a href="${JOIN_URL}" style="color:#138808">${JOIN_URL}</a> and enter your code.</p>
+      <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:12px 16px;margin:0 0 4px">
+        <p style="margin:0;color:#b91c1c;font-size:13px;font-weight:600">Do NOT share this code with anyone — not classmates, friends or family. Anyone who has your code can sign in and act as you at the event.</p>
+      </div>
+      <p style="margin:12px 0 0;color:#9ca3af;font-size:12px">If you did not expect this email, you can ignore it.</p>
     </div>
     <p style="text-align:center;color:#8a93a3;font-size:12px;margin:18px 0 0">Young Indians &middot; CII</p>
   </div>

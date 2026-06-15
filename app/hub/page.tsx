@@ -10,6 +10,7 @@ import {
 import { getYipSession } from "@/lib/yip/auth/yip-session";
 import { signOut } from "@/app/actions/auth";
 import { OAuthButtons } from "@/components/auth/oauth-buttons";
+import Image from "next/image";
 import { Fraunces, Plus_Jakarta_Sans } from "next/font/google";
 
 // Distinctive pairing for the hub entry: a warm serif display + a clean,
@@ -164,6 +165,34 @@ function ModuleHub({
   );
 }
 
+/** Partner / federation logos — Yi · Bharat One · CII (CII right-most, per
+ *  national-team direction). White chips so they read on any background. */
+function PartnerLogos({ className = "" }: { className?: string }) {
+  const logos = [
+    { src: "/yip/logos/yi-logo.png", alt: "Young Indians", w: 5679, h: 4593, size: "h-6" },
+    { src: "/yip/logos/bharat-one-logo.png", alt: "One Bharat, One Spirit", w: 269, h: 187, size: "h-6" },
+    { src: "/yip/logos/cii-logo.png", alt: "Confederation of Indian Industry", w: 2329, h: 709, size: "h-5" },
+  ];
+  return (
+    <div className={`flex items-center gap-2.5 ${className}`}>
+      {logos.map((l) => (
+        <span
+          key={l.src}
+          className="flex items-center justify-center rounded-lg bg-white px-2.5 py-1.5 shadow-sm ring-1 ring-black/5"
+        >
+          <Image
+            src={l.src}
+            alt={l.alt}
+            width={l.w}
+            height={l.h}
+            className={`${l.size} w-auto object-contain`}
+          />
+        </span>
+      ))}
+    </div>
+  );
+}
+
 /** Unified signed-out login — email + password (form POST) AND Google. */
 function HubLogin({ error }: { error?: string }) {
   const message =
@@ -251,10 +280,8 @@ function HubLogin({ error }: { error?: string }) {
           </div>
         </div>
 
-        {/* org footer */}
-        <p className="relative text-[11px] font-medium uppercase tracking-[0.24em] text-white/40">
-          Young Indians · CII
-        </p>
+        {/* partner logos — Yi · Bharat One · CII (CII right-most) */}
+        <PartnerLogos className="relative" />
       </section>
 
       {/* ── Login panel ───────────────────────────────────────── */}
@@ -364,7 +391,10 @@ function HubLogin({ error }: { error?: string }) {
 
           <OAuthButtons />
 
-          <p className="mt-8 text-center text-[11px] text-slate-400">
+          {/* partner logos — shown here only when the brand panel is hidden */}
+          <PartnerLogos className="mt-8 justify-center lg:hidden" />
+
+          <p className="mt-6 text-center text-[11px] text-slate-400">
             Young Indians · Yi Connect
           </p>
         </div>

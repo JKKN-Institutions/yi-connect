@@ -114,12 +114,19 @@ export function VoteClient({
         }
       }
 
-      if (voteSession.vote_type === "no_confidence") {
-        // The motion subject travels in the session config (set when the Speaker
-        // opens the vote) so the browser client needs no motions read.
+      if (
+        voteSession.vote_type === "no_confidence" ||
+        voteSession.vote_type === "impeach_speaker"
+      ) {
+        // The motion subject travels in the session config (set when the vote is
+        // opened) so the browser client needs no motions read.
         const cfg = (voteSession.config ?? {}) as { motionSubject?: unknown };
+        const fallback =
+          voteSession.vote_type === "impeach_speaker"
+            ? "Impeach the Speaker"
+            : "No-Confidence Motion";
         setMotionSubject(
-          typeof cfg.motionSubject === "string" ? cfg.motionSubject : "No-Confidence Motion"
+          typeof cfg.motionSubject === "string" ? cfg.motionSubject : fallback
         );
       }
 
@@ -434,18 +441,24 @@ export function VoteClient({
     );
   }
 
-  // ─── No-Confidence Motion Vote ────────────────────────────────
+  // ─── Motion Floor Vote (No-Confidence OR Impeach the Speaker) ──────────
 
-  if (voteSession.vote_type === "no_confidence") {
+  if (
+    voteSession.vote_type === "no_confidence" ||
+    voteSession.vote_type === "impeach_speaker"
+  ) {
+    const isImpeach = voteSession.vote_type === "impeach_speaker";
     return (
       <div className="space-y-5">
         <div>
           <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
             <Landmark className="size-5 text-red-600" />
-            No-Confidence Motion
+            {isImpeach ? "Impeach the Speaker" : "No-Confidence Motion"}
           </h1>
           <p className="text-sm text-gray-500 mt-1">
-            A vote of the whole House on confidence in the Government
+            {isImpeach
+              ? "A vote of the whole House on the conduct of the Speaker"
+              : "A vote of the whole House on confidence in the Government"}
           </p>
         </div>
 
@@ -461,10 +474,21 @@ export function VoteClient({
         <Card className="border-[#FF9933]/20 bg-[#FF9933]/5">
           <CardContent className="pt-4 pb-4">
             <p className="text-sm text-gray-700">
-              Vote <strong>Aye</strong> to support the no-confidence motion
-              (against the Government), <strong>Nay</strong> if you have
-              confidence in the Government, or <strong>Abstain</strong>. Your
-              vote cannot be changed once cast.
+              {isImpeach ? (
+                <>
+                  Vote <strong>Aye</strong> to impeach (remove) the Speaker,{" "}
+                  <strong>Nay</strong> to keep the Speaker, or{" "}
+                  <strong>Abstain</strong>. If the motion passes, the House will
+                  elect a new Speaker. Your vote cannot be changed once cast.
+                </>
+              ) : (
+                <>
+                  Vote <strong>Aye</strong> to support the no-confidence motion
+                  (against the Government), <strong>Nay</strong> if you have
+                  confidence in the Government, or <strong>Abstain</strong>. Your
+                  vote cannot be changed once cast.
+                </>
+              )}
             </p>
           </CardContent>
         </Card>
@@ -480,7 +504,9 @@ export function VoteClient({
             )}
           >
             <p className="text-2xl font-black text-green-600">AYE</p>
-            <p className="text-sm text-green-600/70 mt-1">Support the motion</p>
+            <p className="text-sm text-green-600/70 mt-1">
+              {isImpeach ? "Remove the Speaker" : "Support the motion"}
+            </p>
           </button>
 
           <button
@@ -493,7 +519,9 @@ export function VoteClient({
             )}
           >
             <p className="text-2xl font-black text-red-600">NAY</p>
-            <p className="text-sm text-red-600/70 mt-1">Confidence in the Government</p>
+            <p className="text-sm text-red-600/70 mt-1">
+              {isImpeach ? "Keep the Speaker" : "Confidence in the Government"}
+            </p>
           </button>
 
           <button

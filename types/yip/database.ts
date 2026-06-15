@@ -199,6 +199,8 @@ export type Database = {
         | "short_duration"
         | "obituary"
         | "laying_of_papers"
+        | "point_of_order"
+        | "impeach_speaker"
       parliament_role:
         | "speaker"
         | "deputy_speaker"
@@ -3724,6 +3726,8 @@ export const Constants = {
         "short_duration",
         "obituary",
         "laying_of_papers",
+        "point_of_order",
+        "impeach_speaker",
       ],
       parliament_role: [
         "speaker",

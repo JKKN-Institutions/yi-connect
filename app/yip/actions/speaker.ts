@@ -23,6 +23,15 @@ type ActionResult<T = null> =
   | { success: true; data: T }
   | { success: false; error: string };
 
+// Motion types decided by a whole-House Aye/Nay/Abstain floor vote (not a
+// Speaker-typed tally). Both reuse the exact same vote machinery; impeach adds
+// a post-pass role swap (see speakerRecordMotionVote). Keep this list as the
+// single source of truth for "this motion goes to a House vote".
+const HOUSE_VOTE_MOTIONS = ["no_confidence", "impeach_speaker"] as const;
+function isHouseVoteMotion(t: string): boolean {
+  return (HOUSE_VOTE_MOTIONS as readonly string[]).includes(t);
+}
+
 /** All motions for the event — the presiding officer's queue. Participant + role gated. */
 export async function getSpeakerMotions(
   eventId: string,
@@ -92,7 +101,7 @@ export async function speakerAdmitMotion(
   const { error } = await r.supabase
     .from("motions")
     .update({
-      status: r.motion.motion_type === "no_confidence" ? "voting" : "discussing",
+      status: isHouseVoteMotion(r.motion.motion_type) ? "voting" : "discussing",
       speaker_ruling: "admitted",
       speaker_note: speakerNote ?? null,
       ruled_at: new Date().toISOString(),
@@ -196,7 +205,7 @@ async function countSessionTally(
   return { for: f, against: a, abstain: ab, total: (data ?? []).length };
 }
 
-/** Open the House floor vote for a No-Confidence motion. */
+/** Open the House floor vote for a No-Confidence OR Impeach-the-Speaker motion. */
 export async function speakerOpenMotionVote(
   eventId: string,
   participantId: string,
@@ -204,13 +213,16 @@ export async function speakerOpenMotionVote(
 ): Promise<ActionResult<{ sessionId: string }>> {
   const r = await loadMotionForSpeaker(eventId, participantId, motionId);
   if (!r.ok) return { success: false, error: r.error };
-  if (r.motion.motion_type !== "no_confidence") {
-    return { success: false, error: "Only a No-Confidence motion goes to a House vote." };
+  if (!isHouseVoteMotion(r.motion.motion_type)) {
+    return { success: false, error: "Only a No-Confidence or Impeach motion goes to a House vote." };
   }
   if (r.motion.status !== "voting") {
     return { success: false, error: "Admit the motion before opening the vote." };
   }
   const supabase = r.supabase;
+  const motionType = r.motion.motion_type;
+  const defaultSubject =
+    motionType === "impeach_speaker" ? "Impeach the Speaker" : "No-Confidence Motion";
 
   // One active vote session at a time (mirrors openVote) — don't let the motion
   // vote collide with a bill vote / election.
@@ -249,10 +261,13 @@ export async function speakerOpenMotionVote(
     .insert({
       event_id: eventId,
       agenda_item_id: event.current_agenda_item_id,
-      vote_type: "no_confidence",
+      // The session's vote_type mirrors the motion type so the House ballot,
+      // tally, and reveal all key off the same value (both validate as
+      // aye/nay/abstain). impeach_speaker triggers the role swap at reveal.
+      vote_type: motionType,
       status: "open",
       opened_at: new Date().toISOString(),
-      config: { motionId, motionSubject: motionRow?.subject ?? "No-Confidence Motion" },
+      config: { motionId, motionSubject: motionRow?.subject ?? defaultSubject },
     })
     .select("id")
     .single();
@@ -264,7 +279,7 @@ export async function speakerOpenMotionVote(
   return { success: true, data: { sessionId: data.id } };
 }
 
-/** Live floor-vote state for each No-Confidence motion that is open/closed. */
+/** Live floor-vote state for each House-voted motion (No-Confidence / Impeach) that is open/closed. */
 export async function getNoConfidenceVoteState(
   eventId: string,
   participantId: string
@@ -277,7 +292,7 @@ export async function getNoConfidenceVoteState(
     .from("vote_sessions")
     .select("id, status, config")
     .eq("event_id", eventId)
-    .eq("vote_type", "no_confidence")
+    .in("vote_type", [...HOUSE_VOTE_MOTIONS])
     .in("status", ["open", "closed"])
     .order("opened_at", { ascending: false });
 
@@ -297,14 +312,22 @@ export async function getNoConfidenceVoteState(
 }
 
 /**
- * Reveal a No-Confidence result: COUNT the House's real ballots, write the
- * motion tally + outcome, and close the floor vote. No hand-entered numbers.
+ * Reveal a No-Confidence OR Impeach result: COUNT the House's real ballots,
+ * write the motion tally + outcome, and close the floor vote. No hand-entered
+ * numbers. For a PASSED impeach_speaker, also vacate the Speaker/Deputy and open
+ * a Speaker re-election (see vacateAndReElectSpeaker).
  */
 export async function speakerRecordMotionVote(
   eventId: string,
   participantId: string,
   motionId: string
-): Promise<ActionResult<{ outcome: "passed" | "rejected"; tally: MotionVoteTally }>> {
+): Promise<
+  ActionResult<{
+    outcome: "passed" | "rejected";
+    tally: MotionVoteTally;
+    reElection?: ImpeachReElection | null;
+  }>
+> {
   const r = await loadMotionForSpeaker(eventId, participantId, motionId);
   if (!r.ok) return { success: false, error: r.error };
   if (r.motion.status !== "voting") {
@@ -316,7 +339,7 @@ export async function speakerRecordMotionVote(
     .from("vote_sessions")
     .select("id, status, config")
     .eq("event_id", eventId)
-    .eq("vote_type", "no_confidence")
+    .in("vote_type", [...HOUSE_VOTE_MOTIONS])
     .in("status", ["open", "closed"])
     .order("opened_at", { ascending: false });
   const session = (sessions ?? []).find((s) => {
@@ -353,7 +376,99 @@ export async function speakerRecordMotionVote(
     .update({ status: "revealed", revealed_at: nowIso, closed_at: nowIso })
     .eq("id", session.id);
 
+  // ── Impeach passed → vacate Speaker + Deputy and open a re-election ──────
+  // Reuses the PROVEN speaker_election path: revealResults(speaker_election)
+  // itself resets speaker/deputy → mp before installing the winners, so the
+  // election can never leave two Speakers even if this pre-vacate is partial.
+  // Best-effort: a failure here must not unwind the recorded impeach result.
+  let reElection: ImpeachReElection | null = null;
+  if (r.motion.motion_type === "impeach_speaker" && outcome === "passed") {
+    reElection = await vacateAndReElectSpeaker(supabase, eventId);
+  }
+
   revalidatePath(`/yip/dashboard/events/${eventId}/motions`);
   revalidatePath(`/yip/me/speaker`);
-  return { success: true, data: { outcome, tally } };
+  revalidatePath(`/yip/dashboard/events/${eventId}/control`);
+  return { success: true, data: { outcome, tally, reElection } };
+}
+
+// ─── Impeach pass → vacate sitting Speaker/Deputy + open a Speaker election ──
+//
+// The actual re-election is run by the organiser through the existing vote
+// manager and resolved by revealResults("speaker_election") in voting.ts — the
+// SAME reset-then-elect engine the original Speaker election uses. We only:
+//   (1) flip the sitting speaker + deputy_speaker rows to mp (the impeach result
+//       is final regardless of whether/when the election completes), and
+//   (2) open a fresh speaker_election session so the House elects a new Speaker.
+// Idempotent + guarded: if a vote session is already active we do NOT open a
+// second one (one-active-session invariant), and if no agenda item is live the
+// caller still gets the vacate — the organiser opens the election manually.
+export type ImpeachReElection = {
+  vacated: number;
+  electionOpened: boolean;
+  reason?: string;
+};
+
+async function vacateAndReElectSpeaker(
+  supabase: Awaited<ReturnType<typeof createServiceClient>>,
+  eventId: string
+): Promise<ImpeachReElection> {
+  // (1) The candidate field for the re-election = the just-removed Speaker +
+  //     Deputy Speaker(s). Capture them BEFORE the role reset so the ballot is
+  //     well-formed (getSpeakerCandidates() reads parliament_role='speaker',
+  //     which we are about to clear).
+  const { data: sitting } = await supabase
+    .from("participants")
+    .select("id")
+    .eq("event_id", eventId)
+    .in("parliament_role", ["speaker", "deputy_speaker"]);
+  const candidateIds = (sitting ?? []).map((p) => p.id);
+
+  // (1b) Vacate them → mp. Scoped to speaker/deputy_speaker so PM/LoP/ministers
+  //      are untouched (mirrors the reset in revealResults).
+  const { data: vacatedRows } = await supabase
+    .from("participants")
+    .update({ parliament_role: "mp" })
+    .eq("event_id", eventId)
+    .in("parliament_role", ["speaker", "deputy_speaker"])
+    .select("id");
+  const vacated = (vacatedRows ?? []).length;
+
+  // (2) Open a fresh Speaker election — but never collide with an active vote
+  //     session (mirrors openVote's one-active-session rule).
+  const { data: existing } = await supabase
+    .from("vote_sessions")
+    .select("id")
+    .eq("event_id", eventId)
+    .in("status", ["open", "closed"])
+    .maybeSingle();
+  if (existing) {
+    return { vacated, electionOpened: false, reason: "active_session" };
+  }
+
+  const { data: event } = await supabase
+    .from("events")
+    .select("current_agenda_item_id")
+    .eq("id", eventId)
+    .maybeSingle();
+  if (!event?.current_agenda_item_id) {
+    return { vacated, electionOpened: false, reason: "no_agenda_item" };
+  }
+
+  const { error: openErr } = await supabase.from("vote_sessions").insert({
+    event_id: eventId,
+    agenda_item_id: event.current_agenda_item_id,
+    vote_type: "speaker_election",
+    status: "open",
+    opened_at: new Date().toISOString(),
+    // candidateIds = the removed officers, the natural re-election field. The
+    // organiser can still run the floor election normally; revealResults then
+    // installs the winner via the proven reset-then-elect path.
+    config: { candidateIds },
+  });
+  if (openErr) {
+    return { vacated, electionOpened: false, reason: openErr.message };
+  }
+
+  return { vacated, electionOpened: true };
 }

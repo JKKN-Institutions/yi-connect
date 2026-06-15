@@ -8,6 +8,8 @@ import {
   type AllocationResult,
   type AllocationParticipant,
 } from "@/lib/yip/allocation-engine";
+import { planCommitteeAssignment } from "@/lib/yip/committee-assignment";
+import { COMMITTEES } from "@/lib/yip/constants";
 
 // Gated writes run on the service client AFTER getYipEventAccess() (yip.* tables
 // have RLS read-only for `authenticated`; the capability check is the gate).
@@ -151,6 +153,123 @@ export async function runAllocationAction(
   revalidatePath(`/yip/dashboard/events/${eventId}/allocation`);
   revalidatePath(`/yip/dashboard/events/${eventId}/participants`);
   return { success: true, data: result };
+}
+
+// ─── Assign Committees (party-balanced, MPs only) ──────────────────
+// Buckets ORDINARY MPs into the event's committees so each committee draws
+// evenly from every party; office-holders (Speaker/Deputy Speaker/PM/Deputy PM/
+// LoP/cabinet & shadow ministers/independents) get NO committee. Runs on the
+// CURRENT party membership and does NOT touch parties, so it is safe to re-run
+// to re-balance committees without reshuffling parties (interview 2026-06-15).
+export type CommitteeAssignmentSummary = {
+  committees: Array<{
+    name: string;
+    members: number;
+    partySpread: Record<string, number>;
+  }>;
+  excluded: number;
+};
+
+export async function assignCommittees(
+  eventId: string
+): Promise<ActionResult<CommitteeAssignmentSummary>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
+  const supabase = await createServiceClient();
+
+  const { data: event } = await supabase
+    .from("events")
+    .select("id, allocation_locked, committee_topics")
+    .eq("id", eventId)
+    .single();
+  if (!event) return { success: false, error: "Event not found" };
+  if (event.allocation_locked) {
+    return {
+      success: false,
+      error: "Allocation is locked. Unlock first to re-assign committees.",
+    };
+  }
+
+  const { data: participants, error: fetchError } = await supabase
+    .from("participants")
+    .select("id, party_id, parliament_role")
+    .eq("event_id", eventId);
+  if (fetchError) return { success: false, error: fetchError.message };
+  if (!participants || participants.length === 0) {
+    return { success: false, error: "No participants registered for this event" };
+  }
+
+  // Committee names: the event's custom topics, else the default 5.
+  let committeeNames: string[] = [...COMMITTEES];
+  if (Array.isArray(event.committee_topics) && event.committee_topics.length > 0) {
+    committeeNames = (event.committee_topics as unknown[]).map(String);
+  }
+
+  const plan = planCommitteeAssignment(
+    participants.map((p) => ({
+      id: p.id,
+      partyId: p.party_id,
+      parliamentRole: p.parliament_role,
+    })),
+    committeeNames
+  );
+
+  // Batch: one UPDATE per committee, plus one UPDATE clearing every office-holder.
+  const byCommittee = new Map<string, { name: string; number: number; ids: string[] }>();
+  const cleared: string[] = [];
+  for (const a of plan) {
+    if (!a.committeeName || a.committeeNumber == null) {
+      cleared.push(a.participantId);
+      continue;
+    }
+    const key = `${a.committeeNumber}::${a.committeeName}`;
+    if (!byCommittee.has(key)) {
+      byCommittee.set(key, { name: a.committeeName, number: a.committeeNumber, ids: [] });
+    }
+    byCommittee.get(key)!.ids.push(a.participantId);
+  }
+
+  const errors: string[] = [];
+  for (const { name, number, ids } of byCommittee.values()) {
+    if (ids.length === 0) continue;
+    const { error } = await supabase
+      .from("participants")
+      .update({ committee_name: name, committee_number: number })
+      .in("id", ids)
+      .eq("event_id", eventId);
+    if (error) errors.push(error.message);
+  }
+  if (cleared.length > 0) {
+    const { error } = await supabase
+      .from("participants")
+      .update({ committee_name: null, committee_number: null })
+      .in("id", cleared)
+      .eq("event_id", eventId);
+    if (error) errors.push(error.message);
+  }
+  if (errors.length > 0) {
+    return { success: false, error: `Committee assignment partly failed: ${errors[0]}` };
+  }
+
+  // Summary: party spread per committee so the organiser can eyeball balance.
+  const partyById = new Map(participants.map((p) => [p.id, p.party_id ?? "—"]));
+  const summary = [...byCommittee.values()]
+    .sort((a, b) => a.number - b.number)
+    .map(({ name, ids }) => {
+      const spread: Record<string, number> = {};
+      for (const id of ids) {
+        const pk = partyById.get(id) ?? "—";
+        spread[pk] = (spread[pk] ?? 0) + 1;
+      }
+      return { name, members: ids.length, partySpread: spread };
+    });
+
+  revalidatePath(`/yip/dashboard/events/${eventId}/allocation`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/participants`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/parties`);
+  return { success: true, data: { committees: summary, excluded: cleared.length } };
 }
 
 // ─── Lock Allocation ───────────────────────────────────────────────

@@ -5,6 +5,7 @@ import { logAuditAction } from "@/lib/yip/audit/log-action";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { revalidatePath } from "next/cache";
 import { planPartyFormation } from "@/lib/yip/party-formation";
+import { assignCommittees } from "@/app/yip/actions/allocation";
 import type { PartySide } from "@/lib/yip/constants";
 
 type ActionResult<T = null> =
@@ -390,6 +391,10 @@ export async function formParties(
       )}). Delete the parties and run Form Parties again.`,
     };
   }
+
+  // Parties now exist → assign party-balanced committees (MPs only). Best-effort:
+  // a committee-assignment hiccup must not undo a successful party formation.
+  await assignCommittees(eventId);
 
   revalidatePath(`/yip/dashboard/events/${eventId}/parties`);
   revalidatePath(`/yip/dashboard/events/${eventId}/participants`);

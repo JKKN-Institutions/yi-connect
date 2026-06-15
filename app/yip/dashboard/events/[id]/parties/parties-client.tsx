@@ -33,6 +33,7 @@ import {
   type FormPartiesSummary,
 } from "@/app/yip/actions/parties";
 import { splitBenchParties } from "@/lib/yip/party-formation";
+import { assignCommittees } from "@/app/yip/actions/allocation";
 
 type Participant = {
   id: string;
@@ -114,6 +115,26 @@ export function PartiesClient({
       setFlash(`Formed ${res.data.parties.length} parties`);
       setTimeout(() => setFlash(null), 2500);
       // Refresh server props so member counts on the party cards are live.
+      router.refresh();
+    });
+  }
+
+  function handleAssignCommittees() {
+    const ok = confirm(
+      "Re-assign committees: ordinary MPs are spread evenly across committees by party. Speaker, Deputy Speaker, PM, LoP, ministers and independents get NO committee. Parties are NOT changed. Continue?"
+    );
+    if (!ok) return;
+    startTransition(async () => {
+      const res = await assignCommittees(eventId);
+      if (!res.success) {
+        setError(res.error);
+        return;
+      }
+      setError(null);
+      setFlash(
+        `Committees re-balanced — ${res.data.committees.length} committees, ${res.data.excluded} office-holders excluded`
+      );
+      setTimeout(() => setFlash(null), 3000);
       router.refresh();
     });
   }
@@ -353,6 +374,29 @@ export function PartiesClient({
           pending={pending}
           result={formResult}
         />
+      )}
+
+      {/* Assign / Re-balance Committees (MPs only, party-balanced) */}
+      {canManage && (
+        <Card>
+          <CardContent className="pt-5 flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="text-sm font-bold text-[#1a1a3e]">Committees (MPs only)</h3>
+              <p className="text-xs text-[#1a1a3e]/60 mt-0.5 max-w-md">
+                Spread ordinary MPs evenly across committees by party. Speaker,
+                Deputy Speaker, PM, LoP, ministers and independents are excluded.
+                Run this after forming parties; re-running won&apos;t change parties.
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              onClick={handleAssignCommittees}
+              disabled={pending || allocationLocked}
+            >
+              Assign / Re-balance Committees
+            </Button>
+          </CardContent>
+        </Card>
       )}
 
       {/* Form */}

@@ -15,7 +15,7 @@ type ActionResult<T = null> =
 // ─── Directory of test accounts derived from mock data ───────────
 
 export type TestAccount = {
-  kind: "student" | "jury" | "organizer";
+  kind: "student" | "jury" | "organizer" | "volunteer";
   id: string; // participant_id / jury_assignment_id / 'organizer'
   label: string;
   sublabel: string;
@@ -29,6 +29,7 @@ export type TestAccount = {
 export async function listTestAccounts(): Promise<{
   students: TestAccount[];
   jury: TestAccount[];
+  volunteers: TestAccount[];
   organizer: TestAccount;
   hasMockData: boolean;
 }> {
@@ -80,30 +81,49 @@ export async function listTestAccounts(): Promise<{
     }
   }
 
-  // Pick leader participants — speaker, pm, leader_of_opposition
   const leaderRoles = new Set([
     "speaker",
+    "deputy_speaker",
     "prime_minister",
+    "deputy_prime_minister",
     "leader_of_opposition",
+    "cabinet_minister",
+    "shadow_minister",
+    "party_leader",
   ]);
-  const leaderPicks = pList
-    .filter(
-      (p) => p.parliament_role && leaderRoles.has(p.parliament_role)
-    )
-    .slice(0, 3);
 
-  // A default MP
-  const mpPick = pList.find(
-    (p) =>
-      p.parliament_role === "mp" &&
-      p.id !== journeyPick?.id &&
-      !leaderPicks.some((l) => l.id === p.id)
-  );
+  // One login per parliamentary role so every persona is testable live
+  // (Speaker, Deputy Speaker, PM, Deputy PM, LoP, a Cabinet Minister, a Shadow
+  // Minister, a Party Leader, an Independent, a Bill Committee member, an MP).
+  const ROLE_ORDER = [
+    "speaker",
+    "deputy_speaker",
+    "prime_minister",
+    "deputy_prime_minister",
+    "leader_of_opposition",
+    "cabinet_minister",
+    "shadow_minister",
+    "party_leader",
+    "independent_mp",
+    "bill_committee",
+    "mp",
+  ];
+  const pickedIds = new Set<string>();
+  if (journeyPick) pickedIds.add(journeyPick.id);
+  const rolePicks: typeof pList = [];
+  for (const role of ROLE_ORDER) {
+    const p = pList.find(
+      (x) => x.parliament_role === role && !pickedIds.has(x.id)
+    );
+    if (p) {
+      rolePicks.push(p);
+      pickedIds.add(p.id);
+    }
+  }
 
   const studentPicks: typeof pList = [];
   if (journeyPick) studentPicks.push(journeyPick);
-  for (const l of leaderPicks) studentPicks.push(l);
-  if (mpPick) studentPicks.push(mpPick);
+  studentPicks.push(...rolePicks);
 
   const students: TestAccount[] = studentPicks.map((p) => {
     const ev = eventMap.get(p.event_id);
@@ -150,6 +170,34 @@ export async function listTestAccounts(): Promise<{
     };
   });
 
+  // Mock volunteers (YUVA kiosks) — for testing the kiosk vote-capture path.
+  // Scoped to MOCK EVENTS only (eventMap) so we never surface a [MOCK]
+  // volunteer that sits on a real event (logging in there could pollute it).
+  const mockEventIds = [...eventMap.keys()];
+  const { data: vols } = mockEventIds.length
+    ? await supabase
+        .from("volunteers")
+        .select("id, full_name, access_code, event_id, is_mock")
+        .eq("is_mock", true)
+        .in("event_id", mockEventIds)
+        .not("access_code", "is", null)
+        .limit(6)
+    : { data: [] as { id: string; full_name: string; access_code: string | null; event_id: string; is_mock: boolean }[] };
+
+  const volunteers: TestAccount[] = (vols ?? []).map((v) => {
+    const ev = eventMap.get(v.event_id);
+    return {
+      kind: "volunteer",
+      id: v.id,
+      label: v.full_name.replace(/^\[MOCK\]\s*/i, ""),
+      sublabel: "YUVA volunteer (kiosk)",
+      event_name: ev?.name ?? null,
+      event_level: ev?.level ?? null,
+      access_code: v.access_code,
+      badges: ["Kiosk voting"],
+    };
+  });
+
   const organizer: TestAccount = {
     kind: "organizer",
     id: "organizer",
@@ -164,6 +212,7 @@ export async function listTestAccounts(): Promise<{
   return {
     students,
     jury,
+    volunteers,
     organizer,
     hasMockData: (events?.length ?? 0) > 0,
   };
@@ -198,6 +247,32 @@ export async function loginAsStudent(
   });
 
   return { success: true, data: { redirect: "/me" } };
+}
+
+export async function loginAsVolunteer(
+  volunteerId: string
+): Promise<ActionResult<{ redirect: string }>> {
+  const supabase = await createServiceClient();
+  const { data: v } = await supabase
+    .from("volunteers")
+    .select("id, full_name, event_id, is_mock")
+    .eq("id", volunteerId)
+    .single();
+
+  if (!v) return { success: false, error: "Volunteer not found" };
+  // SECURITY: demo login is for mock volunteers only (see loginAsStudent).
+  if (!v.is_mock) {
+    return { success: false, error: "One-click login is only available for demo (mock) accounts." };
+  }
+
+  await mintYipSession({
+    type: "volunteer",
+    id: v.id,
+    name: v.full_name,
+    eventId: v.event_id,
+  });
+
+  return { success: true, data: { redirect: "/volunteer" } };
 }
 
 export async function loginAsJury(

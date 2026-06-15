@@ -21,6 +21,7 @@ import {
 import {
   loginAsStudent,
   loginAsJury,
+  loginAsVolunteer,
   loginAsOrganizer,
   type TestAccount,
 } from "@/app/yip/actions/test-login";
@@ -28,11 +29,13 @@ import {
 export function TestLoginClient({
   students,
   jury,
+  volunteers,
   organizer,
   hasMockData,
 }: {
   students: TestAccount[];
   jury: TestAccount[];
+  volunteers: TestAccount[];
   organizer: TestAccount;
   hasMockData: boolean;
 }) {
@@ -50,6 +53,8 @@ export function TestLoginClient({
         res = await loginAsStudent(account.id);
       } else if (account.kind === "jury") {
         res = await loginAsJury(account.id);
+      } else if (account.kind === "volunteer") {
+        res = await loginAsVolunteer(account.id);
       } else {
         res = await loginAsOrganizer();
       }
@@ -214,6 +219,32 @@ export function TestLoginClient({
             ))}
           </div>
         </section>
+
+        {/* Volunteers (YUVA kiosks) */}
+        {volunteers.length > 0 && (
+          <section>
+            <div className="flex items-center gap-2 mb-3">
+              <Shield className="size-5 text-teal-600" />
+              <h2 className="text-lg font-semibold text-[#1a1a3e]">
+                YUVA Volunteer (kiosk)
+              </h2>
+              <Badge variant="secondary" className="text-[10px]">
+                {volunteers.length}
+              </Badge>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {volunteers.map((v) => (
+                <AccountCard
+                  key={v.id}
+                  account={v}
+                  onClick={() => go(v)}
+                  disabled={pending}
+                  loading={pending && loadingId === v.id}
+                />
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* Projector */}
         <section>

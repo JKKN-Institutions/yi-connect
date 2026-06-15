@@ -113,6 +113,11 @@ export function VoteManager({
     description: string;
     action: () => void;
   }>({ open: false, title: "", description: "", action: () => {} });
+  // When a prior ballot for the current item is already revealed, the organiser
+  // can choose to start a fresh one. This flag swaps the revealed result card
+  // for the "open voting" controls so a new session can be opened. It is reset
+  // once a genuinely new session surfaces (see effect below).
+  const [startingNew, setStartingNew] = useState(false);
 
   // Get realtime vote session state with live counts
   const {
@@ -123,6 +128,16 @@ export function VoteManager({
     tallies,
     totalVotes,
   } = useVoteSession(eventId, { trackVotes: true });
+
+  // Clear the "start new vote" override as soon as a non-revealed session is
+  // surfaced — i.e. the new ballot was actually opened (or the old one reverted
+  // to open/closed). The hook orders by opened_at DESC, so a freshly opened
+  // session naturally replaces the old revealed one here.
+  useEffect(() => {
+    if (voteSession && voteSession.status !== "revealed") {
+      setStartingNew(false);
+    }
+  }, [voteSession?.id, voteSession?.status]);
 
   const agendaType = currentAgendaItem?.agenda_type;
   // Party-leader elections are not tied to one agenda_type — the organiser can
@@ -339,6 +354,25 @@ export function VoteManager({
     });
   }
 
+  // Start a fresh ballot for the current agenda item even though a prior
+  // session for it was already revealed. We don't touch the old session — the
+  // open-voting controls reappear, and opening a new vote creates a newer
+  // session that supersedes it (openVote only blocks while an open/closed
+  // session exists, never a revealed one).
+  function handleStartNewVote() {
+    if (!currentAgendaItem) return;
+    setConfirmDialog({
+      open: true,
+      title: "Start a new vote",
+      description:
+        "Open a fresh ballot for the current item? The previous result stays on record but will be superseded by the new vote.",
+      action: () => {
+        setStartingNew(true);
+        setConfirmDialog((prev) => ({ ...prev, open: false }));
+      },
+    });
+  }
+
   function handleRunoff() {
     if (!voteSession) return;
     setConfirmDialog({
@@ -533,8 +567,12 @@ export function VoteManager({
   if (!showVoteControls && !voteSession) return null;
 
   // ─── Active vote session ──────────────────────────────────────
+  // While `startingNew` is set (organiser chose to re-vote a revealed item),
+  // fall through to the open-voting controls instead of the result card. The
+  // flag is only ever true for a revealed session and clears the moment a new
+  // session is opened (effect above), so open/closed sessions are unaffected.
 
-  if (voteSession && (isOpen || isClosed || isRevealed)) {
+  if (voteSession && (isOpen || isClosed || (isRevealed && !startingNew))) {
     const maxVotes = Math.max(...tallies.map((t) => t.count), 1);
 
     return (
@@ -845,6 +883,24 @@ export function VoteManager({
                   Reveal Results
                 </Button>
               )}
+              {/* Once results are revealed, let the organiser open a fresh
+                  ballot for the same item without deleting the old session in
+                  the DB. Party-leader elections use their own per-party flow
+                  below, so this is only for speaker/bill votes. */}
+              {isRevealed &&
+                voteSession.vote_type !== "party_leader" &&
+                currentAgendaItem && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={isPending}
+                    onClick={handleStartNewVote}
+                    className="flex-1"
+                  >
+                    <Vote className="size-3.5 mr-1" />
+                    Start new vote
+                  </Button>
+                )}
             </div>
 
             {/* Floor capture — manual roll-call entry, only while open */}

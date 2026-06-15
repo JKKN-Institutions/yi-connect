@@ -155,12 +155,12 @@ export async function runAllocationAction(
   return { success: true, data: result };
 }
 
-// ─── Assign Committees (party-balanced, MPs only) ──────────────────
-// Buckets ORDINARY MPs into the event's committees so each committee draws
-// evenly from every party; office-holders (Speaker/Deputy Speaker/PM/Deputy PM/
-// LoP/cabinet & shadow ministers/independents) get NO committee. Runs on the
-// CURRENT party membership and does NOT touch parties, so it is safe to re-run
-// to re-balance committees without reshuffling parties (interview 2026-06-15).
+// ─── Assign Committees (mixed cross-party, party-balanced) ─────────
+// Handbook model (p.19): all students are grouped across parties into mixed
+// committees for bill drafting, EXCEPT the Speaker Panel (Speaker + Deputy
+// Speakers) who preside. Buckets the eligible students so each committee draws
+// evenly from every party. Runs on the CURRENT party membership and does NOT
+// touch parties, so it is safe to re-run without reshuffling (2026-06-15).
 export type CommitteeAssignmentSummary = {
   committees: Array<{
     name: string;

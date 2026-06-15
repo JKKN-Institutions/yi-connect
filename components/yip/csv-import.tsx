@@ -23,6 +23,7 @@ import {
   TableRow,
 } from "@/components/yip/ui/table";
 import { Upload, FileText, Loader2, AlertCircle, Check, Download } from "lucide-react";
+import { Switch } from "@/components/yip/ui/switch";
 
 interface CsvRow {
   name: string;
@@ -226,6 +227,22 @@ function normalizeXlsxRow(
   };
 }
 
+/** Distinct, valid party letters in a parsed batch. */
+function distinctPartyCount(rows: ParsedRow[]): number {
+  return new Set(
+    rows.filter((r) => r.errors.length === 0 && r.party_letter).map((r) => r.party_letter)
+  ).size;
+}
+
+/** Default for the government/opposition bench toggle when a file is parsed:
+ * ON for a classic 2-party (or single-party) roster, OFF for multi-party (>2)
+ * rosters like Nashik (5 lettered parties) where there is no bench split.
+ * No party columns at all → irrelevant, leave ON. */
+function defaultAssignBenches(rows: ParsedRow[]): boolean {
+  const n = distinctPartyCount(rows);
+  return n === 0 ? true : n <= 2;
+}
+
 /** Download a one-row .xlsx template */
 function downloadXlsxTemplate() {
   const headers = ["name", "school", "class", "phone", "email", "city", "state"];
@@ -259,6 +276,9 @@ export function CsvImport({
     errors: string[];
   } | null>(null);
   const [parseError, setParseError] = useState("");
+  // Government/opposition benches for lettered-party rosters. Reset to the
+  // count-based default each time a new file is parsed; operator can override.
+  const [assignBenches, setAssignBenches] = useState(true);
   const fileRef = useRef<HTMLInputElement>(null);
 
   function resetState() {
@@ -332,6 +352,7 @@ export function CsvImport({
           }
 
           setParsedRows(rows);
+          setAssignBenches(defaultAssignBenches(rows));
         } catch {
           setParseError("Failed to parse Excel file. Please check the format.");
         }
@@ -475,6 +496,7 @@ export function CsvImport({
           }
 
           setParsedRows(rows);
+          setAssignBenches(defaultAssignBenches(rows));
         } catch {
           setParseError("Failed to parse CSV file. Please check the format.");
         }
@@ -530,7 +552,7 @@ export function CsvImport({
       committee_name: r.committee_name,
     }));
 
-    const res = await importParticipants(eventId, importData);
+    const res = await importParticipants(eventId, importData, { assignBenches });
 
     if (res.success) {
       setResult(res.data);
@@ -734,6 +756,27 @@ export function CsvImport({
                     </div>
                   );
                 })()}
+
+                {/* Bench toggle — only when the roster carries lettered parties */}
+                {distinctPartyCount(parsedRows) > 0 && (
+                  <div className="mt-3 flex items-start justify-between gap-3 rounded-lg border border-gray-200 bg-gray-50 p-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-800">
+                        Assign Government / Opposition benches
+                      </p>
+                      <p className="mt-0.5 text-xs text-gray-500">
+                        {assignBenches
+                          ? "First party becomes Government, the rest Opposition."
+                          : `Flat house — all ${distinctPartyCount(parsedRows)} parties stay neutral (no bench). Assign benches later if needed.`}
+                      </p>
+                    </div>
+                    <Switch
+                      checked={assignBenches}
+                      onCheckedChange={(v: boolean) => setAssignBenches(v)}
+                      className="mt-0.5 shrink-0"
+                    />
+                  </div>
+                )}
 
                 <DialogFooter className="mt-4">
                   <DialogClose render={<Button variant="outline" />}>

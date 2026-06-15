@@ -406,13 +406,22 @@ export async function quickAddWalkIn(
 
 export async function importParticipants(
   eventId: string,
-  rows: ImportRow[]
+  rows: ImportRow[],
+  opts?: { assignBenches?: boolean }
 ): Promise<ActionResult<{ imported: number; errors: string[] }>> {
   const access = await getYipEventAccess(eventId);
   if (!access.canManage) {
     return { success: false, error: "Not authorized to manage this event" };
   }
   const supabase = await createServiceClient();
+
+  // Benches (government/opposition): when false, lettered parties import as a
+  // FLAT house — the parties are still created (so party names show on the
+  // dashboard) but each participant's party_side is left null. The organiser
+  // can assign benches later if they ever want them. Default true preserves
+  // the original 2-bench behavior for chapters that do split. (Nashik 2026:
+  // 5 lettered parties, no ruling/opposition split — director decision.)
+  const assignBenches = opts?.assignBenches !== false;
 
   const existingCodes = new Set<string>();
   const errors: string[] = [];
@@ -562,7 +571,7 @@ export async function importParticipants(
         access_code: code,
         party_id,
         party_number,
-        party_side,
+        party_side: assignBenches ? party_side : null,
         constituency_name: row.constituency_name?.trim() || null,
         constituency_state: row.constituency_state?.trim() || null,
         committee_number,
@@ -597,6 +606,7 @@ export async function importParticipants(
       imported: inserts.length,
       attempted: rows.length,
       errors_count: errors.length,
+      assign_benches: assignBenches,
     },
   });
   revalidatePath(`/yip/dashboard/events/${eventId}/participants`);

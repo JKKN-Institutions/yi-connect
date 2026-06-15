@@ -142,6 +142,9 @@ export async function clearAwardOverride(
 ): Promise<ActionResult> {
   const access = await getYipEventAccess(eventId);
   if (!access.canDelete) return { success: false, error: CHAIR_ONLY };
+  if (!isAwardLabel(awardLabel)) {
+    return { success: false, error: "Unknown award." };
+  }
 
   const supabase = await createServiceClient();
   const { error } = await supabase

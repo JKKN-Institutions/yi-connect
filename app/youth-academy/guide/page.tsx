@@ -132,6 +132,9 @@ export default async function YouthAcademyGuidePage({
         </div>
 
         <GuideView
+          // Remount per lane so the progress useState re-seeds and the
+          // guide_open/lane_complete event refs reset (invariant: key={activeLane}).
+          key={lane}
           content={content}
           trackProgress={trackProgress}
           initialCompleted={initialCompleted}

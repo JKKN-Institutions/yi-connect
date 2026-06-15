@@ -10,6 +10,7 @@
 
 import { redirect } from "next/navigation";
 import { GraduationCap } from "lucide-react";
+import { ModuleWelcome } from "@/app/youth-academy/_components/ModuleWelcome";
 import {
   getMyPrograms,
   getMyProgress,
@@ -87,6 +88,13 @@ export default async function StudentDashboardPage() {
 
   return (
     <main className="space-y-6">
+      <ModuleWelcome
+        moduleKey="student-home"
+        lane="student"
+        title="Welcome to Yi Youth Academy"
+        body="This is your home base — your enrolled programs, sessions, and progress all live here. Here's a quick tour of how it works."
+        cta={{ label: "Show me how", href: "/youth-academy/guide?lane=student" }}
+      />
       <div>
         <h1 className="text-2xl font-bold text-slate-900">My programs</h1>
         <p className="mt-1 text-sm text-slate-500">

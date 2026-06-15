@@ -35,6 +35,7 @@ import {
   bulkApprove,
   bulkReject,
   setQuestionsDeadline,
+  setQuestionsOpen,
 } from "@/app/yip/actions/questions";
 import type { QuestionWithSubmitter } from "@/app/yip/actions/questions";
 import { toast } from "sonner";
@@ -84,6 +85,8 @@ const BENCH_BADGES: Record<Bench, { label: string; className: string }> = {
 interface QuestionsClientProps {
   eventId: string;
   initialQuestions: QuestionWithSubmitter[];
+  /** events.questions_open_at — student submissions open at this time. */
+  initialOpenAt: string | null;
   /** events.questions_close_at — student submissions close at this time. */
   initialCloseAt: string | null;
 }
@@ -100,15 +103,38 @@ function toLocalInputValue(iso: string | null): string {
 export function QuestionsClient({
   eventId,
   initialQuestions,
+  initialOpenAt,
   initialCloseAt,
 }: QuestionsClientProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [openAt, setOpenAt] = useState<string | null>(initialOpenAt);
+  const [openAtDraft, setOpenAtDraft] = useState<string>(
+    toLocalInputValue(initialOpenAt)
+  );
+  const [savingOpen, setSavingOpen] = useState(false);
   const [closeAt, setCloseAt] = useState<string | null>(initialCloseAt);
   const [closeAtDraft, setCloseAtDraft] = useState<string>(
     toLocalInputValue(initialCloseAt)
   );
   const [savingDeadline, setSavingDeadline] = useState(false);
+
+  async function saveOpen(nextIso: string | null) {
+    setSavingOpen(true);
+    const result = await setQuestionsOpen(eventId, nextIso);
+    setSavingOpen(false);
+    if (result.success) {
+      setOpenAt(nextIso);
+      setOpenAtDraft(toLocalInputValue(nextIso));
+      toast.success(
+        nextIso
+          ? "Submission open time saved"
+          : "Open time removed — submissions open from the start"
+      );
+    } else {
+      toast.error(result.error);
+    }
+  }
 
   async function saveDeadline(nextIso: string | null) {
     setSavingDeadline(true);
@@ -319,6 +345,59 @@ export function QuestionsClient({
 
   return (
     <div className="space-y-4">
+      {/* Question-submission OPEN time (event-days only). Pairs with the
+          deadline below; submitQuestion enforces open_at <= now() <= close_at. */}
+      <Card>
+        <CardContent className="flex flex-col gap-2 pt-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2">
+            <CalendarClock className="size-4 text-green-600" />
+            <div>
+              <p className="text-sm font-medium text-gray-800">
+                Question submissions open
+              </p>
+              <p className="text-xs text-gray-500">
+                {openAt
+                  ? `Students can submit from ${new Date(openAt).toLocaleString()}`
+                  : "No open time set — submissions open from the start"}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Input
+              type="datetime-local"
+              value={openAtDraft}
+              onChange={(e) => setOpenAtDraft(e.target.value)}
+              className="h-8 w-52 text-xs"
+              aria-label="Question submission open time"
+            />
+            <Button
+              size="sm"
+              disabled={savingOpen || !openAtDraft}
+              onClick={() => {
+                const d = new Date(openAtDraft);
+                if (Number.isNaN(d.getTime())) {
+                  toast.error("Pick a valid date and time");
+                  return;
+                }
+                saveOpen(d.toISOString());
+              }}
+            >
+              Save
+            </Button>
+            {openAt && (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={savingOpen}
+                onClick={() => saveOpen(null)}
+              >
+                Clear
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Question-submission deadline (handbook: collect questions ≥4 days
           before the session). submitQuestion enforces this cutoff. */}
       <Card>

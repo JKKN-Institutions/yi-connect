@@ -200,16 +200,17 @@ export default async function ParticipantPage() {
   const myQuestions = questionData ?? [];
   const questionCount = myQuestions.length;
 
-  // Fetch bill data for bill committee members
-  const isBillCommittee = participant.parliament_role === "bill_committee";
+  // Fetch bill data for committee members (ordinary MPs on a committee)
+  const isCommitteeMember =
+    participant.parliament_role === "mp" && !!participant.committee_name;
   let myBill: { id: string; title: string; status: string | null } | null = null;
 
-  if (participant.party_side) {
+  if (participant.committee_name) {
     const { data: billData } = await supabase
       .from("bills")
       .select("id, title, status")
       .eq("event_id", event.id)
-      .eq("party_side", participant.party_side)
+      .eq("committee_name" as never, participant.committee_name as never)
       .maybeSingle();
 
     myBill = billData;
@@ -225,7 +226,7 @@ export default async function ParticipantPage() {
     status: string | null;
   }> = [];
 
-  if (!isBillCommittee) {
+  if (!isCommitteeMember) {
     const { data: billsData } = await supabase
       .from("bills")
       .select("id, title, party_side, objective, provisions, status")
@@ -635,8 +636,8 @@ export default async function ParticipantPage() {
         </CardContent>
       </Card>
 
-      {/* ─── BILL DRAFTING (bill committee members) ────────────── */}
-      {isBillCommittee && (
+      {/* ─── BILL DRAFTING (committee members) ────────────── */}
+      {isCommitteeMember && (
         <Card className="border-purple-200/50 overflow-hidden">
           <div className="h-1 w-full bg-gradient-to-r from-purple-400 to-violet-400" />
           <CardContent className="pt-4 pb-4">
@@ -668,7 +669,7 @@ export default async function ParticipantPage() {
                     </p>
                   ) : (
                     <p className="text-xs text-gray-500 mt-0.5">
-                      Draft your party&apos;s bill
+                      Draft your committee&apos;s bill
                     </p>
                   )}
                 </div>
@@ -686,7 +687,7 @@ export default async function ParticipantPage() {
       )}
 
       {/* ─── BILLS (read-only for non-committee members) ──────── */}
-      {!isBillCommittee && approvedBills.length > 0 && (
+      {!isCommitteeMember && approvedBills.length > 0 && (
         <Card className="border-purple-200/50 overflow-hidden">
           <div className="h-1 w-full bg-gradient-to-r from-purple-400 to-violet-400" />
           <CardContent className="pt-4 pb-4">

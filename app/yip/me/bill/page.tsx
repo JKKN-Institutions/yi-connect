@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getYipSession } from "@/lib/yip/auth/yip-session";
+import { createServiceClient } from "@/lib/yip/supabase/server";
 import { BillClient, type ParticipantSession } from "./bill-client";
 
 // The yip_session cookie is httpOnly (set by app/yip/actions/auth.ts), so it
@@ -32,5 +33,21 @@ export default async function BillDraftingPage() {
     redirect("/yip/join");
   }
 
-  return <BillClient initialSession={session} />;
+  // The participant's parliament_role + committee_name live on columns the
+  // browser anon client can't read (RLS), so read them server-side here and
+  // pass down — the client uses them to gate the drafting UI.
+  const supabase = await createServiceClient();
+  const { data: p } = await supabase
+    .from("participants")
+    .select("parliament_role, committee_name")
+    .eq("id", session.id)
+    .maybeSingle();
+
+  return (
+    <BillClient
+      initialSession={session}
+      parliamentRole={p?.parliament_role ?? null}
+      committeeName={p?.committee_name ?? null}
+    />
+  );
 }

@@ -31,12 +31,11 @@ import {
   FolderOpen,
 } from "lucide-react";
 import { toast } from "sonner";
-import { PARTY_COLORS } from "@/lib/yip/constants";
 import { formatBytes } from "@/lib/yip/media";
 import {
   saveBillDraft,
   submitBill,
-  getBillForParty,
+  getBillForCommittee,
   getBillCommitteeMembers,
   type BillCommitteeMember,
 } from "@/app/yip/actions/bills";
@@ -128,14 +127,17 @@ const EMPTY_FORM: BillFormData = {
 
 export function BillClient({
   initialSession,
+  parliamentRole,
+  committeeName,
 }: {
   initialSession: ParticipantSession;
+  parliamentRole: string | null;
+  committeeName: string | null;
 }) {
   const session: ParticipantSession | null = initialSession;
-  const [participant, setParticipant] = useState<{
-    parliament_role: string | null;
-    party_side: string | null;
-  } | null>(null);
+  // Committee MPs draft their committee's bill. Everyone else sees the
+  // restricted notice (but still gets the documents repository below).
+  const isEligible = parliamentRole === "mp" && !!committeeName;
   const [bill, setBill] = useState<Bill | null>(null);
   const [members, setMembers] = useState<BillCommitteeMember[]>([]);
   const [form, setForm] = useState<BillFormData>(EMPTY_FORM);
@@ -149,33 +151,19 @@ export function BillClient({
 
   // Load data for the server-provided session on mount
   useEffect(() => {
-    loadParticipantAndBill(initialSession);
+    loadBill(initialSession);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function loadParticipantAndBill(s: ParticipantSession) {
+  async function loadBill(s: ParticipantSession) {
     try {
-      // Fetch participant details via a simple fetch (we need parliament_role and party_side)
-      const { createClient } = await import("@/lib/yip/supabase/client");
-      const supabase = createClient();
-
-      const { data: p } = await supabase
-        .from("participants")
-        .select("parliament_role, party_side")
-        .eq("id", s.id)
-        .single();
-
-      setParticipant(p);
-
-      if (p?.parliament_role !== "bill_committee" || !p.party_side) {
+      if (!isEligible || !committeeName) {
         setLoading(false);
         return;
       }
 
-      const partySide = p.party_side as "ruling" | "opposition";
-
-      // Load existing bill
-      const existingBill = await getBillForParty(s.eventId, partySide);
+      // Load existing bill for this committee
+      const existingBill = await getBillForCommittee(s.eventId, committeeName);
       if (existingBill) {
         setBill(existingBill);
         const provisions = (existingBill.provisions as string[]) ?? [];
@@ -194,7 +182,7 @@ export function BillClient({
       // Load committee members
       const committeeMembers = await getBillCommitteeMembers(
         s.eventId,
-        partySide
+        committeeName
       );
       setMembers(committeeMembers);
     } catch {
@@ -206,7 +194,7 @@ export function BillClient({
   // Auto-save with debounce
   const autoSave = useCallback(
     (newForm: BillFormData) => {
-      if (!session || !participant?.party_side) return;
+      if (!session || !isEligible || !committeeName) return;
       if (bill && bill.status !== "drafting") return;
 
       if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -215,7 +203,8 @@ export function BillClient({
         setSaving(true);
         const result = await saveBillDraft(
           session.eventId,
-          participant.party_side as "ruling" | "opposition",
+          committeeName,
+          session.id,
           {
             title: newForm.title,
             objective: newForm.objective,
@@ -233,15 +222,15 @@ export function BillClient({
 
         if (result.success && !bill) {
           // Reload to get the bill id
-          const existingBill = await getBillForParty(
+          const existingBill = await getBillForCommittee(
             session.eventId,
-            participant.party_side as "ruling" | "opposition"
+            committeeName
           );
           if (existingBill) setBill(existingBill);
         }
       }, 1000);
     },
-    [session, participant, bill]
+    [session, isEligible, committeeName, bill]
   );
 
   function handleChange(field: keyof BillFormData, value: string) {
@@ -251,7 +240,7 @@ export function BillClient({
   }
 
   function handleManualSave() {
-    if (!session || !participant?.party_side) return;
+    if (!session || !isEligible || !committeeName) return;
     if (bill && bill.status !== "drafting") return;
 
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -259,7 +248,8 @@ export function BillClient({
     startTransition(async () => {
       const result = await saveBillDraft(
         session.eventId,
-        participant.party_side as "ruling" | "opposition",
+        committeeName,
+        session.id,
         {
           title: form.title,
           objective: form.objective,
@@ -277,9 +267,9 @@ export function BillClient({
       if (result.success) {
         toast.success("Draft saved");
         if (!bill) {
-          const existingBill = await getBillForParty(
+          const existingBill = await getBillForCommittee(
             session.eventId,
-            participant.party_side as "ruling" | "opposition"
+            committeeName
           );
           if (existingBill) setBill(existingBill);
         }
@@ -301,7 +291,7 @@ export function BillClient({
     if (!bill) return;
 
     startTransition(async () => {
-      const result = await submitBill(bill.id);
+      const result = await submitBill(bill.id, session!.id);
       if (result.success) {
         toast.success("Bill submitted successfully!");
         setBill((prev) => (prev ? { ...prev, status: "submitted" } : prev));
@@ -335,18 +325,18 @@ export function BillClient({
     );
   }
 
-  if (participant?.parliament_role !== "bill_committee") {
-    // Bill DRAFTING is bill-committee-only, but the Committee Documents
-    // repository is for every participant with a committee assignment — so
-    // the documents card still renders below the restricted notice.
+  if (!isEligible) {
+    // Bill DRAFTING is for committee members (ordinary MPs on a committee),
+    // but the Committee Documents repository is for every participant with a
+    // committee assignment — so the documents card still renders below.
     return (
       <div className="space-y-5">
         <div className="rounded-xl border border-[#FF9933]/20 bg-[#FF9933]/5 p-4 text-center">
           <FileText className="mx-auto size-7 text-[#FF9933] mb-2" />
           <p className="font-medium text-gray-800">Committee Documents</p>
           <p className="text-sm text-gray-600 mt-1">
-            Writing the bill is handled by your party&apos;s Bill Committee. You
-            can still add supporting documents for your committee below.
+            Bill drafting is for committee members. You can still add supporting
+            documents for your committee below.
           </p>
         </div>
         <CommitteeDocumentsSection session={session} />
@@ -354,8 +344,6 @@ export function BillClient({
     );
   }
 
-  const side = participant.party_side as "ruling" | "opposition";
-  const partyLabel = side === "ruling" ? "Ruling Party" : "Opposition Party";
   const billStatus = bill?.status ?? "drafting";
   const isDraft = billStatus === "drafting";
   const statusConfig = STATUS_CONFIG[billStatus] ?? STATUS_CONFIG.drafting;
@@ -371,7 +359,7 @@ export function BillClient({
             Bill Drafting
           </h1>
           <p className="text-sm text-gray-500 mt-1">
-            Draft your party&apos;s bill for the Parliament session
+            Draft your committee&apos;s bill for the Parliament session
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -388,38 +376,15 @@ export function BillClient({
         </div>
       </div>
 
-      {/* Party Badge */}
-      <div
-        className={`rounded-lg border p-3 ${
-          side === "ruling"
-            ? "border-blue-200 bg-blue-50"
-            : "border-red-200 bg-red-50"
-        }`}
-      >
+      {/* Committee Badge */}
+      <div className="rounded-lg border border-purple-200 bg-purple-50 p-3">
         <div className="flex items-center gap-2">
-          <span
-            className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium ${PARTY_COLORS[side].badge}`}
-          >
-            {partyLabel}
+          <span className="inline-flex items-center rounded-full bg-purple-600 px-3 py-1 text-sm font-medium text-white">
+            {committeeName}
           </span>
           <span className="text-sm text-gray-600">Bill</span>
         </div>
       </div>
-
-      {/* Opposition's response (ruling committee sees how the Opposition replied) */}
-      {side === "ruling" && bill?.opposition_response && (
-        <Card className="border-red-200 bg-red-50/50">
-          <CardContent className="pt-4 pb-4">
-            <h3 className="text-sm font-semibold text-red-700 mb-1.5 flex items-center gap-1.5">
-              <Users className="size-4 text-red-500" />
-              Opposition&apos;s Response
-            </h3>
-            <p className="whitespace-pre-wrap text-sm text-gray-800">
-              {bill.opposition_response}
-            </p>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Committee Members */}
       {members.length > 0 && (

@@ -21,6 +21,7 @@ import { RunStatusBadge } from "@/components/yuva/runs/run-status-badge";
 import { GUIDES, type GuideLane } from "@/lib/yuva/guide/content";
 import { getCompletedSteps, logGuideEvent } from "@/lib/yuva/guide/actions";
 import { NextStepWidget } from "@/app/youth-academy/_components/GuideSurfacing";
+import { OnboardingLauncher } from "@/app/youth-academy/_components/OnboardingLauncher";
 
 export const metadata = { title: "Chapter dashboard" };
 
@@ -62,6 +63,12 @@ export default async function ChapterDashboardPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <OnboardingLauncher
+            content={GUIDES[guideLane]}
+            lane={guideLane}
+            completed={guideCompleted}
+            onEvent={logGuideEvent}
+          />
           <Button asChild variant="ghost">
             <Link href="/youth-academy/guide">
               <BookOpen className="size-4" />

@@ -21,6 +21,11 @@ import { getYipSession } from "@/lib/yip/auth/yip-session";
 import { GUIDES } from "@/lib/yip/guide/content";
 import { isGuidePersona, type GuidePersona } from "@/lib/yip/guide/types";
 import { GuideView } from "@/app/yip/_components/GuideView";
+import {
+  getCompletedSteps,
+  toggleStep,
+  logGuideEvent,
+} from "@/lib/yip/guide/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -76,6 +81,15 @@ export default async function YipGuidePage({
     ? requestedRaw
     : ownPersona;
 
+  // The persisted setup checklist is an organiser aid, and only on the viewer's
+  // OWN lane (previewing another lane stays read-only). Organisers are the only
+  // Supabase-authed lane; student / jury / volunteer use the access-code cookie
+  // and get the plain guide.
+  const trackProgress = persona === ownPersona && ownPersona === "organiser";
+  const initialCompleted = trackProgress
+    ? await getCompletedSteps(persona)
+    : undefined;
+
   return (
     <main className="min-h-screen bg-[#FEFCF6]">
       {/* Tricolor top bar */}
@@ -110,7 +124,18 @@ export default async function YipGuidePage({
       </header>
 
       <div className="mx-auto max-w-3xl px-6 py-8">
-        <GuideView guides={GUIDES} persona={persona} eventId={eventId} />
+        <GuideView
+          // Remount per lane so the progress useState re-seeds and the
+          // guide_open / lane_complete event refs reset (invariant: key={lane}).
+          key={persona}
+          guides={GUIDES}
+          persona={persona}
+          eventId={eventId}
+          trackProgress={trackProgress}
+          initialCompleted={initialCompleted}
+          onToggleStep={toggleStep}
+          onEvent={logGuideEvent}
+        />
       </div>
     </main>
   );

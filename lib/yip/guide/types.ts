@@ -105,3 +105,174 @@ export const GUIDE_PERSONAS: readonly GuidePersona[] = [
   "volunteer",
   "jury",
 ] as const;
+
+/* ────────────────────────────────────────────────────────────────────────
+ * ADOPTION LAYER — progress + instrumentation (all OPTIONAL).
+ *
+ * Pure helpers + types only (no JSX, no I/O) so this stays importable from
+ * client AND server. A renderer with no progress/event props just shows the
+ * plain guide (graceful degradation). Mirrors lib/yuva/guide/content.ts,
+ * adapted to YIP's GuidePersona + section/step shape.
+ * ──────────────────────────────────────────────────────────────────────── */
+
+/** Stable key for one step within a lane: "<sectionIndex>:<stepIndex>". Index-
+ *  based so editing a step's text never shifts a saved completion (only
+ *  reordering would — the guide's order is stable). */
+export function stepKey(sectionIndex: number, stepIndex: number): string {
+  return `${sectionIndex}:${stepIndex}`;
+}
+
+/** Every step key in a lane, in order — the full checklist for that persona. */
+export function laneStepKeys(lane: PersonaGuide): string[] {
+  return lane.sections.flatMap((s, si) => s.steps.map((_, i) => stepKey(si, i)));
+}
+
+export interface LaneProgress {
+  total: number;
+  done: number;
+  /** 0–100, for a progress bar. */
+  percent: number;
+  complete: boolean;
+}
+
+export function laneProgress(
+  lane: PersonaGuide,
+  completed: ReadonlySet<string>
+): LaneProgress {
+  const keys = laneStepKeys(lane);
+  const done = keys.filter((k) => completed.has(k)).length;
+  const total = keys.length;
+  return {
+    total,
+    done,
+    percent: total === 0 ? 0 : Math.round((done / total) * 100),
+    complete: total > 0 && done === total,
+  };
+}
+
+export interface NextStep {
+  sectionIndex: number;
+  sectionTitle: string;
+  stepIndex: number;
+  key: string;
+  step: GuideStep;
+}
+
+/** The viewer's next unfinished step (for resume + nudges), or null if done. */
+export function nextUndoneStep(
+  lane: PersonaGuide,
+  completed: ReadonlySet<string>
+): NextStep | null {
+  for (let si = 0; si < lane.sections.length; si++) {
+    const s = lane.sections[si];
+    for (let i = 0; i < s.steps.length; i++) {
+      const key = stepKey(si, i);
+      if (!completed.has(key)) {
+        return { sectionIndex: si, sectionTitle: s.title, stepIndex: i, key, step: s.steps[i] };
+      }
+    }
+  }
+  return null;
+}
+
+/* ── Onboarding entry (Start / Resume / Replay) ───────────────────────────
+ * The start-vs-resume-vs-replay decision is derived PURELY from saved progress,
+ * never a "first login" flag — that is what lets someone who SKIPPED onboarding
+ * pick it up later (non-empty-but-incomplete set → "resume"). */
+export type OnboardingKind = "start" | "resume" | "replay";
+
+export interface OnboardingCta {
+  kind: OnboardingKind;
+  label: string;
+  remaining: number;
+  target: NextStep | null;
+  complete: boolean;
+}
+
+export function onboardingCta(
+  lane: PersonaGuide,
+  completed: ReadonlySet<string>
+): OnboardingCta {
+  const lp = laneProgress(lane, completed);
+  const next = nextUndoneStep(lane, completed);
+  if (lp.done === 0) {
+    return { kind: "start", label: "Start onboarding", remaining: lp.total, target: next, complete: false };
+  }
+  if (next) {
+    return { kind: "resume", label: "Resume onboarding", remaining: lp.total - lp.done, target: next, complete: false };
+  }
+  return { kind: "replay", label: "Replay walkthrough", remaining: 0, target: nextUndoneStep(lane, new Set()), complete: true };
+}
+
+/** Synthetic progress key marking that a viewer saw a module's first-entry
+ *  welcome. Stored in guide_progress (so it syncs across devices) but excluded
+ *  from laneStepKeys, so it never inflates lane progress or becomes a next step. */
+export function welcomeSeenKey(moduleKey: string): string {
+  return `__welcome__:${moduleKey}`;
+}
+
+/* ── Instrumentation ──────────────────────────────────────────────────────
+ * Every meaningful guide interaction, for MEASURING adoption. logGuideEvent is
+ * a public ("use server") endpoint, so the runtime allow-list arrays below are
+ * the source of truth it validates against — a name added to the union but NOT
+ * the array is dropped silently. Keep BOTH in sync. */
+export type GuideEventName =
+  | "guide_open"
+  | "lane_switch"
+  | "step_link_click"
+  | "step_complete"
+  | "step_uncomplete"
+  | "lane_complete"
+  | "pdf_download"
+  | "nudge_click"
+  | "onboarding_start"
+  | "welcome_shown"
+  | "guide_dismiss";
+
+export type GuideSurface =
+  | "page"
+  | "drawer"
+  | "launcher"
+  | "nudge"
+  | "widget"
+  | "welcome"
+  | "onboarding";
+
+export interface GuideEvent {
+  name: GuideEventName;
+  persona: GuidePersona;
+  surface: GuideSurface;
+  /** Step key when relevant (complete / uncomplete / link click / welcome moduleKey). */
+  stepKey?: string;
+  /** Free context (e.g. a route, or the onboarding kind start|resume|replay). */
+  context?: string;
+}
+
+/** Optional callback the renderers fire on each interaction. No-op when unset. */
+export type GuideEventSink = (event: GuideEvent) => void;
+
+/** Runtime allow-lists — logGuideEvent is a public endpoint; validate against
+ *  THESE before insert so a caller can't poison the metrics table. */
+export const GUIDE_EVENT_NAMES: readonly GuideEventName[] = [
+  "guide_open",
+  "lane_switch",
+  "step_link_click",
+  "step_complete",
+  "step_uncomplete",
+  "lane_complete",
+  "pdf_download",
+  "nudge_click",
+  "onboarding_start",
+  "welcome_shown",
+  "guide_dismiss",
+] as const;
+
+export const GUIDE_SURFACES: readonly GuideSurface[] = [
+  "page",
+  "drawer",
+  "launcher",
+  "nudge",
+  "widget",
+  "welcome",
+  "onboarding",
+] as const;

@@ -2,6 +2,8 @@
 
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
+import { requireParticipantSession } from "@/lib/yip/auth/yip-session";
+import { isCommitteeEligible } from "@/lib/yip/committee-assignment";
 import type { Tables, Json } from "@/types/yip/database";
 
 type Bill = Tables<{ schema: "yip" }, "bills">;
@@ -10,11 +12,37 @@ type ActionResult<T = null> =
   | { success: true; data: T }
   | { success: false; error: string };
 
+// ─── Committee membership gate ─────────────────────────────────
+// Bills are now per-COMMITTEE. Only ordinary MPs (parliament_role === "mp")
+// assigned to THIS committee may draft/submit its bill. The yip.* tables have
+// public INSERT/UPDATE policies, so this server check is the only auth layer.
+
+async function assertCommitteeMember(
+  supabase: Awaited<ReturnType<typeof createServiceClient>>,
+  participantId: string,
+  eventId: string,
+  committeeName: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const sess = await requireParticipantSession(participantId, eventId);
+  if (!sess.ok) return { ok: false, error: sess.error };
+  const { data: p } = await supabase
+    .from("participants")
+    .select("parliament_role, committee_name")
+    .eq("id", participantId)
+    .maybeSingle();
+  if (!p) return { ok: false, error: "Participant not found." };
+  if (!isCommitteeEligible(p.parliament_role) || p.committee_name !== committeeName) {
+    return { ok: false, error: "Only this committee's members can draft its bill." };
+  }
+  return { ok: true };
+}
+
 // ─── Save Bill Draft (upsert) ──────────────────────────────────
 
 export async function saveBillDraft(
   eventId: string,
-  partySide: "ruling" | "opposition",
+  committeeName: string,
+  participantId: string,
   data: {
     title: string;
     objective?: string;
@@ -24,22 +52,22 @@ export async function saveBillDraft(
     implementation?: string;
   }
 ): Promise<ActionResult<{ billId: string }>> {
-  // TODO(self-service): saveBillDraft may be participant-authored (a student
-  // drafting their party's bill). It takes no participantId actor, so gate on
-  // canManage as the safe baseline for now; verify participant session later.
-  const access = await getYipEventAccess(eventId);
-  if (!access.canManage) {
-    return { success: false, error: "Not authorized to manage this event" };
-  }
-
   const supabase = await createServiceClient();
 
-  // Check if bill already exists for this party + event
+  const gate = await assertCommitteeMember(
+    supabase,
+    participantId,
+    eventId,
+    committeeName
+  );
+  if (!gate.ok) return { success: false, error: gate.error };
+
+  // Check if bill already exists for this committee + event
   const { data: existing } = await supabase
     .from("bills")
     .select("id, status")
     .eq("event_id", eventId)
-    .eq("party_side", partySide)
+    .eq("committee_name" as never, committeeName as never)
     .maybeSingle();
 
   // If already submitted/approved/etc, don't allow draft edits
@@ -75,10 +103,10 @@ export async function saveBillDraft(
       .from("bills")
       .insert({
         event_id: eventId,
-        party_side: partySide,
+        committee_name: committeeName,
         status: "drafting",
         ...billData,
-      })
+      } as never)
       .select("id")
       .single();
 
@@ -92,27 +120,43 @@ export async function saveBillDraft(
 // ─── Submit Bill ───────────────────────────────────────────────
 
 export async function submitBill(
-  billId: string
+  billId: string,
+  participantId: string
 ): Promise<ActionResult> {
   const supabase = await createServiceClient();
 
   // Get the bill to validate
-  const { data: bill } = await supabase
+  const { data: billRow } = await supabase
     .from("bills")
-    .select("id, event_id, status, title, objective, provisions")
+    .select("id, event_id, committee_name, status, title, objective")
     .eq("id", billId)
     .single();
 
-  if (!bill) {
+  if (!billRow) {
     return { success: false, error: "Bill not found" };
   }
 
-  // TODO(self-service): submitBill may be participant-authored. It takes only a
-  // billId (no participantId actor), so gate on canManage as the safe baseline.
-  const access = await getYipEventAccess(bill.event_id);
-  if (!access.canManage) {
-    return { success: false, error: "Not authorized to manage this event" };
+  const bill = billRow as unknown as {
+    id: string;
+    event_id: string;
+    committee_name: string | null;
+    status: string | null;
+    title: string | null;
+    objective: string | null;
+  };
+
+  if (!bill.committee_name) {
+    return { success: false, error: "This bill has no committee." };
   }
+
+  // Only this committee's members may submit its bill.
+  const gate = await assertCommitteeMember(
+    supabase,
+    participantId,
+    bill.event_id,
+    bill.committee_name
+  );
+  if (!gate.ok) return { success: false, error: gate.error };
 
   if (bill.status !== "drafting") {
     return { success: false, error: "Bill has already been submitted" };
@@ -270,7 +314,7 @@ export async function getBills(
     `
     )
     .eq("event_id", eventId)
-    .order("party_side");
+    .order("committee_name" as never);
 
   if (error || !data) return [];
 
@@ -295,11 +339,11 @@ export async function getBills(
   });
 }
 
-// ─── Get Bill for Party ────────────────────────────────────────
+// ─── Get Bill for Committee ────────────────────────────────────
 
-export async function getBillForParty(
+export async function getBillForCommittee(
   eventId: string,
-  partySide: "ruling" | "opposition"
+  committeeName: string
 ): Promise<Bill | null> {
   const supabase = await createServiceClient();
 
@@ -307,7 +351,7 @@ export async function getBillForParty(
     .from("bills")
     .select("*")
     .eq("event_id", eventId)
-    .eq("party_side", partySide)
+    .eq("committee_name" as never, committeeName as never)
     .maybeSingle();
 
   if (error || !data) return null;
@@ -326,7 +370,7 @@ export interface BillCommitteeMember {
 
 export async function getBillCommitteeMembers(
   eventId: string,
-  partySide: "ruling" | "opposition"
+  committeeName: string
 ): Promise<BillCommitteeMember[]> {
   const supabase = await createServiceClient();
 
@@ -334,8 +378,8 @@ export async function getBillCommitteeMembers(
     .from("participants")
     .select("id, full_name, parliament_role, party_side, school_name")
     .eq("event_id", eventId)
-    .eq("party_side", partySide)
-    .eq("parliament_role", "bill_committee")
+    .eq("committee_name", committeeName)
+    .eq("parliament_role", "mp")
     .order("full_name");
 
   if (error || !data) return [];

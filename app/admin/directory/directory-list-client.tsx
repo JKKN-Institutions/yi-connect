@@ -322,7 +322,7 @@ export function DirectoryListClient({
 
           <div className="md:col-span-8">
             <label className="mb-1 block text-xs font-medium text-slate-600">
-              Vertical / app
+              App
             </label>
             <div className="flex flex-wrap gap-2">
               {APP_OPTIONS.map((a) => {
@@ -448,7 +448,7 @@ export function DirectoryListClient({
                   Active roles {sortIcon("role_count")}
                 </button>
               </TableHead>
-              <TableHead>Verticals</TableHead>
+              <TableHead>Apps</TableHead>
               <TableHead>Auth</TableHead>
             </TableRow>
           </TableHeader>

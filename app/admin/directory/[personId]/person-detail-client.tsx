@@ -18,6 +18,7 @@ import {
   Pencil,
   Phone,
   ShieldAlert,
+  ShieldCheck,
   Star,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -266,6 +267,11 @@ export function PersonDetailClient({
                   <Pencil className="mr-1.5 h-3.5 w-3.5" /> Edit
                 </Button>
               </Link>
+              <Link href={`/admin/directory/${person.id}/roles`}>
+                <Button size="sm">
+                  <ShieldCheck className="mr-1.5 h-3.5 w-3.5" /> Manage roles
+                </Button>
+              </Link>
               <ActiveToggle personId={person.id} isActive={person.is_active} />
             </div>
           </div>
@@ -281,8 +287,13 @@ export function PersonDetailClient({
           </span>
         </h2>
         {active_roles.length === 0 ? (
-          <div className="rounded-md border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500">
-            No active role assignments.
+          <div className="flex flex-col items-center gap-3 rounded-md border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500">
+            <span>No active role assignments yet.</span>
+            <Link href={`/admin/directory/${person.id}/roles`}>
+              <Button size="sm">
+                <ShieldCheck className="mr-1.5 h-3.5 w-3.5" /> Assign a role
+              </Button>
+            </Link>
           </div>
         ) : (
           <RoleGroup roles={active_roles} />

@@ -24,11 +24,35 @@
  * (lib/yip/score-buffer.ts) takes over from there.
  */
 
-const VERSION = "yc-v3-runtime-20260604";
+const VERSION = "yc-v4-runtime-20260615";
 const PAGES = `${VERSION}-pages`;
 const STATIC = `${VERSION}-static`;
 const ASSETS = `${VERSION}-assets`;
 const OWN_CACHES = [PAGES, STATIC, ASSETS];
+
+// ── Live-only routes: NEVER cache, NEVER serve a cached copy ──────────────
+//
+// A few organiser/projector routes are driven by Supabase realtime and MUST
+// always reflect the live agenda + vote state. If the service worker ever
+// serves a cached copy (e.g. the 5s network-first timeout fires on slow venue
+// wifi, or a previously-cached page is replayed), the organiser sees the WRONG
+// current agenda item / vote controls — a Day-2 bill vote instead of the live
+// Day-1 Speaker Election, etc. (confirmed live 2026-06-15). These pages have no
+// offline value anyway: with no network there is no live event to control.
+//
+// Scope is intentionally narrow — ONLY these live organiser/projector routes.
+// The student dashboard (/yip/me/*) and jury (/yip/jury/*) deliberately rely on
+// NetworkFirst-with-cache for offline scoring/voting and are NOT matched here.
+// Matches both the HTML navigation request and the route's RSC payload (which
+// shares the same pathname), so client-side navigation is covered too.
+//   • /yip/dashboard/events/<id>/control   — organiser live control panel
+//   • /yip/event/<id>/display              — public projector view
+function isLiveOnly(pathname) {
+  return (
+    /^\/yip\/dashboard\/events\/[^/]+\/control(?:\/.*)?$/.test(pathname) ||
+    /^\/yip\/event\/[^/]+\/display(?:\/.*)?$/.test(pathname)
+  );
+}
 
 self.addEventListener("install", () => {
   self.skipWaiting();
@@ -55,6 +79,9 @@ self.addEventListener("activate", (event) => {
         clientList.map(async (client) => {
           const url = new URL(client.url);
           if (url.origin !== self.location.origin) return;
+          // Never prime live-only routes into the cache — they must stay
+          // NetworkOnly (a primed control panel would be served stale later).
+          if (isLiveOnly(url.pathname)) return;
           const res = await fetch(client.url, { credentials: "include" });
           if (res.ok && !res.redirected) await pages.put(client.url, res);
         })
@@ -77,6 +104,16 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
   if (url.pathname.startsWith("/api/")) return;
+
+  // Live organiser/projector routes: pure NetworkOnly. Go straight to the
+  // network with no SW timeout, never write the cache, never fall back to a
+  // cached copy. If the network is down these pages simply fail (the browser
+  // shows its offline page) — which is correct, because there is nothing live
+  // to control while offline. This is what prevents a stale control panel.
+  if (isLiveOnly(url.pathname)) {
+    event.respondWith(fetch(req, { cache: "no-store" }));
+    return;
+  }
 
   const isStatic =
     url.pathname.startsWith("/_next/static/") ||

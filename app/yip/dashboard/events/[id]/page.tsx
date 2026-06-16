@@ -1,5 +1,8 @@
 import Link from "next/link";
 import { getEvent } from "@/app/yip/actions/events";
+import { getChiefGuests } from "@/app/yip/actions/reporting-extras";
+import { getYipEventAccess } from "@/lib/yip/auth/event-access";
+import { EventReportingCard } from "./event-reporting-card";
 import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
 import { Badge } from "@/components/yip/ui/badge";
 import {
@@ -85,6 +88,8 @@ export default async function EventOverviewPage({
   }
 
   const status = statusBadge(event.status);
+  const access = await getYipEventAccess(id);
+  const chiefGuests = await getChiefGuests(id);
 
   // Determine action cards based on status
   const actionCards: Array<{
@@ -292,6 +297,20 @@ export default async function EventOverviewPage({
           </div>
         </div>
       )}
+
+      {/* Reporting extras — chief guests (#11) + social coverage (#12) */}
+      <div>
+        <h2 className="mb-3 font-[family-name:var(--font-heading)] text-sm font-semibold text-[#1a1a3e]">
+          Event Reporting
+        </h2>
+        <EventReportingCard
+          eventId={id}
+          canManage={access.canManage}
+          initialChiefGuests={chiefGuests}
+          initialSocialLinks={event.social_links ?? []}
+          initialReach={event.social_reach_count ?? null}
+        />
+      </div>
     </div>
   );
 }

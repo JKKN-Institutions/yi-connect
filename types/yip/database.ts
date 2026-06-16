@@ -1636,6 +1636,47 @@ export type Database = {
         }
         Relationships: []
       }
+      event_chief_guests: {
+        Row: {
+          created_at: string
+          designation: string | null
+          display_order: number
+          event_id: string
+          id: string
+          name: string
+          organization: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          designation?: string | null
+          display_order?: number
+          event_id: string
+          id?: string
+          name: string
+          organization?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          designation?: string | null
+          display_order?: number
+          event_id?: string
+          id?: string
+          name?: string
+          organization?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_chief_guests_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       event_topics: {
         Row: {
           created_at: string | null
@@ -1711,6 +1752,8 @@ export type Database = {
           registrations_frozen: boolean | null
           results_published_at: string | null
           scores_locked: boolean | null
+          social_links: string[]
+          social_reach_count: number | null
           state: string | null
           status: Database["public"]["Enums"]["event_status"]
           updated_at: string | null
@@ -1753,6 +1796,8 @@ export type Database = {
           registrations_frozen?: boolean | null
           results_published_at?: string | null
           scores_locked?: boolean | null
+          social_links?: string[]
+          social_reach_count?: number | null
           state?: string | null
           status?: Database["public"]["Enums"]["event_status"]
           updated_at?: string | null
@@ -1795,6 +1840,8 @@ export type Database = {
           registrations_frozen?: boolean | null
           results_published_at?: string | null
           scores_locked?: boolean | null
+          social_links?: string[]
+          social_reach_count?: number | null
           state?: string | null
           status?: Database["public"]["Enums"]["event_status"]
           updated_at?: string | null

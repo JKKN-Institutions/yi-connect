@@ -31,6 +31,9 @@ interface CsvRow {
   class: number;
   phone?: string;
   email?: string;
+  // Parent / guardian mobile — the reachable contact for minors (most students
+  // have no email/phone of their own). Stored as participants.parent_phone.
+  parent_phone?: string;
   city?: string;
   // Roster home state. Spreadsheets that only have a `state` column get it
   // routed to constituency_state (YIP-handbook canonical meaning); a `state`
@@ -59,11 +62,22 @@ const COL_ALIASES: Record<
   Exclude<keyof CsvRow, "home_state" | "constituency_state"> | "home_state_explicit" | "constituency_state_explicit",
   string[]
 > = {
-  name: ["name", "full_name", "fullname", "student_name", "student name"],
+  name: ["name", "full_name", "full name", "fullname", "student_name", "student name"],
   school: ["school", "school_name", "schoolname", "school name"],
   class: ["class", "grade", "std"],
   phone: ["phone", "mobile", "phone_number", "phone number"],
-  email: ["email", "email_address", "email address"],
+  email: ["email", "email_address", "email address", "email id", "email_id", "email-id"],
+  parent_phone: [
+    "parent_mobile",
+    "parent mobile",
+    "parent_phone",
+    "parent phone",
+    "parent",
+    "guardian_mobile",
+    "guardian mobile",
+    "guardian_phone",
+    "guardian phone",
+  ],
   city: ["city", "town"],
   home_state_explicit: ["home_state", "home state"],
   constituency_state_explicit: ["constituency_state", "state_constituency"],
@@ -138,6 +152,7 @@ function normalizeXlsxRow(
   const classRaw = pick(COL_ALIASES.class);
   const phoneRaw = pick(COL_ALIASES.phone);
   const emailRaw = pick(COL_ALIASES.email);
+  const parentPhoneRaw = pick(COL_ALIASES.parent_phone);
   const cityRaw = pick(COL_ALIASES.city);
 
   // State routing (see resolveStateRouting above)
@@ -168,6 +183,7 @@ function normalizeXlsxRow(
   const school = schoolRaw !== undefined ? String(schoolRaw).trim() : "";
   const classNum = classRaw !== undefined ? Number(classRaw) : 0;
   const phone = normalizePhone(phoneRaw);
+  const parent_phone = normalizePhone(parentPhoneRaw);
   const email = emailRaw !== undefined ? String(emailRaw).trim() || undefined : undefined;
   const city = cityRaw !== undefined ? String(cityRaw).trim() || undefined : undefined;
   const home_state =
@@ -199,7 +215,15 @@ function normalizeXlsxRow(
   const errors: string[] = [];
   if (!name) errors.push("Name is required");
   if (!school) errors.push("School is required");
-  if (classRaw !== undefined && (classNum < 9 || classNum > 12))
+  // Each student must be reachable: at least ONE of email / parent mobile.
+  // Either alone is fine (the missing one is ignored); only a row with NEITHER
+  // is blocked.
+  if (!email && !parent_phone)
+    errors.push("Email or parent mobile is required");
+  // Class is NOT collected in the roster (dropped). participants.class is NOT
+  // NULL, so we default to 10 internally. If a stray class value is present it
+  // must still be 9-12.
+  if (classRaw !== undefined && classRaw !== "" && (classNum < 9 || classNum > 12))
     errors.push("Class must be 9-12");
   if (party_letter !== undefined && !/^[A-Z]$/.test(party_letter))
     errors.push(`Party must be a single letter A-Z (got "${party_letter}")`);
@@ -213,8 +237,9 @@ function normalizeXlsxRow(
     rowNumber,
     name,
     school,
-    class: isNaN(classNum) || classNum === 0 ? 10 : classNum,
+    class: !classNum || isNaN(classNum) ? 10 : classNum,
     phone,
+    parent_phone,
     email,
     city,
     home_state,
@@ -245,15 +270,15 @@ function defaultAssignBenches(rows: ParsedRow[]): boolean {
 
 /** Download a one-row .xlsx template */
 function downloadXlsxTemplate() {
-  const headers = ["name", "school", "class", "phone", "email", "city", "state"];
+  // Standard chapter roster: just these columns. (The importer still also
+  // accepts optional pre-assigned party/constituency/committee columns for
+  // chapters that allocate in advance — they're just not in this template.)
+  const headers = ["name", "school", "email", "parent_mobile"];
   const sample = [
     "Arjun Kumar",
     "Delhi Public School",
-    10,
-    "9876543210",
     "arjun@example.com",
-    "New Delhi",
-    "Delhi",
+    "9876543210",
   ];
   const ws = XLSX.utils.aoa_to_sheet([headers, sample]);
   const wb = XLSX.utils.book_new();
@@ -385,6 +410,7 @@ export function CsvImport({
           const classIdx = findColIdx(headers, COL_ALIASES.class);
           const phoneIdx = findColIdx(headers, COL_ALIASES.phone);
           const emailIdx = findColIdx(headers, COL_ALIASES.email);
+          const parentPhoneIdx = findColIdx(headers, COL_ALIASES.parent_phone);
           const cityIdx = findColIdx(headers, COL_ALIASES.city);
           const homeStateExplicitIdx = findColIdx(headers, COL_ALIASES.home_state_explicit);
           const constStateExplicitIdx = findColIdx(
@@ -399,13 +425,13 @@ export function CsvImport({
 
           if (nameIdx === -1) {
             setParseError(
-              'CSV must have a "name" column. Expected columns: name, school, class, phone, email, city, state'
+              'CSV must have a "name" column. Expected columns: name, school, email, parent_mobile'
             );
             return;
           }
           if (schoolIdx === -1) {
             setParseError(
-              'CSV must have a "school" column. Expected columns: name, school, class, phone, email, city, state'
+              'CSV must have a "school" column. Expected columns: name, school, email, parent_mobile'
             );
             return;
           }
@@ -422,10 +448,16 @@ export function CsvImport({
             const school = cols[schoolIdx]?.trim() || "";
             const classVal =
               classIdx >= 0 ? parseInt(cols[classIdx]?.trim() || "0") : 0;
+            const emailVal = emailIdx >= 0 ? cols[emailIdx]?.trim() : undefined;
+            const parentVal =
+              parentPhoneIdx >= 0 ? normalizePhone(cols[parentPhoneIdx]) : undefined;
 
             if (!name) errors.push("Name is required");
             if (!school) errors.push("School is required");
-            if (classIdx >= 0 && (classVal < 9 || classVal > 12))
+            // At least one of email / parent mobile (only a row with NEITHER blocks).
+            if (!emailVal && !parentVal)
+              errors.push("Email or parent mobile is required");
+            if (classIdx >= 0 && cols[classIdx]?.trim() && (classVal < 9 || classVal > 12))
               errors.push("Class must be 9-12");
 
             // State routing
@@ -478,12 +510,13 @@ export function CsvImport({
               rowNumber: i + 1,
               name,
               school,
-              class: classVal || 10,
+              class: classVal && classVal >= 9 && classVal <= 12 ? classVal : 10,
               phone:
                 phoneIdx >= 0
                   ? normalizePhone(cols[phoneIdx])
                   : undefined,
-              email: emailIdx >= 0 ? cols[emailIdx]?.trim() : undefined,
+              parent_phone: parentVal,
+              email: emailVal,
               city: cityIdx >= 0 ? cols[cityIdx]?.trim() : undefined,
               home_state,
               constituency_state,
@@ -542,6 +575,7 @@ export function CsvImport({
       school: r.school,
       class: r.class,
       phone: r.phone,
+      parent_phone: r.parent_phone,
       email: r.email,
       city: r.city,
       home_state: r.home_state,
@@ -579,7 +613,7 @@ export function CsvImport({
         <DialogHeader>
           <DialogTitle>Import Participants</DialogTitle>
           <DialogDescription>
-            Upload a CSV or Excel (.xlsx / .xls) file. Required columns: name, school. Optional: class, phone, email, city, home_state, party (A-Z), constituency, state (constituency state), committee.
+            Upload a CSV or Excel (.xlsx / .xls) file. Required: name, school, and at least one of email or parent_mobile. (A student with neither contact is flagged and not imported.)
           </DialogDescription>
         </DialogHeader>
 
@@ -690,7 +724,6 @@ export function CsvImport({
                             <TableHead className="w-10">#</TableHead>
                             <TableHead>Name</TableHead>
                             <TableHead>School</TableHead>
-                            <TableHead>Class</TableHead>
                             {showAllocCols && (
                               <>
                                 <TableHead>Party</TableHead>
@@ -717,9 +750,6 @@ export function CsvImport({
                               </TableCell>
                               <TableCell className="text-xs">
                                 {row.school || "--"}
-                              </TableCell>
-                              <TableCell className="text-xs">
-                                {row.class || "--"}
                               </TableCell>
                               {showAllocCols && (
                                 <>

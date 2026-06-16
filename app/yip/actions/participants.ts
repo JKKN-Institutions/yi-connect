@@ -38,6 +38,8 @@ interface ImportRow {
   school: string;
   class: number;
   phone?: string;
+  // Parent / guardian mobile — the reachable contact for minors → parent_phone.
+  parent_phone?: string;
   email?: string;
   city?: string;
   // Roster home state (legacy alias `state` still accepted on the client; the
@@ -437,6 +439,12 @@ export async function importParticipants(
       errors.push(`Row ${i + 1}: Name and school are required`);
       continue;
     }
+    // Each student must be reachable: at least one of email / parent mobile.
+    // (Either alone is fine; only a row with NEITHER is rejected.)
+    if (!row.email?.trim() && !row.parent_phone?.trim()) {
+      errors.push(`Row ${i + 1}: an email or parent mobile is required`);
+      continue;
+    }
     if (!row.class || row.class < 9 || row.class > 12) {
       errors.push(`Row ${i + 1}: Class must be between 9 and 12`);
       continue;
@@ -521,6 +529,7 @@ export async function importParticipants(
     school_name: string;
     class: number;
     phone: string | null;
+    parent_phone: string | null;
     email: string | null;
     city: string | null;
     home_state: string | null;
@@ -566,6 +575,7 @@ export async function importParticipants(
         school_name: row.school.trim(),
         class: row.class,
         phone: row.phone?.trim() || null,
+        parent_phone: row.parent_phone?.trim() || null,
         email: row.email?.trim() || null,
         city: row.city?.trim() || null,
         home_state: row.home_state?.trim() || null,

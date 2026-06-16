@@ -22,13 +22,16 @@ import { getCurrentPersonRoles } from "@/lib/yi/auth/yi-directory-roles";
  *   chapter_admin     — the chair. canView + canManage + canDelete.
  *   chapter_organizer — canView + canManage, NOT canDelete.
  *
- * Chair (= chapter_admin) is granted by EITHER:
+ * Chair (= chapter_admin) is granted by ANY of:
  *   (a) an explicit app='yip', role='chapter_admin' assignment for the chapter, OR
- *   (b) the user's email matching yi.chapters.chair_email (case/space-insensitive).
- * Precedence for "exactly one admin": an explicit chapter_admin role is the
- * canonical admin; the chair_email path is the fallback when no explicit role
- * exists. Both grant identical (full) capability, so there is never a conflict
- * in what the admin can do — only one *effective* admin is ever needed.
+ *   (b) an app='yi', role='chapter_chair'/'chapter_co_chair' assignment for the
+ *       chapter (the Yi directory IS the source of truth for who chairs a
+ *       chapter, so a directory chair is automatically the YIP chair — no
+ *       separate yip role needed), OR
+ *   (c) the user's email matching yi.chapters.chair_email (case/space-insensitive).
+ * All three grant identical (full) capability, so there is never a conflict in
+ * what the admin can do. (b) is identity-based and covers chapters whose
+ * chair_email differs from the directory chair + any future chapter.
  *
  * Above chapters: an active YIP national / platform super_admin (full on every
  * event), or a regional_admin for the event's zone (full within their zone).
@@ -163,6 +166,25 @@ export async function getYipEventAccess(eventId: string): Promise<YipEventAccess
     // Chapter CHAIR sees scores/results (owner decision 2026-06-13: "chapter
     // chair + super-admin"); ordinary organisers + regional stay canViewScores:false.
     if (isExplicitAdmin) return FULL("chapter_admin", "chapter_admin_role", true);
+
+    // 3a-ii. Yi directory chapter chair → the canonical chapter admin for YIP too.
+    // The directory (app='yi', role='chapter_chair' / 'chapter_co_chair') is the
+    // single source of truth for who chairs a chapter, so treat that person as the
+    // YIP chapter_admin: every chapter chair auto-administers their chapter's
+    // events with NO separate app='yip' role and NO per-event assignment. Matched
+    // by directory IDENTITY (person → active role for THIS chapter), not a
+    // chair_email string, so it also covers chapters whose registered chair_email
+    // differs from the directory chair, plus any chapter added later. Scoped to
+    // chapter-level events only and to the user's OWN chapter (same as 3a) —
+    // a chair of chapter X gets nothing on chapter Y or on regional/national.
+    const isDirectoryChair = active.some(
+      (a) =>
+        a.app === "yi" &&
+        (a.role === "chapter_chair" || a.role === "chapter_co_chair") &&
+        norm(a.yi_chapter) === chapName
+    );
+    if (isDirectoryChair)
+      return FULL("chapter_admin", "yi_directory_chapter_chair", true);
 
     // 3b. chair_email fallback → full. Whoever logs in with the chapter's
     //     registered chair_email is the admin when no explicit role exists.

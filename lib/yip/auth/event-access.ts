@@ -153,8 +153,12 @@ export async function getYipEventAccess(eventId: string): Promise<YipEventAccess
   // national events (even if they carry a chapter_name) are owned by RM (zone,
   // step 2) / national / super (step 1) — a chapter chair is NOT their owner.
   // (2026-06-02; matches the dashboard listing scope.)
-  if (event.chapter_name && event.level === "chapter") {
-    const chapName = norm(event.chapter_name);
+  // Require a NON-EMPTY normalised chapter name: a whitespace-only chapter_name
+  // is truthy but norms to "", which would then match a (future) chair/role row
+  // whose yi_chapter is also empty. Guarding here fails the whole chapter block
+  // closed for all of 3a/3a-ii/3b/3c (same fail-closed discipline as chair_email).
+  const chapName = norm(event.chapter_name);
+  if (chapName && event.level === "chapter") {
 
     // 3a. Explicit YIP chapter_admin role for this chapter → full (canonical chair).
     const isExplicitAdmin = active.some(

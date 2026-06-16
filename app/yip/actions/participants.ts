@@ -438,6 +438,12 @@ export async function importParticipants(
       errors.push(`Row ${i + 1}: Name and school are required`);
       continue;
     }
+    // Each student must be reachable: at least one of email / parent mobile.
+    // (Either alone is fine; only a row with NEITHER is rejected.)
+    if (!row.email?.trim() && !row.parent_phone?.trim()) {
+      errors.push(`Row ${i + 1}: an email or parent mobile is required`);
+      continue;
+    }
     if (!row.class || row.class < 9 || row.class > 12) {
       errors.push(`Row ${i + 1}: Class must be between 9 and 12`);
       continue;

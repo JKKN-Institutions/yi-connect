@@ -215,6 +215,11 @@ function normalizeXlsxRow(
   const errors: string[] = [];
   if (!name) errors.push("Name is required");
   if (!school) errors.push("School is required");
+  // Each student must be reachable: at least ONE of email / parent mobile.
+  // Either alone is fine (the missing one is ignored); only a row with NEITHER
+  // is blocked.
+  if (!email && !parent_phone)
+    errors.push("Email or parent mobile is required");
   // Class is NOT collected in the roster (dropped). participants.class is NOT
   // NULL, so we default to 10 internally. If a stray class value is present it
   // must still be 9-12.
@@ -443,9 +448,15 @@ export function CsvImport({
             const school = cols[schoolIdx]?.trim() || "";
             const classVal =
               classIdx >= 0 ? parseInt(cols[classIdx]?.trim() || "0") : 0;
+            const emailVal = emailIdx >= 0 ? cols[emailIdx]?.trim() : undefined;
+            const parentVal =
+              parentPhoneIdx >= 0 ? normalizePhone(cols[parentPhoneIdx]) : undefined;
 
             if (!name) errors.push("Name is required");
             if (!school) errors.push("School is required");
+            // At least one of email / parent mobile (only a row with NEITHER blocks).
+            if (!emailVal && !parentVal)
+              errors.push("Email or parent mobile is required");
             if (classIdx >= 0 && cols[classIdx]?.trim() && (classVal < 9 || classVal > 12))
               errors.push("Class must be 9-12");
 
@@ -504,11 +515,8 @@ export function CsvImport({
                 phoneIdx >= 0
                   ? normalizePhone(cols[phoneIdx])
                   : undefined,
-              parent_phone:
-                parentPhoneIdx >= 0
-                  ? normalizePhone(cols[parentPhoneIdx])
-                  : undefined,
-              email: emailIdx >= 0 ? cols[emailIdx]?.trim() : undefined,
+              parent_phone: parentVal,
+              email: emailVal,
               city: cityIdx >= 0 ? cols[cityIdx]?.trim() : undefined,
               home_state,
               constituency_state,
@@ -605,7 +613,7 @@ export function CsvImport({
         <DialogHeader>
           <DialogTitle>Import Participants</DialogTitle>
           <DialogDescription>
-            Upload a CSV or Excel (.xlsx / .xls) file. Required columns: name, school. Optional: email, parent_mobile.
+            Upload a CSV or Excel (.xlsx / .xls) file. Required: name, school, and at least one of email or parent_mobile. (A student with neither contact is flagged and not imported.)
           </DialogDescription>
         </DialogHeader>
 

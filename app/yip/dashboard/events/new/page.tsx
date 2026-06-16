@@ -2,8 +2,12 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { createEvent, listEventChapters } from "@/app/yip/actions/events";
-import { COMMITTEES } from "@/lib/yip/constants";
+import {
+  createEvent,
+  listEventChapters,
+  listCommitteeTopics,
+  type CommitteeTopicOption,
+} from "@/app/yip/actions/events";
 import { Button } from "@/components/yip/ui/button";
 import { Input } from "@/components/yip/ui/input";
 import { Label } from "@/components/yip/ui/label";
@@ -80,11 +84,13 @@ export default function NewEventPage() {
   const [chapterGroups, setChapterGroups] = useState<ChapterGroup[]>([]);
   const [chaptersLoading, setChaptersLoading] = useState(true);
 
-  // Initialize committee topics with committee names as keys
-  const initialTopics: Record<string, string> = {};
-  COMMITTEES.forEach((c) => {
-    initialTopics[c] = "";
-  });
+  // The official 15 committee topics come from the yip.topics catalog (managed
+  // at /yip/dashboard/admin/topics). The organiser picks 8–10 for this round;
+  // committee_topics holds ONLY the selected committees → their fixed topic.
+  const [committeeCatalog, setCommitteeCatalog] = useState<
+    CommitteeTopicOption[]
+  >([]);
+  const [committeesLoading, setCommitteesLoading] = useState(true);
 
   const [form, setForm] = useState<EventFormData>({
     name: "",
@@ -98,8 +104,33 @@ export default function NewEventPage() {
     venue_name: "",
     venue_address: "",
     central_agenda: "",
-    committee_topics: initialTopics,
+    committee_topics: {},
   });
+
+  // Load the committee catalog on mount and default-select all of them (the
+  // organiser unchecks down to the recommended 8–10).
+  useEffect(() => {
+    let active = true;
+    listCommitteeTopics()
+      .then((catalog) => {
+        if (!active) return;
+        setCommitteeCatalog(catalog);
+        const initial: Record<string, string> = {};
+        catalog.forEach((c) => {
+          initial[c.committee] = c.topic;
+        });
+        setForm((prev) => ({ ...prev, committee_topics: initial }));
+      })
+      .catch(() => {
+        /* leave empty — organiser can still create with no committees */
+      })
+      .finally(() => {
+        if (active) setCommitteesLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // Load the canonical chapter list (grouped by region) on mount.
   useEffect(() => {
@@ -142,14 +173,20 @@ export default function NewEventPage() {
     setError("");
   }
 
-  function updateTopic(committee: string, value: string) {
-    setForm((prev) => ({
-      ...prev,
-      committee_topics: {
-        ...prev.committee_topics,
-        [committee]: value,
-      },
-    }));
+  // Select / deselect a committee for this event. Selecting stores its official
+  // topic from the catalog; deselecting removes it. Topics are fixed — not typed.
+  function toggleCommittee(committee: string) {
+    setForm((prev) => {
+      const next = { ...prev.committee_topics };
+      if (committee in next) {
+        delete next[committee];
+      } else {
+        next[committee] =
+          committeeCatalog.find((c) => c.committee === committee)?.topic ?? "";
+      }
+      return { ...prev, committee_topics: next };
+    });
+    setError("");
   }
 
   // Selecting a chapter auto-fills chapter_name/city/state (kept for back-compat;
@@ -455,28 +492,59 @@ export default function NewEventPage() {
             </div>
 
             <div>
-              <Label className="mb-3">Committee Discussion Topics</Label>
+              <Label className="mb-3">Committee Topics</Label>
               <p className="mb-4 text-xs text-gray-500">
-                Provide a specific topic for each committee to discuss
+                Pick the committees for this round from the official YIP 2026
+                list. Recommended: choose <strong>8–10</strong>. Each
+                committee&apos;s topic is fixed — students draft bills on it.{" "}
+                <span className="font-medium text-[#1a1a3e]">
+                  Selected: {Object.keys(form.committee_topics).length}
+                </span>
               </p>
-              <div className="space-y-3">
-                {COMMITTEES.map((committee) => (
-                  <div key={committee}>
-                    <Label
-                      htmlFor={`topic-${committee}`}
-                      className="text-xs text-gray-600"
-                    >
-                      {committee}
-                    </Label>
-                    <Input
-                      id={`topic-${committee}`}
-                      placeholder={`Discussion topic for ${committee}...`}
-                      value={form.committee_topics[committee] || ""}
-                      onChange={(e) => updateTopic(committee, e.target.value)}
-                    />
-                  </div>
-                ))}
-              </div>
+              {committeesLoading ? (
+                <div className="flex items-center gap-2 text-sm text-gray-500">
+                  <Loader2 className="size-4 animate-spin" /> Loading committee
+                  topics…
+                </div>
+              ) : committeeCatalog.length === 0 ? (
+                <p className="text-sm text-gray-500">
+                  No committee topics found. Add them under Admin → Topics.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {committeeCatalog.map((c) => {
+                    const checked = c.committee in form.committee_topics;
+                    return (
+                      <label
+                        key={c.committee}
+                        className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors ${
+                          checked
+                            ? "border-[#FF9933]/40 bg-[#FF9933]/5"
+                            : "border-gray-200 hover:bg-gray-50"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleCommittee(c.committee)}
+                          className="mt-1 size-4 shrink-0 accent-[#FF9933]"
+                        />
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-gray-900">
+                            {c.committee}
+                          </p>
+                          <p className="text-sm text-gray-700">{c.topic}</p>
+                          {c.scheme && (
+                            <p className="text-xs text-gray-400">
+                              Linked: {c.scheme}
+                            </p>
+                          )}
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -563,16 +631,21 @@ export default function NewEventPage() {
                   </div>
                 )}
                 <div>
-                  <span className="text-gray-500">Committee Topics:</span>
+                  <span className="text-gray-500">
+                    Committee Topics ({Object.keys(form.committee_topics).length}
+                    ):
+                  </span>
                   <div className="mt-1 space-y-1">
-                    {COMMITTEES.map((c) => (
-                      <div key={c} className="flex gap-2">
-                        <span className="text-gray-400 shrink-0">{c}:</span>
-                        <span className="font-medium">
-                          {form.committee_topics[c] || "Not set"}
-                        </span>
-                      </div>
-                    ))}
+                    {Object.keys(form.committee_topics).length === 0 ? (
+                      <p className="text-gray-400">No committees selected.</p>
+                    ) : (
+                      Object.entries(form.committee_topics).map(([c, t]) => (
+                        <div key={c} className="flex gap-2">
+                          <span className="text-gray-400 shrink-0">{c}:</span>
+                          <span className="font-medium">{t}</span>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </div>
               </div>

@@ -83,16 +83,18 @@ export async function runAllocationAction(
     home_state: p.home_state,
   }));
 
-  // Parse custom committees from event if present
+  // The event's selected committees drive allocation. committee_topics is the
+  // map { committee → topic } chosen at event creation (the 8–10 of the 15
+  // official committees), so its KEYS are the committees to assign students to.
+  // (Legacy array form is still accepted.) Falls back to the default catalog.
   let customCommittees: string[] | undefined;
   if (event.committee_topics) {
-    try {
-      const topics = event.committee_topics as unknown;
-      if (Array.isArray(topics) && topics.length > 0) {
-        customCommittees = topics.map(String);
-      }
-    } catch {
-      // Ignore — fall back to defaults
+    const t = event.committee_topics as unknown;
+    if (Array.isArray(t) && t.length > 0) {
+      customCommittees = t.map(String);
+    } else if (t && typeof t === "object") {
+      const keys = Object.keys(t as Record<string, unknown>);
+      if (keys.length > 0) customCommittees = keys;
     }
   }
 
@@ -206,10 +208,15 @@ export async function assignCommittees(
     return { success: false, error: "No participants registered for this event" };
   }
 
-  // Committee names: the event's custom topics, else the default 5.
+  // Committee names: the event's selected committees (object keys or legacy
+  // array form), else the default catalog.
   let committeeNames: string[] = [...COMMITTEES];
-  if (Array.isArray(event.committee_topics) && event.committee_topics.length > 0) {
-    committeeNames = (event.committee_topics as unknown[]).map(String);
+  const ct = event.committee_topics as unknown;
+  if (Array.isArray(ct) && ct.length > 0) {
+    committeeNames = ct.map(String);
+  } else if (ct && typeof ct === "object") {
+    const keys = Object.keys(ct as Record<string, unknown>);
+    if (keys.length > 0) committeeNames = keys;
   }
 
   const plan = planCommitteeAssignment(

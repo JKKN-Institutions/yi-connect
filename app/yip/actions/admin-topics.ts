@@ -11,43 +11,52 @@ type ActionResult<T = null> =
   | { success: true; data: T }
   | { success: false; error: string };
 
+// 'committee' = the 15 official YIP 2026 ministry committee topics (the single
+// all-chapters catalog events pick 8–10 from). For committee rows: title = the
+// ministry/committee name, description = the debate/bill topic, linked_scheme =
+// the linked scheme/policy/act. Committee rows carry no zone (like central).
+export type TopicCategory = "central" | "regional" | "committee";
+
 export type AdminTopic = {
   id: string;
-  category: "central" | "regional";
+  category: TopicCategory;
   zone: YiZone | null;
   topic_number: number | null;
   title: string;
   description: string | null;
   sub_points: string[];
   handbook_page: number | null;
+  linked_scheme: string | null;
   is_active: boolean;
   created_at: string | null;
 };
 
 export type TopicInput = {
-  category: "central" | "regional";
+  category: TopicCategory;
   zone: YiZone | null;
   topic_number?: number | null;
   title: string;
   description?: string | null;
   sub_points?: string[];
   handbook_page?: number | null;
+  linked_scheme?: string | null;
 };
 
 export type TopicFilters = {
-  category?: "central" | "regional";
+  category?: TopicCategory;
   zone?: YiZone | null;
   q?: string;
   includeInactive?: boolean;
 };
 
 export type CsvRow = {
-  category: "central" | "regional";
+  category: TopicCategory;
   zone: YiZone | null;
   title: string;
   description?: string | null;
   sub_points?: string[];
   handbook_page?: number | null;
+  linked_scheme?: string | null;
 };
 
 // ─── Validation helpers (local, not exported) ───────────────────
@@ -56,8 +65,11 @@ function validateInput(input: TopicInput): string | null {
   if (!input.title || input.title.trim().length < 3) {
     return "Title must be at least 3 characters";
   }
-  if (input.category === "central" && input.zone !== null) {
-    return "Central topics must not have a zone";
+  if (
+    (input.category === "central" || input.category === "committee") &&
+    input.zone
+  ) {
+    return `${input.category === "central" ? "Central" : "Committee"} topics must not have a zone`;
   }
   if (input.category === "regional" && !input.zone) {
     return "Regional topics require a zone";
@@ -79,13 +91,14 @@ function normalizeSubPoints(sp: string[] | undefined | null): string[] {
 
 function mapRow(row: {
   id: string;
-  category: "central" | "regional";
+  category: TopicCategory;
   zone: YiZone | null;
   topic_number: number | null;
   title: string;
   description: string | null;
   sub_points: unknown;
   handbook_page: number | null;
+  linked_scheme: string | null;
   is_active: boolean | null;
   created_at: string | null;
 }): AdminTopic {
@@ -100,10 +113,15 @@ function mapRow(row: {
       ? (row.sub_points as string[])
       : [],
     handbook_page: row.handbook_page,
+    linked_scheme: row.linked_scheme,
     is_active: row.is_active ?? true,
     created_at: row.created_at,
   };
 }
+
+// Column list shared by all selects so linked_scheme is always present.
+const TOPIC_COLS =
+  "id, category, zone, topic_number, title, description, sub_points, handbook_page, linked_scheme, is_active, created_at";
 
 // ─── List ───────────────────────────────────────────────────────
 
@@ -113,9 +131,7 @@ export async function adminListTopics(
   const supabase = await createServiceClient();
   let q = supabase
     .from("topics")
-    .select(
-      "id, category, zone, topic_number, title, description, sub_points, handbook_page, is_active, created_at"
-    )
+    .select(TOPIC_COLS)
     .order("category")
     .order("zone", { nullsFirst: true })
     .order("topic_number", { nullsFirst: false });
@@ -173,11 +189,10 @@ export async function adminCreateTopic(
       description: input.description?.trim() || null,
       sub_points: normalizeSubPoints(input.sub_points),
       handbook_page: input.handbook_page ?? null,
+      linked_scheme: input.linked_scheme?.trim() || null,
       is_active: true,
     })
-    .select(
-      "id, category, zone, topic_number, title, description, sub_points, handbook_page, is_active, created_at"
-    )
+    .select(TOPIC_COLS)
     .single();
 
   if (error || !data) {
@@ -215,11 +230,10 @@ export async function adminUpdateTopic(
       description: input.description?.trim() || null,
       sub_points: normalizeSubPoints(input.sub_points),
       handbook_page: input.handbook_page ?? null,
+      linked_scheme: input.linked_scheme?.trim() || null,
     })
     .eq("id", id)
-    .select(
-      "id, category, zone, topic_number, title, description, sub_points, handbook_page, is_active, created_at"
-    )
+    .select(TOPIC_COLS)
     .single();
 
   if (error || !data) {
@@ -279,7 +293,7 @@ export async function adminReactivateTopic(
 // constraint while numbers temporarily collide.
 
 export async function adminReorderTopics(
-  category: "central" | "regional",
+  category: TopicCategory,
   zone: YiZone | null,
   orderedIds: string[]
 ): Promise<ActionResult<{ reordered: number }>> {
@@ -288,8 +302,8 @@ export async function adminReorderTopics(
   if (category === "regional" && !zone) {
     return { success: false, error: "Regional reorder requires a zone" };
   }
-  if (category === "central" && zone) {
-    return { success: false, error: "Central reorder must not have a zone" };
+  if ((category === "central" || category === "committee") && zone) {
+    return { success: false, error: `${category} reorder must not have a zone` };
   }
   if (orderedIds.length === 0) {
     return { success: true, data: { reordered: 0 } };
@@ -365,13 +379,14 @@ export async function adminBulkImport(
   }
 
   const toInsert: Array<{
-    category: "central" | "regional";
+    category: TopicCategory;
     zone: YiZone | null;
     topic_number: number;
     title: string;
     description: string | null;
     sub_points: string[];
     handbook_page: number | null;
+    linked_scheme: string | null;
     is_active: boolean;
   }> = [];
   let skipped = 0;
@@ -386,7 +401,10 @@ export async function adminBulkImport(
       skipped++;
       continue;
     }
-    if (row.category === "central" && row.zone) {
+    if (
+      (row.category === "central" || row.category === "committee") &&
+      row.zone
+    ) {
       skipped++;
       continue;
     }
@@ -409,6 +427,7 @@ export async function adminBulkImport(
       description: row.description?.trim() || null,
       sub_points: normalizeSubPoints(row.sub_points),
       handbook_page: row.handbook_page ?? null,
+      linked_scheme: row.linked_scheme?.trim() || null,
       is_active: true,
     });
   }

@@ -48,16 +48,16 @@ export default async function AllocationPage({
     (p) => p.side === "opposition"
   ).length;
 
-  // Parse custom committee topics
+  // Parse the event's selected committees. committee_topics is either a legacy
+  // array of names, or a { committeeName → topic } map whose KEYS are the names.
   let customCommittees: string[] | undefined;
   if (event.committee_topics) {
-    try {
-      const topics = event.committee_topics as unknown;
-      if (Array.isArray(topics) && topics.length > 0) {
-        customCommittees = topics.map(String);
-      }
-    } catch {
-      // Ignore
+    const t = event.committee_topics as unknown;
+    if (Array.isArray(t) && t.length > 0) {
+      customCommittees = t.map(String);
+    } else if (t && typeof t === "object") {
+      const keys = Object.keys(t as Record<string, unknown>);
+      if (keys.length > 0) customCommittees = keys;
     }
   }
 

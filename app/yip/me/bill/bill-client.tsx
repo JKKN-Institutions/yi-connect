@@ -129,10 +129,14 @@ export function BillClient({
   initialSession,
   parliamentRole,
   committeeName,
+  committeeTopic,
+  committeeScheme,
 }: {
   initialSession: ParticipantSession;
   parliamentRole: string | null;
   committeeName: string | null;
+  committeeTopic: string | null;
+  committeeScheme: string | null;
 }) {
   const session: ParticipantSession | null = initialSession;
   // Committee members draft their committee's bill (everyone except the Speaker
@@ -378,7 +382,7 @@ export function BillClient({
         </div>
       </div>
 
-      {/* Committee Badge */}
+      {/* Committee Badge + official topic / linked scheme */}
       <div className="rounded-lg border border-purple-200 bg-purple-50 p-3">
         <div className="flex items-center gap-2">
           <span className="inline-flex items-center rounded-full bg-purple-600 px-3 py-1 text-sm font-medium text-white">
@@ -386,6 +390,16 @@ export function BillClient({
           </span>
           <span className="text-sm text-gray-600">Bill</span>
         </div>
+        {committeeTopic && (
+          <div className="mt-2">
+            <p className="text-sm font-medium text-gray-900">{committeeTopic}</p>
+            {committeeScheme && (
+              <p className="text-xs text-gray-500">
+                Linked scheme / policy: {committeeScheme}
+              </p>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Committee Members */}

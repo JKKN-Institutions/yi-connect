@@ -222,7 +222,7 @@ export type Database = {
         | "manual"
       registration_status: "pending" | "approved" | "rejected" | "duplicate"
       score_status: "draft" | "submitted" | "locked"
-      topic_category: "central" | "regional"
+      topic_category: "central" | "regional" | "committee"
       volunteer_station:
         | "registration"
         | "help_desk"
@@ -3312,6 +3312,7 @@ export type Database = {
           handbook_page: number | null
           id: string
           is_active: boolean | null
+          linked_scheme: string | null
           sub_points: Json | null
           title: string
           topic_number: number | null
@@ -3324,6 +3325,7 @@ export type Database = {
           handbook_page?: number | null
           id?: string
           is_active?: boolean | null
+          linked_scheme?: string | null
           sub_points?: Json | null
           title: string
           topic_number?: number | null
@@ -3336,6 +3338,7 @@ export type Database = {
           handbook_page?: number | null
           id?: string
           is_active?: boolean | null
+          linked_scheme?: string | null
           sub_points?: Json | null
           title?: string
           topic_number?: number | null
@@ -3856,7 +3859,7 @@ export const Constants = {
       ],
       registration_status: ["pending", "approved", "rejected", "duplicate"],
       score_status: ["draft", "submitted", "locked"],
-      topic_category: ["central", "regional"],
+      topic_category: ["central", "regional", "committee"],
       volunteer_station: [
         "registration",
         "help_desk",

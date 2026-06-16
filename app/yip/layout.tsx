@@ -48,7 +48,6 @@ export const metadata: Metadata = {
     "school students",
     "India",
     "Thalir",
-    "Bharat Rising",
   ],
   authors: [{ name: "Young Indians (Yi), CII" }],
   openGraph: {

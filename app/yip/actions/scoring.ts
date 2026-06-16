@@ -144,6 +144,16 @@ interface SubmitScoreInput {
   // reconnect must never downgrade/overwrite a score the juror has since
   // SUBMITTED — the flush is a background replay, not a live edit.
   fromOfflineSync?: boolean;
+  // #4 within-session averaging (repeat speakers). A juror may score the same
+  // delegate multiple TIMES in one session — each is an `occurrence` (turn).
+  //   • occurrence omitted        → turn 1 (the default; edits the primary score)
+  //   • occurrence: N             → edit that specific turn
+  //   • newTurn: true             → the server assigns the next turn number and
+  //                                 INSERTS a fresh score (used by "Score another
+  //                                 turn"); occurrence is ignored when set.
+  // Backward-compatible: callers that pass neither behave exactly as before.
+  occurrence?: number;
+  newTurn?: boolean;
 }
 
 export async function submitScore(
@@ -185,8 +195,27 @@ export async function submitScore(
     return { success: false, error: "You're not assigned to score this session." };
   }
 
-  // One score per (juror, participant, SESSION) — so the same delegate scored
-  // in a later session creates a new row instead of overwriting the earlier one.
+  // #4: which TURN are we writing? A new turn gets the next occurrence number
+  // (server-assigned, so two taps can't collide on a guessed value); otherwise
+  // we edit turn `occurrence` (default 1 — the legacy single-score behaviour).
+  let occurrence = input.occurrence ?? 1;
+  if (input.newTurn) {
+    const { data: maxRow } = await supabase
+      .from("scores")
+      .select("occurrence")
+      .eq("jury_assignment_id", input.juryAssignmentId)
+      .eq("participant_id", input.participantId)
+      .eq("event_id", input.eventId)
+      .eq("agenda_item_id", input.agendaItemId)
+      .order("occurrence", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    occurrence = (maxRow?.occurrence ?? 0) + 1;
+  }
+
+  // One score per (juror, participant, SESSION, turn). A new turn resolves to an
+  // occurrence with no existing row, so this lookup returns null and the write
+  // below INSERTs it; editing an existing turn finds + updates that exact row.
   const { data: existing } = await supabase
     .from("scores")
     .select("id, criteria_scores, total_score, status")
@@ -194,6 +223,7 @@ export async function submitScore(
     .eq("participant_id", input.participantId)
     .eq("event_id", input.eventId)
     .eq("agenda_item_id", input.agendaItemId)
+    .eq("occurrence", occurrence)
     .maybeSingle();
 
   // If existing score is locked, prevent edit
@@ -275,6 +305,7 @@ export async function submitScore(
     event_id: input.eventId,
     rubric_id: input.rubricId,
     agenda_item_id: input.agendaItemId,
+    occurrence,
     criteria_scores: input.criteriaScores,
     total_score: input.totalScore,
     comments: input.comments || null,
@@ -315,23 +346,33 @@ export async function submitScore(
       reason: input.status === "submitted" ? "Score submitted" : "Draft updated",
     });
   } else {
-    // Insert new score. Concurrent-reconnect race fix (rehearsal 2026-06-14):
-    // two near-simultaneous writes for the same (juror, participant, session) —
-    // e.g. the 10s offline flush firing while the juror also taps Submit — both
-    // read no existing row (above) then both INSERT, and the 2nd hits the
-    // scores_jaid_pid_aid_key unique violation (returned as a failure, leaving
-    // the entry stuck in the offline buffer). Upsert on that key turns the loser
-    // into an idempotent UPDATE instead of a 23505 error (proven at 140-scale).
-    const { data: newScore, error: insertError } = await supabase
-      .from("scores")
-      .upsert(scoreData, {
-        onConflict: "jury_assignment_id,participant_id,agenda_item_id",
-      })
+    // #4: a NEW turn must never silently overwrite an existing one. Two rapid
+    // "Score another turn" taps can both compute the same occurrence (max+1);
+    // a strict INSERT makes the loser fail with 23505 (visible "try again")
+    // instead of an upsert silently UPDATEing the other turn away.
+    //
+    // The non-newTurn path keeps the upsert: the concurrent-reconnect race
+    // (rehearsal 2026-06-14) — the 10s offline flush firing while the juror also
+    // taps Submit for the SAME (juror, participant, session, turn) — both read no
+    // existing row then both write; upsert on the unique key turns the loser into
+    // an idempotent UPDATE rather than a stuck 23505 (proven at 140-scale).
+    const writer = input.newTurn
+      ? supabase.from("scores").insert(scoreData)
+      : supabase.from("scores").upsert(scoreData, {
+          onConflict:
+            "jury_assignment_id,participant_id,agenda_item_id,occurrence",
+        });
+    const { data: newScore, error: insertError } = await writer
       .select("id")
       .single();
 
     if (insertError || !newScore) {
-      return { success: false, error: insertError?.message ?? "Failed to save score" };
+      return {
+        success: false,
+        error: input.newTurn
+          ? "Couldn't add the turn — please try again."
+          : insertError?.message ?? "Failed to save score",
+      };
     }
 
     scoreId = newScore.id;
@@ -430,6 +471,33 @@ export async function getScoreForParticipant(
     .maybeSingle();
 
   if (error || !data) return null;
+  return data;
+}
+
+/**
+ * #4: all TURNS this juror has recorded for a (participant, session), ordered by
+ * turn number. Drives the juror UI's "turns" strip + "Score another turn" flow.
+ * Returns metadata only (no PII) — the juror's own scores.
+ */
+export async function getScoreOccurrences(
+  juryAssignmentId: string,
+  participantId: string,
+  eventId: string,
+  agendaItemId: string
+): Promise<
+  { id: string; occurrence: number; total_score: number; status: string | null }[]
+> {
+  const supabase = await createServiceClient();
+  const { data, error } = await supabase
+    .from("scores")
+    .select("id, occurrence, total_score, status")
+    .eq("jury_assignment_id", juryAssignmentId)
+    .eq("participant_id", participantId)
+    .eq("event_id", eventId)
+    .eq("agenda_item_id", agendaItemId)
+    .order("occurrence", { ascending: true });
+
+  if (error || !data) return [];
   return data;
 }
 

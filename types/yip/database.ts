@@ -3129,6 +3129,7 @@ export type Database = {
           id: string
           is_mock: boolean
           jury_assignment_id: string
+          occurrence: number
           participant_id: string
           position_bonus: number
           rubric_id: string
@@ -3151,6 +3152,7 @@ export type Database = {
           is_mock?: boolean
           jury_assignment_id: string
           participant_id: string
+          occurrence?: number
           position_bonus?: number
           rubric_id: string
           status?: Database["public"]["Enums"]["score_status"] | null
@@ -3172,6 +3174,7 @@ export type Database = {
           is_mock?: boolean
           jury_assignment_id?: string
           participant_id?: string
+          occurrence?: number
           position_bonus?: number
           rubric_id?: string
           status?: Database["public"]["Enums"]["score_status"] | null

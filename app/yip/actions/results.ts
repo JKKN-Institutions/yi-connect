@@ -124,6 +124,17 @@ function appendAward(r: ResultRow, awardLabel: string): void {
     : awardLabel;
 }
 
+/**
+ * Strip one award label from a row's comma-joined award_category (the inverse of
+ * appendAward). Used by the manual-override final pass to take an award away from
+ * its auto-computed winner before re-awarding it to the chair's pick.
+ */
+function removeAward(r: ResultRow, awardLabel: string): void {
+  if (!r.award_category) return;
+  const kept = r.award_category.split(", ").filter((a) => a !== awardLabel);
+  r.award_category = kept.length ? kept.join(", ") : null;
+}
+
 function assignAward(
   rows: ResultRow[],
   participants: Map<string, ParticipantLite>,
@@ -743,6 +754,24 @@ export async function computeResults(
   //     Debate + Zero Hour + Question Hour.
   assignAward(resultRows, participantMap, "Independent Voice of the House", isIndependent,
     sumKeys(["pol", "zero", "qh"]));
+
+  // ── Manual award overrides (chair's final say) — final pass ───────
+  // A chair can pin THE winner for any award (yip.award_overrides). Applied
+  // last so it always beats the auto-computed holder, and re-read on every
+  // recompute so it survives. If the chair's pick has no result row (not
+  // scored), the auto-winner is left intact rather than the award vanishing.
+  const { data: overrides } = await supabase
+    .from("award_overrides")
+    .select("award_label, participant_id")
+    .eq("event_id", eventId);
+  for (const ov of overrides ?? []) {
+    const target = resultRows.find(
+      (r) => r.participant_id === ov.participant_id
+    );
+    if (!target) continue;
+    for (const r of resultRows) removeAward(r, ov.award_label);
+    appendAward(target, ov.award_label);
+  }
 
   // 7. Replace and persist
   await supabase.from("results").delete().eq("event_id", eventId);

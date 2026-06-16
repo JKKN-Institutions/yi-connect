@@ -1005,6 +1005,57 @@ export type Database = {
           },
         ]
       }
+      award_overrides: {
+        Row: {
+          award_label: string
+          created_at: string
+          event_id: string
+          id: string
+          note: string | null
+          participant_id: string
+          set_by_email: string | null
+          set_by_user: string | null
+          updated_at: string
+        }
+        Insert: {
+          award_label: string
+          created_at?: string
+          event_id: string
+          id?: string
+          note?: string | null
+          participant_id: string
+          set_by_email?: string | null
+          set_by_user?: string | null
+          updated_at?: string
+        }
+        Update: {
+          award_label?: string
+          created_at?: string
+          event_id?: string
+          id?: string
+          note?: string | null
+          participant_id?: string
+          set_by_email?: string | null
+          set_by_user?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "award_overrides_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "award_overrides_participant_id_fkey"
+            columns: ["participant_id"]
+            isOneToOne: false
+            referencedRelation: "participants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bill_documents: {
         Row: {
           committee_name: string

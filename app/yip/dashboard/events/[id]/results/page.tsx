@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/yip/supabase/server";
 import { getEvent } from "@/app/yip/actions/events";
 import { getResults } from "@/app/yip/actions/results";
+import { getAwardOverrides } from "@/app/yip/actions/award-overrides";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { ResultsClient } from "./results-client";
 import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
@@ -36,6 +37,7 @@ export default async function ResultsPage({
   }
 
   const results = await getResults(id);
+  const awardOverrides = await getAwardOverrides(id);
 
   return (
     <ResultsClient
@@ -43,6 +45,8 @@ export default async function ResultsPage({
       eventName={event.name}
       resultsPublishedAt={event.results_published_at}
       results={results}
+      awardOverrides={awardOverrides}
+      canOverrideAwards={access.canDelete}
     />
   );
 }

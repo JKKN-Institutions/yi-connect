@@ -5,6 +5,12 @@ import { useRouter } from "next/navigation";
 import { publishResults, unpublishResults } from "@/app/yip/actions/results";
 import type { ResultWithParticipant } from "@/app/yip/actions/results";
 import {
+  setAwardWinner,
+  clearAwardOverride,
+} from "@/app/yip/actions/award-overrides";
+import type { AwardOverride } from "@/app/yip/actions/award-overrides";
+import { AWARD_LABELS } from "@/lib/yip/awards";
+import {
   markQualified,
   unmarkQualified,
   getEventQualificationData,
@@ -41,6 +47,8 @@ import {
   Gavel,
   MapPin,
   TrendingUp,
+  Pencil,
+  X,
 } from "lucide-react";
 
 // ─── Award card styling ───────────────────────────────────────────
@@ -201,6 +209,8 @@ export function ResultsClient({
   eventName,
   resultsPublishedAt,
   results,
+  awardOverrides = [],
+  canOverrideAwards = false,
   eventLevel = "chapter",
   initialQualifiedIds = [],
 }: {
@@ -208,10 +218,54 @@ export function ResultsClient({
   eventName: string;
   resultsPublishedAt: string | null;
   results: ResultWithParticipant[];
+  awardOverrides?: AwardOverride[];
+  canOverrideAwards?: boolean;
   eventLevel?: string;
   initialQualifiedIds?: string[];
 }) {
   const router = useRouter();
+
+  // Manual award override (chair's final say)
+  const [overrideAward, setOverrideAward] = useState<string>("");
+  const [overrideParticipant, setOverrideParticipant] = useState<string>("");
+  const [overrideNote, setOverrideNote] = useState<string>("");
+  const [overrideLoading, setOverrideLoading] = useState(false);
+
+  async function handleSetOverride() {
+    if (!overrideAward || !overrideParticipant) {
+      setMessage({ type: "error", text: "Pick both an award and a participant." });
+      return;
+    }
+    setOverrideLoading(true);
+    const res = await setAwardWinner(
+      eventId,
+      overrideAward,
+      overrideParticipant,
+      overrideNote
+    );
+    setOverrideLoading(false);
+    if (!res.success) {
+      setMessage({ type: "error", text: res.error });
+      return;
+    }
+    setOverrideAward("");
+    setOverrideParticipant("");
+    setOverrideNote("");
+    setMessage({ type: "success", text: "Award winner overridden and results recomputed." });
+    router.refresh();
+  }
+
+  async function handleClearOverride(awardLabel: string) {
+    setOverrideLoading(true);
+    const res = await clearAwardOverride(eventId, awardLabel);
+    setOverrideLoading(false);
+    if (!res.success) {
+      setMessage({ type: "error", text: res.error });
+      return;
+    }
+    setMessage({ type: "success", text: "Override cleared — the computed winner is restored." });
+    router.refresh();
+  }
   const [publishLoading, setPublishLoading] = useState(false);
   const [message, setMessage] = useState<{
     type: "success" | "error";
@@ -533,6 +587,116 @@ export function ResultsClient({
             );
           })}
         </div>
+      )}
+
+      {/* Manual award override — chair's final say (chapter chair or higher) */}
+      {canOverrideAwards && (
+        <Card className="border-[#FF9933]/30 bg-[#FF9933]/5">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Pencil className="size-4 text-[#FF9933]" />
+              Override Award Winner
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-gray-600">
+              Pin the winner for any award. This overrides the auto-computed
+              result and survives every recompute. Clear it to restore the
+              computed winner.
+            </p>
+
+            {awardOverrides.length > 0 && (
+              <div className="space-y-2">
+                {awardOverrides.map((ov) => (
+                  <div
+                    key={ov.id}
+                    className="flex items-center justify-between gap-3 rounded-md border bg-white px-3 py-2"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">
+                        {ov.award_label} →{" "}
+                        {ov.participant_name ?? "Unknown participant"}
+                      </p>
+                      <p className="text-xs text-gray-500 truncate">
+                        Overridden{ov.set_by_email ? ` by ${ov.set_by_email}` : ""}
+                        {ov.note ? ` · ${ov.note}` : ""}
+                      </p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={overrideLoading}
+                      onClick={() => handleClearOverride(ov.award_label)}
+                      className="shrink-0 border-red-300 text-red-600 hover:bg-red-50"
+                    >
+                      <X className="size-4" />
+                      Clear
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+              <div>
+                <label className="text-xs font-medium text-gray-500">Award</label>
+                <select
+                  value={overrideAward}
+                  onChange={(e) => setOverrideAward(e.target.value)}
+                  className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
+                >
+                  <option value="">Select an award…</option>
+                  {AWARD_LABELS.map((label) => (
+                    <option key={label} value={label}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-500">
+                  Winner
+                </label>
+                <select
+                  value={overrideParticipant}
+                  onChange={(e) => setOverrideParticipant(e.target.value)}
+                  className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
+                >
+                  <option value="">Select a participant…</option>
+                  {results.map((r) => (
+                    <option key={r.participant_id} value={r.participant_id}>
+                      {r.participant.full_name} — {r.participant.school_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <Button
+                disabled={overrideLoading}
+                onClick={handleSetOverride}
+                className="bg-[#FF9933] text-white hover:bg-[#E68A2E]"
+              >
+                {overrideLoading ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Pencil className="size-4" />
+                )}
+                Set Winner
+              </Button>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-gray-500">
+                Note (optional)
+              </label>
+              <input
+                type="text"
+                value={overrideNote}
+                onChange={(e) => setOverrideNote(e.target.value)}
+                placeholder="Reason for the override (recorded in the audit log)"
+                className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
+              />
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* Leaderboard Table */}

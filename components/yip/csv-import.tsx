@@ -31,6 +31,9 @@ interface CsvRow {
   class: number;
   phone?: string;
   email?: string;
+  // Parent / guardian mobile — the reachable contact for minors (most students
+  // have no email/phone of their own). Stored as participants.parent_phone.
+  parent_phone?: string;
   city?: string;
   // Roster home state. Spreadsheets that only have a `state` column get it
   // routed to constituency_state (YIP-handbook canonical meaning); a `state`
@@ -64,6 +67,17 @@ const COL_ALIASES: Record<
   class: ["class", "grade", "std"],
   phone: ["phone", "mobile", "phone_number", "phone number"],
   email: ["email", "email_address", "email address"],
+  parent_phone: [
+    "parent_mobile",
+    "parent mobile",
+    "parent_phone",
+    "parent phone",
+    "parent",
+    "guardian_mobile",
+    "guardian mobile",
+    "guardian_phone",
+    "guardian phone",
+  ],
   city: ["city", "town"],
   home_state_explicit: ["home_state", "home state"],
   constituency_state_explicit: ["constituency_state", "state_constituency"],
@@ -138,6 +152,7 @@ function normalizeXlsxRow(
   const classRaw = pick(COL_ALIASES.class);
   const phoneRaw = pick(COL_ALIASES.phone);
   const emailRaw = pick(COL_ALIASES.email);
+  const parentPhoneRaw = pick(COL_ALIASES.parent_phone);
   const cityRaw = pick(COL_ALIASES.city);
 
   // State routing (see resolveStateRouting above)
@@ -168,6 +183,7 @@ function normalizeXlsxRow(
   const school = schoolRaw !== undefined ? String(schoolRaw).trim() : "";
   const classNum = classRaw !== undefined ? Number(classRaw) : 0;
   const phone = normalizePhone(phoneRaw);
+  const parent_phone = normalizePhone(parentPhoneRaw);
   const email = emailRaw !== undefined ? String(emailRaw).trim() || undefined : undefined;
   const city = cityRaw !== undefined ? String(cityRaw).trim() || undefined : undefined;
   const home_state =
@@ -215,6 +231,7 @@ function normalizeXlsxRow(
     school,
     class: isNaN(classNum) || classNum === 0 ? 10 : classNum,
     phone,
+    parent_phone,
     email,
     city,
     home_state,
@@ -245,15 +262,16 @@ function defaultAssignBenches(rows: ParsedRow[]): boolean {
 
 /** Download a one-row .xlsx template */
 function downloadXlsxTemplate() {
-  const headers = ["name", "school", "class", "phone", "email", "city", "state"];
+  // Standard chapter roster: just these columns. (The importer still also
+  // accepts optional pre-assigned party/constituency/committee columns for
+  // chapters that allocate in advance — they're just not in this template.)
+  const headers = ["name", "school", "class", "email", "parent_mobile"];
   const sample = [
     "Arjun Kumar",
     "Delhi Public School",
     10,
-    "9876543210",
     "arjun@example.com",
-    "New Delhi",
-    "Delhi",
+    "9876543210",
   ];
   const ws = XLSX.utils.aoa_to_sheet([headers, sample]);
   const wb = XLSX.utils.book_new();
@@ -385,6 +403,7 @@ export function CsvImport({
           const classIdx = findColIdx(headers, COL_ALIASES.class);
           const phoneIdx = findColIdx(headers, COL_ALIASES.phone);
           const emailIdx = findColIdx(headers, COL_ALIASES.email);
+          const parentPhoneIdx = findColIdx(headers, COL_ALIASES.parent_phone);
           const cityIdx = findColIdx(headers, COL_ALIASES.city);
           const homeStateExplicitIdx = findColIdx(headers, COL_ALIASES.home_state_explicit);
           const constStateExplicitIdx = findColIdx(
@@ -399,13 +418,13 @@ export function CsvImport({
 
           if (nameIdx === -1) {
             setParseError(
-              'CSV must have a "name" column. Expected columns: name, school, class, phone, email, city, state'
+              'CSV must have a "name" column. Expected columns: name, school, class, email, parent_mobile'
             );
             return;
           }
           if (schoolIdx === -1) {
             setParseError(
-              'CSV must have a "school" column. Expected columns: name, school, class, phone, email, city, state'
+              'CSV must have a "school" column. Expected columns: name, school, class, email, parent_mobile'
             );
             return;
           }
@@ -483,6 +502,10 @@ export function CsvImport({
                 phoneIdx >= 0
                   ? normalizePhone(cols[phoneIdx])
                   : undefined,
+              parent_phone:
+                parentPhoneIdx >= 0
+                  ? normalizePhone(cols[parentPhoneIdx])
+                  : undefined,
               email: emailIdx >= 0 ? cols[emailIdx]?.trim() : undefined,
               city: cityIdx >= 0 ? cols[cityIdx]?.trim() : undefined,
               home_state,
@@ -542,6 +565,7 @@ export function CsvImport({
       school: r.school,
       class: r.class,
       phone: r.phone,
+      parent_phone: r.parent_phone,
       email: r.email,
       city: r.city,
       home_state: r.home_state,
@@ -579,7 +603,7 @@ export function CsvImport({
         <DialogHeader>
           <DialogTitle>Import Participants</DialogTitle>
           <DialogDescription>
-            Upload a CSV or Excel (.xlsx / .xls) file. Required columns: name, school. Optional: class, phone, email, city, home_state, party (A-Z), constituency, state (constituency state), committee.
+            Upload a CSV or Excel (.xlsx / .xls) file. Required columns: name, school. Optional: class (defaults to 10), email, parent_mobile.
           </DialogDescription>
         </DialogHeader>
 

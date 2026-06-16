@@ -38,6 +38,8 @@ interface ImportRow {
   school: string;
   class: number;
   phone?: string;
+  // Parent / guardian mobile — the reachable contact for minors → parent_phone.
+  parent_phone?: string;
   email?: string;
   city?: string;
   // Roster home state (legacy alias `state` still accepted on the client; the
@@ -520,6 +522,7 @@ export async function importParticipants(
     school_name: string;
     class: number;
     phone: string | null;
+    parent_phone: string | null;
     email: string | null;
     city: string | null;
     home_state: string | null;
@@ -565,6 +568,7 @@ export async function importParticipants(
         school_name: row.school.trim(),
         class: row.class,
         phone: row.phone?.trim() || null,
+        parent_phone: row.parent_phone?.trim() || null,
         email: row.email?.trim() || null,
         city: row.city?.trim() || null,
         home_state: row.home_state?.trim() || null,

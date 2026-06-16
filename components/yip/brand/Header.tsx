@@ -1,18 +1,12 @@
 import Link from "next/link";
-import Image from "next/image";
 
 /**
- * YIP Brand Header — saffron bar with the programme logos.
+ * YIP Brand Header — tricolor bar.
  *
- * Used at the top of every /yip route via app/yip/layout.tsx.
- * Indian Parliament colors: saffron (#FF9933), white, green (#138808).
- *
- * Logo order (national team direction — Pradeep, national call
- * 2026-06-12), left → right: Yi → Bharat One → YIP 2026 wordmark →
- * CII LAST (right-most). The Thalir logo was REMOVED from the header
- * per the same direction (it named exactly these four logos).
- * Below the `sm` breakpoint only Yi + the wordmark show to avoid
- * overflow; Bharat One and CII are hidden.
+ * LOGOS REMOVED 2026-06-16 (Yi / Bharat One / YIP wordmark / CII) — to be
+ * re-added later with the finalised logo set. The previous version is in git
+ * history; re-add the <Image> cluster inside the home <Link> to restore.
+ * The tricolor bar + a plain-text home link are kept so layout/nav are intact.
  */
 export function YipBrandHeader({
   homeHref = "/yip",
@@ -26,50 +20,10 @@ export function YipBrandHeader({
         <Link
           href={homeHref}
           aria-label="YIP home"
-          className="flex items-center gap-3"
+          className="text-sm font-semibold text-[#1a1a3e]"
         >
-          <Image
-            src="/yip/logos/yi-logo.png"
-            alt="Young Indians"
-            width={44}
-            height={44}
-            className="h-10 w-auto"
-            priority
-          />
-          {/* Bharat One — "One Bharat, One Spirit". White-bg logo on a small
-              rounded chip. Hidden below sm to avoid overflow. */}
-          <Image
-            src="/yip/logos/bharat-one-logo.png"
-            alt="One Bharat, One Spirit"
-            width={269}
-            height={187}
-            className="hidden h-8 w-auto rounded bg-white p-0.5 shadow-sm ring-1 ring-black/5 sm:block"
-          />
-          {/* Official YIP 2026 wordmark (from the Yi handbook) — transparent
-              PNG sitting directly on the tricolor gradient (chip removed per
-              national-team direction). */}
-          <Image
-            src="/yip/logos/yip-2026-wordmark.png"
-            alt="Young Indians Parliament 2026"
-            width={416}
-            height={118}
-            priority
-            className="h-9 w-auto sm:h-10"
-          />
+          Young Indians Parliament
         </Link>
-
-        <div className="hidden items-center gap-3 sm:flex">
-          {/* CII — last, right-most (national-team direction). White chip
-              keeps the purple mark legible over the green end of the
-              gradient. */}
-          <Image
-            src="/yip/logos/cii-logo.png"
-            alt="CII — Confederation of Indian Industry"
-            width={2329}
-            height={709}
-            className="h-8 w-auto rounded bg-white px-1.5 py-1 shadow-sm ring-1 ring-black/5"
-          />
-        </div>
       </div>
     </header>
   );

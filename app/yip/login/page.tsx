@@ -60,11 +60,8 @@ export default function LoginPage() {
 
   return (
     <>
-      {/* Logo / Branding */}
+      {/* Logo removed 2026-06-16 — re-add later */}
       <div className="mb-8 text-center">
-        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[#FF9933]/10">
-          <span className="text-2xl font-bold text-[#FF9933]">YIP</span>
-        </div>
         <h1 className="text-2xl font-bold tracking-tight text-gray-900">
           Young Indians Parliament
         </h1>

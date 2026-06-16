@@ -1,7 +1,7 @@
 /**
  * Directory Admin — List Page (Phase A, 2026-05-28)
  *
- * Cross-vertical list of `yi_directory.people` with roll-up of active
+ * Cross-app list of `yi_directory.people` with roll-up of active
  * `role_assignments`. Read-only. Super-admin gate via X agent's helper.
  */
 import { isCurrentUserPlatformSuperAdmin } from "@/lib/yip/auth/require-super-admin";
@@ -81,7 +81,7 @@ export default async function DirectoryAdminListPage({
       <div className="rounded-lg border border-red-200 bg-red-50 p-6">
         <h1 className="text-lg font-semibold text-red-900">403 · Forbidden</h1>
         <p className="mt-2 text-sm text-red-800">
-          Only the platform super-admin (director) can view the cross-vertical Yi
+          Only the platform super-admin (director) can view the cross-app Yi
           Directory.
         </p>
       </div>

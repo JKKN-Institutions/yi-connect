@@ -16,7 +16,7 @@
  *
  * Auth: callers MUST gate with `isCurrentUserSuperAdmin()`. We use the
  * service client because RLS on legacy schemas is not configured for
- * cross-vertical staff reads.
+ * cross-app staff reads.
  */
 "use server";
 

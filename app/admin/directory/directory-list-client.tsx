@@ -218,14 +218,14 @@ export function DirectoryListClient({
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Link href="/admin/directory/new">
+          <Link href="/admin/directory/invite">
             <Button variant="outline" size="sm">
-              <UserPlus className="mr-1.5 h-4 w-4" /> New person
+              <Mail className="mr-1.5 h-4 w-4" /> Invite
             </Button>
           </Link>
-          <Link href="/admin/directory/invite">
+          <Link href="/admin/directory/new">
             <Button size="sm">
-              <Mail className="mr-1.5 h-4 w-4" /> Invite
+              <UserPlus className="mr-1.5 h-4 w-4" /> Add person
             </Button>
           </Link>
         </div>

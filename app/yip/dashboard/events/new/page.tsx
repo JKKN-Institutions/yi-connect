@@ -530,13 +530,18 @@ export default function NewEventPage() {
                           className="mt-1 size-4 shrink-0 accent-[#FF9933]"
                         />
                         <div className="min-w-0">
-                          <p className="text-sm font-semibold text-gray-900">
-                            {c.committee}
-                          </p>
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-semibold text-gray-900">
+                              {c.committee}
+                            </p>
+                            <span className="shrink-0 rounded border border-gray-300 bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600">
+                              Committee
+                            </span>
+                          </div>
                           <p className="text-sm text-gray-700">{c.topic}</p>
                           {c.scheme && (
                             <p className="text-xs text-gray-400">
-                              Linked: {c.scheme}
+                              Linked scheme: {c.scheme}
                             </p>
                           )}
                         </div>

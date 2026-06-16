@@ -66,7 +66,7 @@ const COL_ALIASES: Record<
   school: ["school", "school_name", "schoolname", "school name"],
   class: ["class", "grade", "std"],
   phone: ["phone", "mobile", "phone_number", "phone number"],
-  email: ["email", "email_address", "email address"],
+  email: ["email", "email_address", "email address", "email id", "email_id", "email-id"],
   parent_phone: [
     "parent_mobile",
     "parent mobile",
@@ -215,8 +215,10 @@ function normalizeXlsxRow(
   const errors: string[] = [];
   if (!name) errors.push("Name is required");
   if (!school) errors.push("School is required");
-  if (classRaw !== undefined && (classNum < 9 || classNum > 12))
-    errors.push("Class must be 9-12");
+  // Class is MANDATORY (so allocation can mix ages evenly across parties).
+  if (classRaw === undefined || classRaw === "" || isNaN(classNum) || classNum === 0)
+    errors.push("Class is required (9-12)");
+  else if (classNum < 9 || classNum > 12) errors.push("Class must be 9-12");
   if (party_letter !== undefined && !/^[A-Z]$/.test(party_letter))
     errors.push(`Party must be a single letter A-Z (got "${party_letter}")`);
   if (
@@ -229,7 +231,7 @@ function normalizeXlsxRow(
     rowNumber,
     name,
     school,
-    class: isNaN(classNum) || classNum === 0 ? 10 : classNum,
+    class: classNum,
     phone,
     parent_phone,
     email,
@@ -444,7 +446,9 @@ export function CsvImport({
 
             if (!name) errors.push("Name is required");
             if (!school) errors.push("School is required");
-            if (classIdx >= 0 && (classVal < 9 || classVal > 12))
+            if (classIdx < 0 || isNaN(classVal) || classVal === 0)
+              errors.push("Class is required (9-12)");
+            else if (classVal < 9 || classVal > 12)
               errors.push("Class must be 9-12");
 
             // State routing
@@ -497,7 +501,7 @@ export function CsvImport({
               rowNumber: i + 1,
               name,
               school,
-              class: classVal || 10,
+              class: classVal,
               phone:
                 phoneIdx >= 0
                   ? normalizePhone(cols[phoneIdx])
@@ -603,7 +607,7 @@ export function CsvImport({
         <DialogHeader>
           <DialogTitle>Import Participants</DialogTitle>
           <DialogDescription>
-            Upload a CSV or Excel (.xlsx / .xls) file. Required columns: name, school. Optional: class (defaults to 10), email, parent_mobile.
+            Upload a CSV or Excel (.xlsx / .xls) file. Required columns: name, school, class (9-12). Optional: email, parent_mobile.
           </DialogDescription>
         </DialogHeader>
 

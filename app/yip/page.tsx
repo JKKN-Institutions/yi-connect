@@ -120,8 +120,6 @@ export default function HomePage() {
                 <span>CII</span>
                 <span className="h-3 w-px bg-[#1a1a3e]/10" />
                 <span>Thalir</span>
-                <span className="h-3 w-px bg-[#1a1a3e]/10" />
-                <span>Bharat Rising</span>
               </div>
             </div>
 
@@ -362,8 +360,6 @@ export default function HomePage() {
               <span>Confederation of Indian Industry</span>
               <span className="hidden sm:inline h-3 w-px bg-[#1a1a3e]/10" />
               <span>Thalir</span>
-              <span className="hidden sm:inline h-3 w-px bg-[#1a1a3e]/10" />
-              <span>Bharat Rising</span>
             </div>
             {/* Tricolor line */}
             <div className="flex w-20 overflow-hidden rounded-full">

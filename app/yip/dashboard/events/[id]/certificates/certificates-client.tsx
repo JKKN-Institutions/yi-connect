@@ -669,8 +669,6 @@ function buildParticipationCertHtml(
       <span style="font-size:11px;color:#666;letter-spacing:0.5px;">Confederation of Indian Industry (CII)</span>
       <span style="font-size:11px;color:#999;">|</span>
       <span style="font-size:11px;color:#666;letter-spacing:0.5px;">Thalir Thiran Iyakkam</span>
-      <span style="font-size:11px;color:#999;">|</span>
-      <span style="font-size:11px;color:#666;letter-spacing:0.5px;">Bharat Rising</span>
     </div>
     <div style="font-size:14px;font-weight:bold;color:#FF9933;letter-spacing:3px;text-transform:uppercase;margin-bottom:4px;">Young Indians Parliament 2.0</div>
     <h1 style="font-size:32px;font-weight:bold;color:#1a1a1a;letter-spacing:6px;text-transform:uppercase;margin:12px 0 8px;">Certificate of Participation</h1>
@@ -728,8 +726,6 @@ function buildAwardCertHtml(
       <span style="font-size:11px;color:#8B7355;letter-spacing:0.5px;">Confederation of Indian Industry (CII)</span>
       <span style="font-size:11px;color:#B8A080;">|</span>
       <span style="font-size:11px;color:#8B7355;letter-spacing:0.5px;">Thalir Thiran Iyakkam</span>
-      <span style="font-size:11px;color:#B8A080;">|</span>
-      <span style="font-size:11px;color:#8B7355;letter-spacing:0.5px;">Bharat Rising</span>
     </div>
     <div style="font-size:14px;font-weight:bold;color:#B8860B;letter-spacing:3px;text-transform:uppercase;margin-bottom:4px;">Young Indians Parliament 2.0</div>
     <h1 style="font-size:32px;font-weight:bold;color:#1a1a1a;letter-spacing:6px;text-transform:uppercase;margin:10px 0 6px;">Certificate of Excellence</h1>

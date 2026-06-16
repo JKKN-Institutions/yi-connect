@@ -170,32 +170,7 @@ export function AwardCert({
           boxSizing: "border-box",
         }}
       >
-        {/* Logos row */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: "32px",
-            marginBottom: "6px",
-          }}
-        >
-          <span style={{ fontSize: "11px", color: "#8B7355", letterSpacing: "0.5px" }}>
-            Young Indians (Yi)
-          </span>
-          <span style={{ fontSize: "11px", color: "#B8A080" }}>|</span>
-          <span style={{ fontSize: "11px", color: "#8B7355", letterSpacing: "0.5px" }}>
-            Confederation of Indian Industry (CII)
-          </span>
-          <span style={{ fontSize: "11px", color: "#B8A080" }}>|</span>
-          <span style={{ fontSize: "11px", color: "#8B7355", letterSpacing: "0.5px" }}>
-            Thalir Thiran Iyakkam
-          </span>
-          <span style={{ fontSize: "11px", color: "#B8A080" }}>|</span>
-          <span style={{ fontSize: "11px", color: "#8B7355", letterSpacing: "0.5px" }}>
-            Bharat Rising
-          </span>
-        </div>
+        {/* Logos row removed 2026-06-16 — re-add later */}
 
         {/* YIP branding */}
         <div

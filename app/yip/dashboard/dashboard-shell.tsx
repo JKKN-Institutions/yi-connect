@@ -117,12 +117,8 @@ export function DashboardShell({
                 collapsed && "lg:justify-center"
               )}
             >
+              {/* Logo mark removed 2026-06-16 — re-add later */}
               <Link href="/yip/dashboard" className="flex items-center gap-3">
-                <div className="relative flex h-11 w-11 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-[#FF9933] to-[#E68A2E] shadow-lg shadow-[#FF9933]/25">
-                  <span className="font-[family-name:var(--font-heading)] text-xl font-bold text-white">Y</span>
-                  {/* Ashoka Chakra tiny overlay */}
-                  <div className="absolute -bottom-1 -right-1 h-5 w-5 rounded-full border border-white/20" />
-                </div>
                 <div className={cn(collapsed && "lg:hidden")}>
                   <span className="block text-[13px] font-bold tracking-wide text-[#1a1a3e]">Young Indians</span>
                   <span className="block text-[9px] font-semibold uppercase tracking-[0.25em] text-[#FF9933]">Parliament</span>

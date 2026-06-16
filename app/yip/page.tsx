@@ -12,10 +12,8 @@ export default function HomePage() {
 
       {/* ─── Nav ─────────────────────────────────────────────────── */}
       <nav className="relative z-10 mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-5">
+        {/* Logo mark removed 2026-06-16 — re-add later */}
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#FF9933] shadow-md shadow-[#FF9933]/20">
-            <span className="font-[family-name:var(--font-heading)] text-lg font-bold text-white">Y</span>
-          </div>
           <div>
             <span className="text-sm font-semibold tracking-wide text-[#1a1a3e]">Young Indians</span>
             <span className="block text-[10px] uppercase tracking-[0.2em] text-[#FF9933]">Parliament</span>

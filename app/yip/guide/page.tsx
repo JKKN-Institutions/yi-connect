@@ -109,10 +109,8 @@ export default async function YipGuidePage({
             <ArrowLeft className="size-4" />
             Back
           </Link>
+          {/* Logo mark removed 2026-06-16 — re-add later */}
           <div className="flex items-center gap-2.5">
-            <div className="flex size-8 items-center justify-center rounded-lg bg-gradient-to-br from-[#FF9933] to-[#E68A2E]">
-              <span className="text-sm font-bold text-white">Y</span>
-            </div>
             <div className="leading-tight">
               <p className="text-sm font-bold text-[#1a1a3e]">Young Indians</p>
               <p className="text-[9px] font-semibold uppercase tracking-[0.25em] text-[#FF9933]">

@@ -50,10 +50,8 @@ export default async function ParticipantLayout({
       {/* Header */}
       <header className="sticky top-0 z-50 border-b border-[#FF9933]/20 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80">
         <div className="flex h-14 items-center justify-between px-4">
+          {/* Logo mark removed 2026-06-16 — re-add later */}
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-[#FF9933] to-[#E68A2E]">
-              <span className="text-sm font-bold text-white">YI</span>
-            </div>
             <div className="min-w-0">
               <p className="text-sm font-semibold text-gray-900 truncate">
                 Young Indians Parliament

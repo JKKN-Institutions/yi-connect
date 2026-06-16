@@ -61,11 +61,8 @@ export default function JoinPage() {
         <div className="absolute top-1/4 left-1/2 -translate-x-1/2 h-[400px] w-[400px] rounded-full bg-[#FF9933]/[0.04] blur-3xl" />
 
         <div className="relative w-full max-w-sm">
-          {/* Logo */}
+          {/* Logo removed 2026-06-16 — re-add later */}
           <div className="mb-10 text-center">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#FF9933] shadow-lg shadow-[#FF9933]/20">
-              <span className="font-[family-name:var(--font-heading)] text-2xl font-bold text-white">Y</span>
-            </div>
             <h1 className="font-[family-name:var(--font-heading)] text-2xl font-bold text-[#1a1a3e]">
               Young Indians Parliament
             </h1>

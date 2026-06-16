@@ -215,10 +215,11 @@ function normalizeXlsxRow(
   const errors: string[] = [];
   if (!name) errors.push("Name is required");
   if (!school) errors.push("School is required");
-  // Class is MANDATORY (so allocation can mix ages evenly across parties).
-  if (classRaw === undefined || classRaw === "" || isNaN(classNum) || classNum === 0)
-    errors.push("Class is required (9-12)");
-  else if (classNum < 9 || classNum > 12) errors.push("Class must be 9-12");
+  // Class is NOT collected in the roster (dropped). participants.class is NOT
+  // NULL, so we default to 10 internally. If a stray class value is present it
+  // must still be 9-12.
+  if (classRaw !== undefined && classRaw !== "" && (classNum < 9 || classNum > 12))
+    errors.push("Class must be 9-12");
   if (party_letter !== undefined && !/^[A-Z]$/.test(party_letter))
     errors.push(`Party must be a single letter A-Z (got "${party_letter}")`);
   if (
@@ -231,7 +232,7 @@ function normalizeXlsxRow(
     rowNumber,
     name,
     school,
-    class: classNum,
+    class: !classNum || isNaN(classNum) ? 10 : classNum,
     phone,
     parent_phone,
     email,
@@ -267,11 +268,10 @@ function downloadXlsxTemplate() {
   // Standard chapter roster: just these columns. (The importer still also
   // accepts optional pre-assigned party/constituency/committee columns for
   // chapters that allocate in advance — they're just not in this template.)
-  const headers = ["name", "school", "class", "email", "parent_mobile"];
+  const headers = ["name", "school", "email", "parent_mobile"];
   const sample = [
     "Arjun Kumar",
     "Delhi Public School",
-    10,
     "arjun@example.com",
     "9876543210",
   ];
@@ -420,13 +420,13 @@ export function CsvImport({
 
           if (nameIdx === -1) {
             setParseError(
-              'CSV must have a "name" column. Expected columns: name, school, class, email, parent_mobile'
+              'CSV must have a "name" column. Expected columns: name, school, email, parent_mobile'
             );
             return;
           }
           if (schoolIdx === -1) {
             setParseError(
-              'CSV must have a "school" column. Expected columns: name, school, class, email, parent_mobile'
+              'CSV must have a "school" column. Expected columns: name, school, email, parent_mobile'
             );
             return;
           }
@@ -446,9 +446,7 @@ export function CsvImport({
 
             if (!name) errors.push("Name is required");
             if (!school) errors.push("School is required");
-            if (classIdx < 0 || isNaN(classVal) || classVal === 0)
-              errors.push("Class is required (9-12)");
-            else if (classVal < 9 || classVal > 12)
+            if (classIdx >= 0 && cols[classIdx]?.trim() && (classVal < 9 || classVal > 12))
               errors.push("Class must be 9-12");
 
             // State routing
@@ -501,7 +499,7 @@ export function CsvImport({
               rowNumber: i + 1,
               name,
               school,
-              class: classVal,
+              class: classVal && classVal >= 9 && classVal <= 12 ? classVal : 10,
               phone:
                 phoneIdx >= 0
                   ? normalizePhone(cols[phoneIdx])
@@ -607,7 +605,7 @@ export function CsvImport({
         <DialogHeader>
           <DialogTitle>Import Participants</DialogTitle>
           <DialogDescription>
-            Upload a CSV or Excel (.xlsx / .xls) file. Required columns: name, school, class (9-12). Optional: email, parent_mobile.
+            Upload a CSV or Excel (.xlsx / .xls) file. Required columns: name, school. Optional: email, parent_mobile.
           </DialogDescription>
         </DialogHeader>
 
@@ -718,7 +716,6 @@ export function CsvImport({
                             <TableHead className="w-10">#</TableHead>
                             <TableHead>Name</TableHead>
                             <TableHead>School</TableHead>
-                            <TableHead>Class</TableHead>
                             {showAllocCols && (
                               <>
                                 <TableHead>Party</TableHead>
@@ -745,9 +742,6 @@ export function CsvImport({
                               </TableCell>
                               <TableCell className="text-xs">
                                 {row.school || "--"}
-                              </TableCell>
-                              <TableCell className="text-xs">
-                                {row.class || "--"}
                               </TableCell>
                               {showAllocCols && (
                                 <>

@@ -62,7 +62,7 @@ const COL_ALIASES: Record<
   Exclude<keyof CsvRow, "home_state" | "constituency_state"> | "home_state_explicit" | "constituency_state_explicit",
   string[]
 > = {
-  name: ["name", "full_name", "fullname", "student_name", "student name"],
+  name: ["name", "full_name", "full name", "fullname", "student_name", "student name"],
   school: ["school", "school_name", "schoolname", "school name"],
   class: ["class", "grade", "std"],
   phone: ["phone", "mobile", "phone_number", "phone number"],

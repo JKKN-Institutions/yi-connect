@@ -46,13 +46,38 @@ export const MINISTRIES = [
 ] as const;
 export type Ministry = (typeof MINISTRIES)[number]["key"];
 
-export const COMMITTEES = [
-  "Youth in Democracy",
-  "Youth in Entrepreneurship & Economic Growth",
-  "Youth Role in Environmental Conservation",
-  "Youth Against Corruption",
-  "Youth Awareness in Cyber Security",
+// YIP 2026 official committee topics (Chapter Level) — the 15 ministry
+// committees, each with its debate/bill topic and the linked scheme/policy/act.
+// Source: "YIP 2026 - Committee Topics for Chapter Level Rounds" (national).
+// A chapter picks 8–10 of these for its event; students draft bills on the
+// committee's topic. This is the SINGLE source of committee names + topics.
+export const COMMITTEE_TOPICS = [
+  { committee: "Ministry of Education", topic: "Should AI & Coding Become Mandatory in Indian Schools?", scheme: "NEP 2020, PM eVidya" },
+  { committee: "Ministry of Finance", topic: "Financial Literacy in Schools – Need or Luxury?", scheme: "RBI Financial Literacy Initiatives" },
+  { committee: "Ministry of Youth Affairs & Sports", topic: "Can Sports Become a Mainstream Career Option in India?", scheme: "Khelo India" },
+  { committee: "Ministry of Health & Family Welfare", topic: "Mental Health Support Systems in Schools & Colleges", scheme: "National Mental Health Programme" },
+  { committee: "Ministry of Electronics & IT", topic: "Social Media Regulation vs Freedom of Expression", scheme: "Digital India Programme" },
+  { committee: "Ministry of Environment", topic: "Plastic-Free Campuses & Sustainable Student Practices", scheme: "Swachh Bharat Mission" },
+  { committee: "Ministry of Agriculture", topic: "Can Technology Make Farming Attractive to the Youth?", scheme: "Digital Agriculture Mission" },
+  { committee: "Ministry of Road Transport", topic: "Road Safety Awareness Among Young Citizens", scheme: "Motor Vehicles Act" },
+  { committee: "Ministry of Housing & Urban Affairs", topic: "Public Transport vs Private Vehicles in Indian Cities", scheme: "Smart Cities Mission" },
+  { committee: "Ministry of Skill Development", topic: "Skill-Based Education vs Traditional Degrees", scheme: "Skill India Mission" },
+  { committee: "Ministry of Women & Child Development", topic: "Safer Educational Spaces for Girls & Children", scheme: "POCSO Act, BBBP" },
+  { committee: "Ministry of Labour & Employment", topic: "Gig Economy – Opportunity or Exploitation for Youth?", scheme: "Labour Codes" },
+  { committee: "Ministry of Tourism & Culture", topic: "Can Tourism Become a Major Youth Employment Sector?", scheme: "Dekho Apna Desh" },
+  { committee: "Ministry of Jal Shakti", topic: "Water Conservation – Responsibility of Citizens or Government?", scheme: "Jal Jeevan Mission" },
+  { committee: "Ministry of MSME", topic: "Entrepreneurship Among Students – Are Schools Doing Enough?", scheme: "Startup India" },
 ] as const;
+
+export const COMMITTEES = COMMITTEE_TOPICS.map((c) => c.committee);
+
+/** Topic + linked scheme for a committee name (from the official catalog). */
+export function getCommitteeTopic(
+  committee: string
+): { topic: string; scheme: string } | undefined {
+  const row = COMMITTEE_TOPICS.find((c) => c.committee === committee);
+  return row ? { topic: row.topic, scheme: row.scheme } : undefined;
+}
 
 export const ROLE_LABELS: Record<string, string> = {
   speaker: "Speaker",

@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { createEvent, listEventChapters } from "@/app/yip/actions/events";
-import { COMMITTEES } from "@/lib/yip/constants";
+import { COMMITTEE_TOPICS, getCommitteeTopic } from "@/lib/yip/constants";
 import { Button } from "@/components/yip/ui/button";
 import { Input } from "@/components/yip/ui/input";
 import { Label } from "@/components/yip/ui/label";
@@ -80,10 +80,12 @@ export default function NewEventPage() {
   const [chapterGroups, setChapterGroups] = useState<ChapterGroup[]>([]);
   const [chaptersLoading, setChaptersLoading] = useState(true);
 
-  // Initialize committee topics with committee names as keys
+  // Default: all 15 official committees selected (each with its catalog topic).
+  // The organiser picks 8–10 by unchecking the rest. The committee_topics map
+  // holds ONLY the selected committees → their topic.
   const initialTopics: Record<string, string> = {};
-  COMMITTEES.forEach((c) => {
-    initialTopics[c] = "";
+  COMMITTEE_TOPICS.forEach((c) => {
+    initialTopics[c.committee] = c.topic;
   });
 
   const [form, setForm] = useState<EventFormData>({
@@ -142,14 +144,19 @@ export default function NewEventPage() {
     setError("");
   }
 
-  function updateTopic(committee: string, value: string) {
-    setForm((prev) => ({
-      ...prev,
-      committee_topics: {
-        ...prev.committee_topics,
-        [committee]: value,
-      },
-    }));
+  // Select / deselect a committee for this event. Selecting stores its official
+  // topic; deselecting removes it. (Topics are fixed by the catalog — not typed.)
+  function toggleCommittee(committee: string) {
+    setForm((prev) => {
+      const next = { ...prev.committee_topics };
+      if (committee in next) {
+        delete next[committee];
+      } else {
+        next[committee] = getCommitteeTopic(committee)?.topic ?? "";
+      }
+      return { ...prev, committee_topics: next };
+    });
+    setError("");
   }
 
   // Selecting a chapter auto-fills chapter_name/city/state (kept for back-compat;
@@ -440,42 +447,46 @@ export default function NewEventPage() {
       {step === 2 && (
         <Card>
           <CardHeader>
-            <CardTitle>Agenda & Committee Topics</CardTitle>
+            <CardTitle>Committee Topics</CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
             <div>
-              <Label htmlFor="central_agenda">Central Agenda / Theme</Label>
-              <Textarea
-                id="central_agenda"
-                placeholder="The central theme or agenda for this session of parliament..."
-                value={form.central_agenda}
-                onChange={(e) => updateField("central_agenda", e.target.value)}
-                rows={3}
-              />
-            </div>
-
-            <div>
-              <Label className="mb-3">Committee Discussion Topics</Label>
               <p className="mb-4 text-xs text-gray-500">
-                Provide a specific topic for each committee to discuss
+                Pick the committees for this round from the official YIP 2026 list.
+                Recommended: choose <strong>8–10</strong>. Each committee&apos;s topic
+                is fixed — students draft bills on it.{" "}
+                <span className="font-medium text-[#1a1a3e]">
+                  Selected: {Object.keys(form.committee_topics).length}
+                </span>
               </p>
-              <div className="space-y-3">
-                {COMMITTEES.map((committee) => (
-                  <div key={committee}>
-                    <Label
-                      htmlFor={`topic-${committee}`}
-                      className="text-xs text-gray-600"
+              <div className="space-y-2">
+                {COMMITTEE_TOPICS.map((c) => {
+                  const checked = c.committee in form.committee_topics;
+                  return (
+                    <label
+                      key={c.committee}
+                      className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors ${
+                        checked
+                          ? "border-[#FF9933]/40 bg-[#FF9933]/5"
+                          : "border-gray-200 hover:bg-gray-50"
+                      }`}
                     >
-                      {committee}
-                    </Label>
-                    <Input
-                      id={`topic-${committee}`}
-                      placeholder={`Discussion topic for ${committee}...`}
-                      value={form.committee_topics[committee] || ""}
-                      onChange={(e) => updateTopic(committee, e.target.value)}
-                    />
-                  </div>
-                ))}
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleCommittee(c.committee)}
+                        className="mt-1 size-4 shrink-0 accent-[#FF9933]"
+                      />
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-gray-900">
+                          {c.committee}
+                        </p>
+                        <p className="text-sm text-gray-700">{c.topic}</p>
+                        <p className="text-xs text-gray-400">Linked: {c.scheme}</p>
+                      </div>
+                    </label>
+                  );
+                })}
               </div>
             </div>
           </CardContent>
@@ -550,31 +561,23 @@ export default function NewEventPage() {
               </div>
             )}
 
-            {/* Agenda Summary */}
+            {/* Committee Summary */}
             <div>
               <h3 className="mb-2 text-sm font-semibold text-gray-700 flex items-center gap-2">
-                <FileText className="size-4" /> Agenda & Topics
+                <FileText className="size-4" /> Committees (
+                {Object.keys(form.committee_topics).length})
               </h3>
-              <div className="rounded-lg bg-gray-50 p-4 space-y-3 text-sm">
-                {form.central_agenda && (
-                  <div>
-                    <span className="text-gray-500">Central Agenda:</span>
-                    <p className="mt-1 font-medium">{form.central_agenda}</p>
-                  </div>
+              <div className="rounded-lg bg-gray-50 p-4 space-y-1 text-sm">
+                {Object.keys(form.committee_topics).length === 0 ? (
+                  <p className="text-gray-400">No committees selected.</p>
+                ) : (
+                  Object.entries(form.committee_topics).map(([c, t]) => (
+                    <div key={c} className="flex gap-2">
+                      <span className="text-gray-400 shrink-0">{c}:</span>
+                      <span className="font-medium">{t}</span>
+                    </div>
+                  ))
                 )}
-                <div>
-                  <span className="text-gray-500">Committee Topics:</span>
-                  <div className="mt-1 space-y-1">
-                    {COMMITTEES.map((c) => (
-                      <div key={c} className="flex gap-2">
-                        <span className="text-gray-400 shrink-0">{c}:</span>
-                        <span className="font-medium">
-                          {form.committee_topics[c] || "Not set"}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
               </div>
             </div>
 

@@ -32,6 +32,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatBytes } from "@/lib/yip/media";
+import { getCommitteeTopic } from "@/lib/yip/constants";
 import {
   saveBillDraft,
   submitBill,
@@ -378,7 +379,7 @@ export function BillClient({
         </div>
       </div>
 
-      {/* Committee Badge */}
+      {/* Committee Badge + official topic / linked scheme */}
       <div className="rounded-lg border border-purple-200 bg-purple-50 p-3">
         <div className="flex items-center gap-2">
           <span className="inline-flex items-center rounded-full bg-purple-600 px-3 py-1 text-sm font-medium text-white">
@@ -386,6 +387,17 @@ export function BillClient({
           </span>
           <span className="text-sm text-gray-600">Bill</span>
         </div>
+        {(() => {
+          const ct = committeeName ? getCommitteeTopic(committeeName) : undefined;
+          return ct ? (
+            <div className="mt-2">
+              <p className="text-sm font-medium text-gray-900">{ct.topic}</p>
+              <p className="text-xs text-gray-500">
+                Linked scheme / policy: {ct.scheme}
+              </p>
+            </div>
+          ) : null;
+        })()}
       </div>
 
       {/* Committee Members */}

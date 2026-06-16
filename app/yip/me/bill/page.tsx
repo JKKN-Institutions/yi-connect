@@ -43,11 +43,31 @@ export default async function BillDraftingPage() {
     .eq("id", session.id)
     .maybeSingle();
 
+  // Look up the committee's official topic + linked scheme from the yip.topics
+  // catalog (category = 'committee', title = the committee name) so drafting
+  // shows what students should write the bill on. Older events whose committee
+  // names predate the official 15 simply won't match → topic/scheme stay null.
+  let committeeTopic: string | null = null;
+  let committeeScheme: string | null = null;
+  if (p?.committee_name) {
+    const { data: ct } = await supabase
+      .from("topics")
+      .select("description, linked_scheme")
+      .eq("category", "committee")
+      .eq("title", p.committee_name)
+      .eq("is_active", true)
+      .maybeSingle();
+    committeeTopic = ct?.description ?? null;
+    committeeScheme = ct?.linked_scheme ?? null;
+  }
+
   return (
     <BillClient
       initialSession={session}
       parliamentRole={p?.parliament_role ?? null}
       committeeName={p?.committee_name ?? null}
+      committeeTopic={committeeTopic}
+      committeeScheme={committeeScheme}
     />
   );
 }

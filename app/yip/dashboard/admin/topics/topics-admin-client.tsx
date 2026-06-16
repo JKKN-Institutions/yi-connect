@@ -30,16 +30,18 @@ import {
   adminDeactivateTopic,
   adminReactivateTopic,
   type AdminTopic,
+  type TopicCategory,
 } from "@/app/yip/actions/admin-topics";
 import { PushCentralTopicsButton } from "@/components/yip/push-central-topics-button";
 
 type FormState = {
-  category: "central" | "regional";
+  category: TopicCategory;
   zone: YiZone | "";
   title: string;
   description: string;
   sub_points: string;
   handbook_page: string;
+  linked_scheme: string;
 };
 
 const EMPTY: FormState = {
@@ -49,6 +51,7 @@ const EMPTY: FormState = {
   description: "",
   sub_points: "",
   handbook_page: "",
+  linked_scheme: "",
 };
 
 export function TopicsAdminClient({
@@ -57,7 +60,9 @@ export function TopicsAdminClient({
   initialTopics: AdminTopic[];
 }) {
   const [topics, setTopics] = useState(initialTopics);
-  const [filter, setFilter] = useState<"all" | "central" | YiZone>("all");
+  const [filter, setFilter] = useState<
+    "all" | "central" | "committee" | YiZone
+  >("all");
   const [query, setQuery] = useState("");
   const [showInactive, setShowInactive] = useState(false);
   const [editing, setEditing] = useState<AdminTopic | null>(null);
@@ -70,7 +75,13 @@ export function TopicsAdminClient({
   const visible = topics.filter((t) => {
     if (!showInactive && !t.is_active) return false;
     if (filter === "central" && t.category !== "central") return false;
-    if (filter !== "all" && filter !== "central" && t.zone !== filter)
+    if (filter === "committee" && t.category !== "committee") return false;
+    if (
+      filter !== "all" &&
+      filter !== "central" &&
+      filter !== "committee" &&
+      t.zone !== filter
+    )
       return false;
     if (query) {
       const q = query.toLowerCase();
@@ -97,6 +108,7 @@ export function TopicsAdminClient({
       description: t.description ?? "",
       sub_points: t.sub_points.join("\n"),
       handbook_page: t.handbook_page?.toString() ?? "",
+      linked_scheme: t.linked_scheme ?? "",
     });
     setEditing(t);
     setCreating(false);
@@ -118,13 +130,17 @@ export function TopicsAdminClient({
       .filter(Boolean);
     const payload = {
       category: form.category,
-      zone: form.category === "central" ? null : (form.zone || null) as YiZone | null,
+      zone:
+        form.category === "regional"
+          ? ((form.zone || null) as YiZone | null)
+          : null,
       title: form.title.trim(),
       description: form.description.trim() || null,
       sub_points,
       handbook_page: form.handbook_page
         ? parseInt(form.handbook_page)
         : null,
+      linked_scheme: form.linked_scheme.trim() || null,
     };
     startTransition(async () => {
       const res = editing
@@ -166,6 +182,7 @@ export function TopicsAdminClient({
     total: topics.length,
     active: topics.filter((t) => t.is_active).length,
     central: topics.filter((t) => t.category === "central").length,
+    committee: topics.filter((t) => t.category === "committee").length,
   };
 
   return (
@@ -177,7 +194,7 @@ export function TopicsAdminClient({
           </h1>
           <p className="text-sm text-[#1a1a3e]/60 mt-1">
             Handbook p.25–38 · {counts.total} total · {counts.active} active ·{" "}
-            {counts.central} central
+            {counts.committee} committee · {counts.central} central
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -209,6 +226,12 @@ export function TopicsAdminClient({
       <div className="flex flex-wrap items-center gap-2">
         <FilterChip active={filter === "all"} onClick={() => setFilter("all")}>
           All
+        </FilterChip>
+        <FilterChip
+          active={filter === "committee"}
+          onClick={() => setFilter("committee")}
+        >
+          Committee ({counts.committee})
         </FilterChip>
         <FilterChip
           active={filter === "central"}
@@ -267,12 +290,13 @@ export function TopicsAdminClient({
                   onChange={(e) =>
                     setForm({
                       ...form,
-                      category: e.target.value as "central" | "regional",
-                      zone: e.target.value === "central" ? "" : form.zone,
+                      category: e.target.value as TopicCategory,
+                      zone: e.target.value === "regional" ? form.zone : "",
                     })
                   }
                   className="w-full border border-input rounded-md px-3 py-2 text-sm"
                 >
+                  <option value="committee">Committee (official 15)</option>
                   <option value="central">Central</option>
                   <option value="regional">Regional</option>
                 </select>
@@ -313,16 +337,34 @@ export function TopicsAdminClient({
             </div>
             <div>
               <label className="text-xs font-medium text-[#1a1a3e]/70">
-                Title *
+                {form.category === "committee"
+                  ? "Committee / Ministry name *"
+                  : "Title *"}
               </label>
               <Input
                 value={form.title}
                 onChange={(e) => setForm({ ...form, title: e.target.value })}
               />
             </div>
+            {form.category === "committee" && (
+              <div>
+                <label className="text-xs font-medium text-[#1a1a3e]/70">
+                  Linked scheme / policy / act
+                </label>
+                <Input
+                  value={form.linked_scheme}
+                  placeholder="e.g. NEP 2020, PM eVidya"
+                  onChange={(e) =>
+                    setForm({ ...form, linked_scheme: e.target.value })
+                  }
+                />
+              </div>
+            )}
             <div>
               <label className="text-xs font-medium text-[#1a1a3e]/70">
-                Description
+                {form.category === "committee"
+                  ? "Debate / bill topic"
+                  : "Description"}
               </label>
               <Textarea
                 value={form.description}
@@ -400,9 +442,18 @@ export function TopicsAdminClient({
                         {t.description}
                       </div>
                     )}
+                    {t.linked_scheme && (
+                      <div className="text-[10px] text-[#1a1a3e]/40">
+                        Linked: {t.linked_scheme}
+                      </div>
+                    )}
                   </TableCell>
                   <TableCell>
-                    {t.category === "central" ? (
+                    {t.category === "committee" ? (
+                      <Badge className="bg-[#1a1a3e]/10 text-[#1a1a3e] border-[#1a1a3e]/20 text-[10px]">
+                        Committee
+                      </Badge>
+                    ) : t.category === "central" ? (
                       <Badge className="bg-[#FF9933]/10 text-[#FF9933] border-[#FF9933]/20 text-[10px]">
                         Central
                       </Badge>

@@ -54,6 +54,39 @@ type ActionResult<T = unknown> =
   | { success: true; data: T }
   | { success: false; error: string };
 
+// ─── Committee topic catalog (the 15 official YIP 2026 committees) ───
+// The single all-chapters catalog, stored in yip.topics (category =
+// 'committee'). title = committee/ministry name, description = the debate/bill
+// topic, linked_scheme = the linked scheme/policy. Replaces the old
+// COMMITTEE_TOPICS code constant — the create-event picker and bill drafting
+// read from here so admins manage the list from /yip/dashboard/admin/topics.
+
+export type CommitteeTopicOption = {
+  id: string;
+  committee: string;
+  topic: string;
+  scheme: string;
+  topic_number: number | null;
+};
+
+export async function listCommitteeTopics(): Promise<CommitteeTopicOption[]> {
+  const supabase = await createServiceClient();
+  const { data, error } = await supabase
+    .from("topics")
+    .select("id, title, description, linked_scheme, topic_number")
+    .eq("category", "committee")
+    .eq("is_active", true)
+    .order("topic_number", { nullsFirst: false });
+  if (error || !data) return [];
+  return data.map((r) => ({
+    id: r.id,
+    committee: r.title,
+    topic: r.description ?? "",
+    scheme: r.linked_scheme ?? "",
+    topic_number: r.topic_number,
+  }));
+}
+
 // ─── Create Event ──────────────────────────────────────────────────
 
 export async function createEvent(

@@ -191,18 +191,19 @@ interface QuickAddAssignment {
   committee_name: string;
 }
 
-/** Read committee names from an event's committee_topics (array OR object of
- * values), falling back to the default COMMITTEES. Mirrors the array/object
- * tolerance the allocation action + yuva-assignments already apply. */
+/** Read committee names from an event's committee_topics, falling back to the
+ * default COMMITTEES. Array form = a list of committee names. Object form =
+ * a { committeeName → topic } map, so the KEYS are the committee names (the
+ * values are the debate topics). Mirrors the allocation action. */
 function committeesFromTopics(topics: unknown): string[] {
   if (Array.isArray(topics) && topics.length > 0) {
     return topics.map(String).filter((s) => s.trim().length > 0);
   }
   if (topics && typeof topics === "object") {
-    const vals = Object.values(topics as Record<string, unknown>)
-      .map(String)
-      .filter((s) => s.trim().length > 0);
-    if (vals.length > 0) return vals;
+    const keys = Object.keys(topics as Record<string, unknown>)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+    if (keys.length > 0) return keys;
   }
   return [...COMMITTEES];
 }

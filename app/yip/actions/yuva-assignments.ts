@@ -139,8 +139,9 @@ export async function listEventCommittees(eventId: string): Promise<string[]> {
   const supabase = await createServiceClient();
   const names = new Set<string>();
 
-  // 1. Custom committees on the event (committee_topics can be an array of
-  //    names or a {key: name} map depending on how the event was seeded).
+  // 1. Custom committees on the event. committee_topics is either an array of
+  //    committee names, or a { committeeName → topic } map whose KEYS are the
+  //    committee names (the values are the debate topics).
   const { data: event } = await supabase
     .from("events")
     .select("committee_topics")
@@ -154,8 +155,8 @@ export async function listEventCommittees(eventId: string): Promise<string[]> {
       if (s) names.add(s);
     }
   } else if (topics && typeof topics === "object") {
-    for (const v of Object.values(topics as Record<string, unknown>)) {
-      const s = String(v).trim();
+    for (const k of Object.keys(topics as Record<string, unknown>)) {
+      const s = k.trim();
       if (s) names.add(s);
     }
   }

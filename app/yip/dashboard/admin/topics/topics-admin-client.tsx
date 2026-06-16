@@ -23,7 +23,7 @@ import {
   Loader2,
   Search,
 } from "lucide-react";
-import { YI_ZONES, type YiZone } from "@/lib/yip/hierarchy";
+import { type YiZone } from "@/lib/yip/hierarchy";
 import {
   adminCreateTopic,
   adminUpdateTopic,
@@ -32,7 +32,6 @@ import {
   type AdminTopic,
   type TopicCategory,
 } from "@/app/yip/actions/admin-topics";
-import { PushCentralTopicsButton } from "@/components/yip/push-central-topics-button";
 
 type FormState = {
   category: TopicCategory;
@@ -45,7 +44,7 @@ type FormState = {
 };
 
 const EMPTY: FormState = {
-  category: "central",
+  category: "committee",
   zone: "",
   title: "",
   description: "",
@@ -190,23 +189,14 @@ export function TopicsAdminClient({
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-[#1a1a3e] flex items-center gap-2">
-            <BookOpen className="size-7 text-[#FF9933]" /> Topics Library — Admin
+            <BookOpen className="size-7 text-[#FF9933]" /> Committee Topics — Admin
           </h1>
           <p className="text-sm text-[#1a1a3e]/60 mt-1">
-            Handbook p.25–38 · {counts.total} total · {counts.active} active ·{" "}
-            {counts.committee} committee · {counts.central} central
+            The official YIP committee topics — events pick 8–10 of these.{" "}
+            {counts.committee} committee · {counts.active} active
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <PushCentralTopicsButton
-            centralTopicIds={topics
-              .filter((t) => t.category === "central" && t.is_active)
-              .map((t) => t.id)}
-            centralCount={
-              topics.filter((t) => t.category === "central" && t.is_active)
-                .length
-            }
-          />
           <Button
             onClick={openCreate}
             className="bg-[#FF9933] hover:bg-[#FF9933]/90 text-white"
@@ -233,24 +223,6 @@ export function TopicsAdminClient({
         >
           Committee ({counts.committee})
         </FilterChip>
-        <FilterChip
-          active={filter === "central"}
-          onClick={() => setFilter("central")}
-        >
-          Central ({counts.central})
-        </FilterChip>
-        {YI_ZONES.map((z) => {
-          const n = topics.filter((t) => t.zone === z.code).length;
-          return (
-            <FilterChip
-              key={z.code}
-              active={filter === z.code}
-              onClick={() => setFilter(z.code)}
-            >
-              {z.label} ({n})
-            </FilterChip>
-          );
-        })}
         <label className="ml-auto flex items-center gap-2 text-xs text-[#1a1a3e]/70">
           <input
             type="checkbox"
@@ -281,47 +253,6 @@ export function TopicsAdminClient({
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div>
-                <label className="text-xs font-medium text-[#1a1a3e]/70">
-                  Category
-                </label>
-                <select
-                  value={form.category}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      category: e.target.value as TopicCategory,
-                      zone: e.target.value === "regional" ? form.zone : "",
-                    })
-                  }
-                  className="w-full border border-input rounded-md px-3 py-2 text-sm"
-                >
-                  <option value="committee">Committee (official 15)</option>
-                  <option value="central">Central</option>
-                  <option value="regional">Regional</option>
-                </select>
-              </div>
-              {form.category === "regional" && (
-                <div>
-                  <label className="text-xs font-medium text-[#1a1a3e]/70">
-                    Zone *
-                  </label>
-                  <select
-                    value={form.zone}
-                    onChange={(e) =>
-                      setForm({ ...form, zone: e.target.value as YiZone })
-                    }
-                    className="w-full border border-input rounded-md px-3 py-2 text-sm"
-                  >
-                    <option value="">— Select —</option>
-                    {YI_ZONES.map((z) => (
-                      <option key={z.code} value={z.code}>
-                        {z.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
               <div>
                 <label className="text-xs font-medium text-[#1a1a3e]/70">
                   Handbook page

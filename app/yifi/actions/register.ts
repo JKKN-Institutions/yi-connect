@@ -3,123 +3,176 @@
 import { cookies } from "next/headers";
 import { createServiceClient } from "@/lib/yifi/supabase/server";
 
-type RegisterResult =
-  | { ok: true; status: "registered"; accessCode: string }
-  | { ok: true; status: "already_registered" }
+// ── Result shapes ───────────────────────────────────────────────────────────
+// Member-gated, paid registration is a TWO-STEP flow:
+//   1. resolveMember(email, phone) — RESOLVE the person against yi_directory.people.
+//      If not found -> { ok:true, found:false } so the UI shows an EXPLICIT rejection
+//      screen ("you're not in the Yi member directory"). We NEVER create an identity
+//      and NEVER silently redirect.
+//   2. registerMember(...) — record the submitted (offline-paid) registration, set the
+//      same yifi_session cookie the access-code door uses, and return the access code.
+
+export type ResolvedMember = {
+  person_id: string;
+  full_name: string;
+  email: string | null;
+  phone: string | null;
+  photo_url: string | null;
+  chapter_id: string | null;
+};
+
+export type Fee = {
+  amount: number | null;
+  tier: string | null;
+  currency: string | null;
+  early_bird_until: string | null;
+  payment_instructions: string | null;
+};
+
+type ResolveResult =
+  | { ok: true; found: true; member: ResolvedMember; editionId: string; fee: Fee }
+  | { ok: true; found: false }
   | { ok: false; error: string };
 
-type PrefillResult = { full_name: string } | null;
+type RegisterResult =
+  | { ok: true; accessCode: string }
+  | { ok: false; error: string };
 
-function str(formData: FormData, key: string): string {
-  const v = formData.get(key);
+function str(v: FormDataEntryValue | null): string {
   return typeof v === "string" ? v.trim() : "";
 }
 
+async function currentEditionId(
+  svc: Awaited<ReturnType<typeof createServiceClient>>
+): Promise<string | null> {
+  const { data } = await svc.rpc("yifi_current_edition");
+  return data?.id ?? null;
+}
+
 /**
- * Self-serve YiFi registration. The form IS the census: when the registrant
- * gives a sector and at least one challenge, census_complete flips true inside
- * yifi_register_self, which lights up the admin Census Monitor + match curation.
- * On success we set the same yifi_session cookie the access-code path uses, so
- * the registrant lands authenticated on /yifi/me.
+ * Step 1 — RESOLVE-OR-REJECT.
+ *
+ * Calls public.yifi_resolve_member, which returns the person from
+ * yi_directory.people (with a best-effort chapter_id) or NULL. On NULL we return
+ * `found: false` — the register door then renders an explicit rejection screen.
+ * On a match we also fetch the current edition + the current fee (public.yifi_current_fee)
+ * so the UI can show the amount + payment instructions in the same round-trip.
  */
-export async function registerSelf(formData: FormData): Promise<RegisterResult> {
-  const fullName = str(formData, "full_name");
-  const phone = str(formData, "phone");
-  const email = str(formData, "email");
-  const memberCategory = str(formData, "member_category");
-  const chapterName = str(formData, "chapter_name");
-  const sector = str(formData, "sector");
-  const organisation = str(formData, "organisation");
-  const designation = str(formData, "designation");
-  const city = str(formData, "city");
-  const totalTeamSize = str(formData, "total_team_size");
+export async function resolveMember(
+  email: string,
+  phone: string
+): Promise<ResolveResult> {
+  const cleanEmail = (email || "").trim();
+  const cleanPhone = (phone || "").trim();
 
-  const challenges = [
-    str(formData, "challenge1"),
-    str(formData, "challenge2"),
-    str(formData, "challenge3"),
-  ].filter(Boolean);
-
-  const seeking = formData
-    .getAll("seeking")
-    .map((s) => (typeof s === "string" ? s.trim() : ""))
-    .filter(Boolean);
-
-  const canOffer = {
-    capital_range: str(formData, "offer_capital") || null,
-    hours_per_month: str(formData, "offer_hours") || null,
-    distribution_reach: str(formData, "offer_distribution") || null,
-    customer_access: str(formData, "offer_customers") || null,
-  };
-
-  const isCouple = formData.get("is_couple") === "on" || formData.get("is_couple") === "true";
-  const partnerName = str(formData, "partner_name");
-  const partnerPhone = str(formData, "partner_phone");
-  const partnerEmail = str(formData, "partner_email");
-
-  if (!fullName) return { ok: false, error: "Please enter your name" };
-  if (!phone) return { ok: false, error: "Please enter your phone number" };
-  if (isCouple && !partnerName) {
-    return { ok: false, error: "Please enter your partner's name, or uncheck 'Registering as a couple'" };
+  if (!cleanEmail && !cleanPhone) {
+    return { ok: false, error: "Enter your email or phone to continue" };
   }
 
-  const supabase = await createServiceClient();
-  const { data, error } = await supabase.rpc("yifi_register_self", {
+  const svc = await createServiceClient();
+
+  const editionId = await currentEditionId(svc);
+  if (!editionId) {
+    return { ok: false, error: "Registration is not open yet" };
+  }
+
+  const { data, error } = await svc.rpc("yifi_resolve_member", {
+    p_email: cleanEmail || null,
+    p_phone: cleanPhone || null,
+  });
+
+  if (error) {
+    return { ok: false, error: "Something went wrong. Please try again." };
+  }
+
+  // NULL == not a Yi member. Explicit rejection (no identity created, no redirect).
+  if (!data) {
+    return { ok: true, found: false };
+  }
+
+  const member = data as ResolvedMember;
+
+  const { data: feeData } = await svc.rpc("yifi_current_fee", {
+    p_edition_id: editionId,
+  });
+  const fee: Fee = (feeData as Fee) ?? {
+    amount: null,
+    tier: null,
+    currency: null,
+    early_bird_until: null,
+    payment_instructions: null,
+  };
+
+  return { ok: true, found: true, member, editionId, fee };
+}
+
+/**
+ * Step 2 — register a resolved member with a submitted (offline) payment.
+ *
+ * Calls public.yifi_register_member, which upserts the registrant, sets
+ * payment_status='submitted' (pending organiser verification), and mints an access
+ * code. On success we set the SAME yifi_session cookie the access-code path uses so
+ * the member lands authenticated on /yifi/me, and return the access code to show.
+ */
+export async function registerMember(formData: FormData): Promise<RegisterResult> {
+  const editionId = str(formData.get("edition_id"));
+  const personId = str(formData.get("person_id"));
+  const fullName = str(formData.get("full_name"));
+  const email = str(formData.get("email"));
+  const phone = str(formData.get("phone"));
+  const paymentReference = str(formData.get("payment_reference"));
+  const amountRaw = str(formData.get("amount_due"));
+  const amountDue = amountRaw ? Number(amountRaw) : null;
+
+  if (!editionId || !personId) {
+    return { ok: false, error: "Your session expired. Please look yourself up again." };
+  }
+  if (!fullName) {
+    return { ok: false, error: "Please enter your name" };
+  }
+  if (!paymentReference) {
+    return {
+      ok: false,
+      error: "Enter the UPI / transaction reference for your payment to continue",
+    };
+  }
+
+  const svc = await createServiceClient();
+  const { data, error } = await svc.rpc("yifi_register_member", {
+    p_edition_id: editionId,
+    p_person_id: personId,
     p_full_name: fullName,
-    p_phone: phone,
     p_email: email || null,
-    p_member_category: memberCategory || null,
-    p_chapter_name: chapterName || null,
-    p_sector: sector || null,
-    p_organisation: organisation || null,
-    p_designation: designation || null,
-    p_city: city || null,
-    p_challenges: challenges,
-    p_can_offer: canOffer,
-    p_seeking: seeking,
-    p_total_team_size: totalTeamSize || null,
-    p_is_couple: isCouple,
-    p_partner_name: partnerName || null,
-    p_partner_phone: partnerPhone || null,
-    p_partner_email: partnerEmail || null,
+    p_phone: phone || null,
+    p_payment_reference: paymentReference,
+    p_amount_due: amountDue,
   });
 
   if (error || !data) {
-    return { ok: false, error: "Something went wrong saving your registration. Please try again." };
+    return { ok: false, error: "Could not save your registration. Please try again." };
   }
 
   const result = data as {
     error?: string;
-    id?: string;
+    registrant_id?: string;
     access_code?: string;
-    full_name?: string;
-    edition_id?: string;
-    already_registered?: boolean;
   };
 
   if (result.error) return { ok: false, error: result.error };
-
-  // Already registered: the RPC deliberately returns no code and no id. We must NOT
-  // mint a session or reveal a credential for an identity the caller has not proven
-  // they own — route them to the "I have a code" door instead.
-  if (result.already_registered) {
-    return { ok: true, status: "already_registered" };
+  if (!result.registrant_id || !result.access_code) {
+    return { ok: false, error: "Could not save your registration. Please try again." };
   }
 
-  if (!result.id || !result.access_code || !result.edition_id) {
-    return { ok: false, error: "Something went wrong saving your registration. Please try again." };
-  }
-
-  // Fresh registration only: auto-login with a session scoped to the row we just
-  // created (its code was generated in this same call).
+  // Auto-login with a session scoped to the row we just upserted (same cookie shape
+  // as the access-code door — see app/yifi/actions/auth.ts).
   const cookieStore = await cookies();
   cookieStore.set(
     "yifi_session",
     JSON.stringify({
       type: "member",
-      id: result.id,
-      name: result.full_name,
-      editionId: result.edition_id,
+      id: result.registrant_id,
+      name: fullName,
+      editionId,
     }),
     {
       httpOnly: true,
@@ -130,23 +183,5 @@ export async function registerSelf(formData: FormData): Promise<RegisterResult> 
     }
   );
 
-  return { ok: true, status: "registered", accessCode: result.access_code };
-}
-
-/**
- * Pre-fill a known Yi member's name from the directory by email. Returns NAME
- * ONLY by design — the RPC does not expose phone/photo, so a guessed email cannot
- * harvest member contact details. Returns null when there is no match, so the form
- * simply leaves fields blank — never blocks registration.
- */
-export async function prefillByEmail(email: string): Promise<PrefillResult> {
-  const clean = (email || "").trim();
-  if (!clean || !clean.includes("@")) return null;
-
-  const supabase = await createServiceClient();
-  const { data } = await supabase.rpc("yifi_prefill_by_email", { p_email: clean });
-  if (!data) return null;
-
-  const row = data as { full_name?: string | null };
-  return row.full_name ? { full_name: row.full_name } : null;
+  return { ok: true, accessCode: result.access_code };
 }

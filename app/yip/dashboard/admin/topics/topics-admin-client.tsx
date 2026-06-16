@@ -346,8 +346,7 @@ export function TopicsAdminClient({
             <TableHeader>
               <TableRow>
                 <TableHead>#</TableHead>
-                <TableHead>Title</TableHead>
-                <TableHead>Scope</TableHead>
+                <TableHead>Committee &amp; Topic</TableHead>
                 <TableHead>Sub-points</TableHead>
                 <TableHead>p.</TableHead>
                 <TableHead className="w-28"></TableHead>
@@ -356,8 +355,8 @@ export function TopicsAdminClient({
             <TableBody>
               {visible.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-10 text-sm text-[#1a1a3e]/50">
-                    No topics match your filters.
+                  <TableCell colSpan={5} className="text-center py-10 text-sm text-[#1a1a3e]/50">
+                    No committee topics match your filters.
                   </TableCell>
                 </TableRow>
               )}
@@ -366,32 +365,26 @@ export function TopicsAdminClient({
                   <TableCell className="font-mono text-xs">
                     {t.topic_number ?? "—"}
                   </TableCell>
-                  <TableCell>
-                    <div className="font-medium text-[#1a1a3e]">{t.title}</div>
+                  <TableCell className="max-w-xl">
+                    {/* Ministry committee name on top + a Committee tag */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold text-[#1a1a3e]">
+                        {t.title}
+                      </span>
+                      <Badge className="bg-[#1a1a3e]/10 text-[#1a1a3e] border-[#1a1a3e]/20 text-[10px]">
+                        Committee
+                      </Badge>
+                    </div>
+                    {/* The debate / bill topic — the main line */}
                     {t.description && (
-                      <div className="text-xs text-[#1a1a3e]/60 line-clamp-1">
+                      <div className="text-sm text-[#1a1a3e]/80 mt-0.5">
                         {t.description}
                       </div>
                     )}
                     {t.linked_scheme && (
-                      <div className="text-[10px] text-[#1a1a3e]/40">
-                        Linked: {t.linked_scheme}
+                      <div className="text-[11px] text-[#1a1a3e]/45 mt-0.5">
+                        Linked scheme: {t.linked_scheme}
                       </div>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {t.category === "committee" ? (
-                      <Badge className="bg-[#1a1a3e]/10 text-[#1a1a3e] border-[#1a1a3e]/20 text-[10px]">
-                        Committee
-                      </Badge>
-                    ) : t.category === "central" ? (
-                      <Badge className="bg-[#FF9933]/10 text-[#FF9933] border-[#FF9933]/20 text-[10px]">
-                        Central
-                      </Badge>
-                    ) : (
-                      <Badge className="bg-[#138808]/10 text-[#138808] border-[#138808]/20 text-[10px]">
-                        {t.zone}
-                      </Badge>
                     )}
                   </TableCell>
                   <TableCell className="text-xs text-[#1a1a3e]/70">

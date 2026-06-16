@@ -388,7 +388,7 @@ export function BillClient({
           <span className="inline-flex items-center rounded-full bg-purple-600 px-3 py-1 text-sm font-medium text-white">
             {committeeName}
           </span>
-          <span className="text-sm text-gray-600">Bill</span>
+          <span className="text-sm text-gray-600">Committee</span>
         </div>
         {committeeTopic && (
           <div className="mt-2">

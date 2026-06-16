@@ -117,6 +117,14 @@ export default async function YiFiAdminPage() {
                 icon="👥"
               />
             )}
+            {permissions.includes("registrants") && (
+              <ActionCard
+                title="Payments & Fees"
+                desc="Set the registration fee, verify offline payments, and add members missing from the directory"
+                href="/yifi/admin/payments"
+                icon="💳"
+              />
+            )}
             {permissions.includes("census") && (
               <ActionCard
                 title="Census Monitor"

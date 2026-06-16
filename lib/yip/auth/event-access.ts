@@ -158,7 +158,7 @@ export async function getYipEventAccess(eventId: string): Promise<YipEventAccess
   // whose yi_chapter is also empty. Guarding here fails the whole chapter block
   // closed for all of 3a/3a-ii/3b/3c (same fail-closed discipline as chair_email).
   const chapName = norm(event.chapter_name);
-  if (chapName && event.level === "chapter") {
+  if (event.chapter_name && chapName && event.level === "chapter") {
 
     // 3a. Explicit YIP chapter_admin role for this chapter → full (canonical chair).
     const isExplicitAdmin = active.some(

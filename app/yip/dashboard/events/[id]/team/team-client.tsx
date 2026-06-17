@@ -108,6 +108,15 @@ export function TeamClient({
     });
   }
 
+  // The chapter chair from the Yi directory has full admin on this event
+  // automatically (recognized by role, not by being added here). Surface them so
+  // the real owner is visible — unless they're already an explicit team row.
+  const directoryChairEmail = suggestedChair?.email?.trim().toLowerCase() ?? null;
+  const chairAlreadyInTeam =
+    !!directoryChairEmail &&
+    roles.some((r) => r.email?.trim().toLowerCase() === directoryChairEmail);
+  const showDirectoryChair = !!suggestedChair?.email && !chairAlreadyInTeam;
+
   return (
     <div className="space-y-4">
       <div>
@@ -127,11 +136,38 @@ export function TeamClient({
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
+          {showDirectoryChair && suggestedChair && (
+            <div className="flex items-center justify-between rounded-lg border border-[#138808]/20 bg-[#138808]/5 px-3 py-2">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="size-4 text-[#138808]" />
+                <div>
+                  <div className="text-sm font-medium text-[#1a1a3e]">
+                    {suggestedChair.name || "Chapter Chair"}
+                  </div>
+                  <div className="text-xs text-[#1a1a3e]/50">{suggestedChair.email}</div>
+                </div>
+              </div>
+              <Badge
+                variant="default"
+                className="bg-[#138808] text-white hover:bg-[#138808]"
+              >
+                Chair · Yi directory
+              </Badge>
+            </div>
+          )}
           {roles.length === 0 ? (
-            <p className="text-sm text-[#1a1a3e]/40">
-              No chapter chair or organiser assigned yet
-              {canEditTeam ? " — add one below." : "."}
-            </p>
+            showDirectoryChair ? (
+              <p className="text-xs text-[#1a1a3e]/45">
+                The chapter chair above has full admin automatically (from the Yi
+                directory) — no need to add them. Add organisers below to help run
+                the event.
+              </p>
+            ) : (
+              <p className="text-sm text-[#1a1a3e]/40">
+                No chapter chair or organiser assigned yet
+                {canEditTeam ? " — add one below." : "."}
+              </p>
+            )
           ) : (
             roles.map((r) => (
               <div

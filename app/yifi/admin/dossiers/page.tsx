@@ -2,6 +2,7 @@ import { getAdminContext, hasPermission } from "../_guard";
 import { AdminHeader, AccessDenied, EmptyState, StatTile } from "../_components";
 import { createServiceClient } from "@/lib/yifi/supabase/server";
 import { DossiersTable } from "./dossiers-table";
+import { GeneratePanel } from "./generate-panel";
 
 export const metadata = {
   title: "YiFi Dossier Pipeline",
@@ -11,6 +12,7 @@ export interface DossierRegistrant {
   id: string;
   full_name: string | null;
   email: string | null;
+  phone: string | null;
   organisation: string | null;
 }
 
@@ -24,6 +26,12 @@ export interface DossierRow {
   registrant: DossierRegistrant | null;
 }
 
+/** Phone is not on the existing list RPC; this is the shape we merge in. */
+interface RegistrantPhoneRow {
+  id: string;
+  phone: string | null;
+}
+
 export default async function DossierPipelinePage() {
   const ctx = await getAdminContext();
   if (!hasPermission(ctx.permissions, "dossiers")) {
@@ -31,11 +39,33 @@ export default async function DossierPipelinePage() {
   }
 
   const svc = await createServiceClient();
-  const { data } = await svc.rpc("yifi_admin_list_dossiers", {
-    p_edition_id: ctx.editionId,
-  });
 
-  const rows: DossierRow[] = Array.isArray(data) ? (data as DossierRow[]) : [];
+  // Board rows (existing list RPC) + a phone lookup (engine's own RPC) so the
+  // per-row Deliver button has a number to send to without changing the
+  // shared list RPC.
+  const [{ data: listData }, { data: registrantData }] = await Promise.all([
+    svc.rpc("yifi_admin_list_dossiers", { p_edition_id: ctx.editionId }),
+    svc.rpc("yifi_get_registrants_for_dossier", { p_edition_id: ctx.editionId }),
+  ]);
+
+  const rawRows: DossierRow[] = Array.isArray(listData)
+    ? (listData as DossierRow[])
+    : [];
+
+  const phoneById = new Map<string, string | null>();
+  if (Array.isArray(registrantData)) {
+    for (const r of registrantData as RegistrantPhoneRow[]) {
+      phoneById.set(r.id, r.phone ?? null);
+    }
+  }
+
+  // Merge phone into each row's registrant so the table can deliver.
+  const rows: DossierRow[] = rawRows.map((row) => ({
+    ...row,
+    registrant: row.registrant
+      ? { ...row.registrant, phone: phoneById.get(row.registrant.id) ?? row.registrant.phone ?? null }
+      : null,
+  }));
 
   const total = rows.length;
   const delivered = rows.filter((r) => r.delivered_at != null).length;
@@ -53,6 +83,9 @@ export default async function DossierPipelinePage() {
           content, then delivered to each person on WhatsApp.
         </p>
 
+        {/* Generate control */}
+        <GeneratePanel />
+
         {/* Stat tiles */}
         <section>
           <div className="grid grid-cols-3 gap-4">
@@ -68,7 +101,7 @@ export default async function DossierPipelinePage() {
             Dossiers ({total})
           </h2>
           {rows.length === 0 ? (
-            <EmptyState message="No dossiers generated yet. They are produced after the summit from session content." />
+            <EmptyState message="No dossiers generated yet. Use Generate above once the summit's session content and census are in." />
           ) : (
             <DossiersTable rows={rows} />
           )}

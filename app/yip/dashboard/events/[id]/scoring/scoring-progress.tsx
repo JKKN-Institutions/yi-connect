@@ -7,6 +7,7 @@ import {
   unlockScores,
   computeResults,
 } from "@/app/yip/actions/results";
+import { getAllScoresForExport } from "@/app/yip/actions/scoring-detail";
 import type { ScoringProgressData } from "@/app/yip/actions/results";
 import { ROLE_LABELS, PARTY_COLORS } from "@/lib/yip/constants";
 import { Badge } from "@/components/yip/ui/badge";
@@ -31,6 +32,7 @@ import {
   Star,
   Users,
   ChevronRight,
+  Download,
 } from "lucide-react";
 
 function formatRelative(dateStr: string | null): string {
@@ -98,6 +100,7 @@ export function ScoringProgress({
   const router = useRouter();
   const [lockLoading, setLockLoading] = useState(false);
   const [computeLoading, setComputeLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [message, setMessage] = useState<{
     type: "success" | "error";
     text: string;
@@ -147,6 +150,55 @@ export function ScoringProgress({
     setComputeLoading(false);
   }
 
+  async function handleExportAll() {
+    setExporting(true);
+    setMessage(null);
+    try {
+      const rows = await getAllScoresForExport(eventId);
+      if (!rows) {
+        setMessage({ type: "error", text: "You don't have access to export scores." });
+        return;
+      }
+      if (rows.length === 0) {
+        setMessage({ type: "error", text: "No scores have been submitted yet." });
+        return;
+      }
+      // Union of every criterion key seen across all jurors/sessions → columns.
+      const criteriaKeys = Array.from(
+        new Set(rows.flatMap((r) => Object.keys(r.criteria_scores)))
+      ).sort();
+      const headers = [
+        "Serial", "Name", "Constituency", "Bench", "Party #", "Role",
+        "Day", "Session", "Juror", "Turn", "Total",
+        ...criteriaKeys,
+        "No-confidence", "Walkout", "Ruckus", "Suspension", "Comments", "Submitted",
+      ];
+      const csvRows = rows.map((r) => [
+        r.serial_no ?? "", r.full_name, r.constituency_name ?? "", r.party_side ?? "",
+        r.party_number ?? "", r.parliament_role ?? "", r.session_day ?? "",
+        r.session_title ?? "", r.jury_name, r.occurrence ?? "", r.total_score,
+        ...criteriaKeys.map((k) => r.criteria_scores[k] ?? ""),
+        r.flags.no_confidence_brought ? "Y" : "", r.flags.walkout ? "Y" : "",
+        r.flags.ruckus ? "Y" : "", r.flags.suspension ? "Y" : "",
+        r.comments ?? "", r.submitted_at ?? "",
+      ]);
+      const csv = [headers, ...csvRows]
+        .map((row) => row.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))
+        .join("\n");
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `yip-all-scores-${eventId}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setMessage({ type: "error", text: "Export failed. Please try again." });
+    } finally {
+      setExporting(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Message banner */}
@@ -178,6 +230,19 @@ export function ScoringProgress({
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExportAll}
+            disabled={exporting}
+          >
+            {exporting ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Download className="size-4" />
+            )}
+            Export all scores
+          </Button>
           <Button
             variant="outline"
             size="sm"

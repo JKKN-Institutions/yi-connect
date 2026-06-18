@@ -87,6 +87,44 @@ export async function listCommitteeTopics(): Promise<CommitteeTopicOption[]> {
   }));
 }
 
+/**
+ * Push the full committee-topic catalogue (the official 15) onto EVERY real
+ * chapter-level event, overwriting each event's committee_topics with the
+ * { committee → topic } map. Lets a super-admin re-sync all chapters from the
+ * admin Topics page after editing the catalogue. Each chapter can then trim to
+ * its 8–10. Mock events are left untouched.
+ */
+export async function pushCommitteeTopicsToAllChapterEvents(): Promise<
+  ActionResult<{ events_updated: number; committees: number }>
+> {
+  if (!(await isCurrentUserSuperAdmin())) {
+    return {
+      success: false,
+      error: "Only super-admins can push committee topics to events.",
+    };
+  }
+  const catalog = await listCommitteeTopics();
+  if (catalog.length === 0) {
+    return { success: false, error: "No committee topics in the catalogue to push." };
+  }
+  const obj = Object.fromEntries(catalog.map((c) => [c.committee, c.topic]));
+
+  const supabase = await createServiceClient();
+  const { data, error } = await supabase
+    .from("events")
+    .update({ committee_topics: obj, updated_at: new Date().toISOString() })
+    .eq("level", "chapter")
+    .eq("is_mock", false)
+    .select("id");
+
+  if (error) return { success: false, error: error.message };
+  revalidatePath("/yip/dashboard/admin/topics");
+  return {
+    success: true,
+    data: { events_updated: data?.length ?? 0, committees: catalog.length },
+  };
+}
+
 // ─── Create Event ──────────────────────────────────────────────────
 
 export async function createEvent(
@@ -155,6 +193,19 @@ export async function createEvent(
     }
   }
 
+  // Default committees to the official 15 catalogue when none were chosen, so
+  // an event is never created empty. The create wizard passes a selection;
+  // bulk/programmatic callers may not. Each chapter can trim to its 8–10 later.
+  let committeeTopics = data.committee_topics;
+  if (!committeeTopics || Object.keys(committeeTopics).length === 0) {
+    const catalog = await listCommitteeTopics();
+    if (catalog.length > 0) {
+      committeeTopics = Object.fromEntries(
+        catalog.map((c) => [c.committee, c.topic])
+      );
+    }
+  }
+
   // Insert the event
   const { data: event, error: eventError } = await supabase
     .from("events")
@@ -171,7 +222,7 @@ export async function createEvent(
       venue_name: data.venue_name,
       venue_address: data.venue_address,
       central_agenda: data.central_agenda,
-      committee_topics: data.committee_topics,
+      committee_topics: committeeTopics,
       status: "draft",
       created_by: user.id,
       ...(data.yi_chapter_id ? { yi_chapter_id: data.yi_chapter_id } : {}),

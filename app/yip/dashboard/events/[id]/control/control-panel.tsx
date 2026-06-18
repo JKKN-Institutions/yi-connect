@@ -43,7 +43,7 @@ import { cn } from "@/lib/yip/utils";
 import { ROLE_LABELS, ROLE_COLORS, PARTY_COLORS } from "@/lib/yip/constants";
 import { useRealtimeEvent } from "@/lib/yip/hooks/use-realtime-event";
 import { useTimer } from "@/lib/yip/hooks/use-timer";
-import { advanceAgenda, goToPreviousAgendaItem, resetAgenda, startAgendaItem, skipAgendaItem, updateEventStatus, updateAgendaItemDuration, updateAgendaItemSubTimers } from "@/app/yip/actions/agenda";
+import { advanceAgenda, goToPreviousAgendaItem, reopenAgendaItem, resetAgenda, startAgendaItem, skipAgendaItem, updateEventStatus, updateAgendaItemDuration, updateAgendaItemSubTimers } from "@/app/yip/actions/agenda";
 import {
   getSubTimers,
   formatSubTimerSeconds,
@@ -372,6 +372,29 @@ export function ControlPanel({
       } else {
         toast.error(result.error);
       }
+    });
+  }
+
+  // Chair / national only (BUG-409). Undo an accidental "complete": a finished
+  // item goes back to upcoming so it can be run again; any scores already
+  // entered are kept. Confirmed first since it changes the live agenda state.
+  function handleReopenItem(itemId: string, title: string) {
+    setConfirmDialog({
+      open: true,
+      title: "Re-open this session?",
+      description: `Re-open "${title}"? It returns to upcoming so you can run it again. Scores already entered for it are kept. (Blocked if scores are locked or results are published.)`,
+      action: () => {
+        startTransition(async () => {
+          const result = await reopenAgendaItem(eventId, itemId);
+          if (result.success) {
+            toast.success(`Re-opened: ${title}`);
+            router.refresh();
+          } else {
+            toast.error(result.error);
+          }
+          setConfirmDialog((prev) => ({ ...prev, open: false }));
+        });
+      },
     });
   }
 
@@ -1325,21 +1348,35 @@ export function ControlPanel({
                           </Button>
                         </div>
                       ) : (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            handleStartEditDuration(
-                              item.id,
-                              item.duration_minutes
-                            )
-                          }
-                          disabled={isPending}
-                          className="mt-0.5 shrink-0 rounded p-1 text-muted-foreground hover:bg-gray-200 hover:text-gray-700"
-                          aria-label={`Edit duration for ${item.title}`}
-                          title="Edit planned duration"
-                        >
-                          <Pencil className="size-3" />
-                        </button>
+                        <div className="flex shrink-0 items-start gap-0.5">
+                          {status === "completed" && canControlAgendaBackward && (
+                            <button
+                              type="button"
+                              onClick={() => handleReopenItem(item.id, item.title)}
+                              disabled={isPending}
+                              className="mt-0.5 shrink-0 rounded p-1 text-amber-600 hover:bg-amber-100 hover:text-amber-700"
+                              aria-label={`Re-open ${item.title}`}
+                              title="Re-open this completed session"
+                            >
+                              <RotateCcw className="size-3" />
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleStartEditDuration(
+                                item.id,
+                                item.duration_minutes
+                              )
+                            }
+                            disabled={isPending}
+                            className="mt-0.5 shrink-0 rounded p-1 text-muted-foreground hover:bg-gray-200 hover:text-gray-700"
+                            aria-label={`Edit duration for ${item.title}`}
+                            title="Edit planned duration"
+                          >
+                            <Pencil className="size-3" />
+                          </button>
+                        </div>
                       )}
                     </div>
                   );

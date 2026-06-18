@@ -114,6 +114,73 @@ export async function advanceAgenda(
   return { success: true, data: { nextItemId: nextItem?.id ?? null } };
 }
 
+// ─── Re-open a Completed Agenda Item (BUG-409) ────────────────────
+// Undo an accidental "complete": revert a COMPLETED item back to `upcoming`
+// (resumable) WITHOUT touching any scores already entered for it. Blocked once
+// scoring is locked or results are published (re-opening a finalised result
+// would corrupt the standings). CHAIR / NATIONAL ONLY — same elevated privilege
+// as moving the agenda backward.
+export async function reopenAgendaItem(
+  eventId: string,
+  agendaItemId: string
+): Promise<ActionResult<null>> {
+  const access = await getYipEventAccess(eventId);
+  if (access.role !== "super_admin" && access.role !== "chapter_admin") {
+    return {
+      success: false,
+      error: "Only the chapter chair or a national admin can re-open a session.",
+    };
+  }
+  const supabase = await createServiceClient();
+
+  // Guardrails — never re-open once results are out or scores are frozen.
+  const { data: event, error: eventErr } = await supabase
+    .from("events")
+    .select("id, scores_locked, results_published_at")
+    .eq("id", eventId)
+    .single();
+  if (eventErr || !event) return { success: false, error: "Event not found" };
+  if (event.results_published_at) {
+    return {
+      success: false,
+      error: "Results are published — re-opening a session is disabled.",
+    };
+  }
+  if (event.scores_locked) {
+    return {
+      success: false,
+      error: "Scores are locked. Unlock scores before re-opening a session.",
+    };
+  }
+
+  // Target must be a COMPLETED item belonging to THIS event.
+  const { data: item, error: itemErr } = await supabase
+    .from("agenda")
+    .select("id, status")
+    .eq("id", agendaItemId)
+    .eq("event_id", eventId)
+    .maybeSingle();
+  if (itemErr || !item) {
+    return { success: false, error: "Agenda item not found for this event." };
+  }
+  if (item.status !== "completed") {
+    return { success: false, error: "Only a completed session can be re-opened." };
+  }
+
+  // Revert to upcoming (resumable). Scores are intentionally NOT touched —
+  // they persist and become editable again when the session next goes live
+  // (subject to the scores-lock guard above).
+  const { error: updErr } = await supabase
+    .from("agenda")
+    .update({ status: "upcoming", actual_end: null })
+    .eq("id", agendaItemId)
+    .eq("event_id", eventId);
+  if (updErr) return { success: false, error: updErr.message };
+
+  revalidatePath(`/yip/dashboard/events/${eventId}/control`);
+  return { success: true, data: null };
+}
+
 // ─── Go To Previous Agenda Item ───────────────────────────────────
 // Reverses advanceAgenda by one step within the current day: un-advances
 // the current item (status back to `upcoming`), re-activates the item

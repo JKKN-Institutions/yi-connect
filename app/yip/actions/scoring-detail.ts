@@ -163,6 +163,114 @@ export async function getParticipantScoringDetail(
   };
 }
 
+// Event-wide score export (BUG-408). Every juror's per-criterion score across
+// every participant and session, for off-app cross-referencing / dispute proof.
+// national/super-admin-only (same gate as the leaderboard / per-participant drill-down).
+export type ExportScoreRow = {
+  serial_no: number | null;
+  full_name: string;
+  constituency_name: string | null;
+  party_side: string | null;
+  party_number: number | null;
+  parliament_role: string | null;
+  session_day: number | null;
+  session_title: string | null;
+  occurrence: number | null;
+  jury_name: string;
+  total_score: number;
+  criteria_scores: Record<string, number>;
+  flags: {
+    no_confidence_brought: boolean;
+    walkout: boolean;
+    ruckus: boolean;
+    suspension: boolean;
+  };
+  comments: string | null;
+  submitted_at: string | null;
+};
+
+export async function getAllScoresForExport(
+  eventId: string
+): Promise<ExportScoreRow[] | null> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canViewScores) return null;
+
+  const supabase = await createServiceClient();
+
+  const { data: rawScores } = await supabase
+    .from("scores")
+    .select(
+      `
+      total_score, criteria_scores, comments, status, submitted_at, occurrence,
+      flag_no_confidence_brought, flag_walkout, flag_ruckus, flag_suspension,
+      participant:participants(serial_no, full_name, constituency_name, party_side, party_number, parliament_role),
+      jury:jury_assignments(jury_name),
+      session:agenda(title, day, sequence_order)
+    `
+    )
+    .eq("event_id", eventId);
+
+  type RawRow = {
+    total_score: number;
+    criteria_scores: unknown;
+    comments: string | null;
+    submitted_at: string | null;
+    occurrence: number | null;
+    flag_no_confidence_brought: boolean | null;
+    flag_walkout: boolean | null;
+    flag_ruckus: boolean | null;
+    flag_suspension: boolean | null;
+    participant: {
+      serial_no: number | null;
+      full_name: string;
+      constituency_name: string | null;
+      party_side: string | null;
+      party_number: number | null;
+      parliament_role: string | null;
+    } | null;
+    jury: { jury_name: string } | null;
+    session: { title: string; day: number; sequence_order: number } | null;
+  };
+
+  const rows = ((rawScores ?? []) as unknown as RawRow[]).map((r) => ({
+    serial_no: r.participant?.serial_no ?? null,
+    full_name: r.participant?.full_name ?? "Unknown",
+    constituency_name: r.participant?.constituency_name ?? null,
+    party_side: r.participant?.party_side ?? null,
+    party_number: r.participant?.party_number ?? null,
+    parliament_role: r.participant?.parliament_role ?? null,
+    session_day: r.session?.day ?? null,
+    session_title: r.session?.title ?? null,
+    occurrence: r.occurrence ?? null,
+    jury_name: r.jury?.jury_name ?? "Unknown juror",
+    total_score: r.total_score,
+    criteria_scores: asNumberRecord(r.criteria_scores),
+    flags: {
+      no_confidence_brought: Boolean(r.flag_no_confidence_brought),
+      walkout: Boolean(r.flag_walkout),
+      ruckus: Boolean(r.flag_ruckus),
+      suspension: Boolean(r.flag_suspension),
+    },
+    comments: r.comments,
+    submitted_at: r.submitted_at,
+  }));
+
+  // Stable order: by participant serial, then session day/title, then juror.
+  rows.sort((a, b) => {
+    const sa = a.serial_no ?? 1e9;
+    const sb = b.serial_no ?? 1e9;
+    if (sa !== sb) return sa - sb;
+    const da = a.session_day ?? 99;
+    const db = b.session_day ?? 99;
+    if (da !== db) return da - db;
+    const ta = (a.session_title ?? "").localeCompare(b.session_title ?? "");
+    if (ta !== 0) return ta;
+    return a.jury_name.localeCompare(b.jury_name);
+  });
+
+  return rows;
+}
+
 // Chair-only correction of a juror's score, fully audited. Gated to canManage
 // (the event chair / super-admin). Every change is written to yip.score_audit
 // with the actor + old→new values. Allowed even when scores are locked — a

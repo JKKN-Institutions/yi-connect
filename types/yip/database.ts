@@ -1005,6 +1005,51 @@ export type Database = {
           },
         ]
       }
+      agenda_template: {
+        Row: {
+          agenda_type: string | null
+          created_at: string | null
+          day: number
+          description: string | null
+          duration_minutes: number | null
+          id: string
+          is_scoreable: boolean
+          mode: Database["public"]["Enums"]["agenda_mode"]
+          sequence_order: number
+          session_key: string | null
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          agenda_type?: string | null
+          created_at?: string | null
+          day: number
+          description?: string | null
+          duration_minutes?: number | null
+          id?: string
+          is_scoreable?: boolean
+          mode?: Database["public"]["Enums"]["agenda_mode"]
+          sequence_order: number
+          session_key?: string | null
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          agenda_type?: string | null
+          created_at?: string | null
+          day?: number
+          description?: string | null
+          duration_minutes?: number | null
+          id?: string
+          is_scoreable?: boolean
+          mode?: Database["public"]["Enums"]["agenda_mode"]
+          sequence_order?: number
+          session_key?: string | null
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       award_overrides: {
         Row: {
           award_label: string

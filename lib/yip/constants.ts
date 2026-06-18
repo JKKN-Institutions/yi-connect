@@ -46,12 +46,26 @@ export const MINISTRIES = [
 ] as const;
 export type Ministry = (typeof MINISTRIES)[number]["key"];
 
+// The 15 official YIP committees (= the ministry committees). The canonical
+// source is the DB catalog `yip.topics` (category='committee'); this constant
+// is the offline fallback used by allocation/participants/yuva when an event
+// has no committee_topics selection. Keep in sync with the catalog.
 export const COMMITTEES = [
-  "Youth in Democracy",
-  "Youth in Entrepreneurship & Economic Growth",
-  "Youth Role in Environmental Conservation",
-  "Youth Against Corruption",
-  "Youth Awareness in Cyber Security",
+  "Ministry of Education",
+  "Ministry of Finance",
+  "Ministry of Youth Affairs & Sports",
+  "Ministry of Health & Family Welfare",
+  "Ministry of Electronics & IT",
+  "Ministry of Environment",
+  "Ministry of Agriculture",
+  "Ministry of Road Transport",
+  "Ministry of Housing & Urban Affairs",
+  "Ministry of Skill Development",
+  "Ministry of Women & Child Development",
+  "Ministry of Labour & Employment",
+  "Ministry of Tourism & Culture",
+  "Ministry of Jal Shakti",
+  "Ministry of MSME",
 ] as const;
 
 export const ROLE_LABELS: Record<string, string> = {

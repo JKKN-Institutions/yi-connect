@@ -22,6 +22,7 @@ import {
   RotateCcw,
   Loader2,
   Search,
+  Send,
 } from "lucide-react";
 import { type YiZone } from "@/lib/yip/hierarchy";
 import {
@@ -32,6 +33,7 @@ import {
   type AdminTopic,
   type TopicCategory,
 } from "@/app/yip/actions/admin-topics";
+import { pushCommitteeTopicsToAllChapterEvents } from "@/app/yip/actions/events";
 
 type FormState = {
   category: TopicCategory;
@@ -177,6 +179,26 @@ export function TopicsAdminClient({
     });
   }
 
+  function pushToAll() {
+    if (
+      !window.confirm(
+        "Push all committee topics to every chapter event? This overwrites each event's committee selection with the full official list. Each chapter can then trim to its 8–10."
+      )
+    )
+      return;
+    startTransition(async () => {
+      const res = await pushCommitteeTopicsToAllChapterEvents();
+      if (!res.success) {
+        setError(res.error);
+        return;
+      }
+      setFlash(
+        `Pushed ${res.data.committees} committees to ${res.data.events_updated} chapter events.`
+      );
+      setTimeout(() => setFlash(null), 4000);
+    });
+  }
+
   const counts = {
     total: topics.length,
     active: topics.filter((t) => t.is_active).length,
@@ -197,6 +219,9 @@ export function TopicsAdminClient({
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={pushToAll} disabled={pending}>
+            <Send className="size-4 mr-2" /> Push to all chapter events
+          </Button>
           <Button
             onClick={openCreate}
             className="bg-[#FF9933] hover:bg-[#FF9933]/90 text-white"

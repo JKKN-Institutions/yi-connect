@@ -323,7 +323,12 @@ export default async function ParticipantPage() {
                     className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium ${PARTY_COLORS[side].badge} shadow-sm`}
                   >
                     <Flag className="size-3.5" />
-                    {partyName ?? (side === "ruling" ? "Ruling Party" : "Opposition Party")}
+                    {partyName ??
+                      (participant.party_number != null
+                        ? `Party ${participant.party_number}`
+                        : side === "ruling"
+                          ? "Ruling Party"
+                          : "Opposition Party")}
                     {partyName && (
                       <span className="font-normal opacity-80">
                         · {side === "ruling" ? "Ruling" : "Opposition"}

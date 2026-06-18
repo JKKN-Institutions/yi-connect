@@ -2,76 +2,11 @@ import Link from "next/link";
 import { createClient } from "@/lib/yip/supabase/server";
 import { isCurrentUserSuperAdmin } from "@/lib/yip/auth/require-super-admin";
 import { getRegionalAdminZones, getYipChapterScopes } from "@/lib/yi/auth/yi-directory-roles";
-import { Badge } from "@/components/yip/ui/badge";
-import { Plus, CalendarDays, Users, MapPin } from "lucide-react";
+import { Plus, CalendarDays } from "lucide-react";
+import { EventsGridClient, type EventCard } from "./events-grid-client";
 import { OnboardingLauncher } from "@/components/yip/guide/onboarding-launcher";
 import { GUIDES } from "@/lib/yip/guide/content";
 import { getCompletedSteps, logGuideEvent } from "@/lib/yip/guide/actions";
-
-// Status badge color mapping with premium styling
-function statusBadge(status: string) {
-  const map: Record<string, { label: string; className: string }> = {
-    draft: {
-      label: "Draft",
-      className: "bg-[#1a1a3e]/5 text-[#1a1a3e]/60 border border-[#1a1a3e]/10",
-    },
-    registration_open: {
-      label: "Registration Open",
-      className: "bg-[#FF9933]/8 text-[#FF9933] border border-[#FF9933]/15",
-    },
-    registration_closed: {
-      label: "Registration Closed",
-      className: "bg-[#D4A843]/10 text-[#D4A843] border border-[#D4A843]/15",
-    },
-    day1_live: {
-      label: "Day 1 Live",
-      className: "bg-[#138808]/8 text-[#138808] border border-[#138808]/15",
-    },
-    day1_complete: {
-      label: "Day 1 Complete",
-      className: "bg-[#138808]/8 text-[#138808] border border-[#138808]/15",
-    },
-    day2_live: {
-      label: "Day 2 Live",
-      className: "bg-[#138808]/8 text-[#138808] border border-[#138808]/15",
-    },
-    completed: {
-      label: "Completed",
-      className: "bg-[#1a1a3e]/5 text-[#1a1a3e] border border-[#1a1a3e]/10",
-    },
-    results_published: {
-      label: "Results Published",
-      className: "bg-[#FF9933]/8 text-[#FF9933] border border-[#FF9933]/15",
-    },
-  };
-  return map[status] ?? { label: status, className: "bg-[#1a1a3e]/5 text-[#1a1a3e]/60 border border-[#1a1a3e]/10" };
-}
-
-function levelBadge(level: string) {
-  const map: Record<string, { label: string; className: string }> = {
-    chapter: {
-      label: "Chapter",
-      className: "bg-[#FF9933]/8 text-[#FF9933] border border-[#FF9933]/15",
-    },
-    regional: {
-      label: "Regional",
-      className: "bg-[#1a1a3e]/5 text-[#1a1a3e] border border-[#1a1a3e]/10",
-    },
-    national: {
-      label: "National",
-      className: "bg-[#138808]/8 text-[#138808] border border-[#138808]/15",
-    },
-  };
-  return map[level] ?? { label: level, className: "bg-[#1a1a3e]/5 text-[#1a1a3e]/60 border border-[#1a1a3e]/10" };
-}
-
-function formatDate(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString("en-IN", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-}
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -132,6 +67,25 @@ export default async function DashboardPage() {
     }
   }
 
+  // Shape the role-scoped list for the client grid (search / filter / sort live
+  // there). The server query above stays the authorization boundary.
+  const eventsForClient: EventCard[] = (events ?? []).map((e) => ({
+    id: e.id,
+    name: e.name,
+    status: e.status,
+    level: e.level,
+    day1_date: e.day1_date,
+    day2_date: e.day2_date,
+    city: e.city,
+    venue_name: e.venue_name,
+    chapter_name: e.chapter_name,
+    yi_zone_code: e.yi_zone_code,
+    is_mock: e.is_mock,
+    created_at: e.created_at,
+    updated_at: e.updated_at,
+    participantCount: participantCounts[e.id] || 0,
+  }));
+
   const hasEvents = events && events.length > 0;
 
   // Onboarding entry for the organiser — always visible, label derived from
@@ -166,68 +120,7 @@ export default async function DashboardPage() {
 
       {/* Events list */}
       {hasEvents ? (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {events.map((event) => {
-            const status = statusBadge(event.status);
-            const level = levelBadge(event.level);
-            const count = participantCounts[event.id] || 0;
-
-            return (
-              <Link key={event.id} href={`/yip/dashboard/events/${event.id}`}>
-                <div className="cursor-pointer overflow-hidden rounded-xl border border-[#1a1a3e]/5 bg-white shadow-sm transition-all hover:border-[#1a1a3e]/10 hover:shadow-md">
-                  <div className="p-5">
-                    <div className="flex items-start justify-between gap-2">
-                      <h3 className="font-[family-name:var(--font-heading)] text-base font-semibold leading-snug text-[#1a1a3e]">
-                        {event.name}
-                      </h3>
-                    </div>
-                    <div className="flex flex-wrap gap-1.5 pt-2">
-                      <Badge
-                        variant="secondary"
-                        className={level.className}
-                      >
-                        {level.label}
-                      </Badge>
-                      <Badge
-                        variant="secondary"
-                        className={status.className}
-                      >
-                        {status.label}
-                      </Badge>
-                    </div>
-                  </div>
-                  <div className="border-t border-[#1a1a3e]/5 px-5 pb-5 pt-4">
-                    <div className="space-y-2 text-sm text-[#1a1a3e]/60">
-                      <div className="flex items-center gap-2">
-                        <CalendarDays className="size-4 text-[#1a1a3e]/30" />
-                        <span>
-                          {formatDate(event.day1_date)} &ndash;{" "}
-                          {formatDate(event.day2_date)}
-                        </span>
-                      </div>
-                      {(event.city || event.venue_name) && (
-                        <div className="flex items-center gap-2">
-                          <MapPin className="size-4 text-[#1a1a3e]/30" />
-                          <span>
-                            {[event.venue_name, event.city]
-                              .filter(Boolean)
-                              .join(", ")}
-                          </span>
-                        </div>
-                      )}
-                      <div className="flex items-center gap-2">
-                        <Users className="size-4 text-[#1a1a3e]/30" />
-                        <span>
-                          {count} participant{count !== 1 ? "s" : ""}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </Link>
-            );
-          })}
-        </div>
+        <EventsGridClient events={eventsForClient} />
       ) : (
         /* Empty state */
         <div className="overflow-hidden rounded-xl border border-[#1a1a3e]/5 bg-white py-16 shadow-sm">

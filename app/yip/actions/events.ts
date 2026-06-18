@@ -243,39 +243,77 @@ export async function createEvent(
     };
   }
 
-  // Auto-generate agenda items from DEFAULT_AGENDA_TEMPLATE
+  // Auto-generate agenda items. Source of truth is the central
+  // yip.agenda_template table (managed at /yip/dashboard/admin/agenda); when
+  // that table is empty we fall back to the DEFAULT_AGENDA_TEMPLATE constant so
+  // event creation always seeds a complete 2-day agenda.
   const agendaItems: Array<{
     event_id: string;
     day: number;
     sequence_order: number;
     title: string;
-    duration_minutes: number;
-    agenda_type: string;
+    description: string | null;
+    duration_minutes: number | null;
+    agenda_type: string | null;
     mode: "party" | "committee" | "mixed";
+    is_scoreable: boolean;
+    session_key: string | null;
   }> = [];
 
-  for (const item of DEFAULT_AGENDA_TEMPLATE.day1) {
-    agendaItems.push({
-      event_id: event.id,
-      day: 1,
-      sequence_order: item.sequence,
-      title: item.title,
-      duration_minutes: item.duration,
-      agenda_type: item.type,
-      mode: item.mode,
-    });
-  }
+  const { data: templateRows } = await supabase
+    .from("agenda_template")
+    .select(
+      "day, sequence_order, title, description, agenda_type, duration_minutes, mode, is_scoreable, session_key"
+    )
+    .order("day")
+    .order("sequence_order");
 
-  for (const item of DEFAULT_AGENDA_TEMPLATE.day2) {
-    agendaItems.push({
-      event_id: event.id,
-      day: 2,
-      sequence_order: item.sequence,
-      title: item.title,
-      duration_minutes: item.duration,
-      agenda_type: item.type,
-      mode: item.mode,
-    });
+  if (templateRows && templateRows.length > 0) {
+    // DB-driven template.
+    for (const item of templateRows) {
+      agendaItems.push({
+        event_id: event.id,
+        day: item.day,
+        sequence_order: item.sequence_order,
+        title: item.title,
+        description: item.description,
+        duration_minutes: item.duration_minutes,
+        agenda_type: item.agenda_type,
+        mode: item.mode,
+        is_scoreable: item.is_scoreable,
+        session_key: item.session_key,
+      });
+    }
+  } else {
+    // Fallback: hard-coded DEFAULT_AGENDA_TEMPLATE constant.
+    for (const item of DEFAULT_AGENDA_TEMPLATE.day1) {
+      agendaItems.push({
+        event_id: event.id,
+        day: 1,
+        sequence_order: item.sequence,
+        title: item.title,
+        description: null,
+        duration_minutes: item.duration,
+        agenda_type: item.type,
+        mode: item.mode,
+        is_scoreable: false,
+        session_key: null,
+      });
+    }
+    for (const item of DEFAULT_AGENDA_TEMPLATE.day2) {
+      agendaItems.push({
+        event_id: event.id,
+        day: 2,
+        sequence_order: item.sequence,
+        title: item.title,
+        description: null,
+        duration_minutes: item.duration,
+        agenda_type: item.type,
+        mode: item.mode,
+        is_scoreable: false,
+        session_key: null,
+      });
+    }
   }
 
   const { error: agendaError } = await supabase

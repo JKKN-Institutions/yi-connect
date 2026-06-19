@@ -31,6 +31,8 @@ import {
   Handshake,
   PanelLeftClose,
   PanelLeftOpen,
+  CheckCircle2,
+  Circle,
   type LucideIcon,
 } from "lucide-react";
 
@@ -104,10 +106,14 @@ export function EventTabNav({
   eventId,
   eventStatus,
   canViewScores = false,
+  setupProgress,
 }: {
   eventId: string;
   eventStatus?: string;
   canViewScores?: boolean;
+  /** Map of { tabHref → done } for the Before-the-Event setup checklist. Tabs
+   *  not present in the map show no indicator. */
+  setupProgress?: Record<string, boolean>;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -172,6 +178,7 @@ export function EventTabNav({
               <optgroup key={g.title} label={g.title}>
                 {g.tabs.map((tab) => (
                   <option key={tab.label} value={`${basePath}${tab.href}`}>
+                    {setupProgress?.[tab.href] ? "✓ " : ""}
                     {tab.label}
                   </option>
                 ))}
@@ -246,7 +253,23 @@ export function EventTabNav({
                     )}
                   >
                     <tab.icon className="size-4 shrink-0" />
-                    {!collapsed && <span>{tab.label}</span>}
+                    {!collapsed && <span className="flex-1">{tab.label}</span>}
+                    {/* Setup checklist: green check when done, hollow circle
+                        when still to-do. Only on tracked Before-the-Event tabs. */}
+                    {!collapsed &&
+                      setupProgress &&
+                      tab.href in setupProgress &&
+                      (setupProgress[tab.href] ? (
+                        <CheckCircle2
+                          className="size-3.5 shrink-0 text-[#138808]"
+                          aria-label="done"
+                        />
+                      ) : (
+                        <Circle
+                          className="size-3.5 shrink-0 text-[#1a1a3e]/20"
+                          aria-label="to do"
+                        />
+                      ))}
                   </Link>
                 );
               })}

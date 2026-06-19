@@ -150,13 +150,14 @@ export async function listChapterEventsForPush(): Promise<
     status: string | null;
     chapter_name: string | null;
     day1_date: string | null;
+    pii_purged_at: string | null;
   }[]
 > {
   if (!(await isCurrentUserSuperAdmin())) return [];
   const supabase = await createServiceClient();
   const { data, error } = await supabase
     .from("events")
-    .select("id, name, status, chapter_name, day1_date")
+    .select("id, name, status, chapter_name, day1_date, pii_purged_at")
     .eq("level", "chapter")
     .eq("is_mock", false)
     .order("day1_date", { ascending: true, nullsFirst: false });

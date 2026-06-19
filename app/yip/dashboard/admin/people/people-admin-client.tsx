@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Badge } from "@/components/yip/ui/badge";
 import { Button } from "@/components/yip/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/yip/ui/card";
+import { RemovePiiDialog } from "../_components/remove-pii-dialog";
 import { Input } from "@/components/yip/ui/input";
 import { Textarea } from "@/components/yip/ui/textarea";
 import {
@@ -219,12 +220,15 @@ export function PeopleAdminClient({
             {stats.active} active · {stats.total} total
           </p>
         </div>
-        <Button
-          onClick={openCreate}
-          className="bg-[#FF9933] hover:bg-[#FF9933]/90 text-white"
-        >
-          <Plus className="size-4 mr-2" /> New Person
-        </Button>
+        <div className="flex items-center gap-2">
+          <RemovePiiDialog />
+          <Button
+            onClick={openCreate}
+            className="bg-[#FF9933] hover:bg-[#FF9933]/90 text-white"
+          >
+            <Plus className="size-4 mr-2" /> New Person
+          </Button>
+        </div>
       </div>
 
       {flash && (

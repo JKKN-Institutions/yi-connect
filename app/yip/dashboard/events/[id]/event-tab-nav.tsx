@@ -9,9 +9,7 @@ import {
   Users,
   Shuffle,
   Scale,
-  MessageSquare,
   MessagesSquare,
-  FileText,
   Radio,
   Star,
   Trophy,
@@ -22,19 +20,17 @@ import {
   IndianRupee,
   Shield,
   ShieldCheck,
-  ClipboardPaste,
   Images,
   MessageCircleHeart,
   BookOpen,
   UserCog,
-  Boxes,
-  Handshake,
   PanelLeftClose,
   PanelLeftOpen,
   CheckCircle2,
   Circle,
   type LucideIcon,
 } from "lucide-react";
+import { MERGED_GROUPS } from "./event-section-subtabs";
 
 type Tab = { label: string; href: string; icon: LucideIcon };
 type TabGroup = { title: string; tabs: Tab[] };
@@ -54,7 +50,7 @@ const GROUPS: TabGroup[] = [
       { label: "Team", href: "/team", icon: UserCog },
       { label: "Checklist", href: "/checklist", icon: ListChecks },
       { label: "Branding", href: "/branding", icon: ShieldCheck },
-      { label: "Registrations", href: "/registrations", icon: ClipboardPaste },
+      // Participants tab also hosts Registrations (sub-tabbed on the page).
       { label: "Participants", href: "/participants", icon: Users },
       { label: "Fees", href: "/fees", icon: IndianRupee },
       // Committee picker (route stays /topics). Before Parties so the setup
@@ -63,20 +59,19 @@ const GROUPS: TabGroup[] = [
       { label: "Parties", href: "/parties", icon: Flag },
       { label: "Allocation", href: "/allocation", icon: Shuffle },
       { label: "Jury", href: "/jury", icon: Scale },
+      // Volunteers tab also hosts YUVA Desks (sub-tabbed on the page).
       { label: "Volunteers", href: "/volunteers", icon: Shield },
-      { label: "YUVA Desks", href: "/yuva", icon: Handshake },
     ],
   },
   {
     title: "Event Day",
     tabs: [
       { label: "Control", href: "/control", icon: Radio },
-      { label: "Questions", href: "/questions", icon: MessageSquare },
-      { label: "Motions", href: "/motions", icon: Gavel },
-      { label: "Bills", href: "/bills", icon: FileText },
+      // Proceedings = Questions / Motions / Bills (sub-tabbed on the page).
+      { label: "Proceedings", href: "/questions", icon: Gavel },
       { label: "Chat", href: "/chat", icon: MessagesSquare },
+      // Scoring = Scoring / Committee Scores (sub-tabbed on the page).
       { label: "Scoring", href: "/scoring", icon: Star },
-      { label: "Committee Scores", href: "/committee-scoring", icon: Boxes },
       { label: "Media", href: "/media", icon: Images },
     ],
   },
@@ -91,15 +86,25 @@ const GROUPS: TabGroup[] = [
 ];
 
 // Score-bearing tabs — visible to national / super-admins only (2026-06-13).
-// "Committee Scores" is the committee-SCORING tab (distinct from the "Committees"
-// picker, which is open setup, not score-gated).
-const SCORE_TABS = new Set(["Scoring", "Committee Scores", "Results"]);
+// "Scoring" hosts Committee Scores as a sub-tab; "Committees" (picker) is open
+// setup and is NOT score-gated.
+const SCORE_TABS = new Set(["Scoring", "Results"]);
 const COLLAPSE_KEY = "yip-event-nav-collapsed";
 
+function matchesHref(href: string, pathname: string, basePath: string) {
+  const p = `${basePath}${href}`;
+  if (href === "") return pathname === basePath;
+  return pathname === p || pathname.startsWith(`${p}/`);
+}
+
 function isActive(tabHref: string, pathname: string, basePath: string) {
-  const tabPath = `${basePath}${tabHref}`;
-  if (tabHref === "") return pathname === basePath;
-  return pathname === tabPath || pathname.startsWith(`${tabPath}/`);
+  if (matchesHref(tabHref, pathname, basePath)) return true;
+  // A merged-group primary (e.g. Proceedings → /questions) stays active when on
+  // any of its sub-tab sibling routes (/motions, /bills).
+  const group = MERGED_GROUPS.find((g) => g.siblings[0].href === tabHref);
+  return group
+    ? group.siblings.some((s) => matchesHref(s.href, pathname, basePath))
+    : false;
 }
 
 export function EventTabNav({

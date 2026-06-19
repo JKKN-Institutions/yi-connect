@@ -172,6 +172,69 @@ export async function setEventCommittees(
   return { success: true, data: { count: Object.keys(obj).length } };
 }
 
+// ─── Setup progress (sidebar checklist) ────────────────────────────
+
+/**
+ * Per-event setup completion for the "Before the Event" sidebar checklist.
+ * Returns a { tabHref → done } map for the objective gating steps only — the
+ * ones whose "done" is unambiguous. Tabs absent from the map show no indicator.
+ * Fail-safe: any DB error returns {} (no indicators) rather than breaking the
+ * event layout that renders on every event page. Cheap: parallel count queries.
+ */
+export async function getEventSetupProgress(
+  eventId: string
+): Promise<Record<string, boolean>> {
+  try {
+    const supabase = await createServiceClient();
+    const [pAll, pAllotted, parties, jury, ev] = await Promise.all([
+      supabase
+        .from("participants")
+        .select("id", { count: "exact", head: true })
+        .eq("event_id", eventId),
+      supabase
+        .from("participants")
+        .select("id", { count: "exact", head: true })
+        .eq("event_id", eventId)
+        .not("party_id", "is", null),
+      supabase
+        .from("parties")
+        .select("id", { count: "exact", head: true })
+        .eq("event_id", eventId),
+      supabase
+        .from("jury_assignments")
+        .select("id", { count: "exact", head: true })
+        .eq("event_id", eventId),
+      supabase
+        .from("events")
+        .select("committee_topics")
+        .eq("id", eventId)
+        .single(),
+    ]);
+
+    const total = pAll.count ?? 0;
+    const allotted = pAllotted.count ?? 0;
+    const ct = ev.data?.committee_topics as
+      | Record<string, unknown>
+      | unknown[]
+      | null;
+    const committeesPicked = Array.isArray(ct)
+      ? ct.length > 0
+      : !!ct && typeof ct === "object" && Object.keys(ct).length > 0;
+
+    return {
+      "/participants": total > 0,
+      "/topics": committeesPicked, // the Committees picker tab
+      "/parties": (parties.count ?? 0) > 0,
+      // Allocation "done" = every student is allotted into a party (one-step
+      // flow assigns party_id + committee + constituency together).
+      "/allocation": total > 0 && allotted === total,
+      "/jury": (jury.count ?? 0) > 0,
+    };
+  } catch {
+    return {};
+  }
+}
+
 // ─── Create Event ──────────────────────────────────────────────────
 
 export async function createEvent(

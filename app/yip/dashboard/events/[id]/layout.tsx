@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/yip/supabase/server";
-import { getEvent } from "@/app/yip/actions/events";
+import { getEvent, getEventSetupProgress } from "@/app/yip/actions/events";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { EventTabNav } from "./event-tab-nav";
 import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
@@ -36,6 +36,9 @@ export default async function EventLayout({
   // (2026-06-13) — hide them for chapter / regional roles.
   const access = await getYipEventAccess(id);
 
+  // Setup-completion map for the sidebar checklist (Before-the-Event tabs).
+  const setupProgress = await getEventSetupProgress(id);
+
   return (
     <div>
       {/* Event Header */}
@@ -49,6 +52,7 @@ export default async function EventLayout({
           eventId={id}
           eventStatus={event.status}
           canViewScores={access.canViewScores}
+          setupProgress={setupProgress}
         />
 
         {/* Tab Content */}

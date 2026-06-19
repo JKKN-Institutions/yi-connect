@@ -204,6 +204,7 @@ export function TopicsAdminClient({
     active: topics.filter((t) => t.is_active).length,
     central: topics.filter((t) => t.category === "central").length,
     committee: topics.filter((t) => t.category === "committee").length,
+    regional: topics.filter((t) => t.category === "regional").length,
   };
 
   return (
@@ -211,10 +212,12 @@ export function TopicsAdminClient({
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-[#1a1a3e] flex items-center gap-2">
-            <BookOpen className="size-7 text-[#FF9933]" /> Committee Topics — Admin
+            <BookOpen className="size-7 text-[#FF9933]" /> Topics — Admin
           </h1>
           <p className="text-sm text-[#1a1a3e]/60 mt-1">
-            The official YIP committee topics — events pick 8–10 of these.{" "}
+            The full YIP topic catalogue — Central, Regional and Committee topics
+            that events draw from.{" "}
+            {counts.central} central · {counts.regional} regional ·{" "}
             {counts.committee} committee · {counts.active} active
           </p>
         </div>

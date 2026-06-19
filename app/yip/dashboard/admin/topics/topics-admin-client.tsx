@@ -34,6 +34,7 @@ import {
   type TopicCategory,
 } from "@/app/yip/actions/admin-topics";
 import { pushCommitteeTopicsToAllChapterEvents } from "@/app/yip/actions/events";
+import { PushToSelectedEvents } from "../_components/push-to-selected-events";
 
 type FormState = {
   category: TopicCategory;
@@ -225,6 +226,16 @@ export function TopicsAdminClient({
           <Button variant="outline" onClick={pushToAll} disabled={pending}>
             <Send className="size-4 mr-2" /> Push to all chapter events
           </Button>
+          <PushToSelectedEvents
+            dialogTitle="Push committee topics to selected events"
+            dialogDescription="Overwrites each chosen event's committee selection with the full official catalogue. Each chapter can then trim to its 8–10."
+            action={pushCommitteeTopicsToAllChapterEvents}
+            formatSuccess={(d) =>
+              `Pushed ${d.committees} committees to ${d.events_updated} chapter event${
+                d.events_updated === 1 ? "" : "s"
+              }.`
+            }
+          />
           <Button
             onClick={openCreate}
             className="bg-[#FF9933] hover:bg-[#FF9933]/90 text-white"

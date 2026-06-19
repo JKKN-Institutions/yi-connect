@@ -95,9 +95,16 @@ export async function listCommitteeTopics(): Promise<CommitteeTopicOption[]> {
  * admin Topics page after editing the catalogue. Each chapter can then trim to
  * its 8–10. Mock events are left untouched.
  */
-export async function pushCommitteeTopicsToAllChapterEvents(): Promise<
-  ActionResult<{ events_updated: number; committees: number }>
-> {
+/**
+ * Push the committee catalogue onto chapter events, overwriting their
+ * committee_topics. With no argument it targets EVERY real chapter event
+ * ("push to all"); pass a list of event IDs to push to only those ("push to
+ * selected"). Selected events are scoped further to level=chapter + non-mock so
+ * a stray ID can never hit a regional/national/mock event. Super-admin only.
+ */
+export async function pushCommitteeTopicsToAllChapterEvents(
+  eventIds?: string[]
+): Promise<ActionResult<{ events_updated: number; committees: number }>> {
   if (!(await isCurrentUserSuperAdmin())) {
     return {
       success: false,
@@ -111,12 +118,16 @@ export async function pushCommitteeTopicsToAllChapterEvents(): Promise<
   const obj = Object.fromEntries(catalog.map((c) => [c.committee, c.topic]));
 
   const supabase = await createServiceClient();
-  const { data, error } = await supabase
+  let q = supabase
     .from("events")
     .update({ committee_topics: obj, updated_at: new Date().toISOString() })
     .eq("level", "chapter")
-    .eq("is_mock", false)
-    .select("id");
+    .eq("is_mock", false);
+  // Selective push: scope to the chosen events (still bounded to real chapter
+  // events above, so an out-of-scope ID is simply ignored).
+  if (eventIds && eventIds.length > 0) q = q.in("id", eventIds);
+
+  const { data, error } = await q.select("id");
 
   if (error) return { success: false, error: error.message };
   revalidatePath("/yip/dashboard/admin/topics");
@@ -124,6 +135,33 @@ export async function pushCommitteeTopicsToAllChapterEvents(): Promise<
     success: true,
     data: { events_updated: data?.length ?? 0, committees: catalog.length },
   };
+}
+
+/**
+ * Real chapter events (level=chapter, non-mock) for the admin "push to selected
+ * events" picker. Returns lightweight rows incl. status so the picker can flag
+ * already-started events. Super-admin only (returns [] otherwise) — matches the
+ * push actions' gate.
+ */
+export async function listChapterEventsForPush(): Promise<
+  {
+    id: string;
+    name: string | null;
+    status: string | null;
+    chapter_name: string | null;
+    day1_date: string | null;
+  }[]
+> {
+  if (!(await isCurrentUserSuperAdmin())) return [];
+  const supabase = await createServiceClient();
+  const { data, error } = await supabase
+    .from("events")
+    .select("id, name, status, chapter_name, day1_date")
+    .eq("level", "chapter")
+    .eq("is_mock", false)
+    .order("day1_date", { ascending: true, nullsFirst: false });
+  if (error || !data) return [];
+  return data;
 }
 
 /**

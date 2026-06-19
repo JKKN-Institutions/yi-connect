@@ -397,12 +397,28 @@ export async function createEvent(
   // safe, not silently allocated against all 15.
   const committeeTopics = data.committee_topics ?? {};
 
+  // DPDP: inherit the chapter's standing privacy default (set in admin → Data
+  // Privacy). Chapters in privacy mode create events that auto-anonymize PII
+  // after results publish. Defaults to false (existing behaviour) when the
+  // chapter has no preference row.
+  const chapterForPrivacy = derivedChapterName ?? data.chapter_name;
+  let privacyMode = false;
+  if (chapterForPrivacy) {
+    const { data: cp } = await supabase
+      .from("chapter_privacy")
+      .select("privacy_default")
+      .eq("yi_chapter", chapterForPrivacy)
+      .maybeSingle();
+    privacyMode = cp?.privacy_default ?? false;
+  }
+
   // Insert the event
   const { data: event, error: eventError } = await supabase
     .from("events")
     .insert({
       name: data.name,
       level: data.level,
+      privacy_mode: privacyMode,
       // When a chapter is linked, the canonical yi.chapters values win over
       // the form's free text (derived* fall back to form text when unlinked).
       chapter_name: derivedChapterName ?? data.chapter_name,

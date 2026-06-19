@@ -2,6 +2,7 @@
 
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
+import { isCurrentUserSuperAdmin } from "@/lib/yip/auth/require-super-admin";
 import { logAuditAction } from "@/lib/yip/audit/log-action";
 import { revalidatePath } from "next/cache";
 
@@ -97,4 +98,77 @@ export async function anonymizeEventPII(eventIds: string[]): Promise<
       skipped_unauthorized: skipped,
     },
   };
+}
+
+// ─── Per-chapter privacy default (standing setting) ────────────────────────
+
+export type ChapterPrivacyRow = {
+  yi_chapter: string;
+  privacy_default: boolean;
+};
+
+/**
+ * Every chapter that runs events, with its DPDP privacy default. Chapters with
+ * the default ON have their NEW events created in privacy mode (auto-anonymize
+ * after results). Super-admin only.
+ */
+export async function listChapterPrivacyDefaults(): Promise<ChapterPrivacyRow[]> {
+  if (!(await isCurrentUserSuperAdmin())) return [];
+  const supabase = await createServiceClient();
+  const [{ data: events }, { data: prefs }] = await Promise.all([
+    supabase
+      .from("events")
+      .select("chapter_name")
+      .eq("level", "chapter")
+      .eq("is_mock", false)
+      .not("chapter_name", "is", null),
+    supabase.from("chapter_privacy").select("yi_chapter, privacy_default"),
+  ]);
+  const defaults = new Map(
+    (prefs ?? []).map((p) => [p.yi_chapter, p.privacy_default])
+  );
+  const chapters = Array.from(
+    new Set((events ?? []).map((e) => e.chapter_name).filter(Boolean) as string[])
+  ).sort((a, b) => a.localeCompare(b));
+  return chapters.map((yi_chapter) => ({
+    yi_chapter,
+    privacy_default: defaults.get(yi_chapter) ?? false,
+  }));
+}
+
+/**
+ * Set (upsert) a chapter's DPDP privacy default. Affects only FUTURE events for
+ * the chapter — existing events keep their current privacy_mode (clean those
+ * with the per-event "Remove personal data" tool). Super-admin only.
+ */
+export async function setChapterPrivacyDefault(
+  yiChapter: string,
+  enabled: boolean
+): Promise<ActionResult<{ yi_chapter: string; privacy_default: boolean }>> {
+  if (!(await isCurrentUserSuperAdmin())) {
+    return { success: false, error: "Only super-admins can set chapter privacy defaults." };
+  }
+  if (!yiChapter?.trim()) {
+    return { success: false, error: "Missing chapter." };
+  }
+  const supabase = await createServiceClient();
+  const { error } = await supabase
+    .from("chapter_privacy")
+    .upsert(
+      {
+        yi_chapter: yiChapter,
+        privacy_default: enabled,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "yi_chapter" }
+    );
+  if (error) return { success: false, error: error.message };
+
+  await logAuditAction({
+    action_type: "update",
+    target_table: "chapter_privacy",
+    metadata: { action: "set_privacy_default", yi_chapter: yiChapter, enabled },
+  });
+  revalidatePath("/yip/dashboard/admin/privacy");
+  return { success: true, data: { yi_chapter: yiChapter, privacy_default: enabled } };
 }

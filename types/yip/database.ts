@@ -1843,6 +1843,8 @@ export type Database = {
           mycii_payment_link: string | null
           name: string
           oath_text: string | null
+          pii_purged_at: string | null
+          privacy_mode: boolean
           questions_close_at: string | null
           questions_open_at: string | null
           registrations_frozen: boolean | null
@@ -1887,6 +1889,8 @@ export type Database = {
           mycii_payment_link?: string | null
           name: string
           oath_text?: string | null
+          pii_purged_at?: string | null
+          privacy_mode?: boolean
           questions_close_at?: string | null
           questions_open_at?: string | null
           registrations_frozen?: boolean | null
@@ -1931,6 +1935,8 @@ export type Database = {
           mycii_payment_link?: string | null
           name?: string
           oath_text?: string | null
+          pii_purged_at?: string | null
+          privacy_mode?: boolean
           questions_close_at?: string | null
           questions_open_at?: string | null
           registrations_frozen?: boolean | null

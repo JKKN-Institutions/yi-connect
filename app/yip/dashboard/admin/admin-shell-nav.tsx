@@ -15,6 +15,7 @@ import {
   UserCircle,
   Database,
   KeyRound,
+  Lock,
   ScrollText,
   SlidersHorizontal,
   Scale,
@@ -36,6 +37,7 @@ const NAV = [
   { label: "Seasons", href: "/yip/dashboard/admin/seasons", icon: CalendarRange },
   { label: "Branding Rules", href: "/yip/dashboard/admin/branding-rules", icon: ShieldCheck },
   { label: "Mock Data", href: "/yip/dashboard/admin/mock-data", icon: Database },
+  { label: "Data Privacy", href: "/yip/dashboard/admin/privacy", icon: Lock },
   { label: "Audit Log", href: "/yip/dashboard/admin/audit-log", icon: ScrollText },
 ];
 

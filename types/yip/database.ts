@@ -824,6 +824,24 @@ export type Database = {
   }
   yip: {
     Tables: {
+      chapter_privacy: {
+        Row: {
+          privacy_default: boolean
+          updated_at: string
+          yi_chapter: string
+        }
+        Insert: {
+          privacy_default?: boolean
+          updated_at?: string
+          yi_chapter: string
+        }
+        Update: {
+          privacy_default?: boolean
+          updated_at?: string
+          yi_chapter?: string
+        }
+        Relationships: []
+      }
       admin_audit_log: {
         Row: {
           action_type: string

@@ -3,6 +3,7 @@ import { createClient } from "@/lib/yip/supabase/server";
 import { getEvent, getEventSetupProgress } from "@/app/yip/actions/events";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { EventTabNav } from "./event-tab-nav";
+import { EventSectionSubTabs } from "./event-section-subtabs";
 import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
 
 export default async function EventLayout({
@@ -56,7 +57,13 @@ export default async function EventLayout({
         />
 
         {/* Tab Content */}
-        <div className="min-w-0 flex-1">{children}</div>
+        <div className="min-w-0 flex-1">
+          {/* Sub-tab strip for merged sections (Participants/Registrations,
+              Volunteers/YUVA, Scoring/Committee Scores, Proceedings). Renders
+              only on those routes. */}
+          <EventSectionSubTabs eventId={id} canViewScores={access.canViewScores} />
+          {children}
+        </div>
       </div>
     </div>
   );

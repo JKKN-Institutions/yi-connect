@@ -8,6 +8,7 @@ import { isCurrentUserSuperAdmin } from "@/lib/yip/auth/require-super-admin";
 import { getRegionalAdminZones } from "@/lib/yi/auth/yi-directory-roles";
 import { revalidatePath } from "next/cache";
 import { attachCentralTopicsToEvent } from "./admin-topics";
+import { getComplianceScore } from "./branding";
 import type { Database } from "@/types/yip/database";
 
 // ─── Types ─────────────────────────────────────────────────────────
@@ -176,8 +177,10 @@ export async function setEventCommittees(
 
 /**
  * Per-event setup completion for the "Before the Event" sidebar checklist.
- * Returns a { tabHref → done } map for the objective gating steps only — the
- * ones whose "done" is unambiguous. Tabs absent from the map show no indicator.
+ * Returns a { tabHref → done } map covering every Before-the-Event setup tab
+ * with an objective "done" signal. Tabs absent from the map show no indicator
+ * (Fees is intentionally omitted — its amount always defaults, so there is no
+ * meaningful setup-done state, and many chapter events are free).
  * Fail-safe: any DB error returns {} (no indicators) rather than breaking the
  * event layout that renders on every event page. Cheap: parallel count queries.
  */
@@ -186,30 +189,44 @@ export async function getEventSetupProgress(
 ): Promise<Record<string, boolean>> {
   try {
     const supabase = await createServiceClient();
-    const [pAll, pAllotted, parties, jury, ev] = await Promise.all([
-      supabase
-        .from("participants")
-        .select("id", { count: "exact", head: true })
-        .eq("event_id", eventId),
-      supabase
-        .from("participants")
-        .select("id", { count: "exact", head: true })
-        .eq("event_id", eventId)
-        .not("party_id", "is", null),
-      supabase
-        .from("parties")
-        .select("id", { count: "exact", head: true })
-        .eq("event_id", eventId),
-      supabase
-        .from("jury_assignments")
-        .select("id", { count: "exact", head: true })
-        .eq("event_id", eventId),
-      supabase
-        .from("events")
-        .select("committee_topics")
-        .eq("id", eventId)
-        .single(),
-    ]);
+    const [pAll, pAllotted, parties, jury, volunteers, checklistRows, branding, ev] =
+      await Promise.all([
+        supabase
+          .from("participants")
+          .select("id", { count: "exact", head: true })
+          .eq("event_id", eventId),
+        supabase
+          .from("participants")
+          .select("id", { count: "exact", head: true })
+          .eq("event_id", eventId)
+          .not("party_id", "is", null),
+        supabase
+          .from("parties")
+          .select("id", { count: "exact", head: true })
+          .eq("event_id", eventId),
+        supabase
+          .from("jury_assignments")
+          .select("id", { count: "exact", head: true })
+          .eq("event_id", eventId),
+        supabase
+          .from("volunteers")
+          .select("id", { count: "exact", head: true })
+          .eq("event_id", eventId),
+        supabase
+          .from("checklist")
+          .select("is_completed")
+          .eq("event_id", eventId),
+        // Reuse the canonical compliance scorer rather than re-deriving the
+        // verified/waived math here (keeps the tick in lockstep with the page).
+        // It reads yi.brand_rules cross-schema, so isolate its failure with a
+        // local catch — a branding hiccup must not wipe the whole checklist.
+        getComplianceScore(eventId).catch(() => null),
+        supabase
+          .from("events")
+          .select("committee_topics, chapter_name")
+          .eq("id", eventId)
+          .single(),
+      ]);
 
     const total = pAll.count ?? 0;
     const allotted = pAllotted.count ?? 0;
@@ -221,7 +238,36 @@ export async function getEventSetupProgress(
       ? ct.length > 0
       : !!ct && typeof ct === "object" && Object.keys(ct).length > 0;
 
+    // Checklist "done" = at least one item AND every item ticked off.
+    const clItems = checklistRows.data ?? [];
+    const checklistDone =
+      clItems.length > 0 && clItems.every((r) => r.is_completed === true);
+
+    // Team "done" = ≥1 chapter organiser/chair assigned for this event's
+    // chapter. Mirrors listChapterRoles' source so the tick matches the Team
+    // page. Chapter-scoped (role_assignments is keyed by chapter, not event),
+    // so it needs the event's chapter_name first.
+    let teamDone = false;
+    const chapterName = (ev.data?.chapter_name as string | null) ?? null;
+    if (chapterName) {
+      const { count: teamCount } = await supabase
+        .schema("yi_directory")
+        .from("role_assignments")
+        .select("id", { count: "exact", head: true })
+        .eq("app", "yip")
+        .eq("yi_chapter", chapterName)
+        .in("role", ["chapter_admin", "chapter_organizer"])
+        .eq("is_active", true);
+      teamDone = (teamCount ?? 0) > 0;
+    }
+
     return {
+      "/team": teamDone,
+      // Checklist tab — green only when every seeded checklist item is done.
+      "/checklist": checklistDone,
+      // Branding compliance is fully verified/waived (100%). total_rules is
+      // never 0 (a fallback rule set exists), so a fresh event reads as not-done.
+      "/branding": !!branding && branding.total_rules > 0 && branding.score_pct === 100,
       "/participants": total > 0,
       "/topics": committeesPicked, // the Committees picker tab
       "/parties": (parties.count ?? 0) > 0,
@@ -229,6 +275,7 @@ export async function getEventSetupProgress(
       // flow assigns party_id + committee + constituency together).
       "/allocation": total > 0 && allotted === total,
       "/jury": (jury.count ?? 0) > 0,
+      "/volunteers": (volunteers.count ?? 0) > 0,
     };
   } catch {
     return {};

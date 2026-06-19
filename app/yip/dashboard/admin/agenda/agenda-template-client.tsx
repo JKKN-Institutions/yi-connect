@@ -28,6 +28,7 @@ import {
   pushAgendaToAllChapterEvents,
   type AgendaTemplateItem,
 } from "@/app/yip/actions/admin-agenda";
+import { PushToSelectedEvents } from "../_components/push-to-selected-events";
 
 type AgendaMode = "party" | "committee" | "mixed";
 
@@ -205,6 +206,17 @@ export function AgendaTemplateClient({
           <Button variant="outline" onClick={pushToAll} disabled={pending}>
             <Send className="size-4 mr-2" /> Push agenda to all chapter events
           </Button>
+          <PushToSelectedEvents
+            label="Push to selected…"
+            dialogTitle="Push agenda to selected events"
+            dialogDescription="Replaces each chosen event's agenda with the canonical template. Draft events are overwritten; on started events, agenda items tied to live scores/votes are protected and skipped."
+            action={pushAgendaToAllChapterEvents}
+            formatSuccess={(d) =>
+              `Pushed ${d.items_each} agenda items to ${d.events_updated} event${
+                d.events_updated === 1 ? "" : "s"
+              }${d.events_skipped ? ` (${d.events_skipped} skipped)` : ""}.`
+            }
+          />
           <Button
             onClick={openCreate}
             className="bg-[#FF9933] hover:bg-[#FF9933]/90 text-white"

@@ -259,7 +259,9 @@ export async function adminReorderAgendaItems(
 // (ON DELETE CASCADE → a delete would DESTROY live voting/jury data). So a true
 // blanket overwrite of live events is unsafe; we protect them instead.
 
-export async function pushAgendaToAllChapterEvents(): Promise<
+export async function pushAgendaToAllChapterEvents(
+  eventIds?: string[]
+): Promise<
   ActionResult<{
     events_updated: number;
     events_skipped: number;
@@ -284,12 +286,17 @@ export async function pushAgendaToAllChapterEvents(): Promise<
     return { success: false, error: "Agenda template is empty — nothing to push." };
   }
 
-  // Find every real chapter event (with status so we can protect started ones).
-  const { data: events, error: eventsError } = await supabase
+  // Selective push (eventIds given) targets exactly the chosen events; "push to
+  // all" (no IDs) targets every real chapter event. Either way bounded to
+  // level=chapter + non-mock so a stray ID can't hit a regional/national/mock.
+  const selective = !!(eventIds && eventIds.length > 0);
+  let evQ = supabase
     .from("events")
     .select("id, name, status")
     .eq("level", "chapter")
     .eq("is_mock", false);
+  if (selective) evQ = evQ.in("id", eventIds);
+  const { data: events, error: eventsError } = await evQ;
 
   if (eventsError) return { success: false, error: eventsError.message };
   if (!events || events.length === 0) {
@@ -302,8 +309,11 @@ export async function pushAgendaToAllChapterEvents(): Promise<
   let updated = 0;
   const skipped: string[] = [];
   for (const ev of events) {
-    // Protect any event that has started — its agenda may carry scores/votes.
-    if (ev.status !== "draft") {
+    // Bulk "push to all" protects started events (their agenda may carry
+    // scores/votes). Selective push is a deliberate, warned choice, so it
+    // proceeds even on started events — but the delete below still rolls back
+    // (and skips) if a FK from real scores/votes would be violated.
+    if (!selective && ev.status !== "draft") {
       skipped.push(ev.name ?? ev.id);
       continue;
     }

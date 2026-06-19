@@ -214,3 +214,56 @@ export function planPartyFormation(input: PartyFormationInput): PartyFormationPl
     maxSameSchoolPerParty,
   };
 }
+
+// ─── Fill EXISTING parties ──────────────────────────────────────────
+
+export interface PartyFillAssignment {
+  participantId: string;
+  side: BenchSide;
+  /** 0-based index of the party within its OWN bench (order by party_number). */
+  benchIndex: number;
+}
+
+/**
+ * Distribute participants who ALREADY carry a bench (`partySide`) into a FIXED
+ * number of parties per bench. Unlike planPartyFormation (which decides how many
+ * parties each bench gets and is paired with creating party rows), this is for
+ * when the chapter's parties already EXIST: allocation only needs to assign
+ * membership (party_id), reusing the existing party rows — so nothing is created
+ * or deleted (YUVA desks / manifestos survive). Within each bench, party sizes
+ * stay balanced and schools are spread out (same `distributeBench` as formation).
+ *
+ * Participants whose bench has zero parties get NO assignment (the caller must
+ * detect that and surface it — e.g. "opposition students but no opposition
+ * party"). The caller maps (side, benchIndex) → an existing party row, where
+ * benchIndex 0 is that bench's lowest party_number.
+ */
+export function planPartyFill(
+  participants: PartyFormationParticipant[],
+  rulingPartyCount: number,
+  oppositionPartyCount: number
+): PartyFillAssignment[] {
+  const out: PartyFillAssignment[] = [];
+
+  if (rulingPartyCount > 0) {
+    const ruling = participants.filter((p) => p.partySide === "ruling");
+    const dist = distributeBench(ruling, rulingPartyCount);
+    for (let i = 0; i < rulingPartyCount; i++) {
+      for (const id of dist.perParty[i]) {
+        out.push({ participantId: id, side: "ruling", benchIndex: i });
+      }
+    }
+  }
+
+  if (oppositionPartyCount > 0) {
+    const opposition = participants.filter((p) => p.partySide === "opposition");
+    const dist = distributeBench(opposition, oppositionPartyCount);
+    for (let i = 0; i < oppositionPartyCount; i++) {
+      for (const id of dist.perParty[i]) {
+        out.push({ participantId: id, side: "opposition", benchIndex: i });
+      }
+    }
+  }
+
+  return out;
+}

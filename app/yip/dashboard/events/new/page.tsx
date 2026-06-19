@@ -107,22 +107,19 @@ export default function NewEventPage() {
     committee_topics: {},
   });
 
-  // Load the committee catalog on mount and default-select all of them (the
-  // organiser unchecks down to the recommended 8–10).
+  // Load the committee catalog on mount. Committees start UNSELECTED — the
+  // organiser consciously picks the ones their event will run (2026-06-19).
+  // (Previously all 15 were auto-selected, which made the in-event Committees
+  // tab open showing "15 selected" and the setup tick meaningless.)
   useEffect(() => {
     let active = true;
     listCommitteeTopics()
       .then((catalog) => {
         if (!active) return;
         setCommitteeCatalog(catalog);
-        const initial: Record<string, string> = {};
-        catalog.forEach((c) => {
-          initial[c.committee] = c.topic;
-        });
-        setForm((prev) => ({ ...prev, committee_topics: initial }));
       })
       .catch(() => {
-        /* leave empty — organiser can still create with no committees */
+        /* catalog load failed — organiser can still create with no committees */
       })
       .finally(() => {
         if (active) setCommitteesLoading(false);

@@ -10,7 +10,6 @@ import {
 } from "@/lib/yip/allocation-engine";
 import { planCommitteeAssignment } from "@/lib/yip/committee-assignment";
 import { planPartyFill } from "@/lib/yip/party-formation";
-import { COMMITTEES } from "@/lib/yip/constants";
 
 // Gated writes run on the service client AFTER getYipEventAccess() (yip.* tables
 // have RLS read-only for `authenticated`; the capability check is the gate).
@@ -85,9 +84,9 @@ export async function runAllocationAction(
   }));
 
   // The event's selected committees drive allocation. committee_topics is the
-  // map { committee → topic } chosen at event creation (the 8–10 of the 15
-  // official committees), so its KEYS are the committees to assign students to.
-  // (Legacy array form is still accepted.) Falls back to the default catalog.
+  // map { committee → topic } the organiser picks on the Committees tab, so its
+  // KEYS are the committees to assign students to. (Legacy array form is still
+  // accepted.)
   let customCommittees: string[] | undefined;
   if (event.committee_topics) {
     const t = event.committee_topics as unknown;
@@ -97,6 +96,18 @@ export async function runAllocationAction(
       const keys = Object.keys(t as Record<string, unknown>);
       if (keys.length > 0) customCommittees = keys;
     }
+  }
+
+  // Refuse to allocate until committees are picked (2026-06-19). New events
+  // start with none selected; previously this silently fell back to all 15,
+  // leaving the Committees tab showing none while allocation used the full
+  // catalogue. Now the organiser must pick on the Committees tab first.
+  if (!customCommittees || customCommittees.length === 0) {
+    return {
+      success: false,
+      error:
+        "Pick your committees on the Committees tab before running allocation.",
+    };
   }
 
   // Run pure allocation
@@ -294,14 +305,25 @@ export async function assignCommittees(
   }
 
   // Committee names: the event's selected committees (object keys or legacy
-  // array form), else the default catalog.
-  let committeeNames: string[] = [...COMMITTEES];
+  // array form). Refuse when none are picked (2026-06-19) — previously this
+  // fell back to the full COMMITTEES catalogue, which silently assigned students
+  // to all 15 even though the organiser had selected none. Callers that auto-run
+  // this best-effort (formParties) ignore the error, so no committees get
+  // assigned until the organiser picks them on the Committees tab.
+  let committeeNames: string[] = [];
   const ct = event.committee_topics as unknown;
   if (Array.isArray(ct) && ct.length > 0) {
     committeeNames = ct.map(String);
   } else if (ct && typeof ct === "object") {
     const keys = Object.keys(ct as Record<string, unknown>);
     if (keys.length > 0) committeeNames = keys;
+  }
+  if (committeeNames.length === 0) {
+    return {
+      success: false,
+      error:
+        "Pick your committees on the Committees tab before assigning students to committees.",
+    };
   }
 
   const plan = planCommitteeAssignment(

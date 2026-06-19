@@ -350,18 +350,13 @@ export async function createEvent(
     }
   }
 
-  // Default committees to the official 15 catalogue when none were chosen, so
-  // an event is never created empty. The create wizard passes a selection;
-  // bulk/programmatic callers may not. Each chapter can trim to its 8–10 later.
-  let committeeTopics = data.committee_topics;
-  if (!committeeTopics || Object.keys(committeeTopics).length === 0) {
-    const catalog = await listCommitteeTopics();
-    if (catalog.length > 0) {
-      committeeTopics = Object.fromEntries(
-        catalog.map((c) => [c.committee, c.topic])
-      );
-    }
-  }
+  // Committees start UNSELECTED (2026-06-19). We no longer backfill the full
+  // 15-catalogue, so committee_topics is whatever the caller sent — typically
+  // {} from the create wizard, where the organiser then picks their committees
+  // on the Committees tab. Allocation refuses to run until at least one is
+  // picked (see runAllocationAction / assignCommittees), so an empty event is
+  // safe, not silently allocated against all 15.
+  const committeeTopics = data.committee_topics ?? {};
 
   // Insert the event
   const { data: event, error: eventError } = await supabase

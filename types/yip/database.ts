@@ -3697,7 +3697,13 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      fn_anonymize_event_pii: {
+        Args: { p_event_id: string }
+        Returns: {
+          participants_anonymized: number
+          volunteers_anonymized: number
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never

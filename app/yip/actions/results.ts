@@ -2,6 +2,7 @@
 
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
+import { logAuditAction } from "@/lib/yip/audit/log-action";
 import { revalidatePath } from "next/cache";
 import { parentScoreByKey } from "@/lib/yip/rubric";
 import { getPositionBonusConfig } from "./positions";
@@ -836,13 +837,33 @@ export async function publishResults(
   }
   const supabase = await createServiceClient();
 
-  const { error } = await supabase
+  const { data: published, error } = await supabase
     .from("events")
     .update({ results_published_at: new Date().toISOString() })
-    .eq("id", eventId);
+    .eq("id", eventId)
+    .select("privacy_mode")
+    .maybeSingle();
 
   if (error) {
     return { success: false, error: error.message };
+  }
+
+  // DPDP: privacy-mode events auto-anonymize their participant + volunteer PII
+  // once results are published — personal data is retained only for the
+  // duration of the event. Best-effort: a hiccup must NOT fail the publish (it
+  // can be re-run from the People admin's "Remove personal data" tool).
+  if (published?.privacy_mode) {
+    const { error: anonError } = await supabase.rpc("fn_anonymize_event_pii", {
+      p_event_id: eventId,
+    });
+    if (!anonError) {
+      await logAuditAction({
+        action_type: "wipe",
+        target_table: "participants",
+        target_event_id: eventId,
+        metadata: { action: "dpdp_anonymize", trigger: "results_published" },
+      });
+    }
   }
 
   revalidatePath(`/yip/dashboard/events/${eventId}/results`);

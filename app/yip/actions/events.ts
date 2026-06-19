@@ -125,6 +125,53 @@ export async function pushCommitteeTopicsToAllChapterEvents(): Promise<
   };
 }
 
+/**
+ * Per-event committee selection. Each chapter chooses WHICH of the official 15
+ * committees (and how many) it will run; this writes the event's
+ * committee_topics = { committee → topic } from the chosen names, resolving each
+ * topic from the live catalogue. Drives allocation's committee assignment.
+ * Organiser-or-above on the event (server re-checks via getYipEventAccess).
+ */
+export async function setEventCommittees(
+  eventId: string,
+  committeeNames: string[]
+): Promise<ActionResult<{ count: number }>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
+  if (!Array.isArray(committeeNames) || committeeNames.length === 0) {
+    return { success: false, error: "Pick at least one committee for this chapter." };
+  }
+
+  // Resolve each chosen committee to its topic from the live catalogue, so the
+  // event always carries an authoritative { committee → topic } map (ignores
+  // any name not in the catalogue rather than persisting a stale committee).
+  const catalog = await listCommitteeTopics();
+  const topicByCommittee = new Map(catalog.map((c) => [c.committee, c.topic]));
+  const obj: Record<string, string> = {};
+  for (const name of committeeNames) {
+    if (topicByCommittee.has(name)) obj[name] = topicByCommittee.get(name) ?? "";
+  }
+  if (Object.keys(obj).length === 0) {
+    return {
+      success: false,
+      error: "None of the selected committees are in the catalogue.",
+    };
+  }
+
+  const supabase = await createServiceClient();
+  const { error } = await supabase
+    .from("events")
+    .update({ committee_topics: obj, updated_at: new Date().toISOString() })
+    .eq("id", eventId);
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/yip/dashboard/events/${eventId}/topics`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/allocation`);
+  return { success: true, data: { count: Object.keys(obj).length } };
+}
+
 // ─── Create Event ──────────────────────────────────────────────────
 
 export async function createEvent(

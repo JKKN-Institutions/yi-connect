@@ -9,6 +9,7 @@ import {
   type AllocationParticipant,
 } from "@/lib/yip/allocation-engine";
 import { planCommitteeAssignment } from "@/lib/yip/committee-assignment";
+import { planPartyFill } from "@/lib/yip/party-formation";
 import { COMMITTEES } from "@/lib/yip/constants";
 
 // Gated writes run on the service client AFTER getYipEventAccess() (yip.* tables
@@ -107,6 +108,76 @@ export async function runAllocationAction(
     excludeState: (event as { state?: string | null }).state ?? undefined,
   });
 
+  // Allot NAMED parties: if the chapter has already set up its parties (on the
+  // Parties tab), distribute the just-sided students INTO those existing party
+  // rows — reusing them, so nothing is created or deleted (YUVA desks and
+  // manifestos survive; no FK cascade). Backward-compatible: an event with no
+  // parties keeps the sides-only behaviour (Form Parties stays the separate
+  // step). Skipped when assignSides is off (every student is a plain MP).
+  const partyByParticipant = new Map<
+    string,
+    { party_id: string; party_number: number }
+  >();
+  if (assignSides) {
+    const { data: parties, error: partiesError } = await supabase
+      .from("parties")
+      .select("id, party_number, side")
+      .eq("event_id", eventId)
+      .order("party_number");
+    if (partiesError) {
+      return { success: false, error: partiesError.message };
+    }
+    if (parties && parties.length > 0) {
+      const rulingParties = parties.filter((p) => p.side === "ruling");
+      const oppositionParties = parties.filter((p) => p.side === "opposition");
+
+      // A bench with members but no party can't be allotted — fail BEFORE any
+      // write, so the event is never left half-assigned. The organiser adds a
+      // party on that bench (Parties tab) and re-runs.
+      const hasRuling = result.assignments.some((a) => a.party_side === "ruling");
+      const hasOpposition = result.assignments.some(
+        (a) => a.party_side === "opposition"
+      );
+      if (hasRuling && rulingParties.length === 0) {
+        return {
+          success: false,
+          error:
+            "Students were assigned to the Ruling bench but there is no Ruling party. Add at least one Ruling party on the Parties tab, then re-run allocation.",
+        };
+      }
+      if (hasOpposition && oppositionParties.length === 0) {
+        return {
+          success: false,
+          error:
+            "Students were assigned to the Opposition bench but there is no Opposition party. Add at least one Opposition party on the Parties tab, then re-run allocation.",
+        };
+      }
+
+      const schoolById = new Map(participants.map((p) => [p.id, p.school_name]));
+      const fill = planPartyFill(
+        result.assignments.map((a) => ({
+          id: a.participantId,
+          partySide: a.party_side as "ruling" | "opposition",
+          schoolName: schoolById.get(a.participantId) ?? null,
+        })),
+        rulingParties.length,
+        oppositionParties.length
+      );
+      for (const f of fill) {
+        const row =
+          f.side === "ruling"
+            ? rulingParties[f.benchIndex]
+            : oppositionParties[f.benchIndex];
+        if (row) {
+          partyByParticipant.set(f.participantId, {
+            party_id: row.id,
+            party_number: row.party_number,
+          });
+        }
+      }
+    }
+  }
+
   // Write results back to database — batch update each participant
   const errors: string[] = [];
   for (const assignment of result.assignments) {
@@ -141,6 +212,20 @@ export async function runAllocationAction(
         constituency_name: assignment.constituency_name,
         constituency_state: assignment.constituency_state,
         committee_name: assignment.committee_name,
+        // Named party: when sides are off, every student is a plain MP with no
+        // bench — clear any party so it can't go stale. When sides are on, set
+        // party_id only if the chapter's parties exist; otherwise leave it
+        // untouched (sides-only flow unchanged).
+        ...(!assignSides
+          ? { party_id: null, party_number: null }
+          : partyByParticipant.has(assignment.participantId)
+            ? {
+                party_id: partyByParticipant.get(assignment.participantId)!
+                  .party_id,
+                party_number: partyByParticipant.get(assignment.participantId)!
+                  .party_number,
+              }
+            : {}),
       })
       .eq("id", assignment.participantId)
       .eq("event_id", eventId);

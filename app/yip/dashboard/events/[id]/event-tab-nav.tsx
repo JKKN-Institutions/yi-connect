@@ -25,7 +25,7 @@ import {
   ClipboardPaste,
   Images,
   MessageCircleHeart,
-  Megaphone,
+  BookOpen,
   UserCog,
   Boxes,
   Handshake,
@@ -37,23 +37,27 @@ import {
 type Tab = { label: string; href: string; icon: LucideIcon };
 type TabGroup = { title: string; tabs: Tab[] };
 
-// Grouped by event lifecycle: Setup → People → Programme & Live → Results.
+// Grouped by event lifecycle so the sidebar reads like a checklist:
+// Overview (pinned, anytime) → Before the Event → Event Day → After the Event.
 const GROUPS: TabGroup[] = [
   {
-    title: "Setup",
+    // Pinned "home" — relevant before, during AND after the event, so it has no
+    // phase header and sits at the very top (empty title → rendered headerless).
+    title: "",
+    tabs: [{ label: "Overview", href: "", icon: LayoutDashboard }],
+  },
+  {
+    title: "Before the Event",
     tabs: [
-      { label: "Overview", href: "", icon: LayoutDashboard },
       { label: "Team", href: "/team", icon: UserCog },
       { label: "Checklist", href: "/checklist", icon: ListChecks },
       { label: "Branding", href: "/branding", icon: ShieldCheck },
-    ],
-  },
-  {
-    title: "People",
-    tabs: [
       { label: "Registrations", href: "/registrations", icon: ClipboardPaste },
       { label: "Participants", href: "/participants", icon: Users },
       { label: "Fees", href: "/fees", icon: IndianRupee },
+      // Committee picker (route stays /topics). Before Parties so the setup
+      // order reads Committees → Parties → Allocation.
+      { label: "Committees", href: "/topics", icon: BookOpen },
       { label: "Parties", href: "/parties", icon: Flag },
       { label: "Allocation", href: "/allocation", icon: Shuffle },
       { label: "Jury", href: "/jury", icon: Scale },
@@ -62,31 +66,32 @@ const GROUPS: TabGroup[] = [
     ],
   },
   {
-    title: "Programme & Live",
+    title: "Event Day",
     tabs: [
-      { label: "Topics", href: "/topics", icon: Megaphone },
+      { label: "Control", href: "/control", icon: Radio },
       { label: "Questions", href: "/questions", icon: MessageSquare },
       { label: "Motions", href: "/motions", icon: Gavel },
       { label: "Bills", href: "/bills", icon: FileText },
-      { label: "Control", href: "/control", icon: Radio },
       { label: "Chat", href: "/chat", icon: MessagesSquare },
+      { label: "Scoring", href: "/scoring", icon: Star },
+      { label: "Committee Scores", href: "/committee-scoring", icon: Boxes },
       { label: "Media", href: "/media", icon: Images },
     ],
   },
   {
-    title: "Results",
+    title: "After the Event",
     tabs: [
-      { label: "Scoring", href: "/scoring", icon: Star },
-      { label: "Committees", href: "/committee-scoring", icon: Boxes },
       { label: "Results", href: "/results", icon: Trophy },
-      { label: "Feedback", href: "/feedback", icon: MessageCircleHeart },
       { label: "Certificates", href: "/certificates", icon: Award },
+      { label: "Feedback", href: "/feedback", icon: MessageCircleHeart },
     ],
   },
 ];
 
 // Score-bearing tabs — visible to national / super-admins only (2026-06-13).
-const SCORE_TABS = new Set(["Scoring", "Committees", "Results"]);
+// "Committee Scores" is the committee-SCORING tab (distinct from the "Committees"
+// picker, which is open setup, not score-gated).
+const SCORE_TABS = new Set(["Scoring", "Committee Scores", "Results"]);
 const COLLAPSE_KEY = "yip-event-nav-collapsed";
 
 function isActive(tabHref: string, pathname: string, basePath: string) {
@@ -162,15 +167,23 @@ export function EventTabNav({
           onChange={(e) => router.push(e.target.value)}
           className="min-h-[44px] w-full rounded-lg border border-[#1a1a3e]/15 bg-white px-3 py-2 text-sm font-medium text-[#1a1a3e] shadow-sm focus:border-[#FF9933] focus:outline-none focus:ring-2 focus:ring-[#FF9933]/30"
         >
-          {groups.map((g) => (
-            <optgroup key={g.title} label={g.title}>
-              {g.tabs.map((tab) => (
+          {groups.map((g) =>
+            g.title ? (
+              <optgroup key={g.title} label={g.title}>
+                {g.tabs.map((tab) => (
+                  <option key={tab.label} value={`${basePath}${tab.href}`}>
+                    {tab.label}
+                  </option>
+                ))}
+              </optgroup>
+            ) : (
+              g.tabs.map((tab) => (
                 <option key={tab.label} value={`${basePath}${tab.href}`}>
                   {tab.label}
                 </option>
-              ))}
-            </optgroup>
-          ))}
+              ))
+            )
+          )}
         </select>
       </div>
 
@@ -209,7 +222,7 @@ export function EventTabNav({
                 "mt-1.5 border-t border-[#1a1a3e]/8 pt-1.5 first:mt-0 first:border-t-0 first:pt-0"
             )}
           >
-            {!collapsed && (
+            {!collapsed && group.title && (
               <p className="px-3 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wider text-[#1a1a3e]/35">
                 {group.title}
               </p>

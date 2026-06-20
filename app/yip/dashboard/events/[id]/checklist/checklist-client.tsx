@@ -10,6 +10,7 @@ import {
   seedChecklistForEvent,
   type ChecklistItem,
 } from "@/app/yip/actions/checklist";
+import Link from "next/link";
 
 const CATEGORY_ORDER = [
   "Pre-Session Preparation",
@@ -33,10 +34,16 @@ export function ChecklistClient({
   eventId,
   eventName,
   initialItems,
+  partiesSet = false,
+  committeesSet = false,
 }: {
   eventId: string;
   eventName: string;
   initialItems: ChecklistItem[];
+  /** Whether the number of parties has been set (parties formed). */
+  partiesSet?: boolean;
+  /** Whether committees have been selected on the Committees tab. */
+  committeesSet?: boolean;
 }) {
   const [items, setItems] = useState(initialItems);
   const [pending, startTransition] = useTransition();
@@ -161,6 +168,33 @@ export function ChecklistClient({
         <span>{totalItems - totalDone} items remaining</span>
       </div>
 
+      {/* Before you allocate — auto-checked prerequisites (set on their own
+          tabs). Same setup detection as the nav green-dots. */}
+      <Card className="border-amber-200 bg-amber-50/40 print:hidden">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm flex items-center gap-2 text-[#1a1a3e]">
+            <ListChecks className="size-4 text-amber-600" />
+            Before you allocate — set these first
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2.5">
+          <PreCheckRow
+            done={partiesSet}
+            label="Number of parties set"
+            hint="Choose how many parties (2–8) and form them"
+            href={`/yip/dashboard/events/${eventId}/parties`}
+            cta="Set on Parties tab"
+          />
+          <PreCheckRow
+            done={committeesSet}
+            label="Committees selected"
+            hint="Pick the committees students will be split into"
+            href={`/yip/dashboard/events/${eventId}/topics`}
+            cta="Set on Committees tab"
+          />
+        </CardContent>
+      </Card>
+
       {error && (
         <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
           {error}
@@ -223,6 +257,50 @@ export function ChecklistClient({
           </Card>
         );
       })}
+    </div>
+  );
+}
+
+/** One auto-checked prerequisite row in the "Before you allocate" card. */
+function PreCheckRow({
+  done,
+  label,
+  hint,
+  href,
+  cta,
+}: {
+  done: boolean;
+  label: string;
+  hint: string;
+  href: string;
+  cta: string;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <div className="flex items-start gap-2">
+        {done ? (
+          <CheckCircle2 className="size-5 shrink-0 text-[#138808]" />
+        ) : (
+          <Circle className="size-5 shrink-0 text-amber-500" />
+        )}
+        <div>
+          <div className="text-sm font-medium text-[#1a1a3e]">{label}</div>
+          <div className="text-xs text-[#1a1a3e]/55">{hint}</div>
+        </div>
+      </div>
+      {done ? (
+        <span className="shrink-0 text-xs font-semibold text-[#138808]">Done</span>
+      ) : (
+        <Link href={href}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="border-amber-300 text-amber-700 hover:bg-amber-100"
+          >
+            {cta}
+          </Button>
+        </Link>
+      )}
     </div>
   );
 }

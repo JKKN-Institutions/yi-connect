@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/yip/supabase/server";
-import { getEvent } from "@/app/yip/actions/events";
+import { getEvent, getEventSetupProgress } from "@/app/yip/actions/events";
 import { getEventChecklist } from "@/app/yip/actions/checklist";
 import { ChecklistClient } from "./checklist-client";
 import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
@@ -25,12 +25,17 @@ export default async function ChecklistPage({
   }
 
   const items = await getEventChecklist(id);
+  // Reuse the canonical setup-progress detection (same source as the nav
+  // green-dots) to auto-check the "before you allocate" prerequisites.
+  const setup = await getEventSetupProgress(id);
 
   return (
     <ChecklistClient
       eventId={id}
       eventName={event.name}
       initialItems={items}
+      partiesSet={!!setup["/parties"]}
+      committeesSet={!!setup["/topics"]}
     />
   );
 }

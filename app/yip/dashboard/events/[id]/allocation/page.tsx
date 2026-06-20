@@ -39,8 +39,9 @@ export default async function AllocationPage({
   // run — the engine assigns participants into those benches.
   const { data: parties } = await supabase
     .from("parties")
-    .select("side")
-    .eq("event_id", id);
+    .select("party_number, name, side")
+    .eq("event_id", id)
+    .order("party_number", { nullsFirst: false });
   const rulingPartyCount = (parties ?? []).filter(
     (p) => p.side === "ruling"
   ).length;
@@ -65,6 +66,7 @@ export default async function AllocationPage({
     <AllocationClient
       eventId={id}
       participants={participants ?? []}
+      parties={parties ?? []}
       allocationLocked={event.allocation_locked ?? false}
       customCommittees={customCommittees}
       rulingPartyCount={rulingPartyCount}

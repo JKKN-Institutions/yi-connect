@@ -28,7 +28,7 @@ export default async function ZonesNationalPage() {
             National Overview
           </h1>
           <p className="text-sm text-[#1a1a3e]/60 mt-1">
-            YIP 2026 · 6 regions · Yi + CII · Thalir
+            YIP 2026 · 6 regions
           </p>
         </div>
       </div>

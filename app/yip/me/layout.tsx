@@ -102,7 +102,7 @@ export default async function ParticipantLayout({
       {/* Footer */}
       <footer className="border-t border-gray-100 bg-white/50 py-4 text-center">
         <p className="text-[11px] text-gray-400">
-          Young Indians (Yi) &middot; Confederation of Indian Industry
+          Young Indians Parliament
         </p>
       </footer>
     </div>

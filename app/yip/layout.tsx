@@ -37,19 +37,17 @@ export const metadata: Metadata = {
     template: "%s · YIP",
   },
   description:
-    "Empowering youth through democratic engagement. A mock parliament platform for school students (Classes 9-12) by Young Indians (Yi), CII.",
+    "Empowering youth through democratic engagement. A mock parliament platform for school students (Classes 9-12).",
   keywords: [
     "Young Indians",
     "Yi",
-    "CII",
     "YIP",
     "Young Indians Parliament",
     "mock parliament",
     "school students",
     "India",
-    "Thalir",
   ],
-  authors: [{ name: "Young Indians (Yi), CII" }],
+  authors: [{ name: "Young Indians Parliament" }],
   openGraph: {
     title: "YIP — Young Indians Parliament",
     description:
@@ -61,7 +59,7 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "YIP — Young Indians Parliament",
-    description: "Mock parliament platform for school students by Yi · CII.",
+    description: "Mock parliament platform for school students.",
   },
   robots: {
     index: true,

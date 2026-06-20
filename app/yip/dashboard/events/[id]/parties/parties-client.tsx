@@ -562,7 +562,6 @@ export function PartiesClient({
                     />
                     <div className="flex-1">
                       <div className="font-medium text-sm">{pt.full_name}</div>
-                      <div className="text-xs text-[#1a1a3e]/60">{pt.school_name}</div>
                     </div>
                     {pt.party_id && pt.party_id !== partyForAssign.id && (
                       <Badge variant="secondary" className="text-[10px]">

@@ -48,6 +48,8 @@ import {
 } from "lucide-react";
 import { CsvImport } from "@/components/yip/csv-import";
 import { EmailSendCodes } from "@/components/yip/email-send-codes";
+import { exportSchoolRosterOnce } from "@/app/yip/actions/school-export";
+import { toast } from "sonner";
 
 type Participant = {
   id: string;
@@ -73,7 +75,7 @@ type Participant = {
   speech_finished?: boolean | null;
 };
 
-type SortKey = "full_name" | "school_name" | "class";
+type SortKey = "full_name" | "class";
 
 type CheckInFilter = "all" | "in" | "out";
 
@@ -82,12 +84,21 @@ export function ParticipantsClient({
   participants: initialParticipants,
   allocationLocked,
   canDelete = true,
+  canManage = false,
+  hasSchoolData = false,
+  schoolExportDownloaded = false,
 }: {
   eventId: string;
   participants: Participant[];
   allocationLocked: boolean;
   /** Chair/national/regional only. Organisers cannot delete records. */
   canDelete?: boolean;
+  /** Organiser+ — gates the one-time school export. */
+  canManage?: boolean;
+  /** Any student still carries a school (pre-purge) — gates the export button. */
+  hasSchoolData?: boolean;
+  /** The one-time school export has already run (school purged) for this event. */
+  schoolExportDownloaded?: boolean;
 }) {
   const router = useRouter();
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -99,6 +110,8 @@ export function ParticipantsClient({
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [checkingIn, setCheckingIn] = useState<Set<string>>(new Set());
   const [checkInFilter, setCheckInFilter] = useState<CheckInFilter>("all");
+  const [schoolExportOpen, setSchoolExportOpen] = useState(false);
+  const [schoolExportLoading, setSchoolExportLoading] = useState(false);
   // Optimistic check-in overrides: applied instantly on click so the row
   // flips without waiting for the server action + route refresh (BUG-399/387).
   // Per-day (YA2); the derived `checked_in` is recomputed in the merge below.
@@ -227,14 +240,10 @@ export function ParticipantsClient({
       filtered = filtered.filter((p) => !p.checked_in);
     }
 
-    // Search filter
+    // Search filter (by name only — school is not shown or searchable)
     if (search.trim()) {
       const q = search.toLowerCase();
-      filtered = filtered.filter(
-        (p) =>
-          p.full_name.toLowerCase().includes(q) ||
-          p.school_name.toLowerCase().includes(q)
-      );
+      filtered = filtered.filter((p) => p.full_name.toLowerCase().includes(q));
     }
 
     // Sort
@@ -460,7 +469,6 @@ export function ParticipantsClient({
   function handleExportCsv() {
     const headers = [
       "Name",
-      "School",
       "Class",
       "Phone",
       "Email",
@@ -477,7 +485,6 @@ export function ParticipantsClient({
     ];
     const rows = participants.map((p) => [
       p.full_name,
-      p.school_name,
       p.class.toString(),
       p.phone || "",
       p.email || "",
@@ -501,6 +508,30 @@ export function ParticipantsClient({
     a.download = `participants-${eventId}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+  }
+
+  // One-time school export → permanent purge. Builds + downloads the CSV from
+  // the server result, then the event's school data is gone for good.
+  async function handleSchoolExport() {
+    setSchoolExportLoading(true);
+    const res = await exportSchoolRosterOnce(eventId);
+    setSchoolExportLoading(false);
+    if (!res.success) {
+      toast.error(res.error);
+      return;
+    }
+    const blob = new Blob([res.data.csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = res.data.filename;
+    a.click();
+    URL.revokeObjectURL(url);
+    setSchoolExportOpen(false);
+    toast.success(
+      `Downloaded ${res.data.count} students with schools. School data has now been permanently deleted from this event.`
+    );
+    router.refresh();
   }
 
   return (
@@ -546,6 +577,61 @@ export function ParticipantsClient({
             <Download className="size-4" />
             Export CSV
           </Button>
+
+          {/* One-time school export → permanent purge (organiser+). Shown only
+              while school data still exists and hasn't been exported yet. */}
+          {canManage && hasSchoolData && !schoolExportDownloaded && (
+            <Dialog open={schoolExportOpen} onOpenChange={setSchoolExportOpen}>
+              <DialogTrigger
+                render={
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-amber-300 text-amber-700 hover:bg-amber-50"
+                  />
+                }
+              >
+                <Download className="size-4" />
+                Download schools (one-time)
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Download roster with schools — one time only</DialogTitle>
+                  <DialogDescription>
+                    School is collected only to balance parties &amp; committees and
+                    is never shown in the platform. This downloads the single copy of
+                    the school&nbsp;↔&nbsp;student mapping (with each student&apos;s
+                    party &amp; committee) as a CSV, then{" "}
+                    <strong>permanently deletes all school data</strong> from this
+                    event. You can do this <strong>once</strong> — afterwards the
+                    schools cannot be recovered or exported again.
+                  </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                  <DialogClose render={<Button variant="outline" />}>
+                    Cancel
+                  </DialogClose>
+                  <Button
+                    className="bg-amber-600 text-white hover:bg-amber-700"
+                    onClick={handleSchoolExport}
+                    disabled={schoolExportLoading}
+                  >
+                    {schoolExportLoading ? (
+                      <>
+                        <Loader2 className="size-4 animate-spin" />
+                        Preparing…
+                      </>
+                    ) : (
+                      <>
+                        <Download className="size-4" />
+                        Download &amp; delete schools
+                      </>
+                    )}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          )}
 
           {/* Email each student's access code via Resend — the reliable channel
               (every participant has an email; no bridge to connect). The
@@ -734,7 +820,7 @@ export function ParticipantsClient({
         <div className="relative max-w-sm flex-1 basis-64">
           <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-gray-400" />
           <Input
-            placeholder="Search by name or school..."
+            placeholder="Search by name..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-8"
@@ -780,15 +866,6 @@ export function ParticipantsClient({
                     className="flex items-center gap-1 hover:text-gray-900"
                   >
                     Name
-                    <ArrowUpDown className="size-3" />
-                  </button>
-                </TableHead>
-                <TableHead>
-                  <button
-                    onClick={() => handleSort("school_name")}
-                    className="flex items-center gap-1 hover:text-gray-900"
-                  >
-                    School
                     <ArrowUpDown className="size-3" />
                   </button>
                 </TableHead>
@@ -853,7 +930,6 @@ export function ParticipantsClient({
                     </div>
                   </TableCell>
                   <TableCell className="font-medium">{p.full_name}</TableCell>
-                  <TableCell>{p.school_name}</TableCell>
                   <TableCell>{p.class}</TableCell>
                   <TableCell>
                     {p.party_side ? (

@@ -119,7 +119,8 @@ export function ParticipantProfileClient({
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2.5 text-sm">
-            <Row label="School" value={p.school_name} />
+            {/* School is collected only to balance allocation and is never shown
+                in the platform (purged after the one-time export). */}
             <Row
               label="Class"
               value={

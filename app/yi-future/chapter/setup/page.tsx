@@ -388,15 +388,25 @@ export default async function ChapterSetupPage() {
                   {m.phone && <span> · {m.phone}</span>}
                 </div>
               </div>
-              <form action={removeMember}>
-                <input type="hidden" name="id" value={m.id} />
-                <button
-                  type="submit"
-                  className="text-xs text-red-600/70 hover:text-red-600"
+              {(m.role as string) === "chapter_chair" ||
+              (m.role as string) === "chapter_co_chair" ? (
+                <span
+                  className="text-xs text-navy/40"
+                  title="Chapter chairs are managed in the Directory — they can't be removed from the team screen."
                 >
-                  Remove
-                </button>
-              </form>
+                  Managed in Directory
+                </span>
+              ) : (
+                <form action={removeMember}>
+                  <input type="hidden" name="id" value={m.id} />
+                  <button
+                    type="submit"
+                    className="text-xs text-red-600/70 hover:text-red-600"
+                  >
+                    Remove
+                  </button>
+                </form>
+              )}
             </div>
           ))}
           {core.length === 0 && (

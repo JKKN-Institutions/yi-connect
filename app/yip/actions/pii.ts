@@ -132,7 +132,10 @@ export async function listChapterPrivacyDefaults(): Promise<ChapterPrivacyRow[]>
   ).sort((a, b) => a.localeCompare(b));
   return chapters.map((yi_chapter) => ({
     yi_chapter,
-    privacy_default: defaults.get(yi_chapter) ?? false,
+    // Privacy-by-default (DPDP data-minimisation): a chapter with no explicit
+    // preference is ON. A chapter opts OUT by toggling off, which stores an
+    // explicit `false` row that is then honoured here.
+    privacy_default: defaults.get(yi_chapter) ?? true,
   }));
 }
 

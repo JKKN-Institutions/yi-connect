@@ -9,12 +9,14 @@ import {
   updateAgendaItem,
   addAgendaItem,
   deleteAgendaItem,
+  moveAgendaItemToDay,
 } from "@/app/yip/actions/agenda";
 import type { Tables } from "@/types/yip/database";
 import {
   CalendarClock,
   ArrowUp,
   ArrowDown,
+  ArrowLeftRight,
   Pencil,
   Trash2,
   Plus,
@@ -54,7 +56,18 @@ export function AgendaSetupClient({
   isLive: boolean;
 }) {
   const router = useRouter();
-  const [activeDay, setActiveDay] = useState<1 | 2>(1);
+
+  // Days the event actually has (0 = prep, 1, 2). Derived from the data so
+  // day-0 prep items — and any future day count — are never hidden by a
+  // hardcoded tab list.
+  const days = Array.from(new Set(items.map((i) => i.day))).sort(
+    (a, b) => a - b
+  );
+  const dayChoices = days.length > 0 ? days : [1, 2];
+
+  const [activeDay, setActiveDay] = useState<number>(() =>
+    dayChoices.includes(1) ? 1 : dayChoices[0]
+  );
   const [busyId, setBusyId] = useState<string | null>(null);
   const [reordering, setReordering] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -64,8 +77,9 @@ export function AgendaSetupClient({
   const [editTitle, setEditTitle] = useState("");
   const [editDuration, setEditDuration] = useState("");
 
-  // Delete confirm + add form
+  // Delete confirm + exclude-scored confirm + add form
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [pendingExcludeId, setPendingExcludeId] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [addTitle, setAddTitle] = useState("");
   const [addDuration, setAddDuration] = useState("15");
@@ -78,14 +92,50 @@ export function AgendaSetupClient({
   const runLiveCount = dayItems.filter((i) => i.status !== "skipped").length;
   const scoredCount = dayItems.filter((i) => i.is_scoreable).length;
 
-  async function toggleRunLive(item: AgendaItem) {
+  const dayLabel = (d: number) => (d === 0 ? "Day 0 (prep)" : `Day ${d}`);
+
+  // Safety net (Q6): warn when the event HAS scored sessions but every one of
+  // them is excluded from the live run → juries would have nothing to mark.
+  // Event-wide (both days), not just the active day.
+  const scoreableAll = items.filter((i) => i.is_scoreable);
+  const noScoredWillRun =
+    scoreableAll.length > 0 &&
+    scoreableAll.every((i) => i.status === "skipped");
+
+  // Excluding a SCORED session asks for confirmation first (Q1). Including, or
+  // excluding a non-scored item, applies immediately.
+  function onToggleRunLive(item: AgendaItem) {
+    const turningOff = item.status !== "skipped";
+    if (turningOff && item.is_scoreable) {
+      setError(null);
+      setConfirmDeleteId(null);
+      setPendingExcludeId(item.id);
+      return;
+    }
+    applyToggle(item);
+  }
+
+  async function applyToggle(item: AgendaItem) {
     setError(null);
+    setPendingExcludeId(null);
     setBusyId(item.id);
     const res = await setAgendaItemInRun(
       eventId,
       item.id,
       item.status === "skipped" // currently excluded → include it
     );
+    setBusyId(null);
+    if (!res.success) {
+      setError(res.error);
+      return;
+    }
+    router.refresh();
+  }
+
+  async function moveToDay(item: AgendaItem, targetDay: number) {
+    setError(null);
+    setBusyId(item.id);
+    const res = await moveAgendaItemToDay(eventId, item.id, targetDay);
     setBusyId(null);
     if (!res.success) {
       setError(res.error);
@@ -183,7 +233,7 @@ export function AgendaSetupClient({
 
       {/* Day tabs */}
       <div className="mb-3 inline-flex rounded-lg border border-gray-200 p-0.5">
-        {([1, 2] as const).map((d) => (
+        {dayChoices.map((d) => (
           <button
             key={d}
             type="button"
@@ -191,6 +241,7 @@ export function AgendaSetupClient({
               setActiveDay(d);
               setEditId(null);
               setConfirmDeleteId(null);
+              setPendingExcludeId(null);
               setShowAdd(false);
             }}
             className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
@@ -199,14 +250,14 @@ export function AgendaSetupClient({
                 : "text-gray-600 hover:bg-gray-50"
             }`}
           >
-            Day {d}
+            {dayLabel(d)}
           </button>
         ))}
       </div>
 
       <p className="mb-3 text-sm font-medium text-gray-700">
-        {runLiveCount} of {dayItems.length} items will run live on Day{" "}
-        {activeDay}
+        {runLiveCount} of {dayItems.length} items will run live on{" "}
+        {dayLabel(activeDay)}
         {scoredCount > 0 && (
           <>
             {" · "}
@@ -224,6 +275,17 @@ export function AgendaSetupClient({
           <span>
             This event is live. Use the Control panel&apos;s Skip / Jump for
             on-the-day changes — reordering here is limited while live.
+          </span>
+        </div>
+      )}
+
+      {noScoredWillRun && (
+        <div className="mb-3 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+          <span>
+            No scored sessions will run live — juries won&apos;t have anything to
+            mark. Switch at least one scored session back on (across either day),
+            or check this is intentional.
           </span>
         </div>
       )}
@@ -249,6 +311,7 @@ export function AgendaSetupClient({
             const busy = busyId === item.id;
             const editing = editId === item.id;
             const confirming = confirmDeleteId === item.id;
+            const pendingExclude = pendingExcludeId === item.id;
 
             return (
               <li key={item.id} className="py-2.5">
@@ -362,7 +425,7 @@ export function AgendaSetupClient({
                   </div>
 
                   {/* Actions */}
-                  {!editing && !confirming && (
+                  {!editing && !confirming && !pendingExclude && (
                     <div className="flex shrink-0 items-center gap-1.5">
                       <button
                         type="button"
@@ -372,6 +435,21 @@ export function AgendaSetupClient({
                       >
                         <Pencil className="size-4" />
                       </button>
+                      {dayChoices
+                        .filter((d) => d !== item.day)
+                        .map((d) => (
+                          <button
+                            key={d}
+                            type="button"
+                            aria-label={`Move to ${dayLabel(d)}`}
+                            title={`Move to ${dayLabel(d)}`}
+                            disabled={busy}
+                            onClick={() => moveToDay(item, d)}
+                            className="inline-flex items-center gap-0.5 rounded-md px-1.5 py-1 text-xs font-medium text-gray-400 hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50"
+                          >
+                            <ArrowLeftRight className="size-3.5" />D{d}
+                          </button>
+                        ))}
                       {canDelete && (
                         <button
                           type="button"
@@ -394,7 +472,7 @@ export function AgendaSetupClient({
                           aria-checked={!excluded}
                           aria-label={`Run "${item.title}" live`}
                           disabled={busy}
-                          onClick={() => toggleRunLive(item)}
+                          onClick={() => onToggleRunLive(item)}
                           className={`relative ml-1 inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${
                             !excluded ? "bg-[#138808]" : "bg-gray-300"
                           }`}
@@ -431,6 +509,33 @@ export function AgendaSetupClient({
                       <button
                         type="button"
                         onClick={() => setConfirmDeleteId(null)}
+                        className="rounded-md border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  )}
+
+                  {pendingExclude && (
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span className="text-xs text-amber-700">
+                        Scored — juries won&apos;t mark it. Switch off?
+                      </span>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => applyToggle(item)}
+                        className="rounded-md bg-amber-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
+                      >
+                        {busy ? (
+                          <Loader2 className="size-3.5 animate-spin" />
+                        ) : (
+                          "Switch off"
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPendingExcludeId(null)}
                         className="rounded-md border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50"
                       >
                         Cancel

@@ -13,12 +13,6 @@ type Sibling = { href: string; label: string };
 export const MERGED_GROUPS: { siblings: Sibling[]; scoreGated?: boolean }[] = [
   {
     siblings: [
-      { href: "/participants", label: "Participants" },
-      { href: "/registrations", label: "Registrations" },
-    ],
-  },
-  {
-    siblings: [
       { href: "/volunteers", label: "Volunteers" },
       { href: "/yuva", label: "YUVA Desks" },
     ],

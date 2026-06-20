@@ -17,6 +17,7 @@ import {
   Flag,
   Gavel,
   ListChecks,
+  CalendarClock,
   Shield,
   Images,
   MessageCircleHeart,
@@ -47,6 +48,9 @@ const GROUPS: TabGroup[] = [
     tabs: [
       { label: "Team", href: "/team", icon: UserCog },
       { label: "Checklist", href: "/checklist", icon: ListChecks },
+      // Pre-event agenda tailoring: which items run live on the day, in what
+      // order. Drives the Control panel + projector view.
+      { label: "Agenda", href: "/agenda", icon: CalendarClock },
       { label: "Participants", href: "/participants", icon: Users },
       // Committee picker (route stays /topics). Before Parties so the setup
       // order reads Committees → Parties → Allocation.

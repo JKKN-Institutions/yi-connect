@@ -28,7 +28,9 @@ type ChapterEvent = {
  * DPDP: "Remove personal data" picker. Lists real chapter events; the
  * super-admin / chapter chair ticks events and anonymizes their participants +
  * volunteers (name -> pseudonym, contacts/school removed). IRREVERSIBLE — gated
- * by a typed "REMOVE" confirmation. Already-cleaned events are flagged.
+ * by typing the selected event's exact name (or "REMOVE N EVENTS" for a bulk
+ * selection), so an accidental click can never erase data. Already-cleaned
+ * events are flagged.
  */
 export function RemovePiiDialog() {
   const [open, setOpen] = useState(false);
@@ -67,8 +69,21 @@ export function RemovePiiDialog() {
     setSelected(allSelected ? new Set() : new Set(list.map((e) => e.id)));
   }
 
+  // To prevent accidental wipes, the chair must type the EXACT name of the
+  // single event being erased (forces a conscious match — a generic word like
+  // "REMOVE" becomes muscle memory). For a multi-event selection, require the
+  // count phrase so a bulk wipe can never be reflexive.
+  const selectedEvents = list.filter((e) => selected.has(e.id));
+  const single = selectedEvents.length === 1 ? selectedEvents[0] : null;
+  const requiredPhrase = single
+    ? single.name ?? single.chapter_name ?? "Untitled event"
+    : `REMOVE ${selected.size} EVENTS`;
+  // Lenient compare (trim + collapse whitespace + case-insensitive) so a name
+  // with an em-dash is still confirmable by copy-paste, without being brittle.
+  const normalize = (s: string) =>
+    s.trim().replace(/\s+/g, " ").toLowerCase();
   const canConfirm =
-    selected.size > 0 && confirmText.trim().toUpperCase() === "REMOVE";
+    selected.size > 0 && normalize(confirmText) === normalize(requiredPhrase);
 
   function doRemove() {
     if (!canConfirm) return;
@@ -188,13 +203,21 @@ export function RemovePiiDialog() {
 
               <div>
                 <label className="text-xs font-medium text-[#1a1a3e]/70 mb-1 block">
-                  Type <span className="font-mono font-bold">REMOVE</span> to
-                  confirm
+                  {single ? (
+                    <>
+                      Type the event&apos;s name to confirm:
+                    </>
+                  ) : (
+                    <>Type the phrase below to confirm:</>
+                  )}
                 </label>
+                <p className="mb-1.5 select-all rounded bg-[#1a1a3e]/5 px-2 py-1 font-mono text-xs font-bold text-[#1a1a3e] break-words">
+                  {requiredPhrase}
+                </p>
                 <Input
                   value={confirmText}
                   onChange={(e) => setConfirmText(e.target.value)}
-                  placeholder="REMOVE"
+                  placeholder={single ? "Event name" : requiredPhrase}
                   disabled={pending}
                 />
               </div>

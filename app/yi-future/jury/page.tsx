@@ -2,6 +2,9 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
 import { readSession } from "@/app/yi-future/actions/auth";
+import { GuideNudge } from "@/components/yi-future/guide";
+import { GUIDES } from "@/lib/yi-future/guide/content";
+import { getCompletedSteps, logGuideEvent } from "@/lib/yi-future/guide/actions";
 
 type Assignment = {
   team_id: string;
@@ -88,6 +91,8 @@ export default async function JuryDashboard({
     (a) => !evalByTeam.get(a.team_id) || evalByTeam.get(a.team_id)!.status === "draft"
   ).length;
 
+  const guideCompleted = await getCompletedSteps("jury");
+
   return (
     <div className="space-y-5">
       {justSubmitted && (
@@ -95,6 +100,12 @@ export default async function JuryDashboard({
           ✓ Evaluation submitted. Pick the next team below.
         </div>
       )}
+      <GuideNudge
+        guide={GUIDES.lanes.jury}
+        basePath="/yi-future/guide"
+        completed={guideCompleted}
+        onEvent={logGuideEvent}
+      />
       {/* ANTI-BIAS [PRD §5.1]: Show only team_name, problem, status, your score.
           Never join team_members or render delegate names on this dashboard. */}
       <div>

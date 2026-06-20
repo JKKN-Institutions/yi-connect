@@ -1,10 +1,20 @@
 import Link from "next/link";
 import { readSession } from "@/app/yi-future/actions/auth";
+import { GuideNudge } from "@/components/yi-future/guide";
+import { GUIDES } from "@/lib/yi-future/guide/content";
+import { getCompletedSteps, logGuideEvent } from "@/lib/yi-future/guide/actions";
 
 export default async function MentorHome() {
   const session = await readSession();
+  const guideCompleted = await getCompletedSteps("mentor");
   return (
     <div className="space-y-6">
+      <GuideNudge
+        guide={GUIDES.lanes.mentor}
+        basePath="/yi-future/guide"
+        completed={guideCompleted}
+        onEvent={logGuideEvent}
+      />
       <div>
         <h1 className="text-3xl font-bold text-navy">Mentor Dashboard</h1>
         <p className="mt-1 text-sm text-navy/60">

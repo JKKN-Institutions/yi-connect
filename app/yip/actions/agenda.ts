@@ -779,6 +779,8 @@ export async function updateAgendaItem(
     description?: string | null;
     duration_minutes?: number;
     agenda_type?: string;
+    /** Pre-event (day 0) calendar date; "" / null clears it. */
+    scheduled_date?: string | null;
   }
 ): Promise<ActionResult> {
   const access = await getYipEventAccess(eventId);
@@ -786,6 +788,8 @@ export async function updateAgendaItem(
     return { success: false, error: "Not authorized to manage this event" };
 
   const update: Record<string, unknown> = {};
+  if (patch.scheduled_date !== undefined)
+    update.scheduled_date = patch.scheduled_date || null;
   if (patch.title !== undefined) {
     const t = patch.title.trim();
     if (!t) return { success: false, error: "Title can't be empty." };
@@ -832,6 +836,8 @@ export async function addAgendaItem(
     description?: string;
     duration_minutes?: number;
     agenda_type?: string;
+    /** Pre-event (day 0) calendar date. */
+    scheduled_date?: string | null;
   }
 ): Promise<ActionResult<{ id: string }>> {
   const access = await getYipEventAccess(eventId);
@@ -840,8 +846,8 @@ export async function addAgendaItem(
 
   const title = input.title?.trim();
   if (!title) return { success: false, error: "Title is required." };
-  if (input.day !== 1 && input.day !== 2)
-    return { success: false, error: "Day must be 1 or 2." };
+  if (![0, 1, 2].includes(input.day))
+    return { success: false, error: "Phase must be Pre-event, Day 1 or Day 2." };
   const duration =
     input.duration_minutes !== undefined
       ? Math.round(input.duration_minutes)
@@ -879,7 +885,10 @@ export async function addAgendaItem(
       mode: modeForAgendaType(agendaType),
       status: "upcoming",
       is_scoreable: false,
-    })
+      // Pre-event (day 0) items carry a calendar date; event-day items don't.
+      // Column post-dates the generated types — cast the payload.
+      scheduled_date: input.day === 0 ? input.scheduled_date ?? null : null,
+    } as never)
     .select("id")
     .single();
   if (error || !data)
@@ -888,6 +897,70 @@ export async function addAgendaItem(
   revalidatePath(`/yip/dashboard/events/${eventId}/agenda`);
   revalidatePath(`/yip/dashboard/events/${eventId}/control`);
   return { success: true, data: { id: data.id } };
+}
+
+/**
+ * Move an agenda item to a different phase: Pre-event (day 0), Day 1 or Day 2.
+ * Appends to the end of the target phase (sequence_order = max+1) to respect the
+ * UNIQUE(event_id, day, sequence_order) index. Moving off Pre-event onto an
+ * event day clears the pre-event date (event days are dated by the event itself).
+ */
+export async function moveAgendaItemToDay(
+  eventId: string,
+  agendaItemId: string,
+  targetDay: number
+): Promise<ActionResult> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage)
+    return { success: false, error: "Not authorized to manage this event" };
+  if (![0, 1, 2].includes(targetDay))
+    return { success: false, error: "Target must be Pre-event, Day 1 or Day 2." };
+
+  const supabase = await createServiceClient();
+
+  const { data: item } = await supabase
+    .from("agenda")
+    .select("id, day, status")
+    .eq("id", agendaItemId)
+    .eq("event_id", eventId)
+    .maybeSingle();
+  if (!item)
+    return { success: false, error: "Agenda item not found for this event." };
+  if (item.day === targetDay) return { success: true, data: null };
+  if (item.status === "in_progress")
+    return {
+      success: false,
+      error:
+        "This item is live right now — move the agenda from the Control panel instead.",
+    };
+
+  // Append to the end of the target phase (max+1 never collides with the index).
+  const { data: maxRow } = await supabase
+    .from("agenda")
+    .select("sequence_order")
+    .eq("event_id", eventId)
+    .eq("day", targetDay)
+    .order("sequence_order", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const nextSeq = (maxRow?.sequence_order ?? 0) + 1;
+
+  const patch: Record<string, unknown> = {
+    day: targetDay,
+    sequence_order: nextSeq,
+  };
+  if (targetDay !== 0) patch.scheduled_date = null;
+
+  const { error } = await supabase
+    .from("agenda")
+    .update(patch)
+    .eq("id", agendaItemId)
+    .eq("event_id", eventId);
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/yip/dashboard/events/${eventId}/agenda`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/control`);
+  return { success: true, data: null };
 }
 
 /**

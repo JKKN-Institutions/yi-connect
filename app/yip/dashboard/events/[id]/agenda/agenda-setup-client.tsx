@@ -76,6 +76,7 @@ export function AgendaSetupClient({
     .filter((i) => i.day === activeDay)
     .sort((a, b) => a.sequence_order - b.sequence_order);
   const runLiveCount = dayItems.filter((i) => i.status !== "skipped").length;
+  const scoredCount = dayItems.filter((i) => i.is_scoreable).length;
 
   async function toggleRunLive(item: AgendaItem) {
     setError(null);
@@ -205,7 +206,16 @@ export function AgendaSetupClient({
 
       <p className="mb-3 text-sm font-medium text-gray-700">
         {runLiveCount} of {dayItems.length} items will run live on Day{" "}
-        {activeDay}.
+        {activeDay}
+        {scoredCount > 0 && (
+          <>
+            {" · "}
+            <span className="text-emerald-700">
+              {scoredCount} scored
+            </span>
+          </>
+        )}
+        .
       </p>
 
       {isLive && (
@@ -318,11 +328,14 @@ export function AgendaSetupClient({
                           }`}
                         >
                           {item.title}
-                          {item.is_scoreable && (
-                            <Star className="ml-1 inline size-3.5 -translate-y-px fill-[#FF9933] text-[#FF9933]" />
-                          )}
                         </p>
-                        <p className="flex items-center gap-2 text-xs text-gray-500">
+                        <p className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                          {item.is_scoreable && (
+                            <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-50 px-1.5 py-0.5 font-semibold text-emerald-700">
+                              <Star className="size-3 fill-emerald-600 text-emerald-600" />
+                              Scored
+                            </span>
+                          )}
                           {item.agenda_type && (
                             <span>{prettyType(item.agenda_type)}</span>
                           )}

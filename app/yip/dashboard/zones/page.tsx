@@ -1,153 +1,367 @@
 import Link from "next/link";
-import { getZoneSummary, listOrganizerProfiles } from "@/app/yip/actions/hierarchy";
-import { Badge } from "@/components/yip/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/yip/ui/card";
-import { MapPin, Users, Trophy, ArrowUpRight, Globe, Crown } from "lucide-react";
-import { canViewYipNationalRollup } from "@/lib/yip/auth/event-access";
-import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
+import { Newsreader } from "next/font/google";
+import { getNationalOverview, listOrganizerProfiles } from "@/app/yip/actions/hierarchy";
+import { Landmark, ArrowRight, CalendarDays } from "lucide-react";
+
+const display = Newsreader({
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  display: "swap",
+});
+
+const MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+
+function fmtDate(d: string): { mon: string; day: string } {
+  const [, m, day] = d.split("-").map(Number);
+  return { mon: MONTHS[(m ?? 1) - 1] ?? "—", day: String(day ?? 1).padStart(2, "0") };
+}
+
+function initials(name: string): string {
+  return name
+    .split(" ")
+    .slice(0, 2)
+    .map((s) => s[0] ?? "")
+    .join("")
+    .toUpperCase();
+}
+
+const BAR = ["bg-[#FF9933]", "bg-[#1a1a3e]", "bg-[#138808]"];
 
 export default async function ZonesNationalPage() {
-  if (!(await canViewYipNationalRollup())) {
-    return <Forbidden403 reason="The national zones overview is for national and regional admins." />;
-  }
-  const [summary, national] = await Promise.all([
-    getZoneSummary(),
+  const [overview, national] = await Promise.all([
+    getNationalOverview(),
     listOrganizerProfiles({ role: "national" }),
   ]);
 
-  const totalEvents = summary.reduce((s, z) => s + z.events_count, 0);
-  const totalParticipants = summary.reduce((s, z) => s + z.participants_count, 0);
-  const totalResults = summary.reduce((s, z) => s + z.results_published_count, 0);
+  const { totals, zones, upcoming, liveEvent } = overview;
+  const setup = Math.max(0, totals.events - totals.live - totals.published);
+  const topZone = zones[0];
+  const notStarted = zones.filter((z) => !z.started).map((z) => z.label);
+  const byParticipation = [...zones]
+    .filter((z) => z.participants > 0)
+    .sort((a, b) => b.participants - a.participants);
 
   return (
     <div className="max-w-[1400px] mx-auto px-6 py-8 space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-6">
-        <div>
-          <h1 className="text-3xl font-bold text-[#1a1a3e] tracking-tight">
-            National Overview
-          </h1>
-          <p className="text-sm text-[#1a1a3e]/60 mt-1">
-            YIP 2026 · 6 regions
-          </p>
+      {/* Masthead */}
+      <header className="relative overflow-hidden rounded-[20px] border border-[#1a1a3e]/10 bg-white">
+        <div
+          className="h-1 w-full"
+          style={{
+            background:
+              "linear-gradient(90deg,#FF9933 0%,#FF9933 33%,#ffffff 33%,#ffffff 66%,#138808 66%,#138808 100%)",
+          }}
+        />
+        <div className="px-7 py-7">
+          <div className="flex items-start justify-between gap-6 flex-wrap">
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#FF9933]">
+                YIP 2026 · National Command
+              </div>
+              <h1
+                className={`${display.className} text-[40px] leading-[1.05] font-medium text-[#1a1a3e] mt-1 tracking-tight`}
+              >
+                National Overview
+              </h1>
+              <p className="text-sm text-[#1a1a3e]/55 mt-2 max-w-xl">
+                The Parliament rolls out across India —{" "}
+                <span className="font-semibold text-[#1a1a3e]/80">{totals.events} sittings</span> seeded in{" "}
+                <span className="font-semibold text-[#1a1a3e]/80">{totals.zones} regions</span>
+                {liveEvent ? ", one live right now." : "."}
+              </p>
+            </div>
+            {liveEvent && (
+              <div className="flex items-center gap-2 rounded-full border border-[#138808]/25 bg-[#138808]/5 px-3 py-1.5">
+                <span className="relative flex size-2">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#138808] opacity-60" />
+                  <span className="relative inline-flex size-2 rounded-full bg-[#138808]" />
+                </span>
+                <span className="text-xs font-semibold text-[#138808]">Live now · {liveEvent.name}</span>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      </header>
 
       {/* National team */}
       {national.length > 0 && (
-        <Card className="bg-gradient-to-br from-[#FF9933]/5 via-white to-[#138808]/5 border-[#FF9933]/15">
-          <CardHeader>
-            <CardTitle className="text-sm text-[#1a1a3e]/70 flex items-center gap-2">
-              <Crown className="size-4 text-[#FF9933]" />
+        <section className="rounded-2xl border border-[#1a1a3e]/8 bg-white overflow-hidden">
+          <div className="px-6 pt-5 pb-2 flex items-center gap-2">
+            <Landmark className="size-4 text-[#FF9933]" />
+            <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#1a1a3e]/55">
               National Team 2026
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-4">
-              {national.map((n) => (
+            </span>
+          </div>
+          <div className="px-6 pb-5 flex flex-wrap gap-x-7 gap-y-4">
+            {national.map((n) => {
+              const isAdmin = (n.title ?? "").toLowerCase().includes("admin");
+              return (
                 <div key={n.id} className="flex items-center gap-3">
-                  <div className="size-10 rounded-full bg-gradient-to-br from-[#FF9933] to-[#E68A2E] flex items-center justify-center text-white font-bold text-sm">
-                    {n.full_name
-                      .split(" ")
-                      .slice(0, 2)
-                      .map((s) => s[0])
-                      .join("")}
+                  <div
+                    className={`size-10 rounded-full grid place-items-center text-white font-bold text-sm bg-gradient-to-br ${
+                      isAdmin ? "from-[#FF9933] to-[#E68A2E]" : "from-[#1a1a3e] to-[#3a3a6e]"
+                    }`}
+                  >
+                    {initials(n.full_name)}
                   </div>
                   <div>
                     <div className="text-sm font-semibold text-[#1a1a3e]">{n.full_name}</div>
-                    <div className="text-xs text-[#1a1a3e]/60">{n.title}</div>
+                    <div className="text-xs text-[#1a1a3e]/55">{n.title ?? "Organizer"}</div>
                   </div>
                 </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+              );
+            })}
+          </div>
+        </section>
       )}
 
-      {/* National totals */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <RollupCard icon={Globe} label="Active Zones" value={summary.filter((z) => z.events_count > 0).length} accent="orange" />
-        <RollupCard icon={Trophy} label="Total Events" value={totalEvents} accent="indigo" />
-        <RollupCard icon={Users} label="Total Participants" value={totalParticipants} accent="green" />
-        <RollupCard icon={MapPin} label="Results Published" value={totalResults} accent="blue" />
-      </div>
+      {/* Pulse: hero + supporting */}
+      <section className="grid grid-cols-1 lg:grid-cols-[1.1fr_2fr] gap-4">
+        <div className="relative overflow-hidden rounded-2xl border border-[#1a1a3e]/8 bg-white px-7 py-6">
+          <div className="absolute -right-8 -top-8 size-32 rounded-full bg-[#FF9933]/8" />
+          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#1a1a3e]/45">
+            Students enrolled
+          </div>
+          <div
+            className={`${display.className} text-[64px] leading-none font-medium text-[#1a1a3e] mt-1 tabular-nums`}
+          >
+            {totals.participants}
+          </div>
+          <div className="text-sm text-[#1a1a3e]/55 mt-2">
+            from <span className="font-semibold text-[#1a1a3e]/80">{totals.schools} schools</span> · across{" "}
+            <span className="font-semibold text-[#1a1a3e]/80">
+              {totals.startedZones} of {totals.zones} zones
+            </span>{" "}
+            so far
+          </div>
+          {byParticipation.length > 0 && (
+            <>
+              <div className="mt-4 h-1.5 w-full rounded-full bg-[#1a1a3e]/8 overflow-hidden flex">
+                {byParticipation.slice(0, 3).map((z, i) => (
+                  <div key={z.code} className={`h-full ${BAR[i]}`} style={{ width: `${z.sharePct}%` }} />
+                ))}
+              </div>
+              <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-[#1a1a3e]/55">
+                {byParticipation.slice(0, 3).map((z, i) => (
+                  <span key={z.code} className="tabular-nums">
+                    <span className={`inline-block size-2 rounded-full ${BAR[i]} mr-1 align-middle`} />
+                    {z.label} {z.participants}
+                  </span>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
 
-      {/* Zone cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {summary.map((z) => (
-          <Link key={z.zone} href={`/yip/dashboard/zones/${z.zone.toLowerCase()}`}>
-            <Card className="hover:border-[#FF9933]/40 hover:shadow-md transition-all cursor-pointer h-full">
-              <CardContent className="pt-5 space-y-3">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <Badge className="bg-[#1a1a3e]/5 text-[#1a1a3e]/70 border border-[#1a1a3e]/10 font-mono text-[10px]">
-                      {z.zone}
-                    </Badge>
-                    <h3 className="text-lg font-semibold text-[#1a1a3e] mt-1">{z.label}</h3>
-                    {z.rm_name && (
-                      <p className="text-xs text-[#1a1a3e]/60 mt-0.5">RM: {z.rm_name}</p>
-                    )}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <StatCard value={totals.zones} label="Active zones" />
+          <StatCard value={totals.chapters} label="Chapters engaged" />
+          <StatCard value={totals.events} label="Events seeded" />
+          <StatCard value={totals.published} label="Results published" accent />
+          <div className="col-span-2 sm:col-span-4 rounded-2xl border border-[#1a1a3e]/8 bg-white px-5 py-4">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#1a1a3e]/45 mb-3">
+              Program pipeline
+            </div>
+            <div className="flex items-center gap-2">
+              <PipeStep value={setup} label="In setup" tone="ink" />
+              <ArrowRight className="size-4 text-[#1a1a3e]/25 shrink-0" />
+              <PipeStep value={totals.live} label="Live now" tone="saffron" />
+              <ArrowRight className="size-4 text-[#1a1a3e]/25 shrink-0" />
+              <PipeStep value={totals.published} label="Results out" tone="green" />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Insights */}
+      {topZone && (
+        <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <InsightCard
+            eyebrow="Front-runner"
+            tone="saffron"
+            title={`${topZone.label} leads the rollout`}
+            body={`${topZone.events} events · ${topZone.chapters} chapters · ${topZone.participants} students${
+              topZone.sharePct >= 40 ? " — nearly half of all enrolment." : "."
+            }`}
+          />
+          <InsightCard
+            eyebrow="Scheduling"
+            tone="ink"
+            title={`${totals.scheduled} ${totals.scheduled === 1 ? "event is" : "events are"} on the calendar`}
+            body={`${totals.awaitingDates} of ${totals.events} still need confirmed dates — the season is mostly unscheduled.`}
+          />
+          <InsightCard
+            eyebrow="Coverage"
+            tone="green"
+            title={`Registration has begun in ${totals.startedZones} ${
+              totals.startedZones === 1 ? "zone" : "zones"
+            }`}
+            body={
+              notStarted.length > 0
+                ? `${listJoin(notStarted)} ${
+                    notStarted.length === 1 ? "has" : "have"
+                  } chapters but no students enrolled yet.`
+                : "Every zone has students enrolled."
+            }
+          />
+        </section>
+      )}
+
+      {/* On the calendar next */}
+      {upcoming.length > 0 && (
+        <section className="rounded-2xl border border-[#1a1a3e]/8 bg-white px-6 py-5">
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#1a1a3e]/55 flex items-center gap-2">
+              <CalendarDays className="size-3.5" /> On the calendar next
+            </span>
+            <span className="text-[11px] text-[#1a1a3e]/45">
+              {upcoming.length} upcoming · confirmed dates
+            </span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {upcoming.map((e) => {
+              const d = fmtDate(e.day1_date);
+              return (
+                <div
+                  key={e.id}
+                  className="rounded-xl border border-[#1a1a3e]/8 px-4 py-3 hover:border-[#FF9933]/40 transition-colors"
+                >
+                  <div className="text-[11px] font-semibold text-[#FF9933] tabular-nums">
+                    {d.mon} {d.day}
                   </div>
-                  <ArrowUpRight className="size-4 text-[#1a1a3e]/30" />
+                  <div className="font-semibold text-sm mt-0.5 text-[#1a1a3e] truncate">{e.name}</div>
+                  <div className="text-xs text-[#1a1a3e]/50 truncate">{e.label}</div>
                 </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
-                <div className="grid grid-cols-3 gap-2 pt-3 border-t border-[#1a1a3e]/5">
-                  <MiniStat label="Events" value={z.events_count} />
-                  <MiniStat label="Chapters" value={z.chapters_count} />
-                  <MiniStat label="Students" value={z.participants_count} />
+      {/* Zone leaderboard */}
+      <section>
+        <div className="mb-3">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#1a1a3e]/55">
+            Zones ranked by activity
+          </span>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {zones.map((z, i) => (
+            <Link
+              key={z.code}
+              href={`/yip/dashboard/zones/${z.code.toLowerCase()}`}
+              className="block rounded-2xl border border-[#1a1a3e]/8 bg-white px-5 py-4 hover:border-[#FF9933]/40 hover:shadow-md transition-all"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div
+                    className={`${display.className} text-[26px] font-medium text-[#1a1a3e]/25 tabular-nums w-7 shrink-0`}
+                  >
+                    {i + 1}
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="font-semibold text-[#1a1a3e] leading-tight truncate">{z.label}</h3>
+                    <div className="text-[11px] font-mono text-[#1a1a3e]/40">{z.code}</div>
+                  </div>
                 </div>
-                <div className="text-[11px] text-[#1a1a3e]/60">
-                  {z.results_published_count} of {z.events_count} events with results published
+                {z.published > 0 ? (
+                  <span className="rounded-full bg-[#138808]/10 text-[#138808] text-[10px] font-semibold px-2 py-0.5 shrink-0">
+                    {z.published} published
+                  </span>
+                ) : z.started ? (
+                  <span className="rounded-full bg-[#FF9933]/10 text-[#FF9933] text-[10px] font-semibold px-2 py-0.5 shrink-0">
+                    registering
+                  </span>
+                ) : (
+                  <span className="rounded-full bg-[#1a1a3e]/5 text-[#1a1a3e]/50 text-[10px] font-semibold px-2 py-0.5 shrink-0">
+                    awaiting enrolment
+                  </span>
+                )}
+              </div>
+              <div className="grid grid-cols-3 gap-2 mt-4 pt-3 border-t border-[#1a1a3e]/5 tabular-nums">
+                <ZoneStat value={z.events} label="Events" />
+                <ZoneStat value={z.chapters} label="Chapters" />
+                <ZoneStat value={z.participants} label="Students" dim={z.participants === 0} />
+              </div>
+              <div className="mt-3">
+                <div className="h-1 w-full rounded-full bg-[#1a1a3e]/8 overflow-hidden">
+                  <div
+                    className={z.started ? "h-full bg-[#FF9933]" : "h-full bg-[#1a1a3e]/20"}
+                    style={{ width: z.started ? `${Math.max(z.sharePct, 4)}%` : "3%" }}
+                  />
                 </div>
-              </CardContent>
-            </Card>
-          </Link>
-        ))}
-      </div>
+                <div className="text-[10px] text-[#1a1a3e]/45 mt-1">
+                  {z.started ? `${z.sharePct}% of national enrolment` : "registration not started"}
+                </div>
+              </div>
+            </Link>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }
 
-function RollupCard({
-  icon: Icon,
-  label,
-  value,
-  accent,
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-  value: number;
-  accent: "orange" | "blue" | "green" | "indigo";
-}) {
-  const map = {
-    orange: { bg: "bg-[#FF9933]/10", text: "text-[#FF9933]" },
-    blue: { bg: "bg-blue-50", text: "text-blue-600" },
-    green: { bg: "bg-[#138808]/10", text: "text-[#138808]" },
-    indigo: { bg: "bg-indigo-50", text: "text-indigo-600" },
-  }[accent];
+function listJoin(items: string[]): string {
+  if (items.length <= 1) return items[0] ?? "";
+  if (items.length === 2) return `${items[0]} and ${items[1]}`;
+  return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
+}
 
+function StatCard({ value, label, accent }: { value: number; label: string; accent?: boolean }) {
   return (
-    <Card>
-      <CardContent className="pt-5">
-        <div className="flex items-center gap-3">
-          <div className={`size-9 rounded-lg ${map.bg} flex items-center justify-center`}>
-            <Icon className={`size-5 ${map.text}`} />
-          </div>
-          <div>
-            <div className="text-2xl font-bold text-[#1a1a3e]">{value}</div>
-            <div className="text-xs text-[#1a1a3e]/60">{label}</div>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+    <div className="rounded-2xl border border-[#1a1a3e]/8 bg-white px-5 py-5">
+      <div
+        className={`text-[34px] font-bold leading-none tabular-nums ${accent ? "text-[#138808]" : "text-[#1a1a3e]"}`}
+      >
+        {value}
+      </div>
+      <div className="text-xs text-[#1a1a3e]/55 mt-1.5">{label}</div>
+    </div>
   );
 }
 
-function MiniStat({ label, value }: { label: string; value: number }) {
+function PipeStep({ value, label, tone }: { value: number; label: string; tone: "ink" | "saffron" | "green" }) {
+  const map = {
+    ink: { bg: "bg-[#1a1a3e]/5", text: "text-[#1a1a3e]" },
+    saffron: { bg: "bg-[#FF9933]/10", text: "text-[#FF9933]" },
+    green: { bg: "bg-[#138808]/10", text: "text-[#138808]" },
+  }[tone];
+  return (
+    <div className={`flex-1 rounded-lg ${map.bg} px-3 py-2.5`}>
+      <div className={`text-xl font-bold tabular-nums ${map.text}`}>{value}</div>
+      <div className="text-[11px] text-[#1a1a3e]/55">{label}</div>
+    </div>
+  );
+}
+
+function InsightCard({
+  eyebrow,
+  title,
+  body,
+  tone,
+}: {
+  eyebrow: string;
+  title: string;
+  body: string;
+  tone: "saffron" | "ink" | "green";
+}) {
+  const border = { saffron: "border-l-[#FF9933]", ink: "border-l-[#1a1a3e]", green: "border-l-[#138808]" }[tone];
+  const text = { saffron: "text-[#FF9933]", ink: "text-[#1a1a3e]/60", green: "text-[#138808]" }[tone];
+  return (
+    <div className={`rounded-2xl border border-[#1a1a3e]/8 border-l-[3px] ${border} bg-white px-5 py-5`}>
+      <div className={`text-[10px] font-semibold uppercase tracking-[0.18em] ${text}`}>{eyebrow}</div>
+      <div className={`${display.className} text-lg font-medium mt-1.5 leading-snug text-[#1a1a3e]`}>{title}</div>
+      <div className="text-sm text-[#1a1a3e]/60 mt-1.5 tabular-nums">{body}</div>
+    </div>
+  );
+}
+
+function ZoneStat({ value, label, dim }: { value: number; label: string; dim?: boolean }) {
   return (
     <div>
-      <div className="text-sm font-bold text-[#1a1a3e]">{value}</div>
-      <div className="text-[10px] text-[#1a1a3e]/60 uppercase tracking-wider">{label}</div>
+      <div className={`text-sm font-bold ${dim ? "text-[#1a1a3e]/40" : "text-[#1a1a3e]"}`}>{value}</div>
+      <div className="text-[10px] uppercase tracking-wider text-[#1a1a3e]/45">{label}</div>
     </div>
   );
 }

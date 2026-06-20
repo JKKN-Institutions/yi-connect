@@ -29,6 +29,30 @@ type ActionResult<T = unknown> =
   | { success: true; data: T }
   | { success: false; error: string };
 
+// ─── Organiser: allow jurors to score earlier sessions (BUG-393) ───
+// Per-event switch. When on, jurors get a "Score an earlier session" option
+// that unlocks all their assigned sessions; when off they stay locked to the
+// current + immediately-previous set.
+
+export async function setJuryAllowEarlierSessions(
+  eventId: string,
+  allow: boolean
+): Promise<ActionResult> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
+  const supabase = await createServiceClient();
+  const { error } = await supabase
+    .from("events")
+    .update({ jury_allow_earlier_sessions: allow })
+    .eq("id", eventId);
+  if (error) return { success: false, error: error.message };
+  revalidatePath(`/yip/dashboard/events/${eventId}/control`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/jury`);
+  return { success: true, data: null };
+}
+
 // ─── Add Jury ──────────────────────────────────────────────────────
 
 export async function addJury(

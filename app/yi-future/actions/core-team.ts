@@ -101,6 +101,30 @@ export async function removeCoreTeamMember(
 ): Promise<ActionResult> {
   await requireAuth();
   const svc = await createServiceClient();
+
+  // GUARD (2026-06-20, ref #500): a chapter_chair / chapter_co_chair is a
+  // canonical, chapter-wide role synced into yi_directory and shared across
+  // every Yi vertical. Removing the chapter_core_team row here orphans that
+  // canonical role (and before the DB-trigger fix, cascade-deleted it → a
+  // cross-vertical self-lockout). Only the Directory may remove a chair.
+  // Refuse explicitly rather than silently "Removing".
+  const { data: row } = await svc
+    .schema("future")
+    .from("chapter_core_team")
+    .select("role")
+    .eq("id", id)
+    .maybeSingle();
+  // Cast: the generated `user_role` enum type lags the live DB, which carries
+  // chapter_chair / chapter_co_chair on this table (see yi_directory sync).
+  const role = (row?.role ?? "") as string;
+  if (role === "chapter_chair" || role === "chapter_co_chair") {
+    return {
+      ok: false,
+      error:
+        "Chapter chairs are managed in the Directory and can't be removed from the team screen.",
+    };
+  }
+
   const { error } = await svc
     .schema("future")
     .from("chapter_core_team")

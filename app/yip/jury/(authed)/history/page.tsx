@@ -5,8 +5,6 @@ import {
   getScoresForJury,
   getSessionScoringParams,
 } from "@/app/yip/actions/scoring";
-import { createServiceClient } from "@/lib/yip/supabase/server";
-import { eventPrivacyMasked } from "@/lib/yip/pii";
 import { HistoryClient } from "./history-client";
 
 interface JurySession {
@@ -38,15 +36,6 @@ export default async function JuryHistoryPage() {
 
   const scores = await getScoresForJury(session.id, session.eventId);
 
-  // DPDP: privacy-mode events show pseudonyms instead of real names to jurors.
-  const supabase = await createServiceClient();
-  const { data: privacyEvent } = await supabase
-    .from("events")
-    .select("privacy_mode, pii_purged_at")
-    .eq("id", session.eventId)
-    .single();
-  const masked = privacyEvent ? eventPrivacyMasked(privacyEvent) : false;
-
   // Resolve each session's max SERVER-SIDE so the History list shows the correct
   // per-session denominator (15/20/10) on first paint — no client fallback flash.
   const distinctAgendaIds = Array.from(
@@ -73,7 +62,6 @@ export default async function JuryHistoryPage() {
       sessionMaxById={sessionMaxById}
       juryAssignmentId={session.id}
       eventId={session.eventId}
-      masked={masked}
     />
   );
 }

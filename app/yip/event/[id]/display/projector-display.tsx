@@ -8,10 +8,8 @@ import { useVoteSession } from "@/lib/yip/hooks/use-vote-session";
 import { useTimer } from "@/lib/yip/hooks/use-timer";
 import { useLiveBanner } from "@/lib/yip/hooks/use-live-banner";
 import { createClient } from "@/lib/yip/supabase/client";
-import { eventPrivacyMasked, maskName } from "@/lib/yip/pii";
 
 interface SpeakerInfo {
-  id: string;
   full_name: string;
   parliament_role: string | null;
   party_side: string | null;
@@ -66,14 +64,6 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
   const [presentedBill, setPresentedBill] = useState<BillDisplayInfo | null>(null);
   const supabase = createClient();
 
-  // DPDP live masking. The projector is PUBLIC, so when the event is in privacy
-  // mode we replace participant names with stable pseudonyms before they ever
-  // reach React state — no render site can then leak a name. Fail-safe: while
-  // `event` is still loading (null) default to masked, so a privacy event never
-  // flashes a real name for the split second before it loads. `masked` is a
-  // boolean, so adding it to the fetch deps below only re-runs when it flips.
-  const masked = event ? eventPrivacyMasked(event) : true;
-
   // Vote session realtime
   const { session: voteSession, isOpen, isClosed, isRevealed, tallies, totalVotes } =
     useVoteSession(eventId, { trackVotes: true });
@@ -107,13 +97,7 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
           .select("id, full_name, school_name")
           .eq("event_id", eventId)
           .eq("parliament_role", "speaker");
-        setVoteCandidates(
-          (data ?? []).map((c) => ({
-            id: c.id,
-            full_name: maskName(masked, c.id, c.full_name),
-            school_name: masked ? "" : c.school_name,
-          }))
-        );
+        setVoteCandidates(data ?? []);
       }
 
       if (voteSession.vote_type === "bill_vote" && voteSession.bill_id) {
@@ -137,7 +121,7 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
     }
 
     loadVoteData();
-  }, [voteSession?.id, eventId, supabase, masked]);
+  }, [voteSession?.id, eventId, supabase]);
 
   // Fetch current speaker when agenda item changes
   const fetchCurrentSpeaker = useCallback(async () => {
@@ -151,7 +135,6 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
       .select(
         `
         participant:participants(
-          id,
           full_name,
           parliament_role,
           party_side,
@@ -167,16 +150,11 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
       .maybeSingle();
 
     if (data?.participant && !Array.isArray(data.participant)) {
-      const p = data.participant as unknown as SpeakerInfo;
-      setCurrentSpeaker({
-        ...p,
-        full_name: maskName(masked, p.id, p.full_name),
-        school_name: masked ? "" : p.school_name,
-      });
+      setCurrentSpeaker(data.participant as unknown as SpeakerInfo);
     } else {
       setCurrentSpeaker(null);
     }
-  }, [event?.current_agenda_item_id, supabase, masked]);
+  }, [event?.current_agenda_item_id, supabase]);
 
   useEffect(() => {
     fetchCurrentSpeaker();
@@ -217,7 +195,6 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
         directed_to_ministry,
         question_type,
         submitter:participants!questions_submitted_by_fkey(
-          id,
           full_name,
           party_side,
           constituency_name
@@ -231,7 +208,6 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
 
     if (data?.submitter && !Array.isArray(data.submitter)) {
       const sub = data.submitter as unknown as {
-        id: string;
         full_name: string;
         party_side: string | null;
         constituency_name: string | null;
@@ -240,14 +216,14 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
         question_text: data.question_text,
         directed_to_ministry: data.directed_to_ministry,
         question_type: data.question_type,
-        submitter_name: maskName(masked, sub.id, sub.full_name),
+        submitter_name: sub.full_name,
         submitter_party: sub.party_side,
         submitter_constituency: sub.constituency_name,
       });
     } else {
       setCurrentQuestionDisplay(null);
     }
-  }, [eventId, supabase, masked]);
+  }, [eventId, supabase]);
 
   // Subscribe to question changes for this event
   useEffect(() => {
@@ -291,8 +267,8 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
         party_side,
         provisions,
         status,
-        presenter_1_participant:participants!bills_presenter_1_fkey(id, full_name),
-        presenter_2_participant:participants!bills_presenter_2_fkey(id, full_name)
+        presenter_1_participant:participants!bills_presenter_1_fkey(full_name),
+        presenter_2_participant:participants!bills_presenter_2_fkey(full_name)
       `
       )
       .eq("event_id", eventId)
@@ -301,8 +277,8 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
       .maybeSingle();
 
     if (data) {
-      const p1 = data.presenter_1_participant as unknown as { id: string; full_name: string } | null;
-      const p2 = data.presenter_2_participant as unknown as { id: string; full_name: string } | null;
+      const p1 = data.presenter_1_participant as unknown as { full_name: string } | null;
+      const p2 = data.presenter_2_participant as unknown as { full_name: string } | null;
       setPresentedBill({
         id: data.id,
         title: data.title,
@@ -310,13 +286,13 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
         party_side: data.party_side,
         provisions: (data.provisions as string[]) ?? [],
         status: data.status,
-        presenter_1_name: p1 ? maskName(masked, p1.id, p1.full_name) : null,
-        presenter_2_name: p2 ? maskName(masked, p2.id, p2.full_name) : null,
+        presenter_1_name: p1?.full_name ?? null,
+        presenter_2_name: p2?.full_name ?? null,
       });
     } else {
       setPresentedBill(null);
     }
-  }, [eventId, supabase, masked]);
+  }, [eventId, supabase]);
 
   useEffect(() => {
     if (currentAgendaItem?.agenda_type !== "bill_presentation") {

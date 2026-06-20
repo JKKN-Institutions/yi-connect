@@ -35,22 +35,12 @@ export default async function ParticipantsPage({
 
   const access = await getYipEventAccess(id);
 
-  // DPDP minimal registration: privacy-mode events register by serial + only.
-  // Pre-fill the next serial (max existing + 1; organiser can override).
-  const nextSerial =
-    participants.reduce(
-      (max, p) => Math.max(max, (p as { serial_no?: number | null }).serial_no ?? 0),
-      0
-    ) + 1;
-
   return (
     <ParticipantsClient
       eventId={id}
       participants={participants}
       allocationLocked={event.allocation_locked ?? false}
       canDelete={access.canDelete}
-      privacyMode={event.privacy_mode ?? false}
-      nextSerial={nextSerial}
     />
   );
 }

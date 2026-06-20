@@ -4,7 +4,6 @@ import { createClient, createServiceClient } from "@/lib/yip/supabase/server";
 import { generateAccessCode } from "@/lib/yip/access-code";
 import { logAuditAction } from "@/lib/yip/audit/log-action";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
-import { PII_REMOVED_PLACEHOLDER } from "@/lib/yip/pii";
 import { COMMITTEES } from "@/lib/yip/constants";
 import {
   CONSTITUENCIES,
@@ -26,8 +25,11 @@ type ParliamentRole = Database["public"]["Enums"]["parliament_role"];
 
 interface AddParticipantData {
   full_name: string;
-  school_name: string;
-  class: number;
+  // Name-only registration: the student's name is the only personal data
+  // collected (with consent — see the privacy notice on /yip/join). school_name
+  // is NOT NULL and class has a 9–12 CHECK, so they default rather than collect.
+  school_name?: string;
+  class?: number;
   phone?: string;
   email?: string;
   city?: string;
@@ -128,8 +130,8 @@ export async function addParticipant(
       .insert({
         event_id: eventId,
         full_name: data.full_name,
-        school_name: data.school_name,
-        class: data.class,
+        school_name: data.school_name || "",
+        class: data.class ?? 9,
         phone: data.phone || null,
         email: data.email || null,
         city: data.city || null,
@@ -147,81 +149,6 @@ export async function addParticipant(
     return {
       success: true,
       data: { id: participant.id, access_code: participant.access_code },
-    };
-  } catch (err) {
-    return {
-      success: false,
-      error: err instanceof Error ? err.message : "Unknown error",
-    };
-  }
-}
-
-// ─── Add Minimal (anonymous / data-minimised) Participant ──────────
-//
-// DPDP data-minimisation: a privacy-mode event registers participants with NO
-// personal data — only a serial number + constituency. The participant is "born
-// anonymised": full_name is a placeholder (same style as the SQL purge),
-// school_name is the removed-placeholder, and class is defaulted to 9 (a CHECK
-// requires 9–12, but it is not collected here). The serial is the chapter's
-// human-facing identifier (auto-suggested as max+1, editable by the organiser).
-
-interface MinimalParticipantData {
-  serial_no: number;
-  constituency_name?: string | null;
-  constituency_state?: string | null;
-}
-
-export async function addParticipantMinimal(
-  eventId: string,
-  data: MinimalParticipantData
-): Promise<ActionResult<{ id: string; access_code: string; serial_no: number }>> {
-  const access = await getYipEventAccess(eventId);
-  if (!access.canManage) {
-    return { success: false, error: "Not authorized to manage this event" };
-  }
-
-  const serial = Number.isFinite(data.serial_no)
-    ? Math.trunc(data.serial_no)
-    : 0;
-  if (serial <= 0) {
-    return { success: false, error: "Serial number must be a positive number" };
-  }
-
-  const supabase = await createServiceClient();
-
-  try {
-    const accessCode = await generateUniqueCode(supabase, eventId, new Set());
-
-    const { data: participant, error } = await supabase
-      .from("participants")
-      .insert({
-        event_id: eventId,
-        full_name: `Participant ${serial}`,
-        school_name: PII_REMOVED_PLACEHOLDER,
-        class: 9,
-        serial_no: serial,
-        constituency_name: data.constituency_name?.trim() || null,
-        constituency_state: data.constituency_state?.trim() || null,
-        access_code: accessCode,
-      })
-      .select("id, access_code, serial_no")
-      .single();
-
-    if (error || !participant) {
-      return {
-        success: false,
-        error: error?.message ?? "Failed to add participant",
-      };
-    }
-
-    revalidatePath(`/yip/dashboard/events/${eventId}/participants`);
-    return {
-      success: true,
-      data: {
-        id: participant.id,
-        access_code: participant.access_code,
-        serial_no: participant.serial_no ?? serial,
-      },
     };
   } catch (err) {
     return {
@@ -253,8 +180,9 @@ export async function addParticipantMinimal(
 
 interface QuickAddData {
   full_name: string;
-  school_name: string;
-  class: number;
+  // Name-only: school/class default (NOT NULL + 9–12 CHECK), not collected.
+  school_name?: string;
+  class?: number;
   phone?: string;
   email?: string;
   city?: string;
@@ -294,11 +222,8 @@ export async function quickAddWalkIn(
   if (!access.canManage) {
     return { success: false, error: "Not authorized to manage this event" };
   }
-  if (!data.full_name?.trim() || !data.school_name?.trim()) {
-    return { success: false, error: "Name and school are required" };
-  }
-  if (!data.class || data.class < 9 || data.class > 12) {
-    return { success: false, error: "Class must be between 9 and 12" };
+  if (!data.full_name?.trim()) {
+    return { success: false, error: "Student name is required" };
   }
 
   const supabase = await createServiceClient();
@@ -420,8 +345,8 @@ export async function quickAddWalkIn(
       .insert({
         event_id: eventId,
         full_name: data.full_name.trim(),
-        school_name: data.school_name.trim(),
-        class: data.class,
+        school_name: data.school_name?.trim() || "",
+        class: data.class ?? 9,
         phone: data.phone?.trim() || null,
         email: data.email?.trim() || null,
         city: data.city?.trim() || null,
@@ -511,14 +436,9 @@ export async function importParticipants(
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
 
-    if (!row.name || !row.school) {
-      errors.push(`Row ${i + 1}: Name and school are required`);
-      continue;
-    }
-    // Each student must be reachable: at least one of email / parent mobile.
-    // (Either alone is fine; only a row with NEITHER is rejected.)
-    if (!row.email?.trim() && !row.parent_phone?.trim()) {
-      errors.push(`Row ${i + 1}: an email or parent mobile is required`);
+    // Name-only registration: only the student's name is required.
+    if (!row.name) {
+      errors.push(`Row ${i + 1}: Name is required`);
       continue;
     }
     if (!row.class || row.class < 9 || row.class > 12) {

@@ -142,3 +142,121 @@ export async function getZoneSummary(): Promise<
     };
   });
 }
+
+/**
+ * National Overview: one structured snapshot for the /yip/dashboard/zones page.
+ * Two reads (events + their participants), everything else derived in memory.
+ * "awaitingDates" is computed by detecting a placeholder day1_date — the single
+ * date shared by an outsized cluster of events (how bulk-seeded chapter rounds
+ * land before a real date is set) — so the scheduling insight stays honest.
+ */
+export async function getNationalOverview(): Promise<{
+  totals: {
+    zones: number;
+    chapters: number;
+    events: number;
+    participants: number;
+    schools: number;
+    published: number;
+    live: number;
+    scheduled: number;
+    awaitingDates: number;
+    startedZones: number;
+  };
+  liveEvent: { id: string; name: string } | null;
+  zones: Array<{
+    code: YiZone;
+    label: string;
+    events: number;
+    chapters: number;
+    participants: number;
+    published: number;
+    sharePct: number;
+    started: boolean;
+  }>;
+  upcoming: Array<{ id: string; name: string; label: string; day1_date: string }>;
+}> {
+  const supabase = await createServiceClient();
+  const today = new Date().toISOString().slice(0, 10);
+
+  const { data: eventsRaw } = await supabase
+    .from("events")
+    .select("id, name, zone, chapter_name, status, day1_date, results_published_at")
+    .eq("is_mock", false);
+  const events = eventsRaw ?? [];
+
+  const eventIds = events.map((e) => e.id);
+  const { data: partsRaw } = await supabase
+    .from("participants")
+    .select("event_id, school_name")
+    .in("event_id", eventIds.length ? eventIds : ["00000000-0000-0000-0000-000000000000"]);
+  const parts = partsRaw ?? [];
+
+  // Detect a "dates TBD" placeholder: one day1_date shared by an outsized cluster.
+  const dateCount = new Map<string, number>();
+  for (const e of events) {
+    if (e.day1_date) dateCount.set(e.day1_date, (dateCount.get(e.day1_date) ?? 0) + 1);
+  }
+  let tbdDate: string | null = null;
+  let maxOnDate = 0;
+  for (const [d, c] of dateCount) {
+    if (c > maxOnDate) {
+      maxOnDate = c;
+      tbdDate = d;
+    }
+  }
+  if (maxOnDate < 10) tbdDate = null; // only a real cluster counts as a placeholder
+
+  const totalParticipants = parts.length;
+  const schools = new Set(parts.map((p) => p.school_name).filter((s) => s && s !== "")).size;
+  const isLive = (s: string | null) => s === "day1_live" || s === "day2_live";
+
+  const zones = YI_ZONES.map((z) => {
+    const zEvents = events.filter((e) => e.zone === z.code);
+    const ids = new Set(zEvents.map((e) => e.id));
+    const chapters = new Set(zEvents.map((e) => e.chapter_name).filter(Boolean));
+    const zParts = parts.filter((p) => ids.has(p.event_id)).length;
+    return {
+      code: z.code,
+      label: z.label,
+      events: zEvents.length,
+      chapters: chapters.size,
+      participants: zParts,
+      published: zEvents.filter((e) => e.results_published_at !== null).length,
+      sharePct: totalParticipants ? Math.round((zParts / totalParticipants) * 100) : 0,
+      started: zParts > 0,
+    };
+  }).sort((a, b) => b.events - a.events || b.participants - a.participants);
+
+  const liveEv = events.find((e) => isLive(e.status));
+  const scheduled = events.filter((e) => e.day1_date && e.day1_date !== tbdDate).length;
+
+  const upcoming = events
+    .filter((e) => e.day1_date && e.day1_date >= today && e.day1_date !== tbdDate)
+    .sort((a, b) => (a.day1_date as string).localeCompare(b.day1_date as string))
+    .slice(0, 4)
+    .map((e) => ({
+      id: e.id,
+      name: e.name ?? "Untitled event",
+      label: YI_ZONES.find((z) => z.code === e.zone)?.label ?? "—",
+      day1_date: e.day1_date as string,
+    }));
+
+  return {
+    totals: {
+      zones: YI_ZONES.length,
+      chapters: new Set(events.map((e) => e.chapter_name).filter(Boolean)).size,
+      events: events.length,
+      participants: totalParticipants,
+      schools,
+      published: events.filter((e) => e.results_published_at !== null).length,
+      live: events.filter((e) => isLive(e.status)).length,
+      scheduled,
+      awaitingDates: events.length - scheduled,
+      startedZones: zones.filter((z) => z.started).length,
+    },
+    liveEvent: liveEv ? { id: liveEv.id, name: liveEv.name ?? "Live event" } : null,
+    zones,
+    upcoming,
+  };
+}

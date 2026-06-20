@@ -365,6 +365,7 @@ function JuryScoringClientInner({
       setAllParticipants((prev) => (prev.length > 0 ? prev : b.roster));
       setCurrentSessionId(b.currentSessionId);
       setSelectableSessionIds(b.selectableSessionIds);
+      setAllowEarlierSessions(b.allowEarlierSessions);
       currentAgendaItemRef.current = b.currentAgendaItemId;
 
       // Default the juror's session to the live current session (organiser-

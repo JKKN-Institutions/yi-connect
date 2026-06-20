@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   addParticipant,
+  addParticipantMinimal,
   quickAddWalkIn,
   deleteParticipant,
   setDayCheckIn,
@@ -11,6 +12,7 @@ import {
   markSpeechFinished,
 } from "@/app/yip/actions/participants";
 import { ROLE_LABELS, PARTY_COLORS } from "@/lib/yip/constants";
+import { CONSTITUENCIES } from "@/lib/yip/data/constituencies";
 import { Button } from "@/components/yip/ui/button";
 import { Input } from "@/components/yip/ui/input";
 import { Label } from "@/components/yip/ui/label";
@@ -82,12 +84,19 @@ export function ParticipantsClient({
   participants: initialParticipants,
   allocationLocked,
   canDelete = true,
+  privacyMode = false,
+  nextSerial = 1,
 }: {
   eventId: string;
   participants: Participant[];
   allocationLocked: boolean;
   /** Chair/national/regional only. Organisers cannot delete records. */
   canDelete?: boolean;
+  /** DPDP: privacy-mode event → register by serial + constituency only; the
+   *  full-PII add forms and CSV import are hidden. */
+  privacyMode?: boolean;
+  /** Pre-filled next serial number for minimal registration (max + 1). */
+  nextSerial?: number;
 }) {
   const router = useRouter();
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -216,6 +225,17 @@ export function ParticipantsClient({
     home_state: "",
   });
 
+  // DPDP minimal registration (privacy-mode events): serial + constituency only.
+  const [minimalOpen, setMinimalOpen] = useState(false);
+  const [minimalLoading, setMinimalLoading] = useState(false);
+  const [minimalError, setMinimalError] = useState("");
+  const [minimalResult, setMinimalResult] = useState<{
+    serial_no: number;
+    access_code: string;
+  } | null>(null);
+  const [minimalSerial, setMinimalSerial] = useState<string>(String(nextSerial));
+  const [minimalConstituency, setMinimalConstituency] = useState("");
+
   // Filtered & sorted list
   const displayedParticipants = useMemo(() => {
     let filtered = participants;
@@ -336,6 +356,47 @@ export function ParticipantsClient({
       setQuickError(result.error);
     }
     setQuickLoading(false);
+  }
+
+  async function handleMinimalAdd() {
+    const serial = Number(minimalSerial);
+    if (!Number.isFinite(serial) || serial <= 0) {
+      setMinimalError("Enter a valid serial number");
+      return;
+    }
+
+    setMinimalLoading(true);
+    setMinimalError("");
+    setMinimalResult(null);
+
+    // Derive constituency state from the catalog (constituency name is unique
+    // enough for our seat list); blank constituency is allowed.
+    const name = minimalConstituency.trim();
+    const match = name
+      ? CONSTITUENCIES.find(
+          (c) => c.name.toLowerCase() === name.toLowerCase()
+        )
+      : null;
+
+    const result = await addParticipantMinimal(eventId, {
+      serial_no: serial,
+      constituency_name: match?.name ?? name ?? null,
+      constituency_state: match?.state ?? null,
+    });
+
+    if (result.success) {
+      setMinimalResult({
+        serial_no: result.data.serial_no,
+        access_code: result.data.access_code,
+      });
+      // Reset to the NEXT serial so the organiser can keep adding in sequence.
+      setMinimalSerial(String(result.data.serial_no + 1));
+      setMinimalConstituency("");
+      router.refresh();
+    } else {
+      setMinimalError(result.error);
+    }
+    setMinimalLoading(false);
   }
 
   async function handleDelete(participantId: string) {
@@ -550,7 +611,9 @@ export function ParticipantsClient({
             </Button>
           )}
 
-          <CsvImport eventId={eventId} onImported={() => router.refresh()} />
+          {!privacyMode && (
+            <CsvImport eventId={eventId} onImported={() => router.refresh()} />
+          )}
 
           <Button variant="outline" size="sm" onClick={handleExportCsv}>
             <Download className="size-4" />
@@ -564,9 +627,10 @@ export function ParticipantsClient({
               WhatsAppSendCodes component is kept for when the bridge is fixed. */}
           <EmailSendCodes eventId={eventId} />
 
-          {/* Quick Add Walk-in — create a single late arrival and auto-assign
-              party + constituency + committee in one click. Works even after
-              allocation is locked (writes one row; never re-runs the engine). */}
+          {/* DPDP: privacy-mode events register by serial + constituency only —
+              the full-PII Walk-in and Add Student forms are hidden and replaced
+              by the minimal add dialog below. */}
+          {!privacyMode && (
           <Dialog
             open={quickOpen}
             onOpenChange={(open) => {
@@ -742,7 +806,9 @@ export function ParticipantsClient({
               </DialogFooter>
             </DialogContent>
           </Dialog>
+          )}
 
+          {!privacyMode && (
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger
               render={
@@ -899,6 +965,116 @@ export function ParticipantsClient({
               </DialogFooter>
             </DialogContent>
           </Dialog>
+          )}
+
+          {/* DPDP minimal registration — privacy-mode events only. Collects a
+              serial number + constituency; NO name / school / contact. The
+              participant is created already anonymised. */}
+          {privacyMode && (
+            <Dialog
+              open={minimalOpen}
+              onOpenChange={(open) => {
+                setMinimalOpen(open);
+                if (!open) {
+                  setMinimalError("");
+                  setMinimalResult(null);
+                }
+              }}
+            >
+              <DialogTrigger
+                render={
+                  <Button
+                    className="bg-[#FF9933] text-white hover:bg-[#E68A2E]"
+                    size="sm"
+                  />
+                }
+              >
+                <UserPlus className="size-4" />
+                Add Participant
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Add Participant</DialogTitle>
+                  <DialogDescription>
+                    Privacy mode — register by serial number and constituency
+                    only. No name, school or contact details are collected.
+                  </DialogDescription>
+                </DialogHeader>
+
+                {minimalError && (
+                  <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700">
+                    {minimalError}
+                  </div>
+                )}
+
+                {minimalResult && (
+                  <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-xs text-green-800">
+                    <p className="font-medium">
+                      Participant {minimalResult.serial_no} added.
+                    </p>
+                    <p className="mt-1.5">
+                      Access code:{" "}
+                      <code className="rounded bg-white px-1 py-0.5 font-mono">
+                        {minimalResult.access_code}
+                      </code>
+                    </p>
+                  </div>
+                )}
+
+                <div className="space-y-3">
+                  <div>
+                    <Label htmlFor="minimal-serial">Serial No. *</Label>
+                    <Input
+                      id="minimal-serial"
+                      type="number"
+                      min={1}
+                      value={minimalSerial}
+                      onChange={(e) => setMinimalSerial(e.target.value)}
+                      placeholder="Serial number"
+                    />
+                    <p className="mt-1 text-[11px] text-gray-400">
+                      Auto-suggested as the next number — edit if needed.
+                    </p>
+                  </div>
+                  <div>
+                    <Label htmlFor="minimal-constituency">Constituency</Label>
+                    <Input
+                      id="minimal-constituency"
+                      list="minimal-constituency-list"
+                      value={minimalConstituency}
+                      onChange={(e) => setMinimalConstituency(e.target.value)}
+                      placeholder="Constituency (optional)"
+                    />
+                    <datalist id="minimal-constituency-list">
+                      {CONSTITUENCIES.map((c) => (
+                        <option key={`${c.name}|${c.state}`} value={c.name}>
+                          {c.name}, {c.state}
+                        </option>
+                      ))}
+                    </datalist>
+                  </div>
+                </div>
+
+                <DialogFooter>
+                  <DialogClose render={<Button variant="outline" />}>
+                    Done
+                  </DialogClose>
+                  <Button
+                    className="bg-[#FF9933] text-white hover:bg-[#E68A2E]"
+                    onClick={handleMinimalAdd}
+                    disabled={minimalLoading}
+                  >
+                    {minimalLoading ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <UserPlus className="size-4" />
+                    )}
+                    {minimalLoading ? "Adding..." : "Add Participant"}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          )}
         </div>
       </div>
 

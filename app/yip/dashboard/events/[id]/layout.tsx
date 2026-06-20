@@ -61,7 +61,11 @@ export default async function EventLayout({
           {/* Sub-tab strip for merged sections (Participants/Registrations,
               Volunteers/YUVA, Scoring/Committee Scores, Proceedings). Renders
               only on those routes. */}
-          <EventSectionSubTabs eventId={id} canViewScores={access.canViewScores} />
+          <EventSectionSubTabs
+            eventId={id}
+            canViewScores={access.canViewScores}
+            privacyMode={event.privacy_mode ?? false}
+          />
           {children}
         </div>
       </div>

@@ -440,23 +440,7 @@ export function AllocationClient({
               style={{ width: `${rulingPct}%` }}
             />
           </div>
-          <div className="mt-3 space-y-1">
-            {/* Show schools in ruling */}
-            {(() => {
-              const schools = new Map<string, number>();
-              ruling.forEach((p) => {
-                schools.set(p.school_name, (schools.get(p.school_name) || 0) + 1);
-              });
-              return [...schools.entries()]
-                .sort((a, b) => b[1] - a[1])
-                .map(([school, count]) => (
-                  <div key={school} className="flex justify-between text-xs text-blue-800">
-                    <span className="truncate">{school}</span>
-                    <span className="ml-2 shrink-0 font-medium">{count}</span>
-                  </div>
-                ));
-            })()}
-          </div>
+          {/* School breakdown removed — school is never shown in the platform. */}
         </div>
 
         {/* Opposition */}
@@ -475,22 +459,7 @@ export function AllocationClient({
               style={{ width: `${oppositionPct}%` }}
             />
           </div>
-          <div className="mt-3 space-y-1">
-            {(() => {
-              const schools = new Map<string, number>();
-              opposition.forEach((p) => {
-                schools.set(p.school_name, (schools.get(p.school_name) || 0) + 1);
-              });
-              return [...schools.entries()]
-                .sort((a, b) => b[1] - a[1])
-                .map(([school, count]) => (
-                  <div key={school} className="flex justify-between text-xs text-red-800">
-                    <span className="truncate">{school}</span>
-                    <span className="ml-2 shrink-0 font-medium">{count}</span>
-                  </div>
-                ));
-            })()}
-          </div>
+          {/* School breakdown removed — school is never shown in the platform. */}
         </div>
       </div>
 
@@ -506,7 +475,6 @@ export function AllocationClient({
               <TableRow>
                 <TableHead>Role</TableHead>
                 <TableHead>Name</TableHead>
-                <TableHead>School</TableHead>
                 <TableHead>Class</TableHead>
                 <TableHead>Party</TableHead>
                 <TableHead>Ministry</TableHead>
@@ -918,9 +886,6 @@ function LeaderRow({
         </Badge>
       </TableCell>
       <TableCell className="font-medium">{participant.full_name}</TableCell>
-      <TableCell className="text-xs text-gray-600">
-        {participant.school_name}
-      </TableCell>
       <TableCell>{participant.class}</TableCell>
       <TableCell>
         {participant.party_side ? (
@@ -1035,9 +1000,7 @@ function EditAssignmentDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Edit Assignment</DialogTitle>
-          <DialogDescription>
-            {participant.full_name} - {participant.school_name}
-          </DialogDescription>
+          <DialogDescription>{participant.full_name}</DialogDescription>
         </DialogHeader>
 
         {saving && (

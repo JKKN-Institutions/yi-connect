@@ -20,6 +20,7 @@ type VotesTable = {
   select: (cols: string) => VotesTable;
   insert: (row: Record<string, unknown>) => Promise<{ error: VotesPgError | null }>;
   eq: (col: string, val: unknown) => VotesTable;
+  in: (col: string, vals: readonly unknown[]) => VotesTable;
   maybeSingle: () => Promise<{ data: VotesRaw | null; error: VotesPgError | null }>;
   single: () => Promise<{ data: VotesRaw | null; error: VotesPgError | null }>;
   then: Promise<{ data: VotesRaw[] | null; error: VotesPgError | null }>["then"];
@@ -62,6 +63,9 @@ export interface FloorPanel {
   volunteers: FloorVolunteerCount[];
   pending: FloorPendingParticipant[];
   manualEntries: FloorManualEntry[];
+  // BUG-394: per-event switch — when true the organiser may apply one choice to
+  // many not-yet-voted participants at once ("show of hands").
+  allowBulk: boolean;
 }
 
 // ─── Internal: load session + gate organiser-control ────────────
@@ -214,6 +218,13 @@ export async function getFloorPanel(
     })
     .sort((a, b) => (a.serialNo ?? Infinity) - (b.serialNo ?? Infinity));
 
+  // Per-event bulk "show of hands" switch (BUG-394).
+  const { data: ev } = await service
+    .from("events")
+    .select("allow_bulk_floor_votes")
+    .eq("id", session.event_id)
+    .maybeSingle();
+
   return {
     success: true,
     data: {
@@ -223,6 +234,7 @@ export async function getFloorPanel(
       volunteers: volunteerSummary,
       pending,
       manualEntries,
+      allowBulk: Boolean(ev?.allow_bulk_floor_votes),
     },
   };
 }
@@ -301,6 +313,159 @@ export async function castFloorVote(
   }
 
   return { success: true, data: { status: "success" } };
+}
+
+// ─── 2b. Organizer bulk roll-call ("show of hands") ─────────────
+// Apply ONE vote value to many not-yet-voted participants at once. Gated by the
+// per-event allow_bulk_floor_votes switch. Never invents a vote: skips students
+// who aren't checked in for the day or who already voted — same rules as the
+// single roll-call path. Returns a per-bucket summary so the UI can report it.
+
+export async function castBulkFloorVotes(
+  sessionId: string,
+  participantIds: string[],
+  voteValue: string
+): Promise<
+  ActionResult<{
+    recorded: number;
+    skippedAlreadyVoted: number;
+    skippedNotCheckedIn: number;
+    skippedInvalid: number;
+  }>
+> {
+  const gated = await loadGatedSession(sessionId);
+  if (!gated.ok) return { success: false, error: gated.error };
+  const { session, uid } = gated;
+
+  if (session.status !== "open") {
+    return { success: false, error: "Voting is closed for this session." };
+  }
+
+  const valid = validateVoteValue(session, voteValue);
+  if (!valid.ok) return { success: false, error: valid.error };
+
+  const ids = Array.from(new Set(participantIds)).filter(Boolean);
+  if (ids.length === 0) {
+    return { success: false, error: "No participants selected." };
+  }
+
+  const service = await createServiceClient();
+
+  // Server-side gate: bulk entry must be enabled for this event.
+  const { data: ev } = await service
+    .from("events")
+    .select("allow_bulk_floor_votes")
+    .eq("id", session.event_id)
+    .maybeSingle();
+  if (!ev?.allow_bulk_floor_votes) {
+    return {
+      success: false,
+      error: "Bulk vote entry is not enabled for this event.",
+    };
+  }
+
+  // The day the check-in flag must match (the vote's agenda item day).
+  let day: number | null = null;
+  if (session.agenda_item_id) {
+    const { data: item } = await service
+      .from("agenda")
+      .select("day")
+      .eq("id", session.agenda_item_id)
+      .maybeSingle();
+    day = item?.day ?? null;
+  }
+
+  // Batch reads: participants of this event + who already voted in this session.
+  const [partsRes, votedRes] = await Promise.all([
+    service
+      .from("participants")
+      .select("id, checked_in, checked_in_day1, checked_in_day2")
+      .eq("event_id", session.event_id)
+      .in("id", ids),
+    votesTable(service)
+      .select("participant_id")
+      .eq("session_id", session.id)
+      .in("participant_id", ids),
+  ]);
+
+  const partsById = new Map(
+    (partsRes.data ?? []).map((p) => [p.id as string, p])
+  );
+  const alreadyVoted = new Set(
+    (votedRes.data ?? []).map(
+      (v) => (v as { participant_id: string }).participant_id
+    )
+  );
+
+  let recorded = 0;
+  let skippedAlreadyVoted = 0;
+  let skippedNotCheckedIn = 0;
+  let skippedInvalid = 0;
+
+  for (const id of ids) {
+    const p = partsById.get(id);
+    if (!p) {
+      skippedInvalid += 1;
+      continue;
+    }
+    if (alreadyVoted.has(id)) {
+      skippedAlreadyVoted += 1;
+      continue;
+    }
+    const present =
+      day === 1
+        ? !!p.checked_in_day1
+        : day === 2
+          ? !!p.checked_in_day2
+          : !!p.checked_in;
+    if (!present) {
+      skippedNotCheckedIn += 1;
+      continue;
+    }
+
+    // Per-row insert (race-safe): a concurrent vote → 23505 → counted as
+    // already-voted, never aborts the rest of the batch.
+    const { error } = await votesTable(service).insert({
+      event_id: session.event_id,
+      agenda_item_id: session.agenda_item_id,
+      session_id: session.id,
+      participant_id: id,
+      vote_type: session.vote_type,
+      vote_value: voteValue,
+      entry_method: "organizer",
+      recorded_by_user: uid,
+    });
+    if (error) {
+      if (error.code === "23505") skippedAlreadyVoted += 1;
+      else skippedInvalid += 1;
+      continue;
+    }
+    recorded += 1;
+  }
+
+  return {
+    success: true,
+    data: { recorded, skippedAlreadyVoted, skippedNotCheckedIn, skippedInvalid },
+  };
+}
+
+// ─── 2c. Organizer: enable/disable bulk show-of-hands (per event) ───
+
+export async function setAllowBulkFloorVotes(
+  eventId: string,
+  allow: boolean
+): Promise<ActionResult> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
+  const service = await createServiceClient();
+  const { error } = await service
+    .from("events")
+    .update({ allow_bulk_floor_votes: allow })
+    .eq("id", eventId);
+  if (error) return { success: false, error: error.message };
+  return { success: true, data: null };
 }
 
 // ─── 3. Correct a manual entry (audited) ────────────────────────

@@ -867,6 +867,7 @@ function JuryScoringClientInner({
               })}
             </select>
             {lockedCount > 0 &&
+              allowEarlierSessions &&
               (showAllSessions ? (
                 <button
                   type="button"

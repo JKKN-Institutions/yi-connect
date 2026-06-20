@@ -12,6 +12,8 @@ import { Loader2, Save, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
 import { EventDangerZone } from "@/components/yip/event-danger-zone";
+import { Switch } from "@/components/yip/ui/switch";
+import { setAllowBulkFloorVotes } from "@/app/yip/actions/vote-floor";
 
 const LEVEL_OPTIONS = [
   { value: "chapter", label: "Chapter Level" },
@@ -57,6 +59,12 @@ export default function EditEventPage() {
 
   const [chapterGroups, setChapterGroups] = useState<ChapterGroup[]>([]);
 
+  // Per-event "bulk show of hands" floor-vote setting. Mirrors the in-vote
+  // Floor Capture toggle, but lets organisers pre-enable it here before any
+  // vote is open. Writes immediately via setAllowBulkFloorVotes.
+  const [allowBulk, setAllowBulk] = useState(false);
+  const [allowBulkBusy, setAllowBulkBusy] = useState(false);
+
   const [form, setForm] = useState<EditFormData>({
     name: "",
     level: "chapter",
@@ -98,6 +106,14 @@ export default function EditEventPage() {
         venue_address: event.venue_address ?? "",
         central_agenda: event.central_agenda ?? "",
       });
+      // Column exists in the DB but lags the generated types — read it through
+      // a narrow cast so tsc stays green on the main tree.
+      setAllowBulk(
+        Boolean(
+          (event as { allow_bulk_floor_votes?: boolean | null })
+            .allow_bulk_floor_votes
+        )
+      );
       setLoading(false);
     }
     load();
@@ -196,6 +212,23 @@ export default function EditEventPage() {
     }
 
     setSaving(false);
+  }
+
+  // Flip the per-event bulk "show of hands" setting. Reuses the existing
+  // event-scoped server action (gated by getYipEventAccess(...).canManage),
+  // so it saves on toggle, independent of the Save button.
+  async function handleToggleAllowBulk(next: boolean) {
+    setAllowBulkBusy(true);
+    const res = await setAllowBulkFloorVotes(eventId, next);
+    setAllowBulkBusy(false);
+    if (!res.success) {
+      toast.error(res.error);
+      return;
+    }
+    setAllowBulk(next);
+    toast.success(
+      next ? "Bulk show-of-hands enabled" : "Bulk show-of-hands disabled"
+    );
   }
 
   if (loading) {
@@ -368,6 +401,36 @@ export default function EditEventPage() {
               value={form.central_agenda}
               onChange={(e) => updateField("central_agenda", e.target.value)}
               rows={3}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Floor Voting — per-event bulk "show of hands". Saves immediately via
+          the same action as the in-vote Floor Capture toggle; independent of
+          the Save button below. */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Floor Voting</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-start justify-between gap-4">
+            <div className="space-y-1">
+              <Label htmlFor="allow_bulk_floor_votes" className="cursor-pointer">
+                Enable bulk &ldquo;show of hands&rdquo;
+              </Label>
+              <p className="text-xs text-gray-500">
+                Lets organisers record a whole show-of-hands result in one action
+                during a floor vote, instead of marking each member one by one.
+                This can also be switched on from inside an open vote. Saved
+                immediately.
+              </p>
+            </div>
+            <Switch
+              id="allow_bulk_floor_votes"
+              checked={allowBulk}
+              onCheckedChange={handleToggleAllowBulk}
+              disabled={allowBulkBusy}
             />
           </div>
         </CardContent>

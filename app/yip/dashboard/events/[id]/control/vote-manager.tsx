@@ -28,6 +28,7 @@ import {
   Search,
   Pencil,
   Loader2,
+  Check,
 } from "lucide-react";
 import { Input } from "@/components/yip/ui/input";
 import { Textarea } from "@/components/yip/ui/textarea";
@@ -62,6 +63,8 @@ import {
 import {
   getFloorPanel,
   castFloorVote,
+  castBulkFloorVotes,
+  setAllowBulkFloorVotes,
   correctFloorVote,
   type FloorPanel,
   type FloorPendingParticipant,
@@ -906,6 +909,7 @@ export function VoteManager({
             {/* Floor capture — manual roll-call entry, only while open */}
             {isOpen && (
               <FloorCapture
+                eventId={eventId}
                 sessionId={voteSession.id}
                 voteType={voteSession.vote_type}
                 candidates={candidates}
@@ -1102,6 +1106,7 @@ export function VoteManager({
 // ─── Floor Capture (manual roll-call + corrections, organiser-only) ──
 
 interface FloorCaptureProps {
+  eventId: string;
   sessionId: string;
   voteType: string;
   candidates: VoteCandidate[];
@@ -1117,11 +1122,17 @@ const BILL_CHOICES: Array<{ value: string; label: string; cls: string }> = [
   },
 ];
 
-function FloorCapture({ sessionId, voteType, candidates }: FloorCaptureProps) {
+function FloorCapture({ eventId, sessionId, voteType, candidates }: FloorCaptureProps) {
   const [panel, setPanel] = useState<FloorPanel | null>(null);
   const [rollOpen, setRollOpen] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
   const [search, setSearch] = useState("");
+
+  // Bulk "show of hands" (BUG-394): gated by the per-event allowBulk switch.
+  const [bulkMode, setBulkMode] = useState(false);
+  const [bulkSelected, setBulkSelected] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [allowBulkBusy, setAllowBulkBusy] = useState(false);
 
   // Pending row currently awaiting one-tap confirm: participantId + chosen value.
   const [confirming, setConfirming] = useState<{
@@ -1210,6 +1221,61 @@ function FloorCapture({ sessionId, voteType, candidates }: FloorCaptureProps) {
     }
   }
 
+  // ── Bulk "show of hands" handlers (BUG-394) ──
+  async function handleToggleAllowBulk(next: boolean) {
+    setAllowBulkBusy(true);
+    const res = await setAllowBulkFloorVotes(eventId, next);
+    setAllowBulkBusy(false);
+    if (!res.success) {
+      toast.error(res.error);
+      return;
+    }
+    if (!next) {
+      setBulkMode(false);
+      setBulkSelected(new Set());
+    }
+    toast.success(
+      next ? "Bulk show-of-hands enabled" : "Bulk show-of-hands disabled"
+    );
+    void refresh();
+  }
+
+  function toggleBulkSelect(id: string) {
+    setBulkSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function handleApplyBulk(value: string) {
+    const ids = [...bulkSelected];
+    if (ids.length === 0) {
+      toast.error("Select at least one student first");
+      return;
+    }
+    setBulkBusy(true);
+    const res = await castBulkFloorVotes(sessionId, ids, value);
+    setBulkBusy(false);
+    if (!res.success) {
+      toast.error(res.error);
+      return;
+    }
+    const { recorded, skippedAlreadyVoted, skippedNotCheckedIn } = res.data;
+    const skips: string[] = [];
+    if (skippedAlreadyVoted) skips.push(`${skippedAlreadyVoted} already voted`);
+    if (skippedNotCheckedIn)
+      skips.push(`${skippedNotCheckedIn} not checked in`);
+    toast.success(
+      `Recorded ${recorded} ${labelForValue(value)} vote${
+        recorded === 1 ? "" : "s"
+      }` + (skips.length ? ` · skipped ${skips.join(", ")}` : "")
+    );
+    setBulkSelected(new Set());
+    void refresh();
+  }
+
   function openEdit(entry: FloorManualEntry) {
     setEditEntry(entry);
     setEditValue(entry.voteValue);
@@ -1241,7 +1307,16 @@ function FloorCapture({ sessionId, voteType, candidates }: FloorCaptureProps) {
 
   if (!panel) return null;
 
-  const { turnout, channels, volunteers, pending, manualEntries } = panel;
+  const { turnout, channels, volunteers, pending, manualEntries, allowBulk } =
+    panel;
+  // Bulk picker options: candidate buttons for candidate ballots, else aye/nay/abstain.
+  const bulkChoices = isCandidateBallot
+    ? candidates.map((c) => ({
+        value: c.id,
+        label: c.full_name,
+        cls: "bg-[#FF9933] hover:bg-[#e88a2e] text-white",
+      }))
+    : BILL_CHOICES;
   const pct =
     turnout.eligible > 0
       ? Math.min((turnout.cast / turnout.eligible) * 100, 100)
@@ -1337,12 +1412,128 @@ function FloorCapture({ sessionId, voteType, candidates }: FloorCaptureProps) {
               />
             </div>
 
+            {/* Bulk "show of hands" controls (BUG-394) — per-event gated */}
+            {!allowBulk ? (
+              <button
+                type="button"
+                onClick={() => handleToggleAllowBulk(true)}
+                disabled={allowBulkBusy}
+                className="text-xs font-medium text-blue-600 underline hover:text-blue-700 disabled:opacity-50"
+              >
+                Enable bulk &ldquo;show of hands&rdquo; entry
+              </button>
+            ) : (
+              <div className="flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBulkMode((m) => !m);
+                    setBulkSelected(new Set());
+                  }}
+                  className={`rounded-md border px-2.5 py-1 text-xs font-semibold ${
+                    bulkMode
+                      ? "border-[#FF9933] bg-[#FF9933]/10 text-[#994d00]"
+                      : "border-gray-200 text-gray-700 hover:bg-gray-50"
+                  }`}
+                >
+                  {bulkMode ? "Bulk select: ON" : "Bulk select"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleToggleAllowBulk(false)}
+                  disabled={allowBulkBusy}
+                  className="text-xs text-gray-400 underline hover:text-gray-600 disabled:opacity-50"
+                >
+                  Turn off bulk
+                </button>
+              </div>
+            )}
+
             {filteredPending.length === 0 ? (
               <p className="py-3 text-center text-xs text-muted-foreground">
                 {pending.length === 0
                   ? "Everyone has voted."
                   : "No matches."}
               </p>
+            ) : bulkMode && allowBulk ? (
+              <>
+                <div className="flex items-center justify-between px-1 text-xs text-gray-500">
+                  <span>{bulkSelected.size} selected</span>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      className="underline hover:text-gray-700"
+                      onClick={() =>
+                        setBulkSelected(
+                          new Set(filteredPending.map((p) => p.participantId))
+                        )
+                      }
+                    >
+                      Select all ({filteredPending.length})
+                    </button>
+                    <button
+                      type="button"
+                      className="underline hover:text-gray-700"
+                      onClick={() => setBulkSelected(new Set())}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+                <div className="max-h-60 space-y-1 overflow-y-auto">
+                  {filteredPending.map((p) => {
+                    const checked = bulkSelected.has(p.participantId);
+                    return (
+                      <button
+                        key={p.participantId}
+                        type="button"
+                        onClick={() => toggleBulkSelect(p.participantId)}
+                        className={`flex w-full items-center gap-2 rounded-md border px-2.5 py-1.5 text-left text-sm ${
+                          checked
+                            ? "border-[#138808] bg-[#138808]/10"
+                            : "border-gray-200 hover:bg-gray-50"
+                        }`}
+                      >
+                        <span
+                          className={`flex size-4 shrink-0 items-center justify-center rounded border ${
+                            checked
+                              ? "border-[#138808] bg-[#138808] text-white"
+                              : "border-gray-300"
+                          }`}
+                        >
+                          {checked && <Check className="size-3" />}
+                        </span>
+                        <span className="text-gray-400">
+                          {p.serialNo ?? "—"}
+                        </span>
+                        <span className="truncate text-gray-900">
+                          {p.fullName}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                {/* Apply bar */}
+                <div className="sticky bottom-0 flex flex-wrap items-center gap-2 border-t bg-white pt-2">
+                  <span className="text-xs text-gray-500">
+                    Apply to {bulkSelected.size}:
+                  </span>
+                  {bulkChoices.map((c) => (
+                    <button
+                      key={c.value}
+                      type="button"
+                      disabled={bulkBusy || bulkSelected.size === 0}
+                      onClick={() => handleApplyBulk(c.value)}
+                      className={`rounded-md px-2.5 py-1 text-xs font-semibold disabled:opacity-40 ${c.cls}`}
+                    >
+                      {c.label}
+                    </button>
+                  ))}
+                  {bulkBusy && (
+                    <Loader2 className="size-3.5 animate-spin text-gray-400" />
+                  )}
+                </div>
+              </>
             ) : (
               <div className="max-h-72 space-y-1 overflow-y-auto">
                 {filteredPending.map((p) => (

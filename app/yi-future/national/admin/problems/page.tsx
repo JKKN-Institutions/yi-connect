@@ -49,6 +49,66 @@ async function getProblems(trackId: string): Promise<Problem[]> {
   return (data as unknown as Problem[]) ?? [];
 }
 
+type TractionRow = {
+  problemId: string;
+  title: string;
+  trackName: string;
+  teams: number;
+  participants: number;
+};
+
+// Per-problem traction across the active edition: how many teams picked each
+// problem, and how many students are working on it (sum of team members).
+async function getProblemTraction(editionId: string): Promise<TractionRow[]> {
+  const svc = await createServiceClient();
+  const [{ data: teamsData }, { data: probData }] = await Promise.all([
+    svc
+      .schema("future")
+      .from("teams")
+      .select("id, problem_statement_id, team_members(delegate_id)")
+      .eq("edition_id", editionId),
+    svc
+      .schema("future")
+      .from("problem_statements")
+      .select("id, title, is_active, tracks!inner(name, edition_id)")
+      .eq("is_active", true)
+      .eq("tracks.edition_id", editionId),
+  ]);
+
+  const teams = (teamsData ?? []) as unknown as {
+    id: string;
+    problem_statement_id: string | null;
+    team_members: { delegate_id: string }[];
+  }[];
+  const problems = (probData ?? []) as unknown as {
+    id: string;
+    title: string;
+    tracks: { name: string } | null;
+  }[];
+
+  const byProblem = new Map<string, { teams: number; participants: number }>();
+  for (const t of teams) {
+    if (!t.problem_statement_id) continue;
+    const cur = byProblem.get(t.problem_statement_id) ?? {
+      teams: 0,
+      participants: 0,
+    };
+    cur.teams += 1;
+    cur.participants += t.team_members?.length ?? 0;
+    byProblem.set(t.problem_statement_id, cur);
+  }
+
+  return problems
+    .map((p) => ({
+      problemId: p.id,
+      title: p.title,
+      trackName: p.tracks?.name ?? "—",
+      teams: byProblem.get(p.id)?.teams ?? 0,
+      participants: byProblem.get(p.id)?.participants ?? 0,
+    }))
+    .sort((a, b) => b.teams - a.teams || b.participants - a.participants);
+}
+
 async function removeProblem(formData: FormData) {
   "use server";
   const id = String(formData.get("id") ?? "");
@@ -81,6 +141,14 @@ export default async function ProblemsPage({
     tracks[0];
   const problems = selected ? await getProblems(selected.id) : [];
 
+  const activeEditionId =
+    tracks.find((t) => t.editions?.is_active)?.edition_id ??
+    selected?.edition_id ??
+    null;
+  const traction = activeEditionId
+    ? await getProblemTraction(activeEditionId)
+    : [];
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
@@ -103,6 +171,58 @@ export default async function ProblemsPage({
       {!isPlatform && (
         <div className="rounded-md border border-navy/15 bg-navy/5 px-4 py-3 text-xs text-navy/70">
           View only — only Platform admins can edit structural config.
+        </div>
+      )}
+
+      {/* Problem traction — which problems teams are picking, ranked */}
+      {traction.length > 0 && (
+        <div className="bg-white border border-navy/10 rounded-lg overflow-hidden">
+          <div className="px-4 py-3 bg-navy/5 border-b border-navy/10">
+            <div className="font-bold text-navy">Problem traction</div>
+            <div className="text-xs text-navy/50">
+              Teams and participants per problem across all chapters · ranked by
+              most teams
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="text-navy/60">
+                <tr className="border-b border-navy/10">
+                  <th className="text-left px-4 py-2 font-semibold w-8">#</th>
+                  <th className="text-left px-4 py-2 font-semibold">Problem</th>
+                  <th className="text-left px-4 py-2 font-semibold">Track</th>
+                  <th className="text-right px-4 py-2 font-semibold">Teams</th>
+                  <th className="text-right px-4 py-2 font-semibold">
+                    Participants
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {traction.map((row, i) => (
+                  <tr
+                    key={row.problemId}
+                    className="border-t border-navy/5 hover:bg-navy/[0.015]"
+                  >
+                    <td className="px-4 py-2 text-navy/40 font-mono text-xs">
+                      {i + 1}
+                    </td>
+                    <td className="px-4 py-2 font-semibold text-navy">
+                      {row.title}
+                    </td>
+                    <td className="px-4 py-2 text-navy/60 text-xs">
+                      {row.trackName}
+                    </td>
+                    <td className="px-4 py-2 text-right font-bold text-navy tabular-nums">
+                      {row.teams}
+                    </td>
+                    <td className="px-4 py-2 text-right font-bold text-navy tabular-nums">
+                      {row.participants}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 

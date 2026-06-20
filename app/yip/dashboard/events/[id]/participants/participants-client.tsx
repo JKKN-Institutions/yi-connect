@@ -592,7 +592,7 @@ export function ParticipantsClient({
                 }
               >
                 <Download className="size-4" />
-                Download schools (one-time)
+                Download roster (one-time)
               </DialogTrigger>
               <DialogContent className="sm:max-w-md">
                 <DialogHeader>

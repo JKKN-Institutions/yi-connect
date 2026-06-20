@@ -35,16 +35,10 @@ export default async function ParticipantsPage({
 
   const access = await getYipEventAccess(id);
 
-  // School is collected only to balance the allocation and is NEVER shown in the
-  // platform. Compute the one-time-export availability server-side, then strip
-  // school from the client payload entirely (the export reads it server-side).
-  const hasSchoolData = participants.some(
-    (p) => (p.school_name ?? "").trim() !== ""
-  );
-  const schoolExportDownloaded = Boolean(
-    (event as { school_export_downloaded_at?: string | null })
-      .school_export_downloaded_at
-  );
+  // The balancing field is collected only to spread parties + committees and is
+  // NEVER shown in the platform — strip it from the client payload entirely (the
+  // roster export reads it server-side; it is purged only when the event's PII is
+  // removed at close-out).
   const safeParticipants = participants.map((p) => ({ ...p, school_name: "" }));
 
   return (
@@ -54,8 +48,6 @@ export default async function ParticipantsPage({
       allocationLocked={event.allocation_locked ?? false}
       canDelete={access.canDelete}
       canManage={access.canManage}
-      hasSchoolData={hasSchoolData}
-      schoolExportDownloaded={schoolExportDownloaded}
     />
   );
 }

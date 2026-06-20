@@ -670,6 +670,61 @@ export async function deleteParticipant(
   return { success: true, data: null };
 }
 
+// ─── Delete ALL participants (chapter chair only — full roster reset) ──────
+//
+// A destructive "start over" used when a chapter re-imports a corrected roster.
+// Chair-only (canDelete) and blocked while allocation is locked, mirroring the
+// single-row delete. The client guards it behind a two-step type-to-confirm
+// dialog; this is the authoritative server-side enforcement.
+export async function deleteAllParticipants(
+  eventId: string
+): Promise<ActionResult<{ deleted: number }>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canDelete) {
+    return {
+      success: false,
+      error: "Only the chapter chair can delete all registrants",
+    };
+  }
+  const supabase = await createServiceClient();
+
+  const { data: event } = await supabase
+    .from("events")
+    .select("id, allocation_locked")
+    .eq("id", eventId)
+    .single();
+
+  if (!event) {
+    return { success: false, error: "Event not found" };
+  }
+  if (event.allocation_locked) {
+    return {
+      success: false,
+      error: "Unlock allocation before deleting all registrants.",
+    };
+  }
+
+  const { data: deleted, error } = await supabase
+    .from("participants")
+    .delete()
+    .eq("event_id", eventId)
+    .select("id");
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  await logAuditAction({
+    action_type: "delete",
+    target_table: "participants",
+    target_id: eventId,
+    target_event_id: eventId,
+  });
+  revalidatePath(`/yip/dashboard/events/${eventId}/participants`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/allocation`);
+  return { success: true, data: { deleted: deleted?.length ?? 0 } };
+}
+
 // ─── Two-day check-in (YA2) ───────────────────────────────────────
 // A YIP event runs over two days. Attendance is tracked per day via
 // checked_in_day1 / checked_in_day2; the legacy `checked_in` is kept as the

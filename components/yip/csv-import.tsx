@@ -342,10 +342,9 @@ export function CsvImport({
           const firstRaw = jsonRows[0];
           const keys = Object.keys(firstRaw).map((k) => k.trim().toLowerCase());
           const hasName = COL_ALIASES.name.some((a) => keys.includes(a));
-          const hasSchool = COL_ALIASES.school.some((a) => keys.includes(a));
-          if (!hasName || !hasSchool) {
+          if (!hasName) {
             setParseError(
-              `Excel must have "name" and "school" columns. Found: ${keys.join(", ")}`
+              `Excel must have a "name" column. Found: ${keys.join(", ")}`
             );
             return;
           }
@@ -415,15 +414,7 @@ export function CsvImport({
           const committeeNameIdx = findColIdx(headers, COL_ALIASES.committee_name);
 
           if (nameIdx === -1) {
-            setParseError(
-              'CSV must have a "name" column. Expected columns: name, school, email, parent_mobile'
-            );
-            return;
-          }
-          if (schoolIdx === -1) {
-            setParseError(
-              'CSV must have a "school" column. Expected columns: name, school, email, parent_mobile'
-            );
+            setParseError('CSV must have a "name" column.');
             return;
           }
 
@@ -711,7 +702,6 @@ export function CsvImport({
                           <TableRow>
                             <TableHead className="w-10">#</TableHead>
                             <TableHead>Name</TableHead>
-                            <TableHead>School</TableHead>
                             {showAllocCols && (
                               <>
                                 <TableHead>Party</TableHead>
@@ -735,9 +725,6 @@ export function CsvImport({
                               </TableCell>
                               <TableCell className="text-xs">
                                 {row.name || "--"}
-                              </TableCell>
-                              <TableCell className="text-xs">
-                                {row.school || "--"}
                               </TableCell>
                               {showAllocCols && (
                                 <>

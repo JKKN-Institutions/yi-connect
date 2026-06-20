@@ -6,6 +6,7 @@ import {
   addParticipant,
   quickAddWalkIn,
   deleteParticipant,
+  deleteAllParticipants,
   setDayCheckIn,
   bulkCheckIn,
   markSpeechFinished,
@@ -48,7 +49,7 @@ import {
 } from "lucide-react";
 import { CsvImport } from "@/components/yip/csv-import";
 import { EmailSendCodes } from "@/components/yip/email-send-codes";
-import { exportSchoolRosterOnce } from "@/app/yip/actions/school-export";
+import { exportAllocationRoster } from "@/app/yip/actions/school-export";
 import { toast } from "sonner";
 
 type Participant = {
@@ -85,20 +86,14 @@ export function ParticipantsClient({
   allocationLocked,
   canDelete = true,
   canManage = false,
-  hasSchoolData = false,
-  schoolExportDownloaded = false,
 }: {
   eventId: string;
   participants: Participant[];
   allocationLocked: boolean;
   /** Chair/national/regional only. Organisers cannot delete records. */
   canDelete?: boolean;
-  /** Organiser+ — gates the one-time school export. */
+  /** Organiser+ — gates the roster download and the full-roster reset. */
   canManage?: boolean;
-  /** Any student still carries a school (pre-purge) — gates the export button. */
-  hasSchoolData?: boolean;
-  /** The one-time school export has already run (school purged) for this event. */
-  schoolExportDownloaded?: boolean;
 }) {
   const router = useRouter();
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -110,8 +105,12 @@ export function ParticipantsClient({
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [checkingIn, setCheckingIn] = useState<Set<string>>(new Set());
   const [checkInFilter, setCheckInFilter] = useState<CheckInFilter>("all");
-  const [schoolExportOpen, setSchoolExportOpen] = useState(false);
-  const [schoolExportLoading, setSchoolExportLoading] = useState(false);
+  const [rosterLoading, setRosterLoading] = useState(false);
+  // Full-roster reset (chair only) — two-step type-to-confirm.
+  const [deleteAllOpen, setDeleteAllOpen] = useState(false);
+  const [deleteStage, setDeleteStage] = useState<1 | 2>(1);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deletingAll, setDeletingAll] = useState(false);
   // Optimistic check-in overrides: applied instantly on click so the row
   // flips without waiting for the server action + route refresh (BUG-399/387).
   // Per-day (YA2); the derived `checked_in` is recomputed in the merge below.
@@ -510,12 +509,13 @@ export function ParticipantsClient({
     URL.revokeObjectURL(url);
   }
 
-  // One-time school export → permanent purge. Builds + downloads the CSV from
-  // the server result, then the event's school data is gone for good.
-  async function handleSchoolExport() {
-    setSchoolExportLoading(true);
-    const res = await exportSchoolRosterOnce(eventId);
-    setSchoolExportLoading(false);
+  // Download the current allocation roster (name + party + side + constituency
+  // + committee + role). Re-runnable: re-download after adding late registrants
+  // and re-running allocation. Non-destructive.
+  async function handleDownloadRoster() {
+    setRosterLoading(true);
+    const res = await exportAllocationRoster(eventId);
+    setRosterLoading(false);
     if (!res.success) {
       toast.error(res.error);
       return;
@@ -527,10 +527,23 @@ export function ParticipantsClient({
     a.download = res.data.filename;
     a.click();
     URL.revokeObjectURL(url);
-    setSchoolExportOpen(false);
-    toast.success(
-      `Downloaded ${res.data.count} students with schools. School data has now been permanently deleted from this event.`
-    );
+    toast.success(`Downloaded roster for ${res.data.count} registrants.`);
+  }
+
+  // Full-roster reset (chair only). Deletes every registrant for this event so a
+  // corrected roster can be re-imported. Behind a two-step type-to-confirm.
+  async function handleDeleteAll() {
+    setDeletingAll(true);
+    const res = await deleteAllParticipants(eventId);
+    setDeletingAll(false);
+    if (!res.success) {
+      toast.error(res.error);
+      return;
+    }
+    setDeleteAllOpen(false);
+    setDeleteStage(1);
+    setDeleteConfirmText("");
+    toast.success(`Deleted all ${res.data.deleted} registrants.`);
     router.refresh();
   }
 
@@ -578,59 +591,23 @@ export function ParticipantsClient({
             Export CSV
           </Button>
 
-          {/* One-time school export → permanent purge (organiser+). Shown only
-              while school data still exists and hasn't been exported yet. */}
-          {canManage && hasSchoolData && !schoolExportDownloaded && (
-            <Dialog open={schoolExportOpen} onOpenChange={setSchoolExportOpen}>
-              <DialogTrigger
-                render={
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="border-amber-300 text-amber-700 hover:bg-amber-50"
-                  />
-                }
-              >
+          {/* Download the current allocation roster (organiser+). Re-runnable
+              any time — re-download after adding late registrants and re-running
+              allocation. */}
+          {canManage && initialParticipants.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleDownloadRoster}
+              disabled={rosterLoading}
+            >
+              {rosterLoading ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
                 <Download className="size-4" />
-                Download roster (one-time)
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-md">
-                <DialogHeader>
-                  <DialogTitle>Download roster with schools — one time only</DialogTitle>
-                  <DialogDescription>
-                    School is collected only to balance parties &amp; committees and
-                    is never shown in the platform. This downloads the single copy of
-                    the school&nbsp;↔&nbsp;student mapping (with each student&apos;s
-                    party &amp; committee) as a CSV, then{" "}
-                    <strong>permanently deletes all school data</strong> from this
-                    event. You can do this <strong>once</strong> — afterwards the
-                    schools cannot be recovered or exported again.
-                  </DialogDescription>
-                </DialogHeader>
-                <DialogFooter>
-                  <DialogClose render={<Button variant="outline" />}>
-                    Cancel
-                  </DialogClose>
-                  <Button
-                    className="bg-amber-600 text-white hover:bg-amber-700"
-                    onClick={handleSchoolExport}
-                    disabled={schoolExportLoading}
-                  >
-                    {schoolExportLoading ? (
-                      <>
-                        <Loader2 className="size-4 animate-spin" />
-                        Preparing…
-                      </>
-                    ) : (
-                      <>
-                        <Download className="size-4" />
-                        Download &amp; delete schools
-                      </>
-                    )}
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+              )}
+              Download roster
+            </Button>
           )}
 
           {/* Email each student's access code via Resend — the reliable channel
@@ -785,8 +762,8 @@ export function ParticipantsClient({
                     autoFocus
                   />
                   <p className="mt-1.5 text-[11px] text-gray-400">
-                    The name is the only detail collected — no school, class or
-                    contact. An access code is generated automatically.
+                    The name is the only detail collected. An access code is
+                    generated automatically.
                   </p>
                 </div>
               </div>
@@ -812,6 +789,113 @@ export function ParticipantsClient({
               </DialogFooter>
             </DialogContent>
           </Dialog>
+
+          {/* Full-roster reset — chair only, hidden once allocation is locked
+              (mirrors the per-row delete). Two-step type-to-confirm dialog. */}
+          {canDelete && !allocationLocked && initialParticipants.length > 0 && (
+            <Dialog
+              open={deleteAllOpen}
+              onOpenChange={(open) => {
+                setDeleteAllOpen(open);
+                if (!open) {
+                  setDeleteStage(1);
+                  setDeleteConfirmText("");
+                }
+              }}
+            >
+              <DialogTrigger
+                render={
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-red-300 text-red-700 hover:bg-red-50"
+                  />
+                }
+              >
+                <Trash2 className="size-4" />
+                Delete all
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-md">
+                {deleteStage === 1 ? (
+                  <>
+                    <DialogHeader>
+                      <DialogTitle>
+                        Delete all {initialParticipants.length} registrants?
+                      </DialogTitle>
+                      <DialogDescription>
+                        This permanently removes <strong>every registrant</strong>{" "}
+                        from this event, along with their party, constituency and
+                        committee allocation. This cannot be undone. Use it to clear
+                        the list before re-importing a corrected roster.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                      <DialogClose render={<Button variant="outline" />}>
+                        Cancel
+                      </DialogClose>
+                      <Button
+                        className="bg-red-600 text-white hover:bg-red-700"
+                        onClick={() => setDeleteStage(2)}
+                      >
+                        Continue
+                      </Button>
+                    </DialogFooter>
+                  </>
+                ) : (
+                  <>
+                    <DialogHeader>
+                      <DialogTitle>Final confirmation</DialogTitle>
+                      <DialogDescription>
+                        This will permanently delete all{" "}
+                        {initialParticipants.length} registrants. Type{" "}
+                        <strong>{initialParticipants.length}</strong> below to
+                        confirm.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div>
+                      <Label htmlFor="delete-confirm">
+                        Type {initialParticipants.length} to confirm
+                      </Label>
+                      <Input
+                        id="delete-confirm"
+                        value={deleteConfirmText}
+                        onChange={(e) => setDeleteConfirmText(e.target.value)}
+                        placeholder={String(initialParticipants.length)}
+                        autoFocus
+                      />
+                    </div>
+                    <DialogFooter>
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setDeleteStage(1);
+                          setDeleteConfirmText("");
+                        }}
+                      >
+                        Back
+                      </Button>
+                      <Button
+                        className="bg-red-600 text-white hover:bg-red-700"
+                        onClick={handleDeleteAll}
+                        disabled={
+                          deletingAll ||
+                          deleteConfirmText.trim() !==
+                            String(initialParticipants.length)
+                        }
+                      >
+                        {deletingAll ? (
+                          <Loader2 className="size-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="size-4" />
+                        )}
+                        Permanently delete all
+                      </Button>
+                    </DialogFooter>
+                  </>
+                )}
+              </DialogContent>
+            </Dialog>
+          )}
         </div>
       </div>
 

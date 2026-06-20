@@ -225,6 +225,29 @@ export function ControlPanel({
   const eventStatus = event.status;
   const currentItemId = event.current_agenda_item_id;
 
+  // BUG-393 follow-up: organiser switch — let jurors score earlier sessions.
+  const [juryAllowEarlier, setJuryAllowEarlier] = useState(
+    Boolean(initialEvent.jury_allow_earlier_sessions)
+  );
+  const [juryAllowEarlierSaving, setJuryAllowEarlierSaving] = useState(false);
+
+  async function handleToggleJuryAllowEarlier(next: boolean) {
+    setJuryAllowEarlier(next); // optimistic
+    setJuryAllowEarlierSaving(true);
+    const res = await setJuryAllowEarlierSessions(eventId, next);
+    setJuryAllowEarlierSaving(false);
+    if (!res.success) {
+      setJuryAllowEarlier(!next); // revert
+      toast.error(res.error);
+      return;
+    }
+    toast.success(
+      next
+        ? "Jurors can now score earlier sessions"
+        : "Jurors locked to the current session"
+    );
+  }
+
   // Filter agenda items by active day
   const dayItems = agendaItems.filter((i) => i.day === activeDay);
 

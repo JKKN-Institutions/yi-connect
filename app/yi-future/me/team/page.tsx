@@ -12,6 +12,7 @@ import {
 } from "@/app/yi-future/actions/team-invites";
 import { updateTeamName } from "@/app/yi-future/actions/teams";
 import { TEAM_SIZE_MIN, TEAM_SIZE_MAX } from "@/lib/yi-future/constants";
+import { isInviteExpired } from "@/lib/yi-future/invite-expiry";
 import { TrackIcon, trackIconText } from "@/components/yi-future/TrackIcon";
 import { SubmitButton } from "@/components/yi-future/SubmitButton";
 
@@ -116,11 +117,15 @@ async function getAvailableDelegates(
   const { data: pending } = await (svc as any)
     .schema("future")
     .from("team_invitations")
-    .select("invited_delegate_id")
+    .select("invited_delegate_id, created_at")
     .eq("team_id", teamId)
     .eq("status", "pending");
+  // Only still-valid pending invites count as "invite sent" — an expired one
+  // can be re-sent, so the delegate appears invitable again.
   const pendingIds = new Set(
-    ((pending ?? []) as { invited_delegate_id: string }[]).map((r) => r.invited_delegate_id)
+    ((pending ?? []) as { invited_delegate_id: string; created_at: string }[])
+      .filter((r) => !isInviteExpired(r.created_at))
+      .map((r) => r.invited_delegate_id)
   );
 
   return delegates

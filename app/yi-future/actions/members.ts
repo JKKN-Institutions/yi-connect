@@ -6,20 +6,56 @@ import { createClient, createServiceClient } from "@/lib/yi-future/supabase/serv
 import type { ActionResult } from "./editions";
 import { TEAM_SIZE_MAX } from "@/lib/yi-future/constants";
 import { requireFutureAdmin } from "@/lib/yi-future/auth/require-access";
+import { isInviteExpired } from "@/lib/yi-future/invite-expiry";
+
+// team_invitations isn't in the generated types yet — untyped at the call site.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyClient = any;
 
 async function requireAuth(): Promise<void> {
   await requireFutureAdmin();
 }
 
-// ─── ADD MEMBER ─────────────────────────────────────────────────────
-export async function addMember(
+// ─── INVITE MEMBER (admin) ──────────────────────────────────────────
+// Consent-based: an admin/chair can SEND an invite, but the student must
+// accept it before they join (mirrors the captain's own invite flow). An
+// admin can no longer drop a student straight onto a team — and never onto a
+// locked team. (2026-06-20, Nashik report: a student was placed on a frozen
+// team without accepting, which then blocked them from forming their own.)
+export async function inviteMember(
   teamId: string,
   delegateId: string
 ): Promise<ActionResult> {
   await requireAuth();
   const svc = await createServiceClient();
 
-  // Check current size
+  // Load the team — invited_by is NOT NULL (use the captain) and we must not
+  // target a locked team.
+  const { data: teamRaw } = await svc
+    .schema("future")
+    .from("teams")
+    .select("id, captain_id, leader_delegate_id, is_frozen")
+    .eq("id", teamId)
+    .maybeSingle();
+  const team = teamRaw as {
+    id: string;
+    captain_id: string | null;
+    leader_delegate_id: string | null;
+    is_frozen: boolean | null;
+  } | null;
+  if (!team) return { ok: false, error: "Team not found." };
+  if (team.is_frozen) {
+    return {
+      ok: false,
+      error: "This team is locked — you can't invite new members.",
+    };
+  }
+  const invitedBy = team.captain_id ?? team.leader_delegate_id;
+  if (!invitedBy) {
+    return { ok: false, error: "Set a team captain before inviting members." };
+  }
+
+  // Size check
   const { count } = await svc
     .schema("future")
     .from("team_members")
@@ -32,33 +68,78 @@ export async function addMember(
     };
   }
 
-  // Check this delegate isn't already on a different team (uniq idx exists, but surface a friendly error)
-  const { data: existing } = await svc
+  // Already on a team? (the unique index allows only one team per delegate)
+  const { data: member } = await svc
     .schema("future")
     .from("team_members")
     .select("team_id")
     .eq("delegate_id", delegateId)
     .maybeSingle();
-  if (existing) {
-    const ex = existing as { team_id: string };
-    if (ex.team_id === teamId) {
-      return { ok: false, error: "Already on this team." };
-    }
+  if (member) {
+    const m = member as { team_id: string };
     return {
       ok: false,
-      error: "This delegate is already on another team in this edition.",
+      error:
+        m.team_id === teamId
+          ? "Already on this team."
+          : "This delegate is already on another team in this edition.",
     };
   }
 
-  const { error } = await svc
+  // Create / re-send the invite, respecting UNIQUE(team_id, invited_delegate_id).
+  const { data: existingRaw } = await (svc as AnyClient)
     .schema("future")
-    .from("team_members")
-    .insert({ team_id: teamId, delegate_id: delegateId, role_in_team: "member" });
-  if (error) return { ok: false, error: error.message };
+    .from("team_invitations")
+    .select("id, status, created_at")
+    .eq("team_id", teamId)
+    .eq("invited_delegate_id", delegateId)
+    .maybeSingle();
+  const existing = existingRaw as
+    | { id: string; status: string; created_at: string }
+    | null;
+  if (
+    existing &&
+    existing.status === "pending" &&
+    !isInviteExpired(existing.created_at)
+  ) {
+    return {
+      ok: false,
+      error: "That delegate already has a pending invite to this team.",
+    };
+  }
+
+  const nowIso = new Date().toISOString();
+  if (existing) {
+    const { error } = await (svc as AnyClient)
+      .schema("future")
+      .from("team_invitations")
+      .update({
+        status: "pending",
+        invited_by: invitedBy,
+        created_at: nowIso,
+        responded_at: null,
+      })
+      .eq("id", existing.id);
+    if (error) return { ok: false, error: error.message };
+  } else {
+    const { error } = await (svc as AnyClient)
+      .schema("future")
+      .from("team_invitations")
+      .insert({
+        team_id: teamId,
+        invited_by: invitedBy,
+        invited_delegate_id: delegateId,
+        status: "pending",
+      });
+    if (error) return { ok: false, error: error.message };
+  }
 
   revalidatePath(`/yi-future/chapter/teams/${teamId}`);
-  revalidatePath("/yi-future/me/team");
-  return { ok: true, message: "Member added." };
+  revalidatePath("/yi-future/me/team/invites");
+  return {
+    ok: true,
+    message: "Invitation sent — the student must accept it to join.",
+  };
 }
 
 // ─── REMOVE MEMBER ──────────────────────────────────────────────────

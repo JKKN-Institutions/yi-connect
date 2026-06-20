@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
 import { readSession } from "@/app/yi-future/actions/auth";
 import { respondInvite } from "@/app/yi-future/actions/team-invites";
+import { isInviteExpired } from "@/lib/yi-future/invite-expiry";
 
 type IncomingInvite = {
   id: string;
@@ -174,14 +175,14 @@ export default async function MyInvitesPage() {
                       )}
                     </div>
                   </div>
-                  <StatusBadge status={inv.status} />
+                  <StatusBadge status={inv.status === "pending" && isInviteExpired(inv.created_at) ? "expired" : inv.status} />
                 </div>
                 {inv.message && (
                   <p className="text-sm text-navy/70 italic border-l-2 border-yi-gold/40 pl-3">
                     “{inv.message}”
                   </p>
                 )}
-                {inv.status === "pending" && (
+                {inv.status === "pending" && !isInviteExpired(inv.created_at) && (
                   <div className="flex gap-2 pt-1">
                     <form action={acceptAction}>
                       <input type="hidden" name="invite_id" value={inv.id} />
@@ -239,7 +240,7 @@ export default async function MyInvitesPage() {
                       {fmtDate(inv.created_at)}
                     </div>
                   </div>
-                  <StatusBadge status={inv.status} />
+                  <StatusBadge status={inv.status === "pending" && isInviteExpired(inv.created_at) ? "expired" : inv.status} />
                 </div>
                 {inv.message && (
                   <p className="text-xs text-navy/60 italic">“{inv.message}”</p>

@@ -5,6 +5,7 @@ import { createServiceClient } from "@/lib/yi-future/supabase/server";
 import { readSession } from "@/app/yi-future/actions/auth";
 import { getChapterContext } from "@/lib/yi-future/chapter-context";
 import { TEAM_SIZE_MAX } from "@/lib/yi-future/constants";
+import { INVITE_EXPIRY_DAYS, isInviteExpired } from "@/lib/yi-future/invite-expiry";
 
 // `team_invitations` was added in migration 120 but generated types haven't
 // been regenerated yet — treat the schema client as untyped at the call site.
@@ -179,12 +180,20 @@ export async function sendInvite(input: {
   const { data: existingInvite } = await svc
     .schema("future")
     .from("team_invitations" as AnyClient)
-    .select("id, status")
+    .select("id, status, created_at")
     .eq("team_id", input.teamId)
     .eq("invited_delegate_id", input.toDelegateId)
     .maybeSingle();
-  const existing = existingInvite as { id: string; status: string } | null;
-  if (existing && existing.status === "pending") {
+  const existing = existingInvite as
+    | { id: string; status: string; created_at: string }
+    | null;
+  // A still-valid pending invite blocks a duplicate; an expired one (past the
+  // 7-day window) falls through and is re-sent below with a fresh clock.
+  if (
+    existing &&
+    existing.status === "pending" &&
+    !isInviteExpired(existing.created_at)
+  ) {
     return {
       ok: false,
       error: "You already have a pending invite for that delegate.",
@@ -240,7 +249,7 @@ export async function respondInvite(
   const { data: inviteRaw } = await svc
     .schema("future")
     .from("team_invitations" as AnyClient)
-    .select("id, team_id, invited_delegate_id, status")
+    .select("id, team_id, invited_delegate_id, status, created_at")
     .eq("id", inviteId)
     .maybeSingle();
   const invite = inviteRaw as {
@@ -248,6 +257,7 @@ export async function respondInvite(
     team_id: string;
     invited_delegate_id: string;
     status: string;
+    created_at: string;
   } | null;
   if (!invite) return { ok: false, error: "Invite not found." };
   if (invite.invited_delegate_id !== session.id) {
@@ -258,6 +268,20 @@ export async function respondInvite(
   }
 
   const nowIso = new Date().toISOString();
+
+  // Time-based expiry: a pending invite older than the window can no longer be
+  // acted on. Flip it to "expired" so the UI and future reads stay consistent.
+  if (isInviteExpired(invite.created_at)) {
+    await svc
+      .schema("future")
+      .from("team_invitations" as AnyClient)
+      .update({ status: "expired", responded_at: nowIso } as never)
+      .eq("id", inviteId);
+    return {
+      ok: false,
+      error: `This invite has expired — invites are valid for ${INVITE_EXPIRY_DAYS} days. Ask the team to send you a new one.`,
+    };
+  }
 
   if (response === "declined") {
     const { error } = await svc

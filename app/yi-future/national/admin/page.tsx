@@ -96,7 +96,13 @@ function pushMessage(opts: {
   return `Hi ${chairFirstName}, this is a quick nudge from Yi National.\n\n${chapter} chapter currently has ${count} delegate${count === 1 ? "" : "s"} registered for ${editionName}.\n\nIf you need help recruiting from your colleges, reply here. Your chapter dashboard: ${appUrl}/yi-future/chapter\n\n— Yi National`;
 }
 
-export default async function NationalDashboard() {
+export default async function NationalDashboard({
+  searchParams,
+}: {
+  searchParams: Promise<{ sort?: string }>;
+}) {
+  const { sort } = await searchParams;
+  const sortHigh = sort === "high";
   const edition = await getActiveEdition();
   const chapters = await getAllChapters();
   const delegates = edition ? await getDelegates(edition.id) : [];
@@ -138,7 +144,9 @@ export default async function NationalDashboard() {
     lastReg: lastRegByChapter.get(c.id) ?? null,
   }));
   rows.sort((a, b) => {
-    if (a.count !== b.count) return a.count - b.count;
+    if (a.count !== b.count) {
+      return sortHigh ? b.count - a.count : a.count - b.count;
+    }
     return a.name.localeCompare(b.name);
   });
 
@@ -227,10 +235,34 @@ export default async function NationalDashboard() {
       </div>
 
       <div>
-        <div className="flex items-end justify-between mb-3">
-          <h3 className="text-xs font-semibold uppercase tracking-widest text-navy/50">
-            All chapters · sorted by lowest first
-          </h3>
+        <div className="flex items-end justify-between mb-3 gap-4 flex-wrap">
+          <div className="flex items-center gap-3 flex-wrap">
+            <h3 className="text-xs font-semibold uppercase tracking-widest text-navy/50">
+              All chapters · sorted by {sortHigh ? "highest" : "lowest"} first
+            </h3>
+            <div className="flex items-center gap-1 text-[11px] font-semibold">
+              <Link
+                href="/yi-future/national/admin"
+                className={`px-2 py-0.5 rounded ${
+                  !sortHigh
+                    ? "bg-navy text-ivory"
+                    : "text-navy/60 hover:bg-navy/5 border border-navy/15"
+                }`}
+              >
+                Lowest first
+              </Link>
+              <Link
+                href="/yi-future/national/admin?sort=high"
+                className={`px-2 py-0.5 rounded ${
+                  sortHigh
+                    ? "bg-navy text-ivory"
+                    : "text-navy/60 hover:bg-navy/5 border border-navy/15"
+                }`}
+              >
+                Highest first
+              </Link>
+            </div>
+          </div>
           <p className="text-[11px] text-navy/40">
             Push opens an Email or WhatsApp draft to the chair. You review
             before sending.

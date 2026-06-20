@@ -73,6 +73,7 @@ type Participant = {
 interface AllocationClientProps {
   eventId: string;
   participants: Participant[];
+  parties: { party_number: number | null; name: string; side: string | null }[];
   allocationLocked: boolean;
   customCommittees?: string[];
   rulingPartyCount: number;
@@ -84,12 +85,20 @@ interface AllocationClientProps {
 export function AllocationClient({
   eventId,
   participants,
+  parties,
   allocationLocked,
   customCommittees,
   rulingPartyCount,
   oppositionPartyCount,
 }: AllocationClientProps) {
   const router = useRouter();
+  // Map a participant's party_number → its named party, so the allocation view
+  // can show WHO is in WHICH party (not just a bare number).
+  const partyByNumber = new Map(
+    parties.filter((p) => p.party_number != null).map((p) => [p.party_number, p])
+  );
+  const partyName = (n: number | null): string | null =>
+    n == null ? null : (partyByNumber.get(n)?.name ?? `Party ${n}`);
   const [loading, setLoading] = useState(false);
   const [lockLoading, setLockLoading] = useState(false);
   const [confirmRerun, setConfirmRerun] = useState(false);
@@ -606,6 +615,68 @@ export function AllocationClient({
         </div>
       </div>
 
+      {/* Section: By Party — who is in which named party */}
+      {parties.length > 0 && (
+        <div>
+          <h3 className="mb-3 flex items-center gap-2 text-base font-semibold text-gray-800">
+            <Users className="size-4 text-[#FF9933]" />
+            By Party
+          </h3>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {[...parties]
+              .filter((pt) => pt.party_number != null)
+              .sort((a, b) => (a.party_number ?? 0) - (b.party_number ?? 0))
+              .map((pt) => {
+                const members = participants.filter(
+                  (p) => p.party_number === pt.party_number
+                );
+                return (
+                  <Card key={pt.party_number}>
+                    <CardContent className="p-4">
+                      <div className="mb-2 flex items-center justify-between gap-2">
+                        <span className="text-sm font-semibold text-gray-800">
+                          {pt.name}
+                        </span>
+                        <span className="text-xs text-gray-400">
+                          {pt.side === "ruling"
+                            ? "Ruling"
+                            : pt.side === "opposition"
+                            ? "Opposition"
+                            : ""}{" "}
+                          · {members.length}
+                        </span>
+                      </div>
+                      {members.length === 0 ? (
+                        <p className="text-xs italic text-gray-400">No members</p>
+                      ) : (
+                        <ul className="space-y-0.5">
+                          {members.map((m) => (
+                            <li
+                              key={m.id}
+                              className="flex items-center justify-between gap-2 text-xs"
+                            >
+                              <span className="truncate text-gray-700">
+                                {m.full_name}
+                              </span>
+                              {m.parliament_role &&
+                                m.parliament_role !== "mp" && (
+                                  <span className="shrink-0 text-[10px] text-gray-400">
+                                    {ROLE_LABELS[m.parliament_role] ??
+                                      m.parliament_role}
+                                  </span>
+                                )}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
+          </div>
+        </div>
+      )}
+
       {/* Section 4: Constituency Assignments */}
       <div>
         <h3 className="mb-3 flex items-center gap-2 text-base font-semibold text-gray-800">
@@ -618,8 +689,8 @@ export function AllocationClient({
               <TableRow>
                 <TableHead className="w-14">S.No</TableHead>
                 <TableHead>Participant</TableHead>
+                <TableHead>Side</TableHead>
                 <TableHead>Party</TableHead>
-                <TableHead className="w-16">Party #</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead>Constituency</TableHead>
                 <TableHead>State</TableHead>
@@ -650,8 +721,10 @@ export function AllocationClient({
                       <span className="text-gray-400">--</span>
                     )}
                   </TableCell>
-                  <TableCell className="font-mono text-xs tabular-nums">
-                    {p.party_number ?? <span className="text-gray-300">—</span>}
+                  <TableCell className="text-xs">
+                    {partyName(p.party_number) ?? (
+                      <span className="text-gray-300">—</span>
+                    )}
                   </TableCell>
                   <TableCell>
                     <span className="text-xs">

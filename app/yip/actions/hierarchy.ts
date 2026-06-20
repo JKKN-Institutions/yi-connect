@@ -174,23 +174,47 @@ export async function getNationalOverview(): Promise<{
     sharePct: number;
     started: boolean;
   }>;
-  upcoming: Array<{ id: string; name: string; label: string; day1_date: string }>;
+  upcoming: Array<{
+    id: string;
+    name: string;
+    label: string;
+    day1_date: string;
+    rosterLoaded: boolean;
+    juryAssigned: boolean;
+    ready: boolean;
+  }>;
+  thisWeek: {
+    newStudents: number;
+    newEvents: number;
+    daysToNext: number | null;
+    nextName: string | null;
+  };
+  needsAttention: Array<{ id: string; title: string; detail: string; severity: "high" | "med" }>;
 }> {
   const supabase = await createServiceClient();
   const today = new Date().toISOString().slice(0, 10);
+  const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+  const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
   const { data: eventsRaw } = await supabase
     .from("events")
-    .select("id, name, zone, chapter_name, status, day1_date, results_published_at")
+    .select("id, name, zone, chapter_name, status, day1_date, results_published_at, created_at")
     .eq("is_mock", false);
   const events = eventsRaw ?? [];
 
   const eventIds = events.map((e) => e.id);
-  const { data: partsRaw } = await supabase
-    .from("participants")
-    .select("event_id, school_name")
-    .in("event_id", eventIds.length ? eventIds : ["00000000-0000-0000-0000-000000000000"]);
+  const safeIds = eventIds.length ? eventIds : ["00000000-0000-0000-0000-000000000000"];
+
+  const [{ data: partsRaw }, { data: juryRaw }] = await Promise.all([
+    supabase.from("participants").select("event_id, school_name, created_at").in("event_id", safeIds),
+    supabase.from("jury_assignments").select("event_id").eq("is_active", true).in("event_id", safeIds),
+  ]);
   const parts = partsRaw ?? [];
+
+  const rosterCount = new Map<string, number>();
+  for (const p of parts) rosterCount.set(p.event_id, (rosterCount.get(p.event_id) ?? 0) + 1);
+  const juryCount = new Map<string, number>();
+  for (const j of juryRaw ?? []) juryCount.set(j.event_id, (juryCount.get(j.event_id) ?? 0) + 1);
 
   // Detect a "dates TBD" placeholder: one day1_date shared by an outsized cluster.
   const dateCount = new Map<string, number>();
@@ -210,6 +234,17 @@ export async function getNationalOverview(): Promise<{
   const totalParticipants = parts.length;
   const schools = new Set(parts.map((p) => p.school_name).filter((s) => s && s !== "")).size;
   const isLive = (s: string | null) => s === "day1_live" || s === "day2_live";
+  const evName = (e: { name: string | null }) => e.name ?? "Untitled event";
+  const evDate = (d: string) => {
+    const [, m, day] = d.split("-").map(Number);
+    return `${MON[(m ?? 1) - 1]} ${day}`;
+  };
+  const nameList = (arr: typeof events, withDate: boolean) => {
+    const shown = arr
+      .slice(0, 3)
+      .map((e) => (withDate && e.day1_date ? `${evName(e)} (${evDate(e.day1_date)})` : evName(e)));
+    return shown.join(" · ") + (arr.length > 3 ? ` +${arr.length - 3} more` : "");
+  };
 
   const zones = YI_ZONES.map((z) => {
     const zEvents = events.filter((e) => e.zone === z.code);
@@ -230,17 +265,77 @@ export async function getNationalOverview(): Promise<{
 
   const liveEv = events.find((e) => isLive(e.status));
   const scheduled = events.filter((e) => e.day1_date && e.day1_date !== tbdDate).length;
+  const awaitingDates = events.length - scheduled;
 
-  const upcoming = events
+  const upcomingDated = events
     .filter((e) => e.day1_date && e.day1_date >= today && e.day1_date !== tbdDate)
-    .sort((a, b) => (a.day1_date as string).localeCompare(b.day1_date as string))
-    .slice(0, 4)
-    .map((e) => ({
+    .sort((a, b) => (a.day1_date as string).localeCompare(b.day1_date as string));
+
+  const upcoming = upcomingDated.slice(0, 4).map((e) => {
+    const rosterLoaded = (rosterCount.get(e.id) ?? 0) > 0;
+    const juryAssigned = (juryCount.get(e.id) ?? 0) > 0;
+    return {
       id: e.id,
-      name: e.name ?? "Untitled event",
+      name: evName(e),
       label: YI_ZONES.find((z) => z.code === e.zone)?.label ?? "—",
       day1_date: e.day1_date as string,
-    }));
+      rosterLoaded,
+      juryAssigned,
+      ready: rosterLoaded && juryAssigned,
+    };
+  });
+
+  // This week
+  const newStudents = parts.filter((p) => p.created_at && p.created_at >= weekAgo).length;
+  const newEvents = events.filter((e) => e.created_at && e.created_at >= weekAgo).length;
+  const next = upcomingDated[0];
+  const daysToNext = next?.day1_date
+    ? Math.round((Date.parse(next.day1_date) - Date.parse(today)) / 86400000)
+    : null;
+
+  // Needs attention — only items with a non-zero count, highest urgency first.
+  const needsAttention: Array<{ id: string; title: string; detail: string; severity: "high" | "med" }> = [];
+  const pastUnpublished = events.filter(
+    (e) => e.day1_date && e.day1_date < today && e.day1_date !== tbdDate && e.results_published_at === null
+  );
+  const noJury = upcomingDated.filter((e) => (juryCount.get(e.id) ?? 0) === 0);
+  const noRoster = upcomingDated.filter((e) => (rosterCount.get(e.id) ?? 0) === 0);
+  const notStartedZones = zones.filter((z) => !z.started);
+  if (pastUnpublished.length)
+    needsAttention.push({
+      id: "past",
+      title: `${pastUnpublished.length} ${pastUnpublished.length === 1 ? "event is" : "events are"} past their date with no results`,
+      detail: nameList(pastUnpublished, false),
+      severity: "high",
+    });
+  if (noJury.length)
+    needsAttention.push({
+      id: "jury",
+      title: `${noJury.length} upcoming ${noJury.length === 1 ? "event has" : "events have"} no jury assigned`,
+      detail: nameList(noJury, true),
+      severity: "high",
+    });
+  if (noRoster.length)
+    needsAttention.push({
+      id: "roster",
+      title: `${noRoster.length} upcoming ${noRoster.length === 1 ? "event has" : "events have"} no students loaded`,
+      detail: nameList(noRoster, true),
+      severity: "med",
+    });
+  if (notStartedZones.length)
+    needsAttention.push({
+      id: "zones",
+      title: `${notStartedZones.length} ${notStartedZones.length === 1 ? "zone hasn't" : "zones haven't"} started enrolling`,
+      detail: notStartedZones.map((z) => z.label).join(" · "),
+      severity: "med",
+    });
+  if (awaitingDates)
+    needsAttention.push({
+      id: "dates",
+      title: `${awaitingDates} events still need a confirmed date`,
+      detail: "across all six zones",
+      severity: "med",
+    });
 
   return {
     totals: {
@@ -252,11 +347,13 @@ export async function getNationalOverview(): Promise<{
       published: events.filter((e) => e.results_published_at !== null).length,
       live: events.filter((e) => isLive(e.status)).length,
       scheduled,
-      awaitingDates: events.length - scheduled,
+      awaitingDates,
       startedZones: zones.filter((z) => z.started).length,
     },
     liveEvent: liveEv ? { id: liveEv.id, name: liveEv.name ?? "Live event" } : null,
     zones,
     upcoming,
+    thisWeek: { newStudents, newEvents, daysToNext, nextName: next ? evName(next) : null },
+    needsAttention,
   };
 }

@@ -1,17 +1,20 @@
 /**
  * Committee Assignment Engine — pure, deterministic, no DB, no randomness.
  *
- * Rules (interview 2026-06-15):
+ * Rules (interview 2026-06-15; school-balance added 2026-06-20):
  *  1. Committees contain ORDINARY MPs only. All office-holders — Speaker,
  *     Deputy Speaker, Prime Minister, Deputy PM, Leader of Opposition, cabinet
  *     & shadow ministers, party leaders, independents — get NO committee.
- *  2. MPs are spread so every committee draws EVENLY from each of the N parties
- *     (party-balanced), with committee sizes kept even. Same school-aware
- *     round-robin idea as party-formation, but the spread key is the PARTY id
- *     (so no committee is dominated by one party).
+ *  2. MPs are spread so every committee is balanced on TWO keys at once — the
+ *     N parties AND the schools — with committee sizes kept even. Each MP joins
+ *     the committee with the lowest combined load of "same party already here"
+ *     + "same school already here" (tie-broken by the smallest committee, then
+ *     lowest index), so no committee is dominated by one party OR one school.
  *
  * This must run AFTER parties are formed (party_id known) — that is the only
- * moment the 5-party balance can be computed.
+ * moment the party balance can be computed. (Parties are themselves already
+ * school-balanced by party-formation.ts; this keeps that spread inside the
+ * committees too.)
  */
 
 // Handbook model (YIP 2026, p.19): all students are grouped across parties into
@@ -28,6 +31,9 @@ export interface CommitteeParticipant {
   /** Party id (one of the N parties). null/"" = its own group, still spread. */
   partyId: string | null;
   parliamentRole: string | null;
+  /** School/institution name. Blank/unknown ("") is distributed for size but
+   *  never treated as "the same school" (each blank is its own group). */
+  schoolName: string | null;
 }
 
 export interface CommitteeAssignment {
@@ -39,10 +45,13 @@ export interface CommitteeAssignment {
 }
 
 const partyKeyOf = (p: CommitteeParticipant) => p.partyId ?? "";
+const schoolKeyOf = (p: CommitteeParticipant) =>
+  (p.schoolName ?? "").trim().toLowerCase();
 
 /**
- * Plan committee membership. Eligible MPs are spread party-evenly across the
- * given committees; everyone else is assigned committeeName "" / number null.
+ * Plan committee membership. Eligible MPs are spread so each committee is
+ * balanced by BOTH party and school; everyone else is assigned committeeName
+ * "" / number null.
  */
 export function planCommitteeAssignment(
   participants: CommitteeParticipant[],
@@ -67,11 +76,18 @@ export function planCommitteeAssignment(
     }
   }
 
-  // Spread eligible MPs party-evenly: group by party (largest party first),
-  // each MP joins the committee with the fewest of THIS party, tie-broken by
-  // the smallest committee overall, then lowest index.
+  // Spread eligible MPs so each committee is balanced by BOTH party and school.
+  // Each MP joins the committee with the lowest combined load — (# of the same
+  // party already there) + (# of the same school already there) — tie-broken by
+  // the smallest committee overall, then lowest index. A blank/unknown school
+  // contributes 0 school-load (each blank is its own group) but still balances
+  // by party and size.
   const sizes = new Array(n).fill(0);
   const partyCounts: Array<Map<string, number>> = Array.from(
+    { length: n },
+    () => new Map<string, number>()
+  );
+  const schoolCounts: Array<Map<string, number>> = Array.from(
     { length: n },
     () => new Map<string, number>()
   );
@@ -82,19 +98,34 @@ export function planCommitteeAssignment(
     if (!byParty.has(key)) byParty.set(key, []);
     byParty.get(key)!.push(p);
   }
-  // Largest parties first (stable — first-seen breaks ties).
+  // Largest parties first; within a party, largest schools first — so the most
+  // concentrated groups fan out before the committees fill (stable: first-seen
+  // breaks ties, keeping the plan deterministic).
   const sortedParties = [...byParty.entries()].sort((a, b) => b[1].length - a[1].length);
 
-  for (const [key, members] of sortedParties) {
+  for (const [pkey, members] of sortedParties) {
+    const bySchool = new Map<string, CommitteeParticipant[]>();
     for (const m of members) {
+      const sk = schoolKeyOf(m);
+      if (!bySchool.has(sk)) bySchool.set(sk, []);
+      bySchool.get(sk)!.push(m);
+    }
+    const ordered = [...bySchool.entries()]
+      .sort((a, b) => b[1].length - a[1].length)
+      .flatMap(([, ms]) => ms);
+
+    for (const m of ordered) {
+      const skey = schoolKeyOf(m);
       let bestIdx = 0;
-      let bestPartyCount = Infinity;
+      let bestCost = Infinity;
       let bestSize = Infinity;
       for (let i = 0; i < n; i++) {
-        const pc = partyCounts[i].get(key) ?? 0;
-        if (pc < bestPartyCount || (pc === bestPartyCount && sizes[i] < bestSize)) {
+        const pc = partyCounts[i].get(pkey) ?? 0;
+        const sc = skey === "" ? 0 : schoolCounts[i].get(skey) ?? 0;
+        const cost = pc + sc;
+        if (cost < bestCost || (cost === bestCost && sizes[i] < bestSize)) {
           bestIdx = i;
-          bestPartyCount = pc;
+          bestCost = cost;
           bestSize = sizes[i];
         }
       }
@@ -104,7 +135,10 @@ export function planCommitteeAssignment(
         committeeNumber: bestIdx + 1,
       });
       sizes[bestIdx] += 1;
-      partyCounts[bestIdx].set(key, (partyCounts[bestIdx].get(key) ?? 0) + 1);
+      partyCounts[bestIdx].set(pkey, (partyCounts[bestIdx].get(pkey) ?? 0) + 1);
+      if (skey !== "") {
+        schoolCounts[bestIdx].set(skey, (schoolCounts[bestIdx].get(skey) ?? 0) + 1);
+      }
     }
   }
 

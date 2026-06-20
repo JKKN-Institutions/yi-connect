@@ -297,7 +297,7 @@ export async function assignCommittees(
 
   const { data: participants, error: fetchError } = await supabase
     .from("participants")
-    .select("id, party_id, parliament_role")
+    .select("id, party_id, parliament_role, school_name")
     .eq("event_id", eventId);
   if (fetchError) return { success: false, error: fetchError.message };
   if (!participants || participants.length === 0) {
@@ -331,6 +331,7 @@ export async function assignCommittees(
       id: p.id,
       partyId: p.party_id,
       parliamentRole: p.parliament_role,
+      schoolName: p.school_name,
     })),
     committeeNames
   );

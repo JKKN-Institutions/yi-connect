@@ -73,3 +73,7 @@ end;
 $$;
 
 revoke all on function yip.fn_anonymize_event_pii(uuid) from public, anon, authenticated;
+-- The app calls this via the service_role key (createServiceClient). Revoking
+-- from PUBLIC also stripped service_role's inherited EXECUTE, so grant it back
+-- explicitly — without this, the rpc fails with "permission denied for function".
+grant execute on function yip.fn_anonymize_event_pii(uuid) to service_role;

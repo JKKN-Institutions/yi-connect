@@ -127,6 +127,22 @@ export default function JoinPage() {
             </div>
           </div>
 
+          {/* DPDP privacy notice — the student's name is the only personal data
+              collected; this informs participants (and parents/guardians) of the
+              purpose, per the Digital Personal Data Protection Act, 2023. */}
+          <div className="mt-6 rounded-xl border border-[#1a1a3e]/8 bg-white/70 px-4 py-3">
+            <p className="text-center text-[11px] leading-relaxed text-[#1a1a3e]/45">
+              <span className="font-semibold text-[#1a1a3e]/65">
+                Privacy Notice:
+              </span>{" "}
+              The student&apos;s name is collected solely for registration,
+              participation management, communication, certificate issuance, and
+              result publication related to the Mock Parliamentary Session
+              Competition. The information will be used only for these purposes
+              and handled in accordance with applicable laws.
+            </p>
+          </div>
+
           <p className="mt-8 text-center text-sm text-[#1a1a3e]/35">
             Jury member?{" "}
             <Link

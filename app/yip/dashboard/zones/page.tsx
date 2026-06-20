@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { Newsreader } from "next/font/google";
 import { getNationalOverview, listOrganizerProfiles } from "@/app/yip/actions/hierarchy";
-import { Landmark, ArrowRight, CalendarDays } from "lucide-react";
+import { Landmark, ArrowRight, CalendarDays, AlertTriangle, Check, X } from "lucide-react";
+import type { YiZone } from "@/lib/yip/hierarchy";
 
 const display = Newsreader({
   subsets: ["latin"],
@@ -27,19 +28,31 @@ function initials(name: string): string {
 
 const BAR = ["bg-[#FF9933]", "bg-[#1a1a3e]", "bg-[#138808]"];
 
+// Roughly geographic placement of the six Yi zones on a 5x4 grid (a schematic
+// map of India, not a literal outline).
+const ZONE_POS: Record<YiZone, string> = {
+  NR: "col-start-2 col-end-5 row-start-1 row-end-2",
+  NER: "col-start-5 col-end-6 row-start-1 row-end-3",
+  WR: "col-start-1 col-end-2 row-start-2 row-end-4",
+  ER: "col-start-3 col-end-5 row-start-2 row-end-3",
+  SRTKKA: "col-start-2 col-end-4 row-start-3 row-end-4",
+  SRTN: "col-start-3 col-end-5 row-start-4 row-end-5",
+};
+
 export default async function ZonesNationalPage() {
   const [overview, national] = await Promise.all([
     getNationalOverview(),
     listOrganizerProfiles({ role: "national" }),
   ]);
 
-  const { totals, zones, upcoming, liveEvent } = overview;
+  const { totals, zones, upcoming, liveEvent, thisWeek, needsAttention } = overview;
   const setup = Math.max(0, totals.events - totals.live - totals.published);
   const topZone = zones[0];
   const notStarted = zones.filter((z) => !z.started).map((z) => z.label);
   const byParticipation = [...zones]
     .filter((z) => z.participants > 0)
     .sort((a, b) => b.participants - a.participants);
+  const maxEvents = Math.max(1, ...zones.map((z) => z.events));
 
   return (
     <div className="max-w-[1400px] mx-auto px-6 py-8 space-y-6">
@@ -107,6 +120,102 @@ export default async function ZonesNationalPage() {
                   <div>
                     <div className="text-sm font-semibold text-[#1a1a3e]">{n.full_name}</div>
                     <div className="text-xs text-[#1a1a3e]/55">{n.title ?? "Organizer"}</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* Needs attention — actionable, top of page */}
+      {needsAttention.length > 0 && (
+        <section className="rounded-2xl border border-[#1a1a3e]/8 bg-white overflow-hidden">
+          <div className="px-6 pt-5 pb-3 flex items-center justify-between">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#1a1a3e]/55 flex items-center gap-2">
+              <AlertTriangle className="size-4 text-[#cc3a21]" /> Needs attention
+            </span>
+            <span className="text-[11px] text-[#1a1a3e]/45 tabular-nums">
+              {needsAttention.length} {needsAttention.length === 1 ? "item" : "items"}
+            </span>
+          </div>
+          <div className="px-3 pb-3 grid grid-cols-1 sm:grid-cols-2 gap-1">
+            {needsAttention.map((n) => (
+              <div
+                key={n.id}
+                className="flex items-start gap-3 rounded-xl px-3 py-2.5 hover:bg-[#1a1a3e]/[0.03] transition-colors"
+              >
+                <span
+                  className={`mt-1.5 size-2 rounded-full shrink-0 ${
+                    n.severity === "high" ? "bg-[#cc3a21]" : "bg-[#FF9933]"
+                  }`}
+                />
+                <div>
+                  <div className="text-sm font-semibold text-[#1a1a3e]">{n.title}</div>
+                  <div className="text-xs text-[#1a1a3e]/55">{n.detail}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* This week */}
+      <section className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <MomentumCard
+          value={`+${thisWeek.newStudents}`}
+          tone="green"
+          head="students this week"
+          sub="new enrolments · last 7 days"
+        />
+        <MomentumCard
+          value={`+${thisWeek.newEvents}`}
+          tone="ink"
+          head="events added this week"
+          sub="seeded · last 7 days"
+        />
+        <MomentumCard
+          value={thisWeek.daysToNext != null ? String(thisWeek.daysToNext) : "—"}
+          tone="saffron"
+          head={thisWeek.daysToNext != null ? "days to next sitting" : "no sitting scheduled"}
+          sub={thisWeek.nextName ?? "set a date to see a countdown"}
+        />
+      </section>
+
+      {/* Next up + readiness */}
+      {upcoming.length > 0 && (
+        <section className="rounded-2xl border border-[#1a1a3e]/8 bg-white px-6 py-5">
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#1a1a3e]/55 flex items-center gap-2">
+              <CalendarDays className="size-3.5" /> Next up — and are they ready?
+            </span>
+            <span className="text-[11px] text-[#1a1a3e]/45">
+              {upcoming.length} upcoming · confirmed dates
+            </span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {upcoming.map((e) => {
+              const d = fmtDate(e.day1_date);
+              return (
+                <div
+                  key={e.id}
+                  className={`rounded-xl px-4 py-3 ${
+                    e.ready
+                      ? "border border-[#138808]/30 bg-[#138808]/[0.02]"
+                      : "border border-[#1a1a3e]/8"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="text-[11px] font-semibold text-[#FF9933] tabular-nums">
+                      {d.mon} {d.day}
+                    </div>
+                    {e.ready && <span className="text-[10px] font-semibold text-[#138808]">READY</span>}
+                  </div>
+                  <div className="font-semibold text-sm mt-0.5 text-[#1a1a3e] truncate">{e.name}</div>
+                  <div className="text-xs text-[#1a1a3e]/50 truncate mb-2.5">{e.label}</div>
+                  <div className="flex gap-1.5">
+                    <ReadyPill ok={e.rosterLoaded} label="Roster" />
+                    <ReadyPill ok={e.juryAssigned} label="Jury" />
                   </div>
                 </div>
               );
@@ -207,36 +316,45 @@ export default async function ZonesNationalPage() {
         </section>
       )}
 
-      {/* On the calendar next */}
-      {upcoming.length > 0 && (
-        <section className="rounded-2xl border border-[#1a1a3e]/8 bg-white px-6 py-5">
-          <div className="flex items-center justify-between mb-4">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#1a1a3e]/55 flex items-center gap-2">
-              <CalendarDays className="size-3.5" /> On the calendar next
-            </span>
-            <span className="text-[11px] text-[#1a1a3e]/45">
-              {upcoming.length} upcoming · confirmed dates
-            </span>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            {upcoming.map((e) => {
-              const d = fmtDate(e.day1_date);
-              return (
-                <div
-                  key={e.id}
-                  className="rounded-xl border border-[#1a1a3e]/8 px-4 py-3 hover:border-[#FF9933]/40 transition-colors"
-                >
-                  <div className="text-[11px] font-semibold text-[#FF9933] tabular-nums">
-                    {d.mon} {d.day}
-                  </div>
-                  <div className="font-semibold text-sm mt-0.5 text-[#1a1a3e] truncate">{e.name}</div>
-                  <div className="text-xs text-[#1a1a3e]/50 truncate">{e.label}</div>
+      {/* Across India map */}
+      <section className="rounded-2xl border border-[#1a1a3e]/8 bg-white px-6 py-5">
+        <div className="flex items-center justify-between mb-4">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#1a1a3e]/55">
+            Across India · activity by zone
+          </span>
+          <span className="text-[11px] text-[#1a1a3e]/45">shaded by events</span>
+        </div>
+        <div
+          className="mx-auto max-w-[560px] grid grid-cols-5 grid-rows-4 gap-2"
+          style={{ aspectRatio: "5 / 4" }}
+        >
+          {zones.map((z) => {
+            const isTop = z.events === maxEvents;
+            const opacity = isTop ? 1 : 0.35 + 0.5 * (z.events / maxEvents);
+            return (
+              <Link
+                key={z.code}
+                href={`/yip/dashboard/zones/${z.code.toLowerCase()}`}
+                className={`rounded-xl flex flex-col justify-center px-3 py-2 text-white transition-transform hover:scale-[1.02] ${ZONE_POS[z.code]}`}
+                style={{ backgroundColor: isTop ? "#FF9933" : "#1a1a3e", opacity }}
+              >
+                <div className="text-xs font-semibold leading-tight">{z.label}</div>
+                <div className="text-[11px] tabular-nums" style={{ opacity: 0.85 }}>
+                  {z.events} events · {z.participants} students
                 </div>
-              );
-            })}
-          </div>
-        </section>
-      )}
+              </Link>
+            );
+          })}
+        </div>
+        <div className="flex items-center justify-center gap-2 mt-4 text-[10px] text-[#1a1a3e]/50">
+          <span>fewer events</span>
+          <span className="h-2 w-6 rounded-full bg-[#1a1a3e]" style={{ opacity: 0.35 }} />
+          <span className="h-2 w-6 rounded-full bg-[#1a1a3e]" style={{ opacity: 0.62 }} />
+          <span className="h-2 w-6 rounded-full bg-[#1a1a3e]" style={{ opacity: 0.85 }} />
+          <span className="h-2 w-6 rounded-full bg-[#FF9933]" />
+          <span>most active</span>
+        </div>
+      </section>
 
       {/* Zone leaderboard */}
       <section>
@@ -306,6 +424,44 @@ function listJoin(items: string[]): string {
   if (items.length <= 1) return items[0] ?? "";
   if (items.length === 2) return `${items[0]} and ${items[1]}`;
   return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
+}
+
+function MomentumCard({
+  value,
+  head,
+  sub,
+  tone,
+}: {
+  value: string;
+  head: string;
+  sub: string;
+  tone: "green" | "ink" | "saffron";
+}) {
+  const color = { green: "text-[#138808]", ink: "text-[#1a1a3e]", saffron: "text-[#FF9933]" }[tone];
+  return (
+    <div className="rounded-2xl border border-[#1a1a3e]/8 bg-white px-5 py-4 flex items-center gap-4">
+      <div className={`${display.className} text-[40px] leading-none font-medium tabular-nums ${color}`}>
+        {value}
+      </div>
+      <div>
+        <div className="text-sm font-semibold text-[#1a1a3e]">{head}</div>
+        <div className="text-xs text-[#1a1a3e]/55">{sub}</div>
+      </div>
+    </div>
+  );
+}
+
+function ReadyPill({ ok, label }: { ok: boolean; label: string }) {
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full text-[10px] font-semibold px-2 py-0.5 ${
+        ok ? "bg-[#138808]/10 text-[#138808]" : "bg-[#cc3a21]/8 text-[#cc3a21]"
+      }`}
+    >
+      {ok ? <Check className="size-3" /> : <X className="size-3" />}
+      {label}
+    </span>
+  );
 }
 
 function StatCard({ value, label, accent }: { value: number; label: string; accent?: boolean }) {

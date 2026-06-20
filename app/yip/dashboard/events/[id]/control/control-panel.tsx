@@ -44,6 +44,7 @@ import { ROLE_LABELS, ROLE_COLORS, PARTY_COLORS } from "@/lib/yip/constants";
 import { useRealtimeEvent } from "@/lib/yip/hooks/use-realtime-event";
 import { useTimer } from "@/lib/yip/hooks/use-timer";
 import { advanceAgenda, goToPreviousAgendaItem, reopenAgendaItem, resetAgenda, startAgendaItem, skipAgendaItem, updateEventStatus, updateAgendaItemDuration, updateAgendaItemSubTimers } from "@/app/yip/actions/agenda";
+import { setJuryAllowEarlierSessions } from "@/app/yip/actions/jury";
 import {
   getSubTimers,
   formatSubTimerSeconds,
@@ -223,6 +224,29 @@ export function ControlPanel({
   const eventId = event.id;
   const eventStatus = event.status;
   const currentItemId = event.current_agenda_item_id;
+
+  // BUG-393 follow-up: organiser switch — let jurors score earlier sessions.
+  const [juryAllowEarlier, setJuryAllowEarlier] = useState(
+    Boolean(initialEvent.jury_allow_earlier_sessions)
+  );
+  const [juryAllowEarlierSaving, setJuryAllowEarlierSaving] = useState(false);
+
+  async function handleToggleJuryAllowEarlier(next: boolean) {
+    setJuryAllowEarlier(next); // optimistic
+    setJuryAllowEarlierSaving(true);
+    const res = await setJuryAllowEarlierSessions(eventId, next);
+    setJuryAllowEarlierSaving(false);
+    if (!res.success) {
+      setJuryAllowEarlier(!next); // revert
+      toast.error(res.error);
+      return;
+    }
+    toast.success(
+      next
+        ? "Jurors can now score earlier sessions"
+        : "Jurors locked to the current session"
+    );
+  }
 
   // Filter agenda items by active day
   const dayItems = agendaItems.filter((i) => i.day === activeDay);
@@ -713,6 +737,38 @@ export function ControlPanel({
             </Button>
           )}
         </div>
+      </div>
+
+      {/* Jury catch-up switch (BUG-393) — organiser lets jurors score earlier
+          sessions, not only the current + immediately-previous one. */}
+      <div className="flex items-center justify-between gap-3 rounded-lg border bg-white px-4 py-3">
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-gray-900">
+            Let jurors score earlier sessions
+          </p>
+          <p className="text-xs text-gray-500">
+            On: jurors get a &ldquo;Score an earlier session&rdquo; option to
+            catch up on sessions they missed. Off: they can only score the
+            current session and the one just before it.
+          </p>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={juryAllowEarlier}
+          aria-label="Let jurors score earlier sessions"
+          disabled={juryAllowEarlierSaving}
+          onClick={() => handleToggleJuryAllowEarlier(!juryAllowEarlier)}
+          className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${
+            juryAllowEarlier ? "bg-[#138808]" : "bg-gray-300"
+          }`}
+        >
+          <span
+            className={`inline-block size-4 transform rounded-full bg-white shadow transition-transform ${
+              juryAllowEarlier ? "translate-x-6" : "translate-x-1"
+            }`}
+          />
+        </button>
       </div>
 
       {/* Main layout: Left panel + Right sidebar */}

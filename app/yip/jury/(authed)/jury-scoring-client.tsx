@@ -179,6 +179,17 @@ function JuryScoringClientInner({
   const [selectableSessionIds, setSelectableSessionIds] = useState<string[]>(
     []
   );
+  // BUG-393 follow-up: jurors are locked to {current, immediately-previous} by
+  // default. This opt-in flag reveals ALL assigned sessions so a juror can
+  // score an earlier one. UI-only unlock — submitScore already permits any
+  // assigned session (it only checks assignment, not the live position). The
+  // ref mirrors the flag so the realtime auto-switch can read it without being
+  // re-created on every toggle.
+  const [showAllSessions, setShowAllSessions] = useState(false);
+  const showAllSessionsRef = useRef(false);
+  // Organiser-controlled (per event): when false the "score an earlier session"
+  // option is hidden and jurors stay locked to the restricted set.
+  const [allowEarlierSessions, setAllowEarlierSessions] = useState(false);
   // Track the live agenda item so a realtime update can detect a genuine
   // house-advance and auto-switch the juror to the new session.
   const currentAgendaItemRef = useRef<string | null>(null);
@@ -354,6 +365,7 @@ function JuryScoringClientInner({
       setAllParticipants((prev) => (prev.length > 0 ? prev : b.roster));
       setCurrentSessionId(b.currentSessionId);
       setSelectableSessionIds(b.selectableSessionIds);
+      setAllowEarlierSessions(b.allowEarlierSessions);
       currentAgendaItemRef.current = b.currentAgendaItemId;
 
       // Default the juror's session to the live current session (organiser-
@@ -455,6 +467,13 @@ function JuryScoringClientInner({
     setAllParticipants((prev) => (prev.length > 0 ? prev : b.roster));
     setCurrentSessionId(b.currentSessionId);
     setSelectableSessionIds(b.selectableSessionIds);
+    setAllowEarlierSessions(b.allowEarlierSessions);
+    // Organiser disabled the unlock mid-session → snap jurors back to the
+    // restricted set.
+    if (!b.allowEarlierSessions && showAllSessionsRef.current) {
+      showAllSessionsRef.current = false;
+      setShowAllSessions(false);
+    }
     currentAgendaItemRef.current = b.currentAgendaItemId;
     patchOfflineCache(eventId, juryAssignmentId, {
       sessions: b.sessions,
@@ -465,6 +484,9 @@ function JuryScoringClientInner({
     });
 
     setSelectedSessionId((prev) => {
+      // The juror explicitly unlocked all sessions to catch up on an earlier
+      // one — never override their manual pick (BUG-393 follow-up).
+      if (showAllSessionsRef.current) return prev;
       // House advanced → jump to the new current session (organiser-driven).
       if (advanced) return b.currentSessionId ?? prev;
       // No advance → keep the juror's pick if it's still selectable.
@@ -800,15 +822,19 @@ function JuryScoringClientInner({
           live agenda position is known (offline / event not started) every
           assigned session is selectable as a fallback. */}
       {(() => {
-        // Selectable set: the {current, immediately-previous} ids from the
+        // Restricted set: the {current, immediately-previous} ids from the
         // bootstrap, mapped back to full session rows (ordered). Falls back to
         // all assigned sessions when the live position is unknown.
-        const selectable =
+        const restricted =
           selectableSessionIds.length > 0
             ? assignedSessions.filter((s) =>
                 selectableSessionIds.includes(s.id)
               )
             : assignedSessions;
+        // BUG-393 follow-up: "Score an earlier session" reveals every assigned
+        // session. Default stays restricted (current + catch-up only).
+        const selectable = showAllSessions ? assignedSessions : restricted;
+        const lockedCount = assignedSessions.length - restricted.length;
         if (selectable.length === 0) return null;
         return (
           <div className="mx-4 mt-4">
@@ -825,13 +851,53 @@ function JuryScoringClientInner({
               className="w-full rounded-lg border-2 border-gray-200 bg-white px-3 py-3 text-sm font-medium text-gray-900 focus:border-blue-500 focus:outline-none"
               style={{ minHeight: "48px" }}
             >
-              {selectable.map((s) => (
-                <option key={s.id} value={s.id}>
-                  Day {s.day} · {s.title}
-                  {s.id === currentSessionId ? " (current)" : " (catch-up)"}
-                </option>
-              ))}
+              {selectable.map((s) => {
+                const suffix =
+                  s.id === currentSessionId
+                    ? " (current)"
+                    : restricted.some((r) => r.id === s.id)
+                      ? " (catch-up)"
+                      : " (earlier)";
+                return (
+                  <option key={s.id} value={s.id}>
+                    Day {s.day} · {s.title}
+                    {suffix}
+                  </option>
+                );
+              })}
             </select>
+            {lockedCount > 0 &&
+              allowEarlierSessions &&
+              (showAllSessions ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    showAllSessionsRef.current = false;
+                    setShowAllSessions(false);
+                    // Snap back to a currently-selectable session so the picker
+                    // never shows a blank value.
+                    if (!restricted.some((r) => r.id === selectedSessionId)) {
+                      setSelectedSessionId(
+                        currentSessionId ?? restricted[0]?.id ?? null
+                      );
+                    }
+                  }}
+                  className="mt-1.5 text-xs font-medium text-gray-500 underline hover:text-gray-700"
+                >
+                  Back to current session
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    showAllSessionsRef.current = true;
+                    setShowAllSessions(true);
+                  }}
+                  className="mt-1.5 text-xs font-medium text-blue-600 underline hover:text-blue-700"
+                >
+                  Score an earlier session
+                </button>
+              ))}
           </div>
         );
       })()}

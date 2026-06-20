@@ -1,8 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getYipSession } from "@/lib/yip/auth/yip-session";
-import { createServiceClient } from "@/lib/yip/supabase/server";
-import { eventPrivacyMasked } from "@/lib/yip/pii";
 import { VoteClient, type ParticipantSession } from "./vote-client";
 
 // The yip_session cookie is httpOnly (set by app/yip/actions/auth.ts), so it
@@ -34,14 +32,5 @@ export default async function VotePage() {
     redirect("/yip/join");
   }
 
-  // DPDP: privacy-mode events show other candidates' names as pseudonyms.
-  const supabase = await createServiceClient();
-  const { data: event } = await supabase
-    .from("events")
-    .select("privacy_mode, pii_purged_at")
-    .eq("id", session.eventId)
-    .single();
-  const masked = event ? eventPrivacyMasked(event) : false;
-
-  return <VoteClient initialSession={session} masked={masked} />;
+  return <VoteClient initialSession={session} />;
 }

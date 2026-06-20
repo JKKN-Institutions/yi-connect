@@ -24,7 +24,6 @@ import {
   type VoteCandidate,
 } from "@/app/yip/actions/voting";
 import { createClient } from "@/lib/yip/supabase/client";
-import { maskName } from "@/lib/yip/pii";
 
 // ─── Session (server-provided) ──────────────────────────────────
 // The yip_session cookie is httpOnly, so it CANNOT be read from
@@ -42,14 +41,11 @@ export interface ParticipantSession {
 export function VoteClient({
   initialSession,
   embedded = false,
-  masked = false,
 }: {
   initialSession: ParticipantSession;
   /** Rendered inline on the student dashboard (/yip/me): hides all the
    *  non-actionable states so nothing shows until a vote is actually open. */
   embedded?: boolean;
-  /** DPDP: privacy-mode event → show other candidates' names as pseudonyms. */
-  masked?: boolean;
 }) {
   const session: ParticipantSession | null = initialSession;
   const [candidates, setCandidates] = useState<VoteCandidate[]>([]);
@@ -384,16 +380,14 @@ export function VoteClient({
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1">
                     <p className="text-base font-bold text-gray-900">
-                      {maskName(masked, candidate.id, candidate.full_name)}
+                      {candidate.full_name}
                     </p>
-                    {!masked && (
-                      <div className="flex items-center gap-1.5 mt-1.5">
-                        <GraduationCap className="size-3.5 text-gray-400" />
-                        <span className="text-sm text-gray-600">
-                          {candidate.school_name}
-                        </span>
-                      </div>
-                    )}
+                    <div className="flex items-center gap-1.5 mt-1.5">
+                      <GraduationCap className="size-3.5 text-gray-400" />
+                      <span className="text-sm text-gray-600">
+                        {candidate.school_name}
+                      </span>
+                    </div>
                     {partySide && (
                       <div className="mt-2">
                         <span

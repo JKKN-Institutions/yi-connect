@@ -2,7 +2,6 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getYipSession } from "@/lib/yip/auth/yip-session";
 import { createServiceClient } from "@/lib/yip/supabase/server";
-import { eventPrivacyMasked } from "@/lib/yip/pii";
 import {
   ROLE_LABELS,
   ROLE_COLORS,
@@ -420,11 +419,7 @@ export default async function ParticipantPage() {
       <LiveNowCard eventId={event.id} />
 
       {/* ─── VOTE NOW (live ballot, inline — no navigation to /me/vote) ─ */}
-      <VoteClient
-        initialSession={session}
-        embedded
-        masked={eventPrivacyMasked(event)}
-      />
+      <VoteClient initialSession={session} embedded />
 
       {/* ─── PRESIDING OFFICER — MOTION QUEUE (Speaker / Deputy Speaker) ─ */}
       {isPresiding && (

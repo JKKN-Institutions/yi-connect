@@ -44,12 +44,9 @@ export const MERGED_GROUPS: { siblings: Sibling[]; scoreGated?: boolean }[] = [
 export function EventSectionSubTabs({
   eventId,
   canViewScores = false,
-  privacyMode = false,
 }: {
   eventId: string;
   canViewScores?: boolean;
-  /** DPDP: privacy-mode events hide the full-PII Registrations sub-tab. */
-  privacyMode?: boolean;
 }) {
   const pathname = usePathname();
   const base = `/yip/dashboard/events/${eventId}`;
@@ -60,19 +57,12 @@ export function EventSectionSubTabs({
   if (!group) return null;
   if (group.scoreGated && !canViewScores) return null;
 
-  // Privacy mode: drop the bulk-PII Registrations tab (minimal registration
-  // happens on the Participants tab instead).
-  const siblings = privacyMode
-    ? group.siblings.filter((s) => s.href !== "/registrations")
-    : group.siblings;
-  if (siblings.length === 0) return null;
-
   return (
     <nav
       aria-label="Section tabs"
       className="mb-4 flex flex-wrap gap-1 border-b border-[#1a1a3e]/10"
     >
-      {siblings.map((s) => {
+      {group.siblings.map((s) => {
         const href = `${base}${s.href}`;
         const active = isOn(s.href);
         return (

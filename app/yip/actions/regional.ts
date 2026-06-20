@@ -21,7 +21,6 @@
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { requireSuperAdmin } from "@/lib/yip/auth/require-super-admin";
 import { YI_ZONES, type YiZone } from "@/lib/yip/hierarchy";
-import { eventPrivacyMasked, participantPseudonym } from "@/lib/yip/pii";
 
 const LEADERSHIP_ROLES = new Set<string>([
   "speaker",
@@ -115,7 +114,7 @@ export async function getRegionalLeaderboard(
   // Pull all completed/published CHAPTER events in this zone for the year.
   let eventsQuery = supabase
     .from("events")
-    .select("id, chapter_name, name, status, privacy_mode, pii_purged_at")
+    .select("id, chapter_name, name, status")
     .eq("yi_zone_code", zone.code)
     .eq("level", "chapter")
     .in("status", ["completed", "results_published"]);
@@ -136,21 +135,8 @@ export async function getRegionalLeaderboard(
 
   const eventIds = events.map((e) => e.id);
   const eventChapterById = new Map<string, string>();
-  // DPDP: a privacy-mode event that has not yet been purged still holds real
-  // names. This regional view is cross-chapter (a super-admin sees chapters
-  // they did NOT personally run), so for those events we show pseudonyms.
-  // results_published privacy events are already purged → names are pseudonyms
-  // in the DB anyway; this covers the completed-but-unpurged window.
-  const maskedEventIds = new Set<string>();
   for (const e of events) {
     eventChapterById.set(e.id, e.chapter_name ?? e.name ?? "");
-    if (
-      eventPrivacyMasked(
-        e as { privacy_mode?: boolean | null; pii_purged_at?: string | null }
-      )
-    ) {
-      maskedEventIds.add(e.id);
-    }
   }
 
   // Pull every result for those events, joined with participant identity.
@@ -192,9 +178,6 @@ export async function getRegionalLeaderboard(
     awards_won: number;
     speaker_count: number;
     best_event_score: number;
-    // True once any contributing event is privacy-masked — the row then shows a
-    // pseudonym (over-mask: never un-hide a name once any source event hid it).
-    masked: boolean;
   };
 
   const agg = new Map<string, Agg>();
@@ -221,28 +204,21 @@ export async function getRegionalLeaderboard(
 
     const key = p.person_id ?? `pid:${p.id}`;
     const chapterName = eventChapterById.get(eventId) ?? "";
-    const isMasked = maskedEventIds.has(eventId);
 
     let entry = agg.get(key);
     if (!entry) {
       entry = {
         person_id: key,
-        full_name: isMasked ? participantPseudonym(p.id) : p.full_name,
+        full_name: p.full_name,
         chapter_name: chapterName,
-        school_name: isMasked ? "" : p.school_name,
+        school_name: p.school_name,
         events_played: new Set<string>(),
         total_score: 0,
         awards_won: 0,
         speaker_count: 0,
         best_event_score: 0,
-        masked: isMasked,
       };
       agg.set(key, entry);
-    } else if (isMasked && !entry.masked) {
-      // A later contributing event is privacy-masked → hide this person's name.
-      entry.masked = true;
-      entry.full_name = participantPseudonym(p.id);
-      entry.school_name = "";
     }
 
     entry.events_played.add(eventId);

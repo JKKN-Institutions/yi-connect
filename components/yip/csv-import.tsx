@@ -213,13 +213,9 @@ function normalizeXlsxRow(
       : undefined;
 
   const errors: string[] = [];
+  // Name-only registration: the student's name is the only required field.
+  // School and contact are optional — kept only if those columns are present.
   if (!name) errors.push("Name is required");
-  if (!school) errors.push("School is required");
-  // Each student must be reachable: at least ONE of email / parent mobile.
-  // Either alone is fine (the missing one is ignored); only a row with NEITHER
-  // is blocked.
-  if (!email && !parent_phone)
-    errors.push("Email or parent mobile is required");
   // Class is NOT collected in the roster (dropped). participants.class is NOT
   // NULL, so we default to 10 internally. If a stray class value is present it
   // must still be 9-12.
@@ -270,16 +266,11 @@ function defaultAssignBenches(rows: ParsedRow[]): boolean {
 
 /** Download a one-row .xlsx template */
 function downloadXlsxTemplate() {
-  // Standard chapter roster: just these columns. (The importer still also
-  // accepts optional pre-assigned party/constituency/committee columns for
-  // chapters that allocate in advance — they're just not in this template.)
-  const headers = ["name", "school", "email", "parent_mobile"];
-  const sample = [
-    "Arjun Kumar",
-    "Delhi Public School",
-    "arjun@example.com",
-    "9876543210",
-  ];
+  // Name-only roster: just the student's name. (The importer still also accepts
+  // optional pre-assigned party/constituency/committee columns for chapters that
+  // allocate in advance — they're just not in this template.)
+  const headers = ["name"];
+  const sample = ["Arjun Kumar"];
   const ws = XLSX.utils.aoa_to_sheet([headers, sample]);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Participants");
@@ -452,11 +443,8 @@ export function CsvImport({
             const parentVal =
               parentPhoneIdx >= 0 ? normalizePhone(cols[parentPhoneIdx]) : undefined;
 
+            // Name-only registration: only the name is required.
             if (!name) errors.push("Name is required");
-            if (!school) errors.push("School is required");
-            // At least one of email / parent mobile (only a row with NEITHER blocks).
-            if (!emailVal && !parentVal)
-              errors.push("Email or parent mobile is required");
             if (classIdx >= 0 && cols[classIdx]?.trim() && (classVal < 9 || classVal > 12))
               errors.push("Class must be 9-12");
 
@@ -613,7 +601,7 @@ export function CsvImport({
         <DialogHeader>
           <DialogTitle>Import Participants</DialogTitle>
           <DialogDescription>
-            Upload a CSV or Excel (.xlsx / .xls) file. Required: name, school, and at least one of email or parent_mobile. (A student with neither contact is flagged and not imported.)
+            Upload a CSV or Excel (.xlsx / .xls) file with a <strong>name</strong> column — one student per row. The name is the only field collected; an access code is generated for each.
           </DialogDescription>
         </DialogHeader>
 

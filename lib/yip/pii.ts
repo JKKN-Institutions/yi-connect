@@ -48,3 +48,16 @@ export function maskName(
 ): string {
   return masked ? participantPseudonym(id) : fullName ?? participantPseudonym(id);
 }
+
+/**
+ * Jury-facing blind label. Jurors always score against the participant's
+ * NUMBER, never the name — fairness, not privacy (so it applies to every
+ * event regardless of privacy mode). Uses the serial number when set, and
+ * falls back to the id-based pseudonym for any row without one.
+ */
+export function juryLabel(
+  serialNo: number | null | undefined,
+  id: string,
+): string {
+  return serialNo != null ? `Participant ${serialNo}` : participantPseudonym(id);
+}

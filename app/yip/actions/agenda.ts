@@ -715,10 +715,11 @@ export async function reorderAgenda(
   // duplicates) — otherwise a partial reorder could orphan sequence numbers.
   const { data: items } = await supabase
     .from("agenda")
-    .select("id")
+    .select("id, status, sequence_order")
     .eq("event_id", eventId)
     .eq("day", day);
-  const existing = new Set((items ?? []).map((i) => i.id));
+  const dayRows = items ?? [];
+  const existing = new Set(dayRows.map((i) => i.id));
   if (
     orderedItemIds.length !== existing.size ||
     new Set(orderedItemIds).size !== orderedItemIds.length ||
@@ -738,12 +739,35 @@ export async function reorderAgenda(
     .eq("id", eventId)
     .single();
   const isLive = ev?.status === "day1_live" || ev?.status === "day2_live";
-  if (isLive && access.role !== "super_admin" && access.role !== "chapter_admin") {
-    return {
-      success: false,
-      error:
-        "The event is live. Only the chapter chair or a national admin can reorder the agenda now.",
-    };
+  if (isLive) {
+    if (access.role !== "super_admin" && access.role !== "chapter_admin") {
+      return {
+        success: false,
+        error:
+          "The event is live. Only the chapter chair or a national admin can reorder the agenda now.",
+      };
+    }
+    // Future-items-only: an item already running or finished must keep its exact
+    // position while live — you may only shuffle items that haven't started yet
+    // (upcoming/excluded). Moving a done/live item, or pushing an item ahead of
+    // it, would jumble the live running order.
+    const oldOrder = [...dayRows].sort(
+      (a, b) => a.sequence_order - b.sequence_order
+    );
+    const newIndex = new Map(orderedItemIds.map((id, idx) => [id, idx]));
+    for (let i = 0; i < oldOrder.length; i++) {
+      const row = oldOrder[i];
+      if (
+        (row.status === "completed" || row.status === "in_progress") &&
+        newIndex.get(row.id) !== i
+      ) {
+        return {
+          success: false,
+          error:
+            "The event is live — you can only reorder items that haven't started yet.",
+        };
+      }
+    }
   }
 
   // Phase 1: park every row at a non-colliding high offset.
@@ -840,8 +864,8 @@ export async function addAgendaItem(
 
   const title = input.title?.trim();
   if (!title) return { success: false, error: "Title is required." };
-  if (input.day !== 1 && input.day !== 2)
-    return { success: false, error: "Day must be 1 or 2." };
+  if (![0, 1, 2].includes(input.day))
+    return { success: false, error: "Day must be 0, 1 or 2." };
   const duration =
     input.duration_minutes !== undefined
       ? Math.round(input.duration_minutes)
@@ -965,6 +989,78 @@ export async function deleteAgendaItem(
   const { error } = await supabase
     .from("agenda")
     .delete()
+    .eq("id", agendaItemId)
+    .eq("event_id", eventId);
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/yip/dashboard/events/${eventId}/agenda`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/control`);
+  return { success: true, data: null };
+}
+
+/**
+ * Move an agenda item to the other day (Day 1 ↔ Day 2). Appends to the end of
+ * the target day (max+1 — never collides with the unique
+ * (event_id,day,sequence_order) index); reorder afterwards to position it.
+ * While the event is live, only future (not-yet-started) items may move, and
+ * never the live item itself — mirrors the reorder "future items only" rule.
+ */
+export async function moveAgendaItemToDay(
+  eventId: string,
+  agendaItemId: string,
+  targetDay: number
+): Promise<ActionResult> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage)
+    return { success: false, error: "Not authorized to manage this event" };
+  // Days 0 (prep), 1, 2 — matches the agenda.day CHECK.
+  if (![0, 1, 2].includes(targetDay))
+    return { success: false, error: "Day must be 0, 1 or 2." };
+  const supabase = await createServiceClient();
+
+  const { data: item } = await supabase
+    .from("agenda")
+    .select("id, day, status")
+    .eq("id", agendaItemId)
+    .eq("event_id", eventId)
+    .maybeSingle();
+  if (!item)
+    return { success: false, error: "Agenda item not found for this event." };
+  if (item.day === targetDay)
+    return { success: false, error: `Item is already on Day ${targetDay}.` };
+
+  const { data: ev } = await supabase
+    .from("events")
+    .select("status, current_agenda_item_id")
+    .eq("id", eventId)
+    .single();
+  if (ev?.current_agenda_item_id === agendaItemId)
+    return {
+      success: false,
+      error: "This item is live. Move the agenda on first.",
+    };
+  const isLive = ev?.status === "day1_live" || ev?.status === "day2_live";
+  if (isLive && (item.status === "completed" || item.status === "in_progress"))
+    return {
+      success: false,
+      error:
+        "The event is live — you can only move items that haven't started yet.",
+    };
+
+  // Append to the end of the target day.
+  const { data: maxRow } = await supabase
+    .from("agenda")
+    .select("sequence_order")
+    .eq("event_id", eventId)
+    .eq("day", targetDay)
+    .order("sequence_order", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const nextSeq = (maxRow?.sequence_order ?? 0) + 1;
+
+  const { error } = await supabase
+    .from("agenda")
+    .update({ day: targetDay, sequence_order: nextSeq })
     .eq("id", agendaItemId)
     .eq("event_id", eventId);
   if (error) return { success: false, error: error.message };

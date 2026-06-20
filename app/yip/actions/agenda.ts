@@ -3,6 +3,7 @@
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { revalidatePath } from "next/cache";
+import { modeForAgendaType } from "@/lib/yip/constants";
 import type { Json } from "@/types/yip/database";
 import {
   type SubTimer,
@@ -244,8 +245,19 @@ export async function goToPreviousAgendaItem(
     return { success: false, error: "Already at the first item." };
   }
 
+  // Walk backward past excluded (skipped) items — they must never become the
+  // live item (mirror advanceAgenda's forward skip). Completed items stay valid
+  // rewind targets, so only `skipped` is jumped over.
+  let prevIdx = currentIdx - 1;
+  while (prevIdx >= 0 && dayItems[prevIdx].status === "skipped") {
+    prevIdx--;
+  }
+  if (prevIdx < 0) {
+    return { success: false, error: "Already at the first item." };
+  }
+
   const currentItem = dayItems[currentIdx];
-  const previousItem = dayItems[currentIdx - 1];
+  const previousItem = dayItems[prevIdx];
 
   // Un-advance the current item: status back to `upcoming`, clear its
   // start/end timestamps so it reads as "not started" again.
@@ -605,6 +617,359 @@ export async function updateEventStatus(
   if (error) return { success: false, error: error.message };
 
   revalidatePath(`/yip/dashboard/events/${eventId}`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/control`);
+  return { success: true, data: null };
+}
+
+// ─── Agenda Setup (pre-event) ─────────────────────────────────────
+// Per-event control over which agenda items run live on the day, their order,
+// timing, and details — set BEFORE the event so the Control panel + projector
+// show the correct day-of agenda. "Won't run live" is stored as status
+// `skipped`: advanceAgenda already jumps over skipped items, and
+// goToPreviousAgendaItem does too (see above), so an excluded item can never
+// become the live/current item. Re-including = status back to `upcoming`.
+
+/** All agenda rows for an event, ordered (day, sequence). Read-gated by canView. */
+export async function getAgendaForSetup(eventId: string) {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canView) return [];
+  const supabase = await createServiceClient();
+  const { data } = await supabase
+    .from("agenda")
+    .select("*")
+    .eq("event_id", eventId)
+    .order("day")
+    .order("sequence_order");
+  return data ?? [];
+}
+
+/**
+ * Include / exclude an agenda item from the live run (pre-event).
+ * includeInRun=false → status 'skipped' (jumped over on the day); true →
+ * 'upcoming'. Refuses to touch the item that is live right now, or one already
+ * completed — those belong to the Control panel's Skip / Re-open.
+ */
+export async function setAgendaItemInRun(
+  eventId: string,
+  agendaItemId: string,
+  includeInRun: boolean
+): Promise<ActionResult> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage)
+    return { success: false, error: "Not authorized to manage this event" };
+  const supabase = await createServiceClient();
+
+  const { data: item } = await supabase
+    .from("agenda")
+    .select("id, status")
+    .eq("id", agendaItemId)
+    .eq("event_id", eventId)
+    .maybeSingle();
+  if (!item)
+    return { success: false, error: "Agenda item not found for this event." };
+
+  if (item.status === "in_progress") {
+    return {
+      success: false,
+      error:
+        "This item is live right now. Use Skip on the Control panel to move past it.",
+    };
+  }
+  if (item.status === "completed") {
+    return {
+      success: false,
+      error:
+        "This item is already completed. Use Re-open on the Control panel to run it again.",
+    };
+  }
+
+  const { error } = await supabase
+    .from("agenda")
+    .update({ status: includeInRun ? "upcoming" : "skipped" })
+    .eq("id", agendaItemId)
+    .eq("event_id", eventId);
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/yip/dashboard/events/${eventId}/agenda`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/control`);
+  return { success: true, data: null };
+}
+
+/**
+ * Persist a new order for one day's agenda. `orderedItemIds` must list exactly
+ * that day's items in the desired order; sequence_order is reassigned 1..N.
+ * There is a UNIQUE (event_id, day, sequence_order) index, so we write in two
+ * phases (park at high offsets, then final positions) to avoid collisions.
+ */
+export async function reorderAgenda(
+  eventId: string,
+  day: number,
+  orderedItemIds: string[]
+): Promise<ActionResult> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage)
+    return { success: false, error: "Not authorized to manage this event" };
+  const supabase = await createServiceClient();
+
+  // The id set must match the day's items exactly (no extras, no missing, no
+  // duplicates) — otherwise a partial reorder could orphan sequence numbers.
+  const { data: items } = await supabase
+    .from("agenda")
+    .select("id")
+    .eq("event_id", eventId)
+    .eq("day", day);
+  const existing = new Set((items ?? []).map((i) => i.id));
+  if (
+    orderedItemIds.length !== existing.size ||
+    new Set(orderedItemIds).size !== orderedItemIds.length ||
+    orderedItemIds.some((id) => !existing.has(id))
+  ) {
+    return {
+      success: false,
+      error:
+        "The reorder list must contain each of the day's items exactly once.",
+    };
+  }
+
+  // Live-state guard: reordering mid-run is a strong action (chair / national).
+  const { data: ev } = await supabase
+    .from("events")
+    .select("status")
+    .eq("id", eventId)
+    .single();
+  const isLive = ev?.status === "day1_live" || ev?.status === "day2_live";
+  if (isLive && access.role !== "super_admin" && access.role !== "chapter_admin") {
+    return {
+      success: false,
+      error:
+        "The event is live. Only the chapter chair or a national admin can reorder the agenda now.",
+    };
+  }
+
+  // Phase 1: park every row at a non-colliding high offset.
+  for (let i = 0; i < orderedItemIds.length; i++) {
+    const { error } = await supabase
+      .from("agenda")
+      .update({ sequence_order: 1000 + i })
+      .eq("id", orderedItemIds[i])
+      .eq("event_id", eventId);
+    if (error) return { success: false, error: error.message };
+  }
+  // Phase 2: write the final 1..N order.
+  for (let i = 0; i < orderedItemIds.length; i++) {
+    const { error } = await supabase
+      .from("agenda")
+      .update({ sequence_order: i + 1 })
+      .eq("id", orderedItemIds[i])
+      .eq("event_id", eventId);
+    if (error) return { success: false, error: error.message };
+  }
+
+  revalidatePath(`/yip/dashboard/events/${eventId}/agenda`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/control`);
+  return { success: true, data: null };
+}
+
+/** Edit an agenda item's display details (title / description / duration / type). */
+export async function updateAgendaItem(
+  eventId: string,
+  agendaItemId: string,
+  patch: {
+    title?: string;
+    description?: string | null;
+    duration_minutes?: number;
+    agenda_type?: string;
+  }
+): Promise<ActionResult> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage)
+    return { success: false, error: "Not authorized to manage this event" };
+
+  const update: Record<string, unknown> = {};
+  if (patch.title !== undefined) {
+    const t = patch.title.trim();
+    if (!t) return { success: false, error: "Title can't be empty." };
+    update.title = t;
+  }
+  if (patch.description !== undefined)
+    update.description = patch.description?.trim() || null;
+  if (patch.duration_minutes !== undefined) {
+    const d = Math.round(patch.duration_minutes);
+    if (!Number.isFinite(d) || d < 0 || d > 600)
+      return {
+        success: false,
+        error: "Duration must be between 0 and 600 minutes.",
+      };
+    update.duration_minutes = d;
+  }
+  if (patch.agenda_type !== undefined && patch.agenda_type.trim()) {
+    const at = patch.agenda_type.trim();
+    update.agenda_type = at;
+    update.mode = modeForAgendaType(at);
+  }
+  if (Object.keys(update).length === 0)
+    return { success: false, error: "Nothing to update." };
+
+  const supabase = await createServiceClient();
+  const { error } = await supabase
+    .from("agenda")
+    .update(update)
+    .eq("id", agendaItemId)
+    .eq("event_id", eventId);
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/yip/dashboard/events/${eventId}/agenda`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/control`);
+  return { success: true, data: null };
+}
+
+/** Add a custom agenda item to a day (appended; reorder afterwards). */
+export async function addAgendaItem(
+  eventId: string,
+  input: {
+    day: number;
+    title: string;
+    description?: string;
+    duration_minutes?: number;
+    agenda_type?: string;
+  }
+): Promise<ActionResult<{ id: string }>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage)
+    return { success: false, error: "Not authorized to manage this event" };
+
+  const title = input.title?.trim();
+  if (!title) return { success: false, error: "Title is required." };
+  if (input.day !== 1 && input.day !== 2)
+    return { success: false, error: "Day must be 1 or 2." };
+  const duration =
+    input.duration_minutes !== undefined
+      ? Math.round(input.duration_minutes)
+      : 15;
+  if (!Number.isFinite(duration) || duration < 0 || duration > 600)
+    return {
+      success: false,
+      error: "Duration must be between 0 and 600 minutes.",
+    };
+  const agendaType = input.agenda_type?.trim() || "general";
+
+  const supabase = await createServiceClient();
+  // Append after the day's current max sequence (the unique index makes any
+  // lower number risky; max+1 never collides).
+  const { data: maxRow } = await supabase
+    .from("agenda")
+    .select("sequence_order")
+    .eq("event_id", eventId)
+    .eq("day", input.day)
+    .order("sequence_order", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const nextSeq = (maxRow?.sequence_order ?? 0) + 1;
+
+  const { data, error } = await supabase
+    .from("agenda")
+    .insert({
+      event_id: eventId,
+      day: input.day,
+      sequence_order: nextSeq,
+      title,
+      description: input.description?.trim() || null,
+      duration_minutes: duration,
+      agenda_type: agendaType,
+      mode: modeForAgendaType(agendaType),
+      status: "upcoming",
+      is_scoreable: false,
+    })
+    .select("id")
+    .single();
+  if (error || !data)
+    return { success: false, error: error?.message ?? "Failed to add item." };
+
+  revalidatePath(`/yip/dashboard/events/${eventId}/agenda`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/control`);
+  return { success: true, data: { id: data.id } };
+}
+
+/**
+ * Delete an agenda item. Chair / national only. Blocked when the item is live
+ * or has dependent data (scores, a vote session, jury session assignments) —
+ * the caller should exclude it from the run instead.
+ */
+export async function deleteAgendaItem(
+  eventId: string,
+  agendaItemId: string
+): Promise<ActionResult> {
+  const access = await getYipEventAccess(eventId);
+  if (access.role !== "super_admin" && access.role !== "chapter_admin")
+    return {
+      success: false,
+      error: "Only the chapter chair or a national admin can delete an agenda item.",
+    };
+  const supabase = await createServiceClient();
+
+  const { data: item } = await supabase
+    .from("agenda")
+    .select("id")
+    .eq("id", agendaItemId)
+    .eq("event_id", eventId)
+    .maybeSingle();
+  if (!item)
+    return { success: false, error: "Agenda item not found for this event." };
+
+  // Never delete the live item.
+  const { data: ev } = await supabase
+    .from("events")
+    .select("current_agenda_item_id")
+    .eq("id", eventId)
+    .single();
+  if (ev?.current_agenda_item_id === agendaItemId)
+    return {
+      success: false,
+      error:
+        "This item is live. Move the agenda on first, or exclude it from the run instead.",
+    };
+
+  // Dependency guards — refuse if anything references this item.
+  const [scoresRes, votesRes, jsaRes] = await Promise.all([
+    supabase
+      .from("scores")
+      .select("id", { count: "exact", head: true })
+      .eq("agenda_item_id", agendaItemId),
+    supabase
+      .from("vote_sessions")
+      .select("id", { count: "exact", head: true })
+      .eq("agenda_item_id", agendaItemId),
+    supabase
+      .from("jury_session_assignments")
+      .select("id", { count: "exact", head: true })
+      .eq("agenda_item_id", agendaItemId),
+  ]);
+  if ((scoresRes.count ?? 0) > 0)
+    return {
+      success: false,
+      error: `Can't delete — ${scoresRes.count} score(s) recorded for it. Exclude it from the run instead.`,
+    };
+  if ((votesRes.count ?? 0) > 0)
+    return {
+      success: false,
+      error:
+        "Can't delete — a vote session is linked to it. Exclude it from the run instead.",
+    };
+  if ((jsaRes.count ?? 0) > 0)
+    return {
+      success: false,
+      error:
+        "Can't delete — jurors are assigned to it. Remove the assignments first, or exclude it from the run.",
+    };
+
+  const { error } = await supabase
+    .from("agenda")
+    .delete()
+    .eq("id", agendaItemId)
+    .eq("event_id", eventId);
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/yip/dashboard/events/${eventId}/agenda`);
   revalidatePath(`/yip/dashboard/events/${eventId}/control`);
   return { success: true, data: null };
 }

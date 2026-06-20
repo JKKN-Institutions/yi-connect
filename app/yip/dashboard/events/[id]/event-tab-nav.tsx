@@ -17,9 +17,7 @@ import {
   Flag,
   Gavel,
   ListChecks,
-  IndianRupee,
   Shield,
-  ShieldCheck,
   Images,
   MessageCircleHeart,
   BookOpen,
@@ -49,10 +47,7 @@ const GROUPS: TabGroup[] = [
     tabs: [
       { label: "Team", href: "/team", icon: UserCog },
       { label: "Checklist", href: "/checklist", icon: ListChecks },
-      { label: "Branding", href: "/branding", icon: ShieldCheck },
-      // Participants tab also hosts Registrations (sub-tabbed on the page).
       { label: "Participants", href: "/participants", icon: Users },
-      { label: "Fees", href: "/fees", icon: IndianRupee },
       // Committee picker (route stays /topics). Before Parties so the setup
       // order reads Committees → Parties → Allocation.
       { label: "Committees", href: "/topics", icon: BookOpen },

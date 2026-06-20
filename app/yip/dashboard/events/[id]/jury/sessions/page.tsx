@@ -1,8 +1,12 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/yip/supabase/server";
 import { getEvent } from "@/app/yip/actions/events";
-import { getSessionRoster } from "@/app/yip/actions/jury-sessions";
+import {
+  getSessionRoster,
+  getScoringToggleSessions,
+} from "@/app/yip/actions/jury-sessions";
 import { SessionRosterClient } from "./sessions-roster-client";
+import { ScoredSessionsPanel } from "./scored-sessions-panel";
 import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
 
 export default async function JurySessionsPage({
@@ -30,5 +34,22 @@ export default async function JurySessionsPage({
     return <Forbidden403 reason={roster.error} />;
   }
 
-  return <SessionRosterClient eventId={id} roster={roster.data} />;
+  const toggleSessions = await getScoringToggleSessions(id);
+  // Key the roster on the scoreable set so it remounts (re-seeds its state)
+  // when a session is switched on/off above.
+  const rosterKey = roster.data.sessions.map((s) => s.id).join("|");
+
+  return (
+    <div className="mx-auto w-full max-w-3xl space-y-4 p-4">
+      {toggleSessions.success && (
+        <ScoredSessionsPanel eventId={id} sessions={toggleSessions.data} />
+      )}
+      <SessionRosterClient
+        key={rosterKey}
+        eventId={id}
+        roster={roster.data}
+        embedded
+      />
+    </div>
+  );
 }

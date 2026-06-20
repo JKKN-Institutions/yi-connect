@@ -11,9 +11,12 @@ import { ArrowLeft, Check, Loader2, CalendarClock } from "lucide-react";
 export function SessionRosterClient({
   eventId,
   roster,
+  embedded = false,
 }: {
   eventId: string;
   roster: SessionRoster;
+  /** When true the parent page supplies the page container (width + padding). */
+  embedded?: boolean;
 }) {
   const { jurors, sessions } = roster;
 
@@ -53,7 +56,7 @@ export function SessionRosterClient({
   }
 
   return (
-    <div className="mx-auto w-full max-w-3xl p-4 space-y-4">
+    <div className={embedded ? "space-y-4" : "mx-auto w-full max-w-3xl p-4 space-y-4"}>
       <div>
         <Link
           href={`/yip/dashboard/events/${eventId}/jury`}

@@ -186,3 +186,163 @@ export async function setJurorSessions(
   revalidatePath(`/yip/dashboard/events/${eventId}/jury`);
   return { success: true, data: null };
 }
+
+// ── Per-event scoring on/off (chapter override of the global default) ──
+//
+// The master Session Parameters page (requireSuperAdmin) defines WHICH session
+// types CAN be scored and with what criteria — the global default. This lets a
+// chapter turn scoring on/off for a session in THEIR OWN event (event-scoped
+// gate), without touching the master. A session can only be turned ON if its
+// type resolves to an ACTIVE master config — mirrors getSessionScoringParams so
+// we never create a "scored but no criteria" trap. Turning OFF leaves any juror
+// assignments + recorded scores untouched (turning back ON restores them).
+
+export type ScoringToggleSession = {
+  id: string;
+  day: number;
+  sequence_order: number;
+  title: string;
+  agenda_type: string | null;
+  session_key: string | null;
+  is_scoreable: boolean;
+  /** A matching ACTIVE master config exists, so this session can be scored. */
+  has_criteria: boolean;
+  /** Scores already recorded against this session (warn before turning off). */
+  score_count: number;
+};
+
+/**
+ * Does an agenda item resolve to an ACTIVE master scoring config?
+ * Mirrors getSessionScoringParams: session_key wins (exact, no type fallback);
+ * otherwise match by agenda_type.
+ */
+function itemHasActiveCriteria(
+  item: { session_key: string | null; agenda_type: string | null },
+  activeKeys: Set<string>,
+  activeTypes: Set<string>
+): boolean {
+  if (item.session_key) return activeKeys.has(item.session_key);
+  if (item.agenda_type) return activeTypes.has(item.agenda_type);
+  return false;
+}
+
+/** All sessions a chapter can toggle scoring for in this event (gated). */
+export async function getScoringToggleSessions(
+  eventId: string
+): Promise<ActionResult<ScoringToggleSession[]>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage)
+    return { success: false, error: "Not authorized to manage this event" };
+
+  const supabase = await createServiceClient();
+  const [agendaRes, paramsRes] = await Promise.all([
+    supabase
+      .from("agenda")
+      .select("id, day, sequence_order, title, agenda_type, session_key, is_scoreable")
+      .eq("event_id", eventId)
+      .order("day")
+      .order("sequence_order"),
+    supabase
+      .from("session_parameters")
+      .select("session_key, agenda_type")
+      .eq("is_active", true),
+  ]);
+
+  const agenda = agendaRes.data ?? [];
+  const activeKeys = new Set(
+    (paramsRes.data ?? []).map((p) => p.session_key).filter(Boolean) as string[]
+  );
+  const activeTypes = new Set(
+    (paramsRes.data ?? []).map((p) => p.agenda_type).filter(Boolean) as string[]
+  );
+
+  // Show sessions that CAN be scored (active criteria) or are currently scored
+  // (so an already-on session can always be turned off).
+  const candidates = agenda.filter((a) => {
+    const eligible = itemHasActiveCriteria(a, activeKeys, activeTypes);
+    return eligible || a.is_scoreable === true;
+  });
+
+  // Tally existing scores per candidate session in one query.
+  const ids = candidates.map((a) => a.id);
+  const counts = new Map<string, number>();
+  if (ids.length > 0) {
+    const { data: scoreRows } = await supabase
+      .from("scores")
+      .select("agenda_item_id")
+      .in("agenda_item_id", ids);
+    for (const r of scoreRows ?? []) {
+      const k = (r as { agenda_item_id: string }).agenda_item_id;
+      counts.set(k, (counts.get(k) ?? 0) + 1);
+    }
+  }
+
+  const sessions: ScoringToggleSession[] = candidates.map((a) => ({
+    id: a.id,
+    day: a.day,
+    sequence_order: a.sequence_order,
+    title: a.title,
+    agenda_type: a.agenda_type,
+    session_key: a.session_key,
+    is_scoreable: a.is_scoreable === true,
+    has_criteria: itemHasActiveCriteria(a, activeKeys, activeTypes),
+    score_count: counts.get(a.id) ?? 0,
+  }));
+
+  return { success: true, data: sessions };
+}
+
+/** Turn scoring on/off for one session in this event (gated). */
+export async function setSessionScoreable(
+  eventId: string,
+  agendaItemId: string,
+  isScoreable: boolean
+): Promise<ActionResult> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage)
+    return { success: false, error: "Not authorized to manage this event" };
+
+  const supabase = await createServiceClient();
+
+  // Session must belong to this event.
+  const { data: item } = await supabase
+    .from("agenda")
+    .select("id, session_key, agenda_type")
+    .eq("id", agendaItemId)
+    .eq("event_id", eventId)
+    .maybeSingle();
+  if (!item) return { success: false, error: "Session not found for this event" };
+
+  // Turning ON requires a matching ACTIVE master config — never create a
+  // "scored but no criteria" trap.
+  if (isScoreable) {
+    const { data: params } = await supabase
+      .from("session_parameters")
+      .select("session_key, agenda_type")
+      .eq("is_active", true);
+    const activeKeys = new Set(
+      (params ?? []).map((p) => p.session_key).filter(Boolean) as string[]
+    );
+    const activeTypes = new Set(
+      (params ?? []).map((p) => p.agenda_type).filter(Boolean) as string[]
+    );
+    if (!itemHasActiveCriteria(item, activeKeys, activeTypes)) {
+      return {
+        success: false,
+        error:
+          "No active scoring criteria for this session type. Set them on the master Session Parameters page first.",
+      };
+    }
+  }
+
+  const { error } = await supabase
+    .from("agenda")
+    .update({ is_scoreable: isScoreable })
+    .eq("id", agendaItemId)
+    .eq("event_id", eventId);
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/yip/dashboard/events/${eventId}/jury/sessions`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/jury`);
+  return { success: true, data: null };
+}

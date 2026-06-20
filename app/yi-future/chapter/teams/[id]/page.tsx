@@ -10,7 +10,7 @@ import {
   deleteTeam,
 } from "@/app/yi-future/actions/teams";
 import { validateTeamForSubmission } from "@/lib/yi-future/team-validation";
-import { addMember, removeMember } from "@/app/yi-future/actions/members";
+import { inviteMember, removeMember } from "@/app/yi-future/actions/members";
 import { TEAM_SIZE_MAX } from "@/lib/yi-future/constants";
 import { TrackIcon, trackIconText } from "@/components/yi-future/TrackIcon";
 import { unfreezeTeam } from "@/app/yi-future/actions/team-invites";
@@ -144,10 +144,10 @@ export default async function TeamDetailPage({
     await updateTeamName(team!.id, team!.edition_id, formData);
   }
 
-  async function addMemberAction(formData: FormData) {
+  async function inviteMemberAction(formData: FormData) {
     "use server";
     const did = String(formData.get("delegate_id") ?? "");
-    await addMember(team!.id, did);
+    await inviteMember(team!.id, did);
   }
 
   async function removeMemberAction(formData: FormData) {
@@ -326,7 +326,7 @@ export default async function TeamDetailPage({
         )}
 
         {team.team_members.length < TEAM_SIZE_MAX && (
-          <form action={addMemberAction} className="flex gap-2 pt-3 border-t border-navy/10">
+          <form action={inviteMemberAction} className="flex gap-2 pt-3 border-t border-navy/10">
             <select
               name="delegate_id"
               required
@@ -351,7 +351,7 @@ export default async function TeamDetailPage({
               type="submit"
               className="px-4 py-2 rounded-md bg-navy text-ivory text-sm font-semibold hover:bg-navy-dark"
             >
-              Add
+              Invite
             </button>
           </form>
         )}

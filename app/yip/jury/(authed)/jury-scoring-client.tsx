@@ -467,6 +467,13 @@ function JuryScoringClientInner({
     setAllParticipants((prev) => (prev.length > 0 ? prev : b.roster));
     setCurrentSessionId(b.currentSessionId);
     setSelectableSessionIds(b.selectableSessionIds);
+    setAllowEarlierSessions(b.allowEarlierSessions);
+    // Organiser disabled the unlock mid-session → snap jurors back to the
+    // restricted set.
+    if (!b.allowEarlierSessions && showAllSessionsRef.current) {
+      showAllSessionsRef.current = false;
+      setShowAllSessions(false);
+    }
     currentAgendaItemRef.current = b.currentAgendaItemId;
     patchOfflineCache(eventId, juryAssignmentId, {
       sessions: b.sessions,

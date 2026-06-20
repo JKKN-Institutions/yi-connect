@@ -193,6 +193,10 @@ export type JuryScreenBootstrap = {
   // Sessions the juror may score RIGHT NOW: the current session + the
   // immediately-previous assigned session (catch-up). Subset of `sessions`.
   selectableSessionIds: string[];
+  // BUG-393 follow-up: when the organiser has enabled it for this event, the
+  // juror may unlock ALL assigned sessions ("score an earlier session"). When
+  // false, jurors stay locked to `selectableSessionIds`.
+  allowEarlierSessions: boolean;
   // All sessions this juror is assigned to, ordered (full picker context).
   sessions: ScoreableSession[];
   // Roster for the manual picker + offline prefetch.
@@ -223,7 +227,7 @@ export async function getJuryScreenBootstrap(
   const [eventRes, sessions, roster, flagsRes, speakerRes] = await Promise.all([
     supabase
       .from("events")
-      .select("scores_locked, current_agenda_item_id")
+      .select("scores_locked, current_agenda_item_id, jury_allow_earlier_sessions")
       .eq("id", eventId)
       .single(),
     getSessionsForJury(juryAssignmentId, eventId),
@@ -234,6 +238,9 @@ export async function getJuryScreenBootstrap(
 
   const scoresLocked = Boolean(eventRes.data?.scores_locked);
   const currentAgendaItemId = eventRes.data?.current_agenda_item_id ?? null;
+  const allowEarlierSessions = Boolean(
+    eventRes.data?.jury_allow_earlier_sessions
+  );
 
   // Fan-out the per-role rubrics + per-session params concurrently (server-side
   // — these were the ~20 serialized client round-trips before).
@@ -326,6 +333,7 @@ export async function getJuryScreenBootstrap(
       currentAgendaItemId,
       currentSessionId,
       selectableSessionIds,
+      allowEarlierSessions,
       sessions,
       roster,
       rubricsByRole,

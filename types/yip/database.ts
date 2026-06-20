@@ -1868,6 +1868,7 @@ export type Database = {
           registrations_frozen: boolean | null
           results_published_at: string | null
           scores_locked: boolean | null
+          jury_allow_earlier_sessions: boolean
           social_links: string[]
           social_reach_count: number | null
           state: string | null

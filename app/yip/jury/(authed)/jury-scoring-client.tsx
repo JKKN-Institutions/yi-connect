@@ -187,6 +187,9 @@ function JuryScoringClientInner({
   // re-created on every toggle.
   const [showAllSessions, setShowAllSessions] = useState(false);
   const showAllSessionsRef = useRef(false);
+  // Organiser-controlled (per event): when false the "score an earlier session"
+  // option is hidden and jurors stay locked to the restricted set.
+  const [allowEarlierSessions, setAllowEarlierSessions] = useState(false);
   // Track the live agenda item so a realtime update can detect a genuine
   // house-advance and auto-switch the juror to the new session.
   const currentAgendaItemRef = useRef<string | null>(null);

@@ -28,6 +28,15 @@ export default async function RegistrationsPage({
     );
   }
 
+  // DPDP: privacy-mode events do not collect personal data, so the bulk-PII
+  // registration surface is disabled. Direct the organiser to the minimal
+  // (serial + constituency) registration on the Participants tab instead.
+  if (event.privacy_mode) {
+    return (
+      <Forbidden403 reason="This event is in privacy mode — registration with personal details is disabled. Add participants by serial number and constituency on the Participants tab." />
+    );
+  }
+
   const [registrations, stats] = await Promise.all([
     listRegistrations(eventId),
     getRegistrationStats(eventId),

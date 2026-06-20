@@ -4,6 +4,7 @@ import { createClient, createServiceClient } from "@/lib/yip/supabase/server";
 import { generateAccessCode } from "@/lib/yip/access-code";
 import { logAuditAction } from "@/lib/yip/audit/log-action";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
+import { PII_REMOVED_PLACEHOLDER } from "@/lib/yip/pii";
 import { COMMITTEES } from "@/lib/yip/constants";
 import {
   CONSTITUENCIES,
@@ -146,6 +147,81 @@ export async function addParticipant(
     return {
       success: true,
       data: { id: participant.id, access_code: participant.access_code },
+    };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Unknown error",
+    };
+  }
+}
+
+// ─── Add Minimal (anonymous / data-minimised) Participant ──────────
+//
+// DPDP data-minimisation: a privacy-mode event registers participants with NO
+// personal data — only a serial number + constituency. The participant is "born
+// anonymised": full_name is a placeholder (same style as the SQL purge),
+// school_name is the removed-placeholder, and class is defaulted to 9 (a CHECK
+// requires 9–12, but it is not collected here). The serial is the chapter's
+// human-facing identifier (auto-suggested as max+1, editable by the organiser).
+
+interface MinimalParticipantData {
+  serial_no: number;
+  constituency_name?: string | null;
+  constituency_state?: string | null;
+}
+
+export async function addParticipantMinimal(
+  eventId: string,
+  data: MinimalParticipantData
+): Promise<ActionResult<{ id: string; access_code: string; serial_no: number }>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
+
+  const serial = Number.isFinite(data.serial_no)
+    ? Math.trunc(data.serial_no)
+    : 0;
+  if (serial <= 0) {
+    return { success: false, error: "Serial number must be a positive number" };
+  }
+
+  const supabase = await createServiceClient();
+
+  try {
+    const accessCode = await generateUniqueCode(supabase, eventId, new Set());
+
+    const { data: participant, error } = await supabase
+      .from("participants")
+      .insert({
+        event_id: eventId,
+        full_name: `Participant ${serial}`,
+        school_name: PII_REMOVED_PLACEHOLDER,
+        class: 9,
+        serial_no: serial,
+        constituency_name: data.constituency_name?.trim() || null,
+        constituency_state: data.constituency_state?.trim() || null,
+        access_code: accessCode,
+      })
+      .select("id, access_code, serial_no")
+      .single();
+
+    if (error || !participant) {
+      return {
+        success: false,
+        error: error?.message ?? "Failed to add participant",
+      };
+    }
+
+    revalidatePath(`/yip/dashboard/events/${eventId}/participants`);
+    return {
+      success: true,
+      data: {
+        id: participant.id,
+        access_code: participant.access_code,
+        serial_no: participant.serial_no ?? serial,
+      },
     };
   } catch (err) {
     return {

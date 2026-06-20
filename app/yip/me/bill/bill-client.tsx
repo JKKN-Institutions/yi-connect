@@ -7,6 +7,7 @@ import { Input } from "@/components/yip/ui/input";
 import { Textarea } from "@/components/yip/ui/textarea";
 import { Label } from "@/components/yip/ui/label";
 import { Badge } from "@/components/yip/ui/badge";
+import { maskName } from "@/lib/yip/pii";
 import {
   Dialog,
   DialogContent,
@@ -131,12 +132,15 @@ export function BillClient({
   committeeName,
   committeeTopic,
   committeeScheme,
+  masked = false,
 }: {
   initialSession: ParticipantSession;
   parliamentRole: string | null;
   committeeName: string | null;
   committeeTopic: string | null;
   committeeScheme: string | null;
+  /** DPDP: privacy-mode event → show committee members' names as pseudonyms. */
+  masked?: boolean;
 }) {
   const session: ParticipantSession | null = initialSession;
   // Committee members draft their committee's bill (everyone except the Speaker
@@ -427,7 +431,7 @@ export function BillClient({
                       {roleLabels[idx] || `Member ${idx + 1}`}
                     </p>
                     <p className="text-sm font-medium text-gray-800 truncate">
-                      {m.full_name}
+                      {maskName(masked, m.id, m.full_name)}
                     </p>
                   </div>
                 );

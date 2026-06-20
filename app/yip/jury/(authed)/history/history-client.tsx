@@ -13,6 +13,7 @@ import {
 } from "@/app/yip/actions/scoring";
 import { Loader2, ArrowLeft, ClipboardList } from "lucide-react";
 import { Button } from "@/components/yip/ui/button";
+import { maskName } from "@/lib/yip/pii";
 
 interface Criterion {
   key: string;
@@ -46,6 +47,8 @@ interface Props {
   // Per-session denominators resolved SERVER-SIDE (page.tsx) so each card shows
   // the correct /N (15/20/10) on first paint — no client fallback flash.
   sessionMaxById: Record<string, number>;
+  // DPDP: privacy-mode event → show participant pseudonyms instead of names.
+  masked?: boolean;
 }
 
 export function HistoryClient({
@@ -53,6 +56,7 @@ export function HistoryClient({
   juryAssignmentId,
   eventId,
   sessionMaxById,
+  masked = false,
 }: Props) {
   const router = useRouter();
   const [editing, setEditing] = useState<string | null>(null); // participant id
@@ -204,6 +208,12 @@ export function HistoryClient({
           participant={{
             ...editParticipant,
             ministry: null,
+            // DPDP: mask the name in privacy mode (id untouched for scoring).
+            full_name: maskName(
+              masked,
+              editParticipant.id,
+              editParticipant.full_name
+            ),
             // Keep constituency_name + serial_no (from editParticipant) so the
             // edit header shows "#N · Name · Constituency" like live scoring.
           }}
@@ -254,11 +264,16 @@ export function HistoryClient({
           {scores.map((score) => (
             <ScoreCard
               key={score.id}
-              participantName={
-                score.participant.serial_no != null
-                  ? `#${score.participant.serial_no} · ${score.participant.full_name}`
-                  : score.participant.full_name
-              }
+              participantName={(() => {
+                const name = maskName(
+                  masked,
+                  score.participant_id,
+                  score.participant.full_name
+                );
+                return score.participant.serial_no != null
+                  ? `#${score.participant.serial_no} · ${name}`
+                  : name;
+              })()}
               constituency={score.participant.constituency_name}
               parliamentRole={score.participant.parliament_role}
               partySide={score.participant.party_side}

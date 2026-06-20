@@ -63,12 +63,14 @@ export function PrivacyAdminClient({
           <Lock className="size-7 text-[#FF9933]" /> Data Privacy (DPDP)
         </h1>
         <p className="text-sm text-[#1a1a3e]/60 mt-1 max-w-2xl">
-          When a chapter is <strong>ON</strong>, its <strong>new</strong> events
-          run in privacy mode — student personal data (name / email / phone /
-          school) is hidden from jury, projector and students during the event,
-          and permanently anonymized after results publish. Existing events are
-          unaffected; clean those from People → “Remove personal data”.{" "}
-          {onCount} of {chapters.length} chapters on.
+          Every chapter is <strong>ON by default</strong> (privacy by default).
+          When a chapter is ON, its <strong>new</strong> events run in privacy
+          mode — student personal data (name / email / phone / school) is hidden
+          from jury, projector and students during the event, and permanently
+          anonymized after results publish. Toggle a chapter <strong>off</strong>{" "}
+          to collect full details for that chapter’s future events. Existing
+          events are unaffected; clean those from People → “Remove personal
+          data”. {onCount} of {chapters.length} chapters on.
         </p>
       </div>
 

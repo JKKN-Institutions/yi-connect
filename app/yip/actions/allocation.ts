@@ -508,6 +508,23 @@ export async function updateParticipantAssignment(
     updateData.ministry = null;
   }
 
+  // Changing the participant's party must also move them to that party's side
+  // (ruling/opposition) so the benches and side badges stay consistent.
+  if (field === "party_number") {
+    const pn = updateData.party_number;
+    if (typeof pn === "number") {
+      const { data: party } = await supabase
+        .from("parties")
+        .select("side")
+        .eq("event_id", eventId)
+        .eq("party_number", pn)
+        .maybeSingle();
+      updateData.party_side = party?.side ?? null;
+    } else {
+      updateData.party_side = null;
+    }
+  }
+
   const { error } = await supabase
     .from("participants")
     .update(updateData)

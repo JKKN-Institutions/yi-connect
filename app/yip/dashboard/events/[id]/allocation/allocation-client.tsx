@@ -212,7 +212,13 @@ export function AllocationClient({
 
   async function handleFieldChange(
     participantId: string,
-    field: "party_side" | "parliament_role" | "ministry" | "committee_name",
+    field:
+      | "party_side"
+      | "party_number"
+      | "parliament_role"
+      | "ministry"
+      | "committee_name"
+      | "constituency_name",
     value: string | null
   ) {
     const result = await updateParticipantAssignment(
@@ -868,6 +874,7 @@ export function AllocationClient({
       {editingParticipant && (
         <EditAssignmentDialog
           participant={editingParticipant}
+          parties={parties}
           committeeNames={committeeNames}
           onClose={() => setEditingParticipant(null)}
           onSave={handleFieldChange}
@@ -968,23 +975,47 @@ function roleColor(role: string): string {
 
 function EditAssignmentDialog({
   participant,
+  parties,
   committeeNames,
   onClose,
   onSave,
 }: {
   participant: Participant;
+  parties: { party_number: number | null; name: string; side: string | null }[];
   committeeNames: string[];
   onClose: () => void;
   onSave: (
     id: string,
-    field: "party_side" | "parliament_role" | "ministry" | "committee_name",
+    field:
+      | "party_side"
+      | "party_number"
+      | "parliament_role"
+      | "ministry"
+      | "committee_name"
+      | "constituency_name",
     value: string | null
   ) => Promise<void>;
 }) {
   const [saving, setSaving] = useState(false);
+  // Local mirror so the dialog reflects each edit immediately (every change is
+  // persisted as it happens).
+  const [partyNumber, setPartyNumber] = useState(
+    participant.party_number != null ? String(participant.party_number) : ""
+  );
+  const [role, setRole] = useState(participant.parliament_role || "mp");
+  const [ministry, setMinistry] = useState(participant.ministry || "");
+  const [committee, setCommittee] = useState(participant.committee_name || "");
+  const [constituency, setConstituency] = useState(
+    participant.constituency_name || ""
+  );
 
-  async function handleChange(
-    field: "party_side" | "parliament_role" | "ministry" | "committee_name",
+  async function persist(
+    field:
+      | "party_number"
+      | "parliament_role"
+      | "ministry"
+      | "committee_name"
+      | "constituency_name",
     value: string | null
   ) {
     setSaving(true);
@@ -993,8 +1024,11 @@ function EditAssignmentDialog({
   }
 
   const isMinisterRole =
-    participant.parliament_role === "cabinet_minister" ||
-    participant.parliament_role === "shadow_minister";
+    role === "cabinet_minister" || role === "shadow_minister";
+
+  const sortedParties = [...parties]
+    .filter((p) => p.party_number != null)
+    .sort((a, b) => (a.party_number ?? 0) - (b.party_number ?? 0));
 
   return (
     <Dialog open onOpenChange={onClose}>
@@ -1014,21 +1048,55 @@ function EditAssignmentDialog({
         )}
 
         <div className="space-y-4">
-          {/* Party Side */}
+          {/* Party — the actual party; the side (Ruling/Opposition) follows it */}
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-700">
               Party
             </label>
             <select
-              value={participant.party_side || ""}
-              onChange={(e) =>
-                handleChange("party_side", e.target.value || null)
-              }
+              value={partyNumber}
+              onChange={(e) => {
+                const v = e.target.value;
+                setPartyNumber(v);
+                void persist("party_number", v || null);
+              }}
               className="flex h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
             >
-              <option value="ruling">Ruling</option>
-              <option value="opposition">Opposition</option>
+              <option value="">-- None --</option>
+              {sortedParties.map((pt) => (
+                <option key={pt.party_number} value={String(pt.party_number)}>
+                  {pt.name}
+                  {pt.side
+                    ? ` (${pt.side === "ruling" ? "Ruling" : "Opposition"})`
+                    : ""}
+                </option>
+              ))}
             </select>
+            {sortedParties.length === 0 && (
+              <p className="mt-1 text-xs text-amber-600">
+                No parties set up yet — add them on the Parties page.
+              </p>
+            )}
+          </div>
+
+          {/* Constituency */}
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-700">
+              Constituency
+            </label>
+            <input
+              type="text"
+              value={constituency}
+              onChange={(e) => setConstituency(e.target.value)}
+              onBlur={() => {
+                const next = constituency.trim();
+                if (next !== (participant.constituency_name || "")) {
+                  void persist("constituency_name", next || null);
+                }
+              }}
+              placeholder="e.g. Gandhinagar"
+              className="flex h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+            />
           </div>
 
           {/* Parliament Role */}
@@ -1037,15 +1105,20 @@ function EditAssignmentDialog({
               Role
             </label>
             <select
-              value={participant.parliament_role || "mp"}
-              onChange={(e) =>
-                handleChange("parliament_role", e.target.value || null)
-              }
+              value={role}
+              onChange={(e) => {
+                const v = e.target.value;
+                setRole(v);
+                if (v !== "cabinet_minister" && v !== "shadow_minister") {
+                  setMinistry("");
+                }
+                void persist("parliament_role", v || null);
+              }}
               className="flex h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
             >
-              {PARLIAMENT_ROLES.map((role) => (
-                <option key={role} value={role}>
-                  {ROLE_LABELS[role] ?? role}
+              {PARLIAMENT_ROLES.map((r) => (
+                <option key={r} value={r}>
+                  {ROLE_LABELS[r] ?? r}
                 </option>
               ))}
             </select>
@@ -1058,10 +1131,12 @@ function EditAssignmentDialog({
                 Ministry
               </label>
               <select
-                value={participant.ministry || ""}
-                onChange={(e) =>
-                  handleChange("ministry", e.target.value || null)
-                }
+                value={ministry}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setMinistry(v);
+                  void persist("ministry", v || null);
+                }}
                 className="flex h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
               >
                 <option value="">-- None --</option>
@@ -1080,10 +1155,12 @@ function EditAssignmentDialog({
               Committee
             </label>
             <select
-              value={participant.committee_name || ""}
-              onChange={(e) =>
-                handleChange("committee_name", e.target.value || null)
-              }
+              value={committee}
+              onChange={(e) => {
+                const v = e.target.value;
+                setCommittee(v);
+                void persist("committee_name", v || null);
+              }}
               className="flex h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
             >
               <option value="">-- None --</option>

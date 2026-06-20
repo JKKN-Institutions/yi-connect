@@ -35,12 +35,27 @@ export default async function ParticipantsPage({
 
   const access = await getYipEventAccess(id);
 
+  // School is collected only to balance the allocation and is NEVER shown in the
+  // platform. Compute the one-time-export availability server-side, then strip
+  // school from the client payload entirely (the export reads it server-side).
+  const hasSchoolData = participants.some(
+    (p) => (p.school_name ?? "").trim() !== ""
+  );
+  const schoolExportDownloaded = Boolean(
+    (event as { school_export_downloaded_at?: string | null })
+      .school_export_downloaded_at
+  );
+  const safeParticipants = participants.map((p) => ({ ...p, school_name: "" }));
+
   return (
     <ParticipantsClient
       eventId={id}
-      participants={participants}
+      participants={safeParticipants}
       allocationLocked={event.allocation_locked ?? false}
       canDelete={access.canDelete}
+      canManage={access.canManage}
+      hasSchoolData={hasSchoolData}
+      schoolExportDownloaded={schoolExportDownloaded}
     />
   );
 }

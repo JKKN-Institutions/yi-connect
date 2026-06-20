@@ -2,6 +2,9 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
 import { readSession } from "@/app/yi-future/actions/auth";
+import { GuideNudge } from "@/components/yi-future/guide";
+import { GUIDES } from "@/lib/yi-future/guide/content";
+import { getCompletedSteps, logGuideEvent } from "@/lib/yi-future/guide/actions";
 
 type Partner = {
   id: string;
@@ -58,8 +61,16 @@ export default async function PartnerHome() {
     (iv) => new Date(iv.scheduled_at) < now
   ).length;
 
+  const guideCompleted = await getCompletedSteps("partner");
+
   return (
     <div className="space-y-6">
+      <GuideNudge
+        guide={GUIDES.lanes.partner}
+        basePath="/yi-future/guide"
+        completed={guideCompleted}
+        onEvent={logGuideEvent}
+      />
       <div>
         <h1 className="text-2xl font-bold text-navy">{p.organization}</h1>
         <p className="mt-1 text-sm text-navy/60">

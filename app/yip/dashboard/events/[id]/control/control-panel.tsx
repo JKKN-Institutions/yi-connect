@@ -44,6 +44,7 @@ import { ROLE_LABELS, ROLE_COLORS, PARTY_COLORS } from "@/lib/yip/constants";
 import { useRealtimeEvent } from "@/lib/yip/hooks/use-realtime-event";
 import { useTimer } from "@/lib/yip/hooks/use-timer";
 import { advanceAgenda, goToPreviousAgendaItem, reopenAgendaItem, resetAgenda, startAgendaItem, skipAgendaItem, updateEventStatus, updateAgendaItemDuration, updateAgendaItemSubTimers } from "@/app/yip/actions/agenda";
+import { setJuryAllowEarlierSessions } from "@/app/yip/actions/jury";
 import {
   getSubTimers,
   formatSubTimerSeconds,

@@ -663,13 +663,6 @@ function buildParticipationCertHtml(
   <div style="position:absolute;top:20px;left:20px;right:20px;bottom:20px;border:1px solid #E8D5A0;border-radius:2px;"></div>
 
   <div style="position:relative;padding:32px 48px;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;box-sizing:border-box;">
-    <div style="display:flex;align-items:center;justify-content:center;gap:32px;margin-bottom:8px;">
-      <span style="font-size:11px;color:#666;letter-spacing:0.5px;">Young Indians (Yi)</span>
-      <span style="font-size:11px;color:#999;">|</span>
-      <span style="font-size:11px;color:#666;letter-spacing:0.5px;">Confederation of Indian Industry (CII)</span>
-      <span style="font-size:11px;color:#999;">|</span>
-      <span style="font-size:11px;color:#666;letter-spacing:0.5px;">Thalir Thiran Iyakkam</span>
-    </div>
     <div style="font-size:14px;font-weight:bold;color:#FF9933;letter-spacing:3px;text-transform:uppercase;margin-bottom:4px;">Young Indians Parliament 2.0</div>
     <h1 style="font-size:32px;font-weight:bold;color:#1a1a1a;letter-spacing:6px;text-transform:uppercase;margin:12px 0 8px;">Certificate of Participation</h1>
     <div style="width:120px;height:3px;background:linear-gradient(to right,#FF9933,#D4A843,#138808);margin:8px auto 20px;border-radius:2px;"></div>
@@ -720,13 +713,6 @@ function buildAwardCertHtml(
   <div style="position:absolute;top:24px;left:24px;right:24px;bottom:24px;border:1px solid #E8D5A0;border-radius:2px;"></div>
 
   <div style="position:relative;padding:36px 56px;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;box-sizing:border-box;">
-    <div style="display:flex;align-items:center;justify-content:center;gap:32px;margin-bottom:6px;">
-      <span style="font-size:11px;color:#8B7355;letter-spacing:0.5px;">Young Indians (Yi)</span>
-      <span style="font-size:11px;color:#B8A080;">|</span>
-      <span style="font-size:11px;color:#8B7355;letter-spacing:0.5px;">Confederation of Indian Industry (CII)</span>
-      <span style="font-size:11px;color:#B8A080;">|</span>
-      <span style="font-size:11px;color:#8B7355;letter-spacing:0.5px;">Thalir Thiran Iyakkam</span>
-    </div>
     <div style="font-size:14px;font-weight:bold;color:#B8860B;letter-spacing:3px;text-transform:uppercase;margin-bottom:4px;">Young Indians Parliament 2.0</div>
     <h1 style="font-size:32px;font-weight:bold;color:#1a1a1a;letter-spacing:6px;text-transform:uppercase;margin:10px 0 6px;">Certificate of Excellence</h1>
     <div style="width:140px;height:3px;background:linear-gradient(to right,#B8860B,#FFD700,#B8860B);margin:6px auto 16px;border-radius:2px;"></div>

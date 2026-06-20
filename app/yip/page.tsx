@@ -71,11 +71,6 @@ export default function HomePage() {
           <div className="grid items-center gap-12 lg:grid-cols-[1.2fr_1fr]">
             {/* Left: Text content */}
             <div>
-              <div className="mb-6 inline-flex items-center gap-2.5 rounded-full border border-[#FF9933]/15 bg-white/80 px-4 py-2 text-sm shadow-sm backdrop-blur-sm">
-                <span className="flex h-2 w-2 rounded-full bg-[#FF9933] shadow-sm shadow-[#FF9933]/50" />
-                <span className="font-medium text-[#1a1a3e]/80">A Yi &middot; CII Initiative</span>
-              </div>
-
               <h1 className="font-[family-name:var(--font-heading)] text-4xl font-bold leading-[1.1] tracking-tight text-[#1a1a3e] sm:text-5xl lg:text-6xl">
                 Where Young
                 <br />
@@ -111,15 +106,6 @@ export default function HomePage() {
                   <svg className="size-5 text-[#138808]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 7-5 5 5 5"/><circle cx="12" cy="12" r="10" strokeWidth="1.5"/></svg>
                   Join with Access Code
                 </Link>
-              </div>
-
-              {/* Trust badges */}
-              <div className="mt-12 flex items-center gap-6 text-xs font-medium uppercase tracking-[0.15em] text-[#1a1a3e]/30">
-                <span>Young Indians</span>
-                <span className="h-3 w-px bg-[#1a1a3e]/10" />
-                <span>CII</span>
-                <span className="h-3 w-px bg-[#1a1a3e]/10" />
-                <span>Thalir</span>
               </div>
             </div>
 
@@ -354,13 +340,6 @@ export default function HomePage() {
       <footer className="border-t border-[#1a1a3e]/5 bg-white py-10">
         <div className="mx-auto max-w-6xl px-6">
           <div className="flex flex-col items-center gap-6">
-            <div className="flex flex-wrap items-center justify-center gap-6 text-xs font-medium uppercase tracking-[0.15em] text-[#1a1a3e]/25">
-              <span>Young Indians (Yi)</span>
-              <span className="hidden sm:inline h-3 w-px bg-[#1a1a3e]/10" />
-              <span>Confederation of Indian Industry</span>
-              <span className="hidden sm:inline h-3 w-px bg-[#1a1a3e]/10" />
-              <span>Thalir</span>
-            </div>
             {/* Tricolor line */}
             <div className="flex w-20 overflow-hidden rounded-full">
               <div className="h-1 flex-1 bg-[#FF9933]" />

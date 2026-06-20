@@ -11,6 +11,7 @@ import {
   type MotionVoteState,
 } from "@/app/yip/actions/speaker";
 import type { Motion } from "@/app/yip/actions/motions";
+import { maskName } from "@/lib/yip/pii";
 import {
   MOTION_TYPES,
   MOTION_STATUS_LABELS,
@@ -26,12 +27,15 @@ export function SpeakerClient({
   roleLabel,
   initialMotions,
   loadError,
+  masked = false,
 }: {
   eventId: string;
   participantId: string;
   roleLabel: string;
   initialMotions: Motion[];
   loadError: string | null;
+  /** DPDP: privacy-mode event → show motion movers' names as pseudonyms. */
+  masked?: boolean;
 }) {
   const [motions, setMotions] = useState<Motion[]>(initialMotions);
   const [error, setError] = useState<string | null>(loadError);
@@ -100,7 +104,7 @@ export function SpeakerClient({
       <Section title={`Awaiting your ruling (${pending.length})`}>
         {pending.length === 0 && <Empty>No motions waiting.</Empty>}
         {pending.map((m) => (
-          <MotionCard key={m.id} m={m}>
+          <MotionCard key={m.id} m={m} masked={masked}>
             {rejecting[m.id] !== undefined ? (
               <div className="space-y-2">
                 <textarea
@@ -162,7 +166,7 @@ export function SpeakerClient({
       <Section title={`On the floor (${active.length})`}>
         {active.length === 0 && <Empty>Nothing under discussion.</Empty>}
         {active.map((m) => (
-          <MotionCard key={m.id} m={m}>
+          <MotionCard key={m.id} m={m} masked={masked}>
             {m.status === "voting" ? (
               <FloorVote
                 state={voteStates[m.id]}
@@ -184,7 +188,7 @@ export function SpeakerClient({
       <Section title={`Resolved (${done.length})`}>
         {done.length === 0 && <Empty>Nothing resolved yet.</Empty>}
         {done.map((m) => (
-          <MotionCard key={m.id} m={m}>
+          <MotionCard key={m.id} m={m} masked={masked}>
             {m.outcome && (
               <p className="text-sm font-semibold text-[#1a1a3e]">
                 Outcome: {m.outcome === "passed" ? "Passed" : "Rejected"}
@@ -222,7 +226,15 @@ function Empty({ children }: { children: React.ReactNode }) {
   );
 }
 
-function MotionCard({ m, children }: { m: Motion; children: React.ReactNode }) {
+function MotionCard({
+  m,
+  masked = false,
+  children,
+}: {
+  m: Motion;
+  masked?: boolean;
+  children: React.ReactNode;
+}) {
   return (
     <div className="rounded-2xl border border-[#1a1a3e]/8 bg-white p-4 shadow-sm">
       <div className="flex items-start justify-between gap-2">
@@ -240,7 +252,10 @@ function MotionCard({ m, children }: { m: Motion; children: React.ReactNode }) {
       </p>
       {m.details && <p className="mt-1.5 text-sm text-[#1a1a3e]/70">{m.details}</p>}
       <p className="mt-1.5 text-xs text-[#1a1a3e]/45">
-        Raised by {m.raised_by_name ?? "—"}
+        Raised by{" "}
+        {m.raised_by_name
+          ? maskName(masked, m.raised_by_id ?? m.id, m.raised_by_name)
+          : "—"}
         {m.raised_by_role ? ` · ${m.raised_by_role}` : ""}
       </p>
       <div className="mt-3">{children}</div>

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getYipSession } from "@/lib/yip/auth/yip-session";
 import Link from "next/link";
 import { createServiceClient } from "@/lib/yip/supabase/server";
+import { eventPrivacyMasked } from "@/lib/yip/pii";
 import { ROLE_LABELS } from "@/lib/yip/constants";
 import { getSpeakerMotions } from "@/app/yip/actions/speaker";
 import { PRESIDING_ROLES } from "@/lib/yip/auth/leadership";
@@ -67,6 +68,14 @@ export default async function SpeakerPage() {
   const result = await getSpeakerMotions(session.eventId, participant.id);
   const motions = result.success ? result.data : [];
 
+  // DPDP: privacy-mode event → show motion movers' names as pseudonyms.
+  const { data: ev } = await supabase
+    .from("events")
+    .select("privacy_mode, pii_purged_at")
+    .eq("id", session.eventId)
+    .single();
+  const masked = ev ? eventPrivacyMasked(ev) : false;
+
   return (
     <SpeakerClient
       eventId={session.eventId}
@@ -74,6 +83,7 @@ export default async function SpeakerPage() {
       roleLabel={role ? ROLE_LABELS[role] ?? "Speaker" : "Speaker"}
       initialMotions={motions}
       loadError={result.success ? null : result.error}
+      masked={masked}
     />
   );
 }

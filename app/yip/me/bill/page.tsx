@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getYipSession } from "@/lib/yip/auth/yip-session";
 import { createServiceClient } from "@/lib/yip/supabase/server";
+import { eventPrivacyMasked } from "@/lib/yip/pii";
 import { BillClient, type ParticipantSession } from "./bill-client";
 
 // The yip_session cookie is httpOnly (set by app/yip/actions/auth.ts), so it
@@ -43,6 +44,14 @@ export default async function BillDraftingPage() {
     .eq("id", session.id)
     .maybeSingle();
 
+  // DPDP: privacy-mode event → show fellow committee members as pseudonyms.
+  const { data: ev } = await supabase
+    .from("events")
+    .select("privacy_mode, pii_purged_at")
+    .eq("id", session.eventId)
+    .single();
+  const masked = ev ? eventPrivacyMasked(ev) : false;
+
   // Look up the committee's official topic + linked scheme from the yip.topics
   // catalog (category = 'committee', title = the committee name) so drafting
   // shows what students should write the bill on. Older events whose committee
@@ -68,6 +77,7 @@ export default async function BillDraftingPage() {
       committeeName={p?.committee_name ?? null}
       committeeTopic={committeeTopic}
       committeeScheme={committeeScheme}
+      masked={masked}
     />
   );
 }

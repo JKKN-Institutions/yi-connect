@@ -23,6 +23,7 @@ import {
   type FlagKey,
 } from "@/app/yip/actions/scoring-flags";
 import { ROLE_LABELS, ROLE_COLORS, PARTY_COLORS } from "@/lib/yip/constants";
+import { maskName } from "@/lib/yip/pii";
 import {
   Loader2,
   Mic,
@@ -109,6 +110,9 @@ interface Props {
   juryName: string;
   eventId: string;
   initialEventLocked?: boolean;
+  // DPDP: when true (privacy-mode event, not yet purged), participant names are
+  // shown to the juror as stable pseudonyms. Scoring is school-blind already.
+  masked?: boolean;
 }
 
 // ─── Component ────────────────────────────────────────────────────
@@ -136,6 +140,7 @@ function JuryScoringClientInner({
   juryName,
   eventId,
   initialEventLocked,
+  masked = false,
 }: Props) {
   const supabase = createClient();
 
@@ -193,9 +198,22 @@ function JuryScoringClientInner({
 
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
-  // The active participant is either the current speaker or a manually selected one
-  const activeParticipant =
+  // The active participant is either the current speaker or a manually selected
+  // one. Mask the display name here so every downstream consumer (ScoreForm,
+  // submit) sees the pseudonym in privacy mode; the id is untouched so scoring,
+  // buffering and lookups still key on the real participant.
+  const activeParticipantRaw =
     manualParticipant ?? currentSpeaker?.participant ?? null;
+  const activeParticipant = activeParticipantRaw
+    ? {
+        ...activeParticipantRaw,
+        full_name: maskName(
+          masked,
+          activeParticipantRaw.id,
+          activeParticipantRaw.full_name
+        ),
+      }
+    : null;
 
   // ─── Fetch speaker data ─────────────────────────────────────────
 
@@ -1055,7 +1073,9 @@ function JuryScoringClientInner({
           const list = q
             ? allParticipants.filter(
                 (p) =>
-                  p.full_name.toLowerCase().includes(q) ||
+                  maskName(masked, p.id, p.full_name)
+                    .toLowerCase()
+                    .includes(q) ||
                   (p.serial_no != null && String(p.serial_no).includes(q)) ||
                   (p.constituency_name?.toLowerCase().includes(q) ?? false)
               )
@@ -1112,7 +1132,7 @@ function JuryScoringClientInner({
                                   {" · "}
                                 </span>
                               )}
-                              {p.full_name}
+                              {maskName(masked, p.id, p.full_name)}
                             </p>
                             {/* Constituency only — school is not shown to jurors. */}
                             {p.constituency_name && (

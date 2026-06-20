@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getYipSession } from "@/lib/yip/auth/yip-session";
 import { createServiceClient } from "@/lib/yip/supabase/server";
+import { eventPrivacyMasked } from "@/lib/yip/pii";
 import { JuryScoringClient } from "./jury-scoring-client";
 
 interface JurySession {
@@ -37,7 +38,7 @@ export default async function JuryScoringPage() {
   const supabase = await createServiceClient();
   const { data: event } = await supabase
     .from("events")
-    .select("scores_locked")
+    .select("scores_locked, privacy_mode, pii_purged_at")
     .eq("id", session.eventId)
     .single();
 
@@ -47,6 +48,7 @@ export default async function JuryScoringPage() {
       juryName={session.name}
       eventId={session.eventId}
       initialEventLocked={event?.scores_locked === true}
+      masked={event ? eventPrivacyMasked(event) : false}
     />
   );
 }

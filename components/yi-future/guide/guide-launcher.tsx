@@ -71,7 +71,9 @@ export function GuideLauncher({
           onClick={() => setOpen(true)}
           aria-label={remaining > 0 ? `Help — ${remaining} setup steps left` : "Help"}
           className={cx(
-            "group fixed bottom-4 right-4 z-40 flex items-center gap-2 rounded-full bg-[#1a1a3e] px-3.5 py-3 text-white shadow-lg",
+            // Pinned bottom-LEFT so it never sits under the bug-reporter FAB
+            // (which lives bottom-right across every Yi Future screen).
+            "group fixed bottom-4 left-4 z-40 flex items-center gap-2 rounded-full bg-[#1a1a3e] px-3.5 py-3 text-white shadow-lg",
             "transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
             className
           )}

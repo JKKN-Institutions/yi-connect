@@ -20,14 +20,13 @@ function csvCell(v: unknown): string {
 }
 
 /**
- * Download the current allocation roster as a CSV — name + party + side +
- * constituency + committee + role.
+ * Download the current allocation roster as a CSV — name + party +
+ * constituency (no. + name) + committee + access code.
  *
  * Re-runnable any number of times so an organiser can re-download after adding
  * late registrants and re-running allocation. Non-destructive: it only reads the
- * roster and writes nothing (it does NOT touch the balancing data, which is held
- * until the event's PII is removed at close-out). Event-scoped: requires
- * canManage (chapter organiser or above).
+ * roster and writes nothing. Event-scoped: requires canManage (chapter organiser
+ * or above) — the access code is the student's login, so this stays manager-only.
  */
 export async function exportAllocationRoster(
   eventId: string
@@ -47,24 +46,35 @@ export async function exportAllocationRoster(
   if (evErr) return { success: false, error: evErr.message };
   if (!ev) return { success: false, error: "Event not found" };
 
-  // Ordered party-wise then by name so the file reads as a clean roster.
+  // party_number → display name ("Party A".."Party E"), so the roster shows the
+  // party the way the dashboard does (not a bare number).
+  const { data: partyRows } = await service
+    .from("parties")
+    .select("party_number, name")
+    .eq("event_id", eventId);
+  const partyNameByNumber = new Map(
+    (partyRows ?? []).map((p) => [p.party_number, p.name])
+  );
+
+  // Ordered party-wise then by seat number so the file reads as a clean roster.
   const { data: rows, error: rowsErr } = await service
     .from("participants")
     .select(
-      "full_name, party_number, party_side, constituency_name, committee_name, parliament_role"
+      "full_name, party_number, constituency_number, constituency_name, committee_number, access_code"
     )
     .eq("event_id", eventId)
-    .order("party_number", { ascending: true })
+    .order("party_number", { ascending: true, nullsFirst: false })
+    .order("constituency_number", { ascending: true, nullsFirst: false })
     .order("full_name", { ascending: true });
   if (rowsErr) return { success: false, error: rowsErr.message };
 
   const list = (rows ?? []) as Array<{
     full_name: string | null;
     party_number: number | null;
-    party_side: string | null;
+    constituency_number: number | null;
     constituency_name: string | null;
-    committee_name: string | null;
-    parliament_role: string | null;
+    committee_number: number | null;
+    access_code: string | null;
   }>;
 
   if (list.length === 0) {
@@ -74,15 +84,27 @@ export async function exportAllocationRoster(
     };
   }
 
-  const headers = ["Name", "Party", "Side", "Constituency", "Committee", "Role"];
+  // Ruling/Opposition ("Side") is intentionally OUT — it's decided on event day,
+  // not at allocation. Access Code IS included so the organiser can hand each
+  // student their login alongside their allocation (this action is canManage-gated).
+  const headers = [
+    "Name",
+    "Party",
+    "Constituency No.",
+    "Constituency",
+    "Committee",
+    "Access Code",
+  ];
   const body = list.map((r) =>
     [
       r.full_name ?? "",
-      r.party_number != null ? `Party ${r.party_number}` : "",
-      r.party_side ?? "",
+      r.party_number != null
+        ? partyNameByNumber.get(r.party_number) ?? `Party ${r.party_number}`
+        : "",
+      r.constituency_number ?? "",
       r.constituency_name ?? "",
-      r.committee_name ?? "",
-      r.parliament_role ?? "",
+      r.committee_number != null ? `Committee ${r.committee_number}` : "",
+      r.access_code ?? "",
     ]
       .map(csvCell)
       .join(",")

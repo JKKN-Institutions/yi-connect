@@ -598,7 +598,7 @@ export function ParticipantsClient({
               ) : (
                 <Download className="size-4" />
               )}
-              Download roster
+              Download Allocated List
             </Button>
           )}
 
@@ -946,6 +946,7 @@ export function ParticipantsClient({
                   </button>
                 </TableHead>
                 <TableHead>Role</TableHead>
+                <TableHead className="w-20">Const. No.</TableHead>
                 <TableHead>Constituency</TableHead>
                 <TableHead>State</TableHead>
                 <TableHead>Committee</TableHead>
@@ -1007,15 +1008,17 @@ export function ParticipantsClient({
                     )}
                   </TableCell>
                   <TableCell>
-                    {p.constituency_name ? (
-                      <span className="text-xs">
-                        {p.constituency_number != null && (
-                          <span className="mr-1 font-mono text-[#1a1a3e]/50">
-                            #{p.constituency_number}
-                          </span>
-                        )}
-                        {p.constituency_name}
+                    {p.constituency_number != null ? (
+                      <span className="font-mono text-xs text-[#1a1a3e]/60">
+                        {p.constituency_number}
                       </span>
+                    ) : (
+                      <span className="text-gray-400">—</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {p.constituency_name ? (
+                      <span className="text-xs">{p.constituency_name}</span>
                     ) : (
                       <span className="text-gray-400">—</span>
                     )}

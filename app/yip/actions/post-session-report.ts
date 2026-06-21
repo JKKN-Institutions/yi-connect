@@ -57,6 +57,7 @@ export async function generatePostSessionReport(
     questionsRes,
     promotionsOutRes,
     chiefGuestsRes,
+    agendaRes,
   ] = await Promise.all([
     supabase.from("participants").select("id, full_name, school_name, parliament_role, party_side").eq("event_id", eventId),
     supabase.from("results").select("participant_id, avg_score, jury_count, rank, award_category").eq("event_id", eventId).order("rank"),
@@ -69,6 +70,7 @@ export async function generatePostSessionReport(
     supabase.from("questions").select("id, status").eq("event_id", eventId),
     supabase.from("promotions").select("id, target_event_id").eq("source_event_id", eventId),
     supabase.from("event_chief_guests").select("name, designation, organization, display_order").eq("event_id", eventId).order("display_order"),
+    supabase.from("agenda").select("title, day, sequence_order, status, skip_reason").eq("event_id", eventId).order("day").order("sequence_order"),
   ]);
 
   const participants = participantsRes.data ?? [];
@@ -82,6 +84,7 @@ export async function generatePostSessionReport(
   const questions = questionsRes.data ?? [];
   const promotions = promotionsOutRes.data ?? [];
   const chiefGuests = chiefGuestsRes.data ?? [];
+  const agenda = agendaRes.data ?? [];
   const socialLinks = event.social_links ?? [];
 
   // Awards rollup from award_category strings (comma-separated)
@@ -184,6 +187,24 @@ export async function generatePostSessionReport(
   push("PROCEEDINGS", "Questions Answered", questions.filter((q) => q.status === "answered").length);
   push("PROCEEDINGS", "Bills Drafted", bills.length);
   push("PROCEEDINGS", "Bills Passed", bills.filter((b) => b.status === "passed").length);
+
+  // Agenda: what ran vs what didn't, and WHY — a session left out while planning
+  // (Agenda tab) reads differently from one cut on the day for time (Control Skip).
+  const ranSessions = agenda.filter(
+    (a) => a.status === "completed" || a.status === "in_progress"
+  );
+  const notRunSessions = agenda.filter((a) => a.status === "skipped");
+  const skipReasonLabel = (r: string | null) =>
+    r === "excluded_preevent"
+      ? "Left out in planning"
+      : r === "skipped_live"
+        ? "Skipped on the day"
+        : "Did not run";
+  push("AGENDA", "Sessions Ran", ranSessions.length);
+  push("AGENDA", "Sessions Not Run", notRunSessions.length);
+  for (const a of notRunSessions) {
+    push("AGENDA", `Day ${a.day} · ${a.title}`, skipReasonLabel(a.skip_reason));
+  }
 
   push("CHECKLIST", "Total Items", checklist.length);
   push("CHECKLIST", "Items Completed", checklist.filter((c) => c.is_completed).length);

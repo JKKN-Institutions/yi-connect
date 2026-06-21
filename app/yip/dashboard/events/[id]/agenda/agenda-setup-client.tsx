@@ -47,11 +47,13 @@ function prettyType(t: string | null): string {
 export function AgendaSetupClient({
   eventId,
   items,
+  scoreCounts,
   canDelete,
   isLive,
 }: {
   eventId: string;
   items: AgendaItem[];
+  scoreCounts: Record<string, number>;
   canDelete: boolean;
   isLive: boolean;
 }) {
@@ -91,6 +93,17 @@ export function AgendaSetupClient({
     .sort((a, b) => a.sequence_order - b.sequence_order);
   const runLiveCount = dayItems.filter((i) => i.status !== "skipped").length;
   const scoredCount = dayItems.filter((i) => i.is_scoreable).length;
+
+  // Day total: time the sessions that WILL run live add up to, so an organiser
+  // can spot a day that overruns. Excluded sessions don't count toward it.
+  const dayMinutes = dayItems
+    .filter((i) => i.status !== "skipped")
+    .reduce((sum, i) => sum + (i.duration_minutes ?? 0), 0);
+  const formatMins = (m: number) => {
+    const h = Math.floor(m / 60);
+    const min = m % 60;
+    return h > 0 ? `${h}h ${min}m` : `${min}m`;
+  };
 
   const dayLabel = (d: number) => (d === 0 ? "Day 0 (prep)" : `Day ${d}`);
 
@@ -266,7 +279,8 @@ export function AgendaSetupClient({
             </span>
           </>
         )}
-        .
+        {" · "}
+        <span className="text-gray-500">{formatMins(dayMinutes)} total</span>.
       </p>
 
       {isLive && (
@@ -416,7 +430,9 @@ export function AgendaSetupClient({
                           )}
                           {excluded && (
                             <span className="text-amber-700">
-                              Won&apos;t run live
+                              {item.skip_reason === "skipped_live"
+                                ? "Skipped on the day"
+                                : "Won't run live"}
                             </span>
                           )}
                         </p>
@@ -519,7 +535,9 @@ export function AgendaSetupClient({
                   {pendingExclude && (
                     <div className="flex shrink-0 items-center gap-2">
                       <span className="text-xs text-amber-700">
-                        Scored — juries won&apos;t mark it. Switch off?
+                        {(scoreCounts[item.id] ?? 0) > 0
+                          ? `Scored — ${scoreCounts[item.id]} mark${scoreCounts[item.id] === 1 ? "" : "s"} already recorded (kept). Switch off?`
+                          : "Scored — juries won't mark it. Switch off?"}
                       </span>
                       <button
                         type="button"

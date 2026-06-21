@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/yip/supabase/server";
 import { getEvent } from "@/app/yip/actions/events";
-import { getAgendaForSetup } from "@/app/yip/actions/agenda";
+import { getAgendaForSetup, getAgendaScoreCounts } from "@/app/yip/actions/agenda";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
 import { AgendaSetupClient } from "./agenda-setup-client";
@@ -35,7 +35,10 @@ export default async function AgendaSetupPage({
     );
   }
 
-  const items = (await getAgendaForSetup(id)) as AgendaItem[];
+  const [items, scoreCounts] = (await Promise.all([
+    getAgendaForSetup(id),
+    getAgendaScoreCounts(id),
+  ])) as [AgendaItem[], Record<string, number>];
   const isLive = event.status === "day1_live" || event.status === "day2_live";
 
   // deleteAgendaItem only allows chair/national — match the button visibility to
@@ -48,6 +51,7 @@ export default async function AgendaSetupPage({
       <AgendaSetupClient
         eventId={id}
         items={items}
+        scoreCounts={scoreCounts}
         canDelete={canDelete}
         isLive={isLive}
       />

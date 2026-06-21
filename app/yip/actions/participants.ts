@@ -52,6 +52,7 @@ interface ImportRow {
   // NEW — allocation columns (all optional, back-compat)
   party_letter?: string;        // "A".."Z" — case-insensitive
   constituency_name?: string;
+  constituency_number?: number; // platform seat number (e.g. 101)
   constituency_state?: string;
   committee_number?: number;
   committee_name?: string;
@@ -534,6 +535,7 @@ export async function importParticipants(
     party_number: number | null;
     party_side: PartySide | null;
     constituency_name: string | null;
+    constituency_number: number | null;
     constituency_state: string | null;
     committee_number: number | null;
     committee_name: string | null;
@@ -580,6 +582,11 @@ export async function importParticipants(
         party_number,
         party_side: assignBenches ? party_side : null,
         constituency_name: row.constituency_name?.trim() || null,
+        constituency_number:
+          row.constituency_number !== undefined &&
+          row.constituency_number !== null
+            ? row.constituency_number
+            : null,
         constituency_state: row.constituency_state?.trim() || null,
         committee_number,
         committee_name,

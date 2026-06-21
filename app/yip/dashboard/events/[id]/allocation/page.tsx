@@ -29,7 +29,7 @@ export default async function AllocationPage({
   const { data: participants } = await supabase
     .from("participants")
     .select(
-      "id, full_name, school_name, class, home_state, party_side, parliament_role, ministry, constituency_name, constituency_state, committee_name, serial_no, party_number, committee_number"
+      "id, full_name, school_name, class, home_state, party_side, parliament_role, ministry, constituency_name, constituency_number, constituency_state, committee_name, serial_no, party_number, committee_number"
     )
     .eq("event_id", id)
     .order("serial_no", { nullsFirst: false })

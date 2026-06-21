@@ -2616,6 +2616,7 @@ export type Database = {
           committee_name: string | null
           committee_number: number | null
           constituency_name: string | null
+          constituency_number: number | null
           constituency_state: string | null
           created_at: string | null
           email: string | null
@@ -2653,6 +2654,7 @@ export type Database = {
           committee_name?: string | null
           committee_number?: number | null
           constituency_name?: string | null
+          constituency_number?: number | null
           constituency_state?: string | null
           created_at?: string | null
           email?: string | null
@@ -2692,6 +2694,7 @@ export type Database = {
           committee_name?: string | null
           committee_number?: number | null
           constituency_name?: string | null
+          constituency_number?: number | null
           constituency_state?: string | null
           created_at?: string | null
           email?: string | null

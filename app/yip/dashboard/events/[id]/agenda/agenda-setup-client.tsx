@@ -87,13 +87,24 @@ export function AgendaSetupClient({
 }) {
   const router = useRouter();
 
-  // Days the event actually has (0 = prep, 1, 2). Derived from the data so
-  // day-0 prep items — and any future day count — are never hidden by a
+  // Pre-Event (day 0) is opt-in: it shows once the event has prep items OR the
+  // organiser clicks "+ Pre-Event".
+  const [showPreEvent, setShowPreEvent] = useState(false);
+
+  // Days the event actually has (0 = Pre-Event, 1, 2). Derived from the data so
+  // pre-event items — and any future day count — are never hidden by a
   // hardcoded tab list.
-  const days = Array.from(new Set(items.map((i) => i.day))).sort(
+  const itemDays = Array.from(new Set(items.map((i) => i.day))).sort(
     (a, b) => a - b
   );
-  const dayChoices = days.length > 0 ? days : [1, 2];
+  const hasPreEvent = itemDays.includes(0);
+  const eventDays = itemDays.filter((d) => d > 0);
+  // Day 0 (Pre-Event) always sorts first; event days fall back to Day 1/2 until
+  // the first item is added.
+  const dayChoices = [
+    ...(hasPreEvent || showPreEvent ? [0] : []),
+    ...(eventDays.length > 0 ? eventDays : [1, 2]),
+  ];
 
   const [activeDay, setActiveDay] = useState<number>(() =>
     dayChoices.includes(1) ? 1 : dayChoices[0]
@@ -147,7 +158,7 @@ export function AgendaSetupClient({
     return h > 0 ? `${h}h ${min}m` : `${min}m`;
   };
 
-  const dayLabel = (d: number) => (d === 0 ? "Day 0 (prep)" : `Day ${d}`);
+  const dayLabel = (d: number) => (d === 0 ? "Pre-Event" : `Day ${d}`);
   const isPreEvent = activeDay === 0;
 
   // Safety net (Q6): warn when the event HAS scored sessions but every one of
@@ -355,6 +366,21 @@ export function AgendaSetupClient({
             {dayLabel(d)}
           </button>
         ))}
+        {!dayChoices.includes(0) && (
+          <button
+            type="button"
+            onClick={() => {
+              setShowPreEvent(true);
+              setActiveDay(0);
+              setEditId(null);
+              setShowAdd(false);
+            }}
+            className="rounded-md px-3 py-1.5 text-sm font-medium text-[#138808] hover:bg-[#138808]/5"
+            title="Add a Pre-Event day for things done before the event (e.g. party formation)"
+          >
+            + Pre-Event
+          </button>
+        )}
       </div>
 
       <p className="mb-3 text-sm font-medium text-gray-700">
@@ -402,7 +428,7 @@ export function AgendaSetupClient({
 
       {dayItems.length === 0 ? (
         <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-6 text-center text-sm text-gray-500">
-          No agenda items for Day {activeDay} yet.
+          No agenda items for {dayLabel(activeDay)} yet.
         </div>
       ) : (
         <ul className="divide-y divide-gray-100">
@@ -684,7 +710,7 @@ export function AgendaSetupClient({
             <input
               value={addTitle}
               onChange={(e) => setAddTitle(e.target.value)}
-              placeholder={`New item title for Day ${activeDay}`}
+              placeholder={`New item title for ${dayLabel(activeDay)}`}
               className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm"
             />
             <div className="flex flex-wrap items-center gap-2">
@@ -730,7 +756,7 @@ export function AgendaSetupClient({
                   ) : (
                     <Check className="size-3.5" />
                   )}
-                  Add to Day {activeDay}
+                  Add to {dayLabel(activeDay)}
                 </button>
                 <button
                   type="button"
@@ -742,7 +768,7 @@ export function AgendaSetupClient({
               </div>
             </div>
             <p className="text-xs text-gray-400">
-              Added to the end of Day {activeDay} — use the arrows to move it into
+              Added to the end of {dayLabel(activeDay)} — use the arrows to move it into
               place.
             </p>
           </div>

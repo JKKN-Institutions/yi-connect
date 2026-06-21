@@ -43,10 +43,17 @@ function votesTable(
 // Shape of vote_sessions.config relevant to runoffs (stored by openRunoff).
 type RunoffConfig = {
   partyId?: string;
+  side?: "ruling" | "opposition";
   candidateIds?: string[];
   isRunoff?: boolean;
   runoffOf?: string;
-  runoffSeat?: "speaker" | "deputy" | "party_leader";
+  runoffSeat?:
+    | "speaker"
+    | "deputy"
+    | "party_leader"
+    | "prime_minister"
+    | "deputy_prime_minister"
+    | "leader_of_opposition";
   openDeputySeats?: number;
 };
 
@@ -144,6 +151,30 @@ async function buildTallies(
     }
   }
 
+  // Single-winner bench elections (PM / Deputy PM / Leader of Opposition) are
+  // bench-scoped: count ONLY votes cast by members of config.side's bench
+  // (party_side). Mirrors the party_leader scoping above, by party_side instead
+  // of party_id. The whole governing coalition (every ruling party) votes for
+  // PM/Deputy; the whole opposition votes for LoP.
+  if (
+    session.vote_type === "prime_minister" ||
+    session.vote_type === "deputy_prime_minister" ||
+    session.vote_type === "leader_of_opposition"
+  ) {
+    const cfg = (session.config ?? {}) as { side?: "ruling" | "opposition" };
+    if (cfg.side) {
+      const { data: members } = await supabase
+        .from("participants")
+        .select("id")
+        .eq("event_id", session.event_id)
+        .eq("party_side", cfg.side);
+      const memberIds = new Set((members ?? []).map((m) => m.id));
+      scoped = scoped.filter(
+        (v) => v.participant_id != null && memberIds.has(v.participant_id)
+      );
+    }
+  }
+
   const tallyMap: Record<string, number> = {};
   scoped.forEach((v) => {
     tallyMap[v.vote_value] = (tallyMap[v.vote_value] || 0) + 1;
@@ -216,6 +247,7 @@ async function resolveOutcome(
       speakerId: null,
       deputyIds: dep.deputyIds,
       partyLeaderId: null,
+      winnerId: null,
       tie: dep.tie,
     };
   }
@@ -233,19 +265,35 @@ async function resolveOutcome(
 export async function openVote(
   eventId: string,
   agendaItemId: string,
-  voteType: "speaker_election" | "bill_vote" | "party_leader",
+  voteType:
+    | "speaker_election"
+    | "bill_vote"
+    | "party_leader"
+    | "prime_minister"
+    | "deputy_prime_minister"
+    | "leader_of_opposition",
   config?: {
     candidateIds?: string[];
     billId?: string;
     // party_leader only: the party whose leader is being elected. Voting is
     // restricted to that party's own members.
     partyId?: string;
+    // Bench seats (prime_minister / deputy_prime_minister / leader_of_opposition)
+    // only: the bench whose seat is being filled. Voting is restricted to that
+    // bench's members (party_side). PM/Deputy → 'ruling'; LoP → 'opposition'.
+    side?: "ruling" | "opposition";
     // Marks a session opened as a tie runoff (set by openRunoff).
     isRunoff?: boolean;
     runoffOf?: string;
     // Which seat the runoff contests — reveal logic depends on it (a deputy
     // runoff must never crown a Speaker).
-    runoffSeat?: "speaker" | "deputy" | "party_leader";
+    runoffSeat?:
+      | "speaker"
+      | "deputy"
+      | "party_leader"
+      | "prime_minister"
+      | "deputy_prime_minister"
+      | "leader_of_opposition";
     // Deputy runoffs only: how many deputy seats are still open (1 or 2).
     openDeputySeats?: number;
   }
@@ -526,6 +574,26 @@ export async function revealResults(
     }
   }
 
+  // Single-winner bench seats: vacate the current holder of THIS role (scoped
+  // to the one role so other leadership seats are untouched), then seat the
+  // winner. winnerId is set only when the seat was decided (no tie).
+  if (
+    (session.vote_type === "prime_minister" ||
+      session.vote_type === "deputy_prime_minister" ||
+      session.vote_type === "leader_of_opposition") &&
+    outcome.winnerId
+  ) {
+    await supabase
+      .from("participants")
+      .update({ parliament_role: "mp" })
+      .eq("event_id", session.event_id)
+      .eq("parliament_role", session.vote_type);
+    await supabase
+      .from("participants")
+      .update({ parliament_role: session.vote_type })
+      .eq("id", outcome.winnerId);
+  }
+
   const results: VoteResults = {
     session: { ...session, status: "revealed" },
     tallies,
@@ -599,6 +667,30 @@ export async function castVote(
         return {
           success: false,
           error: "Only members of this party can vote for its leader",
+        };
+      }
+    }
+  }
+
+  // Bench seats (PM / Deputy PM / Leader of Opposition) are bench-scoped: only
+  // members of config.side's bench may vote (the governing coalition elects the
+  // PM/Deputy; the opposition elects the LoP). Rejected at cast time.
+  if (
+    session.vote_type === "prime_minister" ||
+    session.vote_type === "deputy_prime_minister" ||
+    session.vote_type === "leader_of_opposition"
+  ) {
+    const cfg = (session.config ?? {}) as { side?: "ruling" | "opposition" };
+    if (cfg.side) {
+      const { data: voter } = await supabase
+        .from("participants")
+        .select("party_side")
+        .eq("id", participantId)
+        .single();
+      if (!voter || voter.party_side !== cfg.side) {
+        return {
+          success: false,
+          error: `Only members of the ${cfg.side} bench can vote in this election`,
         };
       }
     }
@@ -965,9 +1057,16 @@ export async function openRunoff(
   return openVote(session.event_id, session.agenda_item_id, session.vote_type as
     | "speaker_election"
     | "bill_vote"
-    | "party_leader", {
+    | "party_leader"
+    | "prime_minister"
+    | "deputy_prime_minister"
+    | "leader_of_opposition", {
     candidateIds: outcome.tie.tiedCandidateIds,
     partyId: cfg.partyId,
+    // Carry the bench through so a bench-seat (PM/Deputy/LoP) runoff stays
+    // bench-scoped at cast + tally — without this the runoff round would be
+    // open to the whole house.
+    side: cfg.side,
     isRunoff: true,
     runoffOf: revealedSessionId,
     runoffSeat: outcome.tie.seat,

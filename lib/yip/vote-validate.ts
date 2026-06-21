@@ -34,12 +34,15 @@ export function validateVoteValue(
       : { ok: false, error: "Invalid vote — must be Aye, Nay, or Abstain" };
   }
 
-  // Candidate ballots (Speaker election and Party-Leader election) both store
-  // the chosen candidate's participant id in vote_value, constrained to the
-  // session's config.candidateIds.
+  // Candidate ballots (Speaker, Party-Leader, and the single-winner bench seats
+  // PM / Deputy PM / Leader of Opposition) all store the chosen candidate's
+  // participant id in vote_value, constrained to the session's config.candidateIds.
   if (
     session.vote_type === "speaker_election" ||
-    session.vote_type === "party_leader"
+    session.vote_type === "party_leader" ||
+    session.vote_type === "prime_minister" ||
+    session.vote_type === "deputy_prime_minister" ||
+    session.vote_type === "leader_of_opposition"
   ) {
     const cfg = (session.config ?? {}) as { candidateIds?: unknown };
     const ids = Array.isArray(cfg.candidateIds)

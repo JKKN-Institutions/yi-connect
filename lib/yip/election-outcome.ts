@@ -13,8 +13,16 @@ export interface VoteTally {
 
 export interface ElectionTie {
   // "speaker" = tie for the single Speaker seat; "deputy" = tie for the last
-  // Deputy seat; "party_leader" = tie for a party's leader.
-  seat: "speaker" | "deputy" | "party_leader";
+  // Deputy seat; "party_leader" = tie for a party's leader; the bench seats
+  // (prime_minister / deputy_prime_minister / leader_of_opposition) are
+  // single-winner elections scoped to one bench — a top-count tie reports here.
+  seat:
+    | "speaker"
+    | "deputy"
+    | "party_leader"
+    | "prime_minister"
+    | "deputy_prime_minister"
+    | "leader_of_opposition";
   tiedCandidateIds: string[];
   tiedCount: number;
 }
@@ -23,8 +31,20 @@ export interface ElectionOutcome {
   speakerId: string | null;
   deputyIds: string[];
   partyLeaderId: string | null;
+  // Generic single-winner for the bench seats (prime_minister /
+  // deputy_prime_minister / leader_of_opposition) — the winning participant id.
+  winnerId: string | null;
   tie: ElectionTie | null;
 }
+
+// Single-winner bench elections: one seat, electorate scoped to one bench
+// (party_side). Reuse the party-leader reading — top-1 wins, a top-count tie
+// goes to a runoff among the tied.
+export const SINGLE_WINNER_BENCH_SEATS = [
+  "prime_minister",
+  "deputy_prime_minister",
+  "leader_of_opposition",
+] as const;
 
 export function computeElectionOutcome(
   voteType: string,
@@ -34,6 +54,7 @@ export function computeElectionOutcome(
     speakerId: null,
     deputyIds: [],
     partyLeaderId: null,
+    winnerId: null,
     tie: null,
   };
   if (tallies.length === 0) return out;
@@ -48,6 +69,27 @@ export function computeElectionOutcome(
       };
     } else {
       out.partyLeaderId = tallies[0].vote_value;
+    }
+    return out;
+  }
+
+  // Single-winner bench seats (PM / Deputy PM / Leader of Opposition): same
+  // reading as party_leader — top-1 wins, a top-count tie goes to a runoff.
+  if (
+    voteType === "prime_minister" ||
+    voteType === "deputy_prime_minister" ||
+    voteType === "leader_of_opposition"
+  ) {
+    if (tallies.length >= 2 && tallies[1].count === topCount) {
+      out.tie = {
+        seat: voteType,
+        tiedCount: topCount,
+        tiedCandidateIds: tallies
+          .filter((t) => t.count === topCount)
+          .map((t) => t.vote_value),
+      };
+    } else {
+      out.winnerId = tallies[0].vote_value;
     }
     return out;
   }

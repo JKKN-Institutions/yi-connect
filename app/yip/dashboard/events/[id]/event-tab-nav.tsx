@@ -11,6 +11,7 @@ import {
   Scale,
   MessagesSquare,
   Radio,
+  Mic,
   Star,
   Trophy,
   Award,
@@ -66,6 +67,8 @@ const GROUPS: TabGroup[] = [
     title: "Event Day",
     tabs: [
       { label: "Control", href: "/control", icon: Radio },
+      // Roster-wide checklist for the 90-second speech every delegate gives.
+      { label: "Speeches", href: "/speeches", icon: Mic },
       // Proceedings = Questions / Motions / Bills (sub-tabbed on the page).
       { label: "Proceedings", href: "/questions", icon: Gavel },
       { label: "Chat", href: "/chat", icon: MessagesSquare },

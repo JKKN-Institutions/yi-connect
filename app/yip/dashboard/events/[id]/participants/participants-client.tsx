@@ -541,7 +541,7 @@ export function ParticipantsClient({
               ) : (
                 <Download className="size-4" />
               )}
-              Download Allocated List
+              Download Auto-Allocated List
             </Button>
           )}
 

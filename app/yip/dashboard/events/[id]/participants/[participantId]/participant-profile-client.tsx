@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/yip/ui/card";
 import { Badge } from "@/components/yip/ui/badge";
 import { ROLE_LABELS, PARTY_COLORS } from "@/lib/yip/constants";
+import { committeeLabel } from "@/lib/yip/committee-label";
 import {
   ArrowLeft,
   GraduationCap,
@@ -119,16 +120,8 @@ export function ParticipantProfileClient({
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2.5 text-sm">
-            {/* School is collected only to balance allocation and is never shown
-                in the platform (purged after the one-time export). */}
-            <Row
-              label="Class"
-              value={
-                p.class
-                  ? `Class ${p.class}${p.section ? ` · ${p.section}` : ""}`
-                  : null
-              }
-            />
+            {/* School + class are collected only to balance allocation and are
+                never shown in the platform (purged after the one-time export). */}
             <Row label="Place" value={place || null} />
             {contestant?.bio && (
               <div className="pt-1">
@@ -197,7 +190,12 @@ export function ParticipantProfileClient({
               }
               icon={<MapPin className="size-3.5" />}
             />
-            <Row label="Committee" value={p.committee_name} />
+            <Row
+              label="Committee"
+              value={committeeLabel(
+                (p as { committee_number?: number | null }).committee_number
+              )}
+            />
           </CardContent>
         </Card>
 

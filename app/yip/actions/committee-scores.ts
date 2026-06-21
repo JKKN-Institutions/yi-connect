@@ -14,6 +14,7 @@ type ActionResult<T = null> =
 
 export type CommitteeRow = CommitteeDimensions & {
   committee_name: string;
+  committee_number: number | null;
   member_count: number;
   scored: boolean;
   judge_notes: string | null;
@@ -51,16 +52,21 @@ export async function getCommitteeScoring(
 
   const { data: parts, error: pErr } = await supabase
     .from("participants")
-    .select("committee_name")
+    .select("committee_name, committee_number")
     .eq("event_id", eventId)
     .not("committee_name", "is", null);
   if (pErr) return { success: false, error: pErr.message };
 
   const counts = new Map<string, number>();
+  // Members of one committee share the same committee_number — capture it.
+  const numberByName = new Map<string, number | null>();
   for (const p of parts ?? []) {
     const name = (p.committee_name ?? "").trim();
     if (!name) continue;
     counts.set(name, (counts.get(name) ?? 0) + 1);
+    if (!numberByName.has(name)) {
+      numberByName.set(name, p.committee_number ?? null);
+    }
   }
 
   const { data: scores, error: sErr } = await supabase
@@ -91,6 +97,7 @@ export async function getCommitteeScoring(
       return {
         ...dims,
         committee_name,
+        committee_number: numberByName.get(committee_name) ?? null,
         member_count,
         scored: !!s,
         judge_notes: s?.judge_notes ?? null,

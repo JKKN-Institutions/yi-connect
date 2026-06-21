@@ -301,7 +301,7 @@ function JourneyCard({
             )}
             {step.committee_number !== null && (
               <Badge variant="secondary" className="text-[10px] font-mono">
-                Com #{step.committee_number}
+                Committee {step.committee_number}
               </Badge>
             )}
           </div>

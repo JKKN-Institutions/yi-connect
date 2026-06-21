@@ -327,9 +327,6 @@ export function CertificatesClient({
                       <span className="text-xs text-gray-500 truncate">
                         {p.school_name}
                       </span>
-                      <span className="text-xs text-gray-400">
-                        Class {p.class}
-                      </span>
                       {p.parliament_role && (
                         <Badge
                           variant="secondary"
@@ -668,7 +665,7 @@ function buildParticipationCertHtml(
     <div style="width:120px;height:3px;background:linear-gradient(to right,#FF9933,#D4A843,#138808);margin:8px auto 20px;border-radius:2px;"></div>
     <p style="font-size:16px;color:#555;margin-bottom:8px;font-style:italic;">This is to certify that</p>
     <p style="font-size:36px;font-weight:bold;color:#1a1a1a;margin-bottom:4px;line-height:1.2;">${escHtml(p.full_name)}</p>
-    <p style="font-size:16px;color:#555;margin-bottom:16px;">of <span style="font-weight:600;color:#333;">${escHtml(p.school_name)}</span> (Class ${p.class})</p>
+    <p style="font-size:16px;color:#555;margin-bottom:16px;">of <span style="font-weight:600;color:#333;">${escHtml(p.school_name)}</span></p>
     <p style="font-size:16px;color:#555;margin-bottom:6px;line-height:1.6;">participated as <strong style="color:#1a1a1a;">${escHtml(roleName)}</strong>${constituency ? ` representing <strong style="color:#1a1a1a;">${escHtml(constituency)}</strong>` : ""}</p>
     <p style="font-size:16px;color:#555;margin-bottom:6px;line-height:1.6;">in the Young Indians Parliament ${escHtml(levelLabel)} Round</p>
     <p style="font-size:16px;color:#555;margin-bottom:28px;line-height:1.6;">held at <strong style="color:#333;">${escHtml(venue)}</strong> ${dateText}</p>
@@ -718,7 +715,7 @@ function buildAwardCertHtml(
     <div style="width:140px;height:3px;background:linear-gradient(to right,#B8860B,#FFD700,#B8860B);margin:6px auto 16px;border-radius:2px;"></div>
     <p style="font-size:16px;color:#555;margin-bottom:6px;font-style:italic;">This is to certify that</p>
     <p style="font-size:36px;font-weight:bold;color:#1a1a1a;margin-bottom:4px;line-height:1.2;">${escHtml(p.full_name)}</p>
-    <p style="font-size:16px;color:#555;margin-bottom:12px;">of <span style="font-weight:600;color:#333;">${escHtml(p.school_name)}</span> (Class ${p.class})</p>
+    <p style="font-size:16px;color:#555;margin-bottom:12px;">of <span style="font-weight:600;color:#333;">${escHtml(p.school_name)}</span></p>
     <p style="font-size:16px;color:#555;margin-bottom:4px;line-height:1.6;">participated as <strong style="color:#1a1a1a;">${escHtml(roleName)}</strong>${constituency ? ` representing <strong style="color:#1a1a1a;">${escHtml(constituency)}</strong>` : ""}</p>
     <p style="font-size:16px;color:#555;margin-bottom:4px;line-height:1.6;">in the Young Indians Parliament ${escHtml(levelLabel)} Round</p>
     <p style="font-size:16px;color:#555;margin-bottom:12px;line-height:1.6;">held at <strong style="color:#333;">${escHtml(venue)}</strong> ${dateText}</p>

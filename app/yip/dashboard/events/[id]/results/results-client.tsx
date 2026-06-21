@@ -147,7 +147,6 @@ function exportCSV(results: ResultWithParticipant[], eventName: string) {
     "Rank",
     "Name",
     "School",
-    "Class",
     "Party",
     "Role",
     "Ministry",
@@ -162,14 +161,15 @@ function exportCSV(results: ResultWithParticipant[], eventName: string) {
     r.rank ?? "",
     r.participant.full_name,
     r.participant.school_name,
-    r.participant.class,
     r.participant.party_side ?? "",
     r.participant.parliament_role
       ? ROLE_LABELS[r.participant.parliament_role] ?? r.participant.parliament_role
       : "",
     getMinistryLabel(r.participant.ministry),
     r.participant.constituency_name ?? "",
-    r.participant.committee_name ?? "",
+    r.participant.committee_number != null
+      ? `Committee ${r.participant.committee_number}`
+      : "",
     r.avg_score ?? "",
     r.jury_count ?? "",
     r.award_category ?? "",

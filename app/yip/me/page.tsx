@@ -47,6 +47,7 @@ import {
   type MeContactInfo,
   type MeRosterMember,
 } from "@/app/yip/actions/me-dashboard";
+import { committeeLabel } from "@/lib/yip/committee-label";
 
 // ─── Session parsing ─────────────────────────────────────────────
 
@@ -365,15 +366,10 @@ export default async function ParticipantPage() {
                 <DetailItem
                   icon={Users}
                   label="Committee"
-                  value={participant.committee_name}
+                  value={committeeLabel(participant.committee_number)}
                   fullWidth
                 />
               )}
-              <DetailItem
-                icon={BookOpen}
-                label="Class"
-                value={`${participant.class}${participant.section ? ` - ${participant.section}` : ""}`}
-              />
             </div>
           </div>
         </div>

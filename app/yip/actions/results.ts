@@ -949,6 +949,7 @@ export type ResultWithParticipant = {
     ministry: string | null;
     constituency_name: string | null;
     committee_name: string | null;
+    committee_number: number | null;
   };
 };
 
@@ -976,7 +977,8 @@ export async function getResults(
         party_side,
         ministry,
         constituency_name,
-        committee_name
+        committee_name,
+        committee_number
       )
     `
     )

@@ -969,6 +969,39 @@ export type Database = {
           },
         ]
       }
+      agenda_presets: {
+        Row: {
+          chapter_name: string
+          created_at: string
+          created_by: string | null
+          id: string
+          items: Json
+          name: string
+          updated_at: string
+          yi_chapter_id: string | null
+        }
+        Insert: {
+          chapter_name: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          items?: Json
+          name: string
+          updated_at?: string
+          yi_chapter_id?: string | null
+        }
+        Update: {
+          chapter_name?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          items?: Json
+          name?: string
+          updated_at?: string
+          yi_chapter_id?: string | null
+        }
+        Relationships: []
+      }
       agenda_speakers: {
         Row: {
           actual_seconds: number | null

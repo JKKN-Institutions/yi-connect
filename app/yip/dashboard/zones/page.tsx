@@ -2,7 +2,11 @@ import Link from "next/link";
 import { Newsreader } from "next/font/google";
 import { getNationalOverview, listOrganizerProfiles } from "@/app/yip/actions/hierarchy";
 import { Landmark, ArrowRight, CalendarDays, AlertTriangle, Check, X } from "lucide-react";
-import type { YiZone } from "@/lib/yip/hierarchy";
+import { getSignupFunnel } from "@/app/yip/actions/zones-funnel";
+import { getLiveSpotlight } from "@/app/yip/actions/zones-spotlight";
+import { SignupFunnel } from "./_components/signup-funnel";
+import { LiveSpotlight } from "./_components/live-spotlight";
+import { IndiaMap } from "./_components/india-map";
 
 const display = Newsreader({
   subsets: ["latin"],
@@ -28,21 +32,12 @@ function initials(name: string): string {
 
 const BAR = ["bg-[#FF9933]", "bg-[#1a1a3e]", "bg-[#138808]"];
 
-// Roughly geographic placement of the six Yi zones on a 5x4 grid (a schematic
-// map of India, not a literal outline).
-const ZONE_POS: Record<YiZone, string> = {
-  NR: "col-start-2 col-end-5 row-start-1 row-end-2",
-  NER: "col-start-5 col-end-6 row-start-1 row-end-3",
-  WR: "col-start-1 col-end-2 row-start-2 row-end-4",
-  ER: "col-start-3 col-end-5 row-start-2 row-end-3",
-  SRTKKA: "col-start-2 col-end-4 row-start-3 row-end-4",
-  SRTN: "col-start-3 col-end-5 row-start-4 row-end-5",
-};
-
 export default async function ZonesNationalPage() {
-  const [overview, national] = await Promise.all([
+  const [overview, national, funnel, spotlight] = await Promise.all([
     getNationalOverview(),
     listOrganizerProfiles({ role: "national" }),
+    getSignupFunnel(),
+    getLiveSpotlight(),
   ]);
 
   const { totals, zones, upcoming, liveEvent, thisWeek, needsAttention } = overview;
@@ -52,7 +47,6 @@ export default async function ZonesNationalPage() {
   const byParticipation = [...zones]
     .filter((z) => z.participants > 0)
     .sort((a, b) => b.participants - a.participants);
-  const maxEvents = Math.max(1, ...zones.map((z) => z.events));
 
   return (
     <div className="max-w-[1400px] mx-auto px-6 py-8 space-y-6">
@@ -127,6 +121,9 @@ export default async function ZonesNationalPage() {
           </div>
         </section>
       )}
+
+      {/* Happening now — only when an event is live */}
+      <LiveSpotlight data={spotlight} />
 
       {/* Needs attention — actionable, top of page */}
       {needsAttention.length > 0 && (
@@ -282,6 +279,9 @@ export default async function ZonesNationalPage() {
         </div>
       </section>
 
+      {/* Sign-up funnel */}
+      <SignupFunnel enrolled={funnel.enrolled} allocated={funnel.allocated} checkedIn={funnel.checkedIn} />
+
       {/* Insights */}
       {topZone && (
         <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -316,45 +316,8 @@ export default async function ZonesNationalPage() {
         </section>
       )}
 
-      {/* Across India map */}
-      <section className="rounded-2xl border border-[#1a1a3e]/8 bg-white px-6 py-5">
-        <div className="flex items-center justify-between mb-4">
-          <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#1a1a3e]/55">
-            Across India · activity by zone
-          </span>
-          <span className="text-[11px] text-[#1a1a3e]/45">shaded by events</span>
-        </div>
-        <div
-          className="mx-auto max-w-[560px] grid grid-cols-5 grid-rows-4 gap-2"
-          style={{ aspectRatio: "5 / 4" }}
-        >
-          {zones.map((z) => {
-            const isTop = z.events === maxEvents;
-            const opacity = isTop ? 1 : 0.35 + 0.5 * (z.events / maxEvents);
-            return (
-              <Link
-                key={z.code}
-                href={`/yip/dashboard/zones/${z.code.toLowerCase()}`}
-                className={`rounded-xl flex flex-col justify-center px-3 py-2 text-white transition-transform hover:scale-[1.02] ${ZONE_POS[z.code]}`}
-                style={{ backgroundColor: isTop ? "#FF9933" : "#1a1a3e", opacity }}
-              >
-                <div className="text-xs font-semibold leading-tight">{z.label}</div>
-                <div className="text-[11px] tabular-nums" style={{ opacity: 0.85 }}>
-                  {z.events} events · {z.participants} students
-                </div>
-              </Link>
-            );
-          })}
-        </div>
-        <div className="flex items-center justify-center gap-2 mt-4 text-[10px] text-[#1a1a3e]/50">
-          <span>fewer events</span>
-          <span className="h-2 w-6 rounded-full bg-[#1a1a3e]" style={{ opacity: 0.35 }} />
-          <span className="h-2 w-6 rounded-full bg-[#1a1a3e]" style={{ opacity: 0.62 }} />
-          <span className="h-2 w-6 rounded-full bg-[#1a1a3e]" style={{ opacity: 0.85 }} />
-          <span className="h-2 w-6 rounded-full bg-[#FF9933]" />
-          <span>most active</span>
-        </div>
-      </section>
+      {/* Across India — real choropleth */}
+      <IndiaMap zones={zones} />
 
       {/* Zone leaderboard */}
       <section>

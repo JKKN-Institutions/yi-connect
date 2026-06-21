@@ -100,6 +100,29 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
         setVoteCandidates(data ?? []);
       }
 
+      // Bench seats (PM / Deputy PM / Leader of Opposition) store their nominees
+      // in config.candidateIds — load those participants by id so the tally +
+      // winner resolve names (mirrors the speaker branch's name lookup).
+      if (
+        voteSession.vote_type === "prime_minister" ||
+        voteSession.vote_type === "deputy_prime_minister" ||
+        voteSession.vote_type === "leader_of_opposition"
+      ) {
+        const cfg = (voteSession.config ?? {}) as { candidateIds?: unknown };
+        const ids = Array.isArray(cfg.candidateIds)
+          ? cfg.candidateIds.filter((x): x is string => typeof x === "string")
+          : [];
+        if (ids.length > 0) {
+          const { data } = await supabase
+            .from("participants")
+            .select("id, full_name, school_name")
+            .in("id", ids);
+          setVoteCandidates(data ?? []);
+        } else {
+          setVoteCandidates([]);
+        }
+      }
+
       if (voteSession.vote_type === "bill_vote" && voteSession.bill_id) {
         const { data: bill } = await supabase
           .from("bills")
@@ -408,17 +431,25 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
                 <p className="text-lg text-gray-500">
                   {voteSession.vote_type === "speaker_election"
                     ? "Speaker Election"
-                    : voteSession.vote_type === "impeach_speaker"
-                      ? `Impeach the Speaker${
-                          motionVoteSubject ? `: ${motionVoteSubject}` : ""
-                        }`
-                      : voteSession.vote_type === "no_confidence"
-                        ? `No-Confidence Motion${
-                            motionVoteSubject ? `: ${motionVoteSubject}` : ""
-                          }`
-                        : voteBillTitle
-                          ? `Bill Vote: ${voteBillTitle}`
-                          : "Bill Vote"}
+                    : voteSession.vote_type === "prime_minister"
+                      ? "Prime Minister Election"
+                      : voteSession.vote_type === "deputy_prime_minister"
+                        ? "Deputy PM Election"
+                        : voteSession.vote_type === "leader_of_opposition"
+                          ? "Leader of Opposition Election"
+                          : voteSession.vote_type === "impeach_speaker"
+                            ? `Impeach the Speaker${
+                                motionVoteSubject ? `: ${motionVoteSubject}` : ""
+                              }`
+                            : voteSession.vote_type === "no_confidence"
+                              ? `No-Confidence Motion${
+                                  motionVoteSubject
+                                    ? `: ${motionVoteSubject}`
+                                    : ""
+                                }`
+                              : voteBillTitle
+                                ? `Bill Vote: ${voteBillTitle}`
+                                : "Bill Vote"}
                 </p>
               </div>
             )}
@@ -443,7 +474,13 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
                 <h2 className="text-3xl font-black text-white uppercase tracking-wider">
                   {voteSession.vote_type === "speaker_election"
                     ? "Speaker Election Results"
-                    : "Bill Vote Results"}
+                    : voteSession.vote_type === "prime_minister"
+                      ? "Prime Minister Election Results"
+                      : voteSession.vote_type === "deputy_prime_minister"
+                        ? "Deputy PM Election Results"
+                        : voteSession.vote_type === "leader_of_opposition"
+                          ? "Leader of Opposition Election Results"
+                          : "Bill Vote Results"}
                 </h2>
 
                 {/* Result bars */}
@@ -462,11 +499,21 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
                       maxCount > 0 &&
                       tallies.filter((t) => t.count === maxCount).length === 1;
 
+                    // Candidate elections (Speaker + bench seats PM / Deputy PM
+                    // / Leader of Opposition) resolve a participant name per bar
+                    // and crown the single clear leader in gold; bill votes use
+                    // the aye/nay/abstain styling.
+                    const isCandidateElection =
+                      voteSession.vote_type === "speaker_election" ||
+                      voteSession.vote_type === "prime_minister" ||
+                      voteSession.vote_type === "deputy_prime_minister" ||
+                      voteSession.vote_type === "leader_of_opposition";
+
                     // Determine label and color
                     let label = tally.vote_value;
                     let barColor = "from-gray-500 to-gray-400";
 
-                    if (voteSession.vote_type === "speaker_election") {
+                    if (isCandidateElection) {
                       const candidate = voteCandidates.find(
                         (c) => c.id === tally.vote_value
                       );
@@ -493,16 +540,14 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
                           <span
                             className={cn(
                               "flex items-center gap-2 text-xl font-bold",
-                              isWinner &&
-                                voteSession.vote_type === "speaker_election"
+                              isWinner && isCandidateElection
                                 ? "text-amber-400"
                                 : "text-white"
                             )}
                           >
-                            {isWinner &&
-                              voteSession.vote_type === "speaker_election" && (
-                                <span className="text-2xl">&#128081;</span>
-                              )}
+                            {isWinner && isCandidateElection && (
+                              <span className="text-2xl">&#128081;</span>
+                            )}
                             {label}
                           </span>
                           <span className="text-xl font-bold tabular-nums text-gray-300">
@@ -515,7 +560,7 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
                               "h-full rounded-lg bg-gradient-to-r transition-all duration-1000",
                               barColor,
                               isWinner &&
-                                voteSession.vote_type === "speaker_election" &&
+                                isCandidateElection &&
                                 "ring-2 ring-amber-400"
                             )}
                             style={{
@@ -546,6 +591,35 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
                           }).runoffSeat === "deputy"
                             ? "Elected Deputy Speaker"
                             : "Elected Speaker"}
+                        </p>
+                        <p className="text-5xl font-black text-amber-400">
+                          {(() => {
+                            const candidate = voteCandidates.find(
+                              (c) => c.id === tallies[0].vote_value
+                            );
+                            return candidate?.full_name ?? "Unknown";
+                          })()}
+                        </p>
+                      </div>
+                    )}
+
+                  {/* Bench-seat winner (PM / Deputy PM / Leader of Opposition):
+                      top-1 wins. Show the elected name only when there is a
+                      single clear leader — a top-count tie goes to a runoff, so
+                      no winner is crowned until it is broken. */}
+                  {(voteSession.vote_type === "prime_minister" ||
+                    voteSession.vote_type === "deputy_prime_minister" ||
+                    voteSession.vote_type === "leader_of_opposition") &&
+                    tallies.length > 0 &&
+                    tallies.filter((t) => t.count === tallies[0].count)
+                      .length === 1 && (
+                      <div className="space-y-2">
+                        <p className="text-lg text-gray-500 uppercase tracking-widest">
+                          {voteSession.vote_type === "prime_minister"
+                            ? "Elected Prime Minister"
+                            : voteSession.vote_type === "deputy_prime_minister"
+                              ? "Elected Deputy Prime Minister"
+                              : "Elected Leader of Opposition"}
                         </p>
                         <p className="text-5xl font-black text-amber-400">
                           {(() => {

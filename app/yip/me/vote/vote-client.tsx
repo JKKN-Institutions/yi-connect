@@ -91,8 +91,15 @@ export function VoteClient({
         setCandidates(data);
       }
 
-      if (voteSession.vote_type === "party_leader") {
-        // Candidates are the nominees the organiser picked (config.candidateIds).
+      if (
+        voteSession.vote_type === "party_leader" ||
+        voteSession.vote_type === "prime_minister" ||
+        voteSession.vote_type === "deputy_prime_minister" ||
+        voteSession.vote_type === "leader_of_opposition"
+      ) {
+        // Candidates are the nominees the organiser picked (config.candidateIds)
+        // — identical storage to party-leader for the bench seats (PM / Deputy
+        // PM / Leader of Opposition).
         const cfg = (voteSession.config ?? {}) as { candidateIds?: unknown };
         const ids = Array.isArray(cfg.candidateIds)
           ? cfg.candidateIds.filter((x): x is string => typeof x === "string")
@@ -322,35 +329,76 @@ export function VoteClient({
     );
   }
 
-  // ─── Candidate ballot (Speaker election + Party-Leader election) ──
-  // Both render an identical candidate grid; vote_value is the candidate id.
+  // ─── Candidate ballot (Speaker + Party-Leader + bench seats) ──────
+  // All render an identical candidate grid; vote_value is the candidate id.
+  // The bench seats (PM / Deputy PM / Leader of Opposition) store their nominees
+  // in config.candidateIds, exactly like speaker / party-leader.
 
   if (
     voteSession.vote_type === "speaker_election" ||
-    voteSession.vote_type === "party_leader"
+    voteSession.vote_type === "party_leader" ||
+    voteSession.vote_type === "prime_minister" ||
+    voteSession.vote_type === "deputy_prime_minister" ||
+    voteSession.vote_type === "leader_of_opposition"
   ) {
-    const isPartyLeader = voteSession.vote_type === "party_leader";
+    // Per-type heading, subtitle, and whether the election is bench/party-scoped
+    // (a heads-up that only that bench/party may vote).
+    const ballotCopy: {
+      heading: string;
+      subtitle: string;
+      scopeNote: string;
+    } = (() => {
+      switch (voteSession.vote_type) {
+        case "party_leader":
+          return {
+            heading: "Vote for Party Leader",
+            subtitle: "Select one candidate to be your party's leader",
+            scopeNote: "Only members of your party can vote in this election. ",
+          };
+        case "prime_minister":
+          return {
+            heading: "Prime Minister Election",
+            subtitle: "Select one candidate to be the Prime Minister",
+            scopeNote:
+              "Only members of the ruling bench can vote in this election. ",
+          };
+        case "deputy_prime_minister":
+          return {
+            heading: "Deputy PM Election",
+            subtitle: "Select one candidate to be the Deputy Prime Minister",
+            scopeNote:
+              "Only members of the ruling bench can vote in this election. ",
+          };
+        case "leader_of_opposition":
+          return {
+            heading: "Leader of Opposition Election",
+            subtitle: "Select one candidate to be the Leader of Opposition",
+            scopeNote:
+              "Only members of the opposition bench can vote in this election. ",
+          };
+        default:
+          return {
+            heading: "Vote for Speaker",
+            subtitle: "Select one candidate to be the Speaker of the House",
+            scopeNote: "",
+          };
+      }
+    })();
     return (
       <div className="space-y-5">
         <div>
           <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
             <Vote className="size-5 text-[#FF9933]" />
-            {isPartyLeader ? "Vote for Party Leader" : "Vote for Speaker"}
+            {ballotCopy.heading}
           </h1>
-          <p className="text-sm text-gray-500 mt-1">
-            {isPartyLeader
-              ? "Select one candidate to be your party's leader"
-              : "Select one candidate to be the Speaker of the House"}
-          </p>
+          <p className="text-sm text-gray-500 mt-1">{ballotCopy.subtitle}</p>
         </div>
 
         {/* Instruction */}
         <Card className="border-[#FF9933]/20 bg-[#FF9933]/5">
           <CardContent className="pt-4 pb-4">
             <p className="text-sm text-gray-700">
-              {isPartyLeader
-                ? "Only members of your party can vote in this election. "
-                : ""}
+              {ballotCopy.scopeNote}
               Tap on a candidate to select them, then press &quot;Cast Vote&quot;
               to confirm. Your vote is secret and cannot be changed once cast.
             </p>

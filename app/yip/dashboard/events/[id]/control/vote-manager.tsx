@@ -110,6 +110,30 @@ export function VoteManager({
     selectedIds: string[];
     loading: boolean;
   }>({ open: false, party: null, members: [], selectedIds: [], loading: false });
+  // Leadership-election nomination dialog (PM / Deputy PM / Leader of Opposition).
+  // Mirrors leaderDialog, but the candidate pool is a whole bench (party_side),
+  // not one party. `voteType` is the seat being filled; `side` is its bench.
+  const [leadershipDialog, setLeadershipDialog] = useState<{
+    open: boolean;
+    voteType:
+      | "prime_minister"
+      | "deputy_prime_minister"
+      | "leader_of_opposition"
+      | null;
+    side: "ruling" | "opposition" | null;
+    label: string;
+    members: VoteCandidate[];
+    selectedIds: string[];
+    loading: boolean;
+  }>({
+    open: false,
+    voteType: null,
+    side: null,
+    label: "",
+    members: [],
+    selectedIds: [],
+    loading: false,
+  });
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean;
     title: string;
@@ -158,6 +182,24 @@ export function VoteManager({
       ? ((voteSession.config ?? {}) as { partyId?: string }).partyId ?? null
       : null;
 
+  // Single-winner bench seats (PM / Deputy PM / Leader of Opposition) reuse the
+  // candidate-ballot machinery. The active session's config.candidateIds is the
+  // authoritative ballot — load those nominees by id (like speaker/party-leader)
+  // so the live tally + result block can resolve candidate names.
+  const isBenchVoteType =
+    voteSession?.vote_type === "prime_minister" ||
+    voteSession?.vote_type === "deputy_prime_minister" ||
+    voteSession?.vote_type === "leader_of_opposition";
+
+  // Human title for the bench seats (and a passthrough for others).
+  function seatTitle(voteType: string): string {
+    if (voteType === "prime_minister") return "Prime Minister Election";
+    if (voteType === "deputy_prime_minister") return "Deputy PM Election";
+    if (voteType === "leader_of_opposition")
+      return "Leader of Opposition Election";
+    return voteType;
+  }
+
   // Fetch candidates or bills when agenda type warrants it.
   // For speaker elections the ACTIVE session's config.candidateIds is the
   // authoritative ballot — after a round-1 reveal a deputy runoff's tied pair
@@ -200,6 +242,20 @@ export function VoteManager({
       getPartyMembers(eventId, activeLeaderPartyId).then(setCandidates);
     }
   }, [activeLeaderPartyId, eventId]);
+
+  // When a bench-seat session (PM / Deputy PM / LoP) is active, load its nominees
+  // by id (config.candidateIds) so the tally + result block resolve names.
+  useEffect(() => {
+    if (!isBenchVoteType || !voteSession) return;
+    const cfg = (voteSession.config ?? {}) as { candidateIds?: unknown };
+    const ids = Array.isArray(cfg.candidateIds)
+      ? cfg.candidateIds.filter((x): x is string => typeof x === "string")
+      : [];
+    if (ids.length > 0) {
+      getVoteCandidates(ids).then(setCandidates);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isBenchVoteType, voteSession?.id]);
 
   // ─── Action handlers ──────────────────────────────────────────
 
@@ -303,6 +359,100 @@ export function VoteManager({
         setLeaderDialog({
           open: false,
           party: null,
+          members: [],
+          selectedIds: [],
+          loading: false,
+        });
+      } else {
+        toast.error(result.error);
+      }
+    });
+  }
+
+  // Leadership: open the nomination dialog and load the bench's members. The
+  // candidate pool is the whole bench (every participant with the target
+  // party_side), gathered by concatenating the members of each party on that
+  // side — reuses getEventParties (which carries `side`) + getPartyMembers, so
+  // no new server action is needed.
+  function handleHoldLeadershipElection(
+    voteType:
+      | "prime_minister"
+      | "deputy_prime_minister"
+      | "leader_of_opposition",
+    side: "ruling" | "opposition",
+    label: string
+  ) {
+    setLeadershipDialog({
+      open: true,
+      voteType,
+      side,
+      label,
+      members: [],
+      selectedIds: [],
+      loading: true,
+    });
+    const benchParties = parties.filter((p) => p.side === side);
+    Promise.all(
+      benchParties.map((p) => getPartyMembers(eventId, p.id))
+    ).then((lists) => {
+      // De-dupe by id and sort by name (each party's members are disjoint, but
+      // guard anyway), then surface only if the dialog is still on this seat.
+      const seen = new Set<string>();
+      const members: VoteCandidate[] = [];
+      for (const list of lists) {
+        for (const m of list) {
+          if (!seen.has(m.id)) {
+            seen.add(m.id);
+            members.push(m);
+          }
+        }
+      }
+      members.sort((a, b) => a.full_name.localeCompare(b.full_name));
+      setLeadershipDialog((prev) =>
+        prev.open && prev.voteType === voteType
+          ? { ...prev, members, loading: false }
+          : prev
+      );
+    });
+  }
+
+  function toggleLeadershipNominee(id: string) {
+    setLeadershipDialog((prev) => {
+      const has = prev.selectedIds.includes(id);
+      // Cap at 5 nominees; ignore further picks once full.
+      if (!has && prev.selectedIds.length >= 5) return prev;
+      return {
+        ...prev,
+        selectedIds: has
+          ? prev.selectedIds.filter((x) => x !== id)
+          : [...prev.selectedIds, id],
+      };
+    });
+  }
+
+  function handleOpenLeadershipElection() {
+    if (
+      !currentAgendaItem ||
+      !leadershipDialog.voteType ||
+      !leadershipDialog.side
+    )
+      return;
+    const voteType = leadershipDialog.voteType;
+    const side = leadershipDialog.side;
+    const label = leadershipDialog.label;
+    const candidateIds = leadershipDialog.selectedIds;
+    startTransition(async () => {
+      const result = await openVote(eventId, currentAgendaItem.id, voteType, {
+        side,
+        candidateIds,
+      });
+      if (result.success) {
+        toast.success(`${label} election is now open!`);
+        setLeadershipDialog({
+          open: false,
+          voteType: null,
+          side: null,
+          label: "",
           members: [],
           selectedIds: [],
           loading: false,
@@ -565,6 +715,205 @@ export function VoteManager({
     </Dialog>
   );
 
+  // ─── Reusable leadership-election elements ────────────────────
+  //
+  // Three launch actions: PM + Deputy PM (nominate from the RULING bench) and
+  // Leader of Opposition (nominate from the OPPOSITION bench). Rendered in the
+  // no-session branch and after a revealed result, alongside the party-leader
+  // list, so the organiser can run them whenever an agenda item is live.
+  const benchHasMembers = (side: "ruling" | "opposition") =>
+    parties.some((p) => p.side === side && p.member_count > 0);
+
+  const leadershipSeats: Array<{
+    voteType: "prime_minister" | "deputy_prime_minister" | "leader_of_opposition";
+    side: "ruling" | "opposition";
+    label: string;
+  }> = [
+    { voteType: "prime_minister", side: "ruling", label: "Prime Minister" },
+    {
+      voteType: "deputy_prime_minister",
+      side: "ruling",
+      label: "Deputy Prime Minister",
+    },
+    {
+      voteType: "leader_of_opposition",
+      side: "opposition",
+      label: "Leader of Opposition",
+    },
+  ];
+
+  const leadershipList =
+    parties.length > 0 ? (
+      <div className="space-y-3">
+        <div className="flex items-center gap-1.5 text-sm font-medium text-gray-700">
+          <Landmark className="size-4 text-[#138808]" />
+          Leadership Elections
+        </div>
+        <p className="text-xs text-gray-500">
+          The whole governing coalition elects the Prime Minister and Deputy PM;
+          the whole opposition elects the Leader of Opposition. Only that
+          bench&apos;s members can vote.
+        </p>
+        <div className="space-y-2">
+          {leadershipSeats.map((seat) => {
+            const hasMembers = benchHasMembers(seat.side);
+            return (
+              <div
+                key={seat.voteType}
+                className="flex items-center justify-between rounded-lg border bg-white p-3"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-gray-800 truncate">
+                    {seat.label}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    {seat.side === "ruling" ? "Ruling bench" : "Opposition bench"}
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={isPending || !hasMembers}
+                  onClick={() =>
+                    handleHoldLeadershipElection(
+                      seat.voteType,
+                      seat.side,
+                      seat.label
+                    )
+                  }
+                >
+                  <Vote className="size-3.5 mr-1" />
+                  Elect {seat.label}
+                </Button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    ) : null;
+
+  // The leadership nomination dialog (pick 2–5 nominees from the bench → open).
+  const leadershipNominationDialog = (
+    <Dialog
+      open={leadershipDialog.open}
+      onOpenChange={(open) =>
+        setLeadershipDialog((prev) =>
+          open
+            ? { ...prev, open }
+            : {
+                open: false,
+                voteType: null,
+                side: null,
+                label: "",
+                members: [],
+                selectedIds: [],
+                loading: false,
+              }
+        )
+      }
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>
+            {leadershipDialog.label
+              ? `Elect ${leadershipDialog.label}`
+              : "Leadership Election"}
+          </DialogTitle>
+          <DialogDescription>
+            Choose 2–5 nominees from the{" "}
+            {leadershipDialog.side === "ruling" ? "ruling" : "opposition"} bench.
+            Only that bench&apos;s members will be able to vote.
+          </DialogDescription>
+        </DialogHeader>
+
+        {leadershipDialog.loading ? (
+          <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
+            <Loader2 className="mr-2 size-4 animate-spin" />
+            Loading members...
+          </div>
+        ) : leadershipDialog.members.length === 0 ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">
+            This bench has no members to nominate.
+          </p>
+        ) : (
+          <div className="max-h-72 space-y-1.5 overflow-y-auto pr-1">
+            {leadershipDialog.members.map((m) => {
+              const checked = leadershipDialog.selectedIds.includes(m.id);
+              const atCap =
+                !checked && leadershipDialog.selectedIds.length >= 5;
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  disabled={atCap}
+                  onClick={() => toggleLeadershipNominee(m.id)}
+                  className={cn(
+                    "flex w-full items-center justify-between rounded-lg border-2 p-3 text-left transition-all",
+                    checked
+                      ? "border-[#FF9933] bg-[#FF9933]/5"
+                      : "border-gray-200 bg-white hover:border-gray-300",
+                    atCap && "opacity-50"
+                  )}
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-gray-800">
+                      {m.full_name}
+                    </p>
+                    <p className="truncate text-xs text-gray-500">
+                      {m.school_name}
+                    </p>
+                  </div>
+                  <div
+                    className={cn(
+                      "ml-2 flex size-5 shrink-0 items-center justify-center rounded-full border-2",
+                      checked
+                        ? "border-[#FF9933] bg-[#FF9933]"
+                        : "border-gray-300 bg-white"
+                    )}
+                  >
+                    {checked && <CheckCircle2 className="size-3.5 text-white" />}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        <DialogFooter>
+          <span className="mr-auto self-center text-xs text-muted-foreground">
+            {leadershipDialog.selectedIds.length} selected
+          </span>
+          <Button
+            variant="outline"
+            onClick={() =>
+              setLeadershipDialog({
+                open: false,
+                voteType: null,
+                side: null,
+                label: "",
+                members: [],
+                selectedIds: [],
+                loading: false,
+              })
+            }
+          >
+            Cancel
+          </Button>
+          <Button
+            disabled={
+              isPending ||
+              leadershipDialog.selectedIds.length < 2 ||
+              leadershipDialog.selectedIds.length > 5
+            }
+            onClick={handleOpenLeadershipElection}
+          >
+            {isPending ? "Opening..." : "Open Election"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+
   // ─── If not a voting agenda type and no active session, don't render ─
 
   if (!showVoteControls && !voteSession) return null;
@@ -592,6 +941,8 @@ export function VoteManager({
                       parties.find((p) => p.id === activeLeaderPartyId)?.name ??
                       "Party"
                     } Leader Election`
+                  : isBenchVoteType
+                  ? seatTitle(voteSession.vote_type)
                   : "Bill Vote"}
               </CardTitle>
               <Badge
@@ -663,7 +1014,8 @@ export function VoteManager({
 
                   if (
                     voteSession.vote_type === "speaker_election" ||
-                    voteSession.vote_type === "party_leader"
+                    voteSession.vote_type === "party_leader" ||
+                    isBenchVoteType
                   ) {
                     const candidate = candidates.find(
                       (c) => c.id === tally.vote_value
@@ -858,6 +1210,53 @@ export function VoteManager({
                       </div>
                     );
                   })()}
+
+                {/* Bench-seat election result (PM / Deputy PM / LoP): elected
+                    winner via outcome.winnerId + tie runoff (same reading as
+                    party_leader — top-1 wins, top-count tie → runoff). */}
+                {isRevealed &&
+                  isBenchVoteType &&
+                  (() => {
+                    const nameOf = (id: string) =>
+                      candidates.find((c) => c.id === id)?.full_name ?? id;
+                    const outcome = computeElectionOutcome(
+                      voteSession.vote_type,
+                      tallies
+                    );
+                    const title = seatTitle(voteSession.vote_type).replace(
+                      " Election",
+                      ""
+                    );
+                    return (
+                      <div className="mt-3 space-y-2 rounded-lg border p-3 text-sm">
+                        {outcome.winnerId && (
+                          <div className="flex items-center gap-2 font-semibold text-amber-700">
+                            <Crown className="size-4 text-amber-500" />
+                            {title}: {nameOf(outcome.winnerId)}
+                          </div>
+                        )}
+                        {outcome.tie && (
+                          <div className="space-y-2 rounded-md border border-amber-300 bg-amber-50 p-2">
+                            <div className="font-medium text-amber-800">
+                              Tie for {title} ({outcome.tie.tiedCount} votes
+                              each):{" "}
+                              {outcome.tie.tiedCandidateIds
+                                .map(nameOf)
+                                .join(", ")}
+                            </div>
+                            <Button
+                              size="sm"
+                              disabled={isPending}
+                              onClick={handleRunoff}
+                              className="w-full"
+                            >
+                              Open 60-second runoff
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
               </div>
             )}
 
@@ -888,10 +1287,11 @@ export function VoteManager({
               )}
               {/* Once results are revealed, let the organiser open a fresh
                   ballot for the same item without deleting the old session in
-                  the DB. Party-leader elections use their own per-party flow
-                  below, so this is only for speaker/bill votes. */}
+                  the DB. Party-leader and leadership elections use their own
+                  launch flows below, so this is only for speaker/bill votes. */}
               {isRevealed &&
                 voteSession.vote_type !== "party_leader" &&
+                !isBenchVoteType &&
                 currentAgendaItem && (
                   <Button
                     size="sm"
@@ -923,6 +1323,18 @@ export function VoteManager({
               voteSession.vote_type === "party_leader" &&
               partyLeaderList && (
                 <div className="border-t pt-4">{partyLeaderList}</div>
+              )}
+
+            {/* After a leadership result is revealed, surface the launch lists
+                again so the organiser can run the next seat (PM → Deputy PM →
+                LoP, or any party-leader election). */}
+            {isRevealed &&
+              isBenchVoteType &&
+              (leadershipList || partyLeaderList) && (
+                <div className="space-y-4 border-t pt-4">
+                  {leadershipList}
+                  {partyLeaderList}
+                </div>
               )}
           </CardContent>
         </Card>
@@ -959,6 +1371,9 @@ export function VoteManager({
 
         {/* Party-Leader nomination dialog (re-elect / next party after reveal) */}
         {partyLeaderDialog}
+
+        {/* Leadership nomination dialog (next seat after a revealed result) */}
+        {leadershipNominationDialog}
       </>
     );
   }
@@ -1066,6 +1481,9 @@ export function VoteManager({
 
           {/* Party Leader Elections — available during any agenda item */}
           {partyLeaderList}
+
+          {/* Leadership Elections (PM / Deputy PM / LoP) — any agenda item */}
+          {leadershipList}
         </CardContent>
       </Card>
 
@@ -1099,6 +1517,9 @@ export function VoteManager({
 
       {/* Party-Leader nomination dialog: pick 3–5 nominees, then open the vote */}
       {partyLeaderDialog}
+
+      {/* Leadership nomination dialog: pick 2–5 bench nominees, then open the vote */}
+      {leadershipNominationDialog}
     </>
   );
 }
@@ -1153,10 +1574,15 @@ function FloorCapture({ eventId, sessionId, voteType, candidates }: FloorCapture
     [candidates]
   );
 
-  // Candidate ballots (speaker + party-leader) resolve a participant name; bills
-  // resolve a fixed aye/nay/abstain label.
+  // Candidate ballots (speaker + party-leader + the bench seats PM / Deputy PM /
+  // Leader of Opposition) resolve a participant name; bills resolve a fixed
+  // aye/nay/abstain label.
   const isCandidateBallot =
-    voteType === "speaker_election" || voteType === "party_leader";
+    voteType === "speaker_election" ||
+    voteType === "party_leader" ||
+    voteType === "prime_minister" ||
+    voteType === "deputy_prime_minister" ||
+    voteType === "leader_of_opposition";
 
   const labelForValue = useCallback(
     (value: string) => {
@@ -1761,7 +2187,11 @@ function RollCallRow({
 
         {/* Quick vote controls (only when not mid-confirm) */}
         {!confirming &&
-          (voteType === "speaker_election" || voteType === "party_leader" ? (
+          (voteType === "speaker_election" ||
+          voteType === "party_leader" ||
+          voteType === "prime_minister" ||
+          voteType === "deputy_prime_minister" ||
+          voteType === "leader_of_opposition" ? (
             <Select
               onValueChange={(v: string | null) => {
                 if (v) onPick(v);

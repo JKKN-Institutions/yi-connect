@@ -50,6 +50,8 @@ import {
   Pencil,
   AlertTriangle,
   Shield,
+  Check,
+  ArrowRight,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -233,67 +235,103 @@ export function AllocationClient({
     }
   }
 
-  // ── No Participants State ─────────────────────────────────────────
-
-  if (participants.length === 0) {
-    return (
-      <Card className="py-16">
-        <CardContent className="flex flex-col items-center text-center">
-          <Users className="mb-4 size-12 text-gray-300" />
-          <h3 className="text-lg font-semibold text-gray-700">
-            No Participants Yet
-          </h3>
-          <p className="mt-3 max-w-lg text-sm text-gray-500">
-            <span className="font-medium text-gray-700">Two ways to set up this event:</span>
-          </p>
-          <p className="mt-2 max-w-lg text-sm text-gray-500">
-            <span className="font-medium">1 · Auto-allocate</span> — add students
-            (Participants tab), create parties, then Run Allocation here.
-          </p>
-          <p className="mt-2 max-w-lg text-sm text-gray-500">
-            <span className="font-medium">2 · Upload an allocated roster</span> —
-            already allocated outside the app? Upload one sheet with{" "}
-            <span className="font-medium">Name, Party Letter, Constituency Number,
-            Constituency Name, Committee Number</span>. The app creates each student
-            (with an access code) and their full allocation.
-          </p>
-          <div className="mt-5">
-            <CsvImport eventId={eventId} onImported={() => router.refresh()} />
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  // ── Not Yet Allocated State ───────────────────────────────────────
+  // ── Setup / Not-Yet-Allocated State (guided) ──────────────────────
+  // A clueless organiser shouldn't have to know to hop between tabs. Show the
+  // three prerequisites as an inline checklist with a button for each, and keep
+  // "Run Allocation" locked until all three are done. Benchless: Ruling vs
+  // Opposition is decided on event day, so there's no bench/role choice here.
 
   if (!hasAllocation) {
-    // Benchless flow: parties must exist first (the chapter creates them on the
-    // Parties tab). Allocation then splits every student evenly across those
-    // parties and assigns a constituency. Ruling/Opposition is decided on event
-    // day, off-app — so there is no bench/role choice here.
-    const hasParties = parties.length > 0;
+    const studentCount = participants.length;
+    const committeeCount = customCommittees?.length ?? 0;
+    const partyCount = parties.length;
+    const ready = studentCount > 0 && committeeCount > 0 && partyCount > 0;
+
+    const steps = [
+      {
+        n: 1,
+        done: studentCount > 0,
+        title: "Add students",
+        doneText: `${studentCount} student${studentCount === 1 ? "" : "s"} added`,
+        todo: "Add the participants for this event",
+        href: `/yip/dashboard/events/${eventId}/participants`,
+        cta: "Add students",
+      },
+      {
+        n: 2,
+        done: committeeCount > 0,
+        title: "Choose committees",
+        doneText: `${committeeCount} committee${committeeCount === 1 ? "" : "s"} chosen`,
+        todo: "Pick the committees students will debate in",
+        href: `/yip/dashboard/events/${eventId}/topics`,
+        cta: "Choose committees",
+      },
+      {
+        n: 3,
+        done: partyCount > 0,
+        title: "Create parties",
+        doneText: `${partyCount} part${partyCount === 1 ? "y" : "ies"} created`,
+        todo: "Create the parties (5 is standard)",
+        href: `/yip/dashboard/events/${eventId}/parties`,
+        cta: "Create parties",
+      },
+    ];
 
     return (
-      <div className="space-y-4">
-        <Card className="py-16">
-          <CardContent className="flex flex-col items-center text-center">
-            <Shuffle className="mb-4 size-12 text-[#FF9933]" />
-            <h3 className="text-lg font-semibold text-gray-700">
-              Ready to Allocate
-            </h3>
-            <p className="mt-2 max-w-md text-sm text-gray-500">
-              {participants.length} participants registered.
-              {hasParties
-                ? ` They'll be split evenly across your ${parties.length} parties (spread across schools) and each given a constituency. Ruling vs Opposition is decided on event day.`
-                : " Create your parties first, then run allocation to split students across them."}
+      <div className="mx-auto max-w-2xl space-y-4">
+        {/* Auto-allocate — guided 3-step checklist */}
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-2">
+              <Shuffle className="size-5 text-[#FF9933]" />
+              <h3 className="text-lg font-semibold text-gray-800">Auto-allocate</h3>
+            </div>
+            <p className="mt-1 text-sm text-gray-500">
+              The app splits students evenly into parties and gives each a
+              constituency. Finish these three steps, then run allocation.
             </p>
 
-            {hasParties ? (
+            <div className="mt-4 space-y-2">
+              {steps.map((s) => (
+                <div
+                  key={s.n}
+                  className={`flex items-center gap-3 rounded-lg border p-3 ${
+                    s.done ? "border-green-200 bg-green-50/50" : "border-gray-200"
+                  }`}
+                >
+                  <div
+                    className={`flex size-7 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${
+                      s.done ? "bg-green-500 text-white" : "bg-gray-100 text-gray-600"
+                    }`}
+                  >
+                    {s.done ? <Check className="size-4" /> : s.n}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-medium text-gray-800">{s.title}</div>
+                    <div className="text-xs text-gray-500">
+                      {s.done ? s.doneText : s.todo}
+                    </div>
+                  </div>
+                  <Link
+                    href={s.href}
+                    className={`inline-flex shrink-0 items-center gap-1 rounded-md px-3 py-1.5 text-xs font-medium ${
+                      s.done
+                        ? "border border-gray-200 text-gray-600 hover:bg-gray-50"
+                        : "bg-[#FF9933] text-white hover:bg-[#E68A2E]"
+                    }`}
+                  >
+                    {s.done ? "Edit" : s.cta}
+                    {!s.done && <ArrowRight className="size-3" />}
+                  </Link>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-5 flex flex-col items-center">
               <Button
-                className="mt-6 bg-[#FF9933] text-white hover:bg-[#E68A2E]"
+                className="bg-[#FF9933] text-white hover:bg-[#E68A2E] disabled:cursor-not-allowed disabled:opacity-50"
                 onClick={() => handleRunAllocation()}
-                disabled={loading}
+                disabled={!ready || loading}
               >
                 {loading ? (
                   <Loader2 className="size-4 animate-spin" />
@@ -302,15 +340,33 @@ export function AllocationClient({
                 )}
                 {loading ? "Running Allocation..." : "Run Allocation"}
               </Button>
-            ) : (
-              <Link
-                href={`/yip/dashboard/events/${eventId}/parties`}
-                className="mt-6 inline-flex items-center gap-2 rounded-md bg-[#FF9933] px-4 py-2 text-sm font-medium text-white hover:bg-[#E68A2E]"
-              >
-                <Users className="size-4" />
-                Go to Parties
-              </Link>
-            )}
+              {!ready && (
+                <p className="mt-2 text-xs text-amber-600">
+                  Finish the steps above to enable allocation.
+                </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Manual alternative — upload a pre-allocated roster */}
+        <Card>
+          <CardContent className="pt-6">
+            <h3 className="text-sm font-semibold text-gray-800">
+              Or upload an allocated roster
+            </h3>
+            <p className="mt-1 text-xs text-gray-500">
+              Already allocated outside the app? Upload one sheet —{" "}
+              <span className="font-medium">
+                Name, Party Letter, Constituency Number, Constituency Name,
+                Committee Number
+              </span>{" "}
+              — and the app creates each student (with an access code) and their
+              full allocation. No steps needed.
+            </p>
+            <div className="mt-3">
+              <CsvImport eventId={eventId} onImported={() => router.refresh()} />
+            </div>
           </CardContent>
         </Card>
       </div>

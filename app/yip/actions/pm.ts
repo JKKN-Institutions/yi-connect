@@ -70,7 +70,10 @@ export async function getPmGovernmentBills(
     .order("created_at", { ascending: false });
 
   if (error) return { success: false, error: error.message };
-  return { success: true, data: (data ?? []) as GovernmentBill[] };
+  // `bills.committee_name` exists in the live DB but the generated Supabase
+  // types lag (known drift; tsc — not the DB — is stale here), so the select is
+  // typed as a SelectQueryError. Cast via unknown; the column is real at runtime.
+  return { success: true, data: (data ?? []) as unknown as GovernmentBill[] };
 }
 
 /**

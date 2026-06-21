@@ -459,6 +459,48 @@ export default async function ParticipantPage() {
         </Link>
       )}
 
+      {/* ─── PRIME MINISTER'S DESK (PM / Deputy PM) ─────────────────── */}
+      {isPMDesk && (
+        <Link href="/yip/me/pm" className="block">
+          <Card className="border-indigo-300/60 overflow-hidden transition-shadow hover:shadow-md">
+            <div className="h-1 w-full bg-gradient-to-r from-indigo-600 to-violet-400" />
+            <CardContent className="flex items-center gap-3 pt-4 pb-4">
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-indigo-100">
+                <Flag className="size-5 text-indigo-700" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h2 className="text-sm font-bold text-gray-900">Prime Minister&apos;s Desk</h2>
+                <p className="text-xs text-gray-500">
+                  Present government bills · answer any ministry
+                </p>
+              </div>
+              <ChevronRight className="size-5 shrink-0 text-gray-400" />
+            </CardContent>
+          </Card>
+        </Link>
+      )}
+
+      {/* ─── SHADOW MINISTER'S DESK (Shadow minister) ───────────────── */}
+      {isShadowDesk && (
+        <Link href="/yip/me/shadow" className="block">
+          <Card className="border-slate-300/60 overflow-hidden transition-shadow hover:shadow-md">
+            <div className="h-1 w-full bg-gradient-to-r from-slate-600 to-slate-400" />
+            <CardContent className="flex items-center gap-3 pt-4 pb-4">
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-slate-100">
+                <Landmark className="size-5 text-slate-700" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h2 className="text-sm font-bold text-gray-900">Shadow Minister&apos;s Desk</h2>
+                <p className="text-xs text-gray-500">
+                  Track your ministry · file a counter
+                </p>
+              </div>
+              <ChevronRight className="size-5 shrink-0 text-gray-400" />
+            </CardContent>
+          </Card>
+        </Link>
+      )}
+
       {/* ─── OPPOSITION DESK (Leader of Opposition) ─────────────────── */}
       {isOpposition && (
         <Link href="/yip/me/opposition" className="block">

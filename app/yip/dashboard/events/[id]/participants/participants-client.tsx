@@ -65,6 +65,7 @@ type Participant = {
   party_side: string | null;
   parliament_role: string | null;
   constituency_name: string | null;
+  constituency_number: number | null;
   constituency_state: string | null;
   committee_name: string | null;
   committee_number: number | null;
@@ -1007,7 +1008,14 @@ export function ParticipantsClient({
                   </TableCell>
                   <TableCell>
                     {p.constituency_name ? (
-                      <span className="text-xs">{p.constituency_name}</span>
+                      <span className="text-xs">
+                        {p.constituency_number != null && (
+                          <span className="mr-1 font-mono text-[#1a1a3e]/50">
+                            #{p.constituency_number}
+                          </span>
+                        )}
+                        {p.constituency_name}
+                      </span>
                     ) : (
                       <span className="text-gray-400">—</span>
                     )}

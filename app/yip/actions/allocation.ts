@@ -211,6 +211,10 @@ export async function runAllocationAction(
 
   // Write results back to database — batch update each participant
   const errors: string[] = [];
+  // Platform constituency (seat) number — standardised to start at 101 and run
+  // 101, 102, 103… in allocation order. Not an official Lok Sabha number; just a
+  // unique per-event seat id, matching the manual-upload "Constituency Number".
+  let seatNumber = 101;
   for (const assignment of result.assignments) {
     const { error: updateError } = await supabase
       .from("participants")
@@ -247,6 +251,7 @@ export async function runAllocationAction(
           | null,
         constituency_name: assignment.constituency_name,
         constituency_state: assignment.constituency_state,
+        constituency_number: seatNumber++,
         committee_name: assignment.committee_name,
         // Named party: set it when this student was distributed into a party
         // (benchless flat-fill, or legacy bench fill); otherwise clear it so a

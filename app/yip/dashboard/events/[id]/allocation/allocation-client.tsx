@@ -17,6 +17,7 @@ import {
   PARLIAMENT_ROLES,
 } from "@/lib/yip/constants";
 import { committeeLabel } from "@/lib/yip/committee-label";
+import { CsvImport } from "@/components/yip/csv-import";
 import { Button } from "@/components/yip/ui/button";
 import { Badge } from "@/components/yip/ui/badge";
 import { Card, CardContent } from "@/components/yip/ui/card";
@@ -64,6 +65,7 @@ type Participant = {
   parliament_role: string | null;
   ministry: string | null;
   constituency_name: string | null;
+  constituency_number: number | null;
   constituency_state: string | null;
   committee_name: string | null;
   serial_no: number | null;
@@ -241,9 +243,23 @@ export function AllocationClient({
           <h3 className="text-lg font-semibold text-gray-700">
             No Participants Yet
           </h3>
-          <p className="mt-1 text-sm text-gray-500">
-            Add participants first before running the allocation engine.
+          <p className="mt-3 max-w-lg text-sm text-gray-500">
+            <span className="font-medium text-gray-700">Two ways to set up this event:</span>
           </p>
+          <p className="mt-2 max-w-lg text-sm text-gray-500">
+            <span className="font-medium">1 · Auto-allocate</span> — add students
+            (Participants tab), create parties, then Run Allocation here.
+          </p>
+          <p className="mt-2 max-w-lg text-sm text-gray-500">
+            <span className="font-medium">2 · Upload an allocated roster</span> —
+            already allocated outside the app? Upload one sheet with{" "}
+            <span className="font-medium">Name, Party Letter, Constituency Number,
+            Constituency Name, Committee Number</span>. The app creates each student
+            (with an access code) and their full allocation.
+          </p>
+          <div className="mt-5">
+            <CsvImport eventId={eventId} onImported={() => router.refresh()} />
+          </div>
         </CardContent>
       </Card>
     );
@@ -634,6 +650,11 @@ export function AllocationClient({
                     </span>
                   </TableCell>
                   <TableCell className="text-xs">
+                    {p.constituency_number != null && (
+                      <span className="mr-1 font-mono text-gray-400">
+                        #{p.constituency_number}
+                      </span>
+                    )}
                     {p.constituency_name || "--"}
                   </TableCell>
                   <TableCell className="text-xs text-gray-500">

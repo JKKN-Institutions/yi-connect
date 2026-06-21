@@ -44,6 +44,7 @@ interface CsvRow {
   // NEW — allocation columns
   party_letter?: string;
   constituency_name?: string;
+  constituency_number?: number;
   constituency_state?: string;
   committee_number?: number;
   committee_name?: string;
@@ -81,9 +82,16 @@ const COL_ALIASES: Record<
   city: ["city", "town"],
   home_state_explicit: ["home_state", "home state"],
   constituency_state_explicit: ["constituency_state", "state_constituency"],
-  party_letter: ["party", "party_letter"],
-  constituency_name: ["constituency", "constituency_name"],
-  committee_number: ["committee", "committee_number", "committee_no"],
+  party_letter: ["party", "party_letter", "party letter"],
+  constituency_name: ["constituency", "constituency_name", "constituency name"],
+  constituency_number: [
+    "constituency_number",
+    "constituency number",
+    "constituency_no",
+    "constituency no",
+    "const_no",
+  ],
+  committee_number: ["committee", "committee_number", "committee_no", "committee number"],
   committee_name: ["committee_name"],
 };
 
@@ -201,6 +209,12 @@ function normalizeXlsxRow(
     constituencyNameRaw !== undefined
       ? String(constituencyNameRaw).trim() || undefined
       : undefined;
+  const constituencyNumberRaw = pick(COL_ALIASES.constituency_number);
+  let constituency_number: number | undefined;
+  if (constituencyNumberRaw !== undefined && constituencyNumberRaw !== "") {
+    const n = Number(constituencyNumberRaw);
+    if (!isNaN(n)) constituency_number = n;
+  }
 
   let committee_number: number | undefined;
   if (committeeNumberRaw !== undefined && committeeNumberRaw !== "") {
@@ -242,6 +256,7 @@ function normalizeXlsxRow(
     constituency_state,
     party_letter,
     constituency_name,
+    constituency_number,
     committee_number,
     committee_name,
     errors,
@@ -259,18 +274,25 @@ function distinctPartyCount(rows: ParsedRow[]): number {
  * ON for a classic 2-party (or single-party) roster, OFF for multi-party (>2)
  * rosters like Nashik (5 lettered parties) where there is no bench split.
  * No party columns at all → irrelevant, leave ON. */
-function defaultAssignBenches(rows: ParsedRow[]): boolean {
-  const n = distinctPartyCount(rows);
-  return n === 0 ? true : n <= 2;
+function defaultAssignBenches(): boolean {
+  // Benchless platform: Ruling/Opposition is decided on event day, not at
+  // upload. Import flat by default — the organiser can flip benches later.
+  return false;
 }
 
 /** Download a one-row .xlsx template */
 function downloadXlsxTemplate() {
-  // Name-only roster: just the student's name. (The importer still also accepts
-  // optional pre-assigned party/constituency/committee columns for chapters that
-  // allocate in advance — they're just not in this template.)
-  const headers = ["name"];
-  const sample = ["Arjun Kumar"];
+  // Pre-allocated roster template — the standardised 5 columns. (All allocation
+  // columns are optional; a name-only sheet still works for chapters that
+  // auto-allocate in the app instead.)
+  const headers = [
+    "Name",
+    "Party Letter",
+    "Constituency Number",
+    "Constituency Name",
+    "Committee Number",
+  ];
+  const sample = ["Arjun Kumar", "A", "101", "Bangalore South", "3"];
   const ws = XLSX.utils.aoa_to_sheet([headers, sample]);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Participants");
@@ -367,7 +389,7 @@ export function CsvImport({
           }
 
           setParsedRows(rows);
-          setAssignBenches(defaultAssignBenches(rows));
+          setAssignBenches(defaultAssignBenches());
         } catch {
           setParseError("Failed to parse Excel file. Please check the format.");
         }
@@ -410,6 +432,7 @@ export function CsvImport({
           const bareStateIdx = headers.findIndex((h) => h === "state");
           const partyIdx = findColIdx(headers, COL_ALIASES.party_letter);
           const constNameIdx = findColIdx(headers, COL_ALIASES.constituency_name);
+          const constNumIdx = findColIdx(headers, COL_ALIASES.constituency_number);
           const committeeNumIdx = findColIdx(headers, COL_ALIASES.committee_number);
           const committeeNameIdx = findColIdx(headers, COL_ALIASES.committee_name);
 
@@ -467,6 +490,14 @@ export function CsvImport({
             }
             const constituency_name =
               constNameIdx >= 0 ? cols[constNameIdx]?.trim() || undefined : undefined;
+            let constituency_number: number | undefined;
+            if (constNumIdx >= 0) {
+              const raw = cols[constNumIdx]?.trim();
+              if (raw) {
+                const n = Number(raw);
+                if (!isNaN(n)) constituency_number = n;
+              }
+            }
             let committee_number: number | undefined;
             if (committeeNumIdx >= 0) {
               const raw = cols[committeeNumIdx]?.trim();
@@ -501,6 +532,7 @@ export function CsvImport({
               constituency_state,
               party_letter,
               constituency_name,
+              constituency_number,
               committee_number,
               committee_name,
               errors,
@@ -508,7 +540,7 @@ export function CsvImport({
           }
 
           setParsedRows(rows);
-          setAssignBenches(defaultAssignBenches(rows));
+          setAssignBenches(defaultAssignBenches());
         } catch {
           setParseError("Failed to parse CSV file. Please check the format.");
         }
@@ -560,6 +592,7 @@ export function CsvImport({
       home_state: r.home_state,
       party_letter: r.party_letter,
       constituency_name: r.constituency_name,
+      constituency_number: r.constituency_number,
       constituency_state: r.constituency_state,
       committee_number: r.committee_number,
       committee_name: r.committee_name,

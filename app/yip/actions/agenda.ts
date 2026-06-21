@@ -388,10 +388,11 @@ export async function skipAgendaItem(
   if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
   const supabase = await createServiceClient();
 
-  // Mark as skipped
+  // Mark as skipped, tagged as an on-the-day skip (vs a pre-event exclusion set
+  // on the Agenda screen) so the post-event report can tell them apart.
   await supabase
     .from("agenda")
-    .update({ status: "skipped" })
+    .update({ status: "skipped", skip_reason: "skipped_live" })
     .eq("id", agendaItemId);
 
   // If this was the current item, advance to next
@@ -643,6 +644,26 @@ export async function getAgendaForSetup(eventId: string) {
   return data ?? [];
 }
 
+/** Recorded-score count per agenda_item_id (so the Agenda screen can warn before
+ * excluding a session that already has marks). Read-gated by canView. */
+export async function getAgendaScoreCounts(
+  eventId: string
+): Promise<Record<string, number>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canView) return {};
+  const supabase = await createServiceClient();
+  const { data } = await supabase
+    .from("scores")
+    .select("agenda_item_id")
+    .eq("event_id", eventId);
+  const counts: Record<string, number> = {};
+  for (const r of data ?? []) {
+    const k = (r as { agenda_item_id: string | null }).agenda_item_id;
+    if (k) counts[k] = (counts[k] ?? 0) + 1;
+  }
+  return counts;
+}
+
 /**
  * Include / exclude an agenda item from the live run (pre-event).
  * includeInRun=false → status 'skipped' (jumped over on the day); true →
@@ -685,7 +706,12 @@ export async function setAgendaItemInRun(
 
   const { error } = await supabase
     .from("agenda")
-    .update({ status: includeInRun ? "upcoming" : "skipped" })
+    .update({
+      status: includeInRun ? "upcoming" : "skipped",
+      // Tag WHY it's not running so reports can tell a planned exclusion apart
+      // from an on-the-day Skip (set in skipAgendaItem). Re-including clears it.
+      skip_reason: includeInRun ? null : "excluded_preevent",
+    })
     .eq("id", agendaItemId)
     .eq("event_id", eventId);
   if (error) return { success: false, error: error.message };

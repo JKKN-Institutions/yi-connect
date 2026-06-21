@@ -912,6 +912,7 @@ export type Database = {
           planned_start: string | null
           sequence_order: number
           session_key: string | null
+          skip_reason: string | null
           status: Database["public"]["Enums"]["agenda_status"] | null
           title: string
           updated_at: string | null
@@ -932,6 +933,7 @@ export type Database = {
           planned_start?: string | null
           sequence_order: number
           session_key?: string | null
+          skip_reason?: string | null
           status?: Database["public"]["Enums"]["agenda_status"] | null
           title: string
           updated_at?: string | null
@@ -952,6 +954,7 @@ export type Database = {
           planned_start?: string | null
           sequence_order?: number
           session_key?: string | null
+          skip_reason?: string | null
           status?: Database["public"]["Enums"]["agenda_status"] | null
           title?: string
           updated_at?: string | null

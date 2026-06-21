@@ -10,10 +10,10 @@ export async function getLiveSpotlight(): Promise<LiveSpotlightData | null> {
     .from("events")
     .select("id, name, status, is_mock")
     .in("status", ["day1_live", "day2_live"])
-    .eq("is_mock", false)
-    .limit(1);
+    .eq("is_mock", false);
 
-  const live = (liveRaw ?? [])[0];
+  // Exclude demo/test events from the "Happening now" card — only a real live event counts.
+  const live = (liveRaw ?? []).find((e) => !/\b(demo|test)\b/i.test(e.name ?? ""));
   if (!live) return null;
 
   const [{ data: agendaRaw }, { count: scoresCount }, { count: voteCount }] = await Promise.all([

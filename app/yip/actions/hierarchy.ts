@@ -233,7 +233,11 @@ export async function getNationalOverview(): Promise<{
 
   const totalParticipants = parts.length;
   const schools = new Set(parts.map((p) => p.school_name).filter((s) => s && s !== "")).size;
-  const isLive = (s: string | null) => s === "day1_live" || s === "day2_live";
+  // A real live event: live status AND not a demo/test event (so the masthead
+  // "Live now" badge and pipeline don't surface the Erode Demo as live).
+  const isLive = (e: { status: string | null; name: string | null }) =>
+    (e.status === "day1_live" || e.status === "day2_live") &&
+    !/\b(demo|test)\b/i.test(e.name ?? "");
   const evName = (e: { name: string | null }) => e.name ?? "Untitled event";
   const evDate = (d: string) => {
     const [, m, day] = d.split("-").map(Number);
@@ -263,7 +267,7 @@ export async function getNationalOverview(): Promise<{
     };
   }).sort((a, b) => b.events - a.events || b.participants - a.participants);
 
-  const liveEv = events.find((e) => isLive(e.status));
+  const liveEv = events.find((e) => isLive(e));
   const scheduled = events.filter((e) => e.day1_date && e.day1_date !== tbdDate).length;
   const awaitingDates = events.length - scheduled;
 
@@ -345,7 +349,7 @@ export async function getNationalOverview(): Promise<{
       participants: totalParticipants,
       schools,
       published: events.filter((e) => e.results_published_at !== null).length,
-      live: events.filter((e) => isLive(e.status)).length,
+      live: events.filter((e) => isLive(e)).length,
       scheduled,
       awaitingDates,
       startedZones: zones.filter((z) => z.started).length,

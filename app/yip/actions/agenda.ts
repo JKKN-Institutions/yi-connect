@@ -829,6 +829,8 @@ export async function updateAgendaItem(
     description?: string | null;
     duration_minutes?: number;
     agenda_type?: string;
+    /** Day-0 (prep) calendar date; "" / null clears it. */
+    scheduled_date?: string | null;
   }
 ): Promise<ActionResult> {
   const access = await getYipEventAccess(eventId);
@@ -836,6 +838,8 @@ export async function updateAgendaItem(
     return { success: false, error: "Not authorized to manage this event" };
 
   const update: Record<string, unknown> = {};
+  if (patch.scheduled_date !== undefined)
+    update.scheduled_date = patch.scheduled_date || null;
   if (patch.title !== undefined) {
     const t = patch.title.trim();
     if (!t) return { success: false, error: "Title can't be empty." };
@@ -882,6 +886,8 @@ export async function addAgendaItem(
     description?: string;
     duration_minutes?: number;
     agenda_type?: string;
+    /** Day-0 (prep) calendar date. */
+    scheduled_date?: string | null;
   }
 ): Promise<ActionResult<{ id: string }>> {
   const access = await getYipEventAccess(eventId);
@@ -929,7 +935,10 @@ export async function addAgendaItem(
       mode: modeForAgendaType(agendaType),
       status: "upcoming",
       is_scoreable: false,
-    })
+      // Day-0 (prep) items carry a calendar date; event-day items don't.
+      // Column post-dates the generated types — cast the payload.
+      scheduled_date: input.day === 0 ? input.scheduled_date ?? null : null,
+    } as never)
     .select("id")
     .single();
   if (error || !data)

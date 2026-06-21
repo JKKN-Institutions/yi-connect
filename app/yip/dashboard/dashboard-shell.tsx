@@ -24,7 +24,7 @@ import { GUIDES } from "@/lib/yip/guide/content";
 const navItems = [
   { label: "My Events", href: "/yip/dashboard", icon: CalendarDays },
   { label: "Topics", href: "/yip/dashboard/topics", icon: BookOpen },
-  { label: "Zones", href: "/yip/dashboard/zones", icon: Globe },
+  { label: "Regions", href: "/yip/dashboard/zones", icon: Globe },
   { label: "Admin", href: "/yip/dashboard/admin", icon: LayoutGrid },
 ];
 

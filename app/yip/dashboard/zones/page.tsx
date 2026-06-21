@@ -236,7 +236,7 @@ export default async function ZonesNationalPage() {
           <div className="text-sm text-[#1a1a3e]/55 mt-2">
             from <span className="font-semibold text-[#1a1a3e]/80">{totals.schools} schools</span> · across{" "}
             <span className="font-semibold text-[#1a1a3e]/80">
-              {totals.startedZones} of {totals.zones} zones
+              {totals.startedZones} of {totals.zones} regions
             </span>{" "}
             so far
           </div>
@@ -260,7 +260,7 @@ export default async function ZonesNationalPage() {
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <StatCard value={totals.zones} label="Active zones" />
+          <StatCard value={totals.zones} label="Active regions" />
           <StatCard value={totals.chapters} label="Chapters engaged" />
           <StatCard value={totals.events} label="Events seeded" />
           <StatCard value={totals.published} label="Results published" accent />
@@ -303,14 +303,14 @@ export default async function ZonesNationalPage() {
             eyebrow="Coverage"
             tone="green"
             title={`Registration has begun in ${totals.startedZones} ${
-              totals.startedZones === 1 ? "zone" : "zones"
+              totals.startedZones === 1 ? "region" : "regions"
             }`}
             body={
               notStarted.length > 0
                 ? `${listJoin(notStarted)} ${
                     notStarted.length === 1 ? "has" : "have"
                   } chapters but no students enrolled yet.`
-                : "Every zone has students enrolled."
+                : "Every region has students enrolled."
             }
           />
         </section>
@@ -323,7 +323,7 @@ export default async function ZonesNationalPage() {
       <section>
         <div className="mb-3">
           <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#1a1a3e]/55">
-            Zones ranked by activity
+            Regions ranked by activity
           </span>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

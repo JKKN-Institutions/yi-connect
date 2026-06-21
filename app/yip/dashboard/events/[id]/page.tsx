@@ -83,7 +83,7 @@ export default async function EventOverviewPage({
 
   if (!event) {
     return (
-      <Forbidden403 reason="You don't have access to this event. It may have been deleted, or you may not be the organizer, zone regional admin, or super-admin for it." />
+      <Forbidden403 reason="You don't have access to this event. It may have been deleted, or you may not be the organizer, regional admin, or super-admin for it." />
     );
   }
 

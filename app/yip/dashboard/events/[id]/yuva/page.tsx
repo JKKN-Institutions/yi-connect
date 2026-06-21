@@ -26,7 +26,7 @@ export default async function YuvaAssignmentsPage({
   const event = await getEvent(id);
   if (!event) {
     return (
-      <Forbidden403 reason="You don't have access to this event's YUVA desks. The event may have been deleted, or your role may not include this event's chapter or zone." />
+      <Forbidden403 reason="You don't have access to this event's YUVA desks. The event may have been deleted, or your role may not include this event's chapter or region." />
     );
   }
 

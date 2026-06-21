@@ -492,6 +492,7 @@ export function MotionsClient({
           onCancel={resetUI}
           pending={pending}
           error={error}
+          eligibleCount={participants.length}
         />
       )}
 
@@ -762,6 +763,7 @@ function VotePanel({
   onCancel,
   pending,
   error,
+  eligibleCount,
 }: {
   motion: Motion;
   votes: { for: number; against: number; abstain: number };
@@ -770,7 +772,13 @@ function VotePanel({
   onCancel: () => void;
   pending: boolean;
   error: string | null;
+  /** Number of delegates on the roster — the most votes this tally can hold. */
+  eligibleCount: number;
 }) {
+  const total = votes.for + votes.against + votes.abstain;
+  // Warn (do NOT block) when the entered tally exceeds the delegate count — a
+  // fat-fingered number on the day would otherwise record nonsense silently.
+  const overCap = eligibleCount > 0 && total > eligibleCount;
   return (
     <Card className="border-violet-300">
       <CardHeader>
@@ -809,6 +817,14 @@ function VotePanel({
             />
           </div>
         </div>
+        {overCap && (
+          <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-800">
+            That&apos;s {total} votes but only {eligibleCount} delegate
+            {eligibleCount === 1 ? "" : "s"} on the roster — double-check the
+            count. You can still record it if some delegates voted more than
+            once or the roster is incomplete.
+          </div>
+        )}
         {error && (
           <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
             {error}

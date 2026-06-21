@@ -24,7 +24,7 @@
  * (lib/yip/score-buffer.ts) takes over from there.
  */
 
-const VERSION = "yc-v5-runtime-20260621";
+const VERSION = "yc-v6-runtime-20260621";
 const PAGES = `${VERSION}-pages`;
 const STATIC = `${VERSION}-static`;
 const ASSETS = `${VERSION}-assets`;

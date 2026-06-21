@@ -97,11 +97,16 @@ interface ControlPanelProps {
   initialAgendaItems: AgendaItem[];
   initialSpeakers: SpeakerWithParticipant[];
   /**
-   * Chair (chapter_admin) or national/super-admin only. Gates the backward
-   * agenda controls (Previous / Reset), which rewind everyone's live screen
-   * and are therefore a stronger privilege than ordinary organising.
+   * Chair (chapter_admin) or national/super-admin only. Gates the strongest
+   * backward controls — Reset (full rewind to the start) and Re-open a completed
+   * item — which rewind everyone's live screen.
    */
   canControlAgendaBackward: boolean;
+  /**
+   * Any organiser (canManage). Gates the Previous button — stepping back one
+   * item to undo a mis-advance is allowed for ordinary organisers now.
+   */
+  canManageAgenda: boolean;
   stats: {
     totalParticipants: number;
     checkedIn: number;
@@ -136,6 +141,7 @@ export function ControlPanel({
   initialAgendaItems,
   initialSpeakers,
   canControlAgendaBackward,
+  canManageAgenda,
   stats,
 }: ControlPanelProps) {
   const router = useRouter();
@@ -791,30 +797,31 @@ export function ControlPanel({
                       {currentAgendaItem.title}
                     </h2>
                     <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
-                      {/* Backward controls — chair / national only. Rendered
-                          as cautious secondary actions vs the primary Next. */}
+                      {/* Backward controls — cautious secondary actions vs the
+                          primary Next. Previous = any organiser; Reset = chair /
+                          national only (full rewind). */}
+                      {canManageAgenda && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={isPending}
+                          onClick={handlePreviousAgenda}
+                        >
+                          <ChevronLeft className="size-4" />
+                          Previous
+                        </Button>
+                      )}
                       {canControlAgendaBackward && (
-                        <>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={isPending}
-                            onClick={handlePreviousAgenda}
-                          >
-                            <ChevronLeft className="size-4" />
-                            Previous
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={isPending}
-                            onClick={handleResetAgenda}
-                            className="border-red-300 text-red-700 hover:bg-red-50 hover:text-red-800"
-                          >
-                            <Undo2 className="size-4" />
-                            Reset
-                          </Button>
-                        </>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={isPending}
+                          onClick={handleResetAgenda}
+                          className="border-red-300 text-red-700 hover:bg-red-50 hover:text-red-800"
+                        >
+                          <Undo2 className="size-4" />
+                          Reset
+                        </Button>
                       )}
                       <Button
                         variant="outline"

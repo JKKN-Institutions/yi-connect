@@ -7,7 +7,11 @@ import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
 import { AgendaSetupClient } from "./agenda-setup-client";
 import type { Tables } from "@/types/yip/database";
 
-type AgendaItem = Tables<{ schema: "yip" }, "agenda">;
+// scheduled_date post-dates the generated types; extend locally to match the
+// client (the column comes through getAgendaForSetup's select("*")).
+type AgendaItem = Tables<{ schema: "yip" }, "agenda"> & {
+  scheduled_date: string | null;
+};
 
 export default async function AgendaSetupPage({
   params,

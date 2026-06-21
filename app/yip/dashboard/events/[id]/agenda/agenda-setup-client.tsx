@@ -14,6 +14,7 @@ import {
 import type { Tables } from "@/types/yip/database";
 import {
   CalendarClock,
+  CalendarDays,
   ArrowUp,
   ArrowDown,
   ArrowLeftRight,
@@ -29,7 +30,22 @@ import {
   Info,
 } from "lucide-react";
 
-type AgendaItem = Tables<{ schema: "yip" }, "agenda">;
+// scheduled_date post-dates the generated types; extend the row type locally.
+type AgendaItem = Tables<{ schema: "yip" }, "agenda"> & {
+  scheduled_date: string | null;
+};
+
+const MONTHS = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
+/** Format an ISO date (YYYY-MM-DD) as "20 Dec 2026" without timezone drift. */
+function formatDate(d: string | null): string {
+  if (!d) return "";
+  const [y, m, day] = d.split("-").map(Number);
+  if (!y || !m || !day) return d;
+  return `${day} ${MONTHS[m - 1]} ${y}`;
+}
 
 // Small, safe set of types for custom items so `mode` resolves correctly on the
 // server (modeForAgendaType): general→party, break/inaugural→mixed.
@@ -87,6 +103,9 @@ export function AgendaSetupClient({
   const [addDuration, setAddDuration] = useState("15");
   const [addType, setAddType] = useState<string>("general");
   const [adding, setAdding] = useState(false);
+  // Day-0 (prep) calendar dates.
+  const [editDate, setEditDate] = useState("");
+  const [addDate, setAddDate] = useState("");
 
   const dayItems = items
     .filter((i) => i.day === activeDay)
@@ -106,6 +125,7 @@ export function AgendaSetupClient({
   };
 
   const dayLabel = (d: number) => (d === 0 ? "Day 0 (prep)" : `Day ${d}`);
+  const isPreEvent = activeDay === 0;
 
   // Safety net (Q6): warn when the event HAS scored sessions but every one of
   // them is excluded from the live run → juries would have nothing to mark.
@@ -178,6 +198,7 @@ export function AgendaSetupClient({
     setEditId(item.id);
     setEditTitle(item.title);
     setEditDuration(String(item.duration_minutes ?? ""));
+    setEditDate(item.scheduled_date ?? "");
   }
 
   async function saveEdit(item: AgendaItem) {
@@ -186,6 +207,8 @@ export function AgendaSetupClient({
     const res = await updateAgendaItem(eventId, item.id, {
       title: editTitle,
       duration_minutes: editDuration === "" ? undefined : Number(editDuration),
+      // Only day-0 (prep) items carry a date; leave it untouched for event days.
+      scheduled_date: isPreEvent ? editDate || null : undefined,
     });
     setBusyId(null);
     if (!res.success) {
@@ -218,6 +241,7 @@ export function AgendaSetupClient({
       title: addTitle,
       duration_minutes: addDuration === "" ? undefined : Number(addDuration),
       agenda_type: addType,
+      scheduled_date: isPreEvent ? addDate || null : undefined,
     });
     setAdding(false);
     if (!res.success) {
@@ -228,6 +252,7 @@ export function AgendaSetupClient({
     setAddTitle("");
     setAddDuration("15");
     setAddType("general");
+    setAddDate("");
     router.refresh();
   }
 
@@ -366,6 +391,15 @@ export function AgendaSetupClient({
                           className="min-w-0 flex-1 rounded-md border border-gray-300 px-2 py-1 text-sm"
                           placeholder="Title"
                         />
+                        {isPreEvent && (
+                          <input
+                            value={editDate}
+                            onChange={(e) => setEditDate(e.target.value)}
+                            type="date"
+                            className="rounded-md border border-gray-300 px-2 py-1 text-sm"
+                            aria-label="Date"
+                          />
+                        )}
                         <input
                           value={editDuration}
                           onChange={(e) => setEditDuration(e.target.value)}
@@ -407,6 +441,18 @@ export function AgendaSetupClient({
                           {item.title}
                         </p>
                         <p className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                          {isPreEvent &&
+                            (item.scheduled_date ? (
+                              <span className="inline-flex items-center gap-0.5 rounded-full bg-[#FF9933]/10 px-1.5 py-0.5 font-semibold text-[#b35e00]">
+                                <CalendarDays className="size-3" />
+                                {formatDate(item.scheduled_date)}
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-0.5 text-amber-700">
+                                <CalendarDays className="size-3" />
+                                Set a date
+                              </span>
+                            ))}
                           {item.is_scoreable && (
                             <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-50 px-1.5 py-0.5 font-semibold text-emerald-700">
                               <Star className="size-3 fill-emerald-600 text-emerald-600" />
@@ -578,6 +624,15 @@ export function AgendaSetupClient({
               className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm"
             />
             <div className="flex flex-wrap items-center gap-2">
+              {isPreEvent && (
+                <input
+                  value={addDate}
+                  onChange={(e) => setAddDate(e.target.value)}
+                  type="date"
+                  className="rounded-md border border-gray-300 px-2 py-1.5 text-sm"
+                  aria-label="Date"
+                />
+              )}
               <select
                 value={addType}
                 onChange={(e) => setAddType(e.target.value)}

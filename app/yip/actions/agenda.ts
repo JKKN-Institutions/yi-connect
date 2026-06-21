@@ -199,8 +199,12 @@ export async function goToPreviousAgendaItem(
   eventId: string
 ): Promise<ActionResult<{ previousItemId: string }>> {
   const access = await getYipEventAccess(eventId);
-  if (access.role !== "super_admin" && access.role !== "chapter_admin") {
-    return { success: false, error: AGENDA_BACKWARD_DENIED };
+  // Previous = ANY organiser (canManage). It rewinds everyone's live screen, so
+  // it used to be chair/national-only — but organisers need to undo a mis-advance
+  // on the day without hunting down the chair (director decision 2026-06-21).
+  // Reset (full rewind to the start) stays chair/national-only below.
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
   }
   const supabase = await createServiceClient();
 

@@ -31,9 +31,10 @@ export default async function ControlPage({
     );
   }
 
-  // Backward agenda controls (Previous / Reset) are CHAIR / NATIONAL only.
-  // Ordinary chapter organisers can advance the agenda but not rewind it.
+  // Previous (undo a mis-advance) is now ANY organiser (canManage). Reset (full
+  // rewind to the start) + Re-open stay CHAIR / NATIONAL only.
   const access = await getYipEventAccess(id);
+  const canManageAgenda = access.canManage;
   const canControlAgendaBackward =
     access.role === "super_admin" || access.role === "chapter_admin";
 
@@ -108,6 +109,7 @@ export default async function ControlPage({
         initialAgendaItems={agendaItems ?? []}
         initialSpeakers={currentSpeakers ?? []}
         canControlAgendaBackward={canControlAgendaBackward}
+        canManageAgenda={canManageAgenda}
         stats={{
           totalParticipants: participantRes.count ?? 0,
           checkedIn: checkedInRes.count ?? 0,

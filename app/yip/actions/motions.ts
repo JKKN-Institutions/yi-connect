@@ -223,6 +223,86 @@ export async function recordMotionVote(
   return { success: true, data: { outcome } };
 }
 
+/**
+ * Organiser backup launcher for the DIGITAL House vote on an admitted
+ * No-Confidence / Impeach-the-Speaker motion. Mirrors speaker.ts
+ * `speakerOpenMotionVote` but gated by canManage instead of the presiding-officer
+ * role — so the digital vote doesn't depend on a student Speaker driving it.
+ * Opens a vote_session (delegates then vote Aye/Nay/Abstain on their phones);
+ * `revealResults` already writes the tally back onto the motion + resolves it.
+ */
+export async function organiserOpenMotionVote(
+  eventId: string,
+  motionId: string
+): Promise<ActionResult<{ sessionId: string }>> {
+  const supabase = await createServiceClient();
+
+  const { data: motion } = await supabase
+    .from("motions")
+    .select("event_id, motion_type, status, subject")
+    .eq("id", motionId)
+    .single();
+  if (!motion) return { success: false, error: "Motion not found" };
+  if (motion.event_id !== eventId)
+    return { success: false, error: "Motion does not belong to this event" };
+
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage)
+    return { success: false, error: "Not authorized to manage this event" };
+
+  if (!isHouseVoteMotionType(motion.motion_type))
+    return {
+      success: false,
+      error: "Only a No-Confidence or Impeach motion goes to a House vote.",
+    };
+  if (motion.status !== "voting")
+    return { success: false, error: "Admit the motion before opening the vote." };
+
+  // One active vote session at a time (mirrors openVote / speakerOpenMotionVote).
+  const { data: existing } = await supabase
+    .from("vote_sessions")
+    .select("id")
+    .eq("event_id", eventId)
+    .in("status", ["open", "closed"])
+    .maybeSingle();
+  if (existing)
+    return { success: false, error: "Close the current vote before opening this one." };
+
+  const { data: event } = await supabase
+    .from("events")
+    .select("current_agenda_item_id")
+    .eq("id", eventId)
+    .maybeSingle();
+  if (!event?.current_agenda_item_id)
+    return { success: false, error: "Start an agenda item before opening the floor vote." };
+
+  const defaultSubject =
+    motion.motion_type === "impeach_speaker"
+      ? "Impeach the Speaker"
+      : "No-Confidence Motion";
+
+  const { data, error } = await supabase
+    .from("vote_sessions")
+    .insert({
+      event_id: eventId,
+      agenda_item_id: event.current_agenda_item_id,
+      // vote_type mirrors the motion type so the House ballot, tally + reveal
+      // all key off the same value (validated as aye/nay/abstain).
+      vote_type: motion.motion_type,
+      status: "open",
+      opened_at: new Date().toISOString(),
+      config: { motionId, motionSubject: motion.subject ?? defaultSubject },
+    })
+    .select("id")
+    .single();
+  if (error || !data)
+    return { success: false, error: error?.message ?? "Failed to open the vote." };
+
+  revalidatePath(`/yip/dashboard/events/${eventId}/motions`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/control`);
+  return { success: true, data: { sessionId: data.id } };
+}
+
 export async function recordMinisterResponse(
   motionId: string,
   response: string,

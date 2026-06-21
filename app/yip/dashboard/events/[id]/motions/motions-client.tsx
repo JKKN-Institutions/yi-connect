@@ -29,6 +29,7 @@ import {
   MOTION_STATUS_LABELS,
   MOTION_STATUS_COLORS,
   motionMeta,
+  isHouseVoteMotionType,
   type MotionType,
 } from "@/lib/yip/motions";
 import { MINISTRIES } from "@/lib/yip/constants";
@@ -37,6 +38,7 @@ import {
   admitMotion,
   rejectMotion,
   recordMotionVote,
+  organiserOpenMotionVote,
   recordMinisterResponse,
   deleteMotion,
   type Motion,
@@ -92,6 +94,7 @@ export function MotionsClient({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
+  const [openingVoteId, setOpeningVoteId] = useState<string | null>(null);
 
   const filtered = filter === "all" ? motions : motions.filter((m) => m.motion_type === filter);
 
@@ -220,6 +223,26 @@ export function MotionsClient({
       resetUI();
       setFlash(`Vote recorded — Motion ${res.data.outcome.toUpperCase()}`);
       setTimeout(() => setFlash(null), 3000);
+    });
+  }
+
+  // Organiser backup launcher for the DIGITAL House vote (delegates vote on
+  // their phones). The live vote is then managed from the Control panel; on
+  // reveal, revealResults resolves the motion automatically.
+  function openDigitalVote(motionId: string) {
+    setError(null);
+    setOpeningVoteId(motionId);
+    startTransition(async () => {
+      const res = await organiserOpenMotionVote(eventId, motionId);
+      setOpeningVoteId(null);
+      if (!res.success) {
+        setError(res.error);
+        return;
+      }
+      setFlash(
+        "Digital vote opened — delegates can now vote on their phones. Manage it from the Control panel."
+      );
+      setTimeout(() => setFlash(null), 5000);
     });
   }
 
@@ -597,6 +620,18 @@ export function MotionsClient({
                             <Gavel className="size-3 mr-1" /> Rule
                           </Button>
                         )}
+                        {canVote && isHouseVoteMotionType(m.motion_type) && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={pending}
+                            onClick={() => openDigitalVote(m.id)}
+                            className="bg-emerald-50 border-emerald-200 text-emerald-700"
+                          >
+                            <Vote className="size-3 mr-1" />
+                            {openingVoteId === m.id ? "Opening…" : "Open Digital Vote"}
+                          </Button>
+                        )}
                         {canVote && (
                           <Button
                             size="sm"
@@ -607,7 +642,7 @@ export function MotionsClient({
                             }}
                             className="bg-violet-50 border-violet-200 text-violet-700"
                           >
-                            <Vote className="size-3 mr-1" /> Vote
+                            <Vote className="size-3 mr-1" /> Manual Tally
                           </Button>
                         )}
                         {canRespond && (

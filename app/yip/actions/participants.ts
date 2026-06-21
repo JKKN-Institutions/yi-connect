@@ -1000,6 +1000,7 @@ export async function markSpeechFinished(
   if (error) return { success: false, error: error.message };
 
   revalidatePath(`/yip/dashboard/events/${eventId}/participants`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/speeches`);
   return { success: true, data: null };
 }
 

@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { cn } from "@/lib/yip/utils";
 import { ROLE_LABELS, PARTY_COLORS, MINISTRIES, OATH_TEXT } from "@/lib/yip/constants";
+import { computeMultiSeatOutcome } from "@/lib/yip/election-outcome";
 import { useRealtimeEvent } from "@/lib/yip/hooks/use-realtime-event";
 import { useVoteSession } from "@/lib/yip/hooks/use-vote-session";
 import { useTimer } from "@/lib/yip/hooks/use-timer";
@@ -100,13 +101,16 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
         setVoteCandidates(data ?? []);
       }
 
-      // Bench seats (PM / Deputy PM / Leader of Opposition) store their nominees
-      // in config.candidateIds — load those participants by id so the tally +
-      // winner resolve names (mirrors the speaker branch's name lookup).
+      // Bench seats (PM / Deputy PM / Leader of Opposition) AND cabinet/shadow
+      // minister elections store their nominees in config.candidateIds — load
+      // those participants by id so the tally + winners resolve names (mirrors
+      // the speaker branch's name lookup).
       if (
         voteSession.vote_type === "prime_minister" ||
         voteSession.vote_type === "deputy_prime_minister" ||
-        voteSession.vote_type === "leader_of_opposition"
+        voteSession.vote_type === "leader_of_opposition" ||
+        voteSession.vote_type === "cabinet_minister" ||
+        voteSession.vote_type === "shadow_minister"
       ) {
         const cfg = (voteSession.config ?? {}) as { candidateIds?: unknown };
         const ids = Array.isArray(cfg.candidateIds)
@@ -437,7 +441,11 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
                         ? "Deputy PM Election"
                         : voteSession.vote_type === "leader_of_opposition"
                           ? "Leader of Opposition Election"
-                          : voteSession.vote_type === "impeach_speaker"
+                          : voteSession.vote_type === "cabinet_minister"
+                            ? "Cabinet Election"
+                            : voteSession.vote_type === "shadow_minister"
+                              ? "Shadow Cabinet Election"
+                              : voteSession.vote_type === "impeach_speaker"
                             ? `Impeach the Speaker${
                                 motionVoteSubject ? `: ${motionVoteSubject}` : ""
                               }`
@@ -480,7 +488,11 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
                         ? "Deputy PM Election Results"
                         : voteSession.vote_type === "leader_of_opposition"
                           ? "Leader of Opposition Election Results"
-                          : "Bill Vote Results"}
+                          : voteSession.vote_type === "cabinet_minister"
+                            ? "Cabinet Election Results"
+                            : voteSession.vote_type === "shadow_minister"
+                              ? "Shadow Cabinet Election Results"
+                              : "Bill Vote Results"}
                 </h2>
 
                 {/* Result bars */}
@@ -507,7 +519,9 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
                       voteSession.vote_type === "speaker_election" ||
                       voteSession.vote_type === "prime_minister" ||
                       voteSession.vote_type === "deputy_prime_minister" ||
-                      voteSession.vote_type === "leader_of_opposition";
+                      voteSession.vote_type === "leader_of_opposition" ||
+                      voteSession.vote_type === "cabinet_minister" ||
+                      voteSession.vote_type === "shadow_minister";
 
                     // Determine label and color
                     let label = tally.vote_value;
@@ -631,6 +645,53 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
                         </p>
                       </div>
                     )}
+
+                  {/* Cabinet / Shadow minister winners (multi-seat, per-party):
+                      list the top-k elected ministers. config.seats is the
+                      seats contested this round; computeMultiSeatOutcome leaves
+                      cutline-tied candidates out (the organiser breaks the tie
+                      with a runoff on the control panel). */}
+                  {(voteSession.vote_type === "cabinet_minister" ||
+                    voteSession.vote_type === "shadow_minister") &&
+                    tallies.length > 0 &&
+                    (() => {
+                      const seatType = voteSession.vote_type as
+                        | "cabinet_minister"
+                        | "shadow_minister";
+                      const seats = Math.max(
+                        1,
+                        ((voteSession.config ?? {}) as { seats?: number })
+                          .seats ?? 1
+                      );
+                      const ms = computeMultiSeatOutcome(
+                        tallies,
+                        seats,
+                        seatType
+                      );
+                      if (ms.winnerIds.length === 0) return null;
+                      const nameOf = (id: string) =>
+                        voteCandidates.find((c) => c.id === id)?.full_name ??
+                        "Unknown";
+                      return (
+                        <div className="space-y-3">
+                          <p className="text-lg text-gray-500 uppercase tracking-widest">
+                            {seatType === "cabinet_minister"
+                              ? "Elected Cabinet Ministers"
+                              : "Elected Shadow Ministers"}
+                          </p>
+                          <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
+                            {ms.winnerIds.map((id) => (
+                              <span
+                                key={id}
+                                className="text-4xl font-black text-amber-400"
+                              >
+                                {nameOf(id)}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()}
 
                   {voteSession.vote_type === "bill_vote" && (
                     <div className="space-y-2">

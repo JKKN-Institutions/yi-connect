@@ -95,11 +95,13 @@ export function VoteClient({
         voteSession.vote_type === "party_leader" ||
         voteSession.vote_type === "prime_minister" ||
         voteSession.vote_type === "deputy_prime_minister" ||
-        voteSession.vote_type === "leader_of_opposition"
+        voteSession.vote_type === "leader_of_opposition" ||
+        voteSession.vote_type === "cabinet_minister" ||
+        voteSession.vote_type === "shadow_minister"
       ) {
         // Candidates are the nominees the organiser picked (config.candidateIds)
         // — identical storage to party-leader for the bench seats (PM / Deputy
-        // PM / Leader of Opposition).
+        // PM / Leader of Opposition) AND the cabinet/shadow minister elections.
         const cfg = (voteSession.config ?? {}) as { candidateIds?: unknown };
         const ids = Array.isArray(cfg.candidateIds)
           ? cfg.candidateIds.filter((x): x is string => typeof x === "string")
@@ -339,8 +341,16 @@ export function VoteClient({
     voteSession.vote_type === "party_leader" ||
     voteSession.vote_type === "prime_minister" ||
     voteSession.vote_type === "deputy_prime_minister" ||
-    voteSession.vote_type === "leader_of_opposition"
+    voteSession.vote_type === "leader_of_opposition" ||
+    voteSession.vote_type === "cabinet_minister" ||
+    voteSession.vote_type === "shadow_minister"
   ) {
+    // How many ministers this party elects (config.seats) — used in the
+    // cabinet/shadow subtitle ("your party elects N ministers").
+    const ministerSeats = Math.max(
+      1,
+      ((voteSession.config ?? {}) as { seats?: number }).seats ?? 1
+    );
     // Per-type heading, subtitle, and whether the election is bench/party-scoped
     // (a heads-up that only that bench/party may vote).
     const ballotCopy: {
@@ -375,6 +385,22 @@ export function VoteClient({
             subtitle: "Select one candidate to be the Leader of Opposition",
             scopeNote:
               "Only members of the opposition bench can vote in this election. ",
+          };
+        case "cabinet_minister":
+          return {
+            heading: "Cabinet Election",
+            subtitle: `Your party elects ${ministerSeats} minister${
+              ministerSeats === 1 ? "" : "s"
+            } — vote for one candidate`,
+            scopeNote: "Only members of your party can vote in this election. ",
+          };
+        case "shadow_minister":
+          return {
+            heading: "Shadow Cabinet Election",
+            subtitle: `Your party elects ${ministerSeats} shadow minister${
+              ministerSeats === 1 ? "" : "s"
+            } — vote for one candidate`,
+            scopeNote: "Only members of your party can vote in this election. ",
           };
         default:
           return {

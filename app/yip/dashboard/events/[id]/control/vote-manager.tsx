@@ -59,7 +59,10 @@ import {
 import {
   computeElectionOutcome,
   computeDeputyRunoffOutcome,
+  computeMultiSeatOutcome,
+  distributeSeats,
 } from "@/lib/yip/election-outcome";
+import { MINISTRIES } from "@/lib/yip/constants";
 import {
   getFloorPanel,
   castFloorVote,
@@ -134,6 +137,32 @@ export function VoteManager({
     selectedIds: [],
     loading: false,
   });
+  // Cabinet / Shadow minister nomination dialog (a coalition party elects its
+  // OWN quota of ministers). Mirrors leaderDialog, but `voteType` distinguishes
+  // cabinet (ruling) from shadow (opposition) and `seats` is the party's quota
+  // (the organiser must pick at least `seats` of the party's members).
+  const [ministerDialog, setMinisterDialog] = useState<{
+    open: boolean;
+    voteType: "cabinet_minister" | "shadow_minister" | null;
+    party: PartyLite | null;
+    seats: number;
+    members: VoteCandidate[];
+    selectedIds: string[];
+    loading: boolean;
+  }>({
+    open: false,
+    voteType: null,
+    party: null,
+    seats: 0,
+    members: [],
+    selectedIds: [],
+    loading: false,
+  });
+  // Editable TOTAL cabinet/shadow seats — the organiser can change it and the
+  // per-party quota re-derives live. Defaults to MINISTRIES.length (8).
+  const [totalCabinetSeats, setTotalCabinetSeats] = useState<number>(
+    MINISTRIES.length
+  );
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean;
     title: string;
@@ -191,12 +220,32 @@ export function VoteManager({
     voteSession?.vote_type === "deputy_prime_minister" ||
     voteSession?.vote_type === "leader_of_opposition";
 
+  // Cabinet / Shadow elections are multi-seat, per-party (config.candidateIds +
+  // config.partyId + config.seats). Their ballots resolve candidate names just
+  // like the party-leader / bench candidate grid.
+  const isMinisterVoteType =
+    voteSession?.vote_type === "cabinet_minister" ||
+    voteSession?.vote_type === "shadow_minister";
+
+  // The active minister session's party id + seats (config), used to label the
+  // result block and resolve the multi-seat winners.
+  const activeMinisterPartyId =
+    isMinisterVoteType && voteSession
+      ? ((voteSession.config ?? {}) as { partyId?: string }).partyId ?? null
+      : null;
+  const activeMinisterSeats =
+    isMinisterVoteType && voteSession
+      ? Math.max(1, ((voteSession.config ?? {}) as { seats?: number }).seats ?? 1)
+      : 1;
+
   // Human title for the bench seats (and a passthrough for others).
   function seatTitle(voteType: string): string {
     if (voteType === "prime_minister") return "Prime Minister Election";
     if (voteType === "deputy_prime_minister") return "Deputy PM Election";
     if (voteType === "leader_of_opposition")
       return "Leader of Opposition Election";
+    if (voteType === "cabinet_minister") return "Cabinet Election";
+    if (voteType === "shadow_minister") return "Shadow Cabinet Election";
     return voteType;
   }
 
@@ -256,6 +305,22 @@ export function VoteManager({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isBenchVoteType, voteSession?.id]);
+
+  // When a cabinet/shadow minister session is active, load its nominees by id
+  // (config.candidateIds) so the tally + result block resolve names. Same
+  // storage as the bench seats — the ballot is the party members the organiser
+  // nominated.
+  useEffect(() => {
+    if (!isMinisterVoteType || !voteSession) return;
+    const cfg = (voteSession.config ?? {}) as { candidateIds?: unknown };
+    const ids = Array.isArray(cfg.candidateIds)
+      ? cfg.candidateIds.filter((x): x is string => typeof x === "string")
+      : [];
+    if (ids.length > 0) {
+      getVoteCandidates(ids).then(setCandidates);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMinisterVoteType, voteSession?.id]);
 
   // ─── Action handlers ──────────────────────────────────────────
 
@@ -453,6 +518,80 @@ export function VoteManager({
           voteType: null,
           side: null,
           label: "",
+          members: [],
+          selectedIds: [],
+          loading: false,
+        });
+      } else {
+        toast.error(result.error);
+      }
+    });
+  }
+
+  // Cabinet / Shadow: open the nomination dialog for ONE coalition party and
+  // load that party's members. `seats` is the party's quota (caller passes the
+  // distributeSeats-derived value); the organiser must pick at least that many.
+  function handleHoldMinisterElection(
+    voteType: "cabinet_minister" | "shadow_minister",
+    party: PartyLite,
+    seats: number
+  ) {
+    setMinisterDialog({
+      open: true,
+      voteType,
+      party,
+      seats,
+      members: [],
+      selectedIds: [],
+      loading: true,
+    });
+    getPartyMembers(eventId, party.id).then((members) => {
+      setMinisterDialog((prev) =>
+        prev.open && prev.party?.id === party.id && prev.voteType === voteType
+          ? { ...prev, members, loading: false }
+          : prev
+      );
+    });
+  }
+
+  function toggleMinisterNominee(id: string) {
+    setMinisterDialog((prev) => {
+      const has = prev.selectedIds.includes(id);
+      return {
+        ...prev,
+        selectedIds: has
+          ? prev.selectedIds.filter((x) => x !== id)
+          : [...prev.selectedIds, id],
+      };
+    });
+  }
+
+  function handleOpenMinisterElection() {
+    if (
+      !currentAgendaItem ||
+      !ministerDialog.voteType ||
+      !ministerDialog.party
+    )
+      return;
+    const voteType = ministerDialog.voteType;
+    const party = ministerDialog.party;
+    const seats = ministerDialog.seats;
+    const candidateIds = ministerDialog.selectedIds;
+    startTransition(async () => {
+      const result = await openVote(eventId, currentAgendaItem.id, voteType, {
+        partyId: party.id,
+        seats,
+        candidateIds,
+      });
+      if (result.success) {
+        const title =
+          voteType === "cabinet_minister" ? "Cabinet" : "Shadow Cabinet";
+        toast.success(`${party.name} ${title} election is now open!`);
+        setMinisterDialog({
+          open: false,
+          voteType: null,
+          party: null,
+          seats: 0,
           members: [],
           selectedIds: [],
           loading: false,
@@ -914,6 +1053,255 @@ export function VoteManager({
     </Dialog>
   );
 
+  // ─── Reusable Cabinet / Shadow Cabinet elections ──────────────
+  //
+  // A coalition feature: each governing party elects its OWN quota of ministers
+  // from its own members (top-k win, party-scoped voting). Cabinet = the RULING
+  // parties; Shadow Cabinet = the OPPOSITION parties. The total seats is
+  // editable (defaults to MINISTRIES.length = 8) and the per-party quota
+  // re-derives live via distributeSeats(). Rendered in the no-session branch and
+  // after a revealed minister result so the organiser can run each party in turn.
+
+  // Per-side quota: distribute totalCabinetSeats across that side's parties.
+  // distributeSeats is fed each party's member_count (already sourced by
+  // getEventParties). Returns a partyId → seats lookup.
+  function quotaForSide(side: "ruling" | "opposition"): Record<string, number> {
+    const sideParties = parties.filter((p) => p.side === side);
+    if (sideParties.length === 0) return {};
+    const dist = distributeSeats(
+      sideParties.map((p) => ({ partyId: p.id, members: p.member_count })),
+      totalCabinetSeats
+    );
+    const map: Record<string, number> = {};
+    dist.forEach((d) => {
+      map[d.partyId] = d.seats;
+    });
+    return map;
+  }
+
+  // One coalition section (Cabinet or Shadow Cabinet). Lists each side's parties
+  // with their quota + a "Hold … Election" button.
+  function ministerSection(
+    voteType: "cabinet_minister" | "shadow_minister",
+    side: "ruling" | "opposition"
+  ) {
+    const sideParties = parties.filter((p) => p.side === side);
+    if (sideParties.length === 0) return null;
+    const quota = quotaForSide(side);
+    const isCabinet = voteType === "cabinet_minister";
+    return (
+      <div className="space-y-3">
+        <div className="flex items-center gap-1.5 text-sm font-medium text-gray-700">
+          <Landmark
+            className={cn(
+              "size-4",
+              isCabinet ? "text-[#138808]" : "text-[#FF9933]"
+            )}
+          />
+          {isCabinet ? "Cabinet" : "Shadow Cabinet"}
+        </div>
+        <p className="text-xs text-gray-500">
+          Each {isCabinet ? "governing" : "opposition"} party elects its own
+          ministers — only that party&apos;s members vote, and the top vote-getters
+          win the party&apos;s seats. Hold one election at a time.
+        </p>
+        {/* Editable total seats — quotas re-derive live */}
+        <div className="flex items-center gap-2 rounded-lg border bg-gray-50/60 p-2.5">
+          <Label
+            htmlFor={`total-seats-${voteType}`}
+            className="text-xs text-gray-600"
+          >
+            Total {isCabinet ? "cabinet" : "shadow"} seats
+          </Label>
+          <Input
+            id={`total-seats-${voteType}`}
+            type="number"
+            min={1}
+            value={totalCabinetSeats}
+            onChange={(e) => {
+              const n = parseInt(e.target.value, 10);
+              setTotalCabinetSeats(Number.isFinite(n) && n >= 1 ? n : 1);
+            }}
+            className="h-8 w-20 text-sm"
+          />
+          <span className="text-xs text-gray-400">across {sideParties.length} {sideParties.length === 1 ? "party" : "parties"}</span>
+        </div>
+        <div className="space-y-2">
+          {sideParties.map((party) => {
+            const seats = quota[party.id] ?? 0;
+            const tooFew = party.member_count < seats;
+            return (
+              <div
+                key={party.id}
+                className="flex items-center justify-between rounded-lg border bg-white p-3"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-gray-800 truncate">
+                    {party.name} — {seats} seat{seats === 1 ? "" : "s"}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    {party.member_count} member
+                    {party.member_count === 1 ? "" : "s"}
+                    {tooFew && (
+                      <span className="ml-1 text-red-600">
+                        · too few members for {seats} seats
+                      </span>
+                    )}
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={
+                    isPending ||
+                    seats < 1 ||
+                    party.member_count < seats ||
+                    !currentAgendaItem
+                  }
+                  onClick={() =>
+                    handleHoldMinisterElection(voteType, party, seats)
+                  }
+                >
+                  <Vote className="size-3.5 mr-1" />
+                  Hold {isCabinet ? "Cabinet" : "Shadow"} Election
+                </Button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  const cabinetSection = ministerSection("cabinet_minister", "ruling");
+  const shadowSection = ministerSection("shadow_minister", "opposition");
+
+  // The Cabinet/Shadow nomination dialog (pick at least `seats` party members →
+  // open the multi-seat vote).
+  const ministerNominationDialog = (
+    <Dialog
+      open={ministerDialog.open}
+      onOpenChange={(open) =>
+        setMinisterDialog((prev) =>
+          open
+            ? { ...prev, open }
+            : {
+                open: false,
+                voteType: null,
+                party: null,
+                seats: 0,
+                members: [],
+                selectedIds: [],
+                loading: false,
+              }
+        )
+      }
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>
+            {ministerDialog.party
+              ? `${ministerDialog.party.name} — ${
+                  ministerDialog.voteType === "cabinet_minister"
+                    ? "Cabinet"
+                    : "Shadow Cabinet"
+                } Election`
+              : "Cabinet Election"}
+          </DialogTitle>
+          <DialogDescription>
+            This party elects {ministerDialog.seats} minister
+            {ministerDialog.seats === 1 ? "" : "s"}. Choose the candidates (at
+            least {ministerDialog.seats}). Only this party&apos;s members can
+            vote, and the top {ministerDialog.seats} vote-getter
+            {ministerDialog.seats === 1 ? "" : "s"} win.
+          </DialogDescription>
+        </DialogHeader>
+
+        {ministerDialog.loading ? (
+          <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
+            <Loader2 className="mr-2 size-4 animate-spin" />
+            Loading members...
+          </div>
+        ) : ministerDialog.members.length === 0 ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">
+            This party has no members to nominate.
+          </p>
+        ) : (
+          <div className="max-h-72 space-y-1.5 overflow-y-auto pr-1">
+            {ministerDialog.members.map((m) => {
+              const checked = ministerDialog.selectedIds.includes(m.id);
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => toggleMinisterNominee(m.id)}
+                  className={cn(
+                    "flex w-full items-center justify-between rounded-lg border-2 p-3 text-left transition-all",
+                    checked
+                      ? "border-[#FF9933] bg-[#FF9933]/5"
+                      : "border-gray-200 bg-white hover:border-gray-300"
+                  )}
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-gray-800">
+                      {m.full_name}
+                    </p>
+                    <p className="truncate text-xs text-gray-500">
+                      {m.school_name}
+                    </p>
+                  </div>
+                  <div
+                    className={cn(
+                      "ml-2 flex size-5 shrink-0 items-center justify-center rounded-full border-2",
+                      checked
+                        ? "border-[#FF9933] bg-[#FF9933]"
+                        : "border-gray-300 bg-white"
+                    )}
+                  >
+                    {checked && <CheckCircle2 className="size-3.5 text-white" />}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        <DialogFooter>
+          <span className="mr-auto self-center text-xs text-muted-foreground">
+            {ministerDialog.selectedIds.length} selected · need{" "}
+            {ministerDialog.seats}
+          </span>
+          <Button
+            variant="outline"
+            onClick={() =>
+              setMinisterDialog({
+                open: false,
+                voteType: null,
+                party: null,
+                seats: 0,
+                members: [],
+                selectedIds: [],
+                loading: false,
+              })
+            }
+          >
+            Cancel
+          </Button>
+          <Button
+            disabled={
+              isPending ||
+              ministerDialog.selectedIds.length < ministerDialog.seats ||
+              ministerDialog.selectedIds.length < 2
+            }
+            onClick={handleOpenMinisterElection}
+          >
+            {isPending ? "Opening..." : "Open Election"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+
   // ─── If not a voting agenda type and no active session, don't render ─
 
   if (!showVoteControls && !voteSession) return null;
@@ -941,6 +1329,11 @@ export function VoteManager({
                       parties.find((p) => p.id === activeLeaderPartyId)?.name ??
                       "Party"
                     } Leader Election`
+                  : isMinisterVoteType
+                  ? `${seatTitle(voteSession.vote_type)} — ${
+                      parties.find((p) => p.id === activeMinisterPartyId)?.name ??
+                      "Party"
+                    }`
                   : isBenchVoteType
                   ? seatTitle(voteSession.vote_type)
                   : "Bill Vote"}
@@ -1015,7 +1408,8 @@ export function VoteManager({
                   if (
                     voteSession.vote_type === "speaker_election" ||
                     voteSession.vote_type === "party_leader" ||
-                    isBenchVoteType
+                    isBenchVoteType ||
+                    isMinisterVoteType
                   ) {
                     const candidate = candidates.find(
                       (c) => c.id === tally.vote_value
@@ -1257,6 +1651,74 @@ export function VoteManager({
                       </div>
                     );
                   })()}
+
+                {/* Cabinet / Shadow minister result (multi-seat, per-party):
+                    the top-k elected ministers via computeMultiSeatOutcome +
+                    cutline tie runoff. The session config.seats is the seats
+                    contested THIS round (full quota on round 1, remaining open
+                    seats on a runoff). */}
+                {isRevealed &&
+                  isMinisterVoteType &&
+                  voteSession.vote_type !== "speaker_election" &&
+                  (() => {
+                    const nameOf = (id: string) =>
+                      candidates.find((c) => c.id === id)?.full_name ?? id;
+                    const seatType = voteSession.vote_type as
+                      | "cabinet_minister"
+                      | "shadow_minister";
+                    const ms = computeMultiSeatOutcome(
+                      tallies,
+                      activeMinisterSeats,
+                      seatType
+                    );
+                    const partyName =
+                      parties.find((p) => p.id === activeMinisterPartyId)
+                        ?.name ?? "Party";
+                    const roleWord =
+                      seatType === "cabinet_minister"
+                        ? "Cabinet Minister"
+                        : "Shadow Minister";
+                    return (
+                      <div className="mt-3 space-y-2 rounded-lg border p-3 text-sm">
+                        {ms.winnerIds.length > 0 && (
+                          <div className="space-y-1">
+                            <div className="font-semibold text-amber-700">
+                              {partyName} {roleWord}
+                              {ms.winnerIds.length === 1 ? "" : "s"} elected:
+                            </div>
+                            <ul className="space-y-0.5">
+                              {ms.winnerIds.map((id) => (
+                                <li
+                                  key={id}
+                                  className="flex items-center gap-2 text-gray-700"
+                                >
+                                  <Crown className="size-3.5 text-amber-500" />
+                                  {nameOf(id)}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        {ms.tie && (
+                          <div className="space-y-2 rounded-md border border-amber-300 bg-amber-50 p-2">
+                            <div className="font-medium text-amber-800">
+                              Tie for the last {roleWord} seat (
+                              {ms.tie.tiedCount} votes each):{" "}
+                              {ms.tie.tiedCandidateIds.map(nameOf).join(", ")}
+                            </div>
+                            <Button
+                              size="sm"
+                              disabled={isPending}
+                              onClick={handleRunoff}
+                              className="w-full"
+                            >
+                              Open 60-second runoff
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
               </div>
             )}
 
@@ -1292,6 +1754,7 @@ export function VoteManager({
               {isRevealed &&
                 voteSession.vote_type !== "party_leader" &&
                 !isBenchVoteType &&
+                !isMinisterVoteType &&
                 currentAgendaItem && (
                   <Button
                     size="sm"
@@ -1336,6 +1799,17 @@ export function VoteManager({
                   {partyLeaderList}
                 </div>
               )}
+
+            {/* After a cabinet/shadow result is revealed, surface the coalition
+                sections again so the organiser can run the next party's quota. */}
+            {isRevealed &&
+              isMinisterVoteType &&
+              (cabinetSection || shadowSection) && (
+                <div className="space-y-4 border-t pt-4">
+                  {cabinetSection}
+                  {shadowSection}
+                </div>
+              )}
           </CardContent>
         </Card>
 
@@ -1374,6 +1848,9 @@ export function VoteManager({
 
         {/* Leadership nomination dialog (next seat after a revealed result) */}
         {leadershipNominationDialog}
+
+        {/* Cabinet/Shadow nomination dialog (next party after a revealed result) */}
+        {ministerNominationDialog}
       </>
     );
   }
@@ -1484,6 +1961,12 @@ export function VoteManager({
 
           {/* Leadership Elections (PM / Deputy PM / LoP) — any agenda item */}
           {leadershipList}
+
+          {/* Cabinet — each ruling party elects its quota of ministers */}
+          {cabinetSection}
+
+          {/* Shadow Cabinet — each opposition party elects its quota */}
+          {shadowSection}
         </CardContent>
       </Card>
 
@@ -1520,6 +2003,9 @@ export function VoteManager({
 
       {/* Leadership nomination dialog: pick 2–5 bench nominees, then open the vote */}
       {leadershipNominationDialog}
+
+      {/* Cabinet/Shadow nomination dialog: pick the party's nominees, then open */}
+      {ministerNominationDialog}
     </>
   );
 }
@@ -1582,7 +2068,9 @@ function FloorCapture({ eventId, sessionId, voteType, candidates }: FloorCapture
     voteType === "party_leader" ||
     voteType === "prime_minister" ||
     voteType === "deputy_prime_minister" ||
-    voteType === "leader_of_opposition";
+    voteType === "leader_of_opposition" ||
+    voteType === "cabinet_minister" ||
+    voteType === "shadow_minister";
 
   const labelForValue = useCallback(
     (value: string) => {
@@ -2191,7 +2679,9 @@ function RollCallRow({
           voteType === "party_leader" ||
           voteType === "prime_minister" ||
           voteType === "deputy_prime_minister" ||
-          voteType === "leader_of_opposition" ? (
+          voteType === "leader_of_opposition" ||
+          voteType === "cabinet_minister" ||
+          voteType === "shadow_minister" ? (
             <Select
               onValueChange={(v: string | null) => {
                 if (v) onPick(v);

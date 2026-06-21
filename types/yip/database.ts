@@ -2788,7 +2788,7 @@ export type Database = {
           name: string
           party_leader_id: string | null
           party_number: number
-          side: Database["public"]["Enums"]["party_side"]
+          side: Database["public"]["Enums"]["party_side"] | null
           symbol_url: string | null
           tagline: string | null
           updated_at: string | null
@@ -2802,7 +2802,7 @@ export type Database = {
           name: string
           party_leader_id?: string | null
           party_number: number
-          side: Database["public"]["Enums"]["party_side"]
+          side?: Database["public"]["Enums"]["party_side"] | null
           symbol_url?: string | null
           tagline?: string | null
           updated_at?: string | null
@@ -2816,7 +2816,7 @@ export type Database = {
           name?: string
           party_leader_id?: string | null
           party_number?: number
-          side?: Database["public"]["Enums"]["party_side"]
+          side?: Database["public"]["Enums"]["party_side"] | null
           symbol_url?: string | null
           tagline?: string | null
           updated_at?: string | null

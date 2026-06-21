@@ -9,7 +9,7 @@ import {
   type AllocationParticipant,
 } from "@/lib/yip/allocation-engine";
 import { planCommitteeAssignment } from "@/lib/yip/committee-assignment";
-import { planPartyFill } from "@/lib/yip/party-formation";
+import { planPartyFill, planFlatPartyFill } from "@/lib/yip/party-formation";
 
 // Gated writes run on the service client AFTER getYipEventAccess() (yip.* tables
 // have RLS read-only for `authenticated`; the capability check is the gate).
@@ -119,72 +119,92 @@ export async function runAllocationAction(
     excludeState: (event as { state?: string | null }).state ?? undefined,
   });
 
-  // Allot NAMED parties: if the chapter has already set up its parties (on the
-  // Parties tab), distribute the just-sided students INTO those existing party
-  // rows — reusing them, so nothing is created or deleted (YUVA desks and
-  // manifestos survive; no FK cascade). Backward-compatible: an event with no
-  // parties keeps the sides-only behaviour (Form Parties stays the separate
-  // step). Skipped when assignSides is off (every student is a plain MP).
+  // Named-party fill. Two models:
+  //  • Benchless (the default now): the chapter created N parties (Party A..N)
+  //    with NO bench on the Parties tab. Split every student EVENLY across them
+  //    (school-spread) and leave party_side null — ruling vs opposition is
+  //    decided on event day, off-app (the parties negotiate a coalition).
+  //  • Benched (legacy): the event's parties already carry ruling/opposition;
+  //    keep the old bench-aware fill so existing events are untouched. Only when
+  //    assignSides is on (the legacy autoFormParties path).
+  const { data: parties, error: partiesError } = await supabase
+    .from("parties")
+    .select("id, party_number, side")
+    .eq("event_id", eventId)
+    .order("party_number");
+  if (partiesError) {
+    return { success: false, error: partiesError.message };
+  }
+  const partyList = parties ?? [];
+  const benched = partyList.some((p) => p.side != null);
+  const benchless = partyList.length > 0 && !benched;
+
+  const schoolById = new Map(participants.map((p) => [p.id, p.school_name]));
   const partyByParticipant = new Map<
     string,
     { party_id: string; party_number: number }
   >();
-  if (assignSides) {
-    const { data: parties, error: partiesError } = await supabase
-      .from("parties")
-      .select("id, party_number, side")
-      .eq("event_id", eventId)
-      .order("party_number");
-    if (partiesError) {
-      return { success: false, error: partiesError.message };
+
+  if (benchless) {
+    // Flat, even, school-spread distribution across all benchless parties.
+    const fill = planFlatPartyFill(
+      participants.map((p) => ({ id: p.id, schoolName: p.school_name })),
+      partyList.length
+    );
+    for (const f of fill) {
+      const row = partyList[f.partyIndex];
+      if (row) {
+        partyByParticipant.set(f.participantId, {
+          party_id: row.id,
+          party_number: row.party_number,
+        });
+      }
     }
-    if (parties && parties.length > 0) {
-      const rulingParties = parties.filter((p) => p.side === "ruling");
-      const oppositionParties = parties.filter((p) => p.side === "opposition");
+  } else if (benched && assignSides) {
+    const rulingParties = partyList.filter((p) => p.side === "ruling");
+    const oppositionParties = partyList.filter((p) => p.side === "opposition");
 
-      // A bench with members but no party can't be allotted — fail BEFORE any
-      // write, so the event is never left half-assigned. The organiser adds a
-      // party on that bench (Parties tab) and re-runs.
-      const hasRuling = result.assignments.some((a) => a.party_side === "ruling");
-      const hasOpposition = result.assignments.some(
-        (a) => a.party_side === "opposition"
-      );
-      if (hasRuling && rulingParties.length === 0) {
-        return {
-          success: false,
-          error:
-            "Students were assigned to the Ruling bench but there is no Ruling party. Add at least one Ruling party on the Parties tab, then re-run allocation.",
-        };
-      }
-      if (hasOpposition && oppositionParties.length === 0) {
-        return {
-          success: false,
-          error:
-            "Students were assigned to the Opposition bench but there is no Opposition party. Add at least one Opposition party on the Parties tab, then re-run allocation.",
-        };
-      }
+    // A bench with members but no party can't be allotted — fail BEFORE any
+    // write, so the event is never left half-assigned. The organiser adds a
+    // party on that bench (Parties tab) and re-runs.
+    const hasRuling = result.assignments.some((a) => a.party_side === "ruling");
+    const hasOpposition = result.assignments.some(
+      (a) => a.party_side === "opposition"
+    );
+    if (hasRuling && rulingParties.length === 0) {
+      return {
+        success: false,
+        error:
+          "Students were assigned to the Ruling bench but there is no Ruling party. Add at least one Ruling party on the Parties tab, then re-run allocation.",
+      };
+    }
+    if (hasOpposition && oppositionParties.length === 0) {
+      return {
+        success: false,
+        error:
+          "Students were assigned to the Opposition bench but there is no Opposition party. Add at least one Opposition party on the Parties tab, then re-run allocation.",
+      };
+    }
 
-      const schoolById = new Map(participants.map((p) => [p.id, p.school_name]));
-      const fill = planPartyFill(
-        result.assignments.map((a) => ({
-          id: a.participantId,
-          partySide: a.party_side as "ruling" | "opposition",
-          schoolName: schoolById.get(a.participantId) ?? null,
-        })),
-        rulingParties.length,
-        oppositionParties.length
-      );
-      for (const f of fill) {
-        const row =
-          f.side === "ruling"
-            ? rulingParties[f.benchIndex]
-            : oppositionParties[f.benchIndex];
-        if (row) {
-          partyByParticipant.set(f.participantId, {
-            party_id: row.id,
-            party_number: row.party_number,
-          });
-        }
+    const fill = planPartyFill(
+      result.assignments.map((a) => ({
+        id: a.participantId,
+        partySide: a.party_side as "ruling" | "opposition",
+        schoolName: schoolById.get(a.participantId) ?? null,
+      })),
+      rulingParties.length,
+      oppositionParties.length
+    );
+    for (const f of fill) {
+      const row =
+        f.side === "ruling"
+          ? rulingParties[f.benchIndex]
+          : oppositionParties[f.benchIndex];
+      if (row) {
+        partyByParticipant.set(f.participantId, {
+          party_id: row.id,
+          party_number: row.party_number,
+        });
       }
     }
   }
@@ -195,11 +215,14 @@ export async function runAllocationAction(
     const { error: updateError } = await supabase
       .from("participants")
       .update({
-        party_side: (assignSides ? assignment.party_side : null) as
+        // Bench (ruling/opposition) is written ONLY for legacy benched events.
+        // Benchless events (the default) and no-party events leave it null —
+        // ruling/opposition is decided on event day, off-app.
+        party_side: (benched && assignSides ? assignment.party_side : null) as
           | "ruling"
           | "opposition"
           | null,
-        parliament_role: (assignSides && assignRoles
+        parliament_role: (benched && assignSides && assignRoles
           ? assignment.parliament_role
           : "mp") as
           | "speaker"
@@ -210,7 +233,9 @@ export async function runAllocationAction(
           | "shadow_minister"
           | "bill_committee"
           | "mp",
-        ministry: (assignSides && assignRoles ? assignment.ministry : null) as
+        ministry: (benched && assignSides && assignRoles
+          ? assignment.ministry
+          : null) as
           | "home"
           | "finance"
           | "education"
@@ -223,20 +248,17 @@ export async function runAllocationAction(
         constituency_name: assignment.constituency_name,
         constituency_state: assignment.constituency_state,
         committee_name: assignment.committee_name,
-        // Named party: when sides are off, every student is a plain MP with no
-        // bench — clear any party so it can't go stale. When sides are on, set
-        // party_id only if the chapter's parties exist; otherwise leave it
-        // untouched (sides-only flow unchanged).
-        ...(!assignSides
-          ? { party_id: null, party_number: null }
-          : partyByParticipant.has(assignment.participantId)
-            ? {
-                party_id: partyByParticipant.get(assignment.participantId)!
-                  .party_id,
-                party_number: partyByParticipant.get(assignment.participantId)!
-                  .party_number,
-              }
-            : {}),
+        // Named party: set it when this student was distributed into a party
+        // (benchless flat-fill, or legacy bench fill); otherwise clear it so a
+        // stale party link can't survive a re-run.
+        ...(partyByParticipant.has(assignment.participantId)
+          ? {
+              party_id: partyByParticipant.get(assignment.participantId)!
+                .party_id,
+              party_number: partyByParticipant.get(assignment.participantId)!
+                .party_number,
+            }
+          : { party_id: null, party_number: null }),
       })
       .eq("id", assignment.participantId)
       .eq("event_id", eventId);
@@ -251,6 +273,14 @@ export async function runAllocationAction(
       success: false,
       error: `Allocation computed but ${errors.length} updates failed: ${errors[0]}`,
     };
+  }
+
+  // Benchless flow: now that every student sits in a party, balance committees
+  // across parties (mixed committees, handbook model) — this also sets
+  // committee_number. Best-effort: a committee hiccup must not undo a good
+  // allocation (matches Form Parties' behaviour).
+  if (benchless) {
+    await assignCommittees(eventId);
   }
 
   revalidatePath(`/yip/dashboard/events/${eventId}/allocation`);

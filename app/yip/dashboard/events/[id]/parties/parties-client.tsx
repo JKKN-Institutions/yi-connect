@@ -13,10 +13,8 @@ import {
   Pencil,
   Trash2,
   Loader2,
-  Flag,
   Crown,
   ArrowLeft,
-  ArrowRightLeft,
   Users,
   Hash,
   Wand2,
@@ -28,11 +26,9 @@ import {
   deleteParty,
   assignParticipantsToParty,
   electPartyLeader,
-  formParties,
+  createBenchlessParties,
   type Party,
-  type FormPartiesSummary,
 } from "@/app/yip/actions/parties";
-import { splitBenchParties } from "@/lib/yip/party-formation";
 import { assignCommittees } from "@/app/yip/actions/allocation";
 
 type Participant = {
@@ -45,7 +41,6 @@ type Participant = {
 };
 
 type FormState = {
-  side: "ruling" | "opposition";
   party_number: number;
   name: string;
   symbol_url: string;
@@ -54,7 +49,6 @@ type FormState = {
 };
 
 const EMPTY_FORM: FormState = {
-  side: "ruling",
   party_number: 1,
   name: "",
   symbol_url: "",
@@ -77,9 +71,9 @@ export function PartiesClient({
   participants: Participant[];
   /** Chair/national/regional only. Organisers cannot delete records. */
   canDelete?: boolean;
-  /** Organiser-or-above. Gates the auto Form Parties tool (server re-checks). */
+  /** Organiser-or-above. Gates the setup tools (server re-checks). */
   canManage?: boolean;
-  /** When locked, role & party changes are disabled. */
+  /** When locked, party changes are disabled. */
   allocationLocked?: boolean;
 }) {
   const router = useRouter();
@@ -92,30 +86,21 @@ export function PartiesClient({
   const [flash, setFlash] = useState<string | null>(null);
   const [assignOpen, setAssignOpen] = useState<string | null>(null);
   const [picked, setPicked] = useState<Set<string>>(new Set());
-  const [formPartyCount, setFormPartyCount] = useState(5);
-  const [assignLeaders, setAssignLeaders] = useState(false);
-  const [formResult, setFormResult] = useState<FormPartiesSummary | null>(null);
+  const [setupCount, setSetupCount] = useState(5);
 
-  function handleFormParties() {
-    const rulingN = participants.filter((p) => p.party_side === "ruling").length;
-    const oppositionN = participants.filter((p) => p.party_side === "opposition").length;
-    const split = splitBenchParties(formPartyCount, rulingN, oppositionN);
-    const ok = confirm(
-      `Creates ${formPartyCount} parties and distributes all ${participants.length} students across them with school spread; bench split ${split.ruling} Ruling / ${split.opposition} Opposition. Continue?`
-    );
-    if (!ok) return;
+  function handleCreateParties() {
     startTransition(async () => {
-      const res = await formParties(eventId, formPartyCount, assignLeaders);
+      const res = await createBenchlessParties(eventId, setupCount);
       if (!res.success) {
         setError(res.error);
         return;
       }
       setError(null);
-      setParties(res.data.parties);
-      setFormResult(res.data);
-      setFlash(`Formed ${res.data.parties.length} parties`);
-      setTimeout(() => setFlash(null), 2500);
-      // Refresh server props so member counts on the party cards are live.
+      setParties(res.data);
+      setFlash(
+        `Created ${res.data.length} parties — now run Allocation to split students across them.`
+      );
+      setTimeout(() => setFlash(null), 4000);
       router.refresh();
     });
   }
@@ -140,9 +125,7 @@ export function PartiesClient({
     });
   }
 
-  // Party numbers are unique per EVENT (across both benches) — see
-  // parties_event_id_party_number_key. Computing per-side suggested numbers
-  // that already exist on the other bench and the insert failed (BUG-388).
+  // Party numbers are unique per EVENT — pick the lowest free number.
   function nextPartyNumber(): number {
     const nums = parties.map((p) => p.party_number);
     let n = 1;
@@ -150,8 +133,8 @@ export function PartiesClient({
     return n;
   }
 
-  // Existing events name parties "Party A", "Party B", … by number.
-  // Suggest the matching name; the organizer can still overwrite it.
+  // Parties are named "Party A", "Party B", … by number. Suggest the matching
+  // name; the organiser can overwrite it (and rename to a real party later).
   function suggestedPartyName(n: number): string {
     const lettered =
       n >= 1 && n <= 26 ? `Party ${String.fromCharCode(64 + n)}` : `Party ${n}`;
@@ -161,9 +144,9 @@ export function PartiesClient({
     return "";
   }
 
-  function openCreate(side: "ruling" | "opposition") {
+  function openCreate() {
     const n = nextPartyNumber();
-    setForm({ ...EMPTY_FORM, side, party_number: n, name: suggestedPartyName(n) });
+    setForm({ ...EMPTY_FORM, party_number: n, name: suggestedPartyName(n) });
     setCreating(true);
     setEditing(null);
     setError(null);
@@ -171,7 +154,6 @@ export function PartiesClient({
 
   function openEdit(p: Party) {
     setForm({
-      side: p.side,
       party_number: p.party_number,
       name: p.name,
       symbol_url: p.symbol_url ?? "",
@@ -202,7 +184,6 @@ export function PartiesClient({
 
     const payload = {
       event_id: eventId,
-      side: form.side,
       party_number: form.party_number,
       name: form.name.trim(),
       symbol_url: form.symbol_url.trim() || null,
@@ -250,33 +231,12 @@ export function PartiesClient({
     });
   }
 
-  /** Move a party (and its assigned members) to the other bench. BUG-401. */
-  function handleMove(p: Party) {
-    const target: "ruling" | "opposition" =
-      p.side === "ruling" ? "opposition" : "ruling";
-    startTransition(async () => {
-      const res = await updateParty(p.id, { side: target });
-      if (!res.success) {
-        setError(res.error);
-        return;
-      }
-      setError(null);
-      setParties((prev) => prev.map((x) => (x.id === p.id ? res.data : x)));
-      setFlash(
-        `Moved ${p.name} to the ${target === "ruling" ? "Ruling" : "Opposition"} Bench`
-      );
-      setTimeout(() => setFlash(null), 2500);
-    });
-  }
-
   function openAssign(partyId: string) {
     const party = parties.find((p) => p.id === partyId);
     if (!party) return;
-    const eligible = participants.filter(
-      (pt) => pt.party_side === party.side || pt.party_side === null
-    );
+    // Benchless: any student can join any party.
     setAssignOpen(partyId);
-    setPicked(new Set(eligible.filter((pt) => pt.party_id === partyId).map((pt) => pt.id)));
+    setPicked(new Set(participants.filter((pt) => pt.party_id === partyId).map((pt) => pt.id)));
   }
 
   function togglePick(id: string) {
@@ -300,7 +260,6 @@ export function PartiesClient({
       setFlash(`Assigned ${ids.length} participants`);
       setAssignOpen(null);
       setTimeout(() => setFlash(null), 2500);
-      // Page refreshes via revalidatePath; the participant.party_id will be updated on next fetch.
     });
   }
 
@@ -321,15 +280,11 @@ export function PartiesClient({
     });
   }
 
-  const ruling = parties.filter((p) => p.side === "ruling");
-  const opposition = parties.filter((p) => p.side === "opposition");
+  const sortedParties = [...parties].sort(
+    (a, b) => a.party_number - b.party_number
+  );
 
   const partyForAssign = assignOpen ? parties.find((p) => p.id === assignOpen) : null;
-  const eligibleForAssign = partyForAssign
-    ? participants.filter(
-        (pt) => pt.party_side === partyForAssign.side || pt.party_side === null
-      )
-    : [];
 
   return (
     <div className="max-w-[1400px] mx-auto px-6 py-8 space-y-6">
@@ -346,9 +301,15 @@ export function PartiesClient({
             Political Parties
           </h1>
           <p className="text-sm text-[#1a1a3e]/60 mt-1">
-            Student-created parties with manifesto &amp; symbol · Handbook page 14
+            Equal parties with manifesto &amp; symbol. Ruling vs Opposition is
+            decided on event day — not here.
           </p>
         </div>
+        {parties.length > 0 && canManage && (
+          <Button size="sm" variant="outline" onClick={openCreate} disabled={allocationLocked}>
+            <Plus className="size-3 mr-1" /> Add Party
+          </Button>
+        )}
       </div>
 
       {flash && (
@@ -363,24 +324,64 @@ export function PartiesClient({
         </div>
       )}
 
-      {/* Auto Form Parties (organiser tool) */}
-      {canManage && (
-        <FormPartiesCard
-          participants={participants}
-          parties={parties}
-          allocationLocked={allocationLocked}
-          partyCount={formPartyCount}
-          onPartyCountChange={setFormPartyCount}
-          onRun={handleFormParties}
-          pending={pending}
-          result={formResult}
-          assignLeaders={assignLeaders}
-          onAssignLeadersChange={setAssignLeaders}
-        />
+      {/* Setup: create N parties in one click (shown until parties exist) */}
+      {canManage && parties.length === 0 && (
+        <Card className="border-[#138808]/30">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Wand2 className="size-4 text-[#138808]" />
+              Set up parties
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-[#1a1a3e]/70">
+              Choose how many parties this chapter needs. We&apos;ll create them
+              as <span className="font-medium">Party A, Party B …</span> — then
+              run <span className="font-medium">Allocation</span> to split every
+              student evenly across them (spread across schools) and assign
+              constituencies. You can rename each party and add its symbol &amp;
+              manifesto afterwards.
+            </p>
+            {allocationLocked ? (
+              <div className="flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-800">
+                <Lock className="size-4 mt-0.5 shrink-0" />
+                <span>Unlock allocation first — party changes are locked.</span>
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-end gap-4">
+                <div>
+                  <label className="text-xs font-medium text-[#1a1a3e]/70 block mb-1">
+                    Number of parties
+                  </label>
+                  <select
+                    value={setupCount}
+                    onChange={(e) => setSetupCount(parseInt(e.target.value))}
+                    className="border border-input rounded-md px-3 py-2 text-sm"
+                    disabled={pending}
+                  >
+                    {[2, 3, 4, 5, 6, 7, 8].map((n) => (
+                      <option key={n} value={n}>
+                        {n} parties
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <Button
+                  onClick={handleCreateParties}
+                  disabled={pending}
+                  className="bg-[#138808] hover:bg-[#138808]/90 text-white"
+                >
+                  {pending && <Loader2 className="size-4 mr-2 animate-spin" />}
+                  Create {setupCount} Parties
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       )}
 
-      {/* Assign / Re-balance Committees (mixed cross-party, party-balanced) */}
-      {canManage && (
+      {/* Assign / Re-balance Committees (mixed cross-party) */}
+      {canManage && parties.length > 0 && (
         <Card>
           <CardContent className="pt-5 flex flex-wrap items-center justify-between gap-3">
             <div className="min-w-0">
@@ -388,8 +389,8 @@ export function PartiesClient({
               <p className="text-xs text-[#1a1a3e]/60 mt-0.5 max-w-md">
                 Spread students evenly across committees by party (mixed
                 committees). Only the Speaker &amp; Deputy Speakers are excluded —
-                they preside. Run after forming parties; re-running won&apos;t
-                change parties.
+                they preside. Allocation runs this automatically; use this to
+                re-balance without changing parties.
               </p>
             </div>
             <Button
@@ -403,42 +404,16 @@ export function PartiesClient({
         </Card>
       )}
 
-      {/* Form */}
+      {/* Create / edit single party */}
       {(creating || editing) && (
         <Card className="border-[#FF9933]/30">
           <CardHeader>
             <CardTitle className="text-lg">
-              {editing ? `Edit: ${editing.name}` : `Add Party to ${form.side === "ruling" ? "Ruling" : "Opposition"} Bench`}
+              {editing ? `Edit: ${editing.name}` : "Add Party"}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="text-xs font-medium text-[#1a1a3e]/70">Side *</label>
-                {editing ? (
-                  // Editable while editing so a party can be moved between
-                  // benches (BUG-401). Members move with the party.
-                  <select
-                    value={form.side}
-                    onChange={(e) =>
-                      setForm({
-                        ...form,
-                        side: e.target.value as "ruling" | "opposition",
-                      })
-                    }
-                    className="w-full border border-input rounded-md px-3 py-2 text-sm"
-                  >
-                    <option value="ruling">Ruling Bench</option>
-                    <option value="opposition">Opposition Bench</option>
-                  </select>
-                ) : (
-                  // Pre-assigned from the bench whose "Add Party" was clicked
-                  // — no manual side choice when adding (BUG-388).
-                  <div className="w-full border border-input rounded-md px-3 py-2 text-sm bg-gray-50 text-[#1a1a3e]/80">
-                    {form.side === "ruling" ? "Ruling Bench" : "Opposition Bench"}
-                  </div>
-                )}
-              </div>
               <div>
                 <label className="text-xs font-medium text-[#1a1a3e]/70">Party Number *</label>
                 <Input
@@ -450,8 +425,6 @@ export function PartiesClient({
                     setForm((f) => ({
                       ...f,
                       party_number: n,
-                      // Auto-populate the name from the number while adding,
-                      // unless the organizer already typed their own name.
                       name:
                         !editing &&
                         (f.name === "" || f.name === suggestedPartyName(f.party_number))
@@ -461,12 +434,12 @@ export function PartiesClient({
                   }}
                 />
               </div>
-              <div>
+              <div className="md:col-span-2">
                 <label className="text-xs font-medium text-[#1a1a3e]/70">Name *</label>
                 <Input
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  placeholder="Bharat Progressive Front"
+                  placeholder="Party A — or a real party name"
                 />
               </div>
               <div className="md:col-span-2">
@@ -489,7 +462,7 @@ export function PartiesClient({
 
             <div>
               <label className="text-xs font-medium text-[#1a1a3e]/70">
-                4-Point Manifesto *
+                4-Point Manifesto
               </label>
               <div className="space-y-2 mt-1">
                 {[0, 1, 2, 3].map((i) => (
@@ -524,9 +497,7 @@ export function PartiesClient({
                 className="bg-[#FF9933] hover:bg-[#FF9933]/90 text-white"
               >
                 {pending && <Loader2 className="size-4 mr-2 animate-spin" />}
-                {editing
-                  ? "Save Changes"
-                  : `Add Party to ${form.side === "ruling" ? "Ruling" : "Opposition"}`}
+                {editing ? "Save Changes" : "Add Party"}
               </Button>
             </div>
           </CardContent>
@@ -544,12 +515,12 @@ export function PartiesClient({
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="max-h-[400px] overflow-y-auto border rounded-lg">
-              {eligibleForAssign.length === 0 ? (
+              {participants.length === 0 ? (
                 <p className="text-sm text-[#1a1a3e]/50 p-6 text-center">
-                  No eligible participants. Assign party side in Allocation first.
+                  No participants yet.
                 </p>
               ) : (
-                eligibleForAssign.map((pt) => (
+                participants.map((pt) => (
                   <label
                     key={pt.id}
                     className="flex items-center gap-3 px-4 py-2 hover:bg-gray-50 cursor-pointer border-b last:border-b-0"
@@ -594,352 +565,113 @@ export function PartiesClient({
         </Card>
       )}
 
-      {/* Benches */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <PartyBench
-          title="Ruling Bench"
-          color="blue"
-          parties={ruling}
-          participants={participants}
-          onCreate={() => openCreate("ruling")}
-          onEdit={openEdit}
-          onDelete={handleDelete}
-          onMove={handleMove}
-          movePending={pending}
-          onAssign={openAssign}
-          onElect={handleElectLeader}
-          canDelete={canDelete}
-        />
-        <PartyBench
-          title="Opposition Bench"
-          color="red"
-          parties={opposition}
-          participants={participants}
-          onCreate={() => openCreate("opposition")}
-          onEdit={openEdit}
-          onDelete={handleDelete}
-          onMove={handleMove}
-          movePending={pending}
-          onAssign={openAssign}
-          onElect={handleElectLeader}
-          canDelete={canDelete}
-        />
-      </div>
-    </div>
-  );
-}
+      {/* Parties list */}
+      {parties.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {sortedParties.map((p) => {
+            const members = participants.filter((pt) => pt.party_id === p.id);
+            const leader = p.party_leader_id
+              ? participants.find((pt) => pt.id === p.party_leader_id)
+              : null;
 
-function FormPartiesCard({
-  participants,
-  parties,
-  allocationLocked,
-  partyCount,
-  onPartyCountChange,
-  onRun,
-  pending,
-  result,
-  assignLeaders,
-  onAssignLeadersChange,
-}: {
-  participants: Participant[];
-  parties: Party[];
-  allocationLocked: boolean;
-  partyCount: number;
-  onPartyCountChange: (n: number) => void;
-  onRun: () => void;
-  pending: boolean;
-  result: FormPartiesSummary | null;
-  assignLeaders: boolean;
-  onAssignLeadersChange: (v: boolean) => void;
-}) {
-  const rulingN = participants.filter((p) => p.party_side === "ruling").length;
-  const oppositionN = participants.filter((p) => p.party_side === "opposition").length;
-  const missingBench = participants.length - rulingN - oppositionN;
-  const anyMembers = participants.some((p) => p.party_id != null);
+            return (
+              <Card key={p.id}>
+                <CardContent className="pt-5 space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-3 flex-1">
+                      {p.symbol_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={p.symbol_url}
+                          alt={p.name}
+                          className="size-10 rounded object-contain bg-white border"
+                        />
+                      ) : (
+                        <div className="size-10 rounded bg-gray-50 border flex items-center justify-center">
+                          <Hash className="size-4 text-[#1a1a3e]/40" />
+                        </div>
+                      )}
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <Badge variant="secondary" className="text-[10px] font-mono">
+                            #{p.party_number}
+                          </Badge>
+                          <span className="font-semibold">{p.name}</span>
+                        </div>
+                        {p.tagline && (
+                          <p className="text-xs text-[#1a1a3e]/60 mt-0.5">{p.tagline}</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex gap-1">
+                      <Button size="icon" variant="ghost" onClick={() => openEdit(p)}>
+                        <Pencil className="size-4" />
+                      </Button>
+                      {canDelete && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => handleDelete(p)}
+                          className="text-red-600 hover:bg-red-50"
+                        >
+                          <Trash2 className="size-4" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
 
-  // Mirror of the server-side refusals so the organiser sees WHY up front
-  // (the server action re-checks everything — this is display only).
-  let blocked: string | null = null;
-  if (parties.length > 0) {
-    blocked = anyMembers
-      ? "Parties already formed — delete existing parties first to use auto-form."
-      : `This event already has ${parties.length} part${
-          parties.length === 1 ? "y" : "ies"
-        } with no members — delete them first to use auto-form.`;
-  } else if (allocationLocked) {
-    blocked = "Unlock allocation first — party changes are locked.";
-  } else if (participants.length === 0) {
-    blocked = "No participants registered yet.";
-  } else if (missingBench > 0) {
-    blocked = `${missingBench} of ${participants.length} students have no bench (ruling/opposition) yet — run Allocation first.`;
-  }
+                  {p.manifesto.length > 0 && (
+                    <ol className="text-xs text-[#1a1a3e]/75 space-y-1 pl-4 list-decimal">
+                      {p.manifesto.map((m, i) => (
+                        <li key={i}>{m}</li>
+                      ))}
+                    </ol>
+                  )}
 
-  const split = !blocked
-    ? splitBenchParties(partyCount, rulingN, oppositionN)
-    : null;
-
-  return (
-    <Card className="border-[#138808]/30">
-      <CardHeader>
-        <CardTitle className="text-lg flex items-center gap-2">
-          <Wand2 className="size-4 text-[#138808]" />
-          Form Parties
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <p className="text-sm text-[#1a1a3e]/70">
-          Automatically creates the parties and distributes every student across
-          them — party sizes stay balanced and classmates from the same school
-          are spread out (handbook model; the chair sets the party count).
-        </p>
-
-        {blocked ? (
-          <div className="flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-800">
-            <Lock className="size-4 mt-0.5 shrink-0" />
-            <span>{blocked}</span>
-          </div>
-        ) : (
-          <div className="flex flex-wrap items-end gap-4">
-            <div>
-              <label className="text-xs font-medium text-[#1a1a3e]/70 block mb-1">
-                Number of parties
-              </label>
-              <select
-                value={partyCount}
-                onChange={(e) => onPartyCountChange(parseInt(e.target.value))}
-                className="border border-input rounded-md px-3 py-2 text-sm"
-                disabled={pending}
-              >
-                {[2, 3, 4, 5, 6, 7, 8].map((n) => (
-                  <option key={n} value={n}>
-                    {n} parties
-                  </option>
-                ))}
-              </select>
-            </div>
-            {split && (
-              <div className="text-xs text-[#1a1a3e]/60 pb-2.5">
-                Bench split: <span className="font-medium text-blue-700">{split.ruling} Ruling</span>
-                {" / "}
-                <span className="font-medium text-red-700">{split.opposition} Opposition</span>
-                {" · "}
-                {participants.length} students ({rulingN}/{oppositionN})
-              </div>
-            )}
-            <Button
-              onClick={onRun}
-              disabled={pending}
-              className="bg-[#138808] hover:bg-[#138808]/90 text-white"
-            >
-              {pending && <Loader2 className="size-4 mr-2 animate-spin" />}
-              Form {partyCount} Parties
-            </Button>
-            <label className="flex w-full max-w-md cursor-pointer items-start gap-2 text-left text-xs text-[#1a1a3e]/70">
-              <input
-                type="checkbox"
-                className="mt-0.5 size-4 accent-[#138808]"
-                checked={assignLeaders}
-                disabled={pending}
-                onChange={(e) => onAssignLeadersChange(e.target.checked)}
-              />
-              <span>
-                <span className="font-medium text-[#1a1a3e]">
-                  Also auto-assign a party leader for each party
-                </span>{" "}
-                — the senior-most member of each party. Optional; leave off to
-                let students elect their leaders.
-              </span>
-            </label>
-          </div>
-        )}
-
-        {result && (
-          <div className="rounded-lg border border-[#138808]/20 bg-[#138808]/5 p-3 space-y-2">
-            <div className="text-sm font-medium text-[#1a1a3e]">
-              Done — {result.parties.length} parties formed (
-              {result.benchSplit.ruling} Ruling / {result.benchSplit.opposition}{" "}
-              Opposition)
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {result.counts.map((c) => (
-                <Badge
-                  key={c.name}
-                  variant="secondary"
-                  className={`text-[11px] ${
-                    c.side === "ruling" ? "bg-blue-50 text-blue-700" : "bg-red-50 text-red-700"
-                  }`}
-                >
-                  {c.name}: {c.members}
-                </Badge>
-              ))}
-            </div>
-            <div className="text-xs text-[#1a1a3e]/60">
-              Max students from one school in a single party:{" "}
-              {result.maxSameSchoolPerParty}
-            </div>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function PartyBench({
-  title,
-  color,
-  parties,
-  participants,
-  onCreate,
-  onEdit,
-  onDelete,
-  onMove,
-  movePending = false,
-  onAssign,
-  onElect,
-  canDelete = true,
-}: {
-  title: string;
-  color: "blue" | "red";
-  parties: Party[];
-  participants: Participant[];
-  onCreate: () => void;
-  onEdit: (p: Party) => void;
-  onDelete: (p: Party) => void;
-  onMove: (p: Party) => void;
-  movePending?: boolean;
-  onAssign: (partyId: string) => void;
-  onElect: (partyId: string, participantId: string) => void;
-  canDelete?: boolean;
-}) {
-  const moveLabel = color === "blue" ? "Move to Opposition" : "Move to Ruling";
-  const accentBg = color === "blue" ? "bg-blue-50" : "bg-red-50";
-  const accentBorder = color === "blue" ? "border-blue-200" : "border-red-200";
-  const accentText = color === "blue" ? "text-blue-700" : "text-red-700";
-
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Flag className={`size-4 ${accentText}`} />
-          <h2 className={`text-lg font-semibold ${accentText}`}>{title}</h2>
-          <span className="text-xs text-[#1a1a3e]/50">({parties.length})</span>
-        </div>
-        <Button size="sm" variant="outline" onClick={onCreate}>
-          <Plus className="size-3 mr-1" /> Add Party
-        </Button>
-      </div>
-
-      {parties.length === 0 && (
-        <div className={`rounded-lg border-2 border-dashed ${accentBorder} ${accentBg} p-8 text-center text-sm text-[#1a1a3e]/60`}>
-          No parties yet on this bench.
+                  <div className="flex items-center justify-between pt-2 border-t">
+                    <div className="text-xs text-[#1a1a3e]/70">
+                      <Users className="size-3 inline mr-1" />
+                      {members.length} member{members.length === 1 ? "" : "s"}
+                      {leader && (
+                        <span className="ml-2">
+                          <Crown className="size-3 inline mr-0.5 text-amber-500" />
+                          {leader.full_name}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex gap-1">
+                      <Button size="sm" variant="outline" onClick={() => openAssign(p.id)}>
+                        Assign
+                      </Button>
+                      {members.length > 0 && !leader && (
+                        <select
+                          onChange={(e) => e.target.value && handleElectLeader(p.id, e.target.value)}
+                          defaultValue=""
+                          className="text-xs border rounded px-2 py-1"
+                        >
+                          <option value="">Elect leader…</option>
+                          {members.map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.full_name}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       )}
 
-      {parties.map((p) => {
-        const members = participants.filter((pt) => pt.party_id === p.id);
-        const leader = p.party_leader_id
-          ? participants.find((pt) => pt.id === p.party_leader_id)
-          : null;
-
-        return (
-          <Card key={p.id} className={accentBorder}>
-            <CardContent className="pt-5 space-y-3">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-start gap-3 flex-1">
-                  {p.symbol_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={p.symbol_url}
-                      alt={p.name}
-                      className="size-10 rounded object-contain bg-white border"
-                    />
-                  ) : (
-                    <div className={`size-10 rounded ${accentBg} ${accentBorder} border flex items-center justify-center`}>
-                      <Hash className={`size-4 ${accentText}`} />
-                    </div>
-                  )}
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <Badge variant="secondary" className="text-[10px] font-mono">
-                        #{p.party_number}
-                      </Badge>
-                      <span className="font-semibold">{p.name}</span>
-                    </div>
-                    {p.tagline && (
-                      <p className="text-xs text-[#1a1a3e]/60 mt-0.5">{p.tagline}</p>
-                    )}
-                  </div>
-                </div>
-                <div className="flex gap-1">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => onMove(p)}
-                    disabled={movePending}
-                    title={`${moveLabel} Bench — assigned members move with the party`}
-                  >
-                    <ArrowRightLeft className="size-3 mr-1" />
-                    {moveLabel}
-                  </Button>
-                  <Button size="icon" variant="ghost" onClick={() => onEdit(p)}>
-                    <Pencil className="size-4" />
-                  </Button>
-                  {canDelete && (
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => onDelete(p)}
-                      className="text-red-600 hover:bg-red-50"
-                    >
-                      <Trash2 className="size-4" />
-                    </Button>
-                  )}
-                </div>
-              </div>
-
-              {p.manifesto.length > 0 && (
-                <ol className="text-xs text-[#1a1a3e]/75 space-y-1 pl-4 list-decimal">
-                  {p.manifesto.map((m, i) => (
-                    <li key={i}>{m}</li>
-                  ))}
-                </ol>
-              )}
-
-              <div className="flex items-center justify-between pt-2 border-t">
-                <div className="text-xs text-[#1a1a3e]/70">
-                  <Users className="size-3 inline mr-1" />
-                  {members.length} member{members.length === 1 ? "" : "s"}
-                  {leader && (
-                    <span className="ml-2">
-                      <Crown className="size-3 inline mr-0.5 text-amber-500" />
-                      {leader.full_name}
-                    </span>
-                  )}
-                </div>
-                <div className="flex gap-1">
-                  <Button size="sm" variant="outline" onClick={() => onAssign(p.id)}>
-                    Assign
-                  </Button>
-                  {members.length > 0 && !leader && (
-                    <select
-                      onChange={(e) => e.target.value && onElect(p.id, e.target.value)}
-                      defaultValue=""
-                      className="text-xs border rounded px-2 py-1"
-                    >
-                      <option value="">Elect leader…</option>
-                      {members.map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.full_name}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        );
-      })}
+      {/* Empty state when an organiser can't set up (read-only viewer) */}
+      {parties.length === 0 && !canManage && (
+        <div className="rounded-lg border-2 border-dashed border-gray-200 bg-gray-50 p-10 text-center text-sm text-[#1a1a3e]/60">
+          No parties have been set up yet.
+        </div>
+      )}
     </div>
   );
 }

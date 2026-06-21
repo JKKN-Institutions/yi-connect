@@ -962,7 +962,6 @@ export function ParticipantsClient({
                     <ArrowUpDown className="size-3" />
                   </button>
                 </TableHead>
-                <TableHead>Party</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead>Constituency</TableHead>
                 <TableHead>State</TableHead>
@@ -1016,21 +1015,6 @@ export function ParticipantsClient({
                   </TableCell>
                   <TableCell className="font-medium">{p.full_name}</TableCell>
                   <TableCell>{p.class}</TableCell>
-                  <TableCell>
-                    {p.party_side ? (
-                      <Badge
-                        variant="secondary"
-                        className={
-                          PARTY_COLORS[p.party_side as keyof typeof PARTY_COLORS]
-                            ?.badge ?? "bg-gray-100 text-gray-700"
-                        }
-                      >
-                        {p.party_side === "ruling" ? "Ruling" : "Opposition"}
-                      </Badge>
-                    ) : (
-                      <span className="text-gray-400">--</span>
-                    )}
-                  </TableCell>
                   <TableCell>
                     {p.parliament_role ? (
                       <Badge variant="secondary" className="bg-gray-100 text-gray-700">

@@ -28,7 +28,8 @@ function friendlyDbError(error: { code?: string; message: string }): string {
 export type Party = {
   id: string;
   event_id: string;
-  side: PartySide;
+  // null = benchless (ruling/opposition decided on event day, off-app).
+  side: PartySide | null;
   party_number: number;
   name: string;
   symbol_url: string | null;
@@ -56,7 +57,9 @@ export async function listParties(eventId: string): Promise<Party[]> {
 
 export async function createParty(input: {
   event_id: string;
-  side: PartySide;
+  // Optional: benchless parties (the default now) carry no side; ruling vs
+  // opposition is decided on event day, off-app.
+  side?: PartySide | null;
   party_number: number;
   name: string;
   symbol_url?: string | null;
@@ -72,7 +75,7 @@ export async function createParty(input: {
     .from("parties")
     .insert({
       event_id: input.event_id,
-      side: input.side,
+      side: input.side ?? null,
       party_number: input.party_number,
       name: input.name,
       symbol_url: input.symbol_url ?? null,
@@ -85,6 +88,79 @@ export async function createParty(input: {
   if (error) return { success: false, error: friendlyDbError(error) };
   revalidatePath(`/yip/dashboard/events/${input.event_id}/parties`);
   return { success: true, data: data as Party };
+}
+
+/**
+ * Create N benchless parties in one click — "Party A".."Party N", numbered
+ * 1..N, no ruling/opposition. The chapter picks the count (default 5) on the
+ * Parties tab; allocation then splits students evenly across them and assigns
+ * constituencies. Parties can be renamed + given a symbol/manifesto afterward.
+ *
+ * Refuses (fail closed) when the event already has parties — the chair deletes
+ * them first (so an organiser-entered manifesto/symbol is never silently lost,
+ * and party numbers can't collide). 2..8 parties, matching the handbook range.
+ */
+export async function createBenchlessParties(
+  eventId: string,
+  count: number
+): Promise<ActionResult<Party[]>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
+  if (!Number.isInteger(count) || count < 2 || count > 8) {
+    return { success: false, error: "Number of parties must be a whole number between 2 and 8." };
+  }
+  const supabase = await createServiceClient();
+
+  const { data: event } = await supabase
+    .from("events")
+    .select("id, allocation_locked")
+    .eq("id", eventId)
+    .single();
+  if (!event) return { success: false, error: "Event not found" };
+  if (event.allocation_locked) {
+    return { success: false, error: "Unlock allocation first — party changes are locked." };
+  }
+
+  const { data: existing, error: existingError } = await supabase
+    .from("parties")
+    .select("id")
+    .eq("event_id", eventId);
+  if (existingError) return { success: false, error: existingError.message };
+  if (existing && existing.length > 0) {
+    return {
+      success: false,
+      error: `This event already has ${existing.length} part${
+        existing.length === 1 ? "y" : "ies"
+      } — delete them first to recreate.`,
+    };
+  }
+
+  const rows = Array.from({ length: count }, (_, i) => ({
+    event_id: eventId,
+    side: null,
+    party_number: i + 1,
+    name: `Party ${String.fromCharCode(65 + i)}`, // Party A, B, C…
+    manifesto: [],
+  }));
+
+  const { data: created, error } = await supabase
+    .from("parties")
+    .insert(rows)
+    .select();
+  if (error || !created) {
+    return { success: false, error: friendlyDbError(error ?? { message: "Failed to create parties" }) };
+  }
+
+  revalidatePath(`/yip/dashboard/events/${eventId}/parties`);
+  return {
+    success: true,
+    data: created.map((p) => ({
+      ...p,
+      manifesto: Array.isArray(p.manifesto) ? p.manifesto : [],
+    })) as Party[],
+  };
 }
 
 export async function updateParty(

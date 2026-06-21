@@ -844,7 +844,7 @@ export async function hasParticipantVoted(
 export interface PartyLite {
   id: string;
   name: string;
-  side: string;
+  side: string | null;
   party_number: number;
   party_leader_id: string | null;
   member_count: number;

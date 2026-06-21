@@ -105,15 +105,6 @@ export function AllocationClient({
   const [confirmLock, setConfirmLock] = useState(false);
   const [confirmUnlock, setConfirmUnlock] = useState(false);
   const [editingParticipant, setEditingParticipant] = useState<Participant | null>(null);
-  // OFF by default → new events do NOT pre-assign party sides/leadership; the
-  // engine only writes side-neutral constituencies + committees and students
-  // form parties + pick leadership live on event day. Check it to restore the
-  // full auto-allocation behaviour.
-  const [autoFormParties, setAutoFormParties] = useState(true);
-  // Parliament roles + ministries are OPTIONAL (off by default): the chapter
-  // ticks this to also auto-assign PM / Deputy PM / LoP / Ministers / Speaker
-  // candidates. Off → everyone is a plain MP and the chapter assigns leaders.
-  const [assignRoles, setAssignRoles] = useState(false);
 
   const committeeNames = customCommittees && customCommittees.length > 0
     ? customCommittees
@@ -135,6 +126,16 @@ export function AllocationClient({
   );
   const opposition = useMemo(
     () => participants.filter((p) => p.party_side === "opposition"),
+    [participants]
+  );
+  // Benchless events (the default now) have no ruling/opposition until event
+  // day. Only legacy benched events show the Ruling/Opposition visuals.
+  const hasBenches = ruling.length > 0 || opposition.length > 0;
+  const hasLeaders = useMemo(
+    () =>
+      participants.some(
+        (p) => p.parliament_role && p.parliament_role !== "mp"
+      ),
     [participants]
   );
 
@@ -162,19 +163,12 @@ export function AllocationClient({
 
   // ── Handlers ──────────────────────────────────────────────────────
 
-  async function handleRunAllocation(autoForm: boolean, withRoles: boolean) {
+  async function handleRunAllocation() {
     setLoading(true);
-    const result = await runAllocationAction(eventId, {
-      assignSides: autoForm,
-      assignRoles: withRoles,
-    });
+    const result = await runAllocationAction(eventId);
     if (result.success) {
       toast.success(
-        !autoForm
-          ? "Constituencies assigned — benches left blank for the day"
-          : withRoles
-            ? "Allocation completed — benches, constituencies & roles assigned"
-            : "Benches & constituencies assigned — roles left for you to assign"
+        "Students split evenly across parties & constituencies assigned"
       );
       router.refresh();
     } else {
@@ -256,12 +250,11 @@ export function AllocationClient({
   // ── Not Yet Allocated State ───────────────────────────────────────
 
   if (!hasAllocation) {
-    // Parties only need to exist when AUTO-forming. With auto-form OFF (the
-    // default) the benches are left blank for students to form on event day and
-    // only the side-neutral constituencies + committees are assigned — so no
-    // parties are required up front.
-    const partiesReady = rulingPartyCount > 0 && oppositionPartyCount > 0;
-    const needsParties = autoFormParties && !partiesReady;
+    // Benchless flow: parties must exist first (the chapter creates them on the
+    // Parties tab). Allocation then splits every student evenly across those
+    // parties and assigns a constituency. Ruling/Opposition is decided on event
+    // day, off-app — so there is no bench/role choice here.
+    const hasParties = parties.length > 0;
 
     return (
       <div className="space-y-4">
@@ -272,78 +265,16 @@ export function AllocationClient({
               Ready to Allocate
             </h3>
             <p className="mt-2 max-w-md text-sm text-gray-500">
-              {participants.length} participants registered
-              {autoFormParties
-                ? ` across ${rulingPartyCount} ruling + ${oppositionPartyCount} opposition parties. `
-                : ". "}
-              {autoFormParties
-                ? assignRoles
-                  ? "Benches, constituencies, committees AND Parliament roles (PM, LoP, Ministers, Speaker candidates) will be assigned automatically."
-                  : "Party benches, constituencies and committees will be assigned. Parliament roles are left for you to assign."
-                : "Constituencies and committees will be assigned; party benches are left blank for students to form on event day."}
+              {participants.length} participants registered.
+              {hasParties
+                ? ` They'll be split evenly across your ${parties.length} parties (spread across schools) and each given a constituency. Ruling vs Opposition is decided on event day.`
+                : " Create your parties first, then run allocation to split students across them."}
             </p>
 
-            <label className="mt-5 flex max-w-md cursor-pointer items-start gap-2 text-left text-sm text-gray-600">
-              <input
-                type="checkbox"
-                className="mt-0.5 size-4 accent-[#FF9933]"
-                checked={autoFormParties}
-                onChange={(e) => setAutoFormParties(e.target.checked)}
-              />
-              <span>
-                <span className="font-medium text-gray-700">
-                  Auto-assign party benches (Ruling / Opposition)
-                </span>
-                <br />
-                On by default. Uncheck to leave benches blank so students form
-                parties live on the day.
-              </span>
-            </label>
-
-            <label
-              className={`mt-3 flex max-w-md items-start gap-2 text-left text-sm ${
-                autoFormParties
-                  ? "cursor-pointer text-gray-600"
-                  : "cursor-not-allowed text-gray-300"
-              }`}
-            >
-              <input
-                type="checkbox"
-                className="mt-0.5 size-4 accent-[#FF9933]"
-                checked={assignRoles}
-                disabled={!autoFormParties}
-                onChange={(e) => setAssignRoles(e.target.checked)}
-              />
-              <span>
-                <span className="font-medium">
-                  Also auto-assign Parliament roles &amp; Ministries
-                </span>
-                <br />
-                PM, Deputy PM, Leader of Opposition, Cabinet &amp; Shadow
-                Ministers, Speaker candidates. Optional — leave off to assign
-                these yourself. (Party leaders are set at Form Parties.)
-              </span>
-            </label>
-
-            {needsParties ? (
-              <div className="mt-6 flex flex-col items-center">
-                <p className="max-w-md text-sm text-amber-700">
-                  Auto-forming needs at least one party on each bench.
-                  Currently: {rulingPartyCount} ruling, {oppositionPartyCount}{" "}
-                  opposition.
-                </p>
-                <Link
-                  href={`/yip/dashboard/events/${eventId}/parties`}
-                  className="mt-3 inline-flex items-center gap-2 rounded-md bg-[#FF9933] px-4 py-2 text-sm font-medium text-white hover:bg-[#E68A2E]"
-                >
-                  <Users className="size-4" />
-                  Go to Parties
-                </Link>
-              </div>
-            ) : (
+            {hasParties ? (
               <Button
                 className="mt-6 bg-[#FF9933] text-white hover:bg-[#E68A2E]"
-                onClick={() => handleRunAllocation(autoFormParties, assignRoles)}
+                onClick={() => handleRunAllocation()}
                 disabled={loading}
               >
                 {loading ? (
@@ -353,6 +284,14 @@ export function AllocationClient({
                 )}
                 {loading ? "Running Allocation..." : "Run Allocation"}
               </Button>
+            ) : (
+              <Link
+                href={`/yip/dashboard/events/${eventId}/parties`}
+                className="mt-6 inline-flex items-center gap-2 rounded-md bg-[#FF9933] px-4 py-2 text-sm font-medium text-white hover:bg-[#E68A2E]"
+              >
+                <Users className="size-4" />
+                Go to Parties
+              </Link>
             )}
           </CardContent>
         </Card>
@@ -422,7 +361,8 @@ export function AllocationClient({
         </div>
       </div>
 
-      {/* Section 1: Party Breakdown */}
+      {/* Section 1: Party Breakdown — legacy benched events only */}
+      {hasBenches && (
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {/* Ruling */}
         <div className={`rounded-lg border-2 ${PARTY_COLORS.ruling.border} ${PARTY_COLORS.ruling.bg} p-4`}>
@@ -462,8 +402,10 @@ export function AllocationClient({
           {/* School breakdown removed — school is never shown in the platform. */}
         </div>
       </div>
+      )}
 
-      {/* Section 2: Leadership Roles */}
+      {/* Section 2: Leadership Roles — only once roles have been assigned */}
+      {hasLeaders && (
       <div>
         <h3 className="mb-3 flex items-center gap-2 text-base font-semibold text-gray-800">
           <Crown className="size-4 text-amber-500" />
@@ -529,6 +471,7 @@ export function AllocationClient({
           </Table>
         </div>
       </div>
+      )}
 
       {/* Section 3: Committee Distribution */}
       <div>
@@ -548,14 +491,16 @@ export function AllocationClient({
                     {committee.members.length}
                   </Badge>
                 </div>
-                <div className="mt-1 flex gap-3 text-xs text-gray-500">
-                  <span className="text-blue-600">
-                    Ruling: {committee.rulingMembers.length}
-                  </span>
-                  <span className="text-red-600">
-                    Opp: {committee.oppositionMembers.length}
-                  </span>
-                </div>
+                {hasBenches && (
+                  <div className="mt-1 flex gap-3 text-xs text-gray-500">
+                    <span className="text-blue-600">
+                      Ruling: {committee.rulingMembers.length}
+                    </span>
+                    <span className="text-red-600">
+                      Opp: {committee.oppositionMembers.length}
+                    </span>
+                  </div>
+                )}
               </div>
               <CardContent className="max-h-48 overflow-y-auto p-3">
                 <div className="space-y-1">
@@ -566,11 +511,13 @@ export function AllocationClient({
                     >
                       <span className="truncate text-gray-700">{m.full_name}</span>
                       <div className="ml-2 flex shrink-0 items-center gap-1">
-                        <span
-                          className={`inline-block size-2 rounded-full ${
-                            m.party_side === "ruling" ? "bg-blue-500" : "bg-red-500"
-                          }`}
-                        />
+                        {m.party_side && (
+                          <span
+                            className={`inline-block size-2 rounded-full ${
+                              m.party_side === "ruling" ? "bg-blue-500" : "bg-red-500"
+                            }`}
+                          />
+                        )}
                         {m.parliament_role && m.parliament_role !== "mp" && (
                           <span className="text-[10px] text-gray-400">
                             {ROLE_LABELS[m.parliament_role] ?? m.parliament_role}
@@ -612,12 +559,7 @@ export function AllocationClient({
                           {pt.name}
                         </span>
                         <span className="text-xs text-gray-400">
-                          {pt.side === "ruling"
-                            ? "Ruling"
-                            : pt.side === "opposition"
-                            ? "Opposition"
-                            : ""}{" "}
-                          · {members.length}
+                          {members.length}
                         </span>
                       </div>
                       {members.length === 0 ? (
@@ -663,7 +605,6 @@ export function AllocationClient({
               <TableRow>
                 <TableHead className="w-14">S.No</TableHead>
                 <TableHead>Participant</TableHead>
-                <TableHead>Side</TableHead>
                 <TableHead>Party</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead>Constituency</TableHead>
@@ -680,21 +621,6 @@ export function AllocationClient({
                     {p.serial_no ?? "—"}
                   </TableCell>
                   <TableCell className="font-medium">{p.full_name}</TableCell>
-                  <TableCell>
-                    {p.party_side ? (
-                      <Badge
-                        variant="secondary"
-                        className={
-                          PARTY_COLORS[p.party_side as keyof typeof PARTY_COLORS]
-                            ?.badge ?? "bg-gray-100 text-gray-700"
-                        }
-                      >
-                        {p.party_side === "ruling" ? "Ruling" : "Opposition"}
-                      </Badge>
-                    ) : (
-                      <span className="text-gray-400">--</span>
-                    )}
-                  </TableCell>
                   <TableCell className="text-xs">
                     {partyName(p.party_number) ?? (
                       <span className="text-gray-300">—</span>
@@ -758,7 +684,7 @@ export function AllocationClient({
             </DialogClose>
             <Button
               className="bg-[#FF9933] text-white hover:bg-[#E68A2E]"
-              onClick={() => handleRunAllocation(autoFormParties, assignRoles)}
+              onClick={() => handleRunAllocation()}
               disabled={loading}
             >
               {loading ? (
@@ -1029,9 +955,6 @@ function EditAssignmentDialog({
               {sortedParties.map((pt) => (
                 <option key={pt.party_number} value={String(pt.party_number)}>
                   {pt.name}
-                  {pt.side
-                    ? ` (${pt.side === "ruling" ? "Ruling" : "Opposition"})`
-                    : ""}
                 </option>
               ))}
             </select>

@@ -11,6 +11,12 @@ import {
   deleteAgendaItem,
   moveAgendaItemToDay,
 } from "@/app/yip/actions/agenda";
+import {
+  savePresetFromEvent,
+  applyPresetToEvent,
+  deletePreset,
+  type PresetSummary,
+} from "@/app/yip/actions/agenda-presets";
 import type { Tables } from "@/types/yip/database";
 import {
   CalendarClock,
@@ -27,6 +33,8 @@ import {
   Clock,
   AlertTriangle,
   Info,
+  BookmarkPlus,
+  FolderDown,
 } from "lucide-react";
 
 type AgendaItem = Tables<{ schema: "yip" }, "agenda">;
@@ -48,12 +56,16 @@ export function AgendaSetupClient({
   eventId,
   items,
   scoreCounts,
+  presets,
   canDelete,
   isLive,
 }: {
   eventId: string;
   items: AgendaItem[];
   scoreCounts: Record<string, number>;
+  presets: PresetSummary[];
+  // canDelete = chair / national. Doubles as the gate for saving/deleting a
+  // chapter preset (both are chair-only).
   canDelete: boolean;
   isLive: boolean;
 }) {
@@ -87,6 +99,17 @@ export function AgendaSetupClient({
   const [addDuration, setAddDuration] = useState("15");
   const [addType, setAddType] = useState<string>("general");
   const [adding, setAdding] = useState(false);
+
+  // Chapter presets (Phase 3)
+  const [showSavePreset, setShowSavePreset] = useState(false);
+  const [presetName, setPresetName] = useState("");
+  const [savingPreset, setSavingPreset] = useState(false);
+  const [presetBusyId, setPresetBusyId] = useState<string | null>(null);
+  const [confirmApplyId, setConfirmApplyId] = useState<string | null>(null);
+  const [confirmDeletePresetId, setConfirmDeletePresetId] = useState<
+    string | null
+  >(null);
+  const [presetError, setPresetError] = useState<string | null>(null);
 
   const dayItems = items
     .filter((i) => i.day === activeDay)
@@ -228,6 +251,47 @@ export function AgendaSetupClient({
     setAddTitle("");
     setAddDuration("15");
     setAddType("general");
+    router.refresh();
+  }
+
+  // ── Chapter presets ──────────────────────────────────────────────
+  async function doSavePreset() {
+    setPresetError(null);
+    setSavingPreset(true);
+    const res = await savePresetFromEvent(eventId, presetName);
+    setSavingPreset(false);
+    if (!res.success) {
+      setPresetError(res.error);
+      return;
+    }
+    setShowSavePreset(false);
+    setPresetName("");
+    router.refresh();
+  }
+
+  async function doApplyPreset(presetId: string) {
+    setPresetError(null);
+    setPresetBusyId(presetId);
+    const res = await applyPresetToEvent(eventId, presetId);
+    setPresetBusyId(null);
+    setConfirmApplyId(null);
+    if (!res.success) {
+      setPresetError(res.error);
+      return;
+    }
+    router.refresh();
+  }
+
+  async function doDeletePreset(presetId: string) {
+    setPresetError(null);
+    setPresetBusyId(presetId);
+    const res = await deletePreset(eventId, presetId);
+    setPresetBusyId(null);
+    setConfirmDeletePresetId(null);
+    if (!res.success) {
+      setPresetError(res.error);
+      return;
+    }
     router.refresh();
   }
 
@@ -650,6 +714,177 @@ export function AgendaSetupClient({
         </Link>{" "}
         screen.
       </p>
+
+      {/* Chapter presets (Phase 3) — save this agenda for reuse on future events */}
+      <div className="mt-5 border-t border-gray-100 pt-4">
+        <div className="mb-1 flex items-center gap-2">
+          <FolderDown className="size-4 text-[#FF9933]" />
+          <h2 className="text-sm font-bold text-gray-900">
+            Chapter agenda presets
+          </h2>
+        </div>
+        <p className="mb-3 text-xs text-gray-500">
+          Save this agenda so your chapter can reuse it on future events. Saved
+          presets stay as they are — later changes to the central template
+          don&apos;t alter them.
+        </p>
+
+        {presetError && (
+          <div className="mb-3 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+            <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+            <span>{presetError}</span>
+          </div>
+        )}
+
+        {presets.length > 0 ? (
+          <ul className="mb-3 divide-y divide-gray-100 rounded-lg border border-gray-200">
+            {presets.map((p) => {
+              const busy = presetBusyId === p.id;
+              const applying = confirmApplyId === p.id;
+              const deleting = confirmDeletePresetId === p.id;
+              return (
+                <li
+                  key={p.id}
+                  className="flex items-center gap-2 px-3 py-2 text-sm"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium text-gray-900">
+                      {p.name}
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      {p.item_count} item{p.item_count === 1 ? "" : "s"}
+                    </p>
+                  </div>
+
+                  {applying ? (
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span className="text-xs text-amber-700">
+                        Replace this agenda?
+                      </span>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => doApplyPreset(p.id)}
+                        className="rounded-md bg-amber-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
+                      >
+                        {busy ? (
+                          <Loader2 className="size-3.5 animate-spin" />
+                        ) : (
+                          "Replace"
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmApplyId(null)}
+                        className="rounded-md border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : deleting ? (
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span className="text-xs text-red-700">Delete preset?</span>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => doDeletePreset(p.id)}
+                        className="rounded-md bg-red-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+                      >
+                        {busy ? (
+                          <Loader2 className="size-3.5 animate-spin" />
+                        ) : (
+                          "Delete"
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDeletePresetId(null)}
+                        className="rounded-md border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => {
+                          setConfirmDeletePresetId(null);
+                          setConfirmApplyId(p.id);
+                        }}
+                        className="rounded-md border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                      >
+                        Apply
+                      </button>
+                      {canDelete && (
+                        <button
+                          type="button"
+                          aria-label={`Delete preset ${p.name}`}
+                          disabled={busy}
+                          onClick={() => {
+                            setConfirmApplyId(null);
+                            setConfirmDeletePresetId(p.id);
+                          }}
+                          className="rounded-md p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+                        >
+                          <Trash2 className="size-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <p className="mb-3 text-xs text-gray-400">
+            No saved presets yet for this chapter.
+          </p>
+        )}
+
+        {canDelete &&
+          (showSavePreset ? (
+            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 p-3">
+              <input
+                value={presetName}
+                onChange={(e) => setPresetName(e.target.value)}
+                placeholder="Preset name (e.g. Full 2-day)"
+                maxLength={80}
+                className="min-w-0 flex-1 rounded-md border border-gray-300 px-2 py-1.5 text-sm"
+              />
+              <button
+                type="button"
+                disabled={savingPreset || !presetName.trim()}
+                onClick={doSavePreset}
+                className="inline-flex items-center gap-1 rounded-md bg-[#138808] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#0f6e06] disabled:opacity-50"
+              >
+                {savingPreset ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <Check className="size-3.5" />
+                )}
+                Save preset
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowSavePreset(false)}
+                className="rounded-md border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-white"
+              >
+                <X className="size-3.5" />
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowSavePreset(true)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-gray-300 px-3 py-2 text-sm font-medium text-gray-600 hover:border-[#138808] hover:text-[#138808]"
+            >
+              <BookmarkPlus className="size-4" />
+              Save current agenda as a preset
+            </button>
+          ))}
+      </div>
     </div>
   );
 }

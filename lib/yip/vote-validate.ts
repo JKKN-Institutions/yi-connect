@@ -42,7 +42,9 @@ export function validateVoteValue(
     session.vote_type === "party_leader" ||
     session.vote_type === "prime_minister" ||
     session.vote_type === "deputy_prime_minister" ||
-    session.vote_type === "leader_of_opposition"
+    session.vote_type === "leader_of_opposition" ||
+    session.vote_type === "cabinet_minister" ||
+    session.vote_type === "shadow_minister"
   ) {
     const cfg = (session.config ?? {}) as { candidateIds?: unknown };
     const ids = Array.isArray(cfg.candidateIds)

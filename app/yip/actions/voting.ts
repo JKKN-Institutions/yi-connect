@@ -8,6 +8,7 @@ import { validateVoteValue } from "@/lib/yip/vote-validate";
 import {
   computeElectionOutcome,
   computeDeputyRunoffOutcome,
+  computeMultiSeatOutcome,
   fillDeputiesFromParent,
   type VoteTally,
   type ElectionTie,
@@ -53,8 +54,12 @@ type RunoffConfig = {
     | "party_leader"
     | "prime_minister"
     | "deputy_prime_minister"
-    | "leader_of_opposition";
+    | "leader_of_opposition"
+    | "cabinet_minister"
+    | "shadow_minister";
   openDeputySeats?: number;
+  // Multi-seat (cabinet/shadow): seats to fill in this round.
+  seats?: number;
 };
 
 type ActionResult<T = null> =
@@ -134,11 +139,16 @@ async function buildTallies(
     scoped = legacy ?? [];
   }
 
-  if (session.vote_type === "party_leader") {
+  if (
+    session.vote_type === "party_leader" ||
+    session.vote_type === "cabinet_minister" ||
+    session.vote_type === "shadow_minister"
+  ) {
     const cfg = (session.config ?? {}) as { partyId?: string };
     if (cfg.partyId) {
-      // Fetch the members of the party whose leader is being elected, then keep
-      // only votes cast by those members. One query, no per-vote round-trips.
+      // Party-scoped elections (party leader + the party's cabinet/shadow
+      // ministers): keep only votes cast by that party's own members. One
+      // query, no per-vote round-trips.
       const { data: members } = await supabase
         .from("participants")
         .select("id")
@@ -202,6 +212,26 @@ async function resolveOutcome(
 ): Promise<ElectionOutcome> {
   const cfg = (session.config ?? {}) as RunoffConfig;
 
+  // Cabinet / Shadow elections are multi-seat (top-k of the party's members).
+  // cfg.seats = seats to fill THIS round: the full quota on round 1, or the
+  // remaining open seats on a cutline runoff (openRunoff sets it). winnerIds
+  // therefore lists only the seats decided in this round.
+  if (
+    session.vote_type === "cabinet_minister" ||
+    session.vote_type === "shadow_minister"
+  ) {
+    const seats = Math.max(1, cfg.seats ?? 1);
+    const ms = computeMultiSeatOutcome(tallies, seats, session.vote_type);
+    return {
+      speakerId: null,
+      deputyIds: [],
+      partyLeaderId: null,
+      winnerId: null,
+      winnerIds: ms.winnerIds,
+      tie: ms.tie,
+    };
+  }
+
   if (!cfg.isRunoff || session.vote_type !== "speaker_election") {
     return computeElectionOutcome(session.vote_type, tallies);
   }
@@ -248,6 +278,7 @@ async function resolveOutcome(
       deputyIds: dep.deputyIds,
       partyLeaderId: null,
       winnerId: null,
+      winnerIds: [],
       tie: dep.tie,
     };
   }
@@ -271,13 +302,18 @@ export async function openVote(
     | "party_leader"
     | "prime_minister"
     | "deputy_prime_minister"
-    | "leader_of_opposition",
+    | "leader_of_opposition"
+    | "cabinet_minister"
+    | "shadow_minister",
   config?: {
     candidateIds?: string[];
     billId?: string;
-    // party_leader only: the party whose leader is being elected. Voting is
-    // restricted to that party's own members.
+    // party_leader AND cabinet/shadow elections: the party whose seat(s) are
+    // being filled. Voting is restricted to that party's own members.
     partyId?: string;
+    // Cabinet/shadow multi-seat elections: how many ministers this party elects
+    // (its coalition quota; the runoff round carries the remaining open seats).
+    seats?: number;
     // Bench seats (prime_minister / deputy_prime_minister / leader_of_opposition)
     // only: the bench whose seat is being filled. Voting is restricted to that
     // bench's members (party_side). PM/Deputy → 'ruling'; LoP → 'opposition'.
@@ -293,7 +329,9 @@ export async function openVote(
       | "party_leader"
       | "prime_minister"
       | "deputy_prime_minister"
-      | "leader_of_opposition";
+      | "leader_of_opposition"
+      | "cabinet_minister"
+      | "shadow_minister";
     // Deputy runoffs only: how many deputy seats are still open (1 or 2).
     openDeputySeats?: number;
   }
@@ -594,6 +632,31 @@ export async function revealResults(
       .eq("id", outcome.winnerId);
   }
 
+  // Cabinet / Shadow ministers (multi-seat, per-party): seat the top-k winners.
+  // First round vacates this party's prior ministers of the same role (scoped
+  // to the party so the OTHER coalition parties' ministers are untouched), then
+  // seats the winners; a cutline RUNOFF only ADDS its winners (no reset, like
+  // the deputy-seat runoff).
+  if (
+    (session.vote_type === "cabinet_minister" ||
+      session.vote_type === "shadow_minister") &&
+    outcome.winnerIds.length > 0
+  ) {
+    const mscfg = (session.config ?? {}) as { partyId?: string; isRunoff?: boolean };
+    if (!mscfg.isRunoff && mscfg.partyId) {
+      await supabase
+        .from("participants")
+        .update({ parliament_role: "mp" })
+        .eq("event_id", session.event_id)
+        .eq("party_id", mscfg.partyId)
+        .eq("parliament_role", session.vote_type);
+    }
+    await supabase
+      .from("participants")
+      .update({ parliament_role: session.vote_type })
+      .in("id", outcome.winnerIds);
+  }
+
   const results: VoteResults = {
     session: { ...session, status: "revealed" },
     tallies,
@@ -652,10 +715,14 @@ export async function castVote(
   const valid = validateVoteValue(session, voteValue);
   if (!valid.ok) return { success: false, error: valid.error };
 
-  // Party-leader elections are party-scoped: only members of the party whose
-  // leader is being elected may vote. (Director ruling: each party elects its
-  // own leader, party members only.)
-  if (session.vote_type === "party_leader") {
+  // Party-scoped elections (party leader + the party's cabinet/shadow ministers):
+  // only members of that party may vote. (Each party elects its own leader, and
+  // — in a coalition — its own slice of the cabinet/shadow bench.)
+  if (
+    session.vote_type === "party_leader" ||
+    session.vote_type === "cabinet_minister" ||
+    session.vote_type === "shadow_minister"
+  ) {
     const cfg = (session.config ?? {}) as { partyId?: string };
     if (cfg.partyId) {
       const { data: voter } = await supabase
@@ -666,7 +733,7 @@ export async function castVote(
       if (!voter || voter.party_id !== cfg.partyId) {
         return {
           success: false,
-          error: "Only members of this party can vote for its leader",
+          error: "Only members of this party can vote in this election",
         };
       }
     }
@@ -1054,19 +1121,31 @@ export async function openRunoff(
         ? Math.max(1, (cfg.openDeputySeats ?? 1) - outcome.deputyIds.length)
         : Math.max(1, 2 - outcome.deputyIds.length);
 
+  // Cabinet/shadow multi-seat tie: the runoff fills the seats left open at the
+  // cutline (this round's seats minus the clearly-ahead already awarded).
+  const isMultiSeat =
+    outcome.tie.seat === "cabinet_minister" ||
+    outcome.tie.seat === "shadow_minister";
+  const seats = isMultiSeat
+    ? Math.max(1, (cfg.seats ?? 1) - outcome.winnerIds.length)
+    : undefined;
+
   return openVote(session.event_id, session.agenda_item_id, session.vote_type as
     | "speaker_election"
     | "bill_vote"
     | "party_leader"
     | "prime_minister"
     | "deputy_prime_minister"
-    | "leader_of_opposition", {
+    | "leader_of_opposition"
+    | "cabinet_minister"
+    | "shadow_minister", {
     candidateIds: outcome.tie.tiedCandidateIds,
     partyId: cfg.partyId,
     // Carry the bench through so a bench-seat (PM/Deputy/LoP) runoff stays
     // bench-scoped at cast + tally — without this the runoff round would be
     // open to the whole house.
     side: cfg.side,
+    seats,
     isRunoff: true,
     runoffOf: revealedSessionId,
     runoffSeat: outcome.tie.seat,

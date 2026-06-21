@@ -22,7 +22,9 @@ export interface ElectionTie {
     | "party_leader"
     | "prime_minister"
     | "deputy_prime_minister"
-    | "leader_of_opposition";
+    | "leader_of_opposition"
+    | "cabinet_minister"
+    | "shadow_minister";
   tiedCandidateIds: string[];
   tiedCount: number;
 }
@@ -34,6 +36,9 @@ export interface ElectionOutcome {
   // Generic single-winner for the bench seats (prime_minister /
   // deputy_prime_minister / leader_of_opposition) — the winning participant id.
   winnerId: string | null;
+  // Multi-seat winners (cabinet_minister / shadow_minister) — the top-k elected
+  // participant ids for a party's ministerial quota.
+  winnerIds: string[];
   tie: ElectionTie | null;
 }
 
@@ -46,6 +51,13 @@ export const SINGLE_WINNER_BENCH_SEATS = [
   "leader_of_opposition",
 ] as const;
 
+// Multi-seat per-party elections: a party elects its quota of ministers from
+// its own members (top-k win). Electorate scoped to the party (party_id).
+export const MULTI_SEAT_PARTY_ELECTIONS = [
+  "cabinet_minister",
+  "shadow_minister",
+] as const;
+
 export function computeElectionOutcome(
   voteType: string,
   tallies: VoteTally[]
@@ -55,6 +67,7 @@ export function computeElectionOutcome(
     deputyIds: [],
     partyLeaderId: null,
     winnerId: null,
+    winnerIds: [],
     tie: null,
   };
   if (tallies.length === 0) return out;
@@ -225,4 +238,106 @@ export function fillDeputiesFromParent(
     ...outcome,
     deputyIds: [...outcome.deputyIds, ...rest.slice(0, need).map((t) => t.vote_value)],
   };
+}
+
+// ─── Multi-seat (Cabinet / Shadow) ──────────────────────────────
+//
+// A party elects its quota of ministers from its own members: the top `seats`
+// candidates win. A tie across the LAST open seat (rank `seats` vs `seats+1`)
+// awards only the clearly-ahead and reports the rest for a runoff among the
+// tied — identical cutline logic to computeDeputyRunoffOutcome, but the winners
+// land in `winnerIds` and the tie carries the seat label (cabinet/shadow).
+
+export function computeMultiSeatOutcome(
+  tallies: VoteTally[],
+  seats: number,
+  seat: "cabinet_minister" | "shadow_minister"
+): { winnerIds: string[]; tie: ElectionTie | null } {
+  if (tallies.length === 0 || seats <= 0) return { winnerIds: [], tie: null };
+  if (tallies.length <= seats) {
+    // Everyone fits — uncontested.
+    return { winnerIds: tallies.map((t) => t.vote_value), tie: null };
+  }
+  const boundary = tallies[seats - 1].count;
+  if (tallies[seats].count === boundary) {
+    // Tied across the last open seat: award the clearly-ahead, runoff the rest.
+    return {
+      winnerIds: tallies.filter((t) => t.count > boundary).map((t) => t.vote_value),
+      tie: {
+        seat,
+        tiedCount: boundary,
+        tiedCandidateIds: tallies
+          .filter((t) => t.count === boundary)
+          .map((t) => t.vote_value),
+      },
+    };
+  }
+  return {
+    winnerIds: tallies.slice(0, seats).map((t) => t.vote_value),
+    tie: null,
+  };
+}
+
+// ─── Coalition cabinet-seat quota ───────────────────────────────
+//
+// Distribute `totalSeats` ministerial seats across the coalition's parties so
+// portfolios are SHARED (no single party sweeps): each party is guaranteed at
+// least one seat, and the remainder is allotted proportional to party size via
+// the largest-remainder (Hamilton) method. If there are more parties than
+// seats, the largest parties take the available seats (one each). Deterministic:
+// ties in size/remainder break toward the party listed first (caller orders by
+// party_number).
+
+export interface PartySeatInput {
+  partyId: string;
+  members: number;
+}
+
+export function distributeSeats(
+  parties: PartySeatInput[],
+  totalSeats: number
+): { partyId: string; seats: number }[] {
+  const n = parties.length;
+  if (n === 0 || totalSeats <= 0) {
+    return parties.map((p) => ({ partyId: p.partyId, seats: 0 }));
+  }
+  // Fewer seats than parties: the largest parties get one seat each.
+  if (totalSeats < n) {
+    const ranked = parties
+      .map((p, i) => ({ ...p, i }))
+      .sort((a, b) => b.members - a.members || a.i - b.i)
+      .slice(0, totalSeats);
+    const winners = new Set(ranked.map((p) => p.partyId));
+    return parties.map((p) => ({ partyId: p.partyId, seats: winners.has(p.partyId) ? 1 : 0 }));
+  }
+  // Each party gets 1; share the rest by largest remainder on member counts.
+  const base = parties.map((p) => ({ partyId: p.partyId, seats: 1 }));
+  let remaining = totalSeats - n;
+  const totalMembers = parties.reduce((s, p) => s + p.members, 0);
+  if (remaining > 0 && totalMembers > 0) {
+    const quota = parties.map((p, i) => {
+      const exact = (remaining * p.members) / totalMembers;
+      const floor = Math.floor(exact);
+      return { i, floor, rem: exact - floor };
+    });
+    quota.forEach((q) => (base[q.i].seats += q.floor));
+    let allotted = quota.reduce((s, q) => s + q.floor, 0);
+    const byRem = [...quota].sort((a, b) => b.rem - a.rem || a.i - b.i);
+    let k = 0;
+    while (allotted < remaining && k < byRem.length) {
+      base[byRem[k].i].seats += 1;
+      allotted++;
+      k++;
+    }
+    remaining = 0;
+  } else if (remaining > 0) {
+    // No member data — hand leftover seats to the first parties, one at a time.
+    let k = 0;
+    while (remaining > 0) {
+      base[k % n].seats += 1;
+      remaining--;
+      k++;
+    }
+  }
+  return base;
 }

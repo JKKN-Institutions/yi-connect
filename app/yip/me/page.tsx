@@ -271,9 +271,9 @@ export default async function ParticipantPage() {
   const roleLabel = role ? ROLE_LABELS[role] ?? role : null;
   const roleGradient = role ? ROLE_GRADIENTS[role] ?? "from-gray-500 to-gray-400" : "";
   const isPresiding = role === "speaker" || role === "deputy_speaker";
-  const isMinistryDesk =
-    !!role &&
-    ["cabinet_minister", "prime_minister", "deputy_prime_minister", "shadow_minister"].includes(role);
+  const isMinistryDesk = role === "cabinet_minister";
+  const isPMDesk = role === "prime_minister" || role === "deputy_prime_minister";
+  const isShadowDesk = role === "shadow_minister";
   const isOpposition = role === "leader_of_opposition";
   const partyGradient = side ? PARTY_GRADIENTS[side] : "";
 

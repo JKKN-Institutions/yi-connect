@@ -23,7 +23,7 @@ export default async function ZoneDashboardPage({
   params: Promise<{ zone: string }>;
 }) {
   if (!(await canViewYipNationalRollup())) {
-    return <Forbidden403 reason="Zone dashboards are for national and regional admins." />;
+    return <Forbidden403 reason="Region dashboards are for national and regional admins." />;
   }
   const { zone: rawZone } = await params;
   const zoneCode = rawZone.toUpperCase() as YiZone;
@@ -104,7 +104,7 @@ export default async function ZoneDashboardPage({
       {/* States covered */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm text-[#1a1a3e]/70">States in this zone</CardTitle>
+          <CardTitle className="text-sm text-[#1a1a3e]/70">States in this region</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap gap-2">
@@ -138,7 +138,7 @@ export default async function ZoneDashboardPage({
               {eventList.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={6} className="text-center text-sm text-[#1a1a3e]/50 py-12">
-                    No events in this zone yet.
+                    No events in this region yet.
                   </TableCell>
                 </TableRow>
               )}

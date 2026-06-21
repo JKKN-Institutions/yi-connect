@@ -965,6 +965,7 @@ export function ParticipantsClient({
                 <TableHead>Party</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead>Constituency</TableHead>
+                <TableHead>State</TableHead>
                 <TableHead>Committee</TableHead>
                 <TableHead>Speech</TableHead>
                 <TableHead>Access Code</TableHead>
@@ -1041,12 +1042,14 @@ export function ParticipantsClient({
                   </TableCell>
                   <TableCell>
                     {p.constituency_name ? (
-                      <span className="text-xs">
-                        {p.constituency_name}
-                        {p.constituency_state
-                          ? `, ${p.constituency_state}`
-                          : ""}
-                      </span>
+                      <span className="text-xs">{p.constituency_name}</span>
+                    ) : (
+                      <span className="text-gray-400">—</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {p.constituency_state ? (
+                      <span className="text-xs">{p.constituency_state}</span>
                     ) : (
                       <span className="text-gray-400">—</span>
                     )}

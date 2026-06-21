@@ -329,7 +329,7 @@ export async function getNationalOverview(): Promise<{
   if (notStartedZones.length)
     needsAttention.push({
       id: "zones",
-      title: `${notStartedZones.length} ${notStartedZones.length === 1 ? "zone hasn't" : "zones haven't"} started enrolling`,
+      title: `${notStartedZones.length} ${notStartedZones.length === 1 ? "region hasn't" : "regions haven't"} started enrolling`,
       detail: notStartedZones.map((z) => z.label).join(" · "),
       severity: "med",
     });
@@ -337,7 +337,7 @@ export async function getNationalOverview(): Promise<{
     needsAttention.push({
       id: "dates",
       title: `${awaitingDates} events still need a confirmed date`,
-      detail: "across all six zones",
+      detail: "across all six regions",
       severity: "med",
     });
 

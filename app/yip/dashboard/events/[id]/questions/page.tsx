@@ -22,7 +22,7 @@ export default async function QuestionsPage({
 
   if (!event) {
     return (
-      <Forbidden403 reason="You don't have access to this event's questions. The event may have been deleted, or your role may not include this event's chapter or zone." />
+      <Forbidden403 reason="You don't have access to this event's questions. The event may have been deleted, or your role may not include this event's chapter or region." />
     );
   }
 

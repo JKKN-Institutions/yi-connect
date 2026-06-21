@@ -68,7 +68,7 @@ export function IndiaMap({ zones }: { zones: Zone[] }) {
           <svg
             viewBox={VIEW_BOX}
             role="img"
-            aria-label="Map of India shaded by Yi zone activity"
+            aria-label="Map of India shaded by Yi region activity"
             className="h-auto w-full"
           >
             {/* Neutral states (islands etc.) */}

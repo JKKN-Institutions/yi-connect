@@ -20,7 +20,7 @@ export default async function TeamPage({
   const access = await getYipEventAccess(id);
   if (!access.canView) {
     return (
-      <Forbidden403 reason="You don't have access to this event's team. Your role may not include this event's chapter or zone." />
+      <Forbidden403 reason="You don't have access to this event's team. Your role may not include this event's chapter or region." />
     );
   }
 

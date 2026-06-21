@@ -21,7 +21,7 @@ export default async function PartiesPage({
   const event = await getEvent(eventId);
   if (!event) {
     return (
-      <Forbidden403 reason="You don't have access to this event's parties. The event may have been deleted, or your role may not include this event's chapter or zone." />
+      <Forbidden403 reason="You don't have access to this event's parties. The event may have been deleted, or your role may not include this event's chapter or region." />
     );
   }
 

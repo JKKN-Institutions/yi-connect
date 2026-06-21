@@ -24,7 +24,7 @@ export default async function ResultsPage({
 
   if (!event) {
     return (
-      <Forbidden403 reason="You don't have access to this event's results. The event may have been deleted, or your role may not include this event's chapter or zone." />
+      <Forbidden403 reason="You don't have access to this event's results. The event may have been deleted, or your role may not include this event's chapter or region." />
     );
   }
 

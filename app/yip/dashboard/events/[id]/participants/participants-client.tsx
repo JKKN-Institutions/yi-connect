@@ -12,6 +12,7 @@ import {
   markSpeechFinished,
 } from "@/app/yip/actions/participants";
 import { ROLE_LABELS, PARTY_COLORS } from "@/lib/yip/constants";
+import { committeeLabel } from "@/lib/yip/committee-label";
 import { Button } from "@/components/yip/ui/button";
 import { Input } from "@/components/yip/ui/input";
 import { Label } from "@/components/yip/ui/label";
@@ -66,6 +67,7 @@ type Participant = {
   constituency_name: string | null;
   constituency_state: string | null;
   committee_name: string | null;
+  committee_number: number | null;
   access_code: string;
   checked_in: boolean | null;
   checked_in_at: string | null;
@@ -76,7 +78,7 @@ type Participant = {
   speech_finished?: boolean | null;
 };
 
-type SortKey = "full_name" | "class";
+type SortKey = "full_name";
 
 type CheckInFilter = "all" | "in" | "out";
 
@@ -198,7 +200,6 @@ export function ParticipantsClient({
   const [formData, setFormData] = useState({
     full_name: "",
     school_name: "",
-    class: 10,
     phone: "",
     email: "",
     city: "",
@@ -221,7 +222,6 @@ export function ParticipantsClient({
   const [quickForm, setQuickForm] = useState({
     full_name: "",
     school_name: "",
-    class: 10,
     phone: "",
     email: "",
     city: "",
@@ -247,12 +247,7 @@ export function ParticipantsClient({
 
     // Sort
     return [...filtered].sort((a, b) => {
-      let cmp = 0;
-      if (sortKey === "class") {
-        cmp = a.class - b.class;
-      } else {
-        cmp = (a[sortKey] || "").localeCompare(b[sortKey] || "");
-      }
+      const cmp = (a[sortKey] || "").localeCompare(b[sortKey] || "");
       return sortAsc ? cmp : -cmp;
     });
   }, [participants, checkInFilter, search, sortKey, sortAsc]);
@@ -286,7 +281,6 @@ export function ParticipantsClient({
       setFormData({
         full_name: "",
         school_name: "",
-        class: 10,
         phone: "",
         email: "",
         city: "",
@@ -323,7 +317,6 @@ export function ParticipantsClient({
       setQuickForm({
         full_name: "",
         school_name: "",
-        class: 10,
         phone: "",
         email: "",
         city: "",
@@ -468,7 +461,6 @@ export function ParticipantsClient({
   function handleExportCsv() {
     const headers = [
       "Name",
-      "Class",
       "Phone",
       "Email",
       "City",
@@ -484,14 +476,13 @@ export function ParticipantsClient({
     ];
     const rows = participants.map((p) => [
       p.full_name,
-      p.class.toString(),
       p.phone || "",
       p.email || "",
       p.city || "",
       p.home_state || "",
       p.party_side || "",
       p.parliament_role || "",
-      p.committee_name || "",
+      p.committee_number != null ? `Committee ${p.committee_number}` : "",
       p.access_code,
       p.checked_in ? "Yes" : "No",
       p.checked_in_day1 ? "Yes" : "No",
@@ -953,15 +944,6 @@ export function ParticipantsClient({
                     <ArrowUpDown className="size-3" />
                   </button>
                 </TableHead>
-                <TableHead>
-                  <button
-                    onClick={() => handleSort("class")}
-                    className="flex items-center gap-1 hover:text-gray-900"
-                  >
-                    Class
-                    <ArrowUpDown className="size-3" />
-                  </button>
-                </TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead>Constituency</TableHead>
                 <TableHead>State</TableHead>
@@ -1014,7 +996,6 @@ export function ParticipantsClient({
                     </div>
                   </TableCell>
                   <TableCell className="font-medium">{p.full_name}</TableCell>
-                  <TableCell>{p.class}</TableCell>
                   <TableCell>
                     {p.parliament_role ? (
                       <Badge variant="secondary" className="bg-gray-100 text-gray-700">
@@ -1039,8 +1020,10 @@ export function ParticipantsClient({
                     )}
                   </TableCell>
                   <TableCell>
-                    {p.committee_name ? (
-                      <span className="text-xs">{p.committee_name}</span>
+                    {p.committee_number != null ? (
+                      <span className="text-xs">
+                        {committeeLabel(p.committee_number)}
+                      </span>
                     ) : (
                       <span className="text-gray-400">--</span>
                     )}

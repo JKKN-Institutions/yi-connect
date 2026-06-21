@@ -16,6 +16,7 @@ import {
   PARTY_COLORS,
   PARLIAMENT_ROLES,
 } from "@/lib/yip/constants";
+import { committeeLabel } from "@/lib/yip/committee-label";
 import { Button } from "@/components/yip/ui/button";
 import { Badge } from "@/components/yip/ui/badge";
 import { Card, CardContent } from "@/components/yip/ui/card";
@@ -153,11 +154,12 @@ export function AllocationClient({
   }, [participants]);
 
   const committeeData = useMemo(() => {
-    return committeeNames.map((name) => {
+    return committeeNames.map((name, index) => {
       const members = participants.filter((p) => p.committee_name === name);
       const rulingMembers = members.filter((m) => m.party_side === "ruling");
       const oppositionMembers = members.filter((m) => m.party_side === "opposition");
-      return { name, members, rulingMembers, oppositionMembers };
+      // 1-based position in the ordered committee list === committee_number.
+      return { name, number: index + 1, members, rulingMembers, oppositionMembers };
     });
   }, [participants, committeeNames]);
 
@@ -417,7 +419,6 @@ export function AllocationClient({
               <TableRow>
                 <TableHead>Role</TableHead>
                 <TableHead>Name</TableHead>
-                <TableHead>Class</TableHead>
                 <TableHead>Party</TableHead>
                 <TableHead>Ministry</TableHead>
                 {!allocationLocked && <TableHead className="w-10" />}
@@ -485,7 +486,7 @@ export function AllocationClient({
               <div className="border-b bg-gray-50 px-4 py-2.5">
                 <div className="flex items-center justify-between">
                   <h4 className="text-sm font-semibold text-gray-800 leading-tight">
-                    {committee.name}
+                    Committee {committee.number}
                   </h4>
                   <Badge variant="secondary" className="ml-2 shrink-0">
                     {committee.members.length}
@@ -610,7 +611,6 @@ export function AllocationClient({
                 <TableHead>Constituency</TableHead>
                 <TableHead>State</TableHead>
                 <TableHead>Committee</TableHead>
-                <TableHead className="w-16">Com. #</TableHead>
                 {!allocationLocked && <TableHead className="w-10" />}
               </TableRow>
             </TableHeader>
@@ -640,10 +640,7 @@ export function AllocationClient({
                     {p.constituency_state || "--"}
                   </TableCell>
                   <TableCell className="max-w-[150px] truncate text-xs">
-                    {p.committee_name || "--"}
-                  </TableCell>
-                  <TableCell className="font-mono text-xs tabular-nums">
-                    {p.committee_number ?? <span className="text-gray-300">—</span>}
+                    {committeeLabel(p.committee_number)}
                   </TableCell>
                   {!allocationLocked && (
                     <TableCell>
@@ -812,7 +809,6 @@ function LeaderRow({
         </Badge>
       </TableCell>
       <TableCell className="font-medium">{participant.full_name}</TableCell>
-      <TableCell>{participant.class}</TableCell>
       <TableCell>
         {participant.party_side ? (
           <Badge
@@ -1050,9 +1046,9 @@ function EditAssignmentDialog({
               className="flex h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
             >
               <option value="">-- None --</option>
-              {committeeNames.map((name) => (
+              {committeeNames.map((name, index) => (
                 <option key={name} value={name}>
-                  {name}
+                  Committee {index + 1}
                 </option>
               ))}
             </select>

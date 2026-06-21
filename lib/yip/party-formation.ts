@@ -267,3 +267,52 @@ export function planPartyFill(
 
   return out;
 }
+
+// ─── Flat fill (benchless) ──────────────────────────────────────────
+
+export interface FlatFillParticipant {
+  id: string;
+  schoolName: string | null;
+}
+
+export interface FlatFillAssignment {
+  participantId: string;
+  /** 0-based index of the party (order by party_number). */
+  partyIndex: number;
+}
+
+/**
+ * Distribute every participant EVENLY across `partyCount` benchless parties
+ * (no ruling/opposition). Same school-aware, size-balanced spread as
+ * `distributeBench` — party sizes differ by at most 1 and each school is
+ * spread across the parties — but with no bench split: there is one flat pool.
+ *
+ * Used by the benchless allocation flow: the chapter creates N parties (Party
+ * A..N) on the Parties tab, then allocation flat-fills all students into them.
+ * Ruling vs Opposition is decided later, on event day, off-app.
+ *
+ * partyIndex 0 maps to the party with the lowest party_number.
+ */
+export function planFlatPartyFill(
+  participants: FlatFillParticipant[],
+  partyCount: number
+): FlatFillAssignment[] {
+  if (partyCount < 1) return [];
+  // distributeBench ignores partySide (it only spreads by school + size), so a
+  // single dummy side is fine — there is no bench here.
+  const dist = distributeBench(
+    participants.map((p) => ({
+      id: p.id,
+      partySide: "ruling" as BenchSide,
+      schoolName: p.schoolName,
+    })),
+    partyCount
+  );
+  const out: FlatFillAssignment[] = [];
+  for (let i = 0; i < partyCount; i++) {
+    for (const id of dist.perParty[i]) {
+      out.push({ participantId: id, partyIndex: i });
+    }
+  }
+  return out;
+}

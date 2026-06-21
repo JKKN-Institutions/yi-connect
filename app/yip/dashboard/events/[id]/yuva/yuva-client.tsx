@@ -25,7 +25,7 @@ type YuvaVolunteer = { id: string; full_name: string; phone: string | null };
 type PartyLite = {
   id: string;
   name: string;
-  side: string;
+  side: string | null;
   party_number: number;
 };
 
@@ -133,7 +133,8 @@ export function YuvaAssignmentsClient({
     () =>
       [...parties].sort(
         (a, b) =>
-          a.side.localeCompare(b.side) || a.party_number - b.party_number
+          (a.side ?? "").localeCompare(b.side ?? "") ||
+          a.party_number - b.party_number
       ),
     [parties]
   );
@@ -212,8 +213,8 @@ export function YuvaAssignmentsClient({
                       <optgroup label="Parties">
                         {sortedParties.map((p) => (
                           <option key={p.id} value={`party:${p.id}`}>
-                            #{p.party_number} {p.name} (
-                            {SIDE_LABEL[p.side] ?? p.side})
+                            #{p.party_number} {p.name}
+                            {p.side ? ` (${SIDE_LABEL[p.side] ?? p.side})` : ""}
                           </option>
                         ))}
                       </optgroup>
@@ -266,9 +267,11 @@ export function YuvaAssignmentsClient({
                   <div className="flex items-center gap-2">
                     <Badge variant="outline">#{p.party_number}</Badge>
                     <span className="font-medium text-[#1a1a3e]">{p.name}</span>
-                    <span className="text-xs text-[#1a1a3e]/50">
-                      {SIDE_LABEL[p.side] ?? p.side}
-                    </span>
+                    {p.side && (
+                      <span className="text-xs text-[#1a1a3e]/50">
+                        {SIDE_LABEL[p.side] ?? p.side}
+                      </span>
+                    )}
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {handlers.length === 0 ? (

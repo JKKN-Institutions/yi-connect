@@ -467,7 +467,7 @@ export async function importParticipants(
   // ── Create-or-find parties for this event ──
   // First letter alphabetically -> ruling, rest -> opposition (organizer can flip later).
   const sortedLetters = [...uniqueLetters].sort();
-  const partyMap = new Map<string, { id: string; side: PartySide; number: number }>();
+  const partyMap = new Map<string, { id: string; side: PartySide | null; number: number }>();
 
   if (sortedLetters.length > 0) {
     // Fetch existing parties for the event in one round-trip
@@ -480,7 +480,7 @@ export async function importParticipants(
       return { success: false, error: `Failed to read parties: ${partyFetchErr.message}` };
     }
 
-    const byName = new Map<string, { id: string; side: PartySide; number: number }>();
+    const byName = new Map<string, { id: string; side: PartySide | null; number: number }>();
     for (const p of existingParties ?? []) {
       byName.set(p.name, { id: p.id, side: p.side, number: p.party_number });
     }

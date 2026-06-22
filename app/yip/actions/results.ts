@@ -11,8 +11,10 @@ import { listScoringBuckets } from "./scoring-buckets";
 import { getScoringFlagsConfig } from "./scoring-flags";
 import {
   deriveCommitteeLevels,
+  averageDimensions,
   CMTE_LEVEL_CRITERION,
   BILL_LEVEL_CRITERION,
+  type CommitteeDimensions,
 } from "@/lib/yip/committee-score";
 
 type ActionResult<T = null> =
@@ -331,16 +333,35 @@ export async function computeResults(
   // score exists (e.g. legacy events / Mizoram), nothing changes — the juror's
   // own committee_level stays in their session total. So this is legacy-safe
   // with no method gate: the presence of a committee_scores row is the switch.
+  // Each committee can now be scored by MULTIPLE judges (one row per judge).
+  // Group the rows by committee and average the judges' marks before deriving
+  // the two committee-level points — so the committee's level reflects the
+  // panel's average, not whichever row happened to be last.
   const { data: committeeScoreRows } = await supabase
     .from("committee_scores")
     .select(
       "committee_name, bill_draft_quality, policy_relevance, innovation, feasibility, team_collaboration, presentation_defence"
     )
     .eq("event_id", eventId);
+  const dimsByCommittee = new Map<string, CommitteeDimensions[]>();
+  for (const c of committeeScoreRows ?? []) {
+    const arr = dimsByCommittee.get(c.committee_name) ?? [];
+    arr.push({
+      bill_draft_quality: c.bill_draft_quality,
+      policy_relevance: c.policy_relevance,
+      innovation: c.innovation,
+      feasibility: c.feasibility,
+      team_collaboration: c.team_collaboration,
+      presentation_defence: c.presentation_defence,
+    });
+    dimsByCommittee.set(c.committee_name, arr);
+  }
   const committeeLevelByName = new Map<string, { cmte: number; bill: number }>(
-    (committeeScoreRows ?? []).map((c) => {
-      const { cmteLevel, billLevel } = deriveCommitteeLevels(c);
-      return [c.committee_name, { cmte: cmteLevel, bill: billLevel }];
+    [...dimsByCommittee.entries()].map(([name, dimsList]) => {
+      const { cmteLevel, billLevel } = deriveCommitteeLevels(
+        averageDimensions(dimsList)
+      );
+      return [name, { cmte: cmteLevel, bill: billLevel }];
     })
   );
 

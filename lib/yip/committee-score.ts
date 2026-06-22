@@ -51,3 +51,41 @@ export function deriveCommitteeLevels(d: CommitteeDimensions): {
   const billLevel = d.presentation_defence / 2; // 10 → 5
   return { cmteLevel, billLevel, total60: drafting + d.presentation_defence };
 }
+
+export const ZERO_COMMITTEE_DIMENSIONS: CommitteeDimensions = {
+  bill_draft_quality: 0,
+  policy_relevance: 0,
+  innovation: 0,
+  feasibility: 0,
+  team_collaboration: 0,
+  presentation_defence: 0,
+};
+
+/**
+ * Average a set of per-judge committee marks into one set of dimensions.
+ * Multiple judges each score a committee /60; the results engine and the
+ * scoring screen average them (the agreed committee mark). Returns fractional
+ * values — deriveCommitteeLevels already produces fractional levels, so the
+ * displayed total and the scored total stay identical. Empty input → zeros.
+ */
+export function averageDimensions(rows: CommitteeDimensions[]): CommitteeDimensions {
+  if (rows.length === 0) return { ...ZERO_COMMITTEE_DIMENSIONS };
+  const sum = { ...ZERO_COMMITTEE_DIMENSIONS };
+  for (const r of rows) {
+    sum.bill_draft_quality += r.bill_draft_quality;
+    sum.policy_relevance += r.policy_relevance;
+    sum.innovation += r.innovation;
+    sum.feasibility += r.feasibility;
+    sum.team_collaboration += r.team_collaboration;
+    sum.presentation_defence += r.presentation_defence;
+  }
+  const n = rows.length;
+  return {
+    bill_draft_quality: sum.bill_draft_quality / n,
+    policy_relevance: sum.policy_relevance / n,
+    innovation: sum.innovation / n,
+    feasibility: sum.feasibility / n,
+    team_collaboration: sum.team_collaboration / n,
+    presentation_defence: sum.presentation_defence / n,
+  };
+}

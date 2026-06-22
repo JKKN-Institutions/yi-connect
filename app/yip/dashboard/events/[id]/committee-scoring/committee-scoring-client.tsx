@@ -5,7 +5,11 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   upsertCommitteeScore,
+  deleteCommitteeScore,
+  setCommitteeChairLead,
+  setJurorCommittees,
   type CommitteeRow,
+  type CommitteeAssignmentRoster,
 } from "@/app/yip/actions/committee-scores";
 import {
   COMMITTEE_DIMENSIONS,
@@ -15,75 +19,189 @@ import {
 import { committeeLabel } from "@/lib/yip/committee-label";
 import { Button } from "@/components/yip/ui/button";
 import { Card, CardContent } from "@/components/yip/ui/card";
-import { Loader2, Users, CheckCircle2 } from "lucide-react";
+import { Input } from "@/components/yip/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogDescription,
+  DialogFooter,
+  DialogClose,
+} from "@/components/yip/ui/dialog";
+import {
+  Loader2,
+  Users,
+  CheckCircle2,
+  Download,
+  UsersRound,
+  Trash2,
+  Lock,
+} from "lucide-react";
 
-type Draft = CommitteeDimensions & { judge_notes: string };
+type ScoreDraft = CommitteeDimensions & { judge_notes: string };
 
-function toDraft(c: CommitteeRow): Draft {
-  return {
-    bill_draft_quality: c.bill_draft_quality,
-    policy_relevance: c.policy_relevance,
-    innovation: c.innovation,
-    feasibility: c.feasibility,
-    team_collaboration: c.team_collaboration,
-    presentation_defence: c.presentation_defence,
-    judge_notes: c.judge_notes ?? "",
-  };
+const ZERO_DRAFT: ScoreDraft = {
+  bill_draft_quality: 0,
+  policy_relevance: 0,
+  innovation: 0,
+  feasibility: 0,
+  team_collaboration: 0,
+  presentation_defence: 0,
+  judge_notes: "",
+};
+
+function csvCell(v: unknown): string {
+  return `"${String(v ?? "").replace(/"/g, '""')}"`;
 }
 
 export function CommitteeScoringClient({
   eventId,
   eventName,
   committees,
-  canManage,
+  roster,
+  locked,
 }: {
   eventId: string;
   eventName: string;
   committees: CommitteeRow[];
-  canManage: boolean;
+  roster: CommitteeAssignmentRoster;
+  locked: boolean;
 }) {
   const router = useRouter();
-  const [drafts, setDrafts] = useState<Record<string, Draft>>(
-    Object.fromEntries(committees.map((c) => [c.committee_name, toDraft(c)]))
-  );
-  const [savingFor, setSavingFor] = useState<string | null>(null);
+  const editable = !locked;
 
-  function setField(name: string, key: keyof Draft, value: string) {
-    setDrafts((prev) => ({
+  // Per-(committee, judge) score being edited. Key = `${committee}__${juryId}`.
+  const [editing, setEditing] = useState<string | null>(null);
+  const [draft, setDraft] = useState<ScoreDraft>(ZERO_DRAFT);
+  const [savingScore, setSavingScore] = useState(false);
+
+  // Chair/Lead drafts per committee.
+  const [chairDrafts, setChairDrafts] = useState<Record<string, string>>(
+    Object.fromEntries(committees.map((c) => [c.committee_name, c.chair_lead ?? ""]))
+  );
+  const [savingChair, setSavingChair] = useState<string | null>(null);
+
+  function openEditor(committee: CommitteeRow, juryId: string) {
+    const existing = committee.scores.find((s) => s.jury_assignment_id === juryId);
+    setDraft(
+      existing
+        ? {
+            bill_draft_quality: existing.bill_draft_quality,
+            policy_relevance: existing.policy_relevance,
+            innovation: existing.innovation,
+            feasibility: existing.feasibility,
+            team_collaboration: existing.team_collaboration,
+            presentation_defence: existing.presentation_defence,
+            judge_notes: existing.judge_notes ?? "",
+          }
+        : { ...ZERO_DRAFT }
+    );
+    setEditing(`${committee.committee_name}__${juryId}`);
+  }
+
+  function setDraftField(key: keyof ScoreDraft, value: string) {
+    setDraft((prev) => ({
       ...prev,
-      [name]: {
-        ...prev[name],
-        [key]:
-          key === "judge_notes"
-            ? value
-            : Math.max(0, Math.min(10, Math.round(Number(value) || 0))),
-      },
+      [key]:
+        key === "judge_notes"
+          ? value
+          : Math.max(0, Math.min(10, Math.round(Number(value) || 0))),
     }));
   }
 
-  async function save(name: string) {
-    setSavingFor(name);
-    const d = drafts[name];
-    const result = await upsertCommitteeScore({
+  async function saveScore(committeeName: string, juryAssignmentId: string) {
+    setSavingScore(true);
+    const res = await upsertCommitteeScore({
       eventId,
-      committeeName: name,
+      committeeName,
+      juryAssignmentId,
       dimensions: {
-        bill_draft_quality: d.bill_draft_quality,
-        policy_relevance: d.policy_relevance,
-        innovation: d.innovation,
-        feasibility: d.feasibility,
-        team_collaboration: d.team_collaboration,
-        presentation_defence: d.presentation_defence,
+        bill_draft_quality: draft.bill_draft_quality,
+        policy_relevance: draft.policy_relevance,
+        innovation: draft.innovation,
+        feasibility: draft.feasibility,
+        team_collaboration: draft.team_collaboration,
+        presentation_defence: draft.presentation_defence,
       },
-      judgeNotes: d.judge_notes || null,
+      judgeNotes: draft.judge_notes || null,
+      scoredBy: "organiser",
     });
-    if (result.success) {
-      toast.success(`${name} committee score saved — applied to all members`);
+    setSavingScore(false);
+    if (res.success) {
+      toast.success("Score saved");
+      setEditing(null);
       router.refresh();
     } else {
-      toast.error(result.error);
+      toast.error(res.error);
     }
-    setSavingFor(null);
+  }
+
+  async function removeScore(committeeName: string, juryAssignmentId: string) {
+    const res = await deleteCommitteeScore({ eventId, committeeName, juryAssignmentId });
+    if (res.success) {
+      toast.success("Score removed");
+      setEditing(null);
+      router.refresh();
+    } else {
+      toast.error(res.error);
+    }
+  }
+
+  async function saveChair(committeeName: string) {
+    setSavingChair(committeeName);
+    const res = await setCommitteeChairLead({
+      eventId,
+      committeeName,
+      chairLead: chairDrafts[committeeName] || null,
+    });
+    setSavingChair(null);
+    if (res.success) {
+      toast.success("Chair / Lead saved");
+      router.refresh();
+    } else {
+      toast.error(res.error);
+    }
+  }
+
+  function downloadSheet() {
+    const headers = [
+      "Committee #",
+      "Committee",
+      "Committee Chair / Lead",
+      "Members Count",
+      "Bill Draft Quality (10)",
+      "Policy Relevance (10)",
+      "Innovation (10)",
+      "Feasibility (10)",
+      "Team Collaboration (10)",
+      "Presentation & Defence (10)",
+      "Total (60)",
+      "Judge Notes",
+    ];
+    const rows = committees.map((c) => [
+      c.committee_number ?? "",
+      c.committee_name,
+      c.chair_lead ?? "",
+      c.member_count,
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+    ]);
+    const csv = [headers, ...rows].map((r) => r.map(csvCell).join(",")).join("\r\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${eventName.replace(/[^a-zA-Z0-9]+/g, "-")}-committee-evaluation.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   if (committees.length === 0) {
@@ -103,98 +221,239 @@ export function CommitteeScoringClient({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-lg font-semibold">Committee Scoring</h2>
-        <p className="mt-1 max-w-2xl text-sm text-gray-500">
-          {eventName} · Score each committee ONCE on the 6 dimensions (/60, Yi
-          2026 Workbook). The result is applied equally to every member of the
-          committee — the 5 drafting dimensions drive the Committee Discussions
-          committee-level (5 pts), and Presentation &amp; Defence drives the Bill
-          Presentation committee-level (5 pts).
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold">Committee Evaluation</h2>
+          <p className="mt-1 max-w-2xl text-sm text-gray-500">
+            {eventName} · Judges score each committee on 6 dimensions (/60). When a
+            committee has several judges, their marks are <strong>averaged</strong>.
+            The 5 drafting dimensions drive the Committee Discussions level (5 pts)
+            and Presentation &amp; Defence drives the Bill Presentation level (5 pts),
+            applied equally to every member.
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {editable && <AssignJudgesDialog eventId={eventId} roster={roster} />}
+          <Button variant="outline" size="sm" onClick={downloadSheet}>
+            <Download className="size-4 mr-2" />
+            Download sheet
+          </Button>
+        </div>
       </div>
 
+      {locked && (
+        <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
+          <Lock className="size-4" /> Scores are locked for this event — entry is
+          read-only.
+        </div>
+      )}
+
       {committees.map((c) => {
-        const d = drafts[c.committee_name];
-        const { cmteLevel, billLevel, total60 } = deriveCommitteeLevels(d);
+        const { cmteLevel, billLevel, total60 } = deriveCommitteeLevels(c.avg);
+        const totalAssigned = c.assigned.length;
         return (
           <Card key={c.committee_name}>
             <CardContent className="space-y-4 p-5">
+              {/* Header */}
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <h3 className="font-semibold text-[#1a1a3e]">
-                    {c.committee_name ?? committeeLabel(c.committee_number)}
+                    {c.committee_number != null ? `${c.committee_number} · ` : ""}
+                    {c.committee_name || committeeLabel(c.committee_number)}
                   </h3>
-                  {c.scored && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
-                      <CheckCircle2 className="size-3" /> Scored
-                    </span>
-                  )}
-                </div>
-                <span className="inline-flex items-center gap-1 text-xs text-gray-500">
-                  <Users className="size-3" /> {c.member_count} member
-                  {c.member_count === 1 ? "" : "s"}
-                </span>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                {COMMITTEE_DIMENSIONS.map((dim) => (
-                  <label key={dim.key} className="block text-sm">
-                    <span className="mb-1 block text-xs font-medium text-gray-600">
-                      {dim.label} <span className="text-gray-400">/10</span>
-                    </span>
-                    <input
-                      type="number"
-                      min={0}
-                      max={10}
-                      disabled={!canManage}
-                      value={d[dim.key]}
-                      onChange={(e) => setField(c.committee_name, dim.key, e.target.value)}
-                      className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-[#FF9933] focus:outline-none disabled:bg-gray-50 disabled:text-gray-500"
-                    />
-                  </label>
-                ))}
-              </div>
-
-              <label className="block text-sm">
-                <span className="mb-1 block text-xs font-medium text-gray-600">
-                  Judge notes (optional)
-                </span>
-                <textarea
-                  rows={2}
-                  disabled={!canManage}
-                  value={d.judge_notes}
-                  onChange={(e) => setField(c.committee_name, "judge_notes", e.target.value)}
-                  className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-[#FF9933] focus:outline-none disabled:bg-gray-50"
-                />
-              </label>
-
-              <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-3">
-                <div className="flex flex-wrap gap-4 text-sm">
-                  <span className="font-medium text-[#1a1a3e]">
-                    Total: {total60}<span className="text-gray-400">/60</span>
-                  </span>
-                  <span className="text-gray-600">
-                    Committee level: <strong>{cmteLevel.toFixed(1)}</strong>
-                    <span className="text-gray-400">/5</span>
-                  </span>
-                  <span className="text-gray-600">
-                    Bill level: <strong>{billLevel.toFixed(1)}</strong>
-                    <span className="text-gray-400">/5</span>
+                  <span className="inline-flex items-center gap-1 text-xs text-gray-500">
+                    <Users className="size-3" /> {c.member_count}
                   </span>
                 </div>
-                {canManage && (
+                <div className="flex items-center gap-3 text-sm">
+                  <span className="text-gray-600">
+                    {c.scored_count} of {totalAssigned || c.scored_count} judge
+                    {(totalAssigned || c.scored_count) === 1 ? "" : "s"} scored
+                  </span>
+                  <span className="font-semibold text-[#1a1a3e]">
+                    Avg {total60.toFixed(1)}
+                    <span className="text-gray-400">/60</span>
+                  </span>
+                </div>
+              </div>
+
+              {/* Chair / Lead */}
+              <div className="flex flex-wrap items-end gap-2">
+                <label className="flex-1 min-w-[200px] text-sm">
+                  <span className="mb-1 block text-xs font-medium text-gray-600">
+                    Committee Chair / Lead
+                  </span>
+                  <Input
+                    value={chairDrafts[c.committee_name] ?? ""}
+                    disabled={!editable}
+                    placeholder="Name of the committee chair / lead"
+                    onChange={(e) =>
+                      setChairDrafts((p) => ({ ...p, [c.committee_name]: e.target.value }))
+                    }
+                  />
+                </label>
+                {editable && (
                   <Button
-                    className="bg-[#FF9933] text-white hover:bg-[#E68A2E]"
-                    onClick={() => save(c.committee_name)}
-                    disabled={savingFor === c.committee_name}
+                    variant="outline"
+                    size="sm"
+                    onClick={() => saveChair(c.committee_name)}
+                    disabled={savingChair === c.committee_name}
                   >
-                    {savingFor === c.committee_name ? (
+                    {savingChair === c.committee_name ? (
                       <Loader2 className="size-4 animate-spin" />
-                    ) : null}
-                    {savingFor === c.committee_name ? "Saving..." : "Save committee score"}
+                    ) : (
+                      "Save"
+                    )}
                   </Button>
                 )}
+              </div>
+
+              {/* Judges */}
+              <div className="space-y-2 border-t pt-3">
+                <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                  Judges
+                </p>
+                {c.assigned.length === 0 && c.scores.length === 0 ? (
+                  <p className="text-sm text-gray-400">
+                    No judges assigned yet — use “Assign judges to committees”.
+                  </p>
+                ) : (
+                  // Show assigned judges, plus any who scored but aren't assigned.
+                  Array.from(
+                    new Map(
+                      [
+                        ...c.assigned,
+                        ...c.scores.map((s) => ({
+                          jury_assignment_id: s.jury_assignment_id,
+                          jury_name: s.jury_name,
+                        })),
+                      ].map((j) => [j.jury_assignment_id, j])
+                    ).values()
+                  ).map((j) => {
+                    const score = c.scores.find(
+                      (s) => s.jury_assignment_id === j.jury_assignment_id
+                    );
+                    const editKey = `${c.committee_name}__${j.jury_assignment_id}`;
+                    const isEditing = editing === editKey;
+                    return (
+                      <div
+                        key={j.jury_assignment_id}
+                        className="rounded-md border border-gray-200"
+                      >
+                        <div className="flex items-center justify-between gap-2 px-3 py-2">
+                          <span className="flex items-center gap-2 text-sm">
+                            {score ? (
+                              <CheckCircle2 className="size-4 text-green-600" />
+                            ) : (
+                              <span className="inline-block size-4 rounded-full border border-gray-300" />
+                            )}
+                            <span className="font-medium text-[#1a1a3e]">
+                              {j.jury_name}
+                            </span>
+                            {score && (
+                              <span className="text-gray-500">
+                                · {score.total60}/60
+                              </span>
+                            )}
+                          </span>
+                          {editable && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                isEditing ? setEditing(null) : openEditor(c, j.jury_assignment_id)
+                              }
+                            >
+                              {isEditing ? "Close" : score ? "Edit" : "Enter marks"}
+                            </Button>
+                          )}
+                        </div>
+
+                        {isEditing && (
+                          <div className="space-y-3 border-t bg-gray-50 px-3 py-3">
+                            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                              {COMMITTEE_DIMENSIONS.map((dim) => (
+                                <label key={dim.key} className="block text-sm">
+                                  <span className="mb-1 block text-xs font-medium text-gray-600">
+                                    {dim.label} <span className="text-gray-400">/10</span>
+                                  </span>
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    max={10}
+                                    value={draft[dim.key]}
+                                    onChange={(e) => setDraftField(dim.key, e.target.value)}
+                                    className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-[#FF9933] focus:outline-none"
+                                  />
+                                </label>
+                              ))}
+                            </div>
+                            <label className="block text-sm">
+                              <span className="mb-1 block text-xs font-medium text-gray-600">
+                                Judge notes (optional)
+                              </span>
+                              <textarea
+                                rows={2}
+                                value={draft.judge_notes}
+                                onChange={(e) => setDraftField("judge_notes", e.target.value)}
+                                className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-[#FF9933] focus:outline-none"
+                              />
+                            </label>
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-sm font-medium text-[#1a1a3e]">
+                                Total{" "}
+                                {deriveCommitteeLevels(draft).total60}
+                                <span className="text-gray-400">/60</span>
+                              </span>
+                              <div className="flex gap-2">
+                                {score && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() =>
+                                      removeScore(c.committee_name, j.jury_assignment_id)
+                                    }
+                                  >
+                                    <Trash2 className="size-4" />
+                                  </Button>
+                                )}
+                                <Button
+                                  className="bg-[#FF9933] text-white hover:bg-[#E68A2E]"
+                                  size="sm"
+                                  onClick={() => saveScore(c.committee_name, j.jury_assignment_id)}
+                                  disabled={savingScore}
+                                >
+                                  {savingScore ? (
+                                    <Loader2 className="size-4 animate-spin" />
+                                  ) : (
+                                    "Save"
+                                  )}
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Averaged committee levels */}
+              <div className="flex flex-wrap gap-4 border-t pt-3 text-sm">
+                <span className="text-gray-600">
+                  Committee level: <strong>{cmteLevel.toFixed(1)}</strong>
+                  <span className="text-gray-400">/5</span>
+                </span>
+                <span className="text-gray-600">
+                  Bill level: <strong>{billLevel.toFixed(1)}</strong>
+                  <span className="text-gray-400">/5</span>
+                </span>
+                <span className="text-gray-400">
+                  (averaged across {c.scored_count} judge
+                  {c.scored_count === 1 ? "" : "s"} · applied to all {c.member_count}{" "}
+                  members)
+                </span>
               </div>
             </CardContent>
           </Card>
@@ -202,4 +461,162 @@ export function CommitteeScoringClient({
       })}
     </div>
   );
+}
+
+// ─── Assign judges to committees (all or select) ──────────────────────────
+function AssignJudgesDialog({
+  eventId,
+  roster,
+}: {
+  eventId: string;
+  roster: CommitteeAssignmentRoster;
+}) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  // juryId → Set of committee names
+  const [sel, setSel] = useState<Record<string, Set<string>>>(() =>
+    buildSelection(roster)
+  );
+
+  function reset() {
+    setSel(buildSelection(roster));
+  }
+
+  function toggle(juryId: string, committee: string) {
+    setSel((prev) => {
+      const next = new Set(prev[juryId] ?? []);
+      if (next.has(committee)) next.delete(committee);
+      else next.add(committee);
+      return { ...prev, [juryId]: next };
+    });
+  }
+
+  function toggleAll(juryId: string) {
+    setSel((prev) => {
+      const all = roster.committees.map((c) => c.committee_name);
+      const current = prev[juryId] ?? new Set<string>();
+      const hasAll = all.every((c) => current.has(c));
+      return { ...prev, [juryId]: hasAll ? new Set() : new Set(all) };
+    });
+  }
+
+  async function save() {
+    setSaving(true);
+    // Persist each juror's committee set.
+    for (const juror of roster.jurors) {
+      const res = await setJurorCommittees({
+        eventId,
+        juryAssignmentId: juror.id,
+        committeeNames: [...(sel[juror.id] ?? [])],
+      });
+      if (!res.success) {
+        toast.error(`${juror.jury_name}: ${res.error}`);
+        setSaving(false);
+        return;
+      }
+    }
+    setSaving(false);
+    setOpen(false);
+    toast.success("Judge assignments saved");
+    router.refresh();
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        setOpen(o);
+        if (!o) reset();
+      }}
+    >
+      <DialogTrigger render={<Button variant="outline" size="sm" />}>
+        <UsersRound className="size-4 mr-2" />
+        Assign judges to committees
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Assign judges to committees</DialogTitle>
+          <DialogDescription>
+            For each judge, tick the committees they score — or “All”. A judge
+            only sees and scores their committees.
+          </DialogDescription>
+        </DialogHeader>
+
+        {roster.jurors.length === 0 ? (
+          <p className="text-sm text-gray-500">
+            No judges added yet. Add judges on the Jury tab first.
+          </p>
+        ) : roster.committees.length === 0 ? (
+          <p className="text-sm text-gray-500">
+            No committees yet — run allocation first.
+          </p>
+        ) : (
+          <div className="space-y-4">
+            {roster.jurors.map((juror) => {
+              const current = sel[juror.id] ?? new Set<string>();
+              const allOn = roster.committees.every((c) => current.has(c.committee_name));
+              return (
+                <div key={juror.id} className="rounded-lg border p-3">
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="font-medium text-[#1a1a3e]">{juror.jury_name}</span>
+                    <label className="flex items-center gap-1.5 text-xs text-gray-600">
+                      <input
+                        type="checkbox"
+                        checked={allOn}
+                        onChange={() => toggleAll(juror.id)}
+                        className="size-4 accent-[#FF9933]"
+                      />
+                      All committees
+                    </label>
+                  </div>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+                    {roster.committees.map((c) => (
+                      <label
+                        key={c.committee_name}
+                        className="flex items-center gap-1.5 text-sm text-gray-700"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={current.has(c.committee_name)}
+                          onChange={() => toggle(juror.id, c.committee_name)}
+                          className="size-4 accent-[#FF9933]"
+                        />
+                        {c.committee_number != null ? `${c.committee_number} · ` : ""}
+                        {c.committee_name}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        <DialogFooter className="mt-4">
+          <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
+          {roster.jurors.length > 0 && roster.committees.length > 0 && (
+            <Button
+              className="bg-[#FF9933] text-white hover:bg-[#E68A2E]"
+              onClick={save}
+              disabled={saving}
+            >
+              {saving ? <Loader2 className="size-4 mr-2 animate-spin" /> : null}
+              Save assignments
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function buildSelection(roster: CommitteeAssignmentRoster): Record<string, Set<string>> {
+  const out: Record<string, Set<string>> = {};
+  for (const j of roster.jurors) out[j.id] = new Set();
+  for (const a of roster.assignments) {
+    if (!out[a.jury_assignment_id]) out[a.jury_assignment_id] = new Set();
+    out[a.jury_assignment_id].add(a.committee_name);
+  }
+  return out;
 }

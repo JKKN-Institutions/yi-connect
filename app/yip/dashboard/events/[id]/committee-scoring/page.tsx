@@ -3,7 +3,10 @@ import { createClient } from "@/lib/yip/supabase/server";
 import { getEvent } from "@/app/yip/actions/events";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
-import { getCommitteeScoring } from "@/app/yip/actions/committee-scores";
+import {
+  getCommitteeScoring,
+  getCommitteeAssignmentRoster,
+} from "@/app/yip/actions/committee-scores";
 import { CommitteeScoringClient } from "./committee-scoring-client";
 
 export default async function CommitteeScoringPage({
@@ -25,23 +28,32 @@ export default async function CommitteeScoringPage({
     );
   }
 
-  // Scores / committee metrics are national/super-admin-only (2026-06-13).
+  // The committee scoring WORKSPACE is for whoever runs the event (organiser+):
+  // judges score, and organisers may enter on a judge's behalf. The results
+  // leaderboard stays national/super-admin-only (see getResults).
   const access = await getYipEventAccess(id);
-  if (!access.canViewScores) {
+  if (!access.canManage) {
     return (
-      <Forbidden403 reason="Scores and results are visible to national/super-admins only." />
+      <Forbidden403 reason="Committee scoring is for the chapter team and judges. Your role doesn't include managing this event." />
     );
   }
 
-  const res = await getCommitteeScoring(id);
-  const committees = res.success ? res.data : [];
+  const [scoringRes, rosterRes] = await Promise.all([
+    getCommitteeScoring(id),
+    getCommitteeAssignmentRoster(id),
+  ]);
 
   return (
     <CommitteeScoringClient
       eventId={id}
       eventName={event.name}
-      committees={committees}
-      canManage={access.canManage}
+      committees={scoringRes.success ? scoringRes.data : []}
+      roster={
+        rosterRes.success
+          ? rosterRes.data
+          : { committees: [], jurors: [], assignments: [] }
+      }
+      locked={Boolean(event.scores_locked)}
     />
   );
 }

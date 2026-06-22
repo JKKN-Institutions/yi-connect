@@ -916,6 +916,7 @@ export type Database = {
           status: Database["public"]["Enums"]["agenda_status"] | null
           title: string
           updated_at: string | null
+          use_for_voting: boolean
         }
         Insert: {
           actual_end?: string | null
@@ -937,6 +938,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["agenda_status"] | null
           title: string
           updated_at?: string | null
+          use_for_voting?: boolean
         }
         Update: {
           actual_end?: string | null
@@ -958,6 +960,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["agenda_status"] | null
           title?: string
           updated_at?: string | null
+          use_for_voting?: boolean
         }
         Relationships: [
           {
@@ -975,6 +978,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: string
+          is_global: boolean
           items: Json
           name: string
           updated_at: string
@@ -985,6 +989,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          is_global?: boolean
           items?: Json
           name: string
           updated_at?: string
@@ -995,6 +1000,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          is_global?: boolean
           items?: Json
           name?: string
           updated_at?: string
@@ -1073,6 +1079,7 @@ export type Database = {
           session_key: string | null
           title: string
           updated_at: string | null
+          use_for_voting: boolean
         }
         Insert: {
           agenda_type?: string | null
@@ -1087,6 +1094,7 @@ export type Database = {
           session_key?: string | null
           title: string
           updated_at?: string | null
+          use_for_voting?: boolean
         }
         Update: {
           agenda_type?: string | null
@@ -1101,6 +1109,7 @@ export type Database = {
           session_key?: string | null
           title?: string
           updated_at?: string | null
+          use_for_voting?: boolean
         }
         Relationships: []
       }
@@ -1378,6 +1387,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      chapter_settings: {
+        Row: {
+          control_agenda_filter: string
+          updated_at: string
+          yi_chapter_id: string
+        }
+        Insert: {
+          control_agenda_filter?: string
+          updated_at?: string
+          yi_chapter_id: string
+        }
+        Update: {
+          control_agenda_filter?: string
+          updated_at?: string
+          yi_chapter_id?: string
+        }
+        Relationships: []
       }
       chat_channels: {
         Row: {

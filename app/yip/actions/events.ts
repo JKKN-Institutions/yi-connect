@@ -465,12 +465,13 @@ export async function createEvent(
     mode: "party" | "committee" | "mixed";
     is_scoreable: boolean;
     session_key: string | null;
+    use_for_voting: boolean;
   }> = [];
 
   const { data: templateRows } = await supabase
     .from("agenda_template")
     .select(
-      "day, sequence_order, title, description, agenda_type, duration_minutes, mode, is_scoreable, session_key"
+      "day, sequence_order, title, description, agenda_type, duration_minutes, mode, is_scoreable, session_key, use_for_voting"
     )
     .order("day")
     .order("sequence_order");
@@ -489,10 +490,18 @@ export async function createEvent(
         mode: item.mode,
         is_scoreable: item.is_scoreable,
         session_key: item.session_key,
+        use_for_voting: item.use_for_voting,
       });
     }
   } else {
     // Fallback: hard-coded DEFAULT_AGENDA_TEMPLATE constant.
+    // Canonical voting moments stay vote-enabled even on the fallback path.
+    const VOTING_TYPES = [
+      "speaker_election",
+      "party_formation",
+      "cabinet_intro",
+      "bill_presentation",
+    ];
     for (const item of DEFAULT_AGENDA_TEMPLATE.day1) {
       agendaItems.push({
         event_id: event.id,
@@ -505,6 +514,7 @@ export async function createEvent(
         mode: item.mode,
         is_scoreable: false,
         session_key: null,
+        use_for_voting: VOTING_TYPES.includes(item.type),
       });
     }
     for (const item of DEFAULT_AGENDA_TEMPLATE.day2) {
@@ -519,6 +529,7 @@ export async function createEvent(
         mode: item.mode,
         is_scoreable: false,
         session_key: null,
+        use_for_voting: VOTING_TYPES.includes(item.type),
       });
     }
   }

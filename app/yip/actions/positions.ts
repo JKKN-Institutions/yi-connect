@@ -82,6 +82,26 @@ export async function getPositionBonusConfig(): Promise<PositionBonusConfig> {
   return { bonuses };
 }
 
+// Service-client read of the SAME merit config. position_bonus_config has RLS
+// enabled with no authenticated policy, so getPositionBonusConfig() (anon/auth
+// client) silently falls back to defaults — wrong values, and a save would
+// overwrite the real config. Admin EDIT screens must use this so the editor
+// shows and writes the true live values.
+export async function getPositionBonusConfigAdmin(): Promise<PositionBonusConfig> {
+  const supabase = await createServiceClient();
+  const { data } = await supabase
+    .from("position_bonus_config")
+    .select("bonuses")
+    .eq("id", true)
+    .maybeSingle();
+  const raw = (data?.bonuses ?? {}) as Record<string, unknown>;
+  const bonuses: Record<string, number> = {};
+  for (const [k, v] of Object.entries(raw)) {
+    bonuses[k] = typeof v === "number" ? v : Number(v) || 0;
+  }
+  return { bonuses };
+}
+
 export async function getParticipantsByRole(
   eventId: string
 ): Promise<PositionRoleGroup[]> {

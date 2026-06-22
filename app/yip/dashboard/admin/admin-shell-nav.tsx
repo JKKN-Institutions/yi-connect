@@ -20,6 +20,7 @@ import {
   SlidersHorizontal,
   Scale,
   Globe,
+  Table2,
 } from "lucide-react";
 
 const NAV = [
@@ -29,6 +30,7 @@ const NAV = [
   { label: "Rubrics", href: "/yip/dashboard/admin/rubrics", icon: Ruler },
   { label: "Session Scoring", href: "/yip/dashboard/admin/session-parameters", icon: SlidersHorizontal },
   { label: "Scoring Rules", href: "/yip/dashboard/admin/scoring-rules", icon: Scale },
+  { label: "Scoring Framework", href: "/yip/dashboard/admin/scoring-framework", icon: Table2 },
   { label: "Topics", href: "/yip/dashboard/admin/topics", icon: BookOpen },
   { label: "Agenda Template", href: "/yip/dashboard/admin/agenda", icon: CalendarClock },
   { label: "Checklist Template", href: "/yip/dashboard/admin/checklist", icon: ListChecks },

@@ -10,6 +10,9 @@ import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 export type ParticipantScoreRow = {
   id: string;
   jury_name: string;
+  jury_assignment_id: string;
+  occurrence: number;
+  agenda_item_id: string | null;
   session_title: string | null;
   session_day: number | null;
   total_score: number;
@@ -83,6 +86,7 @@ export async function getParticipantScoringDetail(
     .select(
       `
       id, total_score, criteria_scores, comments, status, submitted_at, agenda_item_id,
+      occurrence, jury_assignment_id,
       flag_no_confidence_brought, flag_walkout, flag_ruckus, flag_suspension,
       jury:jury_assignments(jury_name),
       session:agenda(title, day, sequence_order)
@@ -99,6 +103,8 @@ export async function getParticipantScoringDetail(
     status: string | null;
     submitted_at: string | null;
     agenda_item_id: string | null;
+    occurrence: number | null;
+    jury_assignment_id: string;
     flag_no_confidence_brought: boolean | null;
     flag_walkout: boolean | null;
     flag_ruckus: boolean | null;
@@ -111,6 +117,9 @@ export async function getParticipantScoringDetail(
   const scores: ParticipantScoreRow[] = rows.map((r) => ({
     id: r.id,
     jury_name: r.jury?.jury_name ?? "Unknown juror",
+    jury_assignment_id: r.jury_assignment_id,
+    occurrence: r.occurrence ?? 1,
+    agenda_item_id: r.agenda_item_id,
     session_title: r.session?.title ?? null,
     session_day: r.session?.day ?? null,
     total_score: r.total_score,

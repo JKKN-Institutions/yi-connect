@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   setAgendaItemInRun,
+  setAgendaItemScoringVoting,
   reorderAgenda,
   updateAgendaItem,
   addAgendaItem,
@@ -74,6 +75,7 @@ export function AgendaSetupClient({
   scoreCounts,
   presets,
   canDelete,
+  isSuperAdmin,
   isLive,
 }: {
   eventId: string;
@@ -83,6 +85,8 @@ export function AgendaSetupClient({
   // canDelete = chair / national. Doubles as the gate for saving/deleting a
   // chapter preset (both are chair-only).
   canDelete: boolean;
+  // isSuperAdmin = national admin: may publish/delete National (global) presets.
+  isSuperAdmin: boolean;
   isLive: boolean;
 }) {
   const router = useRouter();
@@ -133,6 +137,7 @@ export function AgendaSetupClient({
   // Chapter presets (Phase 3)
   const [showSavePreset, setShowSavePreset] = useState(false);
   const [presetName, setPresetName] = useState("");
+  const [saveAsNational, setSaveAsNational] = useState(false);
   const [savingPreset, setSavingPreset] = useState(false);
   const [presetBusyId, setPresetBusyId] = useState<string | null>(null);
   const [confirmApplyId, setConfirmApplyId] = useState<string | null>(null);
@@ -191,6 +196,34 @@ export function AgendaSetupClient({
       item.id,
       item.status === "skipped" // currently excluded → include it
     );
+    setBusyId(null);
+    if (!res.success) {
+      setError(res.error);
+      return;
+    }
+    router.refresh();
+  }
+
+  async function onToggleScored(item: AgendaItem) {
+    setError(null);
+    setBusyId(item.id);
+    const res = await setAgendaItemScoringVoting(eventId, item.id, {
+      is_scoreable: !item.is_scoreable,
+    });
+    setBusyId(null);
+    if (!res.success) {
+      setError(res.error);
+      return;
+    }
+    router.refresh();
+  }
+
+  async function onToggleVoting(item: AgendaItem) {
+    setError(null);
+    setBusyId(item.id);
+    const res = await setAgendaItemScoringVoting(eventId, item.id, {
+      use_for_voting: !item.use_for_voting,
+    });
     setBusyId(null);
     if (!res.success) {
       setError(res.error);
@@ -290,11 +323,15 @@ export function AgendaSetupClient({
     router.refresh();
   }
 
-  // ── Chapter presets ──────────────────────────────────────────────
+  // ── Agenda presets (chapter + national) ──────────────────────────
   async function doSavePreset() {
     setPresetError(null);
     setSavingPreset(true);
-    const res = await savePresetFromEvent(eventId, presetName);
+    const res = await savePresetFromEvent(
+      eventId,
+      presetName,
+      isSuperAdmin && saveAsNational
+    );
     setSavingPreset(false);
     if (!res.success) {
       setPresetError(res.error);
@@ -302,6 +339,7 @@ export function AgendaSetupClient({
     }
     setShowSavePreset(false);
     setPresetName("");
+    setSaveAsNational(false);
     router.refresh();
   }
 
@@ -543,12 +581,47 @@ export function AgendaSetupClient({
                                 Set a date
                               </span>
                             ))}
-                          {item.is_scoreable && (
-                            <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-50 px-1.5 py-0.5 font-semibold text-emerald-700">
-                              <Star className="size-3 fill-emerald-600 text-emerald-600" />
-                              Scored
-                            </span>
-                          )}
+                          <button
+                            type="button"
+                            disabled={busyId === item.id}
+                            onClick={() => onToggleScored(item)}
+                            title={
+                              item.is_scoreable
+                                ? "Jury scores this session — click to turn off"
+                                : "Turn on jury scoring (needs criteria configured)"
+                            }
+                            className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 font-semibold transition-colors disabled:opacity-50 ${
+                              item.is_scoreable
+                                ? "bg-emerald-50 text-emerald-700"
+                                : "bg-gray-100 text-gray-400 hover:bg-gray-200"
+                            }`}
+                          >
+                            <Star
+                              className={`size-3 ${
+                                item.is_scoreable
+                                  ? "fill-emerald-600 text-emerald-600"
+                                  : ""
+                              }`}
+                            />
+                            {item.is_scoreable ? "Scored" : "Score?"}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={busyId === item.id}
+                            onClick={() => onToggleVoting(item)}
+                            title={
+                              item.use_for_voting
+                                ? "Floor voting opens here — click to turn off"
+                                : "Turn on floor voting for this session"
+                            }
+                            className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 font-semibold transition-colors disabled:opacity-50 ${
+                              item.use_for_voting
+                                ? "bg-[#FF9933]/15 text-[#b35e00]"
+                                : "bg-gray-100 text-gray-400 hover:bg-gray-200"
+                            }`}
+                          >
+                            🗳 {item.use_for_voting ? "Voting" : "Vote?"}
+                          </button>
                           {item.agenda_type && (
                             <span>{prettyType(item.agenda_type)}</span>
                           )}
@@ -801,13 +874,14 @@ export function AgendaSetupClient({
         <div className="mb-1 flex items-center gap-2">
           <FolderDown className="size-4 text-[#FF9933]" />
           <h2 className="text-sm font-bold text-gray-900">
-            Chapter agenda presets
+            Agenda presets
           </h2>
         </div>
         <p className="mb-3 text-xs text-gray-500">
-          Save this agenda so your chapter can reuse it on future events. Saved
-          presets stay as they are — later changes to the central template
-          don&apos;t alter them.
+          Apply a <span className="font-semibold text-[#b35e00]">National</span>{" "}
+          preset to use a ready-made agenda order, or save this agenda as your own
+          chapter preset to reuse on future events. Saved presets are frozen —
+          later changes to the central template don&apos;t alter them.
         </p>
 
         {presetError && (
@@ -829,11 +903,17 @@ export function AgendaSetupClient({
                   className="flex items-center gap-2 px-3 py-2 text-sm"
                 >
                   <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium text-gray-900">
-                      {p.name}
+                    <p className="flex items-center gap-1.5 truncate font-medium text-gray-900">
+                      {p.is_global && (
+                        <span className="inline-flex shrink-0 items-center rounded-full bg-[#FF9933]/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#b35e00]">
+                          National
+                        </span>
+                      )}
+                      <span className="truncate">{p.name}</span>
                     </p>
                     <p className="text-xs text-gray-400">
                       {p.item_count} item{p.item_count === 1 ? "" : "s"}
+                      {p.is_global ? " · published by the national team" : ""}
                     </p>
                   </div>
 
@@ -898,7 +978,7 @@ export function AgendaSetupClient({
                       >
                         Apply
                       </button>
-                      {canDelete && (
+                      {(p.is_global ? isSuperAdmin : canDelete) && (
                         <button
                           type="button"
                           aria-label={`Delete preset ${p.name}`}
@@ -930,22 +1010,41 @@ export function AgendaSetupClient({
               <input
                 value={presetName}
                 onChange={(e) => setPresetName(e.target.value)}
-                placeholder="Preset name (e.g. Full 2-day)"
+                placeholder={
+                  saveAsNational
+                    ? "National preset name (e.g. Maria's Flow 2026)"
+                    : "Preset name (e.g. Full 2-day)"
+                }
                 maxLength={80}
                 className="min-w-0 flex-1 rounded-md border border-gray-300 px-2 py-1.5 text-sm"
               />
+              {isSuperAdmin && (
+                <label className="flex w-full items-center gap-2 text-xs font-medium text-[#b35e00]">
+                  <input
+                    type="checkbox"
+                    checked={saveAsNational}
+                    onChange={(e) => setSaveAsNational(e.target.checked)}
+                    className="size-3.5"
+                  />
+                  Publish as a National preset (every chapter can pick it)
+                </label>
+              )}
               <button
                 type="button"
                 disabled={savingPreset || !presetName.trim()}
                 onClick={doSavePreset}
-                className="inline-flex items-center gap-1 rounded-md bg-[#138808] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#0f6e06] disabled:opacity-50"
+                className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50 ${
+                  saveAsNational
+                    ? "bg-[#FF9933] hover:bg-[#e6851a]"
+                    : "bg-[#138808] hover:bg-[#0f6e06]"
+                }`}
               >
                 {savingPreset ? (
                   <Loader2 className="size-3.5 animate-spin" />
                 ) : (
                   <Check className="size-3.5" />
                 )}
-                Save preset
+                {saveAsNational ? "Publish National" : "Save preset"}
               </button>
               <button
                 type="button"

@@ -55,6 +55,7 @@ export default async function AgendaSetupPage({
   // the actual server gate so no role sees a Delete button that always errors.
   const canDelete =
     access.role === "super_admin" || access.role === "chapter_admin";
+  const isSuperAdmin = access.role === "super_admin";
 
   return (
     <div className="mx-auto w-full max-w-3xl space-y-4 p-4">
@@ -64,6 +65,7 @@ export default async function AgendaSetupPage({
         scoreCounts={scoreCounts}
         presets={presets}
         canDelete={canDelete}
+        isSuperAdmin={isSuperAdmin}
         isLive={isLive}
       />
     </div>

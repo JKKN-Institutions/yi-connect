@@ -27,6 +27,7 @@ export type AgendaTemplateItem = {
   mode: AgendaMode;
   is_scoreable: boolean;
   session_key: string | null;
+  use_for_voting: boolean;
 };
 
 export type AgendaItemInput = {
@@ -39,11 +40,12 @@ export type AgendaItemInput = {
   mode: AgendaMode;
   is_scoreable?: boolean;
   session_key?: string | null;
+  use_for_voting?: boolean;
 };
 
 // Column list shared by all selects so every field is always present.
 const AGENDA_TEMPLATE_COLS =
-  "id, day, sequence_order, title, description, agenda_type, duration_minutes, mode, is_scoreable, session_key";
+  "id, day, sequence_order, title, description, agenda_type, duration_minutes, mode, is_scoreable, session_key, use_for_voting";
 
 const VALID_MODES: AgendaMode[] = ["party", "committee", "mixed"];
 
@@ -73,6 +75,7 @@ function mapRow(row: {
   mode: AgendaMode;
   is_scoreable: boolean;
   session_key: string | null;
+  use_for_voting: boolean;
 }): AgendaTemplateItem {
   return {
     id: row.id,
@@ -85,7 +88,34 @@ function mapRow(row: {
     mode: row.mode,
     is_scoreable: row.is_scoreable,
     session_key: row.session_key,
+    use_for_voting: row.use_for_voting,
   };
+}
+
+// ─── Scoring-criteria guard (item 6: no scoring without criteria) ──────────────
+// A session may be marked "score with jury" ONLY if it resolves to configured
+// criteria in yip.session_parameters — by session_key (preferred) or agenda_type.
+// Mirrors getSessionScoringParams' resolution so the template guard matches what
+// a juror would actually see. Returns true when at least one criterion exists.
+async function sessionHasCriteria(
+  supabase: Awaited<ReturnType<typeof createServiceClient>>,
+  sessionKey: string | null,
+  agendaType: string | null
+): Promise<boolean> {
+  let q = supabase
+    .from("session_parameters")
+    .select("parameters")
+    .eq("is_active", true);
+  if (sessionKey) {
+    q = q.eq("session_key", sessionKey);
+  } else if (agendaType) {
+    q = q.eq("agenda_type", agendaType);
+  } else {
+    return false;
+  }
+  const { data } = await q.limit(1);
+  const params = data?.[0]?.parameters;
+  return Array.isArray(params) && params.length > 0;
 }
 
 // ─── List ───────────────────────────────────────────────────────
@@ -116,6 +146,24 @@ export async function adminUpsertAgendaItem(
 
   const supabase = await createServiceClient();
 
+  // Item 6: block scoreable-without-criteria. Marking an item "score with jury"
+  // when no criteria are configured for its session would show jurors an empty
+  // rubric — refuse and tell the admin to configure criteria first.
+  if (input.is_scoreable) {
+    const ok = await sessionHasCriteria(
+      supabase,
+      input.session_key?.trim() || null,
+      input.agenda_type?.trim() || null
+    );
+    if (!ok) {
+      const ref = input.session_key?.trim() || input.agenda_type?.trim() || "(none)";
+      return {
+        success: false,
+        error: `Cannot mark "score with jury": no scoring criteria are configured for session "${ref}". Add criteria under Admin → Session Scoring first, or untick "score with jury".`,
+      };
+    }
+  }
+
   // ── Update path ──
   if (id) {
     const { data, error } = await supabase
@@ -130,6 +178,7 @@ export async function adminUpsertAgendaItem(
         mode: input.mode,
         is_scoreable: input.is_scoreable ?? false,
         session_key: input.session_key?.trim() || null,
+        use_for_voting: input.use_for_voting ?? false,
         updated_at: new Date().toISOString(),
       })
       .eq("id", id)
@@ -172,6 +221,7 @@ export async function adminUpsertAgendaItem(
       mode: input.mode,
       is_scoreable: input.is_scoreable ?? false,
       session_key: input.session_key?.trim() || null,
+      use_for_voting: input.use_for_voting ?? false,
     })
     .select(AGENDA_TEMPLATE_COLS)
     .single();
@@ -342,6 +392,7 @@ export async function pushAgendaToAllChapterEvents(
       mode: t.mode,
       is_scoreable: t.is_scoreable,
       session_key: t.session_key,
+      use_for_voting: t.use_for_voting,
     }));
 
     const { error: insError } = await supabase.from("agenda").insert(rows);

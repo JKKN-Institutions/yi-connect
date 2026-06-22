@@ -1,8 +1,9 @@
 /**
  * Committee display label.
  *
- * Committees are shown to users as a NUMBER ("Committee 1", "Committee 2"…),
- * not the internal ministry name. The number is `participants.committee_number`
+ * Committees are shown to users as the bare number ("1", "2"…) — parallel to
+ * how Party is shown as its bare letter — not the internal ministry name and
+ * not prefixed with the word "Committee". The number is `participants.committee_number`
  * (1-based, assigned in lockstep with committee_name by the allocation /
  * assignCommittees engine). For group views that only have the committee NAME,
  * derive the number from the event's ordered committee list (the order of
@@ -16,7 +17,7 @@
 export function committeeLabel(
   committeeNumber: number | null | undefined
 ): string {
-  return committeeNumber != null ? `Committee ${committeeNumber}` : "—";
+  return committeeNumber != null ? String(committeeNumber) : "—";
 }
 
 /** Map a committee name to its 1-based number using the event's ordered list. */

@@ -20,8 +20,8 @@ function csvCell(v: unknown): string {
 }
 
 /**
- * Download the current allocation roster as a CSV — name + party +
- * constituency (no. + name) + committee + access code.
+ * Download the current allocation roster as a CSV — name + party (letter) +
+ * constituency (no. + name + state) + committee (ministry name) + access code.
  *
  * Re-runnable any number of times so an organiser can re-download after adding
  * late registrants and re-running allocation. Non-destructive: it only reads the
@@ -60,7 +60,7 @@ export async function exportAllocationRoster(
   const { data: rows, error: rowsErr } = await service
     .from("participants")
     .select(
-      "full_name, party_number, constituency_number, constituency_name, committee_number, access_code"
+      "full_name, party_number, constituency_number, constituency_name, constituency_state, committee_number, committee_name, access_code"
     )
     .eq("event_id", eventId)
     .order("party_number", { ascending: true, nullsFirst: false })
@@ -73,7 +73,9 @@ export async function exportAllocationRoster(
     party_number: number | null;
     constituency_number: number | null;
     constituency_name: string | null;
+    constituency_state: string | null;
     committee_number: number | null;
+    committee_name: string | null;
     access_code: string | null;
   }>;
 
@@ -85,30 +87,42 @@ export async function exportAllocationRoster(
   }
 
   // Ruling/Opposition ("Side") is intentionally OUT — it's decided on event day,
-  // not at allocation. Access Code IS included so the organiser can hand each
-  // student their login alongside their allocation (this action is canManage-gated).
+  // not at allocation. Party shows the bare letter (A, B, …) and Committee shows
+  // the ministry name — both are the identity students use, not a bare index.
+  // Access Code IS included so the organiser can hand each student their login
+  // alongside their allocation (this action is canManage-gated).
   const headers = [
     "Name",
     "Party",
     "Constituency No.",
     "Constituency",
+    "Constituency State",
     "Committee",
     "Access Code",
   ];
-  const body = list.map((r) =>
-    [
-      r.full_name ?? "",
+  const body = list.map((r) => {
+    // Bare party letter: strip the "Party " prefix so the default "Party A".."Party G"
+    // reads as "A".."G", while a chapter that renamed a party keeps its custom name.
+    const partyName =
       r.party_number != null
         ? partyNameByNumber.get(r.party_number) ?? `Party ${r.party_number}`
-        : "",
+        : "";
+    const partyLabel = partyName.replace(/^Party\s+/i, "");
+    return [
+      r.full_name ?? "",
+      partyLabel,
       r.constituency_number ?? "",
       r.constituency_name ?? "",
-      r.committee_number != null ? `Committee ${r.committee_number}` : "",
+      r.constituency_state ?? "",
+      // The committee's identity is its ministry name; fall back to the index
+      // only if the name is somehow missing.
+      r.committee_name ??
+        (r.committee_number != null ? `Committee ${r.committee_number}` : ""),
       r.access_code ?? "",
     ]
       .map(csvCell)
-      .join(",")
-  );
+      .join(",");
+  });
   const csv = [headers.map(csvCell).join(","), ...body].join("\r\n");
 
   const safeName = (ev.name || "roster").replace(/[^a-z0-9]+/gi, "-").toLowerCase();

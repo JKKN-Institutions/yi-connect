@@ -5,6 +5,7 @@ import { generateAccessCode } from "@/lib/yip/access-code";
 import { logAuditAction } from "@/lib/yip/audit/log-action";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { COMMITTEES } from "@/lib/yip/constants";
+import { getCommitteeNumbering } from "@/lib/yip/committee-number";
 import {
   CONSTITUENCIES,
   PROMINENT_CONSTITUENCIES,
@@ -420,24 +421,10 @@ export async function importParticipants(
   }
   const supabase = await createServiceClient();
 
-  // Committee numbers in the uploaded sheet map to the event's committees
-  // (committee_topics keys, 1-based) so uploaded events show the real ministry
-  // name — same as in-app allocation. Empty when the event has no committees,
-  // which keeps the "Committee N" fallback below.
-  const { data: importEvent } = await supabase
-    .from("events")
-    .select("committee_topics")
-    .eq("id", eventId)
-    .single();
-  const eventCommitteeNames = ((): string[] => {
-    const ct = (importEvent as { committee_topics?: unknown } | null)
-      ?.committee_topics;
-    if (Array.isArray(ct))
-      return ct.map(String).map((s) => s.trim()).filter(Boolean);
-    if (ct && typeof ct === "object")
-      return Object.keys(ct).map((s) => s.trim()).filter(Boolean);
-    return [];
-  })();
+  // Committee numbers are PERMANENT global numbers (the catalogue topic_number),
+  // identical in every event — so an uploaded "6" resolves to the same committee
+  // everywhere. The committee name is filled in from that number.
+  const committeeNumbering = await getCommitteeNumbering(supabase);
 
   // Benches (government/opposition): when false, lettered parties import as a
   // FLAT house — the parties are still created (so party names show on the
@@ -579,7 +566,7 @@ export async function importParticipants(
     const committee_name =
       row.committee_name?.trim() ||
       (committee_number !== null
-        ? eventCommitteeNames[committee_number - 1] ??
+        ? committeeNumbering.nameByNumber.get(committee_number) ??
           `Committee ${committee_number}`
         : null);
 

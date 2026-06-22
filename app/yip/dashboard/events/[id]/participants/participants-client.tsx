@@ -11,7 +11,6 @@ import {
   bulkCheckIn,
 } from "@/app/yip/actions/participants";
 import { ROLE_LABELS, PARTY_COLORS } from "@/lib/yip/constants";
-import { committeeLabel } from "@/lib/yip/committee-label";
 import { Button } from "@/components/yip/ui/button";
 import { Input } from "@/components/yip/ui/input";
 import { Label } from "@/components/yip/ui/label";
@@ -986,7 +985,10 @@ export function ParticipantsClient({
                   <TableCell>
                     {p.committee_number != null ? (
                       <span className="text-xs">
-                        {committeeLabel(p.committee_number)}
+                        {p.committee_number}
+                        {p.committee_name
+                          ? ` · ${p.committee_name.replace(/^Ministry of /i, "")}`
+                          : ""}
                       </span>
                     ) : (
                       <span className="text-gray-400">--</span>

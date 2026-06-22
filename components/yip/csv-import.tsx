@@ -95,8 +95,18 @@ const COL_ALIASES: Record<
   committee_name: ["committee_name"],
 };
 
+// Normalize a header or alias for matching: lowercase, then collapse every run
+// of non-alphanumerics (spaces, underscores, dots, hyphens) to a single space.
+// So "Constituency No.", "constituency_number", "CONSTITUENCY  NO" all compare
+// equal — column detection is robust to whatever punctuation the uploaded sheet
+// uses, including the app's own "No." export headers.
+function normHeader(s: string): string {
+  return s.trim().toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
 function findColIdx(headers: string[], aliases: string[]): number {
-  return headers.findIndex((h) => aliases.includes(h));
+  const wanted = new Set(aliases.map(normHeader));
+  return headers.findIndex((h) => wanted.has(normHeader(h)));
 }
 
 /** Normalize a raw phone value — handles scientific notation from Excel (9.894e9) */
@@ -122,16 +132,15 @@ function normalizePhone(raw: unknown): string | undefined {
  *   - Else (legacy roster-only file) → bare `state` → home_state.
  */
 function resolveStateRouting(presentKeys: string[]): "home_state" | "constituency_state" {
-  const hasExplicitHomeState = COL_ALIASES.home_state_explicit.some((a) =>
-    presentKeys.includes(a)
-  );
-  if (hasExplicitHomeState) return "constituency_state";
+  const present = new Set(presentKeys.map(normHeader));
+  const has = (aliases: string[]) => aliases.some((a) => present.has(normHeader(a)));
+  if (has(COL_ALIASES.home_state_explicit)) return "constituency_state";
 
   const hasAllocationCols =
-    COL_ALIASES.constituency_state_explicit.some((a) => presentKeys.includes(a)) ||
-    COL_ALIASES.party_letter.some((a) => presentKeys.includes(a)) ||
-    COL_ALIASES.constituency_name.some((a) => presentKeys.includes(a)) ||
-    COL_ALIASES.committee_number.some((a) => presentKeys.includes(a));
+    has(COL_ALIASES.constituency_state_explicit) ||
+    has(COL_ALIASES.party_letter) ||
+    has(COL_ALIASES.constituency_name) ||
+    has(COL_ALIASES.committee_number);
 
   return hasAllocationCols ? "constituency_state" : "home_state";
 }
@@ -142,15 +151,16 @@ function normalizeXlsxRow(
   rowNumber: number,
   bareStateRoutes: "home_state" | "constituency_state"
 ): ParsedRow {
-  // Build a lowercase-keyed version for easy lookup
+  // Build a normalized-key version for easy lookup (punctuation-insensitive).
   const lc: Record<string, unknown> = {};
   for (const k of Object.keys(rawRow)) {
-    lc[k.trim().toLowerCase()] = rawRow[k];
+    lc[normHeader(k)] = rawRow[k];
   }
 
   function pick(aliases: string[]): unknown {
     for (const a of aliases) {
-      if (lc[a] !== undefined && lc[a] !== "") return lc[a];
+      const v = lc[normHeader(a)];
+      if (v !== undefined && v !== "") return v;
     }
     return undefined;
   }
@@ -362,8 +372,8 @@ export function CsvImport({
 
           // Resolve column presence ONCE, off the first row's keys
           const firstRaw = jsonRows[0];
-          const keys = Object.keys(firstRaw).map((k) => k.trim().toLowerCase());
-          const hasName = COL_ALIASES.name.some((a) => keys.includes(a));
+          const keys = Object.keys(firstRaw).map(normHeader);
+          const hasName = COL_ALIASES.name.some((a) => keys.includes(normHeader(a)));
           if (!hasName) {
             setParseError(
               `Excel must have a "name" column. Found: ${keys.join(", ")}`
@@ -412,9 +422,7 @@ export function CsvImport({
           }
 
           // Parse header
-          const headers = lines[0]
-            .split(",")
-            .map((h) => h.trim().toLowerCase().replace(/['"]/g, ""));
+          const headers = lines[0].split(",").map(normHeader);
 
           // Map expected columns
           const nameIdx = findColIdx(headers, COL_ALIASES.name);

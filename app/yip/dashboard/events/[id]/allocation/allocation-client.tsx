@@ -717,7 +717,7 @@ export function AllocationClient({
                     {p.constituency_state || "--"}
                   </TableCell>
                   <TableCell className="max-w-[150px] truncate text-xs">
-                    {committeeLabel(p.committee_number)}
+                    {p.committee_name ?? committeeLabel(p.committee_number)}
                   </TableCell>
                   {!allocationLocked && (
                     <TableCell>

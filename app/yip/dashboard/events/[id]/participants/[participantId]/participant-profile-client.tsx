@@ -192,9 +192,12 @@ export function ParticipantProfileClient({
             />
             <Row
               label="Committee"
-              value={committeeLabel(
-                (p as { committee_number?: number | null }).committee_number
-              )}
+              value={
+                (p as { committee_name?: string | null }).committee_name ??
+                committeeLabel(
+                  (p as { committee_number?: number | null }).committee_number
+                )
+              }
             />
           </CardContent>
         </Card>

@@ -402,56 +402,6 @@ export function ParticipantsClient({
     setLoading(false);
   }
 
-  function handleExportCsv() {
-    const headers = [
-      "Name",
-      "Phone",
-      "Email",
-      "City",
-      "State",
-      "Party",
-      "Role",
-      "Committee",
-      "Access Code",
-      "Checked In",
-      "Day 1",
-      "Day 2",
-      "Checked In At",
-    ];
-    const rows = participants.map((p) => [
-      p.full_name,
-      p.phone || "",
-      p.email || "",
-      p.city || "",
-      p.constituency_state || p.home_state || "",
-      p.party_number != null
-        ? String.fromCharCode(64 + p.party_number)
-        : p.party_side || "",
-      p.parliament_role || "",
-      p.committee_name
-        ? p.committee_number != null
-          ? `${p.committee_number} · ${p.committee_name}`
-          : p.committee_name
-        : p.committee_number != null
-          ? `Committee ${p.committee_number}`
-          : "",
-      p.access_code,
-      p.checked_in ? "Yes" : "No",
-      p.checked_in_day1 ? "Yes" : "No",
-      p.checked_in_day2 ? "Yes" : "No",
-      p.checked_in_at || "",
-    ]);
-
-    const csv = [headers, ...rows].map((r) => r.map((c) => `"${c}"`).join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `participants-${eventId}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
   // Download the current allocation roster (name + party + side + constituency
   // + committee + role). Re-runnable: re-download after adding late registrants
   // and re-running allocation. Non-destructive.
@@ -528,11 +478,6 @@ export function ParticipantsClient({
           )}
 
           <CsvImport eventId={eventId} onImported={() => router.refresh()} />
-
-          <Button variant="outline" size="sm" onClick={handleExportCsv}>
-            <Download className="size-4" />
-            Export CSV
-          </Button>
 
           {/* Download the current allocation roster (organiser+). Re-runnable
               any time — re-download after adding late registrants and re-running

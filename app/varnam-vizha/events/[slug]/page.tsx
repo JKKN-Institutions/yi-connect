@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CalendarDays, MapPin } from "lucide-react";
 import { getEventBySlug } from "@/lib/varnam/data/editions";
+import { RegisterForm } from "./RegisterForm";
 
 type Params = { params: Promise<{ slug: string }> };
 
@@ -85,11 +86,11 @@ export default async function VarnamEventDetail({ params }: Params) {
               {event.description}
             </p>
           )}
-          <p className="text-xs text-[#2B0A33]/45">
-            Registration opens closer to the festival. This is part of the 2026
-            programme — timings may be finalised by the committee.
-          </p>
         </div>
+      </div>
+
+      <div className="mt-6">
+        <RegisterForm eventId={event.id} />
       </div>
     </div>
   );

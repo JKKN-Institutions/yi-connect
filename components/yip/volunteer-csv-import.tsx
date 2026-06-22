@@ -23,7 +23,34 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/yip/ui/table";
-import { Upload, FileText, Loader2, AlertCircle, Check } from "lucide-react";
+import { Upload, FileText, Loader2, AlertCircle, Check, Download } from "lucide-react";
+
+// A starter template the organiser fills in. Name + Mobile are required; the
+// rest are optional. One example row shows the format — replace it with real
+// volunteers before importing.
+const TEMPLATE_HEADERS = ["Name", "Mobile", "Email", "Station", "Shift", "T-Shirt Size", "Yuva"];
+const TEMPLATE_EXAMPLE = [
+  "Example Volunteer (replace this row)",
+  "9876543210",
+  "name@example.com",
+  "Registration Desk",
+  "Day 1 Morning",
+  "M",
+  "Yes",
+];
+
+function downloadTemplate() {
+  const csv = [TEMPLATE_HEADERS, TEMPLATE_EXAMPLE]
+    .map((r) => r.map((c) => `"${c}"`).join(","))
+    .join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "volunteer-roster-template.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 type VolunteerRow = {
   full_name: string;
@@ -40,7 +67,7 @@ type VolunteerRow = {
 // as the participant importer, so the app's own export headers round-trip).
 const COL_ALIASES = {
   name: ["name", "full_name", "full name", "fullname", "volunteer", "volunteer name"],
-  phone: ["phone", "mobile", "phone_number", "phone number", "contact"],
+  phone: ["phone", "mobile", "mobile no", "mobile number", "mobile_no", "phone_number", "phone number", "phone no", "contact", "contact number"],
   email: ["email", "email_address", "email address", "email id", "email_id"],
   station: ["station", "role", "desk", "duty", "assignment"],
   shift: ["shift", "slot", "timing", "time"],
@@ -180,14 +207,19 @@ export function VolunteerCsvImport({
     reader.readAsArrayBuffer(file);
   }
 
+  // Name AND Mobile are mandatory — only rows with both are imported.
+  const validRows = rows.filter((r) => r.full_name.trim() && r.phone.trim());
+  const missingMobile = rows.length - validRows.length;
+
   async function handleImport() {
-    if (rows.length === 0) return;
+    if (validRows.length === 0) return;
+    const skipped = rows.length - validRows.length;
     setImporting(true);
     const res = await importVolunteers(
       eventId,
-      rows.map((r) => ({
+      validRows.map((r) => ({
         full_name: r.full_name,
-        phone: r.phone || null,
+        phone: r.phone,
         email: r.email || null,
         station: r.station,
         shift: r.shift || null,
@@ -200,7 +232,7 @@ export function VolunteerCsvImport({
       setParseError(res.error);
       return;
     }
-    setResult(res.data);
+    setResult({ inserted: res.data.inserted, skipped });
     setRows([]);
     onImported?.();
   }
@@ -224,8 +256,9 @@ export function VolunteerCsvImport({
         <DialogHeader>
           <DialogTitle>Import volunteer roster</DialogTitle>
           <DialogDescription>
-            Upload a CSV or Excel file. Only <strong>Name</strong> is required.
-            Optional columns: Phone, Email, Station, Shift, T-Shirt Size, Yuva.
+            Download the template, fill in your volunteers, then upload it (CSV
+            or Excel). <strong>Name</strong> and <strong>Mobile</strong> are
+            required. Optional: Email, Station, Shift, T-Shirt Size, Yuva.
             Station names resolve to the standard stations (anything unknown
             becomes “Floating”). Importing adds to the existing list.
           </DialogDescription>
@@ -235,10 +268,17 @@ export function VolunteerCsvImport({
           <div className="rounded-lg bg-[#138808]/8 border border-[#138808]/20 px-4 py-3 text-sm text-[#138808] flex items-center gap-2">
             <Check className="size-4 shrink-0" />
             Imported {result.inserted} volunteer{result.inserted === 1 ? "" : "s"}.
-            {result.skipped > 0 && ` Skipped ${result.skipped} row(s) with no name.`}
+            {result.skipped > 0 &&
+              ` Skipped ${result.skipped} row(s) with no name or mobile.`}
           </div>
         ) : (
           <>
+            <div className="flex justify-end">
+              <Button variant="outline" size="sm" onClick={downloadTemplate}>
+                <Download className="size-4 mr-2" />
+                Download template
+              </Button>
+            </div>
             <label className="flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-gray-300 px-4 py-8 cursor-pointer hover:bg-gray-50">
               <FileText className="size-7 text-gray-400" />
               <span className="text-sm text-gray-600">
@@ -263,8 +303,18 @@ export function VolunteerCsvImport({
             {rows.length > 0 && (
               <>
                 <p className="text-sm text-gray-600">
-                  {rows.length} volunteer{rows.length === 1 ? "" : "s"} ready to import:
+                  {validRows.length} volunteer{validRows.length === 1 ? "" : "s"} ready to import
+                  {validRows.length !== rows.length && ` (of ${rows.length} rows)`}:
                 </p>
+                {missingMobile > 0 && (
+                  <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800 flex items-start gap-2">
+                    <AlertCircle className="size-4 shrink-0 mt-0.5" />
+                    <span>
+                      {missingMobile} row{missingMobile === 1 ? "" : "s"} have no mobile number and
+                      won&apos;t be imported (mobile is required).
+                    </span>
+                  </div>
+                )}
                 <div className="rounded-lg border max-h-72 overflow-y-auto">
                   <Table>
                     <TableHeader>
@@ -288,7 +338,13 @@ export function VolunteerCsvImport({
                                 <span className="text-xs text-gray-400"> ← “{r.stationRaw}”</span>
                               )}
                           </TableCell>
-                          <TableCell>{r.phone || "—"}</TableCell>
+                          <TableCell>
+                            {r.phone ? (
+                              r.phone
+                            ) : (
+                              <span className="text-red-600 text-xs font-medium">needs mobile</span>
+                            )}
+                          </TableCell>
                           <TableCell>{r.shift || "—"}</TableCell>
                           <TableCell>{r.is_yuva ? "Yes" : "No"}</TableCell>
                         </TableRow>
@@ -310,7 +366,7 @@ export function VolunteerCsvImport({
           <DialogClose render={<Button variant="outline" />}>
             {result ? "Done" : "Cancel"}
           </DialogClose>
-          {!result && rows.length > 0 && (
+          {!result && validRows.length > 0 && (
             <Button
               onClick={handleImport}
               disabled={importing}
@@ -321,7 +377,7 @@ export function VolunteerCsvImport({
               ) : (
                 <Upload className="size-4 mr-2" />
               )}
-              Import {rows.length}
+              Import {validRows.length}
             </Button>
           )}
         </DialogFooter>

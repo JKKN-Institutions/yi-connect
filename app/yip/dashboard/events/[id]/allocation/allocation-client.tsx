@@ -158,12 +158,14 @@ export function AllocationClient({
   }, [participants]);
 
   const committeeData = useMemo(() => {
-    return committeeNames.map((name, index) => {
+    return committeeNames.map((name) => {
       const members = participants.filter((p) => p.committee_name === name);
       const rulingMembers = members.filter((m) => m.party_side === "ruling");
       const oppositionMembers = members.filter((m) => m.party_side === "opposition");
-      // 1-based position in the ordered committee list === committee_number.
-      return { name, number: index + 1, members, rulingMembers, oppositionMembers };
+      // Permanent global committee number (catalogue topic_number), carried on
+      // each allocated participant — the same number in every event.
+      const number = members[0]?.committee_number ?? null;
+      return { name, number, members, rulingMembers, oppositionMembers };
     });
   }, [participants, committeeNames]);
 
@@ -558,7 +560,8 @@ export function AllocationClient({
               <div className="border-b bg-gray-50 px-4 py-2.5">
                 <div className="flex items-center justify-between">
                   <h4 className="text-sm font-semibold text-gray-800 leading-tight">
-                    Committee {committee.number}
+                    {committee.number != null ? `${committee.number}. ` : ""}
+                    {committee.name}
                   </h4>
                   <Badge variant="secondary" className="ml-2 shrink-0">
                     {committee.members.length}

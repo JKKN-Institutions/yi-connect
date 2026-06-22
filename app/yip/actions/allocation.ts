@@ -9,6 +9,10 @@ import {
   type AllocationParticipant,
 } from "@/lib/yip/allocation-engine";
 import { planCommitteeAssignment } from "@/lib/yip/committee-assignment";
+import {
+  getCommitteeNumbering,
+  committeeNumberForName,
+} from "@/lib/yip/committee-number";
 import { planPartyFill, planFlatPartyFill } from "@/lib/yip/party-formation";
 
 // Gated writes run on the service client AFTER getYipEventAccess() (yip.* tables
@@ -372,18 +376,24 @@ export async function assignCommittees(
   );
 
   // Batch: one UPDATE per committee, plus one UPDATE clearing every office-holder.
-  const byCommittee = new Map<string, { name: string; number: number; ids: string[] }>();
+  // Each committee's number is its PERMANENT global number (the catalogue
+  // topic_number) — not a per-event position — so "3" means the same committee
+  // in every event.
+  const numbering = await getCommitteeNumbering(supabase);
+  const idsByName = new Map<string, string[]>();
   const cleared: string[] = [];
   for (const a of plan) {
     if (!a.committeeName || a.committeeNumber == null) {
       cleared.push(a.participantId);
       continue;
     }
-    const key = `${a.committeeNumber}::${a.committeeName}`;
-    if (!byCommittee.has(key)) {
-      byCommittee.set(key, { name: a.committeeName, number: a.committeeNumber, ids: [] });
-    }
-    byCommittee.get(key)!.ids.push(a.participantId);
+    if (!idsByName.has(a.committeeName)) idsByName.set(a.committeeName, []);
+    idsByName.get(a.committeeName)!.push(a.participantId);
+  }
+  const byCommittee = new Map<string, { name: string; number: number; ids: string[] }>();
+  for (const [name, ids] of idsByName) {
+    const number = (await committeeNumberForName(supabase, numbering, name)) ?? 0;
+    byCommittee.set(name, { name, number, ids });
   }
 
   const errors: string[] = [];

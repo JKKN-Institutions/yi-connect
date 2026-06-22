@@ -946,6 +946,7 @@ export type ResultWithParticipant = {
     class: number;
     parliament_role: string | null;
     party_side: string | null;
+    party_number: number | null;
     ministry: string | null;
     constituency_name: string | null;
     committee_name: string | null;
@@ -975,6 +976,7 @@ export async function getResults(
         class,
         parliament_role,
         party_side,
+        party_number,
         ministry,
         constituency_name,
         committee_name,

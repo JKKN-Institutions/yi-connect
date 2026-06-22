@@ -161,15 +161,15 @@ function exportCSV(results: ResultWithParticipant[], eventName: string) {
     r.rank ?? "",
     r.participant.full_name,
     r.participant.school_name,
-    r.participant.party_side ?? "",
+    r.participant.party_number != null
+      ? String.fromCharCode(64 + r.participant.party_number)
+      : r.participant.party_side ?? "",
     r.participant.parliament_role
       ? ROLE_LABELS[r.participant.parliament_role] ?? r.participant.parliament_role
       : "",
-    getMinistryLabel(r.participant.ministry),
+    r.participant.committee_name ?? getMinistryLabel(r.participant.ministry),
     r.participant.constituency_name ?? "",
-    r.participant.committee_number != null
-      ? `Committee ${r.participant.committee_number}`
-      : "",
+    r.participant.committee_number ?? "",
     r.avg_score ?? "",
     r.jury_count ?? "",
     r.award_category ?? "",

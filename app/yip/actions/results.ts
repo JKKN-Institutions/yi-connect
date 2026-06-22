@@ -7,6 +7,7 @@ import { parentScoreByKey } from "@/lib/yip/rubric";
 import { getPositionBonusConfig } from "./positions";
 import { getScoringSettings } from "./scoring-settings";
 import { listSessionParameters } from "./session-parameters";
+import { listScoringBuckets } from "./scoring-buckets";
 import { getScoringFlagsConfig } from "./scoring-flags";
 import {
   deriveCommitteeLevels,
@@ -290,6 +291,40 @@ export async function computeResults(
     ])
   );
 
+  // Bucket model (cutover-gated by settings.use_bucket_model). When enabled,
+  // scored sessions roll up into the configurable yip.scoring_buckets (/100).
+  // Build session_key → bucket and agenda_type → bucket (the latter via each
+  // bucket's session configs, so legacy items without a session_key still map).
+  type BucketAgg = {
+    bucket_key: string;
+    weightage: number;
+    merit_max: number;
+    jury_max: number;
+  };
+  const useBuckets = settings.use_bucket_model === true;
+  const activeBuckets: BucketAgg[] = [];
+  const keyToBucket = new Map<string, BucketAgg>();
+  const typeToBucket = new Map<string, BucketAgg>();
+  if (useBuckets) {
+    for (const b of await listScoringBuckets()) {
+      if (!b.is_active) continue;
+      const agg: BucketAgg = {
+        bucket_key: b.bucket_key,
+        weightage: b.weightage,
+        merit_max: b.merit_max,
+        jury_max: b.jury_max,
+      };
+      activeBuckets.push(agg);
+      for (const sk of b.session_keys) {
+        if (!keyToBucket.has(sk)) keyToBucket.set(sk, agg);
+        const sc = sessionConfigs.find((c) => c.session_key === sk);
+        if (sc?.agenda_type && !typeToBucket.has(sc.agenda_type)) {
+          typeToBucket.set(sc.agenda_type, agg);
+        }
+      }
+    }
+  }
+
   // Committee-once scoring (Phase 3): a committee is scored ONCE on the /60
   // sheet; the derived committee-level points (cmte + bill, each 0–5) replace
   // every member's per-individual committee_level criterion. When NO committee
@@ -452,7 +487,14 @@ export async function computeResults(
         const score =
           settings.normalize_per_session && max > 0 ? (raw / max) * 100 : raw;
         const weight = cfg ? cfg.session_weight : 1;
-        return { score, weight, raw, max };
+        return {
+          score,
+          weight,
+          raw,
+          max,
+          sessionKey: meta?.session_key ?? null,
+          agendaType: meta?.agenda_type ?? null,
+        };
       }
     );
 
@@ -461,50 +503,91 @@ export async function computeResults(
     // ScoringSettings type in scoring-settings.ts. Other events keep
     // average / weighted_average / best_n.
     const method = settings.aggregation_method as string;
+    const roleBonus =
+      (participant.parliament_role &&
+        positionBonuses[participant.parliament_role]) ||
+      0;
 
     let baseScore = 0;
     let minSession = 0;
-    if (sessionEntries.length > 0) {
-      const arr = sessionEntries.map((e) => e.score);
-      if (method === "sum") {
-        // Yi 2026 Workbook: additive — final base = SUM of per-component means
-        // (do NOT divide by count). Each component is already capped by its
-        // configured max, so the six juror-scored components sum to 90.
-        baseScore = arr.reduce((a, b) => a + b, 0);
-        minSession = Math.min(...arr);
-      } else if (method === "best_n") {
-        const top = [...arr]
-          .sort((a, b) => b - a)
-          .slice(0, Math.max(1, settings.best_n));
-        baseScore = top.reduce((a, b) => a + b, 0) / top.length;
-        minSession = Math.min(...top);
-      } else if (method === "average") {
-        baseScore = arr.reduce((a, b) => a + b, 0) / arr.length;
-        minSession = Math.min(...arr);
-      } else if (method === "weighted_90") {
-        // Yi 2026 Workbook (weighted average → /90): score the student only on
-        // the components they were scored in. base = (Σ component means ÷ Σ
-        // component maxes) × 90, so 3 sessions at 80% ≈ 72/90 — same ceiling as
-        // 6 sessions. Position Points (max 10) add on top → /100. Uses raw means
-        // + maxes directly, independent of normalize_per_session.
-        const sumRaw = sessionEntries.reduce((a, e) => a + e.raw, 0);
-        const sumMax = sessionEntries.reduce((a, e) => a + e.max, 0);
-        baseScore = sumMax > 0 ? (sumRaw / sumMax) * 90 : 0;
-        // Consistency floor (for the MVP award): the weakest single component,
-        // expressed on the same /90 scale.
-        const ratios = sessionEntries
-          .filter((e) => e.max > 0)
-          .map((e) => (e.raw / e.max) * 90);
-        minSession = ratios.length > 0 ? Math.min(...ratios) : 0;
-      } else {
-        // weighted_average (default)
-        const totalW = sessionEntries.reduce((a, e) => a + e.weight, 0);
-        baseScore =
-          totalW > 0
-            ? sessionEntries.reduce((a, e) => a + e.score * e.weight, 0) / totalW
-            : arr.reduce((a, b) => a + b, 0) / arr.length;
-        minSession = Math.min(...arr);
+    let positionPoints = 0;
+
+    if (useBuckets) {
+      // ── Configurable bucket model (/100) ──
+      // Each scored session resolves to a bucket (session_key first, agenda_type
+      // fallback). Per bucket:
+      //   jury  = (Σ scored raw ÷ Σ scored max) × jury_max   (0 when unscored)
+      //   merit = min(merit_max, role bonus)                 (Leadership only)
+      //   value = clamp(merit + jury, 0, weightage)
+      // base = Σ (value − merit)  (excludes position);  position = Σ merit.
+      const byBucket = new Map<string, { sumRaw: number; sumMax: number }>();
+      for (const e of sessionEntries) {
+        const agg =
+          (e.sessionKey ? keyToBucket.get(e.sessionKey) : undefined) ??
+          (e.agendaType ? typeToBucket.get(e.agendaType) : undefined);
+        if (!agg) continue; // unbucketed session → excluded from /100
+        const cur = byBucket.get(agg.bucket_key) ?? { sumRaw: 0, sumMax: 0 };
+        cur.sumRaw += e.raw;
+        cur.sumMax += e.max;
+        byBucket.set(agg.bucket_key, cur);
       }
+      const engagedJury: number[] = [];
+      for (const agg of activeBuckets) {
+        const acc = byBucket.get(agg.bucket_key);
+        const jury =
+          acc && acc.sumMax > 0 ? (acc.sumRaw / acc.sumMax) * agg.jury_max : 0;
+        const merit = agg.merit_max > 0 ? Math.min(agg.merit_max, roleBonus) : 0;
+        const value = Math.max(0, Math.min(agg.weightage, merit + jury));
+        baseScore += value - merit;
+        positionPoints += merit;
+        if (acc || merit > 0) engagedJury.push(value - merit);
+      }
+      minSession = engagedJury.length > 0 ? Math.min(...engagedJury) : 0;
+    } else {
+      if (sessionEntries.length > 0) {
+        const arr = sessionEntries.map((e) => e.score);
+        if (method === "sum") {
+          // Yi 2026 Workbook: additive — final base = SUM of per-component means
+          // (do NOT divide by count). Each component is already capped by its
+          // configured max, so the six juror-scored components sum to 90.
+          baseScore = arr.reduce((a, b) => a + b, 0);
+          minSession = Math.min(...arr);
+        } else if (method === "best_n") {
+          const top = [...arr]
+            .sort((a, b) => b - a)
+            .slice(0, Math.max(1, settings.best_n));
+          baseScore = top.reduce((a, b) => a + b, 0) / top.length;
+          minSession = Math.min(...top);
+        } else if (method === "average") {
+          baseScore = arr.reduce((a, b) => a + b, 0) / arr.length;
+          minSession = Math.min(...arr);
+        } else if (method === "weighted_90") {
+          // Yi 2026 Workbook (weighted average → /90): score the student only on
+          // the components they were scored in. base = (Σ component means ÷ Σ
+          // component maxes) × 90, so 3 sessions at 80% ≈ 72/90 — same ceiling as
+          // 6 sessions. Position Points (max 10) add on top → /100. Uses raw means
+          // + maxes directly, independent of normalize_per_session.
+          const sumRaw = sessionEntries.reduce((a, e) => a + e.raw, 0);
+          const sumMax = sessionEntries.reduce((a, e) => a + e.max, 0);
+          baseScore = sumMax > 0 ? (sumRaw / sumMax) * 90 : 0;
+          // Consistency floor (for the MVP award): the weakest single component,
+          // expressed on the same /90 scale.
+          const ratios = sessionEntries
+            .filter((e) => e.max > 0)
+            .map((e) => (e.raw / e.max) * 90);
+          minSession = ratios.length > 0 ? Math.min(...ratios) : 0;
+        } else {
+          // weighted_average (default)
+          const totalW = sessionEntries.reduce((a, e) => a + e.weight, 0);
+          baseScore =
+            totalW > 0
+              ? sessionEntries.reduce((a, e) => a + e.score * e.weight, 0) / totalW
+              : arr.reduce((a, b) => a + b, 0) / arr.length;
+          minSession = Math.min(...arr);
+        }
+      }
+      // Position Points (legacy: auto, capped at 10, added on top).
+      positionPoints = Math.min(10, roleBonus);
     }
 
     // MVP basis (Director ruling: "even across sessions") — the weakest single
@@ -519,13 +602,7 @@ export async function computeResults(
 
     // jury_count = distinct jurors who scored this participant (across sessions).
     const juryCount = new Set(pScores.map((s) => s.jury_assignment_id)).size;
-    // Position Points (auto) — applied once per participant, capped at 10.
-    const positionPoints = Math.min(
-      10,
-      (participant.parliament_role &&
-        positionBonuses[participant.parliament_role]) ||
-        0
-    );
+    // positionPoints computed above (bucket: Σ Leadership merit; legacy: min(10, role bonus)).
     // Disciplinary flags still gate the Decorum award (kept).
     const hasDisciplinary = hasDisciplinaryFlag(pScores);
 

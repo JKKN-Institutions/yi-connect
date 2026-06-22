@@ -29,6 +29,7 @@ import {
   revokeVolunteerCode,
   type Volunteer,
 } from "@/app/yip/actions/volunteers";
+import { VolunteerCsvImport } from "@/components/yip/volunteer-csv-import";
 
 const STATION_LABEL: Record<string, string> = Object.fromEntries(
   VOLUNTEER_STATIONS.map((s) => [s.code, s.label])
@@ -248,6 +249,10 @@ export function VolunteersClient({
               Generate all codes ({missingCodes})
             </Button>
           )}
+          <VolunteerCsvImport
+            eventId={eventId}
+            onImported={() => router.refresh()}
+          />
           <Button
             onClick={() => {
               setCreating(true);

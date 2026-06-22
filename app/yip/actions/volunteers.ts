@@ -245,3 +245,57 @@ export async function deleteVolunteer(
   revalidatePath(`/yip/dashboard/events/${eventId}/volunteers`);
   return { success: true, data: null };
 }
+
+/**
+ * Bulk-import volunteers from an uploaded roster (CSV/Excel parsed client-side).
+ * Additive: every named row becomes a new volunteer (no de-dupe — re-uploading
+ * the same sheet adds duplicates, same as the participant import). Rows without
+ * a name are skipped. Station is already resolved to a valid code client-side;
+ * unknown/blank stations arrive as "floating". canManage-gated like addVolunteer.
+ */
+export async function importVolunteers(
+  eventId: string,
+  rows: {
+    full_name: string;
+    phone?: string | null;
+    email?: string | null;
+    station?: VolunteerStation;
+    shift?: string | null;
+    tshirt_size?: string | null;
+    is_yuva?: boolean;
+  }[]
+): Promise<ActionResult<{ inserted: number; skipped: number }>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
+
+  const clean = rows
+    .map((r) => ({ ...r, full_name: (r.full_name ?? "").trim() }))
+    .filter((r) => r.full_name.length > 0);
+  const skipped = rows.length - clean.length;
+  if (clean.length === 0) {
+    return { success: false, error: "No rows with a name to import." };
+  }
+
+  const supabase = await createServiceClient();
+  const { data, error } = await supabase
+    .from("volunteers")
+    .insert(
+      clean.map((r) => ({
+        event_id: eventId,
+        full_name: r.full_name,
+        phone: r.phone ?? null,
+        email: r.email ?? null,
+        station: r.station ?? "floating",
+        shift: r.shift ?? null,
+        tshirt_size: r.tshirt_size ?? null,
+        is_yuva: r.is_yuva ?? true,
+      }))
+    )
+    .select("id");
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/yip/dashboard/events/${eventId}/volunteers`);
+  return { success: true, data: { inserted: data?.length ?? 0, skipped } };
+}

@@ -52,6 +52,7 @@ interface ImportRow {
   home_state?: string;
   // NEW — allocation columns (all optional, back-compat)
   party_letter?: string;        // "A".."Z" — case-insensitive
+  party_name?: string;          // a party NAME → resolved to an EXISTING party
   constituency_name?: string;
   constituency_number?: number; // platform seat number (e.g. 101)
   constituency_state?: string;
@@ -439,6 +440,7 @@ export async function importParticipants(
 
   // ── Pre-pass: validate party_letter values & collect unique letters ──
   const uniqueLetters = new Set<string>();
+  const uniquePartyNames = new Set<string>();
   const validRowIdx: number[] = [];
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
@@ -460,6 +462,9 @@ export async function importParticipants(
       }
       uniqueLetters.add(letter);
     }
+    if (row.party_name !== undefined && row.party_name.trim() !== "") {
+      uniquePartyNames.add(row.party_name.trim());
+    }
     if (
       row.committee_number !== undefined &&
       row.committee_number !== null &&
@@ -477,8 +482,10 @@ export async function importParticipants(
   // in-app allocation, which also creates side-less parties.)
   const sortedLetters = [...uniqueLetters].sort();
   const partyMap = new Map<string, { id: string; side: PartySide | null; number: number }>();
+  // Party NAMES resolve to an EXISTING party (case-insensitive) — never created.
+  const partyByName = new Map<string, { id: string; side: PartySide | null; number: number }>();
 
-  if (sortedLetters.length > 0) {
+  if (sortedLetters.length > 0 || uniquePartyNames.size > 0) {
     // Fetch existing parties for the event in one round-trip
     const { data: existingParties, error: partyFetchErr } = await supabase
       .from("parties")
@@ -491,12 +498,13 @@ export async function importParticipants(
 
     const byName = new Map<string, { id: string; side: PartySide | null; number: number }>();
     for (const p of existingParties ?? []) {
-      byName.set(p.name, { id: p.id, side: p.side, number: p.party_number });
+      byName.set(p.name.toLowerCase(), { id: p.id, side: p.side, number: p.party_number });
     }
 
+    // Letters → find-or-create "Party X" (benchless).
     for (const letter of sortedLetters) {
       const name = `Party ${letter}`;
-      const found = byName.get(name);
+      const found = byName.get(name.toLowerCase());
       if (found) {
         partyMap.set(letter, found);
         continue;
@@ -517,7 +525,13 @@ export async function importParticipants(
       }
       const rec = { id: inserted.id, side: inserted.side, number: inserted.party_number };
       partyMap.set(letter, rec);
-      byName.set(name, rec);
+      byName.set(name.toLowerCase(), rec);
+    }
+
+    // Names → resolve to an existing party only (unmatched flagged per-row below).
+    for (const pname of uniquePartyNames) {
+      const found = byName.get(pname.toLowerCase());
+      if (found) partyByName.set(pname.toLowerCase(), found);
     }
   }
 
@@ -550,25 +564,52 @@ export async function importParticipants(
     let party_number: number | null = null;
     let party_side: PartySide | null = null;
     if (row.party_letter) {
-      const letter = row.party_letter.trim().toUpperCase();
-      const rec = partyMap.get(letter);
+      const rec = partyMap.get(row.party_letter.trim().toUpperCase());
       if (rec) {
         party_id = rec.id;
         party_number = rec.number;
         party_side = rec.side;
       }
+    } else if (row.party_name) {
+      const rec = partyByName.get(row.party_name.trim().toLowerCase());
+      if (rec) {
+        party_id = rec.id;
+        party_number = rec.number;
+        party_side = rec.side;
+      } else {
+        errors.push(
+          `Row ${i + 1}: party "${row.party_name}" not found — left unassigned. Create it on the Parties tab, then re-upload.`
+        );
+      }
     }
 
-    const committee_number =
+    // Committee: a number is used directly; a NAME is resolved to its global
+    // number. Unmatched names are flagged and left unassigned (never created).
+    let committee_number: number | null =
       row.committee_number !== undefined && row.committee_number !== null
         ? row.committee_number
         : null;
-    const committee_name =
-      row.committee_name?.trim() ||
-      (committee_number !== null
-        ? committeeNumbering.nameByNumber.get(committee_number) ??
-          `Committee ${committee_number}`
-        : null);
+    let committee_name: string | null = row.committee_name?.trim() || null;
+    if (committee_number !== null) {
+      committee_name =
+        committeeNumbering.nameByNumber.get(committee_number) ??
+        committee_name ??
+        `Committee ${committee_number}`;
+    } else if (committee_name) {
+      const resolved = committeeNumbering.numberByName.get(
+        committee_name.toLowerCase()
+      );
+      if (resolved != null) {
+        committee_number = resolved;
+        committee_name =
+          committeeNumbering.nameByNumber.get(resolved) ?? committee_name;
+      } else {
+        errors.push(
+          `Row ${i + 1}: committee "${committee_name}" not found — left unassigned. Add it on the Committees tab, then re-upload.`
+        );
+        committee_name = null;
+      }
+    }
 
     try {
       const code = await generateUniqueCode(supabase, eventId, existingCodes);

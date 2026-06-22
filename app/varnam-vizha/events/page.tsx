@@ -103,6 +103,13 @@ export default async function VarnamEventsPage() {
         <h1 className="mt-2 font-[family-name:var(--font-vv-display)] text-4xl font-extrabold text-[#3B0A45] sm:text-5xl">
           The Programme
         </h1>
+        {/* TAMIL: needs native review */}
+        <p
+          lang="ta"
+          className="mt-1 font-[family-name:var(--font-vv-display)] text-xl font-semibold text-[#D6336C]"
+        >
+          நிகழ்ச்சி நிரல்
+        </p>
         {range && <p className="mt-2 text-[#2B0A33]/70">{range}</p>}
         {edition?.theme && (
           <p className="mt-1 text-sm italic text-[#2B0A33]/60">{edition.theme}</p>

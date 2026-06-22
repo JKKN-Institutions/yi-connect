@@ -26,6 +26,7 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
+  manifest: "/varnam-vizha/manifest.webmanifest",
   title: {
     default: "Varnam Vizha — Erode's Festival of Colour",
     template: "%s · Varnam Vizha",

@@ -67,6 +67,13 @@ export default async function VarnamEventDetail({ params }: Params) {
         </div>
 
         <div className="space-y-5 px-6 py-8 sm:px-10">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#D6336C]">
+            Date &amp; venue{" "}
+            {/* TAMIL: needs native review */}
+            <span lang="ta" className="normal-case tracking-normal text-[#2B0A33]/55">
+              · நாள் &amp; இடம்
+            </span>
+          </p>
           <div className="flex items-start gap-3">
             <CalendarDays className="mt-0.5 size-5 shrink-0 text-[#D6336C]" />
             <p className="text-sm font-medium text-[#2B0A33]">

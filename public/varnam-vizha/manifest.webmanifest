@@ -1,0 +1,17 @@
+{
+  "name": "Varnam Vizha · வர்ணம் விழா",
+  "short_name": "Varnam Vizha",
+  "start_url": "/varnam-vizha",
+  "scope": "/varnam-vizha",
+  "display": "standalone",
+  "background_color": "#FFF9F0",
+  "theme_color": "#3B0A45",
+  "icons": [
+    {
+      "src": "/varnam-vizha/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

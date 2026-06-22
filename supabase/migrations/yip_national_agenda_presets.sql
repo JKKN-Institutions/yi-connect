@@ -19,13 +19,13 @@ from (
 on conflict (chapter_name, name)
   do update set items = excluded.items, is_global = true, updated_at = now();
 
--- ── Seed 2: Maria's Flow (DRAFT) — party/government formation moved BEFORE the
--- Speaker nomination block (Maria's 2026-06-23 call). Marked DRAFT: the exact
--- split of "party formation" vs "government formation" and whether MuPI is 90s or
--- 90min are still to be confirmed with Maria. It is an opt-in option, not the
--- default, so a best-interpretation draft is safe — refine via Save-as-National.
+-- ── Seed 2: Shortened Flow — party/government formation moved BEFORE the Speaker
+-- nomination block (Maria's 2026-06-23 call). The exact split of "party
+-- formation" vs "government formation" and whether MuPI is 90s or 90min are still
+-- to be confirmed with Maria; it is an opt-in option, not the default, and is
+-- refined via Save-as-National.
 insert into yip.agenda_presets (chapter_name, yi_chapter_id, name, is_global, items)
-select 'National', null, 'Maria''s Flow — Formation→Speaker (DRAFT)', true,
+select 'National', null, 'Shortened Flow', true,
   coalesce(jsonb_agg(to_jsonb(t) order by t.day, t.sequence_order), '[]'::jsonb)
 from (
   select day,

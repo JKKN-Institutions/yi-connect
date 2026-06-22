@@ -1674,6 +1674,7 @@ export type Database = {
         Row: {
           bill_draft_quality: number
           committee_name: string
+          jury_assignment_id: string
           created_at: string
           event_id: string
           feasibility: number
@@ -1689,6 +1690,7 @@ export type Database = {
         Insert: {
           bill_draft_quality?: number
           committee_name: string
+          jury_assignment_id: string
           created_at?: string
           event_id: string
           feasibility?: number
@@ -1704,6 +1706,7 @@ export type Database = {
         Update: {
           bill_draft_quality?: number
           committee_name?: string
+          jury_assignment_id?: string
           created_at?: string
           event_id?: string
           feasibility?: number
@@ -1722,6 +1725,77 @@ export type Database = {
             columns: ["event_id"]
             isOneToOne: false
             referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      committee_meta: {
+        Row: {
+          chair_lead: string | null
+          committee_name: string
+          event_id: string
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          chair_lead?: string | null
+          committee_name: string
+          event_id: string
+          id?: string
+          updated_at?: string
+        }
+        Update: {
+          chair_lead?: string | null
+          committee_name?: string
+          event_id?: string
+          id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "committee_meta_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      jury_committee_assignments: {
+        Row: {
+          committee_name: string
+          created_at: string
+          event_id: string
+          id: string
+          jury_assignment_id: string
+        }
+        Insert: {
+          committee_name: string
+          created_at?: string
+          event_id: string
+          id?: string
+          jury_assignment_id: string
+        }
+        Update: {
+          committee_name?: string
+          created_at?: string
+          event_id?: string
+          id?: string
+          jury_assignment_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "jury_committee_assignments_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "jury_committee_assignments_jury_assignment_id_fkey"
+            columns: ["jury_assignment_id"]
+            isOneToOne: false
+            referencedRelation: "jury_assignments"
             referencedColumns: ["id"]
           },
         ]

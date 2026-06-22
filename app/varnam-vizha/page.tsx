@@ -37,7 +37,7 @@ export default function VarnamHome() {
               See the 2026 programme
             </Link>
             <Link
-              href="/varnam-vizha/dashboard"
+              href="/varnam-vizha/login"
               className="rounded-full border border-white/40 px-6 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
             >
               Committee sign in

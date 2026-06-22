@@ -24,7 +24,7 @@ export function VarnamHeader() {
             Events
           </Link>
           <Link
-            href="/varnam-vizha/dashboard"
+            href="/varnam-vizha/login"
             className="rounded-full bg-[#3B0A45] px-4 py-1.5 text-white transition-colors hover:bg-[#2B0A33]"
           >
             Committee

@@ -40,12 +40,20 @@ export function Forbidden403({
             .
           </p>
 
-          <Link
-            href="/varnam-vizha"
-            className="inline-flex items-center justify-center rounded-lg bg-[#3B0A45] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#2B0A33]"
-          >
-            Back to Varnam Vizha
-          </Link>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Link
+              href="/varnam-vizha/login"
+              className="inline-flex flex-1 items-center justify-center rounded-lg bg-[#3B0A45] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#2B0A33]"
+            >
+              Sign in
+            </Link>
+            <Link
+              href="/varnam-vizha"
+              className="inline-flex flex-1 items-center justify-center rounded-lg border border-[#3B0A45]/10 bg-white px-4 py-2 text-sm font-medium text-[#2B0A33] transition-colors hover:bg-[#3B0A45]/5"
+            >
+              Back to Varnam Vizha
+            </Link>
+          </div>
         </div>
       </div>
     </div>

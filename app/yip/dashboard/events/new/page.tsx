@@ -529,7 +529,9 @@ export default function NewEventPage() {
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
                             <p className="text-sm font-semibold text-gray-900">
-                              {c.committee}
+                              {c.topic_number != null
+                                ? `${c.topic_number} · ${c.committee}`
+                                : c.committee}
                             </p>
                             <span className="shrink-0 rounded border border-gray-300 bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600">
                               Committee

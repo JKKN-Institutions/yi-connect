@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   setAgendaItemInRun,
+  setAgendaItemScoringVoting,
   reorderAgenda,
   updateAgendaItem,
   addAgendaItem,
@@ -191,6 +192,34 @@ export function AgendaSetupClient({
       item.id,
       item.status === "skipped" // currently excluded → include it
     );
+    setBusyId(null);
+    if (!res.success) {
+      setError(res.error);
+      return;
+    }
+    router.refresh();
+  }
+
+  async function onToggleScored(item: AgendaItem) {
+    setError(null);
+    setBusyId(item.id);
+    const res = await setAgendaItemScoringVoting(eventId, item.id, {
+      is_scoreable: !item.is_scoreable,
+    });
+    setBusyId(null);
+    if (!res.success) {
+      setError(res.error);
+      return;
+    }
+    router.refresh();
+  }
+
+  async function onToggleVoting(item: AgendaItem) {
+    setError(null);
+    setBusyId(item.id);
+    const res = await setAgendaItemScoringVoting(eventId, item.id, {
+      use_for_voting: !item.use_for_voting,
+    });
     setBusyId(null);
     if (!res.success) {
       setError(res.error);
@@ -543,12 +572,47 @@ export function AgendaSetupClient({
                                 Set a date
                               </span>
                             ))}
-                          {item.is_scoreable && (
-                            <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-50 px-1.5 py-0.5 font-semibold text-emerald-700">
-                              <Star className="size-3 fill-emerald-600 text-emerald-600" />
-                              Scored
-                            </span>
-                          )}
+                          <button
+                            type="button"
+                            disabled={busyId === item.id}
+                            onClick={() => onToggleScored(item)}
+                            title={
+                              item.is_scoreable
+                                ? "Jury scores this session — click to turn off"
+                                : "Turn on jury scoring (needs criteria configured)"
+                            }
+                            className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 font-semibold transition-colors disabled:opacity-50 ${
+                              item.is_scoreable
+                                ? "bg-emerald-50 text-emerald-700"
+                                : "bg-gray-100 text-gray-400 hover:bg-gray-200"
+                            }`}
+                          >
+                            <Star
+                              className={`size-3 ${
+                                item.is_scoreable
+                                  ? "fill-emerald-600 text-emerald-600"
+                                  : ""
+                              }`}
+                            />
+                            {item.is_scoreable ? "Scored" : "Score?"}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={busyId === item.id}
+                            onClick={() => onToggleVoting(item)}
+                            title={
+                              item.use_for_voting
+                                ? "Floor voting opens here — click to turn off"
+                                : "Turn on floor voting for this session"
+                            }
+                            className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 font-semibold transition-colors disabled:opacity-50 ${
+                              item.use_for_voting
+                                ? "bg-[#FF9933]/15 text-[#b35e00]"
+                                : "bg-gray-100 text-gray-400 hover:bg-gray-200"
+                            }`}
+                          >
+                            🗳 {item.use_for_voting ? "Voting" : "Vote?"}
+                          </button>
                           {item.agenda_type && (
                             <span>{prettyType(item.agenda_type)}</span>
                           )}

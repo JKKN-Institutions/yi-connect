@@ -195,14 +195,18 @@ export function VoteManager({
     }
   }, [voteSession?.id, voteSession?.status]);
 
+  // Voting is gated by the per-agenda-item "use for voting?" flag (Maria's
+  // restructuring). Speaker election, party/government formation, cabinet, and
+  // the Bill vote are flagged use_for_voting=true by default; non-voting items
+  // (anthem, MuPI, breaks…) hide the vote controls entirely. Older agenda rows
+  // predating the flag fall back to their agenda_type so existing live events
+  // never lose their Speaker/Bill vote.
   const agendaType = currentAgendaItem?.agenda_type;
-  // Party-leader elections are not tied to one agenda_type — the organiser can
-  // hold them whenever an agenda item is live. Voting + bill controls still gate
-  // on their agenda types.
-  const showVoteControls =
+  const itemUsesVoting =
+    currentAgendaItem?.use_for_voting === true ||
     agendaType === "speaker_election" ||
-    agendaType === "bill_presentation" ||
-    Boolean(currentAgendaItem);
+    agendaType === "bill_presentation";
+  const showVoteControls = Boolean(currentAgendaItem) && itemUsesVoting;
 
   // The active party-leader session's party id (config.partyId), used to label
   // its tally with member names and to name the party in the result block.
@@ -1956,10 +1960,13 @@ export function VoteManager({
             </div>
           )}
 
-          {/* Party Leader Elections — available during any agenda item */}
+          {/* Party Leader Elections — shown on any item flagged "use for voting"
+              (the whole panel is gated by showVoteControls above). Party/govt
+              formation + cabinet items are flagged by default; for an off-script
+              item the organiser flips its Vote toggle on the Agenda screen. */}
           {partyLeaderList}
 
-          {/* Leadership Elections (PM / Deputy PM / LoP) — any agenda item */}
+          {/* Leadership Elections (PM / Deputy PM / LoP) — same use_for_voting gate */}
           {leadershipList}
 
           {/* Cabinet — each ruling party elects its quota of ministers */}

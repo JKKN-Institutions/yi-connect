@@ -9,6 +9,7 @@ import {
   getParticipantsByRole,
   getAllEventParticipants,
 } from "@/app/yip/actions/positions";
+import { getChapterControlFilter } from "@/app/yip/actions/agenda";
 
 export default async function ControlPage({
   params,
@@ -37,6 +38,7 @@ export default async function ControlPage({
   const canManageAgenda = access.canManage;
   const canControlAgendaBackward =
     access.role === "super_admin" || access.role === "chapter_admin";
+  const controlAgendaFilter = await getChapterControlFilter(id);
 
   // Fetch agenda items
   const { data: agendaItems } = await supabase
@@ -110,6 +112,7 @@ export default async function ControlPage({
         initialSpeakers={currentSpeakers ?? []}
         canControlAgendaBackward={canControlAgendaBackward}
         canManageAgenda={canManageAgenda}
+        initialControlFilter={controlAgendaFilter}
         stats={{
           totalParticipants: participantRes.count ?? 0,
           checkedIn: checkedInRes.count ?? 0,

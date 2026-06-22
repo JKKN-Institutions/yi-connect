@@ -43,7 +43,7 @@ import { cn } from "@/lib/yip/utils";
 import { ROLE_LABELS, ROLE_COLORS, PARTY_COLORS } from "@/lib/yip/constants";
 import { useRealtimeEvent } from "@/lib/yip/hooks/use-realtime-event";
 import { useTimer } from "@/lib/yip/hooks/use-timer";
-import { advanceAgenda, goToPreviousAgendaItem, reopenAgendaItem, resetAgenda, startAgendaItem, skipAgendaItem, updateEventStatus, updateAgendaItemDuration, updateAgendaItemSubTimers } from "@/app/yip/actions/agenda";
+import { advanceAgenda, goToPreviousAgendaItem, reopenAgendaItem, resetAgenda, startAgendaItem, skipAgendaItem, updateEventStatus, updateAgendaItemDuration, updateAgendaItemSubTimers, setChapterControlFilter, type ControlAgendaFilter } from "@/app/yip/actions/agenda";
 import { setJuryAllowEarlierSessions } from "@/app/yip/actions/jury";
 import {
   getSubTimers,
@@ -107,6 +107,8 @@ interface ControlPanelProps {
    * item to undo a mis-advance is allowed for ordinary organisers now.
    */
   canManageAgenda: boolean;
+  /** Per-chapter Control-panel agenda filter ("full" vs "scored_voted_only"). */
+  initialControlFilter: ControlAgendaFilter;
   stats: {
     totalParticipants: number;
     checkedIn: number;
@@ -142,10 +144,13 @@ export function ControlPanel({
   initialSpeakers,
   canControlAgendaBackward,
   canManageAgenda,
+  initialControlFilter,
   stats,
 }: ControlPanelProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [controlFilter, setControlFilter] =
+    useState<ControlAgendaFilter>(initialControlFilter);
   const [timerDuration, setTimerDuration] = useState(90);
   const [speakers, setSpeakers] = useState<SpeakerWithParticipant[]>(initialSpeakers);
   const [activeDay, setActiveDay] = useState<1 | 2>(() => {
@@ -255,7 +260,31 @@ export function ControlPanel({
   }
 
   // Filter agenda items by active day
-  const dayItems = agendaItems.filter((i) => i.day === activeDay);
+  // Per-chapter Control-panel filter (Maria item 4): "scored_voted_only" trims
+  // the agenda list to sessions that are scored or voted, but always keeps the
+  // item that is live right now visible so the moderator can see where they are.
+  const dayItems = agendaItems
+    .filter((i) => i.day === activeDay)
+    .filter(
+      (i) =>
+        controlFilter === "full" ||
+        i.is_scoreable ||
+        i.use_for_voting ||
+        i.id === event.current_agenda_item_id
+    );
+
+  function handleSetControlFilter(mode: ControlAgendaFilter) {
+    if (mode === controlFilter) return;
+    const prev = controlFilter;
+    setControlFilter(mode); // optimistic
+    startTransition(async () => {
+      const res = await setChapterControlFilter(eventId, mode);
+      if (!res.success) {
+        setControlFilter(prev);
+        toast.error(res.error);
+      }
+    });
+  }
 
   // Sub-phase presets for the current item: config.sub_timers override →
   // agenda_type defaults → [] (resolved + shape-validated in the lib helper).
@@ -1306,6 +1335,35 @@ export function ControlPanel({
                   </Button>
                 </div>
               </div>
+              {canManageAgenda && (
+                <div className="mt-2 flex items-center gap-1.5 text-[11px]">
+                  <span className="text-gray-500">Show:</span>
+                  <button
+                    type="button"
+                    onClick={() => handleSetControlFilter("full")}
+                    className={cn(
+                      "rounded-full px-2 py-0.5 font-medium transition-colors",
+                      controlFilter === "full"
+                        ? "bg-[#1a1a3e] text-white"
+                        : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                    )}
+                  >
+                    Full agenda
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSetControlFilter("scored_voted_only")}
+                    className={cn(
+                      "rounded-full px-2 py-0.5 font-medium transition-colors",
+                      controlFilter === "scored_voted_only"
+                        ? "bg-[#1a1a3e] text-white"
+                        : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                    )}
+                  >
+                    Scored / voted only
+                  </button>
+                </div>
+              )}
             </CardHeader>
             <CardContent>
               <div className="max-h-[400px] space-y-0.5 overflow-y-auto">

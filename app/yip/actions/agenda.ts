@@ -635,6 +635,69 @@ export async function updateEventStatus(
 // become the live/current item. Re-including = status back to `upcoming`.
 
 /** All agenda rows for an event, ordered (day, sequence). Read-gated by canView. */
+// ─── Per-chapter control-panel agenda filter (Maria item 4) ────────────────────
+// Each chapter chooses whether the live Control panel shows the FULL agenda or
+// only the sessions that are scored/voted. Stored per chapter (keyed by
+// yi_chapter_id) so the choice carries across that chapter's events. Defaults to
+// "full" so nothing changes until a chapter opts in.
+export type ControlAgendaFilter = "full" | "scored_voted_only";
+
+export async function getChapterControlFilter(
+  eventId: string
+): Promise<ControlAgendaFilter> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canView) return "full";
+  const supabase = await createServiceClient();
+  const { data: ev } = await supabase
+    .from("events")
+    .select("yi_chapter_id")
+    .eq("id", eventId)
+    .maybeSingle();
+  if (!ev?.yi_chapter_id) return "full";
+  const { data } = await supabase
+    .from("chapter_settings")
+    .select("control_agenda_filter")
+    .eq("yi_chapter_id", ev.yi_chapter_id)
+    .maybeSingle();
+  return data?.control_agenda_filter === "scored_voted_only"
+    ? "scored_voted_only"
+    : "full";
+}
+
+export async function setChapterControlFilter(
+  eventId: string,
+  mode: ControlAgendaFilter
+): Promise<ActionResult> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage)
+    return { success: false, error: "Not authorized to manage this event" };
+  if (mode !== "full" && mode !== "scored_voted_only")
+    return { success: false, error: "Invalid filter mode" };
+  const supabase = await createServiceClient();
+  const { data: ev } = await supabase
+    .from("events")
+    .select("yi_chapter_id")
+    .eq("id", eventId)
+    .maybeSingle();
+  if (!ev?.yi_chapter_id)
+    return {
+      success: false,
+      error:
+        "This event isn't linked to a chapter yet, so the filter can't be saved.",
+    };
+  const { error } = await supabase.from("chapter_settings").upsert(
+    {
+      yi_chapter_id: ev.yi_chapter_id,
+      control_agenda_filter: mode,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "yi_chapter_id" }
+  );
+  if (error) return { success: false, error: error.message };
+  revalidatePath(`/yip/dashboard/events/${eventId}/control`);
+  return { success: true, data: null };
+}
+
 export async function getAgendaForSetup(eventId: string) {
   const access = await getYipEventAccess(eventId);
   if (!access.canView) return [];
@@ -716,6 +779,75 @@ export async function setAgendaItemInRun(
       // from an on-the-day Skip (set in skipAgendaItem). Re-including clears it.
       skip_reason: includeInRun ? null : "excluded_preevent",
     })
+    .eq("id", agendaItemId)
+    .eq("event_id", eventId);
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/yip/dashboard/events/${eventId}/agenda`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/control`);
+  return { success: true, data: null };
+}
+
+/**
+ * Per-event override of an agenda item's "score with jury?" (is_scoreable) and
+ * "use for voting?" (use_for_voting) flags. Each event inherits the template's
+ * defaults at creation, but a chapter can tune them here without touching the
+ * global template. Item 6: turning on scoring is BLOCKED when the session has no
+ * configured criteria (a juror would otherwise see an empty rubric).
+ */
+export async function setAgendaItemScoringVoting(
+  eventId: string,
+  agendaItemId: string,
+  patch: { is_scoreable?: boolean; use_for_voting?: boolean }
+): Promise<ActionResult> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage)
+    return { success: false, error: "Not authorized to manage this event" };
+  const supabase = await createServiceClient();
+
+  const { data: item } = await supabase
+    .from("agenda")
+    .select("id, session_key, agenda_type")
+    .eq("id", agendaItemId)
+    .eq("event_id", eventId)
+    .maybeSingle();
+  if (!item)
+    return { success: false, error: "Agenda item not found for this event." };
+
+  // Item 6 guard: no scoring without criteria.
+  if (patch.is_scoreable === true) {
+    let q = supabase
+      .from("session_parameters")
+      .select("parameters")
+      .eq("is_active", true);
+    if (item.session_key) q = q.eq("session_key", item.session_key);
+    else if (item.agenda_type) q = q.eq("agenda_type", item.agenda_type);
+    else
+      return {
+        success: false,
+        error:
+          "Cannot score this item: it has no session key, so no criteria can be matched. Set a session key first.",
+      };
+    const { data: cfg } = await q.limit(1);
+    const params = cfg?.[0]?.parameters;
+    if (!Array.isArray(params) || params.length === 0) {
+      const ref = item.session_key || item.agenda_type || "(none)";
+      return {
+        success: false,
+        error: `Cannot turn on scoring: no criteria are configured for session "${ref}". Add criteria under Admin → Session Scoring first.`,
+      };
+    }
+  }
+
+  const update: { is_scoreable?: boolean; use_for_voting?: boolean } = {};
+  if (typeof patch.is_scoreable === "boolean") update.is_scoreable = patch.is_scoreable;
+  if (typeof patch.use_for_voting === "boolean") update.use_for_voting = patch.use_for_voting;
+  if (Object.keys(update).length === 0)
+    return { success: true, data: null };
+
+  const { error } = await supabase
+    .from("agenda")
+    .update(update)
     .eq("id", agendaItemId)
     .eq("event_id", eventId);
   if (error) return { success: false, error: error.message };

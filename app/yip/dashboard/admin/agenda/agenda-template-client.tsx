@@ -42,6 +42,7 @@ type FormState = {
   mode: AgendaMode;
   is_scoreable: boolean;
   session_key: string;
+  use_for_voting: boolean;
 };
 
 const EMPTY: FormState = {
@@ -54,6 +55,7 @@ const EMPTY: FormState = {
   mode: "party",
   is_scoreable: false,
   session_key: "",
+  use_for_voting: false,
 };
 
 const MODE_BADGE: Record<AgendaMode, string> = {
@@ -99,6 +101,7 @@ export function AgendaTemplateClient({
       mode: item.mode,
       is_scoreable: item.is_scoreable,
       session_key: item.session_key ?? "",
+      use_for_voting: item.use_for_voting,
     });
     setEditing(item);
     setCreating(false);
@@ -128,6 +131,7 @@ export function AgendaTemplateClient({
       mode: form.mode,
       is_scoreable: form.is_scoreable,
       session_key: form.session_key.trim() || null,
+      use_for_voting: form.use_for_voting,
     };
     startTransition(async () => {
       const res = await adminUpsertAgendaItem(payload, editing?.id);
@@ -343,17 +347,30 @@ export function AgendaTemplateClient({
                 rows={2}
               />
             </div>
-            <label className="flex items-center gap-2 text-sm text-[#1a1a3e]/80">
-              <input
-                type="checkbox"
-                checked={form.is_scoreable}
-                onChange={(e) =>
-                  setForm({ ...form, is_scoreable: e.target.checked })
-                }
-                className="size-4"
-              />
-              Scoreable (jury scores this session)
-            </label>
+            <div className="flex flex-col gap-2 rounded-lg border border-[#1a1a3e]/10 bg-[#1a1a3e]/[0.02] px-3 py-2.5">
+              <label className="flex items-center gap-2 text-sm text-[#1a1a3e]/80">
+                <input
+                  type="checkbox"
+                  checked={form.is_scoreable}
+                  onChange={(e) =>
+                    setForm({ ...form, is_scoreable: e.target.checked })
+                  }
+                  className="size-4"
+                />
+                Score with jury? <span className="text-[#1a1a3e]/50">(jury scores this session)</span>
+              </label>
+              <label className="flex items-center gap-2 text-sm text-[#1a1a3e]/80">
+                <input
+                  type="checkbox"
+                  checked={form.use_for_voting}
+                  onChange={(e) =>
+                    setForm({ ...form, use_for_voting: e.target.checked })
+                  }
+                  className="size-4"
+                />
+                Use for voting? <span className="text-[#1a1a3e]/50">(opens floor voting here — e.g. Speaker election, Bill vote)</span>
+              </label>
+            </div>
             {error && (
               <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
                 {error}
@@ -426,7 +443,7 @@ function DayTable({
               <TableHead className="w-36">Type</TableHead>
               <TableHead className="w-20">Mins</TableHead>
               <TableHead className="w-28">Mode</TableHead>
-              <TableHead className="w-24">Scoreable</TableHead>
+              <TableHead className="w-28">Scored / Vote</TableHead>
               <TableHead className="w-24"></TableHead>
             </TableRow>
           </TableHeader>
@@ -473,11 +490,18 @@ function DayTable({
                   </Badge>
                 </TableCell>
                 <TableCell className="text-xs">
-                  {item.is_scoreable ? (
-                    <span className="text-[#138808] font-medium">Yes</span>
-                  ) : (
-                    <span className="text-[#1a1a3e]/40">No</span>
-                  )}
+                  <div className="flex flex-col gap-0.5">
+                    <span>
+                      {item.is_scoreable ? (
+                        <span className="text-[#138808] font-medium">★ Scored</span>
+                      ) : (
+                        <span className="text-[#1a1a3e]/40">Not scored</span>
+                      )}
+                    </span>
+                    {item.use_for_voting && (
+                      <span className="text-[#FF9933] font-medium">🗳 Voting</span>
+                    )}
+                  </div>
                 </TableCell>
                 <TableCell>
                   <div className="flex gap-1 justify-end">

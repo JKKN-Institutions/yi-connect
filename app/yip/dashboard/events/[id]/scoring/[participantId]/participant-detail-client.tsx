@@ -73,6 +73,11 @@ export function ParticipantDetailClient({
   }
 
   // Export this participant's jury scores as a CSV (client-side, no deps).
+  // Auditable layout: EVERY individual turn (occurrence) is its own row, then a
+  // second block shows the averages — each juror's mean across their turns, and
+  // the SESSION average computed two-level (mean of per-juror means), exactly as
+  // the results engine does. This makes Question Hour (multiple turns per juror)
+  // fully traceable: all turns AND the average that feeds the score.
   function exportCsv() {
     const criteriaKeys = Array.from(
       new Set(scores.flatMap((s) => Object.keys(s.criteria_scores)))
@@ -81,8 +86,14 @@ export function ParticipantDetailClient({
       const str = v == null ? "" : String(v);
       return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
     };
+    const round2 = (n: number) => Math.round(n * 100) / 100;
+    const sessionLabelOf = (s: ParticipantScoreRow) =>
+      s.session_title != null
+        ? `Day ${s.session_day} - ${s.session_title}`
+        : "Overall";
     const header = [
       "Juror",
+      "Turn",
       "Session",
       "Total",
       ...criteriaKeys,
@@ -91,18 +102,17 @@ export function ParticipantDetailClient({
       "Status",
       "Submitted At",
     ];
-    const lines = scores.map((s) => {
+    const blank = criteriaKeys.map(() => "");
+    // Block 1 — every individual turn.
+    const turnLines = scores.map((s) => {
       const remarks = (Object.keys(s.flags) as (keyof typeof s.flags)[])
         .filter((k) => s.flags[k])
         .map((k) => FLAG_LABELS[k])
         .join("; ");
-      const sessionLabel =
-        s.session_title != null
-          ? `Day ${s.session_day} - ${s.session_title}`
-          : "Overall";
       return [
         s.jury_name,
-        sessionLabel,
+        `Turn ${s.occurrence}`,
+        sessionLabelOf(s),
         s.total_score,
         ...criteriaKeys.map((k) => s.criteria_scores[k] ?? ""),
         remarks,
@@ -113,7 +123,78 @@ export function ParticipantDetailClient({
         .map(esc)
         .join(",");
     });
-    const csv = [header.map(esc).join(","), ...lines].join("\n");
+    // Block 2 — two-level averages (per-juror mean → mean across jurors),
+    // grouped by agenda_item_id exactly like the results engine. The Day+title
+    // is only a display label (two distinct items could share one), so the
+    // grouping key must be the item id, never the label.
+    const bySession = new Map<
+      string,
+      { label: string; jurors: Map<string, { name: string; total: number }[]> }
+    >();
+    for (const s of scores) {
+      const key = s.agenda_item_id ?? sessionLabelOf(s);
+      let grp = bySession.get(key);
+      if (!grp) {
+        grp = { label: sessionLabelOf(s), jurors: new Map() };
+        bySession.set(key, grp);
+      }
+      const arr = grp.jurors.get(s.jury_assignment_id) ?? [];
+      arr.push({ name: s.jury_name, total: s.total_score });
+      grp.jurors.set(s.jury_assignment_id, arr);
+    }
+    const avgLines: string[] = [];
+    for (const [, grp] of bySession) {
+      const sk = grp.label;
+      const jurorMap = grp.jurors;
+      const perJurorMeans: number[] = [];
+      for (const [, turns] of jurorMap) {
+        const mean = turns.reduce((a, b) => a + b.total, 0) / turns.length;
+        perJurorMeans.push(mean);
+        if (turns.length > 1) {
+          avgLines.push(
+            [
+              turns[0].name,
+              `avg of ${turns.length} turns`,
+              sk,
+              round2(mean),
+              ...blank,
+              "",
+              "",
+              "average",
+              "",
+            ]
+              .map(esc)
+              .join(",")
+          );
+        }
+      }
+      const sessionAvg =
+        perJurorMeans.reduce((a, b) => a + b, 0) / perJurorMeans.length;
+      avgLines.push(
+        [
+          "— SESSION AVERAGE —",
+          "(mean of jurors)",
+          sk,
+          round2(sessionAvg),
+          ...blank,
+          "",
+          "",
+          "average",
+          "",
+        ]
+          .map(esc)
+          .join(",")
+      );
+    }
+    const csv = [
+      header.map(esc).join(","),
+      ...turnLines,
+      "",
+      esc(
+        "AVERAGES — two-level mean of submitted juror totals (each juror's turns averaged first, then the mean across jurors). Note: Committee and Bill sessions are rolled up from a shared committee score in the final results engine, so for those sessions the average shown here is the raw juror total, not the final session figure."
+      ),
+      ...avgLines,
+    ].join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");

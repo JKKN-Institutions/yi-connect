@@ -420,6 +420,25 @@ export async function importParticipants(
   }
   const supabase = await createServiceClient();
 
+  // Committee numbers in the uploaded sheet map to the event's committees
+  // (committee_topics keys, 1-based) so uploaded events show the real ministry
+  // name — same as in-app allocation. Empty when the event has no committees,
+  // which keeps the "Committee N" fallback below.
+  const { data: importEvent } = await supabase
+    .from("events")
+    .select("committee_topics")
+    .eq("id", eventId)
+    .single();
+  const eventCommitteeNames = ((): string[] => {
+    const ct = (importEvent as { committee_topics?: unknown } | null)
+      ?.committee_topics;
+    if (Array.isArray(ct))
+      return ct.map(String).map((s) => s.trim()).filter(Boolean);
+    if (ct && typeof ct === "object")
+      return Object.keys(ct).map((s) => s.trim()).filter(Boolean);
+    return [];
+  })();
+
   // Benches (government/opposition): when false, lettered parties import as a
   // FLAT house — the parties are still created (so party names show on the
   // dashboard) but each participant's party_side is left null. The organiser
@@ -559,7 +578,10 @@ export async function importParticipants(
         : null;
     const committee_name =
       row.committee_name?.trim() ||
-      (committee_number !== null ? `Committee ${committee_number}` : null);
+      (committee_number !== null
+        ? eventCommitteeNames[committee_number - 1] ??
+          `Committee ${committee_number}`
+        : null);
 
     try {
       const code = await generateUniqueCode(supabase, eventId, existingCodes);

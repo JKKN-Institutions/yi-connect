@@ -366,7 +366,7 @@ export default async function ParticipantPage() {
                 <DetailItem
                   icon={Users}
                   label="Committee"
-                  value={committeeLabel(participant.committee_number)}
+                  value={participant.committee_name ?? committeeLabel(participant.committee_number)}
                   fullWidth
                 />
               )}

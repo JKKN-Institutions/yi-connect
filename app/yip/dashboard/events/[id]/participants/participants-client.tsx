@@ -62,6 +62,7 @@ type Participant = {
   city: string | null;
   home_state: string | null;
   party_side: string | null;
+  party_number: number | null;
   parliament_role: string | null;
   constituency_name: string | null;
   constituency_number: number | null;
@@ -888,6 +889,7 @@ export function ParticipantsClient({
                     <ArrowUpDown className="size-3" />
                   </button>
                 </TableHead>
+                <TableHead className="w-16">Party</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead className="w-20">Const. No.</TableHead>
                 <TableHead>Constituency</TableHead>
@@ -940,6 +942,15 @@ export function ParticipantsClient({
                     </div>
                   </TableCell>
                   <TableCell className="font-medium">{p.full_name}</TableCell>
+                  <TableCell>
+                    {p.party_number != null ? (
+                      <span className="text-xs font-medium">
+                        {String.fromCharCode(64 + p.party_number)}
+                      </span>
+                    ) : (
+                      <span className="text-gray-400">—</span>
+                    )}
+                  </TableCell>
                   <TableCell>
                     {p.parliament_role ? (
                       <Badge variant="secondary" className="bg-gray-100 text-gray-700">

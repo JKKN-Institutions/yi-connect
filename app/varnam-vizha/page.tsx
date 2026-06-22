@@ -31,19 +31,17 @@ export default function VarnamHome() {
           </p>
           <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
             <Link
-              href="/varnam-vizha/dashboard"
+              href="/varnam-vizha/events"
               className="rounded-full bg-white px-6 py-3 text-sm font-semibold text-[#3B0A45] shadow-lg transition hover:bg-white/90"
+            >
+              See the 2026 programme
+            </Link>
+            <Link
+              href="/varnam-vizha/dashboard"
+              className="rounded-full border border-white/40 px-6 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
             >
               Committee sign in
             </Link>
-            <a
-              href="https://www.instagram.com/erodevarnamvizha/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="rounded-full border border-white/40 px-6 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
-            >
-              @erodevarnamvizha
-            </a>
           </div>
         </div>
       </section>

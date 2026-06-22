@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getYipSession } from "@/lib/yip/auth/yip-session";
 import Link from "next/link";
-import { LogOut, MessageSquare } from "lucide-react";
+import { LogOut, MessageSquare, Home } from "lucide-react";
 import { CHAT_ENABLED } from "@/lib/yip/chat-config";
 import { GuideLauncher } from "@/components/yip/guide";
 import { GUIDES } from "@/lib/yip/guide/content";
@@ -50,8 +50,20 @@ export default async function ParticipantLayout({
       {/* Header */}
       <header className="sticky top-0 z-50 border-b border-[#FF9933]/20 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80">
         <div className="flex h-14 items-center justify-between px-4">
-          {/* Logo mark removed 2026-06-16 — re-add later */}
-          <div className="flex items-center gap-2.5 min-w-0">
+          {/* Home affordance — tapping the mark/title returns to /yip/me from ANY
+              sub-page (every leadership desk, vote, motion, questions, bill, etc.)
+              for EVERY role. Critical because YIP is an installed standalone PWA
+              (manifest display:'standalone') with no browser back button, so
+              without this a participant who opens a desk is otherwise stranded. */}
+          <Link
+            href="/yip/me"
+            aria-label="Back to my dashboard"
+            title="Back to my dashboard"
+            className="flex items-center gap-2.5 min-w-0 -ml-1 rounded-lg px-1.5 py-1 hover:bg-[#FF9933]/10 transition-colors"
+          >
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-[#FF9933]/10 text-[#FF9933]">
+              <Home className="size-4" />
+            </span>
             <div className="min-w-0">
               <p className="text-sm font-semibold text-gray-900 truncate">
                 Young Indians Parliament
@@ -60,7 +72,7 @@ export default async function ParticipantLayout({
                 {session.name}
               </p>
             </div>
-          </div>
+          </Link>
 
           <div className="flex shrink-0 items-center gap-1">
             {/* Chat entry point — only rendered when the chat flag is ON.

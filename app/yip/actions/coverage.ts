@@ -12,6 +12,7 @@
 // ═══════════════════════════════════════════════════════════════════════
 
 import { createServiceClient } from "@/lib/yip/supabase/server";
+import { fetchAllRows } from "@/lib/pagination";
 import { requireSuperAdmin } from "@/lib/yip/auth/require-super-admin";
 import { YI_ZONES } from "@/lib/yip/hierarchy";
 import { EVENT_STATUSES, type EventStatus } from "@/lib/yip/constants";
@@ -124,7 +125,7 @@ export async function getChapterCoverage(): Promise<CoverageReport> {
 
   const svc = await createServiceClient();
 
-  const [chaptersRes, eventsRes, participantsRes] = await Promise.all([
+  const [chaptersRes, eventsRes] = await Promise.all([
     svc
       .schema("yi")
       .from("chapters")
@@ -135,12 +136,25 @@ export async function getChapterCoverage(): Promise<CoverageReport> {
       .from("events")
       .select("id, status, yi_chapter_id, created_at, results_published_at")
       .not("yi_chapter_id", "is", null),
-    svc.from("participants").select("event_id"),
   ]);
+
+  // PostgREST caps a single response at ~1000 rows; participants across all
+  // events already exceeds that, so a bare select silently undercounts the
+  // per-chapter rollup below. Page through in full batches.
+  const participants = await fetchAllRows<{ event_id: string | null }>(
+    (from, to) =>
+      svc
+        .from("participants")
+        .select("event_id")
+        .order("id", { ascending: true })
+        .range(from, to) as unknown as PromiseLike<{
+        data: { event_id: string | null }[] | null;
+        error: unknown;
+      }>
+  );
 
   const chapters = chaptersRes.data ?? [];
   const events = (eventsRes.data ?? []) as EventRow[];
-  const participants = participantsRes.data ?? [];
 
   // event_id → chapter_id, so participant counts roll up to the chapter.
   const eventToChapter = new Map<string, string>();

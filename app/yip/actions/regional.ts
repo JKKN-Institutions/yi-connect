@@ -19,6 +19,7 @@
  */
 
 import { createServiceClient } from "@/lib/yip/supabase/server";
+import { fetchAllRows } from "@/lib/pagination";
 import { requireSuperAdmin } from "@/lib/yip/auth/require-super-admin";
 import { YI_ZONES, type YiZone } from "@/lib/yip/hierarchy";
 
@@ -313,11 +314,21 @@ export async function listZoneSummaries(): Promise<ZoneSummary[]> {
   const allEventIds = (events ?? []).map((e) => e.id);
   const participantsByEvent = new Map<string, number>();
   if (allEventIds.length > 0) {
-    const { data: parts } = await supabase
-      .from("participants")
-      .select("event_id")
-      .in("event_id", allEventIds);
-    for (const p of parts ?? []) {
+    // PostgREST caps a single response at ~1000 rows; participants across all
+    // events exceeds that, so a bare select silently undercounts the per-zone
+    // totals below. Page through in full batches.
+    const parts = await fetchAllRows<{ event_id: string }>((from, to) =>
+      supabase
+        .from("participants")
+        .select("event_id")
+        .in("event_id", allEventIds)
+        .order("id", { ascending: true })
+        .range(from, to) as unknown as PromiseLike<{
+        data: { event_id: string }[] | null;
+        error: unknown;
+      }>
+    );
+    for (const p of parts) {
       participantsByEvent.set(
         p.event_id,
         (participantsByEvent.get(p.event_id) ?? 0) + 1

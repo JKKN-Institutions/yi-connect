@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
+import { fetchAllRows } from "@/lib/pagination";
 import { isCurrentUserPlatformAdmin } from "@/app/yi-future/actions/national-admins";
 import {
   whatsappStatusForOutreach,
@@ -53,13 +54,24 @@ async function getChapters(): Promise<ChapterRow[]> {
 
 async function getDelegateCounts(editionId: string): Promise<Map<string, number>> {
   const svc = await createServiceClient();
-  const { data } = await svc
-    .schema("future")
-    .from("delegates")
-    .select("id, chapter_id")
-    .eq("edition_id", editionId);
+  // PostgREST caps a single response at ~1000 rows; this edition already has
+  // 1100+ delegates, so a bare select silently undercounts the per-chapter
+  // totals (and the lowest-registration-first sort below). Page through in full
+  // batches.
+  const rows = await fetchAllRows<DelegateRow>((from, to) =>
+    svc
+      .schema("future")
+      .from("delegates")
+      .select("id, chapter_id")
+      .eq("edition_id", editionId)
+      .order("id", { ascending: true })
+      .range(from, to) as unknown as PromiseLike<{
+      data: DelegateRow[] | null;
+      error: unknown;
+    }>
+  );
   const counts = new Map<string, number>();
-  for (const d of (data as unknown as DelegateRow[]) ?? []) {
+  for (const d of rows) {
     counts.set(d.chapter_id, (counts.get(d.chapter_id) ?? 0) + 1);
   }
   return counts;

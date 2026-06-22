@@ -1,6 +1,7 @@
 "use server";
 
 import { createServiceClient } from "@/lib/yip/supabase/server";
+import { fetchAllRows } from "@/lib/pagination";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { revalidatePath } from "next/cache";
 import { YI_ZONES, type YiZone, type YiRole } from "@/lib/yip/hierarchy";
@@ -108,9 +109,19 @@ export async function getZoneSummary(): Promise<
   const { data: events } = await supabase
     .from("events")
     .select("id, zone, chapter_name, level, results_published_at");
-  const { data: participants } = await supabase
-    .from("participants")
-    .select("event_id");
+  // PostgREST caps a single response at ~1000 rows; participants across all
+  // events already exceeds that, so a bare select silently undercounts the
+  // per-zone rollup below. Page through in full batches.
+  const participants = await fetchAllRows<{ event_id: string }>((from, to) =>
+    supabase
+      .from("participants")
+      .select("event_id")
+      .order("id", { ascending: true })
+      .range(from, to) as unknown as PromiseLike<{
+      data: { event_id: string }[] | null;
+      error: unknown;
+    }>
+  );
   const { data: rms } = await supabase
     .from("organizers")
     .select("zone, full_name")
@@ -205,11 +216,34 @@ export async function getNationalOverview(): Promise<{
   const eventIds = events.map((e) => e.id);
   const safeIds = eventIds.length ? eventIds : ["00000000-0000-0000-0000-000000000000"];
 
-  const [{ data: partsRaw }, { data: juryRaw }] = await Promise.all([
-    supabase.from("participants").select("event_id, school_name, created_at").in("event_id", safeIds),
-    supabase.from("jury_assignments").select("event_id").eq("is_active", true).in("event_id", safeIds),
-  ]);
-  const parts = partsRaw ?? [];
+  const { data: juryRaw } = await supabase
+    .from("jury_assignments")
+    .select("event_id")
+    .eq("is_active", true)
+    .in("event_id", safeIds);
+
+  // PostgREST caps a single response at ~1000 rows; participants across all
+  // events exceeds that, so a bare select silently undercounts totalParticipants
+  // / schools / the per-event roster counts below. Page through in full batches.
+  const parts = await fetchAllRows<{
+    event_id: string;
+    school_name: string | null;
+    created_at: string | null;
+  }>((from, to) =>
+    supabase
+      .from("participants")
+      .select("event_id, school_name, created_at")
+      .in("event_id", safeIds)
+      .order("id", { ascending: true })
+      .range(from, to) as unknown as PromiseLike<{
+      data: {
+        event_id: string;
+        school_name: string | null;
+        created_at: string | null;
+      }[] | null;
+      error: unknown;
+    }>
+  );
 
   const rosterCount = new Map<string, number>();
   for (const p of parts) rosterCount.set(p.event_id, (rosterCount.get(p.event_id) ?? 0) + 1);

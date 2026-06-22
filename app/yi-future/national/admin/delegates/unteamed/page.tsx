@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
+import { fetchAllRows } from "@/lib/pagination";
 import { TRACK_LABELS } from "@/lib/yi-future/constants";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -63,31 +64,46 @@ async function getActiveEdition(): Promise<EditionRow | null> {
 async function getUnteamedDelegates(editionId: string): Promise<DelegateRow[]> {
   const svc = await createServiceClient();
 
-  // Get all delegates in this edition
-  const { data: delegates } = await svc
-    .schema("future")
-    .from("delegates")
-    .select(
-      "id, full_name, email, phone, whatsapp, college_id, chapter_id, preferred_track_slug, registered_at, email_verified_at"
-    )
-    .eq("edition_id", editionId)
-    .eq("is_active", true);
-
-  if (!delegates || delegates.length === 0) return [];
-
-  // Get delegate IDs that are already in a team
-  const delegateIds = delegates.map((d: { id: string }) => d.id);
-  const { data: teamMembers } = await svc
-    .schema("future")
-    .from("team_members")
-    .select("delegate_id")
-    .in("delegate_id", delegateIds);
-
-  const teamedIds = new Set(
-    ((teamMembers as { delegate_id: string }[] | null) ?? []).map((tm) => tm.delegate_id)
+  // Get all delegates in this edition. PostgREST caps a single response at
+  // ~1000 rows; this edition already has 1100+ delegates, so a bare select
+  // silently drops some — and any dropped delegate would be mis-classified as
+  // teamed/unteamed here. Page through in full batches.
+  const delegates = await fetchAllRows<DelegateRow>((from, to) =>
+    svc
+      .schema("future")
+      .from("delegates")
+      .select(
+        "id, full_name, email, phone, whatsapp, college_id, chapter_id, preferred_track_slug, registered_at, email_verified_at"
+      )
+      .eq("edition_id", editionId)
+      .eq("is_active", true)
+      .order("id", { ascending: true })
+      .range(from, to) as unknown as PromiseLike<{
+      data: DelegateRow[] | null;
+      error: unknown;
+    }>
   );
 
-  return (delegates as DelegateRow[]).filter((d) => !teamedIds.has(d.id));
+  if (delegates.length === 0) return [];
+
+  // Which delegates are already on a team. team_members has no edition column
+  // and is small (a few hundred rows), so page the whole table rather than
+  // filtering by a 1000+ id list (which would overflow the request URL).
+  const teamMembers = await fetchAllRows<{ delegate_id: string }>((from, to) =>
+    svc
+      .schema("future")
+      .from("team_members")
+      .select("delegate_id")
+      .order("delegate_id", { ascending: true })
+      .range(from, to) as unknown as PromiseLike<{
+      data: { delegate_id: string }[] | null;
+      error: unknown;
+    }>
+  );
+
+  const teamedIds = new Set(teamMembers.map((tm) => tm.delegate_id));
+
+  return delegates.filter((d) => !teamedIds.has(d.id));
 }
 
 async function getAllChapters(): Promise<ChapterRow[]> {

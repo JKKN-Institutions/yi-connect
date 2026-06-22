@@ -466,7 +466,9 @@ export async function importParticipants(
   }
 
   // ── Create-or-find parties for this event ──
-  // First letter alphabetically -> ruling, rest -> opposition (organizer can flip later).
+  // Benchless model: parties are created with NO side. Ruling/opposition is
+  // decided on event day, off-app — never auto-assigned at upload. (Matches
+  // in-app allocation, which also creates side-less parties.)
   const sortedLetters = [...uniqueLetters].sort();
   const partyMap = new Map<string, { id: string; side: PartySide | null; number: number }>();
 
@@ -493,17 +495,11 @@ export async function importParticipants(
         partyMap.set(letter, found);
         continue;
       }
-      // Side default: only assign 'ruling' if NO ruling party exists yet for the event
-      // (covers re-import + multi-batch scenarios cleanly).
-      const hasRuling =
-        [...byName.values()].some((p) => p.side === "ruling") ||
-        [...partyMap.values()].some((p) => p.side === "ruling");
-      const side: PartySide = hasRuling ? "opposition" : "ruling";
       const number = letterToIndex(letter);
 
       const { data: inserted, error: insErr } = await supabase
         .from("parties")
-        .insert({ event_id: eventId, name, party_number: number, side })
+        .insert({ event_id: eventId, name, party_number: number, side: null })
         .select("id, side, party_number")
         .single();
 

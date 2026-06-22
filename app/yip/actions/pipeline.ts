@@ -1,6 +1,7 @@
 "use server";
 
 import { createServiceClient } from "@/lib/yip/supabase/server";
+import { fetchAllRows } from "@/lib/pagination";
 import { requireSuperAdmin } from "@/lib/yip/auth/require-super-admin";
 import { revalidatePath } from "next/cache";
 
@@ -461,11 +462,24 @@ export async function getSeasonEvents(
 
   let participantData: { event_id: string; qualified_for_next: boolean | null }[] = [];
   if (eventIds.length > 0) {
-    const { data } = await supabase
-      .from("participants")
-      .select("event_id, qualified_for_next")
-      .in("event_id", eventIds);
-    participantData = data ?? [];
+    // PostgREST caps a single response at ~1000 rows; a full season's
+    // participants across all events exceeds that, so a bare select silently
+    // undercounts the per-event participant/qualified counts below. Page through
+    // in full batches.
+    participantData = await fetchAllRows<{
+      event_id: string;
+      qualified_for_next: boolean | null;
+    }>((from, to) =>
+      supabase
+        .from("participants")
+        .select("event_id, qualified_for_next")
+        .in("event_id", eventIds)
+        .order("id", { ascending: true })
+        .range(from, to) as unknown as PromiseLike<{
+        data: { event_id: string; qualified_for_next: boolean | null }[] | null;
+        error: unknown;
+      }>
+    );
   }
 
   // Build count maps

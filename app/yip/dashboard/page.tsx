@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/yip/supabase/server";
+import { fetchAllRows } from "@/lib/pagination";
 import { isCurrentUserSuperAdmin } from "@/lib/yip/auth/require-super-admin";
 import { getRegionalAdminZones, getYipChapterScopes } from "@/lib/yi/auth/yi-directory-roles";
 import { Plus, CalendarDays } from "lucide-react";
@@ -51,20 +52,29 @@ export default async function DashboardPage() {
   let participantCounts: Record<string, number> = {};
 
   if (eventIds.length > 0) {
-    const { data: counts } = await supabase
-      .from("participants")
-      .select("event_id")
-      .in("event_id", eventIds);
+    // PostgREST caps a single response at ~1000 rows; a national/regional viewer
+    // sees many events whose participants together exceed that, so a bare select
+    // silently undercounts the per-event counts on the cards. Page through in
+    // full batches.
+    const counts = await fetchAllRows<{ event_id: string }>((from, to) =>
+      supabase
+        .from("participants")
+        .select("event_id")
+        .in("event_id", eventIds)
+        .order("id", { ascending: true })
+        .range(from, to) as unknown as PromiseLike<{
+        data: { event_id: string }[] | null;
+        error: unknown;
+      }>
+    );
 
-    if (counts) {
-      participantCounts = counts.reduce(
-        (acc, row) => {
-          acc[row.event_id] = (acc[row.event_id] || 0) + 1;
-          return acc;
-        },
-        {} as Record<string, number>
-      );
-    }
+    participantCounts = counts.reduce(
+      (acc, row) => {
+        acc[row.event_id] = (acc[row.event_id] || 0) + 1;
+        return acc;
+      },
+      {} as Record<string, number>
+    );
   }
 
   // Shape the role-scoped list for the client grid (search / filter / sort live

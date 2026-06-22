@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { createServiceClient } from "@/lib/yip/supabase/server";
+import { fetchAllRows } from "@/lib/pagination";
 import { listOrganizerProfiles } from "@/app/yip/actions/hierarchy";
 import { YI_ZONES, type YiZone } from "@/lib/yip/hierarchy";
 import { Badge } from "@/components/yip/ui/badge";
@@ -45,12 +46,26 @@ export default async function ZoneDashboardPage({
   const rm = rms[0];
 
   const eventIds = eventList.map((e) => e.id);
-  const { data: participants } = await supabase
-    .from("participants")
-    .select("event_id, school_name")
-    .in("event_id", eventIds.length > 0 ? eventIds : ["00000000-0000-0000-0000-000000000000"]);
-
-  const pList = participants ?? [];
+  // PostgREST caps a single response at ~1000 rows; a large region's participants
+  // can exceed that, so a bare select would silently undercount the totals below.
+  // Page through in full batches.
+  const pList = await fetchAllRows<{
+    event_id: string;
+    school_name: string | null;
+  }>((from, to) =>
+    supabase
+      .from("participants")
+      .select("event_id, school_name")
+      .in(
+        "event_id",
+        eventIds.length > 0 ? eventIds : ["00000000-0000-0000-0000-000000000000"]
+      )
+      .order("id", { ascending: true })
+      .range(from, to) as unknown as PromiseLike<{
+      data: { event_id: string; school_name: string | null }[] | null;
+      error: unknown;
+    }>
+  );
   const totalParticipants = pList.length;
   const uniqueSchools = new Set(pList.map((p) => p.school_name).filter(Boolean)).size;
   const resultsPublished = eventList.filter((e) => e.results_published_at !== null).length;

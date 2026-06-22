@@ -5,6 +5,13 @@ import { NudgeButton } from "./whatsapp-outreach/SendButton";
 import { NextStepWidget } from "@/components/yi-future/guide";
 import { GUIDES } from "@/lib/yi-future/guide/content";
 import { getCompletedSteps, logGuideEvent } from "@/lib/yi-future/guide/actions";
+import { AutoRefresh } from "@/components/yi-future/AutoRefresh";
+
+// The national dashboard must always show LIVE registration counts. Mark it
+// explicitly dynamic so it is never prerendered / router-cached as static, and
+// pair it with <AutoRefresh> in the page body so the installed PWA refreshes
+// itself instead of serving a stale snapshot.
+export const dynamic = "force-dynamic";
 
 type ChapterRow = {
   id: string;
@@ -157,6 +164,7 @@ export default async function NationalDashboard({
 
   return (
     <div className="space-y-6">
+      <AutoRefresh intervalMs={30000} />
       <NextStepWidget
         guide={GUIDES.lanes.national}
         basePath="/yi-future/guide"

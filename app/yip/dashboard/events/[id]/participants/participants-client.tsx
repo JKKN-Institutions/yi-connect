@@ -423,10 +423,18 @@ export function ParticipantsClient({
       p.phone || "",
       p.email || "",
       p.city || "",
-      p.home_state || "",
-      p.party_side || "",
+      p.constituency_state || p.home_state || "",
+      p.party_number != null
+        ? String.fromCharCode(64 + p.party_number)
+        : p.party_side || "",
       p.parliament_role || "",
-      p.committee_number != null ? `Committee ${p.committee_number}` : "",
+      p.committee_name
+        ? p.committee_number != null
+          ? `${p.committee_number} · ${p.committee_name}`
+          : p.committee_name
+        : p.committee_number != null
+          ? `Committee ${p.committee_number}`
+          : "",
       p.access_code,
       p.checked_in ? "Yes" : "No",
       p.checked_in_day1 ? "Yes" : "No",

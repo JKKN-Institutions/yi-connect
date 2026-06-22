@@ -978,6 +978,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: string
+          is_global: boolean
           items: Json
           name: string
           updated_at: string
@@ -988,6 +989,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          is_global?: boolean
           items?: Json
           name: string
           updated_at?: string
@@ -998,6 +1000,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          is_global?: boolean
           items?: Json
           name?: string
           updated_at?: string

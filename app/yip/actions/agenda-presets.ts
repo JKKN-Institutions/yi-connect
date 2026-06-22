@@ -29,6 +29,7 @@ export type PresetItem = {
   mode: "party" | "committee" | "mixed";
   is_scoreable: boolean;
   session_key: string | null;
+  use_for_voting: boolean;
 };
 
 export type PresetSummary = {
@@ -36,13 +37,27 @@ export type PresetSummary = {
   name: string;
   item_count: number;
   created_at: string;
+  // National presets (is_global) are published by national admins and are
+  // visible + applicable to EVERY chapter; chapter presets stay private.
+  is_global: boolean;
 };
+
+// Reserved chapter_name bucket for national/global presets — lets them coexist
+// with the existing UNIQUE(chapter_name, name) constraint without a new index.
+const NATIONAL_BUCKET = "National";
+
+// Columns snapshotted into a preset (must carry every flag the agenda needs when
+// re-seeded, including use_for_voting — else applying a preset silently disables
+// voting on every item).
+const PRESET_AGENDA_COLS =
+  "day, sequence_order, title, description, agenda_type, duration_minutes, mode, is_scoreable, session_key, use_for_voting";
 
 function asPresetItems(raw: unknown): PresetItem[] {
   return Array.isArray(raw) ? (raw as PresetItem[]) : [];
 }
 
-/** Presets for the calling event's chapter (canView-gated). */
+/** Presets for the calling event's chapter PLUS every national preset
+ * (canView-gated). National presets sort first so they read as the shared menu. */
 export async function listPresetsForEvent(
   eventId: string
 ): Promise<PresetSummary[]> {
@@ -55,33 +70,63 @@ export async function listPresetsForEvent(
     .select("chapter_name")
     .eq("id", eventId)
     .single();
-  if (!event?.chapter_name) return [];
 
-  const { data } = await supabase
+  // National presets are visible to everyone; chapter presets only to that
+  // chapter. Two explicit queries (rather than a cross-column .or) keep this
+  // robust against any chapter_name characters. National listed first.
+  const nationalRes = await supabase
     .from("agenda_presets")
-    .select("id, name, items, created_at")
-    .eq("chapter_name", event.chapter_name)
+    .select("id, name, items, created_at, is_global")
+    .eq("is_global", true)
     .order("created_at", { ascending: false });
+  const national = nationalRes.data ?? [];
 
-  return (data ?? []).map((p) => ({
+  let chapter: typeof national = [];
+  if (event?.chapter_name) {
+    const chapterRes = await supabase
+      .from("agenda_presets")
+      .select("id, name, items, created_at, is_global")
+      .eq("is_global", false)
+      .eq("chapter_name", event.chapter_name)
+      .order("created_at", { ascending: false });
+    chapter = chapterRes.data ?? [];
+  }
+
+  const rows = [...national, ...chapter];
+  return rows.map((p) => ({
     id: p.id,
     name: p.name,
     item_count: asPresetItems(p.items).length,
     created_at: p.created_at,
+    is_global: Boolean(p.is_global),
   }));
 }
 
-/** Save the event's CURRENT agenda as a named preset for its chapter (chair only). */
+/**
+ * Save the event's CURRENT agenda as a named preset.
+ *  - Chapter preset (default): chair-only (canDelete), private to the chapter.
+ *  - National preset (isGlobal): super-admin only; published to EVERY chapter so
+ *    any chapter can pick it. This is how the national team publishes the
+ *    official agenda-order options chapters choose between.
+ */
 export async function savePresetFromEvent(
   eventId: string,
-  name: string
+  name: string,
+  isGlobal = false
 ): Promise<ActionResult<{ id: string }>> {
   const access = await getYipEventAccess(eventId);
-  if (!access.canDelete)
+  if (isGlobal) {
+    if (access.role !== "super_admin")
+      return {
+        success: false,
+        error: "Only a national (super) admin can publish a National preset.",
+      };
+  } else if (!access.canDelete) {
     return {
       success: false,
       error: "Only the chapter chair or a national admin can save a preset.",
     };
+  }
 
   const trimmed = name.trim();
   if (!trimmed) return { success: false, error: "Preset name is required." };
@@ -95,7 +140,7 @@ export async function savePresetFromEvent(
     .select("chapter_name, yi_chapter_id")
     .eq("id", eventId)
     .single();
-  if (!event?.chapter_name)
+  if (!isGlobal && !event?.chapter_name)
     return {
       success: false,
       error: "This event has no chapter, so a chapter preset can't be saved.",
@@ -104,9 +149,7 @@ export async function savePresetFromEvent(
   // Snapshot the current agenda (frozen — central changes won't affect it).
   const { data: rows } = await supabase
     .from("agenda")
-    .select(
-      "day, sequence_order, title, description, agenda_type, duration_minutes, mode, is_scoreable, session_key"
-    )
+    .select(PRESET_AGENDA_COLS)
     .eq("event_id", eventId)
     .order("day")
     .order("sequence_order");
@@ -123,10 +166,12 @@ export async function savePresetFromEvent(
   const { data, error } = await supabase
     .from("agenda_presets")
     .insert({
-      chapter_name: event.chapter_name,
-      yi_chapter_id: event.yi_chapter_id,
+      // Guard above guarantees event.chapter_name is set on the non-global path.
+      chapter_name: isGlobal ? NATIONAL_BUCKET : event!.chapter_name!,
+      yi_chapter_id: isGlobal ? null : event!.yi_chapter_id,
       name: trimmed,
       items,
+      is_global: isGlobal,
       created_by: user?.id ?? null,
     })
     .select("id")
@@ -176,11 +221,12 @@ export async function applyPresetToEvent(
 
   const { data: preset } = await supabase
     .from("agenda_presets")
-    .select("id, chapter_name, items")
+    .select("id, chapter_name, items, is_global")
     .eq("id", presetId)
     .maybeSingle();
   if (!preset) return { success: false, error: "Preset not found." };
-  if (preset.chapter_name !== event.chapter_name)
+  // National presets apply to any chapter; chapter presets stay chapter-scoped.
+  if (!preset.is_global && preset.chapter_name !== event.chapter_name)
     return {
       success: false,
       error: "That preset belongs to a different chapter.",
@@ -214,7 +260,7 @@ export async function applyPresetToEvent(
   const { data: backup } = await supabase
     .from("agenda")
     .select(
-      "day, sequence_order, title, description, agenda_type, duration_minutes, mode, is_scoreable, session_key, status, skip_reason, config, planned_start"
+      "day, sequence_order, title, description, agenda_type, duration_minutes, mode, is_scoreable, session_key, use_for_voting, status, skip_reason, config, planned_start"
     )
     .eq("event_id", eventId);
 
@@ -236,6 +282,7 @@ export async function applyPresetToEvent(
     mode: it.mode ?? "party",
     is_scoreable: it.is_scoreable ?? false,
     session_key: it.session_key ?? null,
+    use_for_voting: it.use_for_voting ?? false,
     status: "upcoming" as const,
   }));
   const { error: insErr } = await supabase.from("agenda").insert(newRows);
@@ -277,15 +324,23 @@ export async function deletePreset(
     .single();
   const { data: preset } = await supabase
     .from("agenda_presets")
-    .select("id, chapter_name")
+    .select("id, chapter_name, is_global")
     .eq("id", presetId)
     .maybeSingle();
   if (!preset) return { success: false, error: "Preset not found." };
-  if (!event?.chapter_name || preset.chapter_name !== event.chapter_name)
+  if (preset.is_global) {
+    // National presets are deletable only by a national (super) admin.
+    if (access.role !== "super_admin")
+      return {
+        success: false,
+        error: "Only a national (super) admin can delete a National preset.",
+      };
+  } else if (!event?.chapter_name || preset.chapter_name !== event.chapter_name) {
     return {
       success: false,
       error: "That preset belongs to a different chapter.",
     };
+  }
 
   const { error } = await supabase
     .from("agenda_presets")

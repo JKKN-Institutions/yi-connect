@@ -29,12 +29,23 @@ export default function VarnamHome() {
             Erode&apos;s festival of colour — eleven days of art, culture, sport
             and community, every September, culminating on Erode Day (Sept 16).
           </p>
+          {/* TAMIL: needs native review */}
+          <p
+            lang="ta"
+            className="mx-auto mt-2 max-w-2xl text-base text-white/80"
+          >
+            வண்ணங்களின் திருவிழா · ஈரோடு
+          </p>
           <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
             <Link
               href="/varnam-vizha/events"
               className="rounded-full bg-white px-6 py-3 text-sm font-semibold text-[#3B0A45] shadow-lg transition hover:bg-white/90"
             >
-              See the 2026 programme
+              See the 2026 programme{" "}
+              {/* TAMIL: needs native review */}
+              <span lang="ta" className="text-[#3B0A45]/70">
+                · நிகழ்ச்சி நிரல்
+              </span>
             </Link>
             <Link
               href="/varnam-vizha/login"

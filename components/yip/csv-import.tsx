@@ -43,6 +43,9 @@ interface CsvRow {
   home_state?: string;
   // NEW — allocation columns
   party_letter?: string;
+  // A party NAME (anything that isn't a single letter) — resolved server-side
+  // to an EXISTING party; unmatched names are flagged, never created.
+  party_name?: string;
   constituency_name?: string;
   constituency_number?: number;
   constituency_state?: string;
@@ -60,7 +63,7 @@ interface ParsedRow extends CsvRow {
 // special context-aware logic in normalizeXlsxRow (and the CSV path) because
 // the meaning of bare "state" depends on what other columns are present.
 const COL_ALIASES: Record<
-  Exclude<keyof CsvRow, "home_state" | "constituency_state"> | "home_state_explicit" | "constituency_state_explicit",
+  Exclude<keyof CsvRow, "home_state" | "constituency_state" | "party_name"> | "home_state_explicit" | "constituency_state_explicit",
   string[]
 > = {
   name: ["name", "full_name", "full name", "fullname", "student_name", "student name"],
@@ -211,9 +214,15 @@ function normalizeXlsxRow(
       ? String(constituencyStateRaw).trim() || undefined
       : undefined;
 
+  // A single A–Z is a party LETTER (find-or-create "Party X" server-side); any
+  // longer value is a party NAME, resolved server-side to an EXISTING party
+  // (unmatched names are flagged, not created).
   let party_letter: string | undefined;
-  if (partyRaw !== undefined && partyRaw !== "") {
-    party_letter = String(partyRaw).trim().toUpperCase();
+  let party_name: string | undefined;
+  if (partyRaw !== undefined && String(partyRaw).trim() !== "") {
+    const raw = String(partyRaw).trim();
+    if (/^[A-Za-z]$/.test(raw)) party_letter = raw.toUpperCase();
+    else party_name = raw;
   }
   const constituency_name =
     constituencyNameRaw !== undefined
@@ -226,15 +235,20 @@ function normalizeXlsxRow(
     if (!isNaN(n)) constituency_number = n;
   }
 
+  // A numeric "Committee" value is the committee NUMBER; a text value is a
+  // committee NAME, resolved server-side to its number (unmatched → flagged).
   let committee_number: number | undefined;
-  if (committeeNumberRaw !== undefined && committeeNumberRaw !== "") {
-    const n = Number(committeeNumberRaw);
+  let committeeNameFromNumberCol: string | undefined;
+  if (committeeNumberRaw !== undefined && String(committeeNumberRaw).trim() !== "") {
+    const raw = String(committeeNumberRaw).trim();
+    const n = Number(raw);
     if (!isNaN(n)) committee_number = n;
+    else committeeNameFromNumberCol = raw;
   }
   const committee_name =
-    committeeNameRaw !== undefined
+    (committeeNameRaw !== undefined
       ? String(committeeNameRaw).trim() || undefined
-      : undefined;
+      : undefined) ?? committeeNameFromNumberCol;
 
   const errors: string[] = [];
   // Name-only registration: the student's name is the only required field.
@@ -265,6 +279,7 @@ function normalizeXlsxRow(
     home_state,
     constituency_state,
     party_letter,
+    party_name,
     constituency_name,
     constituency_number,
     committee_number,

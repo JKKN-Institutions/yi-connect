@@ -30,8 +30,7 @@ export default async function RegistrationsPage() {
             Registrations
           </h1>
           <p className="mt-1 text-sm text-[#2B0A33]/60">
-            {rows.length} registration{rows.length === 1 ? "" : "s"} across this
-            edition&rsquo;s events.
+            {`${rows.length} registration${rows.length === 1 ? "" : "s"} across this edition’s events.`}
           </p>
         </div>
         <ExportCsvButton rows={rows} />

@@ -70,12 +70,26 @@ async function getAllChapters(): Promise<ChapterRow[]> {
 
 async function getDelegates(editionId: string): Promise<DelegateRow[]> {
   const svc = await createServiceClient();
-  const { data } = await svc
-    .schema("future")
-    .from("delegates")
-    .select("id, chapter_id, registered_at")
-    .eq("edition_id", editionId);
-  return (data as unknown as DelegateRow[]) ?? [];
+  // PostgREST caps a single response at ~1000 rows even when no explicit limit
+  // is set, so a bare select silently undercounts once an edition passes ~1000
+  // delegates (this froze the National Dashboard total at 1003 while real
+  // registrations were 1080+). Page through in full-size batches so every
+  // delegate is counted.
+  const PAGE = 1000;
+  const all: DelegateRow[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await svc
+      .schema("future")
+      .from("delegates")
+      .select("id, chapter_id, registered_at")
+      .eq("edition_id", editionId)
+      .order("id", { ascending: true })
+      .range(from, from + PAGE - 1);
+    if (error || !data || data.length === 0) break;
+    all.push(...(data as unknown as DelegateRow[]));
+    if (data.length < PAGE) break;
+  }
+  return all;
 }
 
 function timeAgo(iso: string | null): string {

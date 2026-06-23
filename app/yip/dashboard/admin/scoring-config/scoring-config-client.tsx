@@ -165,12 +165,29 @@ export function ScoringConfigClient({
 
   // ── 5. Awards ──
   const [awardDrafts, setAwardDrafts] = useState<
-    Record<string, { label: string; recipients: string; is_active: boolean }>
+    Record<
+      string,
+      {
+        label: string;
+        recipients: string;
+        is_active: boolean;
+        eligibility: string;
+        rank_mode: string;
+        rank_keys: string;
+      }
+    >
   >(
     Object.fromEntries(
       initialAwards.map((a) => [
         a.award_key,
-        { label: a.label, recipients: String(a.default_recipients), is_active: a.is_active },
+        {
+          label: a.label,
+          recipients: String(a.default_recipients),
+          is_active: a.is_active,
+          eligibility: a.eligibility,
+          rank_mode: a.rank_mode,
+          rank_keys: (a.rank_keys ?? []).join(", "),
+        },
       ])
     )
   );

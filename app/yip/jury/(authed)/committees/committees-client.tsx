@@ -8,9 +8,9 @@ import {
   type JurorCommitteeRow,
 } from "@/app/yip/actions/committee-scores";
 import {
-  COMMITTEE_DIMENSIONS,
   deriveCommitteeLevels,
   type CommitteeDimensions,
+  type CommitteeDimensionLabel,
 } from "@/lib/yip/committee-score";
 import { Loader2, CheckCircle2, Users, Lock, ShieldX } from "lucide-react";
 

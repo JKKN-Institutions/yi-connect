@@ -22,6 +22,7 @@ import {
   Globe,
   Table2,
   Trophy,
+  Settings2,
 } from "lucide-react";
 
 const NAV = [

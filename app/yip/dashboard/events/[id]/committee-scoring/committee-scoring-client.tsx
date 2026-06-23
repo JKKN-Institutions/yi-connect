@@ -235,7 +235,9 @@ export function CommitteeScoringClient({
       )}
 
       {committees.map((c) => {
-        const { cmteLevel, billLevel, total60 } = deriveCommitteeLevels(c.avg);
+        // Use the server-computed levels (which already applied the live,
+        // admin-configurable divisors) rather than recomputing on the client.
+        const { cmte_level: cmteLevel, bill_level: billLevel, total60 } = c;
         const totalAssigned = c.assigned.length;
         return (
           <Card key={c.committee_name}>

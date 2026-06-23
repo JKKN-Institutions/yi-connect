@@ -144,7 +144,7 @@ function assignAward(
   awardLabel: string,
   eligible: (p: ParticipantLite, r: ResultRow) => boolean,
   rankBy: (r: ResultRow) => number,
-  opts: { allTied?: boolean } = {}
+  opts: { allTied?: boolean; recipients?: number } = {}
 ): void {
   let topScore = -Infinity;
   let anyEligible = false;
@@ -173,23 +173,24 @@ function assignAward(
     return;
   }
 
-  // Single winner (Director ruling): among everyone tied at the top score, pick
-  // ONE — highest overall avg_score, then lowest participant_id as a stable,
-  // deterministic final tiebreak.
-  let winner: ResultRow | null = null;
-  for (const r of rows) {
-    const p = participants.get(r.participant_id);
-    if (!p || !eligible(p, r) || rankBy(r) !== topScore) continue;
-    if (
-      !winner ||
-      r.avg_score > winner.avg_score ||
-      (r.avg_score === winner.avg_score &&
-        r.participant_id < winner.participant_id)
-    ) {
-      winner = r;
-    }
-  }
-  if (winner) appendAward(winner, awardLabel);
+  // Top-N winners. recipients defaults to 1, reproducing the original single
+  // winner exactly: among eligible participants with a positive score, take the
+  // highest N by rankBy, breaking ties by overall avg_score then a stable
+  // participant_id. Only positive scorers win, so N=3 with only 2 positive
+  // scores awards 2 — never fabricates a winner.
+  const recipients = Math.max(1, opts.recipients ?? 1);
+  const ranked = rows
+    .filter((r) => {
+      const p = participants.get(r.participant_id);
+      return Boolean(p && eligible(p, r) && rankBy(r) > 0);
+    })
+    .sort(
+      (a, b) =>
+        rankBy(b) - rankBy(a) ||
+        b.avg_score - a.avg_score ||
+        (a.participant_id < b.participant_id ? -1 : 1)
+    );
+  for (const r of ranked.slice(0, recipients)) appendAward(r, awardLabel);
 }
 
 export async function computeResults(
@@ -744,130 +745,121 @@ export async function computeResults(
   );
   const mvpMinSessions = Math.max(1, Math.ceil(maxScoredSessions / 2));
 
-  // 1. Best Parliamentarian — top overall additive total.
-  assignAward(
-    resultRows,
-    participantMap,
-    "Best Parliamentarian",
-    all,
-    (r) => r.avg_score
-  );
-  // 2. Best Debater — Political Acumen + Question Hour.
-  assignAward(resultRows, participantMap, "Best Debater", all, (r) =>
-    parentScoreByKey(r.score_breakdown, "pol") +
-    parentScoreByKey(r.score_breakdown, "qh")
-  );
-  // 3. Best Research & Presentation — research/knowledge across components.
-  assignAward(
-    resultRows,
-    participantMap,
-    "Best Research & Presentation",
-    all,
-    sumKeys([
-      "mupi.research_constituency",
-      "qh.subject_knowledge",
-      "bill.understanding",
-      "cmte.research_contribution",
-    ])
-  );
-  // 4. Most Valuable Participant (MVP) — consistency across sessions (Director
-  //    rulings "even across sessions" + "at least half"): among participants
-  //    scored in ≥ half the sessions, the one whose WEAKEST session — as a
-  //    fraction of its own max — is highest. Strong everywhere, fair across
-  //    session sizes, and not winnable on a single session.
-  assignAward(
-    resultRows,
-    participantMap,
-    "Most Valuable Participant (MVP)",
-    (_p, r) => r.consistencySessionCount >= mvpMinSessions,
-    (r) => r.consistencyFloor
-  );
-  // 5. Best Constituency Representative — MuPI + Question Hour + Zero Hour.
-  assignAward(
-    resultRows,
-    participantMap,
-    "Best Constituency Representative",
-    all,
-    (r) =>
-      parentScoreByKey(r.score_breakdown, "mupi") +
-      parentScoreByKey(r.score_breakdown, "qh") +
-      parentScoreByKey(r.score_breakdown, "zero")
-  );
-  // 6. Exemplary Parliamentary Decorum — clean conduct only; sum conduct
-  //    criteria. Eligible = no disciplinary flag raised by any juror.
-  assignAward(
-    resultRows,
-    participantMap,
-    "Exemplary Parliamentary Decorum",
-    (_p, r) => !r.hasDisciplinary,
-    sumKeys(["mupi.conduct", "zero.conduct", "bill.conduct"])
-  );
-  // 7. Team Spirit — TEAM award → allTied, so every member of the top committee
-  //    co-wins. Ranks on the SHARED committee level (cmte+bill, derived from the
-  //    /60 committee score) — identical for every member of a committee — so the
-  //    award tracks the committee's leaderboard standing rather than each
-  //    member's individual juror marks (interview 2026-06-14, Bug C: the prior
-  //    per-juror score_breakdown metric could disagree with the leaderboard).
-  //    Innovative Ideas & Community Impact stay single-winner (individual scores).
-  assignAward(
-    resultRows,
-    participantMap,
-    "Team Spirit",
-    all,
-    (r) => r.committeeLevel,
-    { allTied: true }
-  );
-  // 8. Innovative Ideas — Zero Hour creativity / problem-solving / policy.
-  assignAward(
-    resultRows,
-    participantMap,
-    "Innovative Ideas",
-    all,
-    sumKeys(["zero.creativity", "zero.problem_solving", "zero.policy_orientation"])
-  );
-  // 9. Community Impact — policy orientation + bill feasibility + constituency research.
-  assignAward(
-    resultRows,
-    participantMap,
-    "Community Impact",
-    all,
-    sumKeys([
-      "zero.policy_orientation",
-      "bill.feasibility",
-      "mupi.research_constituency",
-    ])
-  );
+  // The award MATH (eligibility + ranking) lives in this registry keyed by
+  // award_key; the workbook formulas are fixed, so they stay in code. The
+  // yip.award_definitions table owns label / recipient count / on-off / order
+  // (admin-editable, with per-event overrides in yip.event_award_config). Seeded
+  // defaults reproduce the original hardcoded 15 exactly.
+  type AwardSpec = {
+    eligible: (p: ParticipantLite, r: ResultRow) => boolean;
+    rankBy: (r: ResultRow) => number;
+    isTeam?: boolean;
+  };
+  const AWARD_REGISTRY: Record<string, AwardSpec> = {
+    best_parliamentarian: { eligible: all, rankBy: (r) => r.avg_score },
+    best_debater: {
+      eligible: all,
+      rankBy: (r) =>
+        parentScoreByKey(r.score_breakdown, "pol") +
+        parentScoreByKey(r.score_breakdown, "qh"),
+    },
+    best_research_presentation: {
+      eligible: all,
+      rankBy: sumKeys([
+        "mupi.research_constituency",
+        "qh.subject_knowledge",
+        "bill.understanding",
+        "cmte.research_contribution",
+      ]),
+    },
+    mvp: {
+      eligible: (_p, r) => r.consistencySessionCount >= mvpMinSessions,
+      rankBy: (r) => r.consistencyFloor,
+    },
+    best_constituency_rep: {
+      eligible: all,
+      rankBy: (r) =>
+        parentScoreByKey(r.score_breakdown, "mupi") +
+        parentScoreByKey(r.score_breakdown, "qh") +
+        parentScoreByKey(r.score_breakdown, "zero"),
+    },
+    exemplary_decorum: {
+      eligible: (_p, r) => !r.hasDisciplinary,
+      rankBy: sumKeys(["mupi.conduct", "zero.conduct", "bill.conduct"]),
+    },
+    // Team award: allTied → every member of the top committee co-wins. Ranks on
+    // the shared committee level (cmte+bill, from the /60 committee score).
+    team_spirit: { eligible: all, rankBy: (r) => r.committeeLevel, isTeam: true },
+    innovative_ideas: {
+      eligible: all,
+      rankBy: sumKeys([
+        "zero.creativity",
+        "zero.problem_solving",
+        "zero.policy_orientation",
+      ]),
+    },
+    community_impact: {
+      eligible: all,
+      rankBy: sumKeys([
+        "zero.policy_orientation",
+        "bill.feasibility",
+        "mupi.research_constituency",
+      ]),
+    },
+    best_speaker: { eligible: isSpeaker, rankBy: (r) => r.avg_score },
+    leadership_excellence: {
+      eligible: isLeadership,
+      // 50% Leadership (position points /10) + 50% Participation (base /90).
+      // Real positionPoints — NOT (avg − base), which carries the special-
+      // remarks delta and would distort the leadership half.
+      rankBy: (r) =>
+        0.5 * Math.min(1, Math.max(0, r.positionPoints) / 10) +
+        0.5 * Math.min(1, r.baseScore / 90),
+    },
+    best_member_ruling: {
+      eligible: isRuling,
+      rankBy: sumKeys(["pol", "qh", "bill"]),
+    },
+    best_member_opposition: {
+      eligible: isOpposition,
+      rankBy: sumKeys(["qh", "zero", "pol"]),
+    },
+    most_persuasive: { eligible: all, rankBy: sumKeys(["pol", "bill"]) },
+    independent_voice: {
+      eligible: isIndependent,
+      rankBy: sumKeys(["pol", "zero", "qh"]),
+    },
+  };
 
-  // ── + the 6 role/side awards from the official matrix ──────────
-  // 10. Best Speaker (matrix #2) — Speaker only; 100% leadership & parliamentary
-  //     conduct (the Speaker's own rubric total = avg_score).
-  assignAward(resultRows, participantMap, "Best Speaker", isSpeaker,
-    (r) => r.avg_score);
-  // 11. Leadership Excellence (matrix #3) — leadership roles; 50% Leadership
-  //     (position points /10) + 50% Participation (base score /90).
-  assignAward(resultRows, participantMap, "Leadership Excellence", isLeadership,
-    (r) =>
-      // Real position points — NOT (avg − base), which since #308 also carries
-      // the special-remarks delta and would distort the leadership half.
-      0.5 * Math.min(1, Math.max(0, r.positionPoints) / 10) +
-      0.5 * Math.min(1, r.baseScore / 90));
-  // 12. Best Member — Ruling Bench (matrix #4) — ruling side; House Performance,
-  //     FLOOR-ONLY per Director ruling (Political Acumen + Question Hour + Bill;
-  //     committee work excluded).
-  assignAward(resultRows, participantMap, "Best Member — Ruling Bench", isRuling,
-    sumKeys(["pol", "qh", "bill"]));
-  // 13. Best Member — Opposition Bench (matrix #5) — opposition side; 100%
-  //     Opposition Performance (Question Hour + Zero Hour + Political Acumen).
-  assignAward(resultRows, participantMap, "Best Member — Opposition Bench", isOpposition,
-    sumKeys(["qh", "zero", "pol"]));
-  // 14. Most Persuasive Policy Advocate (matrix #7) — all; Policy Content +
-  //     Persuasion (Political Acumen + Bill Defence).
-  assignAward(resultRows, participantMap, "Most Persuasive Policy Advocate", all,
-    sumKeys(["pol", "bill"]));
-  // 15. Independent Voice of the House (matrix #14) — Independent MP only;
-  //     Debate + Zero Hour + Question Hour.
-  assignAward(resultRows, participantMap, "Independent Voice of the House", isIndependent,
-    sumKeys(["pol", "zero", "qh"]));
+  // Load award definitions + this event's overrides; award each ACTIVE one its
+  // effective recipient count (override ?? default), in display order.
+  const { data: awardDefs } = await supabase
+    .from("award_definitions")
+    .select("award_key, label, default_recipients, is_active, display_order")
+    .order("display_order");
+  const { data: awardCfgRows } = await supabase
+    .from("event_award_config")
+    .select("award_key, recipients, is_active")
+    .eq("event_id", eventId);
+  const awardOverrideByKey = new Map(
+    (awardCfgRows ?? []).map((o) => [o.award_key, o])
+  );
+  for (const def of awardDefs ?? []) {
+    const spec = AWARD_REGISTRY[def.award_key];
+    if (!spec) continue; // unknown key (future-proof) — skip
+    const ov = awardOverrideByKey.get(def.award_key);
+    const active = ov?.is_active ?? def.is_active;
+    if (!active) continue;
+    const recipients = ov?.recipients ?? def.default_recipients;
+    assignAward(
+      resultRows,
+      participantMap,
+      def.label,
+      spec.eligible,
+      spec.rankBy,
+      { allTied: spec.isTeam, recipients }
+    );
+  }
 
   // ── Manual award overrides (chair's final say) — final pass ───────
   // A chair can pin THE winner for any award (yip.award_overrides). Applied

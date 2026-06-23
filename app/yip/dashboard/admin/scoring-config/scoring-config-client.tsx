@@ -26,6 +26,12 @@ import {
 import { updateCommitteeDimensionsConfig } from "@/app/yip/actions/committee-dimensions";
 import { type CommitteeDimensionsConfig } from "@/lib/yip/committee-score";
 import {
+  AWARD_ELIGIBILITIES,
+  AWARD_RANK_MODES,
+  ELIGIBILITY_LABELS,
+  RANK_MODE_LABELS,
+} from "@/lib/yip/award-formula";
+import {
   Save,
   Loader2,
   Check,

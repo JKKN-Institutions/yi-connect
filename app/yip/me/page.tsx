@@ -252,7 +252,8 @@ export default async function ParticipantPage() {
   let approvedBills: Array<{
     id: string;
     title: string;
-    party_side: string;
+    party_side: string | null;
+    committee_name: string | null;
     objective: string | null;
     provisions: string[] | null;
     status: string | null;
@@ -261,7 +262,7 @@ export default async function ParticipantPage() {
   if (!isCommitteeMember) {
     const { data: billsData } = await supabase
       .from("bills")
-      .select("id, title, party_side, objective, provisions, status")
+      .select("id, title, party_side, committee_name, objective, provisions, status")
       .eq("event_id", event.id)
       .in("status", ["approved", "presented", "passed", "rejected"]);
 
@@ -848,7 +849,7 @@ export default async function ParticipantPage() {
             <div className="flex items-center gap-2 mb-3">
               <FileText className="size-5 text-purple-600" />
               <h2 className="text-sm font-bold text-gray-900">
-                Party Bills
+                Bills
               </h2>
             </div>
             <div className="space-y-3">
@@ -858,7 +859,9 @@ export default async function ParticipantPage() {
                   className={`rounded-lg border p-3 ${
                     bill.party_side === "ruling"
                       ? "border-blue-200 bg-blue-50/50"
-                      : "border-red-200 bg-red-50/50"
+                      : bill.party_side === "opposition"
+                        ? "border-red-200 bg-red-50/50"
+                        : "border-[#FF9933]/30 bg-[#FF9933]/5"
                   }`}
                 >
                   <div className="flex items-center gap-2 mb-1">
@@ -866,10 +869,17 @@ export default async function ParticipantPage() {
                       className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${
                         bill.party_side === "ruling"
                           ? "bg-blue-600 text-white"
-                          : "bg-red-600 text-white"
+                          : bill.party_side === "opposition"
+                            ? "bg-red-600 text-white"
+                            : "bg-[#FF9933]/15 text-[#9a5212]"
                       }`}
                     >
-                      {bill.party_side === "ruling" ? "Ruling" : "Opposition"}
+                      {bill.committee_name ??
+                        (bill.party_side === "ruling"
+                          ? "Ruling"
+                          : bill.party_side === "opposition"
+                            ? "Opposition"
+                            : "Committee Bill")}
                     </span>
                     {bill.status && (
                       <span

@@ -1283,6 +1283,7 @@ export type Database = {
       }
       bills: {
         Row: {
+          committee_name: string | null
           created_at: string | null
           event_id: string
           expected_impact: string | null
@@ -1307,6 +1308,7 @@ export type Database = {
           votes_for: number | null
         }
         Insert: {
+          committee_name?: string | null
           created_at?: string | null
           event_id: string
           expected_impact?: string | null
@@ -1331,6 +1333,7 @@ export type Database = {
           votes_for?: number | null
         }
         Update: {
+          committee_name?: string | null
           created_at?: string | null
           event_id?: string
           expected_impact?: string | null

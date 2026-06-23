@@ -896,7 +896,8 @@ export async function getEventBills(
     id: string;
     title: string;
     objective: string | null;
-    party_side: string;
+    party_side: string | null;
+    committee_name: string | null;
     status: string | null;
   }>
 > {
@@ -904,7 +905,7 @@ export async function getEventBills(
 
   const { data, error } = await supabase
     .from("bills")
-    .select("id, title, objective, party_side, status")
+    .select("id, title, objective, party_side, committee_name, status")
     .eq("event_id", eventId)
     .in("status", ["submitted", "approved", "presented"]);
 

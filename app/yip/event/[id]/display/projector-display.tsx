@@ -43,7 +43,8 @@ interface BillDisplayInfo {
   id: string;
   title: string;
   objective: string | null;
-  party_side: string;
+  party_side: string | null;
+  committee_name: string | null;
   provisions: string[];
   status: string | null;
   presenter_1_name: string | null;
@@ -292,6 +293,7 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
         title,
         objective,
         party_side,
+        committee_name,
         provisions,
         status,
         presenter_1_participant:participants!bills_presenter_1_fkey(full_name),
@@ -300,6 +302,7 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
       )
       .eq("event_id", eventId)
       .eq("status", "presented")
+      .order("updated_at", { ascending: false })
       .limit(1)
       .maybeSingle();
 
@@ -311,6 +314,7 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
         title: data.title,
         objective: data.objective,
         party_side: data.party_side,
+        committee_name: data.committee_name,
         provisions: (data.provisions as string[]) ?? [],
         status: data.status,
         presenter_1_name: p1?.full_name ?? null,
@@ -834,18 +838,24 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
             {currentAgendaItem.agenda_type === "bill_presentation" &&
               presentedBill && (
                 <div className="mx-auto max-w-3xl space-y-6">
-                  {/* Party badge */}
+                  {/* Committee / party badge — benchless bills are identified by
+                      committee, not by ruling/opposition side. */}
                   <span
                     className={cn(
                       "inline-flex items-center rounded-full px-5 py-1.5 text-sm font-semibold",
                       presentedBill.party_side === "ruling"
                         ? "bg-blue-600 text-white"
-                        : "bg-red-600 text-white"
+                        : presentedBill.party_side === "opposition"
+                          ? "bg-red-600 text-white"
+                          : "bg-[#FF9933] text-white"
                     )}
                   >
-                    {presentedBill.party_side === "ruling"
-                      ? "Ruling Party Bill"
-                      : "Opposition Bill"}
+                    {presentedBill.committee_name ??
+                      (presentedBill.party_side === "ruling"
+                        ? "Ruling Party Bill"
+                        : presentedBill.party_side === "opposition"
+                          ? "Opposition Bill"
+                          : "Committee Bill")}
                   </span>
 
                   {/* Bill title */}

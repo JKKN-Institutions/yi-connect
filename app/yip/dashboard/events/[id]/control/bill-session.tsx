@@ -73,7 +73,7 @@ export function BillSession({ eventId, agendaItemId }: BillSessionProps) {
   function handlePresentBill(bill: BillWithMembers) {
     setConfirmDialog({
       open: true,
-      title: `Present ${bill.party_side === "ruling" ? "Ruling" : "Opposition"} Bill`,
+      title: `Present ${bill.committee_name ?? (bill.party_side === "ruling" ? "Ruling" : bill.party_side === "opposition" ? "Opposition" : "Committee")} Bill`,
       description: `Mark "${bill.title}" as presented? This will show the bill on the projector display.`,
       action: () => {
         startTransition(async () => {
@@ -128,8 +128,12 @@ export function BillSession({ eventId, agendaItemId }: BillSessionProps) {
     );
   }
 
-  const rulingBill = bills.find((b) => b.party_side === "ruling");
-  const oppositionBill = bills.find((b) => b.party_side === "opposition");
+  // One card per drafting committee's bill. Benchless events (the default) have
+  // no ruling/opposition split, so bills are identified by committee_name and
+  // carry no party_side — keying off party_side here dropped every committee
+  // bill and dead-ended the Bill Presentation session. Legacy benched events
+  // still surface their side tint. Drafting bills aren't ready to present.
+  const presentableBills = bills.filter((b) => b.status !== "drafting");
 
   return (
     <>
@@ -141,31 +145,21 @@ export function BillSession({ eventId, agendaItemId }: BillSessionProps) {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {!rulingBill && !oppositionBill ? (
+          {presentableBills.length === 0 ? (
             <p className="text-center py-4 text-sm text-muted-foreground">
               No bills available. Bills must be submitted and approved first.
             </p>
           ) : (
             <div className="space-y-4">
-              {/* Ruling Bill */}
-              {rulingBill && (
+              {presentableBills.map((bill) => (
                 <BillCard
-                  bill={rulingBill}
+                  key={bill.id}
+                  bill={bill}
                   onPresent={handlePresentBill}
                   onVote={handleOpenBillVote}
                   isPending={isPending}
                 />
-              )}
-
-              {/* Opposition Bill */}
-              {oppositionBill && (
-                <BillCard
-                  bill={oppositionBill}
-                  onPresent={handlePresentBill}
-                  onVote={handleOpenBillVote}
-                  isPending={isPending}
-                />
-              )}
+              ))}
             </div>
           )}
         </CardContent>
@@ -217,8 +211,17 @@ function BillCard({
   onVote: (bill: BillWithMembers) => void;
   isPending: boolean;
 }) {
-  const side = bill.party_side as "ruling" | "opposition";
-  const partyLabel = side === "ruling" ? "Ruling Party" : "Opposition";
+  const side =
+    bill.party_side === "ruling" || bill.party_side === "opposition"
+      ? bill.party_side
+      : null;
+  const partyLabel =
+    bill.committee_name ??
+    (side === "ruling"
+      ? "Ruling Party"
+      : side === "opposition"
+        ? "Opposition"
+        : "Committee Bill");
   const status = bill.status ?? "drafting";
   const config = STATUS_CONFIG[status] ?? STATUS_CONFIG.drafting;
   const provisions = (bill.provisions as string[]) ?? [];
@@ -231,7 +234,11 @@ function BillCard({
     <div
       className={cn(
         "rounded-lg border p-4",
-        side === "ruling" ? "border-blue-200" : "border-red-200"
+        side === "ruling"
+          ? "border-blue-200"
+          : side === "opposition"
+            ? "border-red-200"
+            : "border-[#FF9933]/40"
       )}
     >
       <div className="flex items-start justify-between gap-2 mb-3">
@@ -239,7 +246,7 @@ function BillCard({
           <span
             className={cn(
               "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium",
-              PARTY_COLORS[side].badge
+              side ? PARTY_COLORS[side].badge : "bg-[#FF9933]/15 text-[#9a5212]"
             )}
           >
             {partyLabel}

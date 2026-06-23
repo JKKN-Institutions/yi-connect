@@ -3,10 +3,7 @@ import { createClient } from "@/lib/yip/supabase/server";
 import { getEvent } from "@/app/yip/actions/events";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
-import {
-  getCommitteeScoring,
-  getCommitteeAssignmentRoster,
-} from "@/app/yip/actions/committee-scores";
+import { getCommitteeScoring } from "@/app/yip/actions/committee-scores";
 import { CommitteeScoringClient } from "./committee-scoring-client";
 
 export default async function CommitteeScoringPage({
@@ -38,21 +35,13 @@ export default async function CommitteeScoringPage({
     );
   }
 
-  const [scoringRes, rosterRes] = await Promise.all([
-    getCommitteeScoring(id),
-    getCommitteeAssignmentRoster(id),
-  ]);
+  const scoringRes = await getCommitteeScoring(id);
 
   return (
     <CommitteeScoringClient
       eventId={id}
       eventName={event.name}
       committees={scoringRes.success ? scoringRes.data : []}
-      roster={
-        rosterRes.success
-          ? rosterRes.data
-          : { committees: [], jurors: [], assignments: [] }
-      }
       locked={Boolean(event.scores_locked)}
     />
   );

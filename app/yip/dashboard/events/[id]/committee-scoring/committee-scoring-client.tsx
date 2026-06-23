@@ -7,9 +7,7 @@ import {
   upsertCommitteeScore,
   deleteCommitteeScore,
   setCommitteeChairLead,
-  setJurorCommittees,
   type CommitteeRow,
-  type CommitteeAssignmentRoster,
 } from "@/app/yip/actions/committee-scores";
 import {
   COMMITTEE_DIMENSIONS,
@@ -21,21 +19,10 @@ import { Button } from "@/components/yip/ui/button";
 import { Card, CardContent } from "@/components/yip/ui/card";
 import { Input } from "@/components/yip/ui/input";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-  DialogDescription,
-  DialogFooter,
-  DialogClose,
-} from "@/components/yip/ui/dialog";
-import {
   Loader2,
   Users,
   CheckCircle2,
   Download,
-  UsersRound,
   Trash2,
   Lock,
 } from "lucide-react";
@@ -60,13 +47,11 @@ export function CommitteeScoringClient({
   eventId,
   eventName,
   committees,
-  roster,
   locked,
 }: {
   eventId: string;
   eventName: string;
   committees: CommitteeRow[];
-  roster: CommitteeAssignmentRoster;
   locked: boolean;
 }) {
   const router = useRouter();
@@ -233,7 +218,6 @@ export function CommitteeScoringClient({
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          {editable && <AssignJudgesDialog eventId={eventId} roster={roster} />}
           <Button variant="outline" size="sm" onClick={downloadSheet}>
             <Download className="size-4 mr-2" />
             Download sheet
@@ -461,162 +445,4 @@ export function CommitteeScoringClient({
       })}
     </div>
   );
-}
-
-// ─── Assign judges to committees (all or select) ──────────────────────────
-function AssignJudgesDialog({
-  eventId,
-  roster,
-}: {
-  eventId: string;
-  roster: CommitteeAssignmentRoster;
-}) {
-  const router = useRouter();
-  const [open, setOpen] = useState(false);
-  const [saving, setSaving] = useState(false);
-  // juryId → Set of committee names
-  const [sel, setSel] = useState<Record<string, Set<string>>>(() =>
-    buildSelection(roster)
-  );
-
-  function reset() {
-    setSel(buildSelection(roster));
-  }
-
-  function toggle(juryId: string, committee: string) {
-    setSel((prev) => {
-      const next = new Set(prev[juryId] ?? []);
-      if (next.has(committee)) next.delete(committee);
-      else next.add(committee);
-      return { ...prev, [juryId]: next };
-    });
-  }
-
-  function toggleAll(juryId: string) {
-    setSel((prev) => {
-      const all = roster.committees.map((c) => c.committee_name);
-      const current = prev[juryId] ?? new Set<string>();
-      const hasAll = all.every((c) => current.has(c));
-      return { ...prev, [juryId]: hasAll ? new Set() : new Set(all) };
-    });
-  }
-
-  async function save() {
-    setSaving(true);
-    // Persist each juror's committee set.
-    for (const juror of roster.jurors) {
-      const res = await setJurorCommittees({
-        eventId,
-        juryAssignmentId: juror.id,
-        committeeNames: [...(sel[juror.id] ?? [])],
-      });
-      if (!res.success) {
-        toast.error(`${juror.jury_name}: ${res.error}`);
-        setSaving(false);
-        return;
-      }
-    }
-    setSaving(false);
-    setOpen(false);
-    toast.success("Judge assignments saved");
-    router.refresh();
-  }
-
-  return (
-    <Dialog
-      open={open}
-      onOpenChange={(o) => {
-        setOpen(o);
-        if (!o) reset();
-      }}
-    >
-      <DialogTrigger render={<Button variant="outline" size="sm" />}>
-        <UsersRound className="size-4 mr-2" />
-        Assign judges to committees
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Assign judges to committees</DialogTitle>
-          <DialogDescription>
-            For each judge, tick the committees they score — or “All”. A judge
-            only sees and scores their committees.
-          </DialogDescription>
-        </DialogHeader>
-
-        {roster.jurors.length === 0 ? (
-          <p className="text-sm text-gray-500">
-            No judges added yet. Add judges on the Jury tab first.
-          </p>
-        ) : roster.committees.length === 0 ? (
-          <p className="text-sm text-gray-500">
-            No committees yet — run allocation first.
-          </p>
-        ) : (
-          <div className="space-y-4">
-            {roster.jurors.map((juror) => {
-              const current = sel[juror.id] ?? new Set<string>();
-              const allOn = roster.committees.every((c) => current.has(c.committee_name));
-              return (
-                <div key={juror.id} className="rounded-lg border p-3">
-                  <div className="mb-2 flex items-center justify-between">
-                    <span className="font-medium text-[#1a1a3e]">{juror.jury_name}</span>
-                    <label className="flex items-center gap-1.5 text-xs text-gray-600">
-                      <input
-                        type="checkbox"
-                        checked={allOn}
-                        onChange={() => toggleAll(juror.id)}
-                        className="size-4 accent-[#FF9933]"
-                      />
-                      All committees
-                    </label>
-                  </div>
-                  <div className="flex flex-wrap gap-x-4 gap-y-1.5">
-                    {roster.committees.map((c) => (
-                      <label
-                        key={c.committee_name}
-                        className="flex items-center gap-1.5 text-sm text-gray-700"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={current.has(c.committee_name)}
-                          onChange={() => toggle(juror.id, c.committee_name)}
-                          className="size-4 accent-[#FF9933]"
-                        />
-                        {c.committee_number != null ? `${c.committee_number} · ` : ""}
-                        {c.committee_name}
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        <DialogFooter className="mt-4">
-          <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
-          {roster.jurors.length > 0 && roster.committees.length > 0 && (
-            <Button
-              className="bg-[#FF9933] text-white hover:bg-[#E68A2E]"
-              onClick={save}
-              disabled={saving}
-            >
-              {saving ? <Loader2 className="size-4 mr-2 animate-spin" /> : null}
-              Save assignments
-            </Button>
-          )}
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function buildSelection(roster: CommitteeAssignmentRoster): Record<string, Set<string>> {
-  const out: Record<string, Set<string>> = {};
-  for (const j of roster.jurors) out[j.id] = new Set();
-  for (const a of roster.assignments) {
-    if (!out[a.jury_assignment_id]) out[a.jury_assignment_id] = new Set();
-    out[a.jury_assignment_id].add(a.committee_name);
-  }
-  return out;
 }

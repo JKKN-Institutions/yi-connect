@@ -9,6 +9,7 @@ import {
 } from "@/app/yip/actions/scoring-flags";
 import { listScoringBuckets } from "@/app/yip/actions/scoring-buckets";
 import { listAwardDefinitions } from "@/app/yip/actions/admin-awards";
+import { getCommitteeDimensionsConfigAdmin } from "@/app/yip/actions/committee-dimensions";
 import { ScoringConfigClient } from "./scoring-config-client";
 
 // Admin layout already gates with requireSuperAdmin() → Forbidden403, so this
@@ -29,7 +30,7 @@ export default async function AdminScoringConfigPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/yip/login");
 
-  const [settings, components, bonusCfg, flagsRes, buckets, awards] =
+  const [settings, components, bonusCfg, flagsRes, buckets, awards, committeeDims] =
     await Promise.all([
       getScoringSettings(),
       listSessionParameters(),
@@ -37,6 +38,7 @@ export default async function AdminScoringConfigPage() {
       getScoringFlagsConfig(),
       listScoringBuckets(),
       listAwardDefinitions(),
+      getCommitteeDimensionsConfigAdmin(),
     ]);
 
   const deltas = flagsRes.success ? flagsRes.data.deltas : DEFAULT_DELTAS;
@@ -49,6 +51,7 @@ export default async function AdminScoringConfigPage() {
       initialDeltas={deltas}
       initialBuckets={buckets}
       initialAwards={awards}
+      initialCommitteeDims={committeeDims}
     />
   );
 }

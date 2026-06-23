@@ -9,6 +9,7 @@ import { getScoringSettings } from "./scoring-settings";
 import { listSessionParameters } from "./session-parameters";
 import { listScoringBuckets } from "./scoring-buckets";
 import { getScoringFlagsConfig } from "./scoring-flags";
+import { getCommitteeDimensionsConfig } from "./committee-dimensions";
 import {
   deriveCommitteeLevels,
   averageDimensions,
@@ -357,10 +358,17 @@ export async function computeResults(
     });
     dimsByCommittee.set(c.committee_name, arr);
   }
+  // Admin-configurable committee-level divisors (default 10 / 2).
+  const cmteDimsCfg = await getCommitteeDimensionsConfig();
+  const cmteDivisors = {
+    draftingDivisor: cmteDimsCfg.draftingDivisor,
+    presentationDivisor: cmteDimsCfg.presentationDivisor,
+  };
   const committeeLevelByName = new Map<string, { cmte: number; bill: number }>(
     [...dimsByCommittee.entries()].map(([name, dimsList]) => {
       const { cmteLevel, billLevel } = deriveCommitteeLevels(
-        averageDimensions(dimsList)
+        averageDimensions(dimsList),
+        cmteDivisors
       );
       return [name, { cmte: cmteLevel, bill: billLevel }];
     })

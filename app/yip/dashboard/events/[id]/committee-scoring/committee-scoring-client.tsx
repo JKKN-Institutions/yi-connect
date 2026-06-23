@@ -10,9 +10,9 @@ import {
   type CommitteeRow,
 } from "@/app/yip/actions/committee-scores";
 import {
-  COMMITTEE_DIMENSIONS,
   deriveCommitteeLevels,
   type CommitteeDimensions,
+  type CommitteeDimensionLabel,
 } from "@/lib/yip/committee-score";
 import { committeeLabel } from "@/lib/yip/committee-label";
 import { Button } from "@/components/yip/ui/button";
@@ -47,11 +47,13 @@ export function CommitteeScoringClient({
   eventId,
   eventName,
   committees,
+  dimensions,
   locked,
 }: {
   eventId: string;
   eventName: string;
   committees: CommitteeRow[];
+  dimensions: CommitteeDimensionLabel[];
   locked: boolean;
 }) {
   const router = useRouter();
@@ -233,7 +235,9 @@ export function CommitteeScoringClient({
       )}
 
       {committees.map((c) => {
-        const { cmteLevel, billLevel, total60 } = deriveCommitteeLevels(c.avg);
+        // Use the server-computed levels (which already applied the live,
+        // admin-configurable divisors) rather than recomputing on the client.
+        const { cmte_level: cmteLevel, bill_level: billLevel, total60 } = c;
         const totalAssigned = c.assigned.length;
         return (
           <Card key={c.committee_name}>
@@ -356,7 +360,7 @@ export function CommitteeScoringClient({
                         {isEditing && (
                           <div className="space-y-3 border-t bg-gray-50 px-3 py-3">
                             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                              {COMMITTEE_DIMENSIONS.map((dim) => (
+                              {dimensions.map((dim) => (
                                 <label key={dim.key} className="block text-sm">
                                   <span className="mb-1 block text-xs font-medium text-gray-600">
                                     {dim.label} <span className="text-gray-400">/10</span>

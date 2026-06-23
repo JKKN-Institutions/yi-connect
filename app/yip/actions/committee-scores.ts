@@ -10,6 +10,7 @@ import {
   ZERO_COMMITTEE_DIMENSIONS,
   type CommitteeDimensions,
 } from "@/lib/yip/committee-score";
+import { getCommitteeDimensionsConfig } from "@/app/yip/actions/committee-dimensions";
 
 type ActionResult<T = null> =
   | { success: true; data: T }
@@ -105,6 +106,13 @@ export async function getCommitteeScoring(
 
   if (partsRes.error) return { success: false, error: partsRes.error.message };
 
+  // Admin-configurable committee-level divisors (default 10 / 2).
+  const cmteCfg = await getCommitteeDimensionsConfig();
+  const cmteDivisors = {
+    draftingDivisor: cmteCfg.draftingDivisor,
+    presentationDivisor: cmteCfg.presentationDivisor,
+  };
+
   // committee → member count + number (number is shared across a committee).
   const counts = new Map<string, number>();
   const numberByName = new Map<string, number | null>();
@@ -157,7 +165,7 @@ export async function getCommitteeScoring(
       const avg = scores.length
         ? averageDimensions(scores.map(dimsOf))
         : { ...ZERO_COMMITTEE_DIMENSIONS };
-      const { cmteLevel, billLevel, total60 } = deriveCommitteeLevels(avg);
+      const { cmteLevel, billLevel, total60 } = deriveCommitteeLevels(avg, cmteDivisors);
       // Assigned judges, plus any judge who scored but isn't formally assigned.
       const assigned = assignedByCommittee.get(committee_name) ?? [];
       return {

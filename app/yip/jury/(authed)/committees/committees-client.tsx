@@ -8,9 +8,9 @@ import {
   type JurorCommitteeRow,
 } from "@/app/yip/actions/committee-scores";
 import {
-  COMMITTEE_DIMENSIONS,
   deriveCommitteeLevels,
   type CommitteeDimensions,
+  type CommitteeDimensionLabel,
 } from "@/lib/yip/committee-score";
 import { Loader2, CheckCircle2, Users, Lock, ShieldX } from "lucide-react";
 
@@ -45,12 +45,14 @@ export function JurorCommitteesClient({
   eventId,
   locked,
   committees,
+  dimensions,
   error,
 }: {
   juryAssignmentId: string;
   eventId: string;
   locked: boolean;
   committees: JurorCommitteeRow[];
+  dimensions: CommitteeDimensionLabel[];
   error: string | null;
 }) {
   const router = useRouter();
@@ -153,7 +155,7 @@ export function JurorCommitteesClient({
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                {COMMITTEE_DIMENSIONS.map((dim) => (
+                {dimensions.map((dim) => (
                   <label key={dim.key} className="block text-sm">
                     <span className="mb-1 block text-xs font-medium text-gray-600">
                       {dim.label} <span className="text-gray-400">/10</span>

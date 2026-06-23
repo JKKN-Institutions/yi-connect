@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getYipSession } from "@/lib/yip/auth/yip-session";
 import { getJurorCommittees } from "@/app/yip/actions/committee-scores";
+import { getCommitteeDimensionsConfig } from "@/app/yip/actions/committee-dimensions";
 import { JurorCommitteesClient } from "./committees-client";
 
 export default async function JuryCommitteesPage() {
@@ -9,7 +10,10 @@ export default async function JuryCommitteesPage() {
     redirect("/yip/join");
   }
 
-  const res = await getJurorCommittees(session.id, session.eventId);
+  const [res, dimsCfg] = await Promise.all([
+    getJurorCommittees(session.id, session.eventId),
+    getCommitteeDimensionsConfig(),
+  ]);
 
   return (
     <JurorCommitteesClient
@@ -17,6 +21,7 @@ export default async function JuryCommitteesPage() {
       eventId={session.eventId}
       locked={res.success ? res.data.locked : false}
       committees={res.success ? res.data.committees : []}
+      dimensions={dimsCfg.dimensions}
       error={res.success ? null : res.error}
     />
   );

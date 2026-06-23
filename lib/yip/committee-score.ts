@@ -31,12 +31,42 @@ export const COMMITTEE_DIMENSIONS: { key: keyof CommitteeDimensions; label: stri
 export const CMTE_LEVEL_CRITERION = "cmte.committee_level"; // committee_bill_drafting
 export const BILL_LEVEL_CRITERION = "bill.committee_level"; // bill_presentation_voting
 
+// One labelled committee dimension (admin-renamable). Keys are FIXED — they map
+// 1:1 to the committee_scores columns — only the labels are editable.
+export type CommitteeDimensionLabel = { key: keyof CommitteeDimensions; label: string };
+
+// The two divisors that convert the /60 committee marks into the two /5
+// committee-level points. Admin-editable (yip.committee_dimensions_config);
+// the default reproduces the Yi 2026 Workbook (drafting/50 → /5, presentation/10 → /5).
+export type CommitteeDivisors = {
+  draftingDivisor: number; // sum of the 5 drafting dims ÷ this → cmte level (default 10)
+  presentationDivisor: number; // presentation_defence ÷ this → bill level (default 2)
+};
+export const DEFAULT_COMMITTEE_DIVISORS: CommitteeDivisors = {
+  draftingDivisor: 10,
+  presentationDivisor: 2,
+};
+
+// Full committee-dimensions config (labels + divisors) — the editable shape.
+export type CommitteeDimensionsConfig = {
+  dimensions: CommitteeDimensionLabel[];
+  draftingDivisor: number;
+  presentationDivisor: number;
+};
+
 /**
  * Derive the committee-level points (each 0–5) + the /60 total from the six
  * raw dimension marks. Pure — shared by the scoring screen and the results
  * engine so the displayed number and the scored number can never diverge.
+ *
+ * `divisors` is admin-configurable; it defaults to the Yi 2026 Workbook values
+ * (10 and 2), so every existing caller that omits it behaves identically.
+ * Note `total60` is independent of the divisors.
  */
-export function deriveCommitteeLevels(d: CommitteeDimensions): {
+export function deriveCommitteeLevels(
+  d: CommitteeDimensions,
+  divisors: CommitteeDivisors = DEFAULT_COMMITTEE_DIVISORS
+): {
   cmteLevel: number; // 0–5, → cmte.committee_level
   billLevel: number; // 0–5, → bill.committee_level
   total60: number; // 0–60
@@ -47,8 +77,8 @@ export function deriveCommitteeLevels(d: CommitteeDimensions): {
     d.innovation +
     d.feasibility +
     d.team_collaboration; // 0–50
-  const cmteLevel = drafting / 10; // 50 → 5
-  const billLevel = d.presentation_defence / 2; // 10 → 5
+  const cmteLevel = drafting / divisors.draftingDivisor; // 50 → 5 by default
+  const billLevel = d.presentation_defence / divisors.presentationDivisor; // 10 → 5 by default
   return { cmteLevel, billLevel, total60: drafting + d.presentation_defence };
 }
 

@@ -23,6 +23,8 @@ import {
   updateAwardDefinition,
   type AwardDefinition,
 } from "@/app/yip/actions/admin-awards";
+import { updateCommitteeDimensionsConfig } from "@/app/yip/actions/committee-dimensions";
+import { type CommitteeDimensionsConfig } from "@/lib/yip/committee-score";
 import {
   Save,
   Loader2,
@@ -34,6 +36,7 @@ import {
   Trophy,
   Table2,
   ArrowRight,
+  Users,
 } from "lucide-react";
 
 const FLAG_LABELS: { key: keyof FlagDeltas; label: string }[] = [
@@ -93,6 +96,7 @@ export function ScoringConfigClient({
   initialDeltas,
   initialBuckets,
   initialAwards,
+  initialCommitteeDims,
 }: {
   initialSettings: ScoringSettings;
   initialComponents: SessionParametersConfig[];
@@ -100,6 +104,7 @@ export function ScoringConfigClient({
   initialDeltas: FlagDeltas;
   initialBuckets: ScoringBucket[];
   initialAwards: AwardDefinition[];
+  initialCommitteeDims: CommitteeDimensionsConfig;
 }) {
   const router = useRouter();
 
@@ -110,6 +115,33 @@ export function ScoringConfigClient({
   const [bucketModel, setBucketModel] = useState(initialSettings.use_bucket_model);
   const [savingModel, setSavingModel] = useState(false);
   const [modelMsg, setModelMsg] = useState<string | null>(null);
+
+  // ── 2b. Committee evaluation (dimensions + divisors) ──
+  const [cmteLabels, setCmteLabels] = useState<Record<string, string>>(
+    Object.fromEntries(initialCommitteeDims.dimensions.map((d) => [d.key, d.label]))
+  );
+  const [draftingDiv, setDraftingDiv] = useState(String(initialCommitteeDims.draftingDivisor));
+  const [presentationDiv, setPresentationDiv] = useState(
+    String(initialCommitteeDims.presentationDivisor)
+  );
+  const [savingCmte, setSavingCmte] = useState(false);
+  const [cmteMsg, setCmteMsg] = useState<string | null>(null);
+
+  async function saveCommitteeDims() {
+    setSavingCmte(true);
+    setCmteMsg(null);
+    const res = await updateCommitteeDimensionsConfig({
+      dimensions: initialCommitteeDims.dimensions.map((d) => ({
+        key: d.key,
+        label: cmteLabels[d.key] ?? d.label,
+      })),
+      draftingDivisor: Number(draftingDiv),
+      presentationDivisor: Number(presentationDiv),
+    });
+    setSavingCmte(false);
+    setCmteMsg(res.success ? "saved" : res.error);
+    if (res.success) router.refresh();
+  }
 
   // ── 3. Leadership bonuses ──
   const [bonuses, setBonuses] = useState<Record<string, string>>(
@@ -330,6 +362,60 @@ export function ScoringConfigClient({
         >
           Edit components &amp; criteria <ArrowRight className="size-4" />
         </Link>
+      </section>
+
+      {/* 2b. Committee evaluation */}
+      <section className={sectionCls}>
+        <h2 className={h2Cls}>
+          <Users className="size-4 text-[#FF9933]" /> Committee evaluation
+        </h2>
+        <p className="mt-1 text-xs text-[#1a1a3e]/50">
+          Rename the 6 committee rating dimensions, and set the two divisors that
+          convert the /60 committee mark into the two /5 committee-level points
+          (defaults 10 and 2). Applies to every event.
+        </p>
+        <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {initialCommitteeDims.dimensions.map((d) => (
+            <label
+              key={d.key}
+              className="flex items-center justify-between gap-2 rounded-lg border border-gray-200 px-3 py-2"
+            >
+              <span className="text-[11px] text-[#1a1a3e]/45">{d.key}</span>
+              <input
+                type="text"
+                value={cmteLabels[d.key] ?? ""}
+                onChange={(e) => setCmteLabels((p) => ({ ...p, [d.key]: e.target.value }))}
+                className="min-w-[150px] flex-1 rounded border border-gray-300 px-2 py-1 text-sm"
+              />
+            </label>
+          ))}
+        </div>
+        <div className="mt-3 flex flex-wrap gap-4">
+          <label className="flex items-center gap-1.5 text-xs text-[#1a1a3e]/70">
+            Drafting divisor (→ Committee Discussions /5)
+            <input
+              type="number"
+              value={draftingDiv}
+              onChange={(e) => setDraftingDiv(e.target.value)}
+              className={numInput}
+            />
+          </label>
+          <label className="flex items-center gap-1.5 text-xs text-[#1a1a3e]/70">
+            Presentation divisor (→ Bill Presentation /5)
+            <input
+              type="number"
+              value={presentationDiv}
+              onChange={(e) => setPresentationDiv(e.target.value)}
+              className={numInput}
+            />
+          </label>
+        </div>
+        <div className="mt-4 flex items-center gap-3">
+          <button type="button" onClick={saveCommitteeDims} disabled={savingCmte} className={saveBtn}>
+            {savingCmte ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />} Save
+          </button>
+          <Saved msg={cmteMsg} />
+        </div>
       </section>
 
       {/* 3. Leadership bonuses */}

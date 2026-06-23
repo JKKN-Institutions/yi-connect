@@ -48,6 +48,9 @@ export type AwardDefinitionPatch = {
   label?: string;
   default_recipients?: number;
   is_active?: boolean;
+  eligibility?: string;
+  rank_mode?: string;
+  rank_keys?: string[];
 };
 
 export async function updateAwardDefinition(

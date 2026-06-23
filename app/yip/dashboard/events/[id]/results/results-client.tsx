@@ -15,7 +15,9 @@ import {
   unmarkQualified,
   getEventQualificationData,
 } from "@/app/yip/actions/pipeline";
-import { ROLE_LABELS, PARTY_COLORS, MINISTRIES } from "@/lib/yip/constants";
+import { ROLE_LABELS, PARTY_COLORS } from "@/lib/yip/constants";
+import { StudentScoreSheet } from "./student-score-sheet";
+import { LeadershipTracker } from "./leadership-tracker";
 import { Badge } from "@/components/yip/ui/badge";
 import { Button } from "@/components/yip/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/yip/ui/card";
@@ -134,44 +136,34 @@ function getAwardStyle(label: string): AwardStyle {
   return AWARD_STYLES[label] ?? DEFAULT_AWARD_STYLE;
 }
 
-function getMinistryLabel(key: string | null): string {
-  if (!key) return "";
-  const found = MINISTRIES.find((m) => m.key === key);
-  return found ? found.label : key;
-}
 
 // ─── CSV Export ──────────────────────────────────────────────────
 
 function exportCSV(results: ResultWithParticipant[], eventName: string) {
+  // Yi 2026 official leaderboard format. Constituency No is the per-participant
+  // identifier (each constituency number maps to one delegate), so no separate
+  // Participant ID column. School/Class are not collected, so they're omitted.
   const headers = [
     "Rank",
-    "Name",
-    "School",
-    "Party",
-    "Role",
-    "Ministry",
+    "Student Name",
+    "Constituency No",
     "Constituency",
+    "Party",
     "Committee",
-    "Avg Score",
-    "Jury Count",
-    "Award",
+    "Total Score",
+    "Remarks",
   ];
 
   const rows = results.map((r) => [
     r.rank ?? "",
     r.participant.full_name,
-    r.participant.school_name,
+    r.participant.constituency_number ?? "",
+    r.participant.constituency_name ?? "",
     r.participant.party_number != null
       ? String.fromCharCode(64 + r.participant.party_number)
       : r.participant.party_side ?? "",
-    r.participant.parliament_role
-      ? ROLE_LABELS[r.participant.parliament_role] ?? r.participant.parliament_role
-      : "",
-    r.participant.committee_name ?? getMinistryLabel(r.participant.ministry),
-    r.participant.constituency_name ?? "",
-    r.participant.committee_number ?? "",
+    r.participant.committee_name ?? r.participant.committee_number ?? "",
     r.avg_score ?? "",
-    r.jury_count ?? "",
     r.award_category ?? "",
   ]);
 
@@ -213,6 +205,7 @@ export function ResultsClient({
   canOverrideAwards = false,
   eventLevel = "chapter",
   initialQualifiedIds = [],
+  positionBonuses = {},
 }: {
   eventId: string;
   eventName: string;
@@ -222,8 +215,14 @@ export function ResultsClient({
   canOverrideAwards?: boolean;
   eventLevel?: string;
   initialQualifiedIds?: string[];
+  positionBonuses?: Record<string, number>;
 }) {
   const router = useRouter();
+
+  // Leaderboard (ranked) vs Student Score Sheet (all students × buckets) view.
+  const [resultsView, setResultsView] = useState<
+    "leaderboard" | "scoresheet" | "leadership"
+  >("leaderboard");
 
   // Manual award override (chair's final say)
   const [overrideAward, setOverrideAward] = useState<string>("");
@@ -699,12 +698,56 @@ export function ResultsClient({
         </Card>
       )}
 
-      {/* Leaderboard Table */}
+      {/* Leaderboard / Student Score Sheet */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Leaderboard</CardTitle>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <CardTitle className="text-base">
+              {resultsView === "scoresheet"
+                ? "Student Score Sheet"
+                : resultsView === "leadership"
+                  ? "Leadership Tracker"
+                  : "Leaderboard"}
+            </CardTitle>
+            <div className="flex flex-wrap gap-1">
+              <Button
+                variant={resultsView === "leaderboard" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setResultsView("leaderboard")}
+              >
+                Leaderboard
+              </Button>
+              <Button
+                variant={resultsView === "scoresheet" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setResultsView("scoresheet")}
+              >
+                Score Sheet
+              </Button>
+              <Button
+                variant={resultsView === "leadership" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setResultsView("leadership")}
+              >
+                Leadership
+              </Button>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
+          {resultsView === "scoresheet" ? (
+            <StudentScoreSheet
+              results={results}
+              positionBonuses={positionBonuses}
+              eventName={eventName}
+            />
+          ) : resultsView === "leadership" ? (
+            <LeadershipTracker
+              results={results}
+              positionBonuses={positionBonuses}
+              eventName={eventName}
+            />
+          ) : (
           <div className="rounded-lg border overflow-x-auto">
             <Table>
               <TableHeader>
@@ -800,6 +843,7 @@ export function ResultsClient({
               </TableBody>
             </Table>
           </div>
+          )}
         </CardContent>
       </Card>
 

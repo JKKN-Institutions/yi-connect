@@ -64,7 +64,7 @@ function rowToConfig(row: {
 // Live config read by the scoring engine + screens. Falls back to defaults when
 // the singleton row is missing, so behaviour is never undefined.
 export async function getCommitteeDimensionsConfig(): Promise<CommitteeDimensionsConfig> {
-  const supabase = await createServiceClient();
+  const supabase = await dimsClient();
   const { data } = await supabase
     .from("committee_dimensions_config")
     .select("dimensions, drafting_divisor, presentation_divisor")
@@ -109,7 +109,7 @@ export async function updateCommitteeDimensionsConfig(input: {
     label: labelByKey.get(d.key) ?? d.label,
   }));
 
-  const supabase = await createServiceClient();
+  const supabase = await dimsClient();
   const { data, error } = await supabase
     .from("committee_dimensions_config")
     .upsert(

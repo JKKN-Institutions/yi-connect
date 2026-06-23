@@ -18,6 +18,8 @@ import {
 import { ROLE_LABELS, PARTY_COLORS } from "@/lib/yip/constants";
 import { StudentScoreSheet } from "./student-score-sheet";
 import { LeadershipTracker } from "./leadership-tracker";
+import { EventAwardConfig } from "./event-award-config";
+import type { EventAwardRow } from "@/app/yip/actions/admin-awards";
 import { Badge } from "@/components/yip/ui/badge";
 import { Button } from "@/components/yip/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/yip/ui/card";
@@ -206,6 +208,7 @@ export function ResultsClient({
   eventLevel = "chapter",
   initialQualifiedIds = [],
   positionBonuses = {},
+  eventAwardConfig = [],
 }: {
   eventId: string;
   eventName: string;
@@ -216,6 +219,7 @@ export function ResultsClient({
   eventLevel?: string;
   initialQualifiedIds?: string[];
   positionBonuses?: Record<string, number>;
+  eventAwardConfig?: EventAwardRow[];
 }) {
   const router = useRouter();
 
@@ -697,6 +701,9 @@ export function ResultsClient({
           </CardContent>
         </Card>
       )}
+
+      {/* Per-event award recipient overrides (recognise more on this event) */}
+      <EventAwardConfig eventId={eventId} initialConfig={eventAwardConfig} />
 
       {/* Leaderboard / Student Score Sheet */}
       <Card>

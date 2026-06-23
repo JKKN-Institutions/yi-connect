@@ -3,6 +3,7 @@ import { createClient } from "@/lib/yip/supabase/server";
 import { getEvent } from "@/app/yip/actions/events";
 import { getResults } from "@/app/yip/actions/results";
 import { getAwardOverrides } from "@/app/yip/actions/award-overrides";
+import { getPositionBonusConfigAdmin } from "@/app/yip/actions/positions";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { ResultsClient } from "./results-client";
 import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
@@ -38,6 +39,7 @@ export default async function ResultsPage({
 
   const results = await getResults(id);
   const awardOverrides = await getAwardOverrides(id);
+  const positionConfig = await getPositionBonusConfigAdmin();
 
   return (
     <ResultsClient
@@ -47,6 +49,7 @@ export default async function ResultsPage({
       results={results}
       awardOverrides={awardOverrides}
       canOverrideAwards={access.canDelete}
+      positionBonuses={positionConfig.bonuses}
     />
   );
 }

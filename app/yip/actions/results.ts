@@ -1026,6 +1026,7 @@ export type ResultWithParticipant = {
     party_number: number | null;
     ministry: string | null;
     constituency_name: string | null;
+    constituency_number: number | null;
     committee_name: string | null;
     committee_number: number | null;
   };
@@ -1056,6 +1057,7 @@ export async function getResults(
         party_number,
         ministry,
         constituency_name,
+        constituency_number,
         committee_name,
         committee_number
       )

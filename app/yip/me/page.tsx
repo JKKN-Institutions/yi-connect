@@ -295,6 +295,35 @@ export default async function ParticipantPage() {
 
   const role = participant.parliament_role;
   const side = participant.party_side as "ruling" | "opposition" | null;
+  // Party identity must show even when there is no bench. Benchless allocation
+  // (the current default) leaves party_side null — Ruling/Opposition is decided
+  // live on event day — so party display can NOT key off `side`, or every party
+  // chip + roster disappears. Neutral (saffron) accent when there is no side;
+  // the Ruling/Opposition tint is kept only when a side actually exists.
+  const partyAccent =
+    side === "ruling"
+      ? {
+          border: "border-blue-200/50",
+          bar: "from-blue-500 to-sky-400",
+          text: "text-blue-600",
+          chip: "bg-blue-100 text-blue-700",
+          badge: PARTY_COLORS.ruling.badge,
+        }
+      : side === "opposition"
+        ? {
+            border: "border-red-200/50",
+            bar: "from-red-500 to-rose-400",
+            text: "text-red-600",
+            chip: "bg-red-100 text-red-700",
+            badge: PARTY_COLORS.opposition.badge,
+          }
+        : {
+            border: "border-[#FF9933]/30",
+            bar: "from-[#FF9933] to-amber-400",
+            text: "text-[#b56a1f]",
+            chip: "bg-[#FF9933]/15 text-[#9a5212]",
+            badge: "bg-[#FF9933]/12 text-[#9a5212]",
+          };
   const roleLabel = role ? ROLE_LABELS[role] ?? role : null;
   const roleGradient = role ? ROLE_GRADIENTS[role] ?? "from-gray-500 to-gray-400" : "";
   const isPresiding = role === "speaker" || role === "deputy_speaker";
@@ -346,9 +375,9 @@ export default async function ParticipantPage() {
                     {roleLabel}
                   </span>
                 )}
-                {side && (
+                {(partyName || participant.party_number != null || side) && (
                   <span
-                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium ${PARTY_COLORS[side].badge} shadow-sm`}
+                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium ${partyAccent.badge} shadow-sm`}
                   >
                     <Flag className="size-3.5" />
                     {partyName ??
@@ -357,7 +386,7 @@ export default async function ParticipantPage() {
                         : side === "ruling"
                           ? "Ruling Party"
                           : "Opposition Party")}
-                    {partyName && (
+                    {side && (
                       <span className="font-normal opacity-80">
                         · {side === "ruling" ? "Ruling" : "Opposition"}
                       </span>
@@ -606,27 +635,16 @@ export default async function ParticipantPage() {
       )}
 
       {/* ─── YOUR PARTY (privacy-safe roster — serial # + constituency only) */}
-      {side && partyRoster.length > 0 && (
-        <Card
-          className={
-            side === "ruling" ? "border-blue-200/50" : "border-red-200/50"
-          }
-        >
-          <div
-            className={`h-1 w-full bg-gradient-to-r ${
-              side === "ruling"
-                ? "from-blue-500 to-sky-400"
-                : "from-red-500 to-rose-400"
-            }`}
-          />
+      {partyRoster.length > 0 && (
+        <Card className={partyAccent.border}>
+          <div className={`h-1 w-full bg-gradient-to-r ${partyAccent.bar}`} />
           <CardContent className="pt-4 pb-4">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
-                <Users
-                  className={`size-5 ${side === "ruling" ? "text-blue-600" : "text-red-600"}`}
-                />
+                <Users className={`size-5 ${partyAccent.text}`} />
                 <h2 className="text-sm font-bold text-gray-900">
-                  Your {side === "ruling" ? "Ruling" : "Opposition"} Party
+                  Your Party
+                  {side ? ` · ${side === "ruling" ? "Ruling" : "Opposition"}` : ""}
                 </h2>
               </div>
               <span className="text-xs text-gray-400">
@@ -641,11 +659,7 @@ export default async function ParticipantPage() {
                   className={`flex items-center gap-3 py-2 ${m.isSelf ? "rounded-md bg-amber-50 px-2 -mx-2" : ""}`}
                 >
                   <span
-                    className={`inline-flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
-                      side === "ruling"
-                        ? "bg-blue-100 text-blue-700"
-                        : "bg-red-100 text-red-700"
-                    }`}
+                    className={`inline-flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${partyAccent.chip}`}
                   >
                     {m.serial_no != null ? `#${m.serial_no}` : "—"}
                   </span>

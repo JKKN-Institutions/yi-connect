@@ -308,7 +308,7 @@ export function TopicsAdminClient({
             <div>
               <label className="text-xs font-medium text-[#1a1a3e]/70">
                 {form.category === "committee"
-                  ? "Committee / Ministry name *"
+                  ? "Ministry name *"
                   : "Title *"}
               </label>
               <Input
@@ -405,13 +405,15 @@ export function TopicsAdminClient({
                     {t.topic_number ?? "—"}
                   </TableCell>
                   <TableCell className="max-w-xl">
-                    {/* Ministry committee name on top + a Committee tag */}
+                    {/* Ministry name on top + a Ministry tag. The ministry is the
+                        topic's department label — NOT the committee (the committee
+                        is the student group assigned this topic). */}
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-semibold text-[#1a1a3e]">
                         {t.title}
                       </span>
                       <Badge className="bg-[#1a1a3e]/10 text-[#1a1a3e] border-[#1a1a3e]/20 text-[10px]">
-                        Committee
+                        Ministry
                       </Badge>
                     </div>
                     {/* The debate / bill topic — the main line */}

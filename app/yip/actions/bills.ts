@@ -37,6 +37,25 @@ async function assertCommitteeMember(
   return { ok: true };
 }
 
+// ─── Committee Report gate ─────────────────────────────────────
+// A committee must submit its Committee Report (findings + recommendations)
+// BEFORE it can draft its bill — the bill is built from the report. Returns an
+// error message when the report is missing/unsubmitted, else null.
+async function assertReportSubmitted(
+  supabase: Awaited<ReturnType<typeof createServiceClient>>,
+  eventId: string,
+  committeeName: string
+): Promise<string | null> {
+  const { data } = await supabase
+    .from("committee_reports")
+    .select("status")
+    .eq("event_id", eventId)
+    .eq("committee_name", committeeName)
+    .maybeSingle();
+  if (data?.status === "submitted") return null;
+  return "Submit your Committee Report first — the bill unlocks once the report is in.";
+}
+
 // ─── Save Bill Draft (upsert) ──────────────────────────────────
 
 export async function saveBillDraft(
@@ -61,6 +80,10 @@ export async function saveBillDraft(
     committeeName
   );
   if (!gate.ok) return { success: false, error: gate.error };
+
+  // Bill is locked until the committee submits its Committee Report.
+  const reportGate = await assertReportSubmitted(supabase, eventId, committeeName);
+  if (reportGate) return { success: false, error: reportGate };
 
   // Check if bill already exists for this committee + event
   const { data: existing } = await supabase
@@ -157,6 +180,14 @@ export async function submitBill(
     bill.committee_name
   );
   if (!gate.ok) return { success: false, error: gate.error };
+
+  // Bill is locked until the committee submits its Committee Report.
+  const reportGate = await assertReportSubmitted(
+    supabase,
+    bill.event_id,
+    bill.committee_name
+  );
+  if (reportGate) return { success: false, error: reportGate };
 
   if (bill.status !== "drafting") {
     return { success: false, error: "Bill has already been submitted" };

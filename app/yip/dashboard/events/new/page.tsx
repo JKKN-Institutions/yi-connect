@@ -85,8 +85,8 @@ export default function NewEventPage() {
   const [chaptersLoading, setChaptersLoading] = useState(true);
 
   // The official 15 committee topics come from the yip.topics catalog (managed
-  // at /yip/dashboard/admin/topics). The organiser picks 8–10 for this round;
-  // committee_topics holds ONLY the selected committees → their fixed topic.
+  // at /yip/dashboard/admin/topics). The organiser picks ~5 (more if they want)
+  // for this round; committee_topics holds ONLY the selected committees → topic.
   const [committeeCatalog, setCommitteeCatalog] = useState<
     CommitteeTopicOption[]
   >([]);
@@ -492,8 +492,8 @@ export default function NewEventPage() {
               <Label className="mb-3">Committee Topics</Label>
               <p className="mb-4 text-xs text-gray-500">
                 Pick the committees for this round from the official YIP 2026
-                list. Recommended: choose <strong>8–10</strong>. Each
-                committee&apos;s topic is fixed — students draft bills on it.{" "}
+                list. Recommended: choose <strong>5</strong> — you can pick more.
+                Each committee&apos;s topic is fixed — students draft bills on it.{" "}
                 <span className="font-medium text-[#1a1a3e]">
                   Selected: {Object.keys(form.committee_topics).length}
                 </span>

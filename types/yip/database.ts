@@ -1727,6 +1727,59 @@ export type Database = {
         }
         Relationships: []
       }
+      committee_reports: {
+        Row: {
+          background: string | null
+          committee_name: string
+          created_at: string
+          current_challenges: string | null
+          event_id: string
+          findings: string | null
+          id: string
+          is_mock: boolean
+          proposed_solutions: string | null
+          recommendations: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          background?: string | null
+          committee_name: string
+          created_at?: string
+          current_challenges?: string | null
+          event_id: string
+          findings?: string | null
+          id?: string
+          is_mock?: boolean
+          proposed_solutions?: string | null
+          recommendations?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          background?: string | null
+          committee_name?: string
+          created_at?: string
+          current_challenges?: string | null
+          event_id?: string
+          findings?: string | null
+          id?: string
+          is_mock?: boolean
+          proposed_solutions?: string | null
+          recommendations?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "committee_reports_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       committee_scores: {
         Row: {
           bill_draft_quality: number

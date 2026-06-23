@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useTransition } from "react";
+import Link from "next/link";
 import { Card, CardContent } from "@/components/yip/ui/card";
 import { Button } from "@/components/yip/ui/button";
 import { Input } from "@/components/yip/ui/input";
@@ -29,6 +30,9 @@ import {
   Download,
   Trash2,
   FolderOpen,
+  Lock,
+  ArrowRight,
+  ClipboardList,
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatBytes } from "@/lib/yip/media";
@@ -131,12 +135,14 @@ export function BillClient({
   committeeName,
   committeeTopic,
   committeeScheme,
+  reportSubmitted,
 }: {
   initialSession: ParticipantSession;
   parliamentRole: string | null;
   committeeName: string | null;
   committeeTopic: string | null;
   committeeScheme: string | null;
+  reportSubmitted: boolean;
 }) {
   const session: ParticipantSession | null = initialSession;
   // Committee members draft their committee's bill (everyone except the Speaker
@@ -402,8 +408,8 @@ export function BillClient({
         )}
       </div>
 
-      {/* Committee Members */}
-      {members.length > 0 && (
+      {/* Committee Members (only once the bill is unlocked) */}
+      {reportSubmitted && members.length > 0 && (
         <Card>
           <CardContent className="pt-4 pb-4">
             <h3 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1.5">
@@ -437,8 +443,33 @@ export function BillClient({
         </Card>
       )}
 
-      {/* Bill Form */}
-      {isDraft ? (
+      {/* Bill is LOCKED until the Committee Report is submitted */}
+      {!reportSubmitted ? (
+        <Card className="border-amber-200 bg-amber-50/50">
+          <CardContent className="pt-5 pb-5 text-center space-y-3">
+            <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-amber-100">
+              <Lock className="size-6 text-amber-500" />
+            </div>
+            <div>
+              <p className="font-semibold text-gray-900">
+                Submit your Committee Report first
+              </p>
+              <p className="text-sm text-gray-600 mt-1 max-w-sm mx-auto">
+                Your committee researches the topic and agrees its findings +
+                recommendations in the Committee Report. Once it&apos;s submitted,
+                the bill unlocks here.
+              </p>
+            </div>
+            <Link href="/yip/me/report">
+              <Button className="bg-[#FF9933] hover:bg-[#E68A2E]">
+                <ClipboardList className="size-4 mr-1.5" />
+                Go to Committee Report
+                <ArrowRight className="size-4 ml-1.5" />
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+      ) : isDraft ? (
         <Card>
           <CardContent className="pt-5 space-y-4">
             {/* Bill Title */}

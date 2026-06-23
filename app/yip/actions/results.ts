@@ -921,8 +921,10 @@ export async function computeResults(
   const awardOverrideByKey = new Map(
     (awardCfgRows ?? []).map((o) => [o.award_key, o])
   );
-  for (const def of awardDefs ?? []) {
-    const spec = AWARD_REGISTRY[def.award_key];
+  for (const def of (awardDefs ?? []) as AwardConfigRow[]) {
+    // Config-driven when rank_mode is set (seeded for all 15); else fall back to
+    // the in-code registry so no award ever silently disappears.
+    const spec = def.rank_mode ? buildSpec(def) : AWARD_REGISTRY[def.award_key];
     if (!spec) continue; // unknown key (future-proof) — skip
     const ov = awardOverrideByKey.get(def.award_key);
     const active = ov?.is_active ?? def.is_active;

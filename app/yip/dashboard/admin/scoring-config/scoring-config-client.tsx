@@ -23,6 +23,8 @@ import {
   updateAwardDefinition,
   type AwardDefinition,
 } from "@/app/yip/actions/admin-awards";
+import { updateCommitteeDimensionsConfig } from "@/app/yip/actions/committee-dimensions";
+import { type CommitteeDimensionsConfig } from "@/lib/yip/committee-score";
 import {
   Save,
   Loader2,
@@ -34,6 +36,7 @@ import {
   Trophy,
   Table2,
   ArrowRight,
+  Users,
 } from "lucide-react";
 
 const FLAG_LABELS: { key: keyof FlagDeltas; label: string }[] = [

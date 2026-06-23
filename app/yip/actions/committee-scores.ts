@@ -165,7 +165,7 @@ export async function getCommitteeScoring(
       const avg = scores.length
         ? averageDimensions(scores.map(dimsOf))
         : { ...ZERO_COMMITTEE_DIMENSIONS };
-      const { cmteLevel, billLevel, total60 } = deriveCommitteeLevels(avg);
+      const { cmteLevel, billLevel, total60 } = deriveCommitteeLevels(avg, cmteDivisors);
       // Assigned judges, plus any judge who scored but isn't formally assigned.
       const assigned = assignedByCommittee.get(committee_name) ?? [];
       return {

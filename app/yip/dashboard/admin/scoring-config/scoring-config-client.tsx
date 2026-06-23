@@ -509,7 +509,10 @@ export function ScoringConfigClient({
           <Trophy className="size-4 text-[#FF9933]" /> Awards
         </h2>
         <p className="mt-1 text-xs text-[#1a1a3e]/50">
-          Turn an award on/off, rename it, and set how many winners it has.
+          Turn an award on/off, rename it, set winners, and edit its formula —
+          who&apos;s eligible and how the winner is ranked. &quot;Keys&quot; (for
+          the sum mode) are criterion families like <code>pol</code>, <code>qh</code>,{" "}
+          <code>zero</code> or specific criteria like <code>zero.creativity</code>.
         </p>
         <div className="mt-3 space-y-2">
           {initialAwards.map((a) => {

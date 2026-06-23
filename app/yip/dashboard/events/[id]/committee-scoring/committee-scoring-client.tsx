@@ -360,7 +360,7 @@ export function CommitteeScoringClient({
                         {isEditing && (
                           <div className="space-y-3 border-t bg-gray-50 px-3 py-3">
                             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                              {COMMITTEE_DIMENSIONS.map((dim) => (
+                              {dimensions.map((dim) => (
                                 <label key={dim.key} className="block text-sm">
                                   <span className="mb-1 block text-xs font-medium text-gray-600">
                                     {dim.label} <span className="text-gray-400">/10</span>

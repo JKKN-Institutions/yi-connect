@@ -79,6 +79,22 @@ export async function updateAwardDefinition(
     update.default_recipients = n;
   }
   if (typeof patch.is_active === "boolean") update.is_active = patch.is_active;
+  if (typeof patch.eligibility === "string") {
+    if (!(AWARD_ELIGIBILITIES as readonly string[]).includes(patch.eligibility))
+      return { success: false, error: "Unknown eligibility." };
+    update.eligibility = patch.eligibility;
+  }
+  if (typeof patch.rank_mode === "string") {
+    if (!(AWARD_RANK_MODES as readonly string[]).includes(patch.rank_mode))
+      return { success: false, error: "Unknown rank mode." };
+    update.rank_mode = patch.rank_mode;
+  }
+  if (Array.isArray(patch.rank_keys)) {
+    update.rank_keys = patch.rank_keys
+      .map((k) => String(k).trim())
+      .filter((k) => k.length > 0 && k.length <= 60)
+      .slice(0, 12);
+  }
 
   const supabase = await createServiceClient();
   const { data, error } = await supabase

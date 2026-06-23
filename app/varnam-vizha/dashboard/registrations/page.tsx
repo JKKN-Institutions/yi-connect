@@ -18,7 +18,15 @@ const fmtDate = (iso: string | null) =>
 
 export default async function RegistrationsPage() {
   const access = await getVarnamAccess();
-  if (!access.canView) return <Forbidden403 reason={access.reason} />;
+  // The sign-up list holds people's contact details — restricted to the chair,
+  // co-chair and admins (not every committee member).
+  const canSeePeople =
+    access.canAdmin || access.role === "chair" || access.role === "co_chair";
+  if (!canSeePeople) {
+    return (
+      <Forbidden403 reason="The sign-up list (with people's contact details) is limited to the chair and admins." />
+    );
+  }
 
   const rows = await getAllRegistrations();
 

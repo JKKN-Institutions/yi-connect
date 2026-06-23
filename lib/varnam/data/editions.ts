@@ -90,20 +90,70 @@ export async function getEditionEvents(
   return (data as FestivalEvent[]) ?? [];
 }
 
-/** One festival event by its public slug, with its edition. */
-export async function getEventBySlug(
-  slug: string
-): Promise<{ event: FestivalEvent; edition: Edition | null } | null> {
+export type RegMode = "open" | "waitlist" | "full" | "paid" | "closed" | "cancelled";
+export type RegistrationState = {
+  mode: RegMode;
+  ticketUrl: string | null;
+  spotsLeft: number | null;
+};
+
+/**
+ * Pure decision: how registration behaves for an event right now. Used by both
+ * the public detail page (to render the right control) and the register server
+ * action (to enforce it). Order matters: cancelled → paid → closed → full.
+ */
+export function computeRegistrationMode(args: {
+  status: string | null;
+  customFields: Record<string, unknown> | null;
+  startDate: string | null;
+  maxCapacity: number | null;
+  waitlistEnabled: boolean | null;
+  confirmedCount: number;
+}): RegMode {
+  const {
+    status,
+    customFields,
+    startDate,
+    maxCapacity,
+    waitlistEnabled,
+    confirmedCount,
+  } = args;
+  if (status === "cancelled") return "cancelled";
+  if (customFields && (customFields.paid === true || customFields.ticket_url))
+    return "paid";
+  if (startDate && new Date(startDate).getTime() < Date.now()) return "closed";
+  if (
+    typeof maxCapacity === "number" &&
+    maxCapacity > 0 &&
+    confirmedCount >= maxCapacity
+  ) {
+    return waitlistEnabled ? "waitlist" : "full";
+  }
+  return "open";
+}
+
+/** One festival event by its public slug, with its edition + registration state. */
+export async function getEventBySlug(slug: string): Promise<{
+  event: FestivalEvent;
+  edition: Edition | null;
+  registration: RegistrationState;
+} | null> {
   const sb = await createServerSupabaseClient();
   const { data: eventRaw } = await sb
     .schema("yi_connect")
     .from("events")
-    .select(EVENT_COLS + ",festival_edition_id")
+    .select(
+      EVENT_COLS +
+        ",festival_edition_id,max_capacity,waitlist_enabled,custom_fields"
+    )
     .eq("public_slug", slug)
     .maybeSingle();
   if (!eventRaw) return null;
   const event = eventRaw as unknown as FestivalEvent & {
     festival_edition_id?: string | null;
+    max_capacity?: number | null;
+    waitlist_enabled?: boolean | null;
+    custom_fields?: Record<string, unknown> | null;
   };
 
   let edition: Edition | null = null;
@@ -116,5 +166,30 @@ export async function getEventBySlug(
       .maybeSingle();
     edition = (ed as Edition) ?? null;
   }
-  return { event, edition };
+
+  // Live confirmed count drives capacity / waitlist.
+  const { count } = await sb
+    .schema("yi_connect")
+    .from("guest_rsvps")
+    .select("id", { count: "exact", head: true })
+    .eq("event_id", event.id)
+    .eq("status", "confirmed");
+  const confirmedCount = count ?? 0;
+  const cf = event.custom_fields ?? null;
+  const mode = computeRegistrationMode({
+    status: event.status,
+    customFields: cf,
+    startDate: event.start_date,
+    maxCapacity: event.max_capacity ?? null,
+    waitlistEnabled: event.waitlist_enabled ?? null,
+    confirmedCount,
+  });
+  const ticketUrl =
+    cf && typeof cf.ticket_url === "string" ? cf.ticket_url : null;
+  const spotsLeft =
+    typeof event.max_capacity === "number" && event.max_capacity > 0
+      ? Math.max(0, event.max_capacity - confirmedCount)
+      : null;
+
+  return { event, edition, registration: { mode, ticketUrl, spotsLeft } };
 }

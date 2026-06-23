@@ -7,6 +7,7 @@
  * gateway-ready but wires no payment.
  */
 import { createAdminSupabaseClient } from "@/lib/supabase/server";
+import { computeRegistrationMode } from "@/lib/varnam/data/editions";
 
 export type RegisterState = { ok: boolean; message: string };
 
@@ -34,10 +35,20 @@ export async function registerForEvent(
   const { data: ev } = await sb
     .schema("yi_connect")
     .from("events")
-    .select("id, festival_edition_id")
+    .select(
+      "id, festival_edition_id, status, start_date, max_capacity, waitlist_enabled, custom_fields"
+    )
     .eq("id", eventId)
     .maybeSingle();
-  if (!ev || !(ev as { festival_edition_id?: string }).festival_edition_id) {
+  const event = ev as {
+    festival_edition_id?: string | null;
+    status?: string | null;
+    start_date?: string | null;
+    max_capacity?: number | null;
+    waitlist_enabled?: boolean | null;
+    custom_fields?: Record<string, unknown> | null;
+  } | null;
+  if (!event || !event.festival_edition_id) {
     return { ok: false, message: "This event isn't open for registration yet." };
   }
 
@@ -53,6 +64,34 @@ export async function registerForEvent(
     return { ok: true, message: `You're already registered, ${first} — see you there!` };
   }
 
+  // Enforce the registration rules (paid / closed / cancelled / full→waitlist).
+  const { count } = await sb
+    .schema("yi_connect")
+    .from("guest_rsvps")
+    .select("id", { count: "exact", head: true })
+    .eq("event_id", eventId)
+    .eq("status", "confirmed");
+  const mode = computeRegistrationMode({
+    status: event.status ?? null,
+    customFields: event.custom_fields ?? null,
+    startDate: event.start_date ?? null,
+    maxCapacity: event.max_capacity ?? null,
+    waitlistEnabled: event.waitlist_enabled ?? null,
+    confirmedCount: count ?? 0,
+  });
+  if (mode === "paid")
+    return {
+      ok: false,
+      message: "This is a ticketed event — please buy a ticket via the ticketing link.",
+    };
+  if (mode === "cancelled")
+    return { ok: false, message: "This event has been cancelled." };
+  if (mode === "closed")
+    return { ok: false, message: "Registration for this event has closed." };
+  if (mode === "full")
+    return { ok: false, message: "Sorry — this event is full." };
+
+  const status = mode === "waitlist" ? "waitlist" : "confirmed";
   const { error } = await sb
     .schema("yi_connect")
     .from("guest_rsvps")
@@ -61,7 +100,7 @@ export async function registerForEvent(
       full_name: fullName,
       email,
       phone: phone || null,
-      status: "confirmed",
+      status,
     });
   if (error) {
     return { ok: false, message: "Couldn't register right now — please try again." };
@@ -69,6 +108,9 @@ export async function registerForEvent(
 
   return {
     ok: true,
-    message: `You're registered, ${first}! A confirmation will follow by email.`,
+    message:
+      status === "waitlist"
+        ? `You're on the waitlist, ${first} — we'll be in touch if a spot opens up.`
+        : `You're registered, ${first}! A confirmation will follow by email.`,
   };
 }

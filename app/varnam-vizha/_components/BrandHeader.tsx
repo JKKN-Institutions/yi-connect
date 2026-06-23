@@ -23,6 +23,9 @@ export function VarnamHeader() {
           <Link href="/varnam-vizha/events" className="hover:text-[#D6336C]">
             Events
           </Link>
+          <Link href="/varnam-vizha/past" className="hover:text-[#D6336C]">
+            Past years
+          </Link>
           <Link
             href="/varnam-vizha/login"
             className="rounded-full bg-[#3B0A45] px-4 py-1.5 text-white transition-colors hover:bg-[#2B0A33]"

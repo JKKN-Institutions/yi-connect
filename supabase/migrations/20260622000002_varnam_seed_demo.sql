@@ -52,3 +52,15 @@ CROSS JOIN (VALUES
 ) AS v(title, description, category, start_ts, end_ts, venue, slug, feat)
 WHERE fe.festival_key = 'varnam-vizha' AND fe.year = 2026
 ON CONFLICT (public_slug) DO NOTHING;
+
+-- Registration behaviour (Director interview 2026-06-23):
+-- Jolly Jam is a PAID, ticketed event — sold via an external ticketing partner
+-- (no free sign-up). The 5K Awareness Run gets a small demo capacity so the
+-- "full → waitlist" behaviour is visible. Idempotent.
+UPDATE yi_connect.events
+  SET custom_fields = COALESCE(custom_fields, '{}'::jsonb) || '{"paid": true, "ticketing": "external"}'::jsonb
+  WHERE public_slug = 'varnam-2026-jolly-jam';
+
+UPDATE yi_connect.events
+  SET max_capacity = 2, waitlist_enabled = true
+  WHERE public_slug = 'varnam-2026-awareness-run';

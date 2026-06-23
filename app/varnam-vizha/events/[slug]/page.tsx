@@ -38,7 +38,7 @@ export default async function VarnamEventDetail({ params }: Params) {
   const { slug } = await params;
   const found = await getEventBySlug(slug);
   if (!found) notFound();
-  const { event, edition } = found;
+  const { event, edition, registration } = found;
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-12">
@@ -97,7 +97,49 @@ export default async function VarnamEventDetail({ params }: Params) {
       </div>
 
       <div className="mt-6">
-        <RegisterForm eventId={event.id} />
+        {registration.mode === "paid" ? (
+          <div className="rounded-2xl border border-[#F4A300]/40 bg-[#F4A300]/5 p-6 text-center">
+            <p className="font-[family-name:var(--font-vv-display)] text-lg font-bold text-[#3B0A45]">
+              🎟️ Ticketed event
+            </p>
+            <p className="mx-auto mt-1 max-w-sm text-sm text-[#2B0A33]/70">
+              This is a paid event. Tickets are sold through our ticketing
+              partner.
+            </p>
+            {registration.ticketUrl ? (
+              <a
+                href={registration.ticketUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-4 inline-flex rounded-full bg-[#3B0A45] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#2B0A33]"
+              >
+                Buy tickets →
+              </a>
+            ) : (
+              <p className="mt-3 text-xs text-[#2B0A33]/45">
+                The ticket link will appear here closer to the festival.
+              </p>
+            )}
+          </div>
+        ) : registration.mode === "cancelled" ? (
+          <div className="rounded-2xl border border-[#3B0A45]/10 bg-white p-6 text-center text-sm font-medium text-[#2B0A33]/70">
+            This event has been cancelled.
+          </div>
+        ) : registration.mode === "closed" ? (
+          <div className="rounded-2xl border border-[#3B0A45]/10 bg-white p-6 text-center text-sm font-medium text-[#2B0A33]/70">
+            Registration for this event has closed.
+          </div>
+        ) : registration.mode === "full" ? (
+          <div className="rounded-2xl border border-[#3B0A45]/10 bg-white p-6 text-center text-sm font-medium text-[#2B0A33]/70">
+            Sorry — this event is full.
+          </div>
+        ) : (
+          <RegisterForm
+            eventId={event.id}
+            mode={registration.mode}
+            spotsLeft={registration.spotsLeft}
+          />
+        )}
       </div>
     </div>
   );

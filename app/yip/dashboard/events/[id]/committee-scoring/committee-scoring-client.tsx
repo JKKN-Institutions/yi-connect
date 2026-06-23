@@ -10,9 +10,9 @@ import {
   type CommitteeRow,
 } from "@/app/yip/actions/committee-scores";
 import {
-  COMMITTEE_DIMENSIONS,
   deriveCommitteeLevels,
   type CommitteeDimensions,
+  type CommitteeDimensionLabel,
 } from "@/lib/yip/committee-score";
 import { committeeLabel } from "@/lib/yip/committee-label";
 import { Button } from "@/components/yip/ui/button";

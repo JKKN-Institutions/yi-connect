@@ -158,9 +158,15 @@ export function VoteManager({
     selectedIds: [],
     loading: false,
   });
-  // Editable TOTAL cabinet/shadow seats — the organiser can change it and the
+  // Editable TOTAL cabinet / shadow seats — the organiser can change each and the
   // per-party quota re-derives live. Defaults to MINISTRIES.length (8).
+  // Cabinet (ruling) and Shadow (opposition) keep INDEPENDENT totals: the
+  // opposition is usually smaller, so a shared count would leave the Shadow side
+  // stuck (a default of 8 exceeds the seats a 2-member opposition party can fill).
   const [totalCabinetSeats, setTotalCabinetSeats] = useState<number>(
+    MINISTRIES.length
+  );
+  const [totalShadowSeats, setTotalShadowSeats] = useState<number>(
     MINISTRIES.length
   );
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -1072,9 +1078,10 @@ export function VoteManager({
   function quotaForSide(side: "ruling" | "opposition"): Record<string, number> {
     const sideParties = parties.filter((p) => p.side === side);
     if (sideParties.length === 0) return {};
+    const totalSeats = side === "ruling" ? totalCabinetSeats : totalShadowSeats;
     const dist = distributeSeats(
       sideParties.map((p) => ({ partyId: p.id, members: p.member_count })),
-      totalCabinetSeats
+      totalSeats
     );
     const map: Record<string, number> = {};
     dist.forEach((d) => {
@@ -1093,6 +1100,9 @@ export function VoteManager({
     if (sideParties.length === 0) return null;
     const quota = quotaForSide(side);
     const isCabinet = voteType === "cabinet_minister";
+    // Cabinet and Shadow each bind to their own total-seats state.
+    const totalSeats = isCabinet ? totalCabinetSeats : totalShadowSeats;
+    const setTotalSeats = isCabinet ? setTotalCabinetSeats : setTotalShadowSeats;
     return (
       <div className="space-y-3">
         <div className="flex items-center gap-1.5 text-sm font-medium text-gray-700">
@@ -1121,10 +1131,10 @@ export function VoteManager({
             id={`total-seats-${voteType}`}
             type="number"
             min={1}
-            value={totalCabinetSeats}
+            value={totalSeats}
             onChange={(e) => {
               const n = parseInt(e.target.value, 10);
-              setTotalCabinetSeats(Number.isFinite(n) && n >= 1 ? n : 1);
+              setTotalSeats(Number.isFinite(n) && n >= 1 ? n : 1);
             }}
             className="h-8 w-20 text-sm"
           />
@@ -1783,35 +1793,27 @@ export function VoteManager({
               />
             )}
 
-            {/* After a party-leader result is revealed, let the organiser run
-                the next party's election (a new session is allowed once the
-                previous one is revealed). */}
+            {/* After ANY result is revealed, surface EVERY launch list again so
+                the organiser can run the next election in any category — the next
+                bench seat (PM → Deputy PM → LoP), the next party's Cabinet/Shadow
+                quota, or a party-leader election — without leaving this screen.
+                Previously each reveal only re-surfaced its OWN category, which
+                stranded the organiser when moving from the bench elections to
+                Cabinet/Shadow: the bench reveal hid "Start new vote" and showed
+                only the leadership/party-leader lists, with no control to reach
+                the coalition sections. Showing all of them keeps the live
+                event-day sequence (Speaker → PM/Deputy/LoP → Cabinet/Shadow)
+                navigable end to end. */}
             {isRevealed &&
-              voteSession.vote_type === "party_leader" &&
-              partyLeaderList && (
-                <div className="border-t pt-4">{partyLeaderList}</div>
-              )}
-
-            {/* After a leadership result is revealed, surface the launch lists
-                again so the organiser can run the next seat (PM → Deputy PM →
-                LoP, or any party-leader election). */}
-            {isRevealed &&
-              isBenchVoteType &&
-              (leadershipList || partyLeaderList) && (
+              (leadershipList ||
+                cabinetSection ||
+                shadowSection ||
+                partyLeaderList) && (
                 <div className="space-y-4 border-t pt-4">
                   {leadershipList}
-                  {partyLeaderList}
-                </div>
-              )}
-
-            {/* After a cabinet/shadow result is revealed, surface the coalition
-                sections again so the organiser can run the next party's quota. */}
-            {isRevealed &&
-              isMinisterVoteType &&
-              (cabinetSection || shadowSection) && (
-                <div className="space-y-4 border-t pt-4">
                   {cabinetSection}
                   {shadowSection}
+                  {partyLeaderList}
                 </div>
               )}
           </CardContent>

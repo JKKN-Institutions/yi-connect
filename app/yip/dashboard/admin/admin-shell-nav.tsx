@@ -21,6 +21,7 @@ import {
   Scale,
   Globe,
   Table2,
+  Trophy,
 } from "lucide-react";
 
 const NAV = [
@@ -31,6 +32,7 @@ const NAV = [
   { label: "Session Scoring", href: "/yip/dashboard/admin/session-parameters", icon: SlidersHorizontal },
   { label: "Scoring Rules", href: "/yip/dashboard/admin/scoring-rules", icon: Scale },
   { label: "Scoring Framework", href: "/yip/dashboard/admin/scoring-framework", icon: Table2 },
+  { label: "Awards", href: "/yip/dashboard/admin/awards", icon: Trophy },
   { label: "Topics", href: "/yip/dashboard/admin/topics", icon: BookOpen },
   { label: "Agenda Template", href: "/yip/dashboard/admin/agenda", icon: CalendarClock },
   { label: "Checklist Template", href: "/yip/dashboard/admin/checklist", icon: ListChecks },

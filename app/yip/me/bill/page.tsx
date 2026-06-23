@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getYipSession } from "@/lib/yip/auth/yip-session";
 import { createServiceClient } from "@/lib/yip/supabase/server";
+import { isCommitteeReportSubmitted } from "@/app/yip/actions/committee-reports";
 import { BillClient, type ParticipantSession } from "./bill-client";
 
 // The yip_session cookie is httpOnly (set by app/yip/actions/auth.ts), so it
@@ -61,6 +62,11 @@ export default async function BillDraftingPage() {
     committeeScheme = ct?.linked_scheme ?? null;
   }
 
+  // The bill is locked until this committee submits its Committee Report.
+  const reportSubmitted = p?.committee_name
+    ? await isCommitteeReportSubmitted(session.eventId, p.committee_name)
+    : false;
+
   return (
     <BillClient
       initialSession={session}
@@ -68,6 +74,7 @@ export default async function BillDraftingPage() {
       committeeName={p?.committee_name ?? null}
       committeeTopic={committeeTopic}
       committeeScheme={committeeScheme}
+      reportSubmitted={reportSubmitted}
     />
   );
 }

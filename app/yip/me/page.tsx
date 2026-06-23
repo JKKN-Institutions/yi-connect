@@ -33,6 +33,8 @@ import {
   UserRound,
   HeartHandshake,
   Flag,
+  ClipboardList,
+  Lock,
 } from "lucide-react";
 import { VoteClient } from "./vote/vote-client";
 import { LiveNowCard } from "./live-now-card";
@@ -47,7 +49,6 @@ import {
   type MeContactInfo,
   type MeRosterMember,
 } from "@/app/yip/actions/me-dashboard";
-import { committeeLabel } from "@/lib/yip/committee-label";
 
 // ─── Session parsing ─────────────────────────────────────────────
 
@@ -221,6 +222,32 @@ export default async function ParticipantPage() {
     myBill = billData;
   }
 
+  // Committee topic + linked scheme (yip.topics catalog, same lookup as the bill
+  // page) so the dashboard can show "Committee N — topic" + the scheme, and the
+  // committee-report status to drive the Report card + bill lock.
+  let committeeTopic: string | null = null;
+  let committeeScheme: string | null = null;
+  let reportSubmitted = false;
+  if (participant.committee_name) {
+    const { data: ct } = await supabase
+      .from("topics")
+      .select("description, linked_scheme")
+      .eq("category", "committee")
+      .eq("title", participant.committee_name)
+      .eq("is_active", true)
+      .maybeSingle();
+    committeeTopic = ct?.description ?? null;
+    committeeScheme = ct?.linked_scheme ?? null;
+
+    const { data: rep } = await supabase
+      .from("committee_reports")
+      .select("status")
+      .eq("event_id", event.id)
+      .eq("committee_name", participant.committee_name)
+      .maybeSingle();
+    reportSubmitted = rep?.status === "submitted";
+  }
+
   // For non-committee members: fetch approved/presented bills for read-only view
   let approvedBills: Array<{
     id: string;
@@ -363,12 +390,30 @@ export default async function ParticipantPage() {
                 />
               )}
               {participant.committee_name && (
-                <DetailItem
-                  icon={Users}
-                  label="Committee"
-                  value={participant.committee_name ?? committeeLabel(participant.committee_number)}
-                  fullWidth
-                />
+                <div className="col-span-2">
+                  <p className="text-[10px] uppercase tracking-wider text-gray-400 font-medium">
+                    Committee
+                  </p>
+                  <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                    <Users className="size-3.5 text-gray-400 shrink-0" />
+                    <span className="text-sm font-semibold text-gray-800">
+                      Committee {participant.committee_number ?? "—"}
+                    </span>
+                    <span className="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-[11px] font-medium text-purple-700">
+                      {participant.committee_name}
+                    </span>
+                  </div>
+                  {committeeTopic && (
+                    <p className="text-sm text-gray-700 mt-1 ml-5">
+                      {committeeTopic}
+                    </p>
+                  )}
+                  {committeeScheme && (
+                    <p className="text-[11px] text-gray-400 mt-0.5 ml-5">
+                      Linked scheme: {committeeScheme}
+                    </p>
+                  )}
+                </div>
               )}
             </div>
           </div>
@@ -696,6 +741,37 @@ export default async function ParticipantPage() {
       </Card>
 
       {/* ─── BILL DRAFTING (committee members) ────────────── */}
+      {/* ─── COMMITTEE REPORT (the step before the bill) ──────── */}
+      {isCommitteeMember && (
+        <Card className="border-amber-200/50 overflow-hidden">
+          <div className="h-1 w-full bg-gradient-to-r from-amber-400 to-orange-400" />
+          <CardContent className="pt-4 pb-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ClipboardList className="size-5 text-amber-600" />
+                <div>
+                  <h2 className="text-sm font-bold text-gray-900">
+                    Committee Report
+                  </h2>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {reportSubmitted
+                      ? "Submitted — your bill is unlocked"
+                      : "Agree your findings + recommendations first"}
+                  </p>
+                </div>
+              </div>
+              <Link
+                href="/yip/me/report"
+                className="inline-flex items-center gap-1 rounded-lg bg-amber-50 px-3 py-1.5 text-sm font-medium text-amber-700 hover:bg-amber-100 transition-colors"
+              >
+                {reportSubmitted ? "View" : "Write"}
+                <ChevronRight className="size-4" />
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {isCommitteeMember && (
         <Card className="border-purple-200/50 overflow-hidden">
           <div className="h-1 w-full bg-gradient-to-r from-purple-400 to-violet-400" />
@@ -725,6 +801,11 @@ export default async function ParticipantPage() {
                       >
                         ({myBill.status ?? "drafting"})
                       </span>
+                    </p>
+                  ) : !reportSubmitted ? (
+                    <p className="text-xs text-amber-600 mt-0.5 flex items-center gap-1">
+                      <Lock className="size-3" />
+                      Locked until your report is submitted
                     </p>
                   ) : (
                     <p className="text-xs text-gray-500 mt-0.5">

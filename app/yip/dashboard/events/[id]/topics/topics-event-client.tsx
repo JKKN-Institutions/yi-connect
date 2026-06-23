@@ -92,9 +92,9 @@ export function CommitteePickerClient({
           </h2>
           <p className="mt-0.5 max-w-2xl text-sm text-[#1a1a3e]/60">
             Choose which committees this chapter will run — and how many. Each
-            committee is a cross-party bill-drafting group. Allocation distributes
-            students across exactly the committees you pick here. Recommended
-            8–10 for a chapter round.
+            committee is a cross-party group of students assigned one topic.
+            Allocation distributes students across exactly the committees you pick
+            here. Recommended: 5 — you can pick more.
           </p>
         </div>
         <div className="flex items-center gap-2">

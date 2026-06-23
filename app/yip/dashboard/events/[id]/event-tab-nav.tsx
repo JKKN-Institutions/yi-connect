@@ -15,6 +15,7 @@ import {
   Star,
   Trophy,
   Award,
+  Medal,
   Flag,
   Gavel,
   ListChecks,
@@ -80,6 +81,10 @@ const GROUPS: TabGroup[] = [
   {
     title: "After the Event",
     tabs: [
+      // Award recipient setup — how many students each award recognises at this
+      // event. NOT score-gated: it's a setup choice and reveals no scores, so the
+      // chapter organiser sets it (Results itself stays national/super-admin).
+      { label: "Awards", href: "/awards", icon: Medal },
       { label: "Results", href: "/results", icon: Trophy },
       { label: "Certificates", href: "/certificates", icon: Award },
       { label: "Feedback", href: "/feedback", icon: MessageCircleHeart },

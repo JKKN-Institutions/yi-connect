@@ -17,11 +17,13 @@ import { Trophy, ChevronDown, ChevronRight, Loader2, Check } from "lucide-react"
 export function EventAwardConfig({
   eventId,
   initialConfig,
+  defaultOpen = false,
 }: {
   eventId: string;
   initialConfig: EventAwardRow[];
+  defaultOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const [rows, setRows] = useState(initialConfig);
   const [pending, startTransition] = useTransition();
   const [busyKey, setBusyKey] = useState<string | null>(null);

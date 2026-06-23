@@ -250,3 +250,37 @@ export async function canViewYipNationalRollup(): Promise<boolean> {
     return a.app === "yip" && NATIONAL_OR_REGIONAL_YIP_ROLES.includes(a.role);
   });
 }
+
+/**
+ * "Is this person ANY kind of YIP admin?" — a NON-event-scoped gate for shared
+ * read-only admin surfaces (e.g. the Scoring & Awards Guide) that every admin
+ * who runs an event should be able to open, but plain judges / participants
+ * should not. Admits: platform / cross-app super-admins, any YIP
+ * national / super / regional / chapter-admin / organiser role, and chapter
+ * chairs (who run their chapter's YIP events). Denies everyone else.
+ *
+ * This is intentionally broader than requireSuperAdmin (which is national/super
+ * only) and looser than getYipEventAccess (which is tied to one event) — it
+ * answers "should this person see admin-facing explainer content at all".
+ */
+const ANY_YIP_ADMIN_ROLES = new Set([
+  "yip_super_admin",
+  "national",
+  "regional_admin",
+  "chapter_admin",
+  "chapter_organizer",
+]);
+export async function isAnyYipAdmin(): Promise<boolean> {
+  const me = await getCurrentPersonRoles();
+  if (!me) return false;
+  return me.assignments.some((a) => {
+    if (!a.is_active) return false;
+    // Platform / cross-app super-admins.
+    if (a.role === "platform_super_admin" || a.role === "super_admin") return true;
+    // Any YIP admin / organiser role.
+    if (a.app === "yip" && ANY_YIP_ADMIN_ROLES.has(a.role)) return true;
+    // Chapter chairs (directory) — they chair their chapter's YIP events.
+    if (a.role === "chapter_chair" || a.role === "chapter_co_chair") return true;
+    return false;
+  });
+}

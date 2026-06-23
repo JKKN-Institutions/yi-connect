@@ -14,6 +14,7 @@ import {
   LayoutGrid,
   Globe,
   BookOpen,
+  GraduationCap,
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react";
@@ -25,6 +26,7 @@ const navItems = [
   { label: "My Events", href: "/yip/dashboard", icon: CalendarDays },
   { label: "Topics", href: "/yip/dashboard/topics", icon: BookOpen },
   { label: "Regions", href: "/yip/dashboard/zones", icon: Globe },
+  { label: "Scoring Guide", href: "/yip/dashboard/scoring-guide", icon: GraduationCap },
   { label: "Admin", href: "/yip/dashboard/admin", icon: LayoutGrid },
 ];
 

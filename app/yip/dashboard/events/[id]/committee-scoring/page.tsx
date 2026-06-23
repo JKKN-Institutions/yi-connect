@@ -36,13 +36,17 @@ export default async function CommitteeScoringPage({
     );
   }
 
-  const scoringRes = await getCommitteeScoring(id);
+  const [scoringRes, dimsCfg] = await Promise.all([
+    getCommitteeScoring(id),
+    getCommitteeDimensionsConfig(),
+  ]);
 
   return (
     <CommitteeScoringClient
       eventId={id}
       eventName={event.name}
       committees={scoringRes.success ? scoringRes.data : []}
+      dimensions={dimsCfg.dimensions}
       locked={Boolean(event.scores_locked)}
     />
   );

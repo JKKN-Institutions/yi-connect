@@ -41,7 +41,7 @@ const COLS =
   "award_key, label, basis_description, default_recipients, is_team, is_active, display_order, eligibility, rank_mode, rank_keys";
 
 export async function listAwardDefinitions(): Promise<AwardDefinition[]> {
-  const supabase = await createServiceClient();
+  const supabase = await awardsClient();
   const { data, error } = await supabase
     .from("award_definitions")
     .select(COLS)
@@ -102,7 +102,7 @@ export async function updateAwardDefinition(
       .slice(0, 12);
   }
 
-  const supabase = await createServiceClient();
+  const supabase = await awardsClient();
   const { data, error } = await supabase
     .from("award_definitions")
     .update(update)
@@ -138,7 +138,7 @@ export async function getEventAwardConfig(
   // setup choice and reveal no scores, so the chapter that runs the event can set
   // them on its own Awards tab.
   if (!access.canManage) return [];
-  const supabase = await createServiceClient();
+  const supabase = await awardsClient();
   const [defsRes, cfgRes] = await Promise.all([
     supabase.from("award_definitions").select(COLS).order("display_order"),
     supabase
@@ -176,7 +176,7 @@ export async function setEventAwardConfig(
   )
     return { success: false, error: "Recipients must be between 1 and 50." };
 
-  const supabase = await createServiceClient();
+  const supabase = await awardsClient();
   const row: {
     event_id: string;
     award_key: string;

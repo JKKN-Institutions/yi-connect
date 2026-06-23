@@ -3,6 +3,7 @@
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { revalidatePath } from "next/cache";
 import { requireSuperAdmin } from "@/lib/yip/auth/require-super-admin";
+import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 
 // Admin configuration for the 15 workbook awards (yip.award_definitions). The
 // award MATH lives in the results engine's registry keyed by award_key; this
@@ -85,4 +86,81 @@ export async function updateAwardDefinition(
 
   revalidatePath("/yip/dashboard/admin/awards");
   return { success: true, data: data as AwardDefinition };
+}
+
+// ─── Per-event overrides (each chapter can "recognise more" on its own event) ──
+
+export type EventAwardRow = AwardDefinition & {
+  effective_recipients: number;
+  effective_active: boolean;
+  has_override: boolean;
+};
+
+/** The 15 awards with this event's EFFECTIVE recipient count + on/off (per-event
+ * override falling back to the global default). Read-gated to score viewers. */
+export async function getEventAwardConfig(
+  eventId: string
+): Promise<EventAwardRow[]> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canViewScores) return [];
+  const supabase = await createServiceClient();
+  const [defsRes, cfgRes] = await Promise.all([
+    supabase.from("award_definitions").select(COLS).order("display_order"),
+    supabase
+      .from("event_award_config")
+      .select("award_key, recipients, is_active")
+      .eq("event_id", eventId),
+  ]);
+  const cfg = new Map(
+    (cfgRes.data ?? []).map((c) => [c.award_key, c])
+  );
+  return (defsRes.data ?? []).map((d) => {
+    const o = cfg.get((d as AwardDefinition).award_key);
+    return {
+      ...(d as AwardDefinition),
+      effective_recipients: o?.recipients ?? (d as AwardDefinition).default_recipients,
+      effective_active: o?.is_active ?? (d as AwardDefinition).is_active,
+      has_override: !!o && (o.recipients != null || o.is_active != null),
+    };
+  });
+}
+
+/** Set (or clear) this event's recipient/on-off override for one award. Pass
+ * null to fall back to the global default. Manager-gated (chapter chair+). */
+export async function setEventAwardConfig(
+  eventId: string,
+  awardKey: string,
+  patch: { recipients?: number | null; is_active?: boolean | null }
+): Promise<ActionResult> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage)
+    return { success: false, error: "Not authorized to manage this event" };
+  if (
+    typeof patch.recipients === "number" &&
+    (patch.recipients < 1 || patch.recipients > 50)
+  )
+    return { success: false, error: "Recipients must be between 1 and 50." };
+
+  const supabase = await createServiceClient();
+  const row: {
+    event_id: string;
+    award_key: string;
+    updated_at: string;
+    recipients?: number | null;
+    is_active?: boolean | null;
+  } = {
+    event_id: eventId,
+    award_key: awardKey,
+    updated_at: new Date().toISOString(),
+  };
+  if (patch.recipients !== undefined) row.recipients = patch.recipients;
+  if (patch.is_active !== undefined) row.is_active = patch.is_active;
+
+  const { error } = await supabase
+    .from("event_award_config")
+    .upsert(row, { onConflict: "event_id,award_key" });
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/yip/dashboard/events/${eventId}/results`);
+  return { success: true, data: null };
 }

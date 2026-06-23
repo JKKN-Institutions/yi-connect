@@ -47,11 +47,13 @@ export function CommitteeScoringClient({
   eventId,
   eventName,
   committees,
+  dimensions,
   locked,
 }: {
   eventId: string;
   eventName: string;
   committees: CommitteeRow[];
+  dimensions: CommitteeDimensionLabel[];
   locked: boolean;
 }) {
   const router = useRouter();

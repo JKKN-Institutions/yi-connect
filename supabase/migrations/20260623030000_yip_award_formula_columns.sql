@@ -1,0 +1,20 @@
+ALTER TABLE yip.award_definitions ADD COLUMN IF NOT EXISTS eligibility text NOT NULL DEFAULT 'all';
+ALTER TABLE yip.award_definitions ADD COLUMN IF NOT EXISTS rank_mode text NOT NULL DEFAULT 'family_sum';
+ALTER TABLE yip.award_definitions ADD COLUMN IF NOT EXISTS rank_keys text[] NOT NULL DEFAULT '{}';
+
+UPDATE yip.award_definitions SET eligibility='all', rank_mode='overall_total', rank_keys='{}' WHERE award_key='best_parliamentarian';
+UPDATE yip.award_definitions SET eligibility='all', rank_mode='family_sum', rank_keys='{pol,qh}' WHERE award_key='best_debater';
+UPDATE yip.award_definitions SET eligibility='all', rank_mode='family_sum', rank_keys='{mupi.research_constituency,qh.subject_knowledge,bill.understanding,cmte.research_contribution}' WHERE award_key='best_research_presentation';
+UPDATE yip.award_definitions SET eligibility='all', rank_mode='consistency', rank_keys='{}' WHERE award_key='mvp';
+UPDATE yip.award_definitions SET eligibility='all', rank_mode='family_sum', rank_keys='{mupi,qh,zero}' WHERE award_key='best_constituency_rep';
+UPDATE yip.award_definitions SET eligibility='no_disciplinary', rank_mode='family_sum', rank_keys='{mupi.conduct,zero.conduct,bill.conduct}' WHERE award_key='exemplary_decorum';
+UPDATE yip.award_definitions SET eligibility='all', rank_mode='committee_level', rank_keys='{}' WHERE award_key='team_spirit';
+UPDATE yip.award_definitions SET eligibility='all', rank_mode='family_sum', rank_keys='{zero.creativity,zero.problem_solving,zero.policy_orientation}' WHERE award_key='innovative_ideas';
+UPDATE yip.award_definitions SET eligibility='all', rank_mode='family_sum', rank_keys='{zero.policy_orientation,bill.feasibility,mupi.research_constituency}' WHERE award_key='community_impact';
+UPDATE yip.award_definitions SET eligibility='speaker', rank_mode='overall_total', rank_keys='{}' WHERE award_key='best_speaker';
+UPDATE yip.award_definitions SET eligibility='leadership', rank_mode='leadership_blend', rank_keys='{}' WHERE award_key='leadership_excellence';
+UPDATE yip.award_definitions SET eligibility='ruling', rank_mode='family_sum', rank_keys='{pol,qh,bill}' WHERE award_key='best_member_ruling';
+UPDATE yip.award_definitions SET eligibility='opposition', rank_mode='family_sum', rank_keys='{qh,zero,pol}' WHERE award_key='best_member_opposition';
+UPDATE yip.award_definitions SET eligibility='all', rank_mode='family_sum', rank_keys='{pol,bill}' WHERE award_key='most_persuasive';
+UPDATE yip.award_definitions SET eligibility='independent', rank_mode='family_sum', rank_keys='{pol,zero,qh}' WHERE award_key='independent_voice';
+NOTIFY pgrst, 'reload schema';

@@ -1,18 +1,28 @@
 "use server";
 
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { revalidatePath } from "next/cache";
 import { requireSuperAdmin } from "@/lib/yip/auth/require-super-admin";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
+import {
+  AWARD_ELIGIBILITIES,
+  AWARD_RANK_MODES,
+} from "@/lib/yip/award-formula";
 
 // Admin configuration for the 15 workbook awards (yip.award_definitions). The
-// award MATH lives in the results engine's registry keyed by award_key; this
-// surface owns the operational knobs — label, how many recipients, on/off. The
-// engine reads these on every Compute Results, so changes here are wired live.
+// award MATH (eligibility + ranking) is now editable here via eligibility /
+// rank_mode / rank_keys; the results engine interprets those on every Compute.
 
 type ActionResult<T = null> =
   | { success: true; data: T }
   | { success: false; error: string };
+
+// eligibility/rank_mode/rank_keys are newer than the generated Database types,
+// so reads/writes use an untyped client view (values validated/coerced here).
+async function awardsClient(): Promise<SupabaseClient> {
+  return (await createServiceClient()) as unknown as SupabaseClient;
+}
 
 export type AwardDefinition = {
   award_key: string;
@@ -22,13 +32,16 @@ export type AwardDefinition = {
   is_team: boolean;
   is_active: boolean;
   display_order: number;
+  eligibility: string;
+  rank_mode: string;
+  rank_keys: string[];
 };
 
 const COLS =
-  "award_key, label, basis_description, default_recipients, is_team, is_active, display_order";
+  "award_key, label, basis_description, default_recipients, is_team, is_active, display_order, eligibility, rank_mode, rank_keys";
 
 export async function listAwardDefinitions(): Promise<AwardDefinition[]> {
-  const supabase = await createServiceClient();
+  const supabase = await awardsClient();
   const { data, error } = await supabase
     .from("award_definitions")
     .select(COLS)
@@ -41,6 +54,9 @@ export type AwardDefinitionPatch = {
   label?: string;
   default_recipients?: number;
   is_active?: boolean;
+  eligibility?: string;
+  rank_mode?: string;
+  rank_keys?: string[];
 };
 
 export async function updateAwardDefinition(
@@ -69,8 +85,24 @@ export async function updateAwardDefinition(
     update.default_recipients = n;
   }
   if (typeof patch.is_active === "boolean") update.is_active = patch.is_active;
+  if (typeof patch.eligibility === "string") {
+    if (!(AWARD_ELIGIBILITIES as readonly string[]).includes(patch.eligibility))
+      return { success: false, error: "Unknown eligibility." };
+    update.eligibility = patch.eligibility;
+  }
+  if (typeof patch.rank_mode === "string") {
+    if (!(AWARD_RANK_MODES as readonly string[]).includes(patch.rank_mode))
+      return { success: false, error: "Unknown rank mode." };
+    update.rank_mode = patch.rank_mode;
+  }
+  if (Array.isArray(patch.rank_keys)) {
+    update.rank_keys = patch.rank_keys
+      .map((k) => String(k).trim())
+      .filter((k) => k.length > 0 && k.length <= 60)
+      .slice(0, 12);
+  }
 
-  const supabase = await createServiceClient();
+  const supabase = await awardsClient();
   const { data, error } = await supabase
     .from("award_definitions")
     .update(update)
@@ -106,7 +138,7 @@ export async function getEventAwardConfig(
   // setup choice and reveal no scores, so the chapter that runs the event can set
   // them on its own Awards tab.
   if (!access.canManage) return [];
-  const supabase = await createServiceClient();
+  const supabase = await awardsClient();
   const [defsRes, cfgRes] = await Promise.all([
     supabase.from("award_definitions").select(COLS).order("display_order"),
     supabase
@@ -144,7 +176,7 @@ export async function setEventAwardConfig(
   )
     return { success: false, error: "Recipients must be between 1 and 50." };
 
-  const supabase = await createServiceClient();
+  const supabase = await awardsClient();
   const row: {
     event_id: string;
     award_key: string;

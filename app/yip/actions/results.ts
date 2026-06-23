@@ -1,5 +1,6 @@
 "use server";
 
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { revalidatePath } from "next/cache";
@@ -839,11 +840,79 @@ export async function computeResults(
     },
   };
 
+  // ── Config-driven award formulas ──────────────────────────────────────
+  // Each award's eligibility + rank rule is now editable in the DB
+  // (yip.award_definitions.eligibility / rank_mode / rank_keys). buildSpec()
+  // reconstructs the same { eligible, rankBy } the AWARD_REGISTRY above
+  // produced; the seed reproduces the registry exactly, and any row missing
+  // rank_mode falls back to the in-code registry so behaviour is never lost.
+  type AwardConfigRow = {
+    award_key: string;
+    label: string;
+    default_recipients: number;
+    is_active: boolean;
+    display_order: number;
+    eligibility: string | null;
+    rank_mode: string | null;
+    rank_keys: string[] | null;
+    is_team: boolean | null;
+  };
+  function eligibilityFn(e: string): (p: ParticipantLite, r: ResultRow) => boolean {
+    switch (e) {
+      case "speaker":
+        return isSpeaker;
+      case "leadership":
+        return isLeadership;
+      case "ruling":
+        return isRuling;
+      case "opposition":
+        return isOpposition;
+      case "independent":
+        return isIndependent;
+      case "no_disciplinary":
+        return (_p, r) => !r.hasDisciplinary;
+      default:
+        return all;
+    }
+  }
+  function rankByFn(mode: string, keys: string[]): (r: ResultRow) => number {
+    switch (mode) {
+      case "overall_total":
+        return (r) => r.avg_score;
+      case "base_score":
+        return (r) => r.baseScore;
+      case "consistency":
+        return (r) => r.consistencyFloor;
+      case "committee_level":
+        return (r) => r.committeeLevel;
+      case "leadership_blend":
+        return (r) =>
+          0.5 * Math.min(1, Math.max(0, r.positionPoints) / 10) +
+          0.5 * Math.min(1, r.baseScore / 90);
+      default:
+        return sumKeys(keys);
+    }
+  }
+  function buildSpec(row: AwardConfigRow): AwardSpec {
+    const baseElig = eligibilityFn(row.eligibility ?? "all");
+    const rankBy = rankByFn(row.rank_mode ?? "family_sum", row.rank_keys ?? []);
+    // 'consistency' (MVP) carries the min-participation gate, like the registry.
+    const eligible =
+      row.rank_mode === "consistency"
+        ? (p: ParticipantLite, r: ResultRow) =>
+            baseElig(p, r) && r.consistencySessionCount >= mvpMinSessions
+        : baseElig;
+    return { eligible, rankBy, isTeam: row.is_team ?? false };
+  }
+
   // Load award definitions + this event's overrides; award each ACTIVE one its
-  // effective recipient count (override ?? default), in display order.
-  const { data: awardDefs } = await supabase
+  // effective recipient count (override ?? default), in display order. Untyped
+  // client view — the formula columns are newer than the generated types.
+  const { data: awardDefs } = await (supabase as unknown as SupabaseClient)
     .from("award_definitions")
-    .select("award_key, label, default_recipients, is_active, display_order")
+    .select(
+      "award_key, label, default_recipients, is_active, display_order, eligibility, rank_mode, rank_keys, is_team"
+    )
     .order("display_order");
   const { data: awardCfgRows } = await supabase
     .from("event_award_config")
@@ -852,8 +921,10 @@ export async function computeResults(
   const awardOverrideByKey = new Map(
     (awardCfgRows ?? []).map((o) => [o.award_key, o])
   );
-  for (const def of awardDefs ?? []) {
-    const spec = AWARD_REGISTRY[def.award_key];
+  for (const def of (awardDefs ?? []) as AwardConfigRow[]) {
+    // Config-driven when rank_mode is set (seeded for all 15); else fall back to
+    // the in-code registry so no award ever silently disappears.
+    const spec = def.rank_mode ? buildSpec(def) : AWARD_REGISTRY[def.award_key];
     if (!spec) continue; // unknown key (future-proof) — skip
     const ov = awardOverrideByKey.get(def.award_key);
     const active = ov?.is_active ?? def.is_active;

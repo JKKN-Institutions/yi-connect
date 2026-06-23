@@ -26,6 +26,12 @@ import {
 import { updateCommitteeDimensionsConfig } from "@/app/yip/actions/committee-dimensions";
 import { type CommitteeDimensionsConfig } from "@/lib/yip/committee-score";
 import {
+  AWARD_ELIGIBILITIES,
+  AWARD_RANK_MODES,
+  ELIGIBILITY_LABELS,
+  RANK_MODE_LABELS,
+} from "@/lib/yip/award-formula";
+import {
   Save,
   Loader2,
   Check,
@@ -159,12 +165,29 @@ export function ScoringConfigClient({
 
   // ── 5. Awards ──
   const [awardDrafts, setAwardDrafts] = useState<
-    Record<string, { label: string; recipients: string; is_active: boolean }>
+    Record<
+      string,
+      {
+        label: string;
+        recipients: string;
+        is_active: boolean;
+        eligibility: string;
+        rank_mode: string;
+        rank_keys: string;
+      }
+    >
   >(
     Object.fromEntries(
       initialAwards.map((a) => [
         a.award_key,
-        { label: a.label, recipients: String(a.default_recipients), is_active: a.is_active },
+        {
+          label: a.label,
+          recipients: String(a.default_recipients),
+          is_active: a.is_active,
+          eligibility: a.eligibility,
+          rank_mode: a.rank_mode,
+          rank_keys: (a.rank_keys ?? []).join(", "),
+        },
       ])
     )
   );
@@ -239,6 +262,12 @@ export function ScoringConfigClient({
         label: d.label,
         default_recipients: Number(d.recipients),
         is_active: d.is_active,
+        eligibility: d.eligibility,
+        rank_mode: d.rank_mode,
+        rank_keys: d.rank_keys
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean),
       });
       if (!res.success) {
         setAwardsMsg(`${a.label}: ${res.error}`);
@@ -480,39 +509,77 @@ export function ScoringConfigClient({
           <Trophy className="size-4 text-[#FF9933]" /> Awards
         </h2>
         <p className="mt-1 text-xs text-[#1a1a3e]/50">
-          Turn an award on/off, rename it, and set how many winners it has.
+          Turn an award on/off, rename it, set winners, and edit its formula —
+          who&apos;s eligible and how the winner is ranked. &quot;Keys&quot; (for
+          the sum mode) are criterion families like <code>pol</code>, <code>qh</code>,{" "}
+          <code>zero</code> or specific criteria like <code>zero.creativity</code>.
         </p>
         <div className="mt-3 space-y-2">
           {initialAwards.map((a) => {
             const d = awardDrafts[a.award_key];
             return (
-              <div key={a.award_key} className="flex flex-wrap items-center gap-3 rounded-lg border border-gray-200 px-3 py-2">
-                <label className="flex items-center gap-1.5 text-sm">
+              <div key={a.award_key} className="space-y-2 rounded-lg border border-gray-200 px-3 py-2">
+                <div className="flex flex-wrap items-center gap-3">
+                  <label className="flex items-center gap-1.5 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={d.is_active}
+                      onChange={(e) =>
+                        setAwardDrafts((p) => ({ ...p, [a.award_key]: { ...d, is_active: e.target.checked } }))
+                      }
+                    />
+                    On
+                  </label>
                   <input
-                    type="checkbox"
-                    checked={d.is_active}
-                    onChange={(e) =>
-                      setAwardDrafts((p) => ({ ...p, [a.award_key]: { ...d, is_active: e.target.checked } }))
-                    }
+                    type="text"
+                    value={d.label}
+                    onChange={(e) => setAwardDrafts((p) => ({ ...p, [a.award_key]: { ...d, label: e.target.value } }))}
+                    className="min-w-[200px] flex-1 rounded border border-gray-300 px-2 py-1 text-sm"
                   />
-                  On
-                </label>
-                <input
-                  type="text"
-                  value={d.label}
-                  onChange={(e) => setAwardDrafts((p) => ({ ...p, [a.award_key]: { ...d, label: e.target.value } }))}
-                  className="min-w-[200px] flex-1 rounded border border-gray-300 px-2 py-1 text-sm"
-                />
-                <label className="flex items-center gap-1.5 text-xs text-[#1a1a3e]/70">
-                  Winners
+                  <label className="flex items-center gap-1.5 text-xs text-[#1a1a3e]/70">
+                    Winners
+                    <input
+                      type="number"
+                      min={1}
+                      value={d.recipients}
+                      onChange={(e) => setAwardDrafts((p) => ({ ...p, [a.award_key]: { ...d, recipients: e.target.value } }))}
+                      className={numInput}
+                    />
+                  </label>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 text-xs text-[#1a1a3e]/70">
+                  <span className="text-[11px] uppercase tracking-wide text-[#1a1a3e]/40">Formula</span>
+                  <select
+                    value={d.eligibility}
+                    onChange={(e) => setAwardDrafts((p) => ({ ...p, [a.award_key]: { ...d, eligibility: e.target.value } }))}
+                    className="rounded border border-gray-300 px-2 py-1 text-xs"
+                  >
+                    {AWARD_ELIGIBILITIES.map((el) => (
+                      <option key={el} value={el}>
+                        {ELIGIBILITY_LABELS[el] ?? el}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={d.rank_mode}
+                    onChange={(e) => setAwardDrafts((p) => ({ ...p, [a.award_key]: { ...d, rank_mode: e.target.value } }))}
+                    className="rounded border border-gray-300 px-2 py-1 text-xs"
+                  >
+                    {AWARD_RANK_MODES.map((rm) => (
+                      <option key={rm} value={rm}>
+                        {RANK_MODE_LABELS[rm] ?? rm}
+                      </option>
+                    ))}
+                  </select>
                   <input
-                    type="number"
-                    min={1}
-                    value={d.recipients}
-                    onChange={(e) => setAwardDrafts((p) => ({ ...p, [a.award_key]: { ...d, recipients: e.target.value } }))}
-                    className={numInput}
+                    type="text"
+                    value={d.rank_keys}
+                    placeholder="keys e.g. pol, qh"
+                    disabled={d.rank_mode !== "family_sum"}
+                    onChange={(e) => setAwardDrafts((p) => ({ ...p, [a.award_key]: { ...d, rank_keys: e.target.value } }))}
+                    className="min-w-[150px] flex-1 rounded border border-gray-300 px-2 py-1 text-xs disabled:bg-gray-100 disabled:text-gray-400"
                   />
-                </label>
+                </div>
               </div>
             );
           })}

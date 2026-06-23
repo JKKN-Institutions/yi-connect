@@ -34,6 +34,7 @@ const NAV = [
   { label: "Scoring Rules", href: "/yip/dashboard/admin/scoring-rules", icon: Scale },
   { label: "Scoring Framework", href: "/yip/dashboard/admin/scoring-framework", icon: Table2 },
   { label: "Awards", href: "/yip/dashboard/admin/awards", icon: Trophy },
+  { label: "Scoring Configuration", href: "/yip/dashboard/admin/scoring-config", icon: Settings2 },
   { label: "Topics", href: "/yip/dashboard/admin/topics", icon: BookOpen },
   { label: "Agenda Template", href: "/yip/dashboard/admin/agenda", icon: CalendarClock },
   { label: "Checklist Template", href: "/yip/dashboard/admin/checklist", icon: ListChecks },

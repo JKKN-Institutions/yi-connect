@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getYipSession } from "@/lib/yip/auth/yip-session";
 import Link from "next/link";
-import { Scale, History, LogOut } from "lucide-react";
+import { Scale, History, LogOut, ClipboardList } from "lucide-react";
 import { GuideLauncher } from "@/components/yip/guide";
 import { GUIDES } from "@/lib/yip/guide/content";
 
@@ -65,6 +65,15 @@ export default async function JuryLayout({
             >
               <Scale className="size-5" />
               <span className="hidden sm:inline">Score</span>
+            </Link>
+            {/* Committee evaluation nav */}
+            <Link
+              href="/yip/jury/committees"
+              className="flex items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-gray-700 hover:bg-gray-100 active:bg-gray-200 transition-colors"
+              style={{ minHeight: "44px", minWidth: "44px", display: "flex", alignItems: "center" }}
+            >
+              <ClipboardList className="size-5" />
+              <span className="hidden sm:inline">Committees</span>
             </Link>
             {/* History nav */}
             <Link

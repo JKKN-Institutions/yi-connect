@@ -515,33 +515,68 @@ export function ScoringConfigClient({
           {initialAwards.map((a) => {
             const d = awardDrafts[a.award_key];
             return (
-              <div key={a.award_key} className="flex flex-wrap items-center gap-3 rounded-lg border border-gray-200 px-3 py-2">
-                <label className="flex items-center gap-1.5 text-sm">
+              <div key={a.award_key} className="space-y-2 rounded-lg border border-gray-200 px-3 py-2">
+                <div className="flex flex-wrap items-center gap-3">
+                  <label className="flex items-center gap-1.5 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={d.is_active}
+                      onChange={(e) =>
+                        setAwardDrafts((p) => ({ ...p, [a.award_key]: { ...d, is_active: e.target.checked } }))
+                      }
+                    />
+                    On
+                  </label>
                   <input
-                    type="checkbox"
-                    checked={d.is_active}
-                    onChange={(e) =>
-                      setAwardDrafts((p) => ({ ...p, [a.award_key]: { ...d, is_active: e.target.checked } }))
-                    }
+                    type="text"
+                    value={d.label}
+                    onChange={(e) => setAwardDrafts((p) => ({ ...p, [a.award_key]: { ...d, label: e.target.value } }))}
+                    className="min-w-[200px] flex-1 rounded border border-gray-300 px-2 py-1 text-sm"
                   />
-                  On
-                </label>
-                <input
-                  type="text"
-                  value={d.label}
-                  onChange={(e) => setAwardDrafts((p) => ({ ...p, [a.award_key]: { ...d, label: e.target.value } }))}
-                  className="min-w-[200px] flex-1 rounded border border-gray-300 px-2 py-1 text-sm"
-                />
-                <label className="flex items-center gap-1.5 text-xs text-[#1a1a3e]/70">
-                  Winners
+                  <label className="flex items-center gap-1.5 text-xs text-[#1a1a3e]/70">
+                    Winners
+                    <input
+                      type="number"
+                      min={1}
+                      value={d.recipients}
+                      onChange={(e) => setAwardDrafts((p) => ({ ...p, [a.award_key]: { ...d, recipients: e.target.value } }))}
+                      className={numInput}
+                    />
+                  </label>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 text-xs text-[#1a1a3e]/70">
+                  <span className="text-[11px] uppercase tracking-wide text-[#1a1a3e]/40">Formula</span>
+                  <select
+                    value={d.eligibility}
+                    onChange={(e) => setAwardDrafts((p) => ({ ...p, [a.award_key]: { ...d, eligibility: e.target.value } }))}
+                    className="rounded border border-gray-300 px-2 py-1 text-xs"
+                  >
+                    {AWARD_ELIGIBILITIES.map((el) => (
+                      <option key={el} value={el}>
+                        {ELIGIBILITY_LABELS[el] ?? el}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={d.rank_mode}
+                    onChange={(e) => setAwardDrafts((p) => ({ ...p, [a.award_key]: { ...d, rank_mode: e.target.value } }))}
+                    className="rounded border border-gray-300 px-2 py-1 text-xs"
+                  >
+                    {AWARD_RANK_MODES.map((rm) => (
+                      <option key={rm} value={rm}>
+                        {RANK_MODE_LABELS[rm] ?? rm}
+                      </option>
+                    ))}
+                  </select>
                   <input
-                    type="number"
-                    min={1}
-                    value={d.recipients}
-                    onChange={(e) => setAwardDrafts((p) => ({ ...p, [a.award_key]: { ...d, recipients: e.target.value } }))}
-                    className={numInput}
+                    type="text"
+                    value={d.rank_keys}
+                    placeholder="keys e.g. pol, qh"
+                    disabled={d.rank_mode !== "family_sum"}
+                    onChange={(e) => setAwardDrafts((p) => ({ ...p, [a.award_key]: { ...d, rank_keys: e.target.value } }))}
+                    className="min-w-[150px] flex-1 rounded border border-gray-300 px-2 py-1 text-xs disabled:bg-gray-100 disabled:text-gray-400"
                   />
-                </label>
+                </div>
               </div>
             );
           })}

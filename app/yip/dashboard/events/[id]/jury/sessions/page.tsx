@@ -7,6 +7,8 @@ import {
 } from "@/app/yip/actions/jury-sessions";
 import { SessionRosterClient } from "./sessions-roster-client";
 import { ScoredSessionsPanel } from "./scored-sessions-panel";
+import { CommitteeRosterClient } from "./committee-roster-client";
+import { getCommitteeAssignmentRoster } from "@/app/yip/actions/committee-scores";
 import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
 
 export default async function JurySessionsPage({
@@ -35,6 +37,7 @@ export default async function JurySessionsPage({
   }
 
   const toggleSessions = await getScoringToggleSessions(id);
+  const committeeRoster = await getCommitteeAssignmentRoster(id);
   // Key the roster on the scoreable set so it remounts (re-seeds its state)
   // when a session is switched on/off above.
   const rosterKey = roster.data.sessions.map((s) => s.id).join("|");
@@ -50,6 +53,9 @@ export default async function JurySessionsPage({
         roster={roster.data}
         embedded
       />
+      {committeeRoster.success && (
+        <CommitteeRosterClient eventId={id} roster={committeeRoster.data} />
+      )}
     </div>
   );
 }

@@ -40,6 +40,7 @@
  */
 
 import { createClient, createServiceClient } from "@/lib/yi-future/supabase/server";
+import { fetchAllRows } from "@/lib/pagination";
 import { toCSV, csvResponse } from "@/lib/yi-future/csv";
 import {
   aggregateEvaluations,
@@ -351,32 +352,41 @@ export async function GET(
       colleges: { name: string; city: string | null } | null;
     };
 
-    let q = svc
-      .schema("future")
-      .from("delegates")
-      .select(
-        "id, full_name, email, phone, whatsapp, gender, age, course, year_of_study, home_state, registered_at, chapter_id, colleges(name, city)"
-      )
-      .eq("edition_id", edition.id)
-      .order("full_name", { ascending: true });
-
-    if (chapterFilter) q = q.eq("chapter_id", chapterFilter);
-
+    let regionChapterIds: string[] | null = null;
     if (regionFilter) {
-      const ids = (await chapterIdsForRegion(svc, regionFilter)) ?? [];
-      if (ids.length === 0) {
+      regionChapterIds = (await chapterIdsForRegion(svc, regionFilter)) ?? [];
+      if (regionChapterIds.length === 0) {
         return csvResponse(
           `delegates-${todayStamp()}.csv`,
           toCSV([], [{ key: "id", label: "ID" }])
         );
       }
-      q = q.in("chapter_id", ids);
     }
 
-    const { data } = await q;
+    // PostgREST caps a single response at ~1000 rows; a national export already
+    // exceeds that, so a bare select would silently truncate the CSV. Page
+    // through in full batches (id is the unique tiebreaker for stable paging).
+    const data = await fetchAllRows<Row>((from, to) => {
+      let q = svc
+        .schema("future")
+        .from("delegates")
+        .select(
+          "id, full_name, email, phone, whatsapp, gender, age, course, year_of_study, home_state, registered_at, chapter_id, colleges(name, city)"
+        )
+        .eq("edition_id", edition.id);
+      if (chapterFilter) q = q.eq("chapter_id", chapterFilter);
+      if (regionChapterIds) q = q.in("chapter_id", regionChapterIds);
+      return q
+        .order("full_name", { ascending: true })
+        .order("id", { ascending: true })
+        .range(from, to) as unknown as PromiseLike<{
+        data: Row[] | null;
+        error: unknown;
+      }>;
+    });
     const chMap = await chapterDisplayMap(svc);
 
-    const rows = ((data as unknown as Row[]) ?? []).map((d) => {
+    const rows = data.map((d) => {
       const ch = chMap.get(d.chapter_id);
       return {
         id: d.id,

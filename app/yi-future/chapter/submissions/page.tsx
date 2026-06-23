@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
 import { getChapterContext } from "@/lib/yi-future/chapter-context";
 import { PHASES, PHASE_LABELS, type Phase } from "@/lib/yi-future/constants";
+import { SopDownloadCard } from "@/components/yi-future/SopDownloadCard";
 
 type SubRow = {
   team_id: string;
@@ -87,6 +88,8 @@ export default async function SubmissionsMatrixPage() {
           </p>
         </div>
       </div>
+
+      <SopDownloadCard note="Share this with your teams so every submission follows the national format." />
 
       {teams.length === 0 ? (
         <div className="bg-white border border-navy/10 rounded-lg p-8 text-center text-navy/50 text-sm">

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
+import { SopDownloadCard } from "@/components/yi-future/SopDownloadCard";
 
 const REGIONS = ["ER", "NER", "NR", "SRTKKA", "SRTN", "WR"] as const;
 const REGION_LABELS: Record<string, string> = {
@@ -317,6 +318,8 @@ export default async function NationalDownloadsPage({
           </p>
         </div>
       </div>
+
+      <SopDownloadCard note="The official Solution Submission Format for delegates — circulate it to chapters and teams." />
 
       {/* Region filter chips */}
       <div className="flex flex-wrap items-center gap-2">

@@ -1,4 +1,5 @@
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
+import { fetchAllRows } from "@/lib/pagination";
 
 type EditionRow = {
   id: string;
@@ -72,8 +73,23 @@ export default async function NationalMetricsPage() {
   const svc = await createServiceClient();
 
   // Parallel queries
+  // PostgREST caps a single response at ~1000 rows; this edition already has
+  // 1100+ delegates, so a bare select silently undercounts every delegate metric
+  // below. Page through in full batches.
+  const delegates: DelegateRow[] = await fetchAllRows<DelegateRow>((from, to) =>
+    svc
+      .schema("future")
+      .from("delegates")
+      .select("id, chapter_id, registered_at")
+      .eq("edition_id", edition.id)
+      .order("id", { ascending: true })
+      .range(from, to) as unknown as PromiseLike<{
+      data: DelegateRow[] | null;
+      error: unknown;
+    }>
+  );
+
   const [
-    delegatesRes,
     chaptersRes,
     mentorsRes,
     juryRes,
@@ -84,11 +100,6 @@ export default async function NationalMetricsPage() {
     submissionsRes,
     evaluationsRes,
   ] = await Promise.all([
-    svc
-      .schema("future")
-      .from("delegates")
-      .select("id, chapter_id, registered_at")
-      .eq("edition_id", edition.id),
     svc
       .schema("yi")
       .from("chapters")
@@ -128,7 +139,6 @@ export default async function NationalMetricsPage() {
     svc.schema("future").from("evaluations").select("team_id"),
   ]);
 
-  const delegates: DelegateRow[] = (delegatesRes.data as DelegateRow[]) ?? [];
   const chapters: ChapterRow[] = (chaptersRes.data as ChapterRow[]) ?? [];
   const teams: TeamRow[] = (teamsRes.data as TeamRow[]) ?? [];
   const teamMembers: { delegate_id: string; team_id: string }[] =

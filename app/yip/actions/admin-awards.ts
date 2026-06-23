@@ -4,6 +4,10 @@ import { createServiceClient } from "@/lib/yip/supabase/server";
 import { revalidatePath } from "next/cache";
 import { requireSuperAdmin } from "@/lib/yip/auth/require-super-admin";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
+import {
+  AWARD_ELIGIBILITIES,
+  AWARD_RANK_MODES,
+} from "@/lib/yip/award-formula";
 
 // Admin configuration for the 15 workbook awards (yip.award_definitions). The
 // award MATH lives in the results engine's registry keyed by award_key; this

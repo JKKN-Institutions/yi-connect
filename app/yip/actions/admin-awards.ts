@@ -14,6 +14,25 @@ type ActionResult<T = null> =
   | { success: true; data: T }
   | { success: false; error: string };
 
+// Award formula vocabulary — the editable rules the results engine interprets.
+export const AWARD_ELIGIBILITIES = [
+  "all",
+  "speaker",
+  "leadership",
+  "ruling",
+  "opposition",
+  "independent",
+  "no_disciplinary",
+] as const;
+export const AWARD_RANK_MODES = [
+  "family_sum",
+  "overall_total",
+  "base_score",
+  "consistency",
+  "committee_level",
+  "leadership_blend",
+] as const;
+
 export type AwardDefinition = {
   award_key: string;
   label: string;
@@ -22,10 +41,13 @@ export type AwardDefinition = {
   is_team: boolean;
   is_active: boolean;
   display_order: number;
+  eligibility: string;
+  rank_mode: string;
+  rank_keys: string[];
 };
 
 const COLS =
-  "award_key, label, basis_description, default_recipients, is_team, is_active, display_order";
+  "award_key, label, basis_description, default_recipients, is_team, is_active, display_order, eligibility, rank_mode, rank_keys";
 
 export async function listAwardDefinitions(): Promise<AwardDefinition[]> {
   const supabase = await createServiceClient();

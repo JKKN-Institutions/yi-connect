@@ -35,6 +35,7 @@ export type ParticipantScoringDetail = {
     school_name: string;
     parliament_role: string | null;
     party_side: string | null;
+    party_number: number | null;
     constituency_name: string | null;
     ministry: string | null;
     serial_no: number | null;
@@ -73,7 +74,7 @@ export async function getParticipantScoringDetail(
   const { data: participant } = await supabase
     .from("participants")
     .select(
-      "id, full_name, school_name, parliament_role, party_side, constituency_name, ministry, serial_no, checked_in, checked_in_at"
+      "id, full_name, school_name, parliament_role, party_side, party_number, constituency_name, ministry, serial_no, checked_in, checked_in_at"
     )
     .eq("id", participantId)
     .eq("event_id", eventId)

@@ -80,6 +80,7 @@ export default async function ControlPage({
           full_name,
           parliament_role,
           party_side,
+          party_number,
           constituency_name,
           constituency_state,
           school_name,

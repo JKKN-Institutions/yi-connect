@@ -14,6 +14,7 @@ interface SpeakerInfo {
   full_name: string;
   parliament_role: string | null;
   party_side: string | null;
+  party_number: number | null;
   constituency_name: string | null;
   constituency_state: string | null;
   school_name: string;
@@ -25,6 +26,7 @@ interface QuestionDisplayInfo {
   question_type: string | null;
   submitter_name: string;
   submitter_party: string | null;
+  submitter_party_number: number | null;
   submitter_constituency: string | null;
 }
 
@@ -166,6 +168,7 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
           full_name,
           parliament_role,
           party_side,
+          party_number,
           constituency_name,
           constituency_state,
           school_name
@@ -225,6 +228,7 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
         submitter:participants!questions_submitted_by_fkey(
           full_name,
           party_side,
+          party_number,
           constituency_name
         )
       `
@@ -238,6 +242,7 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
       const sub = data.submitter as unknown as {
         full_name: string;
         party_side: string | null;
+        party_number: number | null;
         constituency_name: string | null;
       };
       setCurrentQuestionDisplay({
@@ -246,6 +251,7 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
         question_type: data.question_type,
         submitter_name: sub.full_name,
         submitter_party: sub.party_side,
+        submitter_party_number: sub.party_number,
         submitter_constituency: sub.constituency_name,
       });
     } else {
@@ -796,18 +802,35 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
                     <span className="text-xl text-gray-300">
                       {currentQuestionDisplay.submitter_name}
                     </span>
-                    {currentQuestionDisplay.submitter_party && (
+                    {(currentQuestionDisplay.submitter_party ||
+                      currentQuestionDisplay.submitter_party_number != null) && (
                       <span
                         className={cn(
                           "rounded-full px-4 py-1 text-sm font-medium",
                           currentQuestionDisplay.submitter_party === "ruling"
                             ? "bg-blue-600 text-white"
-                            : "bg-red-600 text-white"
+                            : currentQuestionDisplay.submitter_party ===
+                                "opposition"
+                              ? "bg-red-600 text-white"
+                              : "bg-[#FF9933] text-white"
                         )}
                       >
-                        {currentQuestionDisplay.submitter_party === "ruling"
-                          ? "Ruling Party"
-                          : "Opposition"}
+                        {currentQuestionDisplay.submitter_party_number != null
+                          ? `Party ${String.fromCharCode(
+                              64 +
+                                currentQuestionDisplay.submitter_party_number
+                            )}`
+                          : currentQuestionDisplay.submitter_party === "ruling"
+                            ? "Ruling Party"
+                            : "Opposition"}
+                        {currentQuestionDisplay.submitter_party && (
+                          <span className="ml-1.5 font-normal opacity-80">
+                            ·{" "}
+                            {currentQuestionDisplay.submitter_party === "ruling"
+                              ? "Ruling"
+                              : "Opposition"}
+                          </span>
+                        )}
                       </span>
                     )}
                     {currentQuestionDisplay.submitter_constituency && (
@@ -972,18 +995,33 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
                         currentSpeaker.parliament_role}
                     </span>
                   )}
-                  {currentSpeaker.party_side && (
+                  {(currentSpeaker.party_side ||
+                    currentSpeaker.party_number != null) && (
                     <span
                       className={cn(
                         "rounded-full px-4 py-1 text-sm font-medium",
                         currentSpeaker.party_side === "ruling"
                           ? "bg-blue-600 text-white"
-                          : "bg-red-600 text-white"
+                          : currentSpeaker.party_side === "opposition"
+                            ? "bg-red-600 text-white"
+                            : "bg-[#FF9933] text-white"
                       )}
                     >
-                      {currentSpeaker.party_side === "ruling"
-                        ? "Ruling Party"
-                        : "Opposition"}
+                      {currentSpeaker.party_number != null
+                        ? `Party ${String.fromCharCode(
+                            64 + currentSpeaker.party_number
+                          )}`
+                        : currentSpeaker.party_side === "ruling"
+                          ? "Ruling Party"
+                          : "Opposition"}
+                      {currentSpeaker.party_side && (
+                        <span className="ml-1.5 font-normal opacity-80">
+                          ·{" "}
+                          {currentSpeaker.party_side === "ruling"
+                            ? "Ruling"
+                            : "Opposition"}
+                        </span>
+                      )}
                     </span>
                   )}
                 </div>

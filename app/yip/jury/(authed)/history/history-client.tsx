@@ -262,6 +262,7 @@ export function HistoryClient({
               constituency={score.participant.constituency_name}
               parliamentRole={score.participant.parliament_role}
               partySide={score.participant.party_side}
+              partyNumber={score.participant.party_number}
               totalScore={score.total_score}
               maxScore={
                 (score.agenda_item_id &&

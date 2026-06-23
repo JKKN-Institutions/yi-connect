@@ -9,6 +9,9 @@ interface ScoreCardProps {
   constituency?: string | null;
   parliamentRole: string | null;
   partySide: string | null;
+  // Benchless allocation leaves partySide null but still assigns a party number
+  // (A–G). Used for a neutral-saffron card tint so party identity stays visible.
+  partyNumber?: number | null;
   totalScore: number;
   maxScore: number;
   status: string | null;
@@ -21,6 +24,7 @@ export function ScoreCard({
   constituency,
   parliamentRole,
   partySide,
+  partyNumber,
   totalScore,
   maxScore,
   status,
@@ -33,9 +37,13 @@ export function ScoreCard({
   const roleColor = parliamentRole
     ? ROLE_COLORS[parliamentRole] ?? "bg-gray-500 text-white"
     : "bg-gray-500 text-white";
-  const partyColor = partySide
-    ? PARTY_COLORS[partySide as keyof typeof PARTY_COLORS]
-    : null;
+  // Card tint: Ruling/Opposition keep their colour; a benchless party (side null
+  // but a party number) gets a neutral saffron tint; no party = plain white.
+  const partyTint = partySide
+    ? `${PARTY_COLORS[partySide as keyof typeof PARTY_COLORS].bg} ${PARTY_COLORS[partySide as keyof typeof PARTY_COLORS].border}`
+    : partyNumber != null
+      ? "bg-[#FF9933]/5 border-[#FF9933]/30"
+      : null;
 
   const statusConfig = {
     draft: {
@@ -74,7 +82,7 @@ export function ScoreCard({
       disabled={!onClick}
       aria-label={`${participantName}${onClick ? " — tap to edit score" : ""}`}
       className={`w-full text-left rounded-xl border-2 p-4 transition-all touch-manipulation
-        ${partyColor ? `${partyColor.bg} ${partyColor.border}` : "bg-white border-gray-200"}
+        ${partyTint ?? "bg-white border-gray-200"}
         ${onClick ? "active:scale-[0.98] hover:shadow-md cursor-pointer" : "cursor-default"}
       `}
       style={{ minHeight: onClick ? "72px" : undefined }}

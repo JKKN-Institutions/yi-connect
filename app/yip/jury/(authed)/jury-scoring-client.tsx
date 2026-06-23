@@ -99,6 +99,7 @@ type Participant = {
   full_name: string;
   parliament_role: string | null;
   party_side: string | null;
+  party_number?: number | null;
   // No school_name — jurors must never receive it (school-blind scoring).
   ministry?: string | null;
   constituency_name?: string | null;
@@ -1169,9 +1170,21 @@ function JuryScoringClientInner({
                     const roleColor = p.parliament_role
                       ? ROLE_COLORS[p.parliament_role] ?? "bg-gray-500 text-white"
                       : "bg-gray-500 text-white";
-                    const partyColor = p.party_side
+                    // Benchless (party_side null) still has a party letter —
+                    // show it with a neutral saffron chip, never "O"/"R".
+                    const partyBadgeClass = p.party_side
                       ? PARTY_COLORS[p.party_side as keyof typeof PARTY_COLORS]
-                      : null;
+                          .badge
+                      : p.party_number != null
+                        ? "bg-[#FF9933]/15 text-[#9a5212]"
+                        : null;
+                    const partyBadgeLabel = p.party_side
+                      ? p.party_side === "ruling"
+                        ? "R"
+                        : "O"
+                      : p.party_number != null
+                        ? String.fromCharCode(64 + p.party_number)
+                        : null;
 
                     return (
                       <button
@@ -1196,11 +1209,11 @@ function JuryScoringClientInner({
                             )}
                           </div>
                           <div className="flex items-center gap-1.5 shrink-0">
-                            {partyColor && (
+                            {partyBadgeClass && (
                               <span
-                                className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${partyColor.badge}`}
+                                className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${partyBadgeClass}`}
                               >
-                                {p.party_side === "ruling" ? "R" : "O"}
+                                {partyBadgeLabel}
                               </span>
                             )}
                             <span

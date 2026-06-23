@@ -177,7 +177,21 @@ export default async function AdminPersonPage({
                           {ROLE_LABELS[step.parliament_role] ?? step.parliament_role}
                         </Badge>
                       )}
-                      {step.party_side && (
+                      {step.party_number !== null && (
+                        <Badge
+                          className={`text-[10px] border ${
+                            step.party_side === "ruling"
+                              ? "bg-blue-50 text-blue-700 border-blue-200"
+                              : step.party_side === "opposition"
+                                ? "bg-red-50 text-red-700 border-red-200"
+                                : "bg-[#FF9933]/15 text-[#9a5212] border-[#FF9933]/30"
+                          }`}
+                        >
+                          Party {String.fromCharCode(64 + step.party_number)}
+                          {step.party_side ? ` · ${step.party_side}` : ""}
+                        </Badge>
+                      )}
+                      {step.party_number === null && step.party_side && (
                         <Badge
                           className={`text-[10px] border ${
                             step.party_side === "ruling"

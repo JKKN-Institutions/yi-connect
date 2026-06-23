@@ -116,6 +116,33 @@ export function ScoringConfigClient({
   const [savingModel, setSavingModel] = useState(false);
   const [modelMsg, setModelMsg] = useState<string | null>(null);
 
+  // ── 2b. Committee evaluation (dimensions + divisors) ──
+  const [cmteLabels, setCmteLabels] = useState<Record<string, string>>(
+    Object.fromEntries(initialCommitteeDims.dimensions.map((d) => [d.key, d.label]))
+  );
+  const [draftingDiv, setDraftingDiv] = useState(String(initialCommitteeDims.draftingDivisor));
+  const [presentationDiv, setPresentationDiv] = useState(
+    String(initialCommitteeDims.presentationDivisor)
+  );
+  const [savingCmte, setSavingCmte] = useState(false);
+  const [cmteMsg, setCmteMsg] = useState<string | null>(null);
+
+  async function saveCommitteeDims() {
+    setSavingCmte(true);
+    setCmteMsg(null);
+    const res = await updateCommitteeDimensionsConfig({
+      dimensions: initialCommitteeDims.dimensions.map((d) => ({
+        key: d.key,
+        label: cmteLabels[d.key] ?? d.label,
+      })),
+      draftingDivisor: Number(draftingDiv),
+      presentationDivisor: Number(presentationDiv),
+    });
+    setSavingCmte(false);
+    setCmteMsg(res.success ? "saved" : res.error);
+    if (res.success) router.refresh();
+  }
+
   // ── 3. Leadership bonuses ──
   const [bonuses, setBonuses] = useState<Record<string, string>>(
     Object.fromEntries(ROLE_LABELS.map((r) => [r.key, String(initialBonuses[r.key] ?? 0)]))

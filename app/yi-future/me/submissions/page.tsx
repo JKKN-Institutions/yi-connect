@@ -7,6 +7,7 @@ import {
   submitSubmission,
 } from "@/app/yi-future/actions/submissions";
 import { DeliverableUpload } from "@/components/yi-future/submissions/DeliverableUpload";
+import { SopDownloadCard } from "@/components/yi-future/SopDownloadCard";
 import type { Database } from "@/types/yi-future/database";
 
 type DeliverablePhase = Database["future"]["Enums"]["deliverable_phase"];
@@ -71,18 +72,22 @@ export default async function MySubmissionsPage() {
   const team = await getCaptainTeam(session.id);
   if (!team) {
     return (
-      <div className="bg-white border border-navy/10 rounded-lg p-6 text-center">
-        <div className="text-4xl mb-2">🔒</div>
-        <h2 className="text-lg font-bold text-navy">Captain only</h2>
-        <p className="mt-2 text-sm text-navy/60">
-          Only captains can file deliverables for their team.
-        </p>
-        <Link
-          href="/yi-future/me"
-          className="mt-4 inline-block text-sm text-navy font-semibold hover:text-yi-gold"
-        >
-          &larr; Back to dashboard
-        </Link>
+      <div className="space-y-5">
+        <SopDownloadCard />
+        <div className="bg-white border border-navy/10 rounded-lg p-6 text-center">
+          <div className="text-4xl mb-2">🔒</div>
+          <h2 className="text-lg font-bold text-navy">Captain only</h2>
+          <p className="mt-2 text-sm text-navy/60">
+            Only captains can file deliverables for their team — but anyone can
+            read the submission format above.
+          </p>
+          <Link
+            href="/yi-future/me"
+            className="mt-4 inline-block text-sm text-navy font-semibold hover:text-yi-gold"
+          >
+            &larr; Back to dashboard
+          </Link>
+        </div>
       </div>
     );
   }
@@ -102,6 +107,7 @@ export default async function MySubmissionsPage() {
             Deliverables &middot; {team.team_name}
           </h2>
         </div>
+        <SopDownloadCard />
         <div className="bg-white border border-navy/10 rounded-lg p-6 text-center">
           <div className="text-4xl mb-2">🔒</div>
           <h2 className="text-lg font-bold text-navy">
@@ -294,6 +300,8 @@ export default async function MySubmissionsPage() {
           3 phases, each produces a deliverable. Phase C produces 4 artifacts.
         </p>
       </div>
+
+      <SopDownloadCard />
 
       <PhaseCard
         phase="phase_a"

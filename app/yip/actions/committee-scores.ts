@@ -2,6 +2,7 @@
 
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
+import { requireJurySession } from "@/lib/yip/auth/yip-session";
 import { revalidatePath } from "next/cache";
 import {
   deriveCommitteeLevels,
@@ -375,5 +376,126 @@ export async function setJurorCommittees(input: {
   }
 
   revalidatePath(`/yip/dashboard/events/${input.eventId}/committee-scoring`);
+  return { success: true, data: null };
+}
+
+// ─── Juror self-entry (the jury login screen) ─────────────────────────────
+// Authorized by the jury SESSION cookie (requireJurySession), NOT by
+// getYipEventAccess — judges aren't event managers.
+
+export type JurorCommitteeRow = {
+  committee_name: string;
+  committee_number: number | null;
+  member_count: number;
+  my: (CommitteeDimensions & { judge_notes: string | null }) | null;
+};
+
+/** The committees THIS judge is assigned to, with their own marks (if any). */
+export async function getJurorCommittees(
+  juryAssignmentId: string,
+  eventId: string
+): Promise<ActionResult<{ locked: boolean; committees: JurorCommitteeRow[] }>> {
+  const auth = await requireJurySession(juryAssignmentId, eventId);
+  if (!auth.ok) return { success: false, error: auth.error };
+  const supabase = await createServiceClient();
+
+  const [assignRes, partsRes, scoresRes, evRes] = await Promise.all([
+    supabase
+      .from("jury_committee_assignments")
+      .select("committee_name")
+      .eq("event_id", eventId)
+      .eq("jury_assignment_id", juryAssignmentId),
+    supabase
+      .from("participants")
+      .select("committee_name, committee_number")
+      .eq("event_id", eventId)
+      .not("committee_name", "is", null),
+    supabase
+      .from("committee_scores")
+      .select("*")
+      .eq("event_id", eventId)
+      .eq("jury_assignment_id", juryAssignmentId),
+    supabase.from("events").select("scores_locked").eq("id", eventId).maybeSingle(),
+  ]);
+
+  const counts = new Map<string, number>();
+  const numberByName = new Map<string, number | null>();
+  for (const p of partsRes.data ?? []) {
+    const name = (p.committee_name ?? "").trim();
+    if (!name) continue;
+    counts.set(name, (counts.get(name) ?? 0) + 1);
+    if (!numberByName.has(name)) numberByName.set(name, p.committee_number ?? null);
+  }
+  const myByName = new Map((scoresRes.data ?? []).map((s) => [s.committee_name, s]));
+
+  const committees: JurorCommitteeRow[] = (assignRes.data ?? [])
+    .map((a) => a.committee_name)
+    .filter((name) => counts.has(name)) // only non-empty committees
+    .sort((a, b) => (numberByName.get(a) ?? 999) - (numberByName.get(b) ?? 999))
+    .map((committee_name) => {
+      const s = myByName.get(committee_name);
+      return {
+        committee_name,
+        committee_number: numberByName.get(committee_name) ?? null,
+        member_count: counts.get(committee_name) ?? 0,
+        my: s
+          ? { ...dimsOf(s), judge_notes: s.judge_notes ?? null }
+          : null,
+      };
+    });
+
+  return {
+    success: true,
+    data: { locked: Boolean(evRes.data?.scores_locked), committees },
+  };
+}
+
+/** A judge enters/updates THEIR OWN /60 for a committee they're assigned to. */
+export async function submitJurorCommitteeScore(input: {
+  juryAssignmentId: string;
+  eventId: string;
+  committeeName: string;
+  dimensions: CommitteeDimensions;
+  judgeNotes?: string | null;
+}): Promise<ActionResult<null>> {
+  const auth = await requireJurySession(input.juryAssignmentId, input.eventId);
+  if (!auth.ok) return { success: false, error: auth.error };
+  if (await scoresLocked(input.eventId)) {
+    return { success: false, error: "Scores are locked for this event." };
+  }
+  const supabase = await createServiceClient();
+
+  // The judge may only score a committee they're assigned to.
+  const { data: asg } = await supabase
+    .from("jury_committee_assignments")
+    .select("id")
+    .eq("event_id", input.eventId)
+    .eq("jury_assignment_id", input.juryAssignmentId)
+    .eq("committee_name", input.committeeName.trim())
+    .maybeSingle();
+  if (!asg) {
+    return { success: false, error: "You are not assigned to this committee." };
+  }
+
+  const clamp = (n: number) => Math.max(0, Math.min(10, Math.round(Number(n) || 0)));
+  const d = input.dimensions;
+  const { error } = await supabase.from("committee_scores").upsert(
+    {
+      event_id: input.eventId,
+      committee_name: input.committeeName.trim(),
+      jury_assignment_id: input.juryAssignmentId,
+      bill_draft_quality: clamp(d.bill_draft_quality),
+      policy_relevance: clamp(d.policy_relevance),
+      innovation: clamp(d.innovation),
+      feasibility: clamp(d.feasibility),
+      team_collaboration: clamp(d.team_collaboration),
+      presentation_defence: clamp(d.presentation_defence),
+      judge_notes: input.judgeNotes ?? null,
+      scored_by: "self",
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "event_id,committee_name,jury_assignment_id" }
+  );
+  if (error) return { success: false, error: error.message };
   return { success: true, data: null };
 }

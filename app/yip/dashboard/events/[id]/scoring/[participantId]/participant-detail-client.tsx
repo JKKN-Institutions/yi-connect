@@ -288,12 +288,25 @@ export function ParticipantDetailClient({
                     {ROLE_LABELS[p.parliament_role] ?? p.parliament_role}
                   </Badge>
                 )}
-                {side && (
+                {(side || p.party_number != null) && (
                   <Badge
                     variant="secondary"
-                    className={`text-[11px] ${PARTY_COLORS[side].badge}`}
+                    className={`text-[11px] ${
+                      side
+                        ? PARTY_COLORS[side].badge
+                        : "bg-[#FF9933]/15 text-[#9a5212]"
+                    }`}
                   >
-                    {side === "ruling" ? "Ruling" : "Opposition"}
+                    {p.party_number != null
+                      ? `Party ${String.fromCharCode(64 + p.party_number)}`
+                      : side === "ruling"
+                        ? "Ruling"
+                        : "Opposition"}
+                    {side && (
+                      <span className="ml-1 font-normal opacity-80">
+                        · {side === "ruling" ? "Ruling" : "Opposition"}
+                      </span>
+                    )}
                   </Badge>
                 )}
                 {p.constituency_name && (

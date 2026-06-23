@@ -170,19 +170,34 @@ export function QuestionHourPanel({ eventId }: QuestionHourPanelProps) {
                   <span className="font-medium text-gray-700">
                     {currentQuestion.submitter?.full_name ?? "Unknown"}
                   </span>
-                  {currentQuestion.submitter?.party_side && (
+                  {(currentQuestion.submitter?.party_side ||
+                    currentQuestion.submitter?.party_number != null) && (
                     <span
                       className={cn(
                         "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium",
-                        PARTY_COLORS[
-                          currentQuestion.submitter
-                            .party_side as keyof typeof PARTY_COLORS
-                        ]?.badge ?? "bg-gray-500 text-white"
+                        currentQuestion.submitter.party_side
+                          ? PARTY_COLORS[
+                              currentQuestion.submitter
+                                .party_side as keyof typeof PARTY_COLORS
+                            ]?.badge ?? "bg-gray-500 text-white"
+                          : "bg-[#FF9933]/15 text-[#9a5212]"
                       )}
                     >
-                      {currentQuestion.submitter.party_side === "ruling"
-                        ? "Ruling"
-                        : "Opposition"}
+                      {currentQuestion.submitter.party_number != null
+                        ? `Party ${String.fromCharCode(
+                            64 + currentQuestion.submitter.party_number
+                          )}`
+                        : currentQuestion.submitter.party_side === "ruling"
+                          ? "Ruling"
+                          : "Opposition"}
+                      {currentQuestion.submitter.party_side && (
+                        <span className="ml-1 font-normal opacity-80">
+                          ·{" "}
+                          {currentQuestion.submitter.party_side === "ruling"
+                            ? "Ruling"
+                            : "Opposition"}
+                        </span>
+                      )}
                     </span>
                   )}
                   {currentQuestion.submitter?.constituency_name && (

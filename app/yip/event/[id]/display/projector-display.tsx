@@ -14,6 +14,7 @@ interface SpeakerInfo {
   full_name: string;
   parliament_role: string | null;
   party_side: string | null;
+  party_number: number | null;
   constituency_name: string | null;
   constituency_state: string | null;
   school_name: string;
@@ -25,6 +26,7 @@ interface QuestionDisplayInfo {
   question_type: string | null;
   submitter_name: string;
   submitter_party: string | null;
+  submitter_party_number: number | null;
   submitter_constituency: string | null;
 }
 
@@ -43,7 +45,8 @@ interface BillDisplayInfo {
   id: string;
   title: string;
   objective: string | null;
-  party_side: string;
+  party_side: string | null;
+  committee_name: string | null;
   provisions: string[];
   status: string | null;
   presenter_1_name: string | null;
@@ -165,6 +168,7 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
           full_name,
           parliament_role,
           party_side,
+          party_number,
           constituency_name,
           constituency_state,
           school_name
@@ -224,6 +228,7 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
         submitter:participants!questions_submitted_by_fkey(
           full_name,
           party_side,
+          party_number,
           constituency_name
         )
       `
@@ -237,6 +242,7 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
       const sub = data.submitter as unknown as {
         full_name: string;
         party_side: string | null;
+        party_number: number | null;
         constituency_name: string | null;
       };
       setCurrentQuestionDisplay({
@@ -245,6 +251,7 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
         question_type: data.question_type,
         submitter_name: sub.full_name,
         submitter_party: sub.party_side,
+        submitter_party_number: sub.party_number,
         submitter_constituency: sub.constituency_name,
       });
     } else {
@@ -292,6 +299,7 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
         title,
         objective,
         party_side,
+        committee_name,
         provisions,
         status,
         presenter_1_participant:participants!bills_presenter_1_fkey(full_name),
@@ -300,6 +308,7 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
       )
       .eq("event_id", eventId)
       .eq("status", "presented")
+      .order("updated_at", { ascending: false })
       .limit(1)
       .maybeSingle();
 
@@ -311,6 +320,7 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
         title: data.title,
         objective: data.objective,
         party_side: data.party_side,
+        committee_name: data.committee_name,
         provisions: (data.provisions as string[]) ?? [],
         status: data.status,
         presenter_1_name: p1?.full_name ?? null,
@@ -792,18 +802,35 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
                     <span className="text-xl text-gray-300">
                       {currentQuestionDisplay.submitter_name}
                     </span>
-                    {currentQuestionDisplay.submitter_party && (
+                    {(currentQuestionDisplay.submitter_party ||
+                      currentQuestionDisplay.submitter_party_number != null) && (
                       <span
                         className={cn(
                           "rounded-full px-4 py-1 text-sm font-medium",
                           currentQuestionDisplay.submitter_party === "ruling"
                             ? "bg-blue-600 text-white"
-                            : "bg-red-600 text-white"
+                            : currentQuestionDisplay.submitter_party ===
+                                "opposition"
+                              ? "bg-red-600 text-white"
+                              : "bg-[#FF9933] text-white"
                         )}
                       >
-                        {currentQuestionDisplay.submitter_party === "ruling"
-                          ? "Ruling Party"
-                          : "Opposition"}
+                        {currentQuestionDisplay.submitter_party_number != null
+                          ? `Party ${String.fromCharCode(
+                              64 +
+                                currentQuestionDisplay.submitter_party_number
+                            )}`
+                          : currentQuestionDisplay.submitter_party === "ruling"
+                            ? "Ruling Party"
+                            : "Opposition"}
+                        {currentQuestionDisplay.submitter_party && (
+                          <span className="ml-1.5 font-normal opacity-80">
+                            ·{" "}
+                            {currentQuestionDisplay.submitter_party === "ruling"
+                              ? "Ruling"
+                              : "Opposition"}
+                          </span>
+                        )}
                       </span>
                     )}
                     {currentQuestionDisplay.submitter_constituency && (
@@ -834,18 +861,24 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
             {currentAgendaItem.agenda_type === "bill_presentation" &&
               presentedBill && (
                 <div className="mx-auto max-w-3xl space-y-6">
-                  {/* Party badge */}
+                  {/* Committee / party badge — benchless bills are identified by
+                      committee, not by ruling/opposition side. */}
                   <span
                     className={cn(
                       "inline-flex items-center rounded-full px-5 py-1.5 text-sm font-semibold",
                       presentedBill.party_side === "ruling"
                         ? "bg-blue-600 text-white"
-                        : "bg-red-600 text-white"
+                        : presentedBill.party_side === "opposition"
+                          ? "bg-red-600 text-white"
+                          : "bg-[#FF9933] text-white"
                     )}
                   >
-                    {presentedBill.party_side === "ruling"
-                      ? "Ruling Party Bill"
-                      : "Opposition Bill"}
+                    {presentedBill.committee_name ??
+                      (presentedBill.party_side === "ruling"
+                        ? "Ruling Party Bill"
+                        : presentedBill.party_side === "opposition"
+                          ? "Opposition Bill"
+                          : "Committee Bill")}
                   </span>
 
                   {/* Bill title */}
@@ -962,18 +995,33 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
                         currentSpeaker.parliament_role}
                     </span>
                   )}
-                  {currentSpeaker.party_side && (
+                  {(currentSpeaker.party_side ||
+                    currentSpeaker.party_number != null) && (
                     <span
                       className={cn(
                         "rounded-full px-4 py-1 text-sm font-medium",
                         currentSpeaker.party_side === "ruling"
                           ? "bg-blue-600 text-white"
-                          : "bg-red-600 text-white"
+                          : currentSpeaker.party_side === "opposition"
+                            ? "bg-red-600 text-white"
+                            : "bg-[#FF9933] text-white"
                       )}
                     >
-                      {currentSpeaker.party_side === "ruling"
-                        ? "Ruling Party"
-                        : "Opposition"}
+                      {currentSpeaker.party_number != null
+                        ? `Party ${String.fromCharCode(
+                            64 + currentSpeaker.party_number
+                          )}`
+                        : currentSpeaker.party_side === "ruling"
+                          ? "Ruling Party"
+                          : "Opposition"}
+                      {currentSpeaker.party_side && (
+                        <span className="ml-1.5 font-normal opacity-80">
+                          ·{" "}
+                          {currentSpeaker.party_side === "ruling"
+                            ? "Ruling"
+                            : "Opposition"}
+                        </span>
+                      )}
                     </span>
                   )}
                 </div>

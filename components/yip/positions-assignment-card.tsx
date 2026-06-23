@@ -43,7 +43,9 @@ interface Props {
 function partyDot(side: string | null) {
   if (side === "ruling") return "bg-blue-500";
   if (side === "opposition") return "bg-red-500";
-  return "bg-gray-300";
+  // Benchless (side decided live on event day) — neutral saffron, not a
+  // "no party" gray; the participant still belongs to a party.
+  return "bg-[#FF9933]";
 }
 
 export function PositionsAssignmentCard({ groups, allParticipants }: Props) {

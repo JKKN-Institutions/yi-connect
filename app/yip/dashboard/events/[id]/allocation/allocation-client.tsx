@@ -900,6 +900,16 @@ function LeaderRow({
           >
             {participant.party_side === "ruling" ? "Ruling" : "Opp"}
           </Badge>
+        ) : participant.party_number != null ? (
+          // Benchless: Ruling vs Opposition is decided live on event day, so
+          // show the party letter (A–G) with a neutral saffron accent — never
+          // a side label.
+          <Badge
+            variant="secondary"
+            className="bg-[#FF9933]/15 text-[#9a5212]"
+          >
+            Party {String.fromCharCode(64 + participant.party_number)}
+          </Badge>
         ) : (
           "--"
         )}

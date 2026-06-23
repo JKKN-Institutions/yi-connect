@@ -85,6 +85,7 @@ interface SpeakerWithParticipant {
     full_name: string;
     parliament_role: string | null;
     party_side: string | null;
+    party_number: number | null;
     constituency_name: string | null;
     constituency_state: string | null;
     school_name: string;
@@ -1179,20 +1180,38 @@ export function ControlPanel({
                                 ] ?? currentSpeaker.participant.parliament_role}
                               </span>
                             )}
-                            {currentSpeaker.participant?.party_side && (
+                            {(currentSpeaker.participant?.party_side ||
+                              currentSpeaker.participant?.party_number !=
+                                null) && (
                               <span
                                 className={cn(
                                   "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
-                                  PARTY_COLORS[
-                                    currentSpeaker.participant
-                                      .party_side as keyof typeof PARTY_COLORS
-                                  ]?.badge ?? "bg-gray-500 text-white"
+                                  currentSpeaker.participant.party_side
+                                    ? PARTY_COLORS[
+                                        currentSpeaker.participant
+                                          .party_side as keyof typeof PARTY_COLORS
+                                      ]?.badge ?? "bg-gray-500 text-white"
+                                    : "bg-[#FF9933]/15 text-[#9a5212]"
                                 )}
                               >
-                                {currentSpeaker.participant.party_side ===
-                                "ruling"
-                                  ? "Ruling"
-                                  : "Opposition"}
+                                {currentSpeaker.participant.party_number != null
+                                  ? `Party ${String.fromCharCode(
+                                      64 +
+                                        currentSpeaker.participant.party_number
+                                    )}`
+                                  : currentSpeaker.participant.party_side ===
+                                      "ruling"
+                                    ? "Ruling"
+                                    : "Opposition"}
+                                {currentSpeaker.participant.party_side && (
+                                  <span className="ml-1 font-normal opacity-80">
+                                    ·{" "}
+                                    {currentSpeaker.participant.party_side ===
+                                    "ruling"
+                                      ? "Ruling"
+                                      : "Opposition"}
+                                  </span>
+                                )}
                               </span>
                             )}
                           </div>
@@ -1267,18 +1286,26 @@ export function ControlPanel({
                                 {speaker.participant?.full_name ?? "Unknown"}
                               </span>
                             </div>
-                            {speaker.participant?.party_side && (
+                            {(speaker.participant?.party_side ||
+                              speaker.participant?.party_number != null) && (
                               <span
                                 className={cn(
                                   "rounded px-1.5 py-0.5 text-[10px] font-medium",
                                   speaker.participant.party_side === "ruling"
                                     ? "bg-blue-100 text-blue-700"
-                                    : "bg-red-100 text-red-700"
+                                    : speaker.participant.party_side ===
+                                        "opposition"
+                                      ? "bg-red-100 text-red-700"
+                                      : "bg-[#FF9933]/15 text-[#9a5212]"
                                 )}
                               >
-                                {speaker.participant.party_side === "ruling"
-                                  ? "R"
-                                  : "O"}
+                                {speaker.participant.party_number != null
+                                  ? String.fromCharCode(
+                                      64 + speaker.participant.party_number
+                                    )
+                                  : speaker.participant.party_side === "ruling"
+                                    ? "R"
+                                    : "O"}
                               </span>
                             )}
                           </div>

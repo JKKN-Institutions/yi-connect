@@ -25,6 +25,9 @@ interface ParticipantInfo {
   full_name: string;
   parliament_role: string | null;
   party_side: string | null;
+  // Benchless allocation leaves party_side null but assigns a party number
+  // (A–G) — used for a neutral header tint so party identity stays visible.
+  party_number?: number | null;
   // No school_name — jurors must never receive it (school-blind scoring).
   ministry?: string | null;
   constituency_name?: string | null;
@@ -374,15 +377,19 @@ export function ScoreForm({
   const roleColor = participant.parliament_role
     ? ROLE_COLORS[participant.parliament_role] ?? "bg-gray-500 text-white"
     : "bg-gray-500 text-white";
-  const partyColor = participant.party_side
-    ? PARTY_COLORS[participant.party_side as keyof typeof PARTY_COLORS]
-    : null;
+  // Header tint: Ruling/Opposition keep their colour; a benchless party (side
+  // null but a party number) gets a neutral saffron tint; no party = gray.
+  const partyTint = participant.party_side
+    ? `${PARTY_COLORS[participant.party_side as keyof typeof PARTY_COLORS].bg} ${PARTY_COLORS[participant.party_side as keyof typeof PARTY_COLORS].border}`
+    : participant.party_number != null
+      ? "bg-[#FF9933]/5 border-[#FF9933]/30"
+      : null;
 
   return (
     <div className="space-y-5 landscape-gap-2">
       {/* Participant Header */}
       <div
-        className={`rounded-xl border-2 p-4 landscape-compact ${partyColor ? `${partyColor.bg} ${partyColor.border}` : "bg-gray-50 border-gray-200"}`}
+        className={`rounded-xl border-2 p-4 landscape-compact ${partyTint ?? "bg-gray-50 border-gray-200"}`}
       >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">

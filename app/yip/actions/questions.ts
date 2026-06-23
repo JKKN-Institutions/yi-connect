@@ -122,6 +122,7 @@ export type QuestionWithSubmitter = Question & {
     id: string;
     full_name: string;
     party_side: string | null;
+    party_number: number | null;
     constituency_name: string | null;
     school_name: string;
     parliament_role: string | null;
@@ -201,6 +202,7 @@ export async function getQuestions(
         id,
         full_name,
         party_side,
+        party_number,
         constituency_name,
         school_name,
         parliament_role
@@ -474,6 +476,7 @@ export type CurrentQuestionInfo = Question & {
     id: string;
     full_name: string;
     party_side: string | null;
+    party_number: number | null;
     constituency_name: string | null;
     school_name: string;
     parliament_role: string | null;
@@ -494,6 +497,7 @@ export async function getCurrentQuestion(
         id,
         full_name,
         party_side,
+        party_number,
         constituency_name,
         school_name,
         parliament_role
@@ -525,6 +529,7 @@ export async function getQueuedQuestions(
         id,
         full_name,
         party_side,
+        party_number,
         constituency_name,
         school_name,
         parliament_role
@@ -556,6 +561,7 @@ export async function getCompletedQuestions(
         id,
         full_name,
         party_side,
+        party_number,
         constituency_name,
         school_name,
         parliament_role

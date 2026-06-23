@@ -46,11 +46,14 @@ export function ParticipantProfileClient({
 }) {
   const { participant: p, contestant, crossLevel, canManage } = profile;
   const place = [p.city, p.home_state].filter(Boolean).join(", ");
+  // Benchless (party_side null) still has a party letter — neutral saffron chip.
   const partyClass =
     p.party_side
       ? PARTY_COLORS[p.party_side as keyof typeof PARTY_COLORS]?.badge ??
         "bg-gray-100 text-gray-700"
-      : "";
+      : p.party_number != null
+        ? "bg-[#FF9933]/15 text-[#9a5212]"
+        : "";
 
   return (
     <div className="max-w-[1100px] mx-auto px-6 py-6 space-y-6">
@@ -162,9 +165,16 @@ export function ParticipantProfileClient({
           <CardContent className="space-y-2.5 text-sm">
             <div className="flex items-center justify-between">
               <span className="text-[#1a1a3e]/55">Party</span>
-              {p.party_side ? (
+              {p.party_side || p.party_number != null ? (
                 <Badge variant="secondary" className={partyClass}>
-                  {p.party_side === "ruling" ? "Ruling" : "Opposition"}
+                  {p.party_number != null
+                    ? `Party ${String.fromCharCode(64 + p.party_number)}`
+                    : p.party_side === "ruling"
+                      ? "Ruling"
+                      : "Opposition"}
+                  {p.party_side
+                    ? ` · ${p.party_side === "ruling" ? "Ruling" : "Opposition"}`
+                    : ""}
                 </Badge>
               ) : (
                 <span className="text-[#1a1a3e]/40">—</span>

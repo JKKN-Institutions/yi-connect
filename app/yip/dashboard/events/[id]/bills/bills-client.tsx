@@ -106,8 +106,16 @@ export function BillsClient({
     action: () => void;
   }>({ open: false, title: "", description: "", action: () => {} });
 
-  const rulingBill = bills.find((b) => b.party_side === "ruling");
-  const oppositionBill = bills.find((b) => b.party_side === "opposition");
+  // Bills sorted committee-first so the columns read in a stable order. Benchless
+  // events identify bills by committee_name (party_side null); legacy benched
+  // events keep ruling first, then opposition.
+  const sortedBills = [...bills].sort((a, b) => {
+    const rank = (s: string | null) =>
+      s === "ruling" ? 0 : s === "opposition" ? 1 : 2;
+    const sideDelta = rank(a.party_side) - rank(b.party_side);
+    if (sideDelta !== 0) return sideDelta;
+    return (a.committee_name ?? "").localeCompare(b.committee_name ?? "");
+  });
 
   function handleApprove(billId: string, title: string) {
     setConfirmDialog({
@@ -167,7 +175,7 @@ export function BillsClient({
             Bill Management
           </h2>
           <p className="text-sm text-gray-500 mt-0.5">
-            Review and manage bills submitted by both parties
+            Review and manage bills drafted by each committee
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={() => router.refresh()}>
@@ -175,28 +183,30 @@ export function BillsClient({
         </Button>
       </div>
 
-      {/* Two column layout */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Ruling Party Bill */}
-        <BillColumn
-          label="Ruling Party Bill"
-          side="ruling"
-          bill={rulingBill ?? null}
-          onApprove={handleApprove}
-          onReject={handleReject}
-          isPending={isPending}
-        />
-
-        {/* Opposition Party Bill */}
-        <BillColumn
-          label="Opposition Party Bill"
-          side="opposition"
-          bill={oppositionBill ?? null}
-          onApprove={handleApprove}
-          onReject={handleReject}
-          isPending={isPending}
-        />
-      </div>
+      {/* One card per committee bill (benchless), or per party (legacy benched). */}
+      {sortedBills.length === 0 ? (
+        <Card>
+          <CardContent className="py-12 text-center">
+            <FileText className="mx-auto size-10 text-gray-200 mb-3" />
+            <p className="text-sm text-gray-500">No bills drafted yet</p>
+            <p className="text-xs text-gray-400 mt-1">
+              Committees draft their bills during the Bill Drafting session.
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-6 lg:grid-cols-2">
+          {sortedBills.map((b) => (
+            <BillColumn
+              key={b.id}
+              bill={b}
+              onApprove={handleApprove}
+              onReject={handleReject}
+              isPending={isPending}
+            />
+          ))}
+        </div>
+      )}
 
       {/* Committee Documents */}
       <CommitteeDocumentsSection
@@ -237,24 +247,37 @@ export function BillsClient({
   );
 }
 
+// Neutral (saffron) accent for benchless committee bills that carry no side.
+const NEUTRAL_BILL = {
+  border: "border-[#FF9933]/40",
+  badge: "bg-[#FF9933]/15 text-[#9a5212]",
+} as const;
+
 // ─── Bill Column Component ──────────────────────────────────────
 
 function BillColumn({
-  label,
-  side,
   bill,
   onApprove,
   onReject,
   isPending,
 }: {
-  label: string;
-  side: "ruling" | "opposition";
   bill: BillWithMembers | null;
   onApprove: (billId: string, title: string) => void;
   onReject: (billId: string, title: string) => void;
   isPending: boolean;
 }) {
-  const colors = PARTY_COLORS[side];
+  const side =
+    bill?.party_side === "ruling" || bill?.party_side === "opposition"
+      ? bill.party_side
+      : null;
+  const label =
+    bill?.committee_name ??
+    (side === "ruling"
+      ? "Ruling Party Bill"
+      : side === "opposition"
+        ? "Opposition Party Bill"
+        : "Committee Bill");
+  const colors = side ? PARTY_COLORS[side] : NEUTRAL_BILL;
   const status = bill?.status ?? "drafting";
   const statusConfig = STATUS_CONFIG[status] ?? STATUS_CONFIG.drafting;
   const StatusIcon = statusConfig.icon;
@@ -262,11 +285,15 @@ function BillColumn({
 
   return (
     <Card className={cn("overflow-hidden", colors.border, "border")}>
-      {/* Party header bar */}
+      {/* Committee / party header bar */}
       <div
         className={cn(
           "px-4 py-2.5 flex items-center justify-between",
-          side === "ruling" ? "bg-blue-50" : "bg-red-50"
+          side === "ruling"
+            ? "bg-blue-50"
+            : side === "opposition"
+              ? "bg-red-50"
+              : "bg-[#FF9933]/10"
         )}
       >
         <span

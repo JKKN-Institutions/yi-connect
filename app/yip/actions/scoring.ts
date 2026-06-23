@@ -400,6 +400,7 @@ export type ScoreWithParticipant = Score & {
     full_name: string;
     parliament_role: string | null;
     party_side: string | null;
+    party_number: number | null;
     // Juror identifies a participant by name + serial # + constituency.
     // School is never sent to jurors (school-blind scoring, enforced at the
     // data layer — not just hidden in the UI).
@@ -427,6 +428,7 @@ export async function getScoresForJury(
         full_name,
         parliament_role,
         party_side,
+        party_number,
         constituency_name,
         serial_no
       ),
@@ -513,6 +515,7 @@ export type CurrentSpeakerInfo = {
     full_name: string;
     parliament_role: string | null;
     party_side: string | null;
+    party_number: number | null;
     // School is never sent to jurors (school-blind scoring, data-layer enforced).
     ministry: string | null;
     constituency_name: string | null;
@@ -559,6 +562,7 @@ export async function getCurrentSpeaker(
         full_name,
         parliament_role,
         party_side,
+        party_number,
         ministry,
         constituency_name,
         serial_no
@@ -595,6 +599,7 @@ export type ScoreableParticipant = {
   full_name: string;
   parliament_role: string | null;
   party_side: string | null;
+  party_number: number | null;
   // School is never sent to jurors (school-blind scoring, data-layer enforced).
   ministry: string | null;
   constituency_name: string | null;
@@ -608,7 +613,7 @@ export async function getScoreableParticipants(
 
   const { data, error } = await supabase
     .from("participants")
-    .select("id, full_name, parliament_role, party_side, ministry, constituency_name, serial_no")
+    .select("id, full_name, parliament_role, party_side, party_number, ministry, constituency_name, serial_no")
     .eq("event_id", eventId)
     .not("parliament_role", "is", null)
     .order("serial_no", { nullsFirst: false })

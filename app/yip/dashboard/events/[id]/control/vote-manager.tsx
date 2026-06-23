@@ -89,7 +89,8 @@ interface BillOption {
   id: string;
   title: string;
   objective: string | null;
-  party_side: string;
+  party_side: string | null;
+  committee_name: string | null;
   status: string | null;
 }
 
@@ -1935,10 +1936,14 @@ export function VoteManager({
                           {bill.title}
                         </p>
                         <p className="text-xs text-gray-500">
-                          {bill.party_side === "ruling"
-                            ? "Ruling Party"
-                            : "Opposition"}{" "}
-                          Bill
+                          {bill.committee_name ??
+                            `${
+                              bill.party_side === "ruling"
+                                ? "Ruling Party"
+                                : bill.party_side === "opposition"
+                                  ? "Opposition"
+                                  : "Committee"
+                            } Bill`}
                         </p>
                       </div>
                       <Button

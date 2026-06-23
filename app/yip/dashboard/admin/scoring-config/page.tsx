@@ -9,6 +9,7 @@ import {
 } from "@/app/yip/actions/scoring-flags";
 import { listScoringBuckets } from "@/app/yip/actions/scoring-buckets";
 import { listAwardDefinitions } from "@/app/yip/actions/admin-awards";
+import { getCommitteeDimensionsConfigAdmin } from "@/app/yip/actions/committee-dimensions";
 import { ScoringConfigClient } from "./scoring-config-client";
 
 // Admin layout already gates with requireSuperAdmin() → Forbidden403, so this

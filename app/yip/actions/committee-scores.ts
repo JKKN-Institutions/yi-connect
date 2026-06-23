@@ -106,6 +106,13 @@ export async function getCommitteeScoring(
 
   if (partsRes.error) return { success: false, error: partsRes.error.message };
 
+  // Admin-configurable committee-level divisors (default 10 / 2).
+  const cmteCfg = await getCommitteeDimensionsConfig();
+  const cmteDivisors = {
+    draftingDivisor: cmteCfg.draftingDivisor,
+    presentationDivisor: cmteCfg.presentationDivisor,
+  };
+
   // committee → member count + number (number is shared across a committee).
   const counts = new Map<string, number>();
   const numberByName = new Map<string, number | null>();

@@ -12,6 +12,13 @@ import {
   Info,
   CheckCircle2,
   Scale,
+  MapPin,
+  Gavel,
+  ScrollText,
+  ListChecks,
+  Sparkles,
+  HelpCircle,
+  ArrowRight,
 } from "lucide-react";
 import { PrintButton } from "./print-button";
 
@@ -19,28 +26,35 @@ export const metadata: Metadata = {
   title: "Scoring & Awards Guide — YIP",
 };
 
-// ── small presentational helpers (server component, no client JS) ──────────
+// ── presentational helpers (server component, no client JS) ────────────────
 function Section({
   n,
   icon,
   title,
+  subtitle,
   children,
 }: {
-  n: number;
+  n: number | string;
   icon: React.ReactNode;
   title: string;
+  subtitle?: string;
   children: React.ReactNode;
 }) {
   return (
     <Card className="overflow-hidden">
       <CardContent className="space-y-4 p-6">
-        <div className="flex items-center gap-3 border-b border-[#1a1a3e]/10 pb-3">
+        <div className="flex items-start gap-3 border-b border-[#1a1a3e]/10 pb-3">
           <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-[#FF9933]/12 text-[#FF9933]">
             {icon}
           </span>
-          <h2 className="text-base font-bold text-[#1a1a3e]">
-            <span className="text-[#FF9933]">{n}.</span> {title}
-          </h2>
+          <div>
+            <h2 className="text-base font-bold text-[#1a1a3e]">
+              <span className="text-[#FF9933]">{n}.</span> {title}
+            </h2>
+            {subtitle ? (
+              <p className="mt-0.5 text-xs text-gray-500">{subtitle}</p>
+            ) : null}
+          </div>
         </div>
         {children}
       </CardContent>
@@ -48,11 +62,40 @@ function Section({
   );
 }
 
-function Pill({ children }: { children: React.ReactNode }) {
+function Bar({ v, max }: { v: number; max: number }) {
+  const pct = Math.max(0, Math.min(100, Math.round((v / max) * 100)));
   return (
-    <span className="inline-flex items-center rounded-md bg-[#138808]/10 px-2 py-0.5 text-xs font-semibold text-[#138808]">
-      {children}
-    </span>
+    <div className="h-2 w-full overflow-hidden rounded-full bg-[#1a1a3e]/[0.07]">
+      <div
+        className="h-2 rounded-full bg-[#FF9933]"
+        style={{ width: `${pct}%` }}
+      />
+    </div>
+  );
+}
+
+function Analogy({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex gap-2 rounded-lg border border-[#138808]/25 bg-[#138808]/[0.05] px-4 py-3 text-sm text-[#14532d]">
+      <Sparkles className="mt-0.5 size-4 shrink-0 text-[#138808]" />
+      <p>
+        <strong>In plain terms:</strong> {children}
+      </p>
+    </div>
+  );
+}
+
+function Faq({ q, children }: { q: string; children: React.ReactNode }) {
+  return (
+    <details className="group rounded-lg border border-[#1a1a3e]/10 bg-white px-4 py-3">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-sm font-semibold text-[#1a1a3e]">
+        {q}
+        <span className="text-[#FF9933] transition-transform group-open:rotate-90">
+          <ArrowRight className="size-4" />
+        </span>
+      </summary>
+      <div className="mt-2 text-sm text-gray-600">{children}</div>
+    </details>
   );
 }
 
@@ -71,7 +114,51 @@ export default async function ScoringGuidePage() {
 
   const thCls =
     "border border-[#1a1a3e]/10 bg-[#1a1a3e]/[0.03] px-3 py-2 text-left font-semibold text-[#1a1a3e]";
-  const tdCls = "border border-[#1a1a3e]/10 px-3 py-2 text-gray-700";
+  const tdCls = "border border-[#1a1a3e]/10 px-3 py-2 text-gray-700 align-top";
+
+  const journey = [
+    { icon: <MapPin className="size-5" />, t: "Gets a place", d: "A party, a constituency and a committee" },
+    { icon: <ScrollText className="size-5" />, t: "Plays 6 sessions", d: "Speaks & debates on the floor" },
+    { icon: <Gavel className="size-5" />, t: "Judges score", d: "Each session marked by judges" },
+    { icon: <Users className="size-5" />, t: "Committee mark shared", d: "One team mark for the whole committee" },
+    { icon: <Calculator className="size-5" />, t: "Total /100", d: "Sessions + leadership bonus" },
+    { icon: <Trophy className="size-5" />, t: "Awards", d: "Top of each category wins" },
+  ];
+
+  const glossary = [
+    ["Party", "The political group a student is placed in (like a team)."],
+    ["Constituency", "The region a student represents in the house."],
+    ["Committee", "A small group (e.g. a Ministry) that drafts a bill together and is scored as a team."],
+    ["Bench", "Ruling bench = the side in power; Opposition bench = the side challenging it."],
+    ["Judge / Jury", "An adult evaluator who scores students on each session."],
+    ["Session", "One activity on the agenda (e.g. Question Hour) that students are scored on."],
+    ["Leadership role", "An elected post — Prime Minister, Speaker, Minister — that earns a small bonus."],
+    ["Bill", "The proposed law a committee writes, then presents and defends."],
+  ];
+
+  // PM hero scorecard (real seeded numbers — engine output)
+  const pmCard: [string, number, number, string][] = [
+    ["Urgent Public Importance", 12.0, 15, "his own"],
+    ["Committee Discussions & Bill Drafting", 14.05, 15, "10 his own + 4.05 committee"],
+    ["Question Hour", 17.0, 20, "his own"],
+    ["Zero Hour", 12.0, 15, "his own"],
+    ["Debate (Political Acumen)", 8.0, 10, "his own"],
+    ["Bill Presentation & Defence", 14.0, 15, "10 his own + 4.00 committee"],
+  ];
+
+  // real demo leaderboard (engine output)
+  const board: [number, string, string, string, number][] = [
+    [1, "Aarav Sharma", "Prime Minister", "77.05 + 5", 82.05],
+    [2, "Ishaan Kapoor", "Speaker", "74.6 + 5", 79.6],
+    [3, "Saanvi Rao", "Deputy Prime Minister", "74.6 + 4", 78.6],
+    [4, "Reyansh Gupta", "Leader of Opposition", "74.6 + 4", 78.6],
+    [5, "Kabir Anand", "Shadow Minister", "76.05 + 2", 78.05],
+    [6, "Ananya Iyer", "MP (Opposition)", "75.05 + 0", 75.05],
+    [7, "Myra Joshi", "Deputy Speaker", "69.6 + 4", 73.6],
+    [8, "Diya Nair", "MP (Ruling)", "72.05 + 0", 72.05],
+    [9, "Vihaan Reddy", "Cabinet Minister", "68.05 + 3", 71.05],
+    [10, "Arjun Mehta", "MP (Ruling)", "70.6 + 0", 70.6],
+  ];
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 px-4 py-8 sm:px-6">
@@ -82,54 +169,106 @@ export default async function ScoringGuidePage() {
             How YIP Scoring &amp; Awards Work
           </h1>
           <p className="mt-1 max-w-2xl text-sm text-gray-500">
-            A plain-English guide for chapter chairs, organisers and admins.
-            Based on the Yi 2026 Evaluation Workbook. The names and marks below
-            are an <strong>illustrative example</strong> (real committee, judges
-            and students from Erode 2026 are used only to make it concrete) — not
-            anyone&apos;s actual result.
+            A step-by-step walkthrough for chapter chairs, organisers and admins —
+            written so anyone can follow it, no scoring background needed.
           </p>
         </div>
         <PrintButton />
       </div>
 
-      {/* The big picture */}
-      <Card className="border-[#FF9933]/30 bg-[#FF9933]/[0.04]">
+      {/* This is a REAL demo */}
+      <Card className="border-[#FF9933]/30 bg-[#FF9933]/[0.05]">
         <CardContent className="space-y-2 p-6">
           <div className="flex items-center gap-2">
             <Info className="size-5 text-[#FF9933]" />
             <h2 className="text-base font-bold text-[#1a1a3e]">
-              The whole idea in 30 seconds
+              This isn&apos;t made up — it&apos;s a real demo event in your system
             </h2>
           </div>
           <p className="text-sm text-gray-700">
-            Every student is scored <strong>out of 100</strong>. That is{" "}
-            <strong>six things they do on the floor (worth 90)</strong> plus a{" "}
-            <strong>leadership bonus (up to 10)</strong> if they hold a role like
-            Prime Minister or Speaker. One of those six things — their{" "}
-            <strong>committee work</strong> — is a <em>shared team mark</em>:
-            every member of a committee gets the same committee score, decided by
-            the judges who evaluate that committee. Everything else they earn
-            individually. Awards are then handed out by ranking students on
-            different slices of this score.
+            Every name and number below comes from a genuine demo event —{" "}
+            <strong>&quot;DEMO — Election Rehearsal&quot;</strong> — with{" "}
+            <strong>10 students</strong>, an elected{" "}
+            <strong>Prime Minister</strong>, two committees and two judges, all
+            fully scored. The totals are exactly what the live scoring engine
+            computes. A super-admin can open it any time under{" "}
+            <strong>Admin → Mock Data</strong> to see the same figures. So this is
+            a real simulation, not a hypothetical.
           </p>
         </CardContent>
       </Card>
 
-      {/* 1. Committee scoring */}
-      <Section n={1} icon={<Users className="size-5" />} title="How a committee is scored (the shared team mark)">
+      {/* The journey */}
+      <Section
+        n={1}
+        icon={<ListChecks className="size-5" />}
+        title="The journey of one score"
+        subtitle="From the moment a student arrives to the awards ceremony"
+      >
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          {journey.map((s, i) => (
+            <div
+              key={s.t}
+              className="relative rounded-xl border border-[#1a1a3e]/10 bg-white p-3 text-center"
+            >
+              <span className="mx-auto mb-2 flex size-9 items-center justify-center rounded-full bg-[#1a1a3e]/[0.04] text-[#FF9933]">
+                {s.icon}
+              </span>
+              <p className="text-[11px] font-bold uppercase tracking-wide text-[#1a1a3e]">
+                {i + 1}. {s.t}
+              </p>
+              <p className="mt-0.5 text-[11px] leading-snug text-gray-500">{s.d}</p>
+            </div>
+          ))}
+        </div>
         <p className="text-sm text-gray-700">
-          Judges rate each committee on <strong>6 things, each out of 10 — so 60
-          total</strong>. When several judges score the same committee, their
-          marks are <strong>averaged</strong>. Example: the{" "}
-          <strong>Ministry of Education</strong> committee, scored by two judges.
+          A student&apos;s final mark is <strong>out of 100</strong>: six things
+          they do on the floor (worth 90) plus a small leadership bonus (up to 10)
+          if they hold an elected post. We&apos;ll walk through each step with a
+          real committee and a real Prime Minister.
+        </p>
+      </Section>
+
+      {/* Glossary */}
+      <Section
+        n={2}
+        icon={<HelpCircle className="size-5" />}
+        title="The words, in plain English"
+        subtitle="Quick reference if any term is new"
+      >
+        <div className="grid gap-3 sm:grid-cols-2">
+          {glossary.map(([term, def]) => (
+            <div
+              key={term}
+              className="rounded-lg border border-[#1a1a3e]/10 bg-white px-3 py-2"
+            >
+              <p className="text-sm font-semibold text-[#1a1a3e]">{term}</p>
+              <p className="text-xs text-gray-600">{def}</p>
+            </div>
+          ))}
+        </div>
+      </Section>
+
+      {/* Act 1 — committee */}
+      <Section
+        n={3}
+        icon={<Users className="size-5" />}
+        title="The committee's shared team mark"
+        subtitle="Demo committee: Ministry of Education (5 students)"
+      >
+        <p className="text-sm text-gray-700">
+          Five students form the <strong>Ministry of Education</strong> committee
+          and write a bill together. Two judges score the{" "}
+          <strong>whole committee</strong> on 6 things, each out of 10 — so 60
+          total. Several judges? Their marks are <strong>averaged</strong>.
         </p>
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-sm">
             <thead>
               <tr>
                 <th className={thCls}>What judges rate</th>
-                <th className={thCls}>Mohandinesh Ayyasamy</th>
-                <th className={thCls}>yASH</th>
+                <th className={thCls}>Mr. Rajesh Kumar</th>
+                <th className={thCls}>Ms. Priya Menon</th>
                 <th className={thCls}>Average</th>
               </tr>
             </thead>
@@ -137,10 +276,10 @@ export default async function ScoringGuidePage() {
               {[
                 ["Bill Draft Quality", 8, 9, 8.5],
                 ["Policy Relevance", 7, 8, 7.5],
-                ["Innovation", 6, 7, 6.5],
-                ["Feasibility", 7, 6, 6.5],
-                ["Team Collaboration", 9, 8, 8.5],
-                ["Presentation & Defence", 8, 9, 8.5],
+                ["Innovation", 8, 7, 7.5],
+                ["Feasibility", 9, 8, 8.5],
+                ["Team Collaboration", 8, 9, 8.5],
+                ["Presentation & Defence", 8, 8, 8.0],
               ].map(([k, a, b, avg]) => (
                 <tr key={k as string}>
                   <td className={tdCls}>{k}</td>
@@ -151,215 +290,124 @@ export default async function ScoringGuidePage() {
               ))}
               <tr className="font-semibold">
                 <td className={tdCls}>Committee total /60</td>
-                <td className={tdCls}>45</td>
-                <td className={tdCls}>47</td>
-                <td className={`${tdCls} text-[#FF9933]`}>46</td>
+                <td className={tdCls}>48</td>
+                <td className={tdCls}>49</td>
+                <td className={`${tdCls} text-[#FF9933]`}>48.5</td>
               </tr>
             </tbody>
           </table>
         </div>
         <p className="text-sm text-gray-700">
-          That averaged <strong>46/60</strong> then splits into two final marks,
-          each out of 5:
+          That averaged <strong>48.5/60</strong> splits into two final marks:{" "}
+          <strong>Committee Discussions 4.05 / 5</strong> (from the five teamwork
+          items) and <strong>Bill Presentation 4.00 / 5</strong> (from the
+          presentation item) — together{" "}
+          <strong className="text-[#FF9933]">8.05 points</strong>, handed{" "}
+          <strong>identically to all 5 members</strong>.
         </p>
-        <ul className="ml-1 space-y-1 text-sm text-gray-700">
-          <li>
-            • The first five items (teamwork &amp; bill-drafting) = 37.5 of 50 →{" "}
-            <strong>Committee Discussions: 3.75 / 5</strong>
-          </li>
-          <li>
-            • Presentation &amp; Defence = 8.5 of 10 →{" "}
-            <strong>Bill Presentation: 4.25 / 5</strong>
-          </li>
-        </ul>
+        <Analogy>
+          the committee mark is like a <strong>group-project grade</strong> —
+          everyone in the group gets the same marks for the shared work. What sets
+          them apart is their <em>own</em> performance in the other sessions.
+        </Analogy>
+      </Section>
+
+      {/* Act 2 — individual scorecard */}
+      <Section
+        n={4}
+        icon={<Calculator className="size-5" />}
+        title="One student's full scorecard"
+        subtitle="Following Aarav Sharma — a member of that committee"
+      >
         <p className="text-sm text-gray-700">
-          So this committee contributes <Pill>3.75 + 4.25 = 8.00 points</Pill>{" "}
-          — given <strong>identically to every one of its members</strong>. A
-          perfect committee (60/60) would give 5 + 5 = 10.
+          Aarav is scored on <strong>six components</strong>. Two of them (marked
+          <span className="text-[#138808] font-semibold"> ★</span>) carry the
+          shared committee mark from Step 3; the rest he earns himself.
+        </p>
+        <div className="space-y-2">
+          {pmCard.map(([label, v, max, made]) => (
+            <div key={label} className="rounded-lg border border-[#1a1a3e]/10 p-3">
+              <div className="mb-1 flex items-baseline justify-between gap-2">
+                <span className="text-sm font-medium text-[#1a1a3e]">
+                  {label}
+                  {made.includes("committee") ? (
+                    <span className="text-[#138808]"> ★</span>
+                  ) : null}
+                </span>
+                <span className="shrink-0 text-sm font-semibold text-[#1a1a3e]">
+                  {v}
+                  <span className="text-gray-400">/{max}</span>
+                </span>
+              </div>
+              <Bar v={v} max={max} />
+              <p className="mt-1 text-[11px] text-gray-500">{made}</p>
+            </div>
+          ))}
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-[#1a1a3e]/[0.04] px-4 py-3 text-sm">
+          <span className="text-gray-600">
+            Six components added up = <strong>77.05 / 90</strong>
+          </span>
+          <span className="font-bold text-[#1a1a3e]">
+            (his leadership bonus comes next →)
+          </span>
+        </div>
+        <p className="text-sm text-gray-700">
+          His committee teammate <strong>Diya Nair</strong> carries the{" "}
+          <strong>same 8.05 committee portion</strong>, but her own speaking marks
+          land her at <strong>72.05 / 90</strong>. Same team mark — individual
+          performance decides who ranks higher.
         </p>
       </Section>
 
-      {/* 2. Individual scorecard */}
-      <Section n={2} icon={<Calculator className="size-5" />} title="A student's full scorecard (out of 100)">
+      {/* Act 3 — leadership */}
+      <Section
+        n={5}
+        icon={<Crown className="size-5" />}
+        title="Leadership — the bonus on top"
+        subtitle="Aarav was elected Prime Minister"
+      >
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-[#FF9933]/30 bg-[#FF9933]/[0.05] p-4">
+          <div className="text-sm">
+            <div className="text-gray-600">Aarav&apos;s six components</div>
+            <div className="text-xl font-bold text-[#1a1a3e]">77.05</div>
+          </div>
+          <span className="text-[#FF9933]">＋</span>
+          <div className="text-sm">
+            <div className="text-gray-600">Prime Minister bonus</div>
+            <div className="text-xl font-bold text-[#1a1a3e]">5</div>
+          </div>
+          <span className="text-[#FF9933]">＝</span>
+          <div className="text-sm">
+            <div className="text-gray-600">Final total</div>
+            <div className="text-xl font-bold text-[#FF9933]">82.05 / 100</div>
+          </div>
+        </div>
         <p className="text-sm text-gray-700">
-          A student is scored on these <strong>six components</strong> (the
-          current Erode 2026 setup). The two marked{" "}
-          <span className="text-[#138808] font-semibold">★</span> each contain
-          the shared committee mark from Section 1.
+          As an ordinary MP he&apos;d have <strong>77.05</strong>; the{" "}
+          <strong>+5</strong> is his leadership bonus. Every elected post earns
+          one (newly completed in the backend so <em>every</em> role is defined):
         </p>
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-sm">
             <thead>
               <tr>
-                <th className={thCls}>Component</th>
-                <th className={thCls}>Max</th>
+                <th className={thCls}>Leadership role</th>
+                <th className={thCls}>Bonus</th>
               </tr>
             </thead>
             <tbody>
               {[
-                ["Matters of Urgent Public Importance / Opening Speech", 15, false],
-                ["Committee Discussions & Bill Drafting ★", 15, true],
-                ["Question Hour", 20, false],
-                ["Zero Hour", 15, false],
-                ["Political Acumen & Legislative Strategy (Debate)", 10, false],
-                ["Bill Presentation & Defence ★", 15, true],
-              ].map(([k, m, star]) => (
-                <tr key={k as string}>
-                  <td className={tdCls}>
-                    {k}{" "}
-                    {star ? (
-                      <span className="text-[#138808]">(holds committee mark)</span>
-                    ) : null}
-                  </td>
-                  <td className={tdCls}>{m}</td>
-                </tr>
-              ))}
-              <tr className="font-semibold">
-                <td className={tdCls}>Sum of the six</td>
-                <td className={tdCls}>90</td>
-              </tr>
-              <tr className="font-semibold">
-                <td className={tdCls}>+ Leadership bonus (0 for an ordinary MP)</td>
-                <td className={tdCls}>up to 10</td>
-              </tr>
-              <tr className="font-bold">
-                <td className={`${tdCls} text-[#1a1a3e]`}>GRAND TOTAL</td>
-                <td className={`${tdCls} text-[#FF9933]`}>100</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <p className="text-sm font-semibold text-[#1a1a3e]">
-          Example — G.S.Aswatha (MP, Ministry of Education):
-        </p>
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr>
-                <th className={thCls}>Component</th>
-                <th className={thCls}>Her mark</th>
-                <th className={thCls}>Made of</th>
-              </tr>
-            </thead>
-            <tbody>
-              {[
-                ["Urgent Public Importance /15", "10", "her own"],
-                ["Committee Discussions /15", "11.75", "8 her own + 3.75 shared committee"],
-                ["Question Hour /20", "13", "her own"],
-                ["Zero Hour /15", "10", "her own"],
-                ["Debate /10", "7", "her own"],
-                ["Bill Presentation /15", "12.25", "8 her own + 4.25 shared committee"],
-              ].map(([k, v, m]) => (
-                <tr key={k as string}>
-                  <td className={tdCls}>{k}</td>
-                  <td className={tdCls}>{v}</td>
-                  <td className={tdCls}>{m}</td>
-                </tr>
-              ))}
-              <tr className="font-bold">
-                <td className={tdCls}>GRAND TOTAL</td>
-                <td className={`${tdCls} text-[#FF9933]`}>64 / 100</td>
-                <td className={tdCls}>MP → no leadership bonus</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <p className="text-sm text-gray-700">
-          A teammate, <strong>Harshana J</strong> (same committee), gets the{" "}
-          <strong>same 3.75 + 4.25 committee portion</strong>, but stronger
-          speaking marks lift her to <strong>73 / 100</strong>. Same team mark —
-          different individual marks decide who ranks higher.
-        </p>
-      </Section>
-
-      {/* 3. Leadership */}
-      <Section n={3} icon={<Crown className="size-5" />} title="Leadership roles (the bonus on top)">
-        <p className="text-sm text-gray-700">
-          A student elected to a role gets a flat <strong>leadership bonus</strong>{" "}
-          added on top (capped at 10): Prime Minister / Speaker{" "}
-          <strong>+5</strong>, Coalition Leader / Leader of Opposition / Deputy
-          Speaker <strong>+4</strong>, Cabinet Minister / Party Leader{" "}
-          <strong>+3</strong>, Committee Chair / Shadow Minister{" "}
-          <strong>+2</strong>.
-        </p>
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr>
-                <th className={thCls}>Same person, same marks</th>
-                <th className={thCls}>Base /90</th>
-                <th className={thCls}>Leadership bonus</th>
-                <th className={thCls}>Total /100</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td className={tdCls}>K.R.Ajay Adhithya — as a plain MP</td>
-                <td className={tdCls}>77</td>
-                <td className={tdCls}>+0</td>
-                <td className={tdCls}>77</td>
-              </tr>
-              <tr className="font-semibold">
-                <td className={tdCls}>K.R.Ajay Adhithya — if elected Prime Minister</td>
-                <td className={tdCls}>77</td>
-                <td className={tdCls}>+5</td>
-                <td className={`${tdCls} text-[#FF9933]`}>82</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          <strong>Note for Erode:</strong> no leaders are assigned yet — roles
-          like PM and Speaker are <strong>elected during the event</strong>. Two
-          big leadership-only sessions (Cabinet Intros, Speaker Speeches, each
-          /100) exist in the master setup but are <strong>switched off</strong>{" "}
-          for Erode right now; if turned on, leaders would be scored there too.
-        </div>
-      </Section>
-
-      {/* 4. Awards */}
-      <Section n={4} icon={<Trophy className="size-5" />} title="How the 15 awards are decided">
-        <p className="text-sm text-gray-700">
-          For each award the system takes everyone <strong>eligible</strong>,
-          ranks them by <strong>that award&apos;s own formula</strong>, and the{" "}
-          <strong>top scorer wins</strong> (one winner by default; admins can
-          change the count per event). If a category was never scored, the award
-          is skipped — it never invents a winner.
-        </p>
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr>
-                <th className={thCls}>Award</th>
-                <th className={thCls}>Who wins it</th>
-                <th className={thCls}>Open to</th>
-              </tr>
-            </thead>
-            <tbody>
-              {[
-                ["Best Parliamentarian", "Highest overall total /100", "everyone"],
-                ["Best Debater", "Debate + Question Hour, added", "everyone"],
-                ["Best Research & Presentation", "Research-related criteria across sessions", "everyone"],
-                ["Most Valuable Participant (MVP)", "Most consistent — their weakest session is still high (must have played at least half the sessions)", "everyone"],
-                ["Best Constituency Representative", "Urgent Importance + Question Hour + Zero Hour", "everyone"],
-                ["Exemplary Parliamentary Decorum", "Best conduct marks AND no disciplinary flag", "clean record"],
-                ["Team Spirit", "The whole TOP committee co-wins", "team"],
-                ["Innovative Ideas", "Zero Hour creativity + problem-solving + policy", "everyone"],
-                ["Community Impact", "Policy orientation + bill feasibility + constituency research", "everyone"],
-                ["Best Speaker", "Highest total among the elected Speaker(s)", "Speaker"],
-                ["Leadership Excellence", "Half role points + half participation", "leadership roles"],
-                ["Best Member — Ruling Bench", "Debate + Question Hour + Bill", "ruling side"],
-                ["Best Member — Opposition Bench", "Question Hour + Zero Hour + Debate", "opposition side"],
-                ["Most Persuasive Policy Advocate", "Debate + Bill Presentation", "everyone"],
-                ["Independent Voice of the House", "Debate + Zero Hour + Question Hour", "independent MPs"],
-              ].map(([a, w, o], i) => (
-                <tr key={a as string}>
-                  <td className={`${tdCls} font-semibold text-[#1a1a3e]`}>
-                    {i + 1}. {a}
-                  </td>
-                  <td className={tdCls}>{w}</td>
-                  <td className={tdCls}>{o}</td>
+                ["Prime Minister · Speaker", "+5"],
+                ["Deputy PM · Deputy Speaker · Leader of Opposition · Coalition Leader", "+4"],
+                ["Cabinet Minister · Party Leader", "+3"],
+                ["Shadow Minister · Committee Chairperson", "+2"],
+                ["Nominated Speaker", "+1"],
+                ["MP · Bill Committee · Independent MP", "+0"],
+              ].map(([r, b]) => (
+                <tr key={r as string}>
+                  <td className={tdCls}>{r}</td>
+                  <td className={`${tdCls} font-semibold`}>{b}</td>
                 </tr>
               ))}
             </tbody>
@@ -367,93 +415,179 @@ export default async function ScoringGuidePage() {
         </div>
 
         <p className="mt-2 text-sm font-semibold text-[#1a1a3e]">
-          Worked example — four Ministry of Education students:
+          The real demo leaderboard (what the engine computed):
         </p>
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-sm">
             <thead>
               <tr>
+                <th className={thCls}>#</th>
                 <th className={thCls}>Student</th>
+                <th className={thCls}>Role</th>
+                <th className={thCls}>Floor + bonus</th>
                 <th className={thCls}>Total</th>
-                <th className={thCls}>Debate+QH</th>
-                <th className={thCls}>Consistency</th>
-                <th className={thCls}>Conduct</th>
-                <th className={thCls}>Flag</th>
               </tr>
             </thead>
             <tbody>
-              {[
-                ["K.R.Ajay Adhithya", "74", "22", "0.70", "4.0", "—"],
-                ["Harshana J", "73", "29", "0.60", "3.0", "⚠ walkout"],
-                ["Harshita V", "73", "23", "0.75", "3.5", "—"],
-                ["G.S.Aswatha", "64", "20", "0.65", "4.5", "—"],
-              ].map(([n2, t, d, c, cd, f]) => (
-                <tr key={n2 as string}>
-                  <td className={tdCls}>{n2}</td>
-                  <td className={tdCls}>{t}</td>
-                  <td className={tdCls}>{d}</td>
-                  <td className={tdCls}>{c}</td>
-                  <td className={tdCls}>{cd}</td>
-                  <td className={tdCls}>{f}</td>
+              {board.map(([rank, name, role, calc, total]) => (
+                <tr key={name as string} className={rank === 1 ? "bg-[#FF9933]/[0.06]" : ""}>
+                  <td className={tdCls}>{rank}</td>
+                  <td className={`${tdCls} font-medium text-[#1a1a3e]`}>{name}</td>
+                  <td className={tdCls}>{role}</td>
+                  <td className={tdCls}>{calc}</td>
+                  <td className={`${tdCls} font-semibold text-[#FF9933]`}>{total}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+        <Analogy>
+          the bonus <em>helps</em> but doesn&apos;t decide everything. Notice Kabir
+          (Shadow Minister) has one of the strongest floor performances, yet his
+          smaller +2 bonus leaves him 5th — and a strong ordinary MP, Ananya, sits
+          6th, ahead of several leaders. Performance is most of the score.
+        </Analogy>
+      </Section>
+
+      {/* Act 4 — awards */}
+      <Section
+        n={6}
+        icon={<Trophy className="size-5" />}
+        title="The awards"
+        subtitle="15 awards — each rewards a different strength"
+      >
+        <p className="text-sm text-gray-700">
+          For each award the system takes everyone <strong>eligible</strong>,
+          ranks them by <strong>that award&apos;s own formula</strong>, and the
+          top scorer wins. If a category was never scored, that award is skipped —
+          it never invents a winner.
+        </p>
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr>
+                <th className={thCls}>Award</th>
+                <th className={thCls}>Who wins it</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[
+                ["Best Parliamentarian", "Highest overall total"],
+                ["Best Debater", "Debate + Question Hour"],
+                ["Best Research & Presentation", "Research-heavy criteria across sessions"],
+                ["MVP", "Most consistent (strongest weakest-session)"],
+                ["Best Constituency Representative", "Urgent Importance + Question Hour + Zero Hour"],
+                ["Exemplary Decorum", "Best conduct AND no disciplinary flag"],
+                ["Team Spirit", "The whole top committee"],
+                ["Innovative Ideas", "Zero Hour creativity + problem-solving"],
+                ["Community Impact", "Policy + feasibility + constituency research"],
+                ["Best Speaker", "Top among the elected Speaker(s)"],
+                ["Leadership Excellence", "Half role points + half participation"],
+                ["Best Member — Ruling Bench", "Debate + Question Hour + Bill"],
+                ["Best Member — Opposition Bench", "Question Hour + Zero Hour + Debate"],
+                ["Most Persuasive", "Debate + Bill Presentation"],
+                ["Independent Voice", "Debate + Zero Hour + Question Hour"],
+              ].map(([a, w], i) => (
+                <tr key={a as string}>
+                  <td className={`${tdCls} font-semibold text-[#1a1a3e]`}>
+                    {i + 1}. {a}
+                  </td>
+                  <td className={tdCls}>{w}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="mt-2 text-sm font-semibold text-[#1a1a3e]">
+          What the demo actually awarded:
+        </p>
         <ul className="space-y-1.5 text-sm text-gray-700">
-          <li className="flex gap-2">
-            <Trophy className="mt-0.5 size-4 shrink-0 text-[#FF9933]" />
-            <span>
-              <strong>Best Parliamentarian → K.R.Ajay Adhithya</strong> (highest
-              total, 74)
-            </span>
-          </li>
-          <li className="flex gap-2">
-            <Trophy className="mt-0.5 size-4 shrink-0 text-[#FF9933]" />
-            <span>
-              <strong>Best Debater → Harshana J</strong> (Debate+QH = 29, even
-              though she is only 2nd on total)
-            </span>
-          </li>
-          <li className="flex gap-2">
-            <Trophy className="mt-0.5 size-4 shrink-0 text-[#FF9933]" />
-            <span>
-              <strong>MVP → Harshita V</strong> (most even — her weakest session
-              is still 75% of its max)
-            </span>
-          </li>
-          <li className="flex gap-2">
-            <Trophy className="mt-0.5 size-4 shrink-0 text-[#FF9933]" />
-            <span>
-              <strong>Exemplary Decorum → G.S.Aswatha</strong> (best conduct{" "}
-              <em>and</em> clean — Harshana&apos;s higher activity is
-              disqualified by her walkout flag)
-            </span>
-          </li>
+          {[
+            ["Best Parliamentarian", "Aarav Sharma", "highest total, 82.05"],
+            ["Best Speaker", "Ishaan Kapoor", "top among Speakers"],
+            ["Leadership Excellence", "Aarav Sharma", "strong on both role + participation"],
+            ["Best Member — Ruling Bench", "Diya Nair", "best ruling-side MP"],
+            ["Best Member — Opposition Bench", "Ananya Iyer", "best opposition MP"],
+          ].map(([award, who, why]) => (
+            <li key={award} className="flex gap-2">
+              <Trophy className="mt-0.5 size-4 shrink-0 text-[#FF9933]" />
+              <span>
+                <strong>
+                  {award} → {who}
+                </strong>{" "}
+                <span className="text-gray-500">({why})</span>
+              </span>
+            </li>
+          ))}
           <li className="flex gap-2">
             <Users className="mt-0.5 size-4 shrink-0 text-[#138808]" />
             <span>
-              <strong>Team Spirit → every Ministry of Education member</strong>{" "}
-              (top committee, shared 8.00)
+              <strong>Team Spirit → the whole top committee</strong> (shared mark)
             </span>
           </li>
         </ul>
         <p className="text-sm text-gray-700">
-          Notice four <em>different</em> students win — the system spreads
-          recognition. Each award rewards a different strength, not just
-          &quot;highest total wins everything&quot;.
+          The recognition <strong>spreads</strong> — the overall winner, the best
+          ruling member and the best opposition member are different students, and
+          a whole committee shares Team Spirit.
         </p>
       </Section>
 
-      {/* 5. Principles */}
-      <Section n={5} icon={<Scale className="size-5" />} title="Key principles (and what is fair)">
+      {/* FAQ */}
+      <Section
+        n={7}
+        icon={<HelpCircle className="size-5" />}
+        title="Common questions"
+        subtitle="What organisers usually ask"
+      >
+        <div className="space-y-2">
+          <Faq q="What if two students tie?">
+            They share the same rank. For a single-winner award the chair can step
+            in and pick between them — there&apos;s a manual override on the
+            results screen.
+          </Faq>
+          <Faq q="Can a score change after it's entered?">
+            Yes — until the chair <strong>locks</strong> the event&apos;s scores.
+            After locking, entry is read-only so results can&apos;t shift under
+            people.
+          </Faq>
+          <Faq q="Who enters the committee score — the judge or the organiser?">
+            Judges score from their own login. An organiser can also enter a
+            judge&apos;s marks on their behalf (e.g. from a paper sheet). Either
+            way the committee&apos;s several judges are averaged.
+          </Faq>
+          <Faq q="What if a judge doesn't turn up?">
+            No problem — only the judges who actually scored are averaged. A
+            committee can be scored by a single judge if needed.
+          </Faq>
+          <Faq q="Why didn't the highest-bonus leader automatically win?">
+            Because the leadership bonus (max 10) is small next to the 90 points
+            earned on the floor. A leader still has to perform; the bonus is a
+            tie-breaker-sized nudge, not a free pass.
+          </Faq>
+          <Faq q="Are there special leadership-only sessions?">
+            Yes — large &quot;Cabinet Introductions&quot; and &quot;Speaker
+            Speeches&quot; sessions exist in the setup, but they&apos;re switched
+            off by default and can be turned on per event.
+          </Faq>
+        </div>
+      </Section>
+
+      {/* Principles */}
+      <Section
+        n={8}
+        icon={<Scale className="size-5" />}
+        title="The principles behind it"
+        subtitle="Why this is fair"
+      >
         <ul className="space-y-2 text-sm text-gray-700">
           {[
-            "Several judges per committee are averaged — the standard, defensible way a panel scores. It matches how individual students are averaged too.",
+            "Several judges per committee are averaged — the standard, defensible way a panel scores.",
             "The committee mark is a team component shared equally by its members; everything else is earned individually.",
-            "What you see while scoring is exactly what counts — the same calculation runs on the scoring screen and in the final results, so they can never drift apart.",
-            "Awards #10–13 and #15 (Best Speaker, Leadership Excellence, Ruling/Opposition Bench, Independent Voice) need roles and party sides assigned — they stay dormant until the elections happen at the event.",
-            "A chair can manually override any award winner at the end if there is a tie or a special reason.",
+            "What you see while scoring is exactly what counts — the same calculation runs on the scoring screen and in the final results.",
+            "Every assignable role now has a defined leadership bonus, so no role is ever silently scored as zero by accident.",
+            "Role-based awards (Best Speaker, Ruling/Opposition Bench, etc.) only activate once roles and benches are assigned at the event.",
+            "A chair can manually override any award winner if there's a tie or a special reason.",
           ].map((t, i) => (
             <li key={i} className="flex gap-2">
               <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-[#138808]" />
@@ -464,8 +598,9 @@ export default async function ScoringGuidePage() {
       </Section>
 
       <p className="pb-4 text-center text-xs text-gray-400">
-        Yi Parliament · Scoring &amp; Awards methodology · Yi 2026 Evaluation
-        Workbook. Example marks are illustrative.
+        Yi Parliament · Scoring &amp; Awards walkthrough · based on the live demo
+        event &quot;DEMO — Election Rehearsal&quot; and the Yi 2026 Evaluation
+        Workbook.
       </p>
     </div>
   );

@@ -96,6 +96,7 @@ export function ScoringConfigClient({
   initialDeltas,
   initialBuckets,
   initialAwards,
+  initialCommitteeDims,
 }: {
   initialSettings: ScoringSettings;
   initialComponents: SessionParametersConfig[];
@@ -103,6 +104,7 @@ export function ScoringConfigClient({
   initialDeltas: FlagDeltas;
   initialBuckets: ScoringBucket[];
   initialAwards: AwardDefinition[];
+  initialCommitteeDims: CommitteeDimensionsConfig;
 }) {
   const router = useRouter();
 

@@ -364,6 +364,60 @@ export function ScoringConfigClient({
         </Link>
       </section>
 
+      {/* 2b. Committee evaluation */}
+      <section className={sectionCls}>
+        <h2 className={h2Cls}>
+          <Users className="size-4 text-[#FF9933]" /> Committee evaluation
+        </h2>
+        <p className="mt-1 text-xs text-[#1a1a3e]/50">
+          Rename the 6 committee rating dimensions, and set the two divisors that
+          convert the /60 committee mark into the two /5 committee-level points
+          (defaults 10 and 2). Applies to every event.
+        </p>
+        <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {initialCommitteeDims.dimensions.map((d) => (
+            <label
+              key={d.key}
+              className="flex items-center justify-between gap-2 rounded-lg border border-gray-200 px-3 py-2"
+            >
+              <span className="text-[11px] text-[#1a1a3e]/45">{d.key}</span>
+              <input
+                type="text"
+                value={cmteLabels[d.key] ?? ""}
+                onChange={(e) => setCmteLabels((p) => ({ ...p, [d.key]: e.target.value }))}
+                className="min-w-[150px] flex-1 rounded border border-gray-300 px-2 py-1 text-sm"
+              />
+            </label>
+          ))}
+        </div>
+        <div className="mt-3 flex flex-wrap gap-4">
+          <label className="flex items-center gap-1.5 text-xs text-[#1a1a3e]/70">
+            Drafting divisor (→ Committee Discussions /5)
+            <input
+              type="number"
+              value={draftingDiv}
+              onChange={(e) => setDraftingDiv(e.target.value)}
+              className={numInput}
+            />
+          </label>
+          <label className="flex items-center gap-1.5 text-xs text-[#1a1a3e]/70">
+            Presentation divisor (→ Bill Presentation /5)
+            <input
+              type="number"
+              value={presentationDiv}
+              onChange={(e) => setPresentationDiv(e.target.value)}
+              className={numInput}
+            />
+          </label>
+        </div>
+        <div className="mt-4 flex items-center gap-3">
+          <button type="button" onClick={saveCommitteeDims} disabled={savingCmte} className={saveBtn}>
+            {savingCmte ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />} Save
+          </button>
+          <Saved msg={cmteMsg} />
+        </div>
+      </section>
+
       {/* 3. Leadership bonuses */}
       <section className={sectionCls}>
         <h2 className={h2Cls}>

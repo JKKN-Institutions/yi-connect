@@ -262,6 +262,12 @@ export function ScoringConfigClient({
         label: d.label,
         default_recipients: Number(d.recipients),
         is_active: d.is_active,
+        eligibility: d.eligibility,
+        rank_mode: d.rank_mode,
+        rank_keys: d.rank_keys
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean),
       });
       if (!res.success) {
         setAwardsMsg(`${a.label}: ${res.error}`);

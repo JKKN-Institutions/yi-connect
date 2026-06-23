@@ -1,5 +1,6 @@
 "use server";
 
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { requireSuperAdmin } from "@/lib/yip/auth/require-super-admin";
 import { revalidatePath } from "next/cache";
@@ -13,6 +14,12 @@ import {
 type ActionResult<T = null> =
   | { success: true; data: T }
   | { success: false; error: string };
+
+// committee_dimensions_config is newer than the generated Database types, so
+// reads/writes use an untyped client view (values are validated/coerced here).
+async function dimsClient(): Promise<SupabaseClient> {
+  return (await createServiceClient()) as unknown as SupabaseClient;
+}
 
 // COMMITTEE_DIMENSIONS holds the 6 fixed keys (mapping 1:1 to the
 // committee_scores columns). Labels are editable; keys are not.

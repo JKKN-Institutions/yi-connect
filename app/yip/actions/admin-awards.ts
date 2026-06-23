@@ -14,25 +14,6 @@ type ActionResult<T = null> =
   | { success: true; data: T }
   | { success: false; error: string };
 
-// Award formula vocabulary — the editable rules the results engine interprets.
-export const AWARD_ELIGIBILITIES = [
-  "all",
-  "speaker",
-  "leadership",
-  "ruling",
-  "opposition",
-  "independent",
-  "no_disciplinary",
-] as const;
-export const AWARD_RANK_MODES = [
-  "family_sum",
-  "overall_total",
-  "base_score",
-  "consistency",
-  "committee_level",
-  "leadership_blend",
-] as const;
-
 export type AwardDefinition = {
   award_key: string;
   label: string;

@@ -4,6 +4,7 @@ import { getEvent } from "@/app/yip/actions/events";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
 import { getCommitteeScoring } from "@/app/yip/actions/committee-scores";
+import { getCommitteeDimensionsConfig } from "@/app/yip/actions/committee-dimensions";
 import { CommitteeScoringClient } from "./committee-scoring-client";
 
 export default async function CommitteeScoringPage({

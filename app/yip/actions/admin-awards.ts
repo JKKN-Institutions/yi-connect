@@ -1,5 +1,6 @@
 "use server";
 
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { revalidatePath } from "next/cache";
 import { requireSuperAdmin } from "@/lib/yip/auth/require-super-admin";
@@ -10,13 +11,18 @@ import {
 } from "@/lib/yip/award-formula";
 
 // Admin configuration for the 15 workbook awards (yip.award_definitions). The
-// award MATH lives in the results engine's registry keyed by award_key; this
-// surface owns the operational knobs — label, how many recipients, on/off. The
-// engine reads these on every Compute Results, so changes here are wired live.
+// award MATH (eligibility + ranking) is now editable here via eligibility /
+// rank_mode / rank_keys; the results engine interprets those on every Compute.
 
 type ActionResult<T = null> =
   | { success: true; data: T }
   | { success: false; error: string };
+
+// eligibility/rank_mode/rank_keys are newer than the generated Database types,
+// so reads/writes use an untyped client view (values validated/coerced here).
+async function awardsClient(): Promise<SupabaseClient> {
+  return (await createServiceClient()) as unknown as SupabaseClient;
+}
 
 export type AwardDefinition = {
   award_key: string;

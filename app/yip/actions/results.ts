@@ -9,6 +9,7 @@ import { getScoringSettings } from "./scoring-settings";
 import { listSessionParameters } from "./session-parameters";
 import { listScoringBuckets } from "./scoring-buckets";
 import { getScoringFlagsConfig } from "./scoring-flags";
+import { getCommitteeDimensionsConfig } from "./committee-dimensions";
 import {
   deriveCommitteeLevels,
   averageDimensions,

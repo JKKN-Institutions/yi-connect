@@ -10,6 +10,7 @@ import {
   ZERO_COMMITTEE_DIMENSIONS,
   type CommitteeDimensions,
 } from "@/lib/yip/committee-score";
+import { getCommitteeDimensionsConfig } from "@/app/yip/actions/committee-dimensions";
 
 type ActionResult<T = null> =
   | { success: true; data: T }

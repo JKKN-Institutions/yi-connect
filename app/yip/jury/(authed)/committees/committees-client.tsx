@@ -45,12 +45,14 @@ export function JurorCommitteesClient({
   eventId,
   locked,
   committees,
+  dimensions,
   error,
 }: {
   juryAssignmentId: string;
   eventId: string;
   locked: boolean;
   committees: JurorCommitteeRow[];
+  dimensions: CommitteeDimensionLabel[];
   error: string | null;
 }) {
   const router = useRouter();

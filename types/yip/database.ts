@@ -1113,6 +1113,63 @@ export type Database = {
         }
         Relationships: []
       }
+      award_definitions: {
+        Row: {
+          award_key: string
+          basis_description: string
+          default_recipients: number
+          display_order: number
+          is_active: boolean
+          is_team: boolean
+          label: string
+          updated_at: string
+        }
+        Insert: {
+          award_key: string
+          basis_description: string
+          default_recipients?: number
+          display_order?: number
+          is_active?: boolean
+          is_team?: boolean
+          label: string
+          updated_at?: string
+        }
+        Update: {
+          award_key?: string
+          basis_description?: string
+          default_recipients?: number
+          display_order?: number
+          is_active?: boolean
+          is_team?: boolean
+          label?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      event_award_config: {
+        Row: {
+          award_key: string
+          event_id: string
+          is_active: boolean | null
+          recipients: number | null
+          updated_at: string
+        }
+        Insert: {
+          award_key: string
+          event_id: string
+          is_active?: boolean | null
+          recipients?: number | null
+          updated_at?: string
+        }
+        Update: {
+          award_key?: string
+          event_id?: string
+          is_active?: boolean | null
+          recipients?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       award_overrides: {
         Row: {
           award_label: string

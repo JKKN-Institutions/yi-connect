@@ -102,7 +102,10 @@ export async function getEventAwardConfig(
   eventId: string
 ): Promise<EventAwardRow[]> {
   const access = await getYipEventAccess(eventId);
-  if (!access.canViewScores) return [];
+  // Manager-gated (chapter organiser), NOT score-gated: recipient counts are a
+  // setup choice and reveal no scores, so the chapter that runs the event can set
+  // them on its own Awards tab.
+  if (!access.canManage) return [];
   const supabase = await createServiceClient();
   const [defsRes, cfgRes] = await Promise.all([
     supabase.from("award_definitions").select(COLS).order("display_order"),

@@ -51,30 +51,32 @@ export function AdminShellNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="border-b border-[#1a1a3e]/5 bg-white shadow-[0_1px_3px_0_rgba(26,26,62,0.04)]">
-      <div className="max-w-[1400px] mx-auto px-6">
-        <div className="-mb-px flex gap-0 overflow-x-auto scrollbar-hide">
-          {NAV.map((item) => {
-            const active = item.exact
-              ? pathname === item.href
-              : pathname.startsWith(item.href);
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  "flex shrink-0 items-center gap-1.5 border-b-2 px-4 py-3 text-sm font-medium transition-colors min-h-[44px]",
-                  active
-                    ? "border-[#FF9933] text-[#FF9933]"
-                    : "border-transparent text-[#1a1a3e]/50 hover:border-[#1a1a3e]/10 hover:text-[#1a1a3e]/80"
-                )}
-              >
-                <item.icon className="size-4" />
-                {item.label}
-              </Link>
-            );
-          })}
-        </div>
+    // Mobile: horizontal scroller (a 19-item vertical list would eat a phone
+    // screen). md+: vertical sidebar — self-start + sticky so it stays in view
+    // while the page content scrolls, and scrolls internally if the list is
+    // taller than the viewport (56px = the dashboard top bar height).
+    <nav className="border-b border-[#1a1a3e]/5 bg-white shadow-[0_1px_3px_0_rgba(26,26,62,0.04)] md:w-56 md:shrink-0 md:self-start md:sticky md:top-0 md:max-h-[calc(100vh-56px)] md:overflow-y-auto md:border-b-0 md:border-r">
+      <div className="flex gap-0 overflow-x-auto scrollbar-hide md:flex-col md:overflow-x-visible md:py-2">
+        {NAV.map((item) => {
+          const active = item.exact
+            ? pathname === item.href
+            : pathname.startsWith(item.href);
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={cn(
+                "flex shrink-0 items-center gap-1.5 border-b-2 px-4 py-3 text-sm font-medium transition-colors min-h-[44px] md:border-b-0 md:border-l-2",
+                active
+                  ? "border-[#FF9933] text-[#FF9933] md:bg-[#FF9933]/[0.06]"
+                  : "border-transparent text-[#1a1a3e]/50 hover:border-[#1a1a3e]/10 hover:text-[#1a1a3e]/80 md:hover:border-transparent md:hover:bg-[#1a1a3e]/[0.03]"
+              )}
+            >
+              <item.icon className="size-4 shrink-0" />
+              {item.label}
+            </Link>
+          );
+        })}
       </div>
     </nav>
   );

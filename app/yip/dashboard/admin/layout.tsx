@@ -24,9 +24,10 @@ export default async function AdminLayout({
   }
 
   return (
-    <div>
+    // md+: nav sidebar beside content; mobile: nav (horizontal scroller) stacks on top.
+    <div className="flex flex-col md:flex-row md:items-start">
       <AdminShellNav />
-      {children}
+      <div className="min-w-0 flex-1">{children}</div>
     </div>
   );
 }

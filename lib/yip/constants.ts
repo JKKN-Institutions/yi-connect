@@ -18,6 +18,10 @@ export type PartySide = (typeof PARTY_SIDES)[number];
 
 // Aligned with YIP 2026 Handbook pages 16–18.
 // Adds: deputy_prime_minister (page 16), independent_mp (page 18), party_leader (page 17).
+// Adds (2026-06-24): coalition_leader + committee_chair — these already carried
+// position bonuses (4 / 2) in yip.position_bonus_config but were absent from the
+// parliament_role enum, so no participant could hold them. Now assignable so each
+// can be given to a distinct student (Director: "1 person 1 role, more opportunity").
 export const PARLIAMENT_ROLES = [
   "speaker",
   "nominated_speaker",
@@ -28,7 +32,9 @@ export const PARLIAMENT_ROLES = [
   "cabinet_minister",
   "shadow_minister",
   "party_leader",
+  "coalition_leader",
   "bill_committee",
+  "committee_chair",
   "mp",
   "independent_mp",
 ] as const;
@@ -78,7 +84,9 @@ export const ROLE_LABELS: Record<string, string> = {
   cabinet_minister: "Cabinet Minister",
   shadow_minister: "Shadow Minister",
   party_leader: "Party Leader",
+  coalition_leader: "Coalition Leader",
   bill_committee: "Bill Committee Member",
+  committee_chair: "Committee Chairperson",
   mp: "Member of Parliament",
   independent_mp: "Independent MP",
 };
@@ -93,7 +101,9 @@ export const ROLE_COLORS: Record<string, string> = {
   cabinet_minister: "bg-blue-500 text-white",
   shadow_minister: "bg-red-500 text-white",
   party_leader: "bg-indigo-600 text-white",
+  coalition_leader: "bg-teal-600 text-white",
   bill_committee: "bg-purple-500 text-white",
+  committee_chair: "bg-purple-700 text-white",
   mp: "bg-gray-500 text-white",
   independent_mp: "bg-emerald-600 text-white",
 };

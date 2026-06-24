@@ -47,8 +47,10 @@ const LEADERSHIP_ROLES = new Set([
   "deputy_prime_minister",
   "leader_of_opposition",
   "party_leader",
+  "coalition_leader",
   "cabinet_minister",
   "shadow_minister",
+  "committee_chair",
 ]);
 
 function isRulingMP(role: string | null, side: string | null): boolean {

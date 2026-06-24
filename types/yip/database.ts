@@ -214,6 +214,8 @@ export type Database = {
         | "party_leader"
         | "independent_mp"
         | "nominated_speaker"
+        | "committee_chair"
+        | "coalition_leader"
       party_side: "ruling" | "opposition"
       registration_source:
         | "microsoft_forms"
@@ -4183,6 +4185,8 @@ export const Constants = {
         "party_leader",
         "independent_mp",
         "nominated_speaker",
+        "committee_chair",
+        "coalition_leader",
       ],
       party_side: ["ruling", "opposition"],
       registration_source: [

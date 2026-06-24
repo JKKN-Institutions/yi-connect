@@ -24,8 +24,9 @@ export default async function AdminLayout({
   }
 
   return (
-    // md+: nav sidebar beside content; mobile: nav (horizontal scroller) stacks on top.
-    <div className="flex flex-col md:flex-row md:items-start">
+    // lg+: grouped nav sidebar beside content; below lg: nav renders as a
+    // dropdown (handled inside AdminShellNav) and content sits beneath it.
+    <div className="flex flex-col lg:flex-row lg:items-start lg:gap-4">
       <AdminShellNav />
       <div className="min-w-0 flex-1">{children}</div>
     </div>

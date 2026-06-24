@@ -174,10 +174,24 @@ export async function updatePositionBonusConfig(
   const gate = await requireSuperAdmin();
   if (!gate.ok) return { success: false, error: gate.error };
 
+  // Leadership bonuses are "points, 0–10" — enforce the range here (the
+  // security/correctness boundary; the client also checks, but that can be
+  // bypassed). Reject explicitly rather than silently clamp, so the caller sees
+  // why. Shared by 3 admin screens (scoring-config / scoring-framework /
+  // scoring-rules); all surface res.error.
   const clean: Record<string, number> = {};
   for (const [k, v] of Object.entries(bonuses ?? {})) {
     const n = Number(v);
-    if (Number.isFinite(n)) clean[k] = n;
+    if (!Number.isFinite(n)) {
+      return { success: false, error: `Bonus for "${k}" must be a number.` };
+    }
+    if (n < 0 || n > 10) {
+      return {
+        success: false,
+        error: `Leadership bonuses must be between 0 and 10 — got ${n} for "${k}".`,
+      };
+    }
+    clean[k] = n;
   }
 
   const supabase = await createServiceClient();

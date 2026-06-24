@@ -51,6 +51,10 @@ interface ScoreFormProps {
   agendaItemId: string | null;
   juryAssignmentId: string;
   existingScore: ExistingScore | null;
+  // When true, this session is scored ONCE and frozen on submit (e.g. the
+  // 90-second Constituency Speech): a submitted score becomes read-only, reusing
+  // the existing isLocked machinery. Drafts stay editable.
+  lockAfterSubmit?: boolean;
   // Special-Remarks flags from the parent panel — included in every buffer
   // write so flags ticked during an outage survive to the sync.
   flags?: {
@@ -77,6 +81,7 @@ export function ScoreForm({
   agendaItemId,
   juryAssignmentId,
   existingScore,
+  lockAfterSubmit,
   flags,
   onSubmit,
 }: ScoreFormProps) {
@@ -141,8 +146,12 @@ export function ScoreForm({
   );
   const totalScore = criteria.reduce((sum, c) => sum + (scores[c.key] ?? 0), 0);
   const maxTotal = criteria.reduce((sum, c) => sum + c.max_score, 0);
-  const isLocked = existingScore?.status === "locked";
   const isSubmitted = existingScore?.status === "submitted";
+  // lock_on_submit sessions freeze on submit: a submitted score is read-only,
+  // reusing every isLocked code path below (disabled inputs, hidden submit
+  // button, "locked" notice). The score keeps status='submitted' server-side.
+  const isLocked =
+    existingScore?.status === "locked" || (lockAfterSubmit === true && isSubmitted);
 
   // Auto-save to localStorage buffer on score changes — but ONLY once the juror
   // has actually edited something. Without the dirty guard this effect fires on

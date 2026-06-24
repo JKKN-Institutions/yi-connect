@@ -67,6 +67,11 @@ export type SessionScoringParams = {
     kind: "evaluation" | "participation";
   }[];
   total_max: number;
+  // When true, this session is scored ONCE per juror and locked on submit: no
+  // extra turns, no re-scoring (status written as 'locked'). The cross-juror
+  // panel average at result time is unchanged. Used by the 90-second
+  // Constituency Speech (Director ruling 2026-06-25).
+  lock_on_submit: boolean;
 };
 
 export async function getSessionScoringParams(
@@ -82,7 +87,7 @@ export async function getSessionScoringParams(
 
   let cfgQuery = supabase
     .from("session_parameters")
-    .select("parameters, total_max")
+    .select("parameters, total_max, lock_on_submit")
     .eq("is_active", true);
   if (item.session_key) {
     cfgQuery = cfgQuery.eq("session_key", item.session_key);
@@ -115,7 +120,11 @@ export async function getSessionScoringParams(
     kind: "evaluation" | "participation";
   }[];
   if (criteria.length === 0) return null;
-  return { criteria, total_max: Number(cfg.total_max) };
+  return {
+    criteria,
+    total_max: Number(cfg.total_max),
+    lock_on_submit: (cfg as { lock_on_submit?: boolean }).lock_on_submit === true,
+  };
 }
 
 // ─── Submit Score (upsert + audit log) ────────────────────────────
@@ -195,6 +204,21 @@ export async function submitScore(
     return { success: false, error: "You're not assigned to score this session." };
   }
 
+  // Session config drives the entry rules. lock_on_submit sessions (e.g. the
+  // 90-second Constituency Speech) are scored ONCE per juror: no extra turns,
+  // and locked the moment they're submitted (no re-scoring). Several jurors may
+  // still each enter one score — those are averaged once at result time. Load
+  // the config here and reuse it for the range validation below.
+  const sessionParams = await getSessionScoringParams(input.agendaItemId);
+  const lockOnSubmit = sessionParams?.lock_on_submit === true;
+  if (lockOnSubmit && (input.newTurn || (input.occurrence ?? 1) > 1)) {
+    return {
+      success: false,
+      error:
+        "This session is scored once per delegate and cannot have extra turns.",
+    };
+  }
+
   // #4: which TURN are we writing? A new turn gets the next occurrence number
   // (server-assigned, so two taps can't collide on a guessed value); otherwise
   // we edit turn `occurrence` (default 1 — the legacy single-score behaviour).
@@ -243,6 +267,25 @@ export async function submitScore(
     return { success: true, data: { id: existing.id } };
   }
 
+  // lock_on_submit sessions (e.g. the 90-second Constituency Speech) are FINAL
+  // once submitted: a juror cannot re-score their single mark. Drafts stay
+  // editable; only an already-SUBMITTED row is frozen. The score keeps
+  // status='submitted' (so it still counts everywhere — award engine, coverage,
+  // etc.); the lock is enforced here, not via a new status value.
+  if (lockOnSubmit && existing?.status === "submitted") {
+    // An offline replay (the form goes editable offline because it can't read the
+    // existing score) is dropped as idempotent success so it can NEVER overwrite
+    // the frozen score; a live re-edit is rejected with a clear message.
+    if (input.fromOfflineSync) {
+      return { success: true, data: { id: existing.id } };
+    }
+    return {
+      success: false,
+      error:
+        "This score is final and can't be changed — the 90-second speech is scored once.",
+    };
+  }
+
   // Validate the submitted scores against the session's live parameters for
   // EVERY submission — not only offline replay. yip.scores has open write RLS,
   // so this server check is the only thing stopping a juror's client (or a
@@ -263,9 +306,7 @@ export async function submitScore(
 
     let foreignKey = false;
     let rangeBad = false;
-    const params = input.agendaItemId
-      ? await getSessionScoringParams(input.agendaItemId)
-      : null;
+    const params = sessionParams; // loaded once above
     if (params && params.criteria.length > 0) {
       const maxByKey = new Map(params.criteria.map((c) => [c.key, c.max_score]));
       foreignKey = entries.some(([k]) => !maxByKey.has(k));

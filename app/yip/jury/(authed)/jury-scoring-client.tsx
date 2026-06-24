@@ -153,6 +153,9 @@ function JuryScoringClientInner({
     { id: string; occurrence: number; total_score: number; status: string | null }[]
   >([]);
   const [addingTurn, setAddingTurn] = useState(false);
+  // The active session is scored ONCE per juror and locked on submit (e.g. the
+  // 90-second Constituency Speech) — hide the "Score another turn" control.
+  const [sessionLocksOnSubmit, setSessionLocksOnSubmit] = useState(false);
   const [loading, setLoading] = useState(true);
   const [scoreKey, setScoreKey] = useState(0); // Force re-render on speaker change
   const [eventLocked, setEventLocked] = useState<boolean>(
@@ -255,6 +258,7 @@ function JuryScoringClientInner({
         } else {
           setRubric(null);
         }
+        setSessionLocksOnSubmit(sessionParams?.lock_on_submit === true);
 
         if (scoreResult) {
           setExistingScore({
@@ -314,6 +318,8 @@ function JuryScoringClientInner({
         // Turns can't be read offline; keep the single-score flow (occurrence 1).
         setOccurrences([]);
         setAddingTurn(false);
+        // Offline keeps occurrences empty, so the turns strip is hidden anyway.
+        setSessionLocksOnSubmit(false);
       }
 
       setScoreKey((k) => k + 1);
@@ -1024,8 +1030,9 @@ function JuryScoringClientInner({
           (e.g. they spoke more than once). Each juror's turns are averaged into
           their session mark. Hidden until a first score exists or the juror is
           mid-adding a turn; offline (occurrences empty) keeps the single-score
-          flow. */}
-      {activeParticipant && rubric && !eventLocked &&
+          flow. lock_on_submit sessions (e.g. the 90-second speech) are scored
+          once, so the turns strip is hidden entirely. */}
+      {activeParticipant && rubric && !eventLocked && !sessionLocksOnSubmit &&
         (occurrences.length > 0 || addingTurn) && (
           <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3">
             <div className="flex items-center justify-between gap-3">
@@ -1084,6 +1091,7 @@ function JuryScoringClientInner({
           agendaItemId={selectedSessionId}
           juryAssignmentId={juryAssignmentId}
           existingScore={existingScore}
+          lockAfterSubmit={sessionLocksOnSubmit}
           flags={flags}
           onSubmit={handleSubmit}
         />

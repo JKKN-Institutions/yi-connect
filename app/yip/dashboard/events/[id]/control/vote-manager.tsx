@@ -159,6 +159,20 @@ export function VoteManager({
     selectedIds: [],
     loading: false,
   });
+  // Speaker nomination dialog — like leadershipDialog but the candidate pool is
+  // the WHOLE House (both benches), grouped by party. Equity rule: each party
+  // puts forward min 1, max 2 nominees. `selectedByParty` keys the picks by
+  // party so the per-party cap + the open-gate are both easy to evaluate.
+  const [speakerDialog, setSpeakerDialog] = useState<{
+    open: boolean;
+    groups: { party: PartyLite; members: VoteCandidate[] }[];
+    selectedByParty: Record<string, string[]>;
+    loading: boolean;
+  }>({ open: false, groups: [], selectedByParty: {}, loading: false });
+  // Shared search query for every nominee picker (only one dialog is open at a
+  // time, so a single string suffices). Reset on each dialog open.
+  const [nomineeSearch, setNomineeSearch] = useState("");
+
   // Editable TOTAL cabinet / shadow seats — the organiser can change each and the
   // per-party quota re-derives live. Defaults to MINISTRIES.length (8).
   // Cabinet (ruling) and Shadow (opposition) keep INDEPENDENT totals: the
@@ -335,29 +349,77 @@ export function VoteManager({
 
   // ─── Action handlers ──────────────────────────────────────────
 
+  // Case-insensitive filter shared by every nominee picker (name or school).
+  function filterNominees(members: VoteCandidate[]) {
+    const q = nomineeSearch.trim().toLowerCase();
+    if (!q) return members;
+    return members.filter(
+      (m) =>
+        m.full_name.toLowerCase().includes(q) ||
+        (m.school_name ?? "").toLowerCase().includes(q)
+    );
+  }
+
+  // Speaker: open the nomination dialog and load EVERY party's members (both
+  // benches), grouped by party. The Speaker is elected by the whole House, so
+  // the pool spans all parties — reuses getPartyMembers like leadershipDialog.
+  function handleHoldSpeakerNomination() {
+    setNomineeSearch("");
+    setSpeakerDialog({
+      open: true,
+      groups: [],
+      selectedByParty: {},
+      loading: true,
+    });
+    const allParties = parties;
+    Promise.all(allParties.map((p) => getPartyMembers(eventId, p.id))).then(
+      (lists) => {
+        const groups = allParties
+          .map((party, i) => ({ party, members: lists[i] ?? [] }))
+          .filter((g) => g.members.length > 0);
+        setSpeakerDialog((prev) =>
+          prev.open ? { ...prev, groups, loading: false } : prev
+        );
+      }
+    );
+  }
+
+  // Equity rule: max 2 Speaker nominees per party. Silently ignore a 3rd pick
+  // from the same party (the open-gate also enforces min 1 per party).
+  function toggleSpeakerNominee(partyId: string, id: string) {
+    setSpeakerDialog((prev) => {
+      const cur = prev.selectedByParty[partyId] ?? [];
+      const has = cur.includes(id);
+      if (!has && cur.length >= 2) return prev;
+      const next = has ? cur.filter((x) => x !== id) : [...cur, id];
+      return {
+        ...prev,
+        selectedByParty: { ...prev.selectedByParty, [partyId]: next },
+      };
+    });
+  }
+
   function handleOpenSpeakerElection() {
     if (!currentAgendaItem) return;
-
-    setConfirmDialog({
-      open: true,
-      title: "Open Speaker Election",
-      description: `Open voting for Speaker election with ${candidates.length} candidates? All participants will be able to cast their vote.`,
-      action: () => {
-        startTransition(async () => {
-          const result = await openVote(
-            eventId,
-            currentAgendaItem.id,
-            "speaker_election",
-            { candidateIds: candidates.map((c) => c.id) }
-          );
-          if (result.success) {
-            toast.success("Speaker election voting is now open!");
-          } else {
-            toast.error(result.error);
-          }
-          setConfirmDialog((prev) => ({ ...prev, open: false }));
+    const candidateIds = Object.values(speakerDialog.selectedByParty).flat();
+    startTransition(async () => {
+      const result = await openVote(
+        eventId,
+        currentAgendaItem.id,
+        "speaker_election",
+        { candidateIds }
+      );
+      if (result.success) {
+        toast.success("Speaker election is now open!");
+        setSpeakerDialog({
+          open: false,
+          groups: [],
+          selectedByParty: {},
+          loading: false,
         });
-      },
+      } else {
+        toast.error(result.error);
+      }
     });
   }
 
@@ -389,6 +451,7 @@ export function VoteManager({
 
   // Party-leader: open the nomination dialog and load the party's members.
   function handleHoldLeaderElection(party: PartyLite) {
+    setNomineeSearch("");
     setLeaderDialog({
       open: true,
       party,
@@ -458,6 +521,7 @@ export function VoteManager({
     side: "ruling" | "opposition",
     label: string
   ) {
+    setNomineeSearch("");
     setLeadershipDialog({
       open: true,
       voteType,
@@ -547,6 +611,7 @@ export function VoteManager({
     party: PartyLite,
     seats: number
   ) {
+    setNomineeSearch("");
     setMinisterDialog({
       open: true,
       voteType,
@@ -780,6 +845,18 @@ export function VoteManager({
           </DialogDescription>
         </DialogHeader>
 
+        {leaderDialog.members.length > 0 && (
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-gray-400" />
+            <Input
+              value={nomineeSearch}
+              onChange={(e) => setNomineeSearch(e.target.value)}
+              placeholder="Search by name or school"
+              className="h-8 pl-8 text-sm"
+            />
+          </div>
+        )}
+
         {leaderDialog.loading ? (
           <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
             <Loader2 className="mr-2 size-4 animate-spin" />
@@ -791,7 +868,7 @@ export function VoteManager({
           </p>
         ) : (
           <div className="max-h-72 space-y-1.5 overflow-y-auto pr-1">
-            {leaderDialog.members.map((m) => {
+            {filterNominees(leaderDialog.members).map((m) => {
               const checked = leaderDialog.selectedIds.includes(m.id);
               const atCap = !checked && leaderDialog.selectedIds.length >= 5;
               return (
@@ -976,6 +1053,18 @@ export function VoteManager({
           </DialogDescription>
         </DialogHeader>
 
+        {leadershipDialog.members.length > 0 && (
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-gray-400" />
+            <Input
+              value={nomineeSearch}
+              onChange={(e) => setNomineeSearch(e.target.value)}
+              placeholder="Search by name or school"
+              className="h-8 pl-8 text-sm"
+            />
+          </div>
+        )}
+
         {leadershipDialog.loading ? (
           <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
             <Loader2 className="mr-2 size-4 animate-spin" />
@@ -987,7 +1076,7 @@ export function VoteManager({
           </p>
         ) : (
           <div className="max-h-72 space-y-1.5 overflow-y-auto pr-1">
-            {leadershipDialog.members.map((m) => {
+            {filterNominees(leadershipDialog.members).map((m) => {
               const checked = leadershipDialog.selectedIds.includes(m.id);
               const atCap =
                 !checked && leadershipDialog.selectedIds.length >= 5;
@@ -1232,6 +1321,18 @@ export function VoteManager({
           </DialogDescription>
         </DialogHeader>
 
+        {ministerDialog.members.length > 0 && (
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-gray-400" />
+            <Input
+              value={nomineeSearch}
+              onChange={(e) => setNomineeSearch(e.target.value)}
+              placeholder="Search by name or school"
+              className="h-8 pl-8 text-sm"
+            />
+          </div>
+        )}
+
         {ministerDialog.loading ? (
           <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
             <Loader2 className="mr-2 size-4 animate-spin" />
@@ -1243,7 +1344,7 @@ export function VoteManager({
           </p>
         ) : (
           <div className="max-h-72 space-y-1.5 overflow-y-auto pr-1">
-            {ministerDialog.members.map((m) => {
+            {filterNominees(ministerDialog.members).map((m) => {
               const checked = ministerDialog.selectedIds.includes(m.id);
               return (
                 <button
@@ -1309,6 +1410,150 @@ export function VoteManager({
               ministerDialog.selectedIds.length < 2
             }
             onClick={handleOpenMinisterElection}
+          >
+            {isPending ? "Opening..." : "Open Election"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+
+  // The Speaker nomination dialog — whole-House pool grouped by party, with the
+  // equity rule baked in: each party puts forward 1–2 nominees. Mirrors the
+  // other pickers' styling; the open-gate enforces min 1 / max 2 per party.
+  const speakerSelectedIds = Object.values(speakerDialog.selectedByParty).flat();
+  const speakerValid =
+    speakerDialog.groups.length > 0 &&
+    speakerDialog.groups.every((g) => {
+      const n = (speakerDialog.selectedByParty[g.party.id] ?? []).length;
+      return n >= 1 && n <= 2;
+    }) &&
+    speakerSelectedIds.length >= 2;
+  const speakerNominationDialog = (
+    <Dialog
+      open={speakerDialog.open}
+      onOpenChange={(open) =>
+        setSpeakerDialog((prev) =>
+          open
+            ? { ...prev, open }
+            : { open: false, groups: [], selectedByParty: {}, loading: false }
+        )
+      }
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Nominate Speakers</DialogTitle>
+          <DialogDescription>
+            Each party puts forward 1–2 Speaker nominees. The whole House then
+            elects the Speaker; the runner-up becomes Deputy Speaker.
+          </DialogDescription>
+        </DialogHeader>
+
+        {speakerDialog.groups.length > 0 && (
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-gray-400" />
+            <Input
+              value={nomineeSearch}
+              onChange={(e) => setNomineeSearch(e.target.value)}
+              placeholder="Search by name or school"
+              className="h-8 pl-8 text-sm"
+            />
+          </div>
+        )}
+
+        {speakerDialog.loading ? (
+          <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
+            <Loader2 className="mr-2 size-4 animate-spin" />
+            Loading members...
+          </div>
+        ) : speakerDialog.groups.length === 0 ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">
+            No party members available to nominate.
+          </p>
+        ) : (
+          <div className="max-h-72 space-y-3 overflow-y-auto pr-1">
+            {speakerDialog.groups.map((g) => {
+              const picks = speakerDialog.selectedByParty[g.party.id] ?? [];
+              const visible = filterNominees(g.members);
+              if (visible.length === 0) return null;
+              return (
+                <div key={g.party.id} className="space-y-1.5">
+                  <p className="flex items-center justify-between px-0.5 text-xs font-semibold text-gray-600">
+                    <span>{g.party.name}</span>
+                    <span
+                      className={cn(
+                        picks.length === 0 ? "text-red-500" : "text-gray-400"
+                      )}
+                    >
+                      {picks.length}/2
+                    </span>
+                  </p>
+                  {visible.map((m) => {
+                    const checked = picks.includes(m.id);
+                    const atCap = !checked && picks.length >= 2;
+                    return (
+                      <button
+                        key={m.id}
+                        type="button"
+                        disabled={atCap}
+                        onClick={() => toggleSpeakerNominee(g.party.id, m.id)}
+                        className={cn(
+                          "flex w-full items-center justify-between rounded-lg border-2 p-3 text-left transition-all",
+                          checked
+                            ? "border-[#FF9933] bg-[#FF9933]/5"
+                            : "border-gray-200 bg-white hover:border-gray-300",
+                          atCap && "opacity-50"
+                        )}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium text-gray-800">
+                            {m.full_name}
+                          </p>
+                          <p className="truncate text-xs text-gray-500">
+                            {m.school_name}
+                          </p>
+                        </div>
+                        <div
+                          className={cn(
+                            "ml-2 flex size-5 shrink-0 items-center justify-center rounded-full border-2",
+                            checked
+                              ? "border-[#FF9933] bg-[#FF9933]"
+                              : "border-gray-300 bg-white"
+                          )}
+                        >
+                          {checked && (
+                            <CheckCircle2 className="size-3.5 text-white" />
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        <DialogFooter>
+          <span className="mr-auto self-center text-xs text-muted-foreground">
+            {speakerSelectedIds.length} selected · each party needs 1–2
+          </span>
+          <Button
+            variant="outline"
+            onClick={() =>
+              setSpeakerDialog({
+                open: false,
+                groups: [],
+                selectedByParty: {},
+                loading: false,
+              })
+            }
+          >
+            Cancel
+          </Button>
+          <Button
+            disabled={isPending || !speakerValid}
+            onClick={handleOpenSpeakerElection}
           >
             {isPending ? "Opening..." : "Open Election"}
           </Button>
@@ -1858,6 +2103,9 @@ export function VoteManager({
 
         {/* Cabinet/Shadow nomination dialog (next party after a revealed result) */}
         {ministerNominationDialog}
+
+        {/* Speaker nomination dialog (next Speaker election after a reveal) */}
+        {speakerNominationDialog}
       </>
     );
   }
@@ -1878,40 +2126,19 @@ export function VoteManager({
           {agendaType === "speaker_election" && (
             <div className="space-y-3">
               <p className="text-sm text-gray-600">
-                {candidates.length} speaker candidates found. Open voting to let
-                participants elect the Speaker.
+                Nominate Speaker candidates — each party puts forward 1–2. The
+                whole House elects the Speaker; the runner-up becomes Deputy
+                Speaker.
               </p>
-
-              {/* Candidate list */}
-              {candidates.length > 0 && (
-                <div className="space-y-1.5 rounded-lg border bg-gray-50/50 p-3">
-                  <p className="text-xs font-medium text-muted-foreground mb-2">
-                    Candidates:
-                  </p>
-                  {candidates.map((c) => (
-                    <div
-                      key={c.id}
-                      className="flex items-center justify-between text-sm"
-                    >
-                      <span className="font-medium text-gray-800">
-                        {c.full_name}
-                      </span>
-                      <span className="text-xs text-gray-500">
-                        {c.school_name}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
 
               <Button
                 size="sm"
-                disabled={isPending || candidates.length === 0}
-                onClick={handleOpenSpeakerElection}
+                disabled={isPending}
+                onClick={handleHoldSpeakerNomination}
                 className="w-full"
               >
-                <Vote className="size-3.5 mr-1.5" />
-                Open Speaker Election
+                <Crown className="size-3.5 mr-1.5" />
+                Nominate Speakers
               </Button>
             </div>
           )}
@@ -2020,6 +2247,9 @@ export function VoteManager({
 
       {/* Cabinet/Shadow nomination dialog: pick the party's nominees, then open */}
       {ministerNominationDialog}
+
+      {/* Speaker nomination dialog: each party picks 1–2, then open the vote */}
+      {speakerNominationDialog}
     </>
   );
 }

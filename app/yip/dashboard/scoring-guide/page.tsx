@@ -126,10 +126,10 @@ export default async function ScoringGuidePage() {
   ];
 
   const glossary = [
-    ["Party", "The political group a student is placed in (like a team)."],
+    ["Party", "The group (A–G) a student is placed in — their team in the house."],
     ["Constituency", "The region a student represents in the house."],
-    ["Committee", "A small group (e.g. a Ministry) that drafts a bill together and is scored as a team."],
-    ["Bench", "Ruling bench = the side in power; Opposition bench = the side challenging it."],
+    ["Committee", "A Ministry team that drafts a bill together and is scored as a team."],
+    ["Bench (optional)", "Some events split the house into a Ruling bench (in power) and an Opposition bench. Many chapters — and the default benchless setup — skip this: students simply belong to a Party (A–G) and a committee."],
     ["Judge / Jury", "An adult evaluator who scores students on each session."],
     ["Session", "One activity on the agenda (e.g. Question Hour) that students are scored on."],
     ["Leadership role", "An elected post — Prime Minister, Speaker, Minister — that earns a small bonus."],
@@ -153,11 +153,11 @@ export default async function ScoringGuidePage() {
     [3, "Saanvi Rao", "Deputy Prime Minister", "74.6 + 4", 78.6],
     [4, "Reyansh Gupta", "Leader of Opposition", "74.6 + 4", 78.6],
     [5, "Kabir Anand", "Shadow Minister", "76.05 + 2", 78.05],
-    [6, "Ananya Iyer", "MP (Opposition)", "75.05 + 0", 75.05],
+    [6, "Ananya Iyer", "MP", "75.05 + 0", 75.05],
     [7, "Myra Joshi", "Deputy Speaker", "69.6 + 4", 73.6],
-    [8, "Diya Nair", "MP (Ruling)", "72.05 + 0", 72.05],
+    [8, "Diya Nair", "MP", "72.05 + 0", 72.05],
     [9, "Vihaan Reddy", "Cabinet Minister", "68.05 + 3", 71.05],
-    [10, "Arjun Mehta", "MP (Ruling)", "70.6 + 0", 70.6],
+    [10, "Arjun Mehta", "MP", "70.6 + 0", 70.6],
   ];
 
   return (
@@ -441,6 +441,12 @@ export default async function ScoringGuidePage() {
             </tbody>
           </table>
         </div>
+        <p className="text-xs text-gray-500">
+          This demo happens to be a benched event, so a couple of rows are tagged
+          Ruling / Opposition. On a benchless event (the default — students just
+          have a Party A–G and a committee) the <strong>/100 math is identical</strong>;
+          only the bench label is absent.
+        </p>
         <Analogy>
           the bonus <em>helps</em> but doesn&apos;t decide everything. Notice Kabir
           (Shadow Minister) has one of the strongest floor performances, yet his
@@ -483,8 +489,8 @@ export default async function ScoringGuidePage() {
                 ["Community Impact", "Policy + feasibility + constituency research"],
                 ["Best Speaker", "Top among the elected Speaker(s)"],
                 ["Leadership Excellence", "Half role points + half participation"],
-                ["Best Member — Ruling Bench", "Debate + Question Hour + Bill"],
-                ["Best Member — Opposition Bench", "Question Hour + Zero Hour + Debate"],
+                ["Best Member — Ruling Bench", "Debate + Question Hour + Bill (if the event uses benches)"],
+                ["Best Member — Opposition Bench", "Question Hour + Zero Hour + Debate (if the event uses benches)"],
                 ["Most Persuasive", "Debate + Bill Presentation"],
                 ["Independent Voice", "Debate + Zero Hour + Question Hour"],
               ].map(([a, w], i) => (
@@ -527,9 +533,10 @@ export default async function ScoringGuidePage() {
           </li>
         </ul>
         <p className="text-sm text-gray-700">
-          The recognition <strong>spreads</strong> — the overall winner, the best
-          ruling member and the best opposition member are different students, and
-          a whole committee shares Team Spirit.
+          The recognition <strong>spreads</strong> — the overall winner is one
+          student while a whole committee shares Team Spirit. (This demo is a
+          benched event, so it also has best ruling and best opposition members;
+          benchless events simply skip those two bench awards.)
         </p>
       </Section>
 
@@ -586,7 +593,7 @@ export default async function ScoringGuidePage() {
             "The committee mark is a team component shared equally by its members; everything else is earned individually.",
             "What you see while scoring is exactly what counts — the same calculation runs on the scoring screen and in the final results.",
             "Every assignable role now has a defined leadership bonus, so no role is ever silently scored as zero by accident.",
-            "Role-based awards (Best Speaker, Ruling/Opposition Bench, etc.) only activate once roles and benches are assigned at the event.",
+            "Role-based awards (Best Speaker, etc.) only activate once roles are assigned; the Ruling/Opposition Bench awards apply only if the event uses benches (benchless events skip them).",
             "A chair can manually override any award winner if there's a tie or a special reason.",
           ].map((t, i) => (
             <li key={i} className="flex gap-2">

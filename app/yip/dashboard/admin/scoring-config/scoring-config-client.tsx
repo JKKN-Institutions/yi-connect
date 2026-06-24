@@ -229,6 +229,15 @@ export function ScoringConfigClient({
   }
 
   async function saveBonuses() {
+    // Enforce the "points, 0–10" range with immediate, specific feedback before
+    // hitting the server (the server also rejects out-of-range as a safety net).
+    for (const r of ROLE_LABELS) {
+      const n = Number(bonuses[r.key]);
+      if (!Number.isFinite(n) || n < 0 || n > 10) {
+        setBonusMsg(`${r.label}: bonus must be a number between 0 and 10.`);
+        return;
+      }
+    }
     setSavingBonus(true);
     setBonusMsg(null);
     const payload: Record<string, number> = {};
@@ -458,6 +467,9 @@ export function ScoringConfigClient({
               <span className="text-sm text-[#1a1a3e]">{r.label}</span>
               <input
                 type="number"
+                min={0}
+                max={10}
+                step={1}
                 value={bonuses[r.key]}
                 onChange={(e) => setBonuses((p) => ({ ...p, [r.key]: e.target.value }))}
                 className={numInput}

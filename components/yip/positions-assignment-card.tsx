@@ -16,10 +16,10 @@ import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/yip/ui/card";
 import { Badge } from "@/components/yip/ui/badge";
 import { Button } from "@/components/yip/ui/button";
-import { Crown, X, Plus } from "lucide-react";
+import { Crown, X, Plus, Gavel } from "lucide-react";
 import { cn } from "@/lib/yip/utils";
 import { toast } from "sonner";
-import { setParliamentRole } from "@/app/yip/actions/participants";
+import { setParliamentRole, deposeToExRole } from "@/app/yip/actions/participants";
 import type {
   PositionRoleGroup,
   PositionParticipant,
@@ -48,6 +48,16 @@ function partyDot(side: string | null) {
   return "bg-[#FF9933]";
 }
 
+// Single-seat leaders that can be DEPOSED to an "Ex-" role (keeps their points)
+// instead of plain removal (→ mp). Other roles only show the plain remove (X).
+const DEPOSABLE_ROLES = new Set<string>([
+  "prime_minister",
+  "deputy_prime_minister",
+  "leader_of_opposition",
+  "speaker",
+  "deputy_speaker",
+]);
+
 export function PositionsAssignmentCard({ groups, allParticipants }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -74,6 +84,19 @@ export function PositionsAssignmentCard({ groups, allParticipants }: Props) {
       const result = await setParliamentRole(p.id, null);
       if (result.success) {
         toast.success(`${p.full_name} removed from role`);
+        router.refresh();
+      } else {
+        toast.error(result.error);
+      }
+    });
+  }
+
+  // Depose → keeps the participant's leadership points as an "Ex-" role.
+  function handleDepose(p: PositionParticipant) {
+    startTransition(async () => {
+      const result = await deposeToExRole(p.id);
+      if (result.success) {
+        toast.success(`${p.full_name} deposed — kept as Ex- (points retained)`);
         router.refresh();
       } else {
         toast.error(result.error);
@@ -140,15 +163,29 @@ export function PositionsAssignmentCard({ groups, allParticipants }: Props) {
                           />
                           <span className="truncate">{p.full_name}</span>
                         </span>
-                        <button
-                          type="button"
-                          aria-label={`Remove ${p.full_name} from ${group.label}`}
-                          onClick={() => handleUnassign(p)}
-                          disabled={isPending}
-                          className="text-muted-foreground hover:text-red-600 disabled:opacity-50"
-                        >
-                          <X className="size-3.5" />
-                        </button>
+                        <span className="flex shrink-0 items-center gap-1.5">
+                          {DEPOSABLE_ROLES.has(group.role) && (
+                            <button
+                              type="button"
+                              aria-label={`Depose ${p.full_name} from ${group.label} — keeps points as Ex-`}
+                              title="Depose to Ex- (keeps leadership points)"
+                              onClick={() => handleDepose(p)}
+                              disabled={isPending}
+                              className="text-muted-foreground hover:text-amber-600 disabled:opacity-50"
+                            >
+                              <Gavel className="size-3.5" />
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            aria-label={`Remove ${p.full_name} from ${group.label}`}
+                            onClick={() => handleUnassign(p)}
+                            disabled={isPending}
+                            className="text-muted-foreground hover:text-red-600 disabled:opacity-50"
+                          >
+                            <X className="size-3.5" />
+                          </button>
+                        </span>
                       </li>
                     ))}
                   </ul>

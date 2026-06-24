@@ -32,6 +32,12 @@ const LEADERSHIP_ROLES = new Set<string>([
   "party_leader",
   "cabinet_minister",
   "shadow_minister",
+  // "Ex-" deposed leaders keep their leadership standing on the leaderboard.
+  "ex_prime_minister",
+  "ex_deputy_prime_minister",
+  "ex_leader_of_opposition",
+  "ex_speaker",
+  "ex_deputy_speaker",
 ]);
 
 export type RegionalLeaderboardRow = {

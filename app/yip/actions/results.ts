@@ -31,6 +31,9 @@ const RULING_ROLES = new Set([
   "cabinet_minister",
   "mp",
   "bill_committee",
+  // A deposed PM / Deputy PM stays on the ruling bench.
+  "ex_prime_minister",
+  "ex_deputy_prime_minister",
 ]);
 
 const OPPOSITION_ROLES = new Set([
@@ -38,6 +41,8 @@ const OPPOSITION_ROLES = new Set([
   "shadow_minister",
   "mp",
   "bill_committee",
+  // A deposed Leader of Opposition stays on the opposition bench.
+  "ex_leader_of_opposition",
 ]);
 
 const LEADERSHIP_ROLES = new Set([
@@ -51,6 +56,14 @@ const LEADERSHIP_ROLES = new Set([
   "cabinet_minister",
   "shadow_minister",
   "committee_chair",
+  // "Ex-" deposed leaders keep their leadership standing (and points). Note:
+  // role-SPECIFIC awards (e.g. "Best Prime Minister") key off the exact role
+  // string, so those still resolve to the CURRENT holder, not the Ex-.
+  "ex_prime_minister",
+  "ex_deputy_prime_minister",
+  "ex_leader_of_opposition",
+  "ex_speaker",
+  "ex_deputy_speaker",
 ]);
 
 function isRulingMP(role: string | null, side: string | null): boolean {

@@ -1649,10 +1649,14 @@ export async function wipeMockData(): Promise<
 
     // score_audit_log → scores must go; audit log has FK to scores so it
     // must be wiped first. It has no event_id and no is_mock.
+    // scores (and their audit log) are EVENT-scoped — transitively derived, NOT
+    // is_mock-flagged. Collect + delete by mock event_id; filtering on is_mock
+    // misses them, leaving event-scoped scores that then block the agenda delete
+    // below via scores_agenda_item_id_fkey.
     const { data: mockScoreIds } = await supabase
       .from("scores")
       .select("id")
-      .eq("is_mock", true);
+      .in("event_id", mockEventIds);
     const scoreIds = ((mockScoreIds ?? []) as Array<{ id: string }>).map((s) => s.id);
     if (scoreIds.length > 0) {
       await wipe("score_audit", async () =>
@@ -1666,7 +1670,7 @@ export async function wipeMockData(): Promise<
     }
 
     await wipe("scores", async () =>
-      supabase.from("scores").delete({ count: "exact" }).eq("is_mock", true)
+      supabase.from("scores").delete({ count: "exact" }).in("event_id", mockEventIds)
     );
 
     if (mockEventIds.length > 0) {
@@ -1688,12 +1692,12 @@ export async function wipeMockData(): Promise<
           .delete({ count: "exact" })
           .in("event_id", mockEventIds)
       );
-      await wipe("notifications", async () =>
-        supabase
-          .from("notifications")
-          .delete({ count: "exact" })
-          .in("event_id", mockEventIds)
-      );
+      // notifications live in the yi_connect schema and carry no event_id /
+      // is_mock column — there is nothing event-scoped to wipe here. The old
+      // yip-scoped delete targeted a table that doesn't exist
+      // ("could not find the table 'yip.notifications'") and aborted the whole
+      // wipe mid-way, leaving mock data half-deleted.
+      deleted.notifications = 0;
       await wipe("results", async () =>
         supabase
           .from("results")

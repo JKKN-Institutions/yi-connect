@@ -1539,7 +1539,14 @@ export type ScoringProgressData = {
   juryProgress: Array<{
     id: string;
     jury_name: string;
-    scoresSubmitted: number;
+    // Distinct PARTICIPANTS this jury has scored (the X in "X / total") — a
+    // jury scoring one person across 4 sessions is 1 participant, not 4.
+    participantsScored: number;
+    // Total score ROWS (one per session × turn) — the genuine "entries" count
+    // that sums to the "Total Scores Submitted" headline.
+    entriesSubmitted: number;
+    // Distinct sessions this jury has scored in.
+    sessionsCovered: number;
     draftsNotSubmitted: number;
     lastActivity: string | null;
     // The actual unsubmitted drafts (so an organiser can find WHERE the draft
@@ -1566,8 +1573,16 @@ export type ScoringProgressData = {
     constituency_name: string | null;
     committee_number: number | null;
     committee_name: string | null;
+    // Distinct JURIES that have scored this person (the X in "X / totalJuries")
+    // — counted once per jury no matter how many sessions/turns. Never > total.
     juriesScored: number;
+    // Distinct sessions this person has been scored in (any jury).
+    sessionsScored: number;
     totalJuries: number;
+    // Strict completeness (Director ruling 2026-06-26): true only when EVERY
+    // session this person has any score in has been scored by ALL active juries
+    // — i.e. the (juries × their sessions) grid is full. Drives "fully scored".
+    fullyScored: boolean;
     avgScoreSoFar: number | null;
   }>;
 };
@@ -1605,7 +1620,7 @@ export async function getScoringProgress(
 
   const { data: scores } = await supabase
     .from("scores")
-    .select("id, participant_id, jury_assignment_id, total_score, status, submitted_at, updated_at")
+    .select("id, participant_id, jury_assignment_id, agenda_item_id, total_score, status, submitted_at, updated_at")
     .eq("event_id", eventId)
     .eq("status", "submitted");
 
@@ -1672,7 +1687,14 @@ export async function getScoringProgress(
     return {
       id: j.id,
       jury_name: j.jury_name,
-      scoresSubmitted: juryScores.length,
+      // Coverage by DISTINCT participants/sessions, not raw rows — a jury that
+      // scored 20 people across 4 sessions is "20 participants · 80 entries · 4
+      // sessions", not "80 / 144".
+      participantsScored: new Set(juryScores.map((s) => s.participant_id)).size,
+      entriesSubmitted: juryScores.length,
+      sessionsCovered: new Set(
+        juryScores.map((s) => s.agenda_item_id).filter(Boolean)
+      ).size,
       draftsNotSubmitted: drafts.length,
       lastActivity: lastScore?.submitted_at ?? lastScore?.updated_at ?? null,
       drafts,
@@ -1690,6 +1712,34 @@ export async function getScoringProgress(
           ) / 100
         : null;
 
+    // Distinct juries + sessions (count each once — multi-session/turn no longer
+    // inflates the number; that was the "9 / 3" bug).
+    const juriesScored = new Set(pScores.map((s) => s.jury_assignment_id)).size;
+    const sessionsScored = new Set(
+      pScores.map((s) => s.agenda_item_id).filter(Boolean)
+    ).size;
+
+    // Strict "fully scored": group this person's scores BY session, then require
+    // EVERY session in play to carry all active juries. The (juries × sessions)
+    // grid must be full. A session no jury has touched yet is unknowable, so it
+    // can't be required — completeness is measured over sessions actually in play.
+    const juriesBySession = new Map<string, Set<string>>();
+    for (const s of pScores) {
+      const key = s.agenda_item_id ?? "∅";
+      let set = juriesBySession.get(key);
+      if (!set) {
+        set = new Set();
+        juriesBySession.set(key, set);
+      }
+      set.add(s.jury_assignment_id);
+    }
+    const fullyScored =
+      totalJuries > 0 &&
+      juriesBySession.size > 0 &&
+      Array.from(juriesBySession.values()).every(
+        (set) => set.size >= totalJuries
+      );
+
     return {
       id: p.id,
       full_name: p.full_name,
@@ -1700,8 +1750,10 @@ export async function getScoringProgress(
       constituency_name: p.constituency_name,
       committee_number: p.committee_number,
       committee_name: p.committee_name,
-      juriesScored: pScores.length,
+      juriesScored,
+      sessionsScored,
       totalJuries,
+      fullyScored,
       avgScoreSoFar,
     };
   });

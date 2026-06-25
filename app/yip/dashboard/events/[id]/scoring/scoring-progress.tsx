@@ -74,16 +74,6 @@ function RelativeTime({ dateStr }: { dateStr: string | null }) {
   return <span suppressHydrationWarning>{label}</span>;
 }
 
-function statusColor(
-  scored: number,
-  total: number
-): "green" | "yellow" | "red" {
-  if (total === 0) return "red";
-  if (scored >= total) return "green";
-  if (scored > 0) return "yellow";
-  return "red";
-}
-
 const STATUS_STYLES = {
   green: "bg-green-100 text-green-700 border-green-200",
   yellow: "bg-yellow-100 text-yellow-700 border-yellow-200",
@@ -159,10 +149,9 @@ export function ScoringProgress({
       ? Math.round((participantsScored / totalParticipants) * 100)
       : 0;
 
-  // "Fully scored" = every active juror has submitted for this participant.
-  const fullyScored = participantProgress.filter(
-    (p) => p.totalJuries > 0 && p.juriesScored >= p.totalJuries
-  ).length;
+  // "Fully scored" = strict completeness from the data layer: all active juries
+  // have scored this person in EVERY session they're in (not just "≥3 rows").
+  const fullyScored = participantProgress.filter((p) => p.fullyScored).length;
   const fullyPercent =
     totalParticipants > 0
       ? Math.round((fullyScored / totalParticipants) * 100)
@@ -396,7 +385,7 @@ export function ScoringProgress({
             </div>
             <div>
               <p className="text-2xl font-bold">
-                {juryProgress.reduce((s, j) => s + j.scoresSubmitted, 0)}
+                {juryProgress.reduce((s, j) => s + j.entriesSubmitted, 0)}
               </p>
               <p className="text-xs text-gray-500">Total Scores Submitted</p>
             </div>
@@ -427,7 +416,7 @@ export function ScoringProgress({
                 <TableHeader>
                   <TableRow>
                     <TableHead>Jury Name</TableHead>
-                    <TableHead className="text-center">Scores Submitted</TableHead>
+                    <TableHead className="text-center">Participants Scored</TableHead>
                     <TableHead className="text-right">Last Activity</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -462,15 +451,21 @@ export function ScoringProgress({
                             <Badge
                               variant="secondary"
                               className={
-                                j.scoresSubmitted >= totalParticipants
+                                j.participantsScored >= totalParticipants
                                   ? "bg-green-100 text-green-700"
-                                  : j.scoresSubmitted > 0
+                                  : j.participantsScored > 0
                                   ? "bg-yellow-100 text-yellow-700"
                                   : "bg-gray-100 text-gray-500"
                               }
                             >
-                              {j.scoresSubmitted} / {totalParticipants}
+                              {j.participantsScored} / {totalParticipants}
                             </Badge>
+                            <p className="mt-1 text-[11px] text-gray-400">
+                              {j.entriesSubmitted} score
+                              {j.entriesSubmitted === 1 ? "" : "s"} ·{" "}
+                              {j.sessionsCovered} session
+                              {j.sessionsCovered === 1 ? "" : "s"}
+                            </p>
                             {j.draftsNotSubmitted > 0 && (
                               <p className="mt-1 text-xs font-medium text-amber-600 underline-offset-2 hover:underline">
                                 {j.draftsNotSubmitted} draft
@@ -597,7 +592,7 @@ export function ScoringProgress({
         <CardContent>
           {participantProgress.length > 0 ? (
             <>
-              {/* Fully-scored progress (every active juror submitted) */}
+              {/* Fully-scored progress — strict: all juries × every session. */}
               <div className="mb-4">
                 <div className="mb-1 flex items-center justify-between text-sm">
                   <span className="font-medium text-gray-700">
@@ -611,6 +606,11 @@ export function ScoringProgress({
                     style={{ width: `${fullyPercent}%` }}
                   />
                 </div>
+                <p className="mt-1 text-[11px] text-gray-400">
+                  &ldquo;Fully scored&rdquo; means all {data.juryProgress.length}{" "}
+                  juries have scored that person in every session they&apos;ve
+                  been scored in. A green dot below marks each one.
+                </p>
               </div>
 
               {/* Search by name/seat number + "not scored yet" filter */}
@@ -655,7 +655,13 @@ export function ScoringProgress({
                 </TableHeader>
                 <TableBody>
                   {filteredParticipants.map((p) => {
-                    const color = statusColor(p.juriesScored, p.totalJuries);
+                    // Strict: green only when the whole jury×session grid is full;
+                    // amber once any jury has scored; red when nobody has.
+                    const color: "green" | "yellow" | "red" = p.fullyScored
+                      ? "green"
+                      : p.juriesScored > 0
+                      ? "yellow"
+                      : "red";
                     const side = p.party_side as "ruling" | "opposition" | null;
                     return (
                       <TableRow
@@ -740,8 +746,12 @@ export function ScoringProgress({
                             variant="secondary"
                             className={STATUS_STYLES[color]}
                           >
-                            {p.juriesScored} / {p.totalJuries}
+                            {p.juriesScored} / {p.totalJuries} juries
                           </Badge>
+                          <p className="mt-1 text-[11px] text-gray-400">
+                            {p.sessionsScored} session
+                            {p.sessionsScored === 1 ? "" : "s"} scored
+                          </p>
                         </TableCell>
                         <TableCell className="text-right font-mono text-sm">
                           {p.avgScoreSoFar !== null

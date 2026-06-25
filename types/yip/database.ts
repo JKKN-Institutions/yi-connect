@@ -3600,6 +3600,7 @@ export type Database = {
           id: string
           is_active: boolean
           label: string
+          lock_on_submit: boolean
           parameters: Json
           session_key: string
           session_weight: number
@@ -3613,6 +3614,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           label: string
+          lock_on_submit?: boolean
           parameters?: Json
           session_key: string
           session_weight?: number
@@ -3626,6 +3628,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           label?: string
+          lock_on_submit?: boolean
           parameters?: Json
           session_key?: string
           session_weight?: number

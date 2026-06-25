@@ -74,6 +74,10 @@ export interface VoteCandidate {
   school_name: string;
   party_side: string | null;
   parliament_role: string | null;
+  // Constituency (assigned at allocation; null before then) — exposed so the
+  // nominee pickers can search by constituency name or number, not just name.
+  constituency_name: string | null;
+  constituency_number: number | null;
 }
 
 export interface VoteSessionWithDetails extends VoteSession {
@@ -864,7 +868,9 @@ export async function getSpeakerCandidates(
 
   const { data, error } = await supabase
     .from("participants")
-    .select("id, full_name, school_name, party_side, parliament_role")
+    .select(
+      "id, full_name, school_name, party_side, parliament_role, constituency_name, constituency_number"
+    )
     .eq("event_id", eventId)
     .eq("parliament_role", "speaker");
 
@@ -1036,7 +1042,9 @@ export async function getPartyMembers(
   const supabase = await createServiceClient();
   const { data, error } = await supabase
     .from("participants")
-    .select("id, full_name, school_name, party_side, parliament_role")
+    .select(
+      "id, full_name, school_name, party_side, parliament_role, constituency_name, constituency_number"
+    )
     .eq("event_id", eventId)
     .eq("party_id", partyId)
     .order("full_name");
@@ -1057,7 +1065,9 @@ export async function getVoteCandidates(
   const supabase = await createServiceClient();
   const { data, error } = await supabase
     .from("participants")
-    .select("id, full_name, school_name, party_side, parliament_role")
+    .select(
+      "id, full_name, school_name, party_side, parliament_role, constituency_name, constituency_number"
+    )
     .in("id", ids)
     .order("full_name");
   if (error || !data) return [];

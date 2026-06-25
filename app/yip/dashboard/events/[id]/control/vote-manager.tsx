@@ -195,6 +195,11 @@ export function VoteManager({
   // for the "open voting" controls so a new session can be opened. It is reset
   // once a genuinely new session surfaces (see effect below).
   const [startingNew, setStartingNew] = useState(false);
+  // The party/government election launchers (party-leader, PM/Deputy/LoP,
+  // cabinet, shadow) are available on ANY voting item — collapsed behind one
+  // "Run an election" menu so the panel isn't cluttered with every election at
+  // once. Closed by default; the agenda-pinned Speaker/Bill votes stay inline.
+  const [electionsMenuOpen, setElectionsMenuOpen] = useState(false);
 
   // Get realtime vote session state with live counts
   const {
@@ -1295,6 +1300,40 @@ export function VoteManager({
   const cabinetSection = ministerSection("cabinet_minister", "ruling");
   const shadowSection = ministerSection("shadow_minister", "opposition");
 
+  // All four "run anytime" election launchers, collapsed behind one menu.
+  const hasElectionLaunchers =
+    !!partyLeaderList || !!leadershipList || !!cabinetSection || !!shadowSection;
+  const electionLaunchers = hasElectionLaunchers ? (
+    <div className="rounded-lg border bg-card">
+      <button
+        type="button"
+        onClick={() => setElectionsMenuOpen((o) => !o)}
+        className="flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-gray-700 hover:bg-muted/40"
+      >
+        <span className="flex items-center gap-2">
+          <Crown className="size-4 text-[#FF9933]" />
+          Run an election
+          <span className="hidden text-xs font-normal text-muted-foreground sm:inline">
+            party leader · PM / Deputy / LoP · cabinet · shadow
+          </span>
+        </span>
+        {electionsMenuOpen ? (
+          <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
+        ) : (
+          <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+        )}
+      </button>
+      {electionsMenuOpen && (
+        <div className="space-y-4 border-t p-3">
+          {partyLeaderList}
+          {leadershipList}
+          {cabinetSection}
+          {shadowSection}
+        </div>
+      )}
+    </div>
+  ) : null;
+
   // The Cabinet/Shadow nomination dialog (pick at least `seats` party members →
   // open the multi-seat vote).
   const ministerNominationDialog = (
@@ -2065,18 +2104,9 @@ export function VoteManager({
                 the coalition sections. Showing all of them keeps the live
                 event-day sequence (Speaker → PM/Deputy/LoP → Cabinet/Shadow)
                 navigable end to end. */}
-            {isRevealed &&
-              (leadershipList ||
-                cabinetSection ||
-                shadowSection ||
-                partyLeaderList) && (
-                <div className="space-y-4 border-t pt-4">
-                  {leadershipList}
-                  {cabinetSection}
-                  {shadowSection}
-                  {partyLeaderList}
-                </div>
-              )}
+            {isRevealed && electionLaunchers && (
+              <div className="border-t pt-4">{electionLaunchers}</div>
+            )}
           </CardContent>
         </Card>
 
@@ -2209,20 +2239,11 @@ export function VoteManager({
             </div>
           )}
 
-          {/* Party Leader Elections — shown on any item flagged "use for voting"
-              (the whole panel is gated by showVoteControls above). Party/govt
-              formation + cabinet items are flagged by default; for an off-script
-              item the organiser flips its Vote toggle on the Agenda screen. */}
-          {partyLeaderList}
-
-          {/* Leadership Elections (PM / Deputy PM / LoP) — same use_for_voting gate */}
-          {leadershipList}
-
-          {/* Cabinet — each ruling party elects its quota of ministers */}
-          {cabinetSection}
-
-          {/* Shadow Cabinet — each opposition party elects its quota */}
-          {shadowSection}
+          {/* Party/government elections (party leader, PM/Deputy/LoP, cabinet,
+              shadow) — available on any voting item, collapsed behind one
+              "Run an election" menu so the panel stays clean. The agenda-pinned
+              Speaker/Bill votes above stay inline. */}
+          {electionLaunchers}
         </CardContent>
       </Card>
 

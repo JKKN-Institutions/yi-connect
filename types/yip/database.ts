@@ -913,6 +913,7 @@ export type Database = {
           description: string | null
           duration_minutes: number | null
           event_id: string
+          exclude_from_final: boolean
           id: string
           is_scoreable: boolean
           mode: Database["public"]["Enums"]["agenda_mode"]
@@ -935,6 +936,7 @@ export type Database = {
           description?: string | null
           duration_minutes?: number | null
           event_id: string
+          exclude_from_final?: boolean
           id?: string
           is_scoreable?: boolean
           mode?: Database["public"]["Enums"]["agenda_mode"]
@@ -957,6 +959,7 @@ export type Database = {
           description?: string | null
           duration_minutes?: number | null
           event_id?: string
+          exclude_from_final?: boolean
           id?: string
           is_scoreable?: boolean
           mode?: Database["public"]["Enums"]["agenda_mode"]

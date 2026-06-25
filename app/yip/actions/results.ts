@@ -88,6 +88,11 @@ type ParticipantLite = {
   school_name: string;
   constituency_name: string | null;
   committee_name: string | null;
+  // Day-presence signals (Director ruling 2026-06-25). Treated as "not checked
+  // in" unless strictly === true (the columns are NOT NULL booleans today, but
+  // the strict check is defensive against any future nullable backfill).
+  checked_in_day1: boolean | null;
+  checked_in_day2: boolean | null;
 };
 
 type RawScore = {
@@ -128,7 +133,13 @@ type ResultRow = {
   consistencyFloor: number; // MVP: weakest session as a 0–1 fraction of its max
   consistencySessionCount: number; // # scored sessions (MVP min-participation gate)
   committeeLevel: number; // shared committee level (cmte+bill, /10) — Team Spirit award
-  rank: number;
+  // Day-presence eligibility (Director ruling 2026-06-25). dayComplete=false ⇒
+  // the participant attended only one day of a two-day event: excluded from the
+  // overall rank (rank=null) and EVERY award, but still written WITH their
+  // scores plus a surfaced reason. true for everyone at a one-day event.
+  dayComplete: boolean;
+  notRankedReason: string | null; // e.g. "Not ranked — absent Day 2"
+  rank: number | null; // null = not ranked (incomplete attendance)
   award_category: string | null;
   computed_at: string;
 };
@@ -163,12 +174,20 @@ function assignAward(
   rankBy: (r: ResultRow) => number,
   opts: { allTied?: boolean; recipients?: number } = {}
 ): void {
+  // Central day-presence gate (Director ruling 2026-06-25): a participant who
+  // did not attend BOTH days of a two-day event (dayComplete=false) is excluded
+  // from EVERY award here, in one place, so all 15 award predicates honor it
+  // uniformly without editing each one. Inert at one-day events (dayComplete is
+  // true for everyone). Folded into the eligible() check below.
+  const isEligible = (p: ParticipantLite, r: ResultRow): boolean =>
+    r.dayComplete && eligible(p, r);
+
   let topScore = -Infinity;
   let anyEligible = false;
 
   for (const r of rows) {
     const p = participants.get(r.participant_id);
-    if (!p || !eligible(p, r)) continue;
+    if (!p || !isEligible(p, r)) continue;
     anyEligible = true;
     const s = rankBy(r);
     if (s > topScore) topScore = s;
@@ -184,7 +203,7 @@ function assignAward(
     // — e.g. the whole top committee shares Team Spirit.
     for (const r of rows) {
       const p = participants.get(r.participant_id);
-      if (!p || !eligible(p, r)) continue;
+      if (!p || !isEligible(p, r)) continue;
       if (rankBy(r) === topScore) appendAward(r, awardLabel);
     }
     return;
@@ -199,7 +218,7 @@ function assignAward(
   const ranked = rows
     .filter((r) => {
       const p = participants.get(r.participant_id);
-      return Boolean(p && eligible(p, r) && rankBy(r) > 0);
+      return Boolean(p && isEligible(p, r) && rankBy(r) > 0);
     })
     .sort(
       (a, b) =>
@@ -292,7 +311,7 @@ export async function computeResults(
 
   const { data: agendaRows } = await supabase
     .from("agenda")
-    .select("id, agenda_type, session_key, is_scoreable")
+    .select("id, agenda_type, session_key, is_scoreable, day")
     .eq("event_id", eventId);
   // Map agenda_item_id → { agenda_type, session_key, is_scoreable } so per-session
   // config can be resolved by session_key FIRST (1:1), falling back to agenda_type,
@@ -309,6 +328,30 @@ export async function computeResults(
         is_scoreable: a.is_scoreable === true,
       },
     ])
+  );
+
+  // ── Two-day detection (Director ruling 2026-06-25) ──────────────────
+  // For a genuinely TWO-DAY event, a participant must be checked in on BOTH
+  // days to be ranked / award-eligible; a one-day attendee is "marked
+  // incomplete — NOT ranked" (excluded from rank + every award, but still
+  // shown with their scores and a clear reason).
+  //
+  // SIGNAL CHOICE: an event counts as two-day iff it has >= 1 SCOREABLE day-2
+  // agenda item. We deliberately do NOT key off yip.events.day2_date — that
+  // column is NOT NULL on every event (the create-event form auto-fills
+  // day2 = day1 + 1), so "day2_date IS NOT NULL" is true for 100% of events
+  // and cannot distinguish one-day from two-day. The agenda template also
+  // seeds 11 (non-scoreable) day-2 placeholder items on every event, so
+  // "has any day-2 item" is likewise always true. The presence of a
+  // *scoreable* day-2 session is the only signal that day 2 actually ran as a
+  // scored part of the event — and it reuses the exact is_scoreable + day
+  // metadata the engine already trusts for aggregation (Bug A). It is also
+  // self-consistent: a participant can only earn day-2 scores when scoreable
+  // day-2 sessions exist, so the gate activates precisely when day-2 presence
+  // is meaningful. Events with no scoreable day-2 session ⇒ NOT two-day ⇒
+  // every participant is dayComplete ⇒ zero behaviour change.
+  const isTwoDayEvent = (agendaRows ?? []).some(
+    (a) => a.day === 2 && a.is_scoreable === true
   );
 
   // Bucket model (cutover-gated by settings.use_bucket_model). When enabled,
@@ -393,7 +436,7 @@ export async function computeResults(
   // 2. Participants (with constituency for Best Constituency Rep / Community Impact)
   const { data: participants, error: pError } = await supabase
     .from("participants")
-    .select("id, full_name, parliament_role, party_side, school_name, constituency_name, committee_name")
+    .select("id, full_name, parliament_role, party_side, school_name, constituency_name, committee_name, checked_in_day1, checked_in_day2")
     .eq("event_id", eventId)
     .not("parliament_role", "is", null);
 
@@ -693,6 +736,27 @@ export async function computeResults(
         Math.round((criteriaSum[key] / criteriaCount[key]) * 100) / 100;
     }
 
+    // Day-presence gate (Director ruling 2026-06-25). At a two-day event a
+    // participant is dayComplete only when checked in on BOTH days (strict
+    // === true; NULL/false ⇒ not checked in). At a one-day event everyone is
+    // dayComplete, so this is inert there. Day numbers in the reason follow the
+    // signal: it's always Day 2 that's missing or partial, but we phrase the
+    // reason precisely from the actual flags so it never mislabels.
+    const ciDay1 = participant.checked_in_day1 === true;
+    const ciDay2 = participant.checked_in_day2 === true;
+    const dayComplete = !isTwoDayEvent || (ciDay1 && ciDay2);
+    let notRankedReason: string | null = null;
+    if (!dayComplete) {
+      // Two-day event + missing at least one day. Name the missing day(s).
+      if (!ciDay1 && !ciDay2) {
+        notRankedReason = "Not ranked — absent both days";
+      } else if (!ciDay2) {
+        notRankedReason = "Not ranked — absent Day 2";
+      } else {
+        notRankedReason = "Not ranked — absent Day 1";
+      }
+    }
+
     resultRows.push({
       event_id: eventId,
       participant_id: participant.id,
@@ -709,20 +773,29 @@ export async function computeResults(
       // Spirit ranks on this so the whole top committee co-wins, matching the
       // leaderboard's committee value (interview 2026-06-14, Bug C).
       committeeLevel: cl ? cl.cmte + cl.bill : 0,
-      rank: 0,
+      dayComplete,
+      notRankedReason,
+      rank: null,
       award_category: null,
       computed_at: new Date().toISOString(),
     });
   }
 
-  // 5. Sort + rank
-  resultRows.sort((a, b) => b.avg_score - a.avg_score);
+  // 5. Sort + rank. ONLY dayComplete participants receive an overall rank
+  //    (Director ruling 2026-06-25). One-day attendees of a two-day event keep
+  //    rank=null and are excluded from the ordinal placement entirely — they do
+  //    not occupy or shift a rank number. Their result row is still written
+  //    (below) with their scores + notRankedReason so they're visibly flagged,
+  //    never silently dropped. At a one-day event every row is dayComplete, so
+  //    this reproduces the original full-field ranking exactly.
+  const rankableRows = resultRows.filter((r) => r.dayComplete);
+  rankableRows.sort((a, b) => b.avg_score - a.avg_score);
   let currentRank = 1;
-  for (let i = 0; i < resultRows.length; i++) {
-    if (i > 0 && resultRows[i].avg_score < resultRows[i - 1].avg_score) {
+  for (let i = 0; i < rankableRows.length; i++) {
+    if (i > 0 && rankableRows[i].avg_score < rankableRows[i - 1].avg_score) {
       currentRank = i + 1;
     }
-    resultRows[i].rank = currentRank;
+    rankableRows[i].rank = currentRank;
   }
 
   // 6. Build participant lookup for award assignment
@@ -969,8 +1042,27 @@ export async function computeResults(
       (r) => r.participant_id === ov.participant_id
     );
     if (!target) continue;
+    // Day-presence gate also applies to chair overrides (Director ruling
+    // 2026-06-25: excluded from EVERY award). A one-day attendee of a two-day
+    // event cannot be pinned an award; leave the auto-winner intact rather than
+    // awarding an unranked student.
+    if (!target.dayComplete) continue;
     for (const r of resultRows) removeAward(r, ov.award_label);
     appendAward(target, ov.award_label);
+  }
+
+  // ── Surface the "not ranked" reason (Director ruling 2026-06-25) ──────
+  // A day-incomplete participant is written WITH their scores but must be
+  // VISIBLY flagged, never silently dropped. We reuse award_category (already
+  // rendered as badges in the leaderboard and exported in the CSV "Remarks"
+  // column) to carry the reason. Done as a final pass so the reason text is
+  // never mistaken for an award label by the override add/remove logic above.
+  // By construction these rows hold no awards (the central gate excluded them),
+  // so award_category is null here and the reason stands alone.
+  for (const r of resultRows) {
+    if (!r.dayComplete && r.notRankedReason) {
+      r.award_category = r.notRankedReason;
+    }
   }
 
   // 7. Replace and persist

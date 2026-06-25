@@ -209,7 +209,14 @@ export function StudentScoreSheet({
                   <td className="px-2 py-1.5 text-right font-bold tabular-nums text-[#1a1a3e]">
                     {r.avg_score != null ? round2(r.avg_score) : ""}
                   </td>
-                  <td className="px-2 py-1.5 text-[11px] text-[#FF9933]">
+                  <td
+                    className={`px-2 py-1.5 text-[11px] ${
+                      r.rank == null &&
+                      r.award_category?.startsWith("Not ranked")
+                        ? "font-medium text-red-600"
+                        : "text-[#FF9933]"
+                    }`}
+                  >
                     {r.award_category ?? ""}
                   </td>
                 </tr>

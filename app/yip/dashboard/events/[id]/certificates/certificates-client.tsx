@@ -118,9 +118,17 @@ export function CertificatesClient({
 
   const { event, participants } = certData;
 
+  // A day-incomplete participant (one-day attendee of a two-day event) carries
+  // the status "Not ranked — absent Day N" in award_category — it is NOT an
+  // award and must never produce an award certificate or award badge.
+  const realAwards = (award_category: string | null): string[] =>
+    award_category && !award_category.startsWith("Not ranked")
+      ? award_category.split(", ").filter(Boolean)
+      : [];
+
   // Separate award winners from regular participants
   const awardWinners = participants.filter(
-    (p) => p.award_category && p.award_category.length > 0
+    (p) => realAwards(p.award_category).length > 0
   );
   const allParticipants = participants;
 
@@ -260,7 +268,7 @@ export function CertificatesClient({
                   </div>
                   <div className="flex items-center gap-2 shrink-0 ml-2">
                     <div className="flex flex-wrap gap-1 justify-end max-w-48">
-                      {p.award_category?.split(", ").map((a) => (
+                      {realAwards(p.award_category).map((a) => (
                         <Badge
                           key={a}
                           variant="secondary"
@@ -555,7 +563,11 @@ function printCertificates(
               : event.level;
 
       if (type === "award") {
-        const awards = p.award_category?.split(", ") ?? [];
+        // Exclude the "Not ranked — absent Day N" status (not an award).
+        const awards =
+          p.award_category && !p.award_category.startsWith("Not ranked")
+            ? p.award_category.split(", ").filter(Boolean)
+            : [];
         return buildAwardCertHtml(
           p,
           roleName,

@@ -48,6 +48,7 @@ export default async function ParticipantsPage({
       allocationLocked={event.allocation_locked ?? false}
       canDelete={access.canDelete}
       canManage={access.canManage}
+      canEdit={access.canDelete}
     />
   );
 }

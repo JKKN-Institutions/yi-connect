@@ -182,6 +182,62 @@ export async function reopenAgendaItem(
   return { success: true, data: null };
 }
 
+// ─── Re-open the Last Completed Session (paused-state "Go back") ──
+// When the event is PAUSED between sessions/days (no current agenda item —
+// e.g. status day1_complete), there is no live item to step back from. This
+// re-opens the most recently FINISHED session and makes it live again so the
+// organiser can resume from where they paused. CHAIR / NATIONAL ONLY — same
+// elevated privilege as moving the agenda backward (it rewinds everyone's live
+// screen).
+export async function reopenLastCompletedSession(
+  eventId: string
+): Promise<ActionResult<null>> {
+  const access = await getYipEventAccess(eventId);
+  if (access.role !== "super_admin" && access.role !== "chapter_admin") {
+    return {
+      success: false,
+      error: "Only the chapter chair or a national admin can re-open a session.",
+    };
+  }
+  const supabase = await createServiceClient();
+
+  // Find the LAST completed item: latest day, then latest sequence within it.
+  const { data: items, error: itemsErr } = await supabase
+    .from("agenda")
+    .select("id, day")
+    .eq("event_id", eventId)
+    .eq("status", "completed")
+    .order("day", { ascending: false })
+    .order("sequence_order", { ascending: false })
+    .limit(1);
+  if (itemsErr) return { success: false, error: itemsErr.message };
+  const item = items?.[0];
+  if (!item) {
+    return { success: false, error: "No finished session to re-open." };
+  }
+
+  // Re-activate that item: status back to in_progress, clear its end timestamp.
+  const { error: agendaErr } = await supabase
+    .from("agenda")
+    .update({ status: "in_progress", actual_end: null })
+    .eq("id", item.id)
+    .eq("event_id", eventId);
+  if (agendaErr) return { success: false, error: agendaErr.message };
+
+  // Point the event back at that item and put the matching day live again.
+  const { error: eventErr } = await supabase
+    .from("events")
+    .update({
+      current_agenda_item_id: item.id,
+      status: item.day === 2 ? "day2_live" : "day1_live",
+    })
+    .eq("id", eventId);
+  if (eventErr) return { success: false, error: eventErr.message };
+
+  revalidatePath(`/yip/dashboard/events/${eventId}/control`);
+  return { success: true, data: null };
+}
+
 // ─── Go To Previous Agenda Item ───────────────────────────────────
 // Reverses advanceAgenda by one step within the current day: un-advances
 // the current item (status back to `upcoming`), re-activates the item

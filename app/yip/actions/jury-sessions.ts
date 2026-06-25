@@ -342,6 +342,44 @@ export async function setSessionScoreable(
     .eq("event_id", eventId);
   if (error) return { success: false, error: error.message };
 
+  // Turning ON: auto-assign every active juror who isn't already on this session
+  // so a newly-scoreable session never goes missing from anyone's jury list.
+  // Idempotent — the existing-set filter means re-toggling ON makes no dupes.
+  // Turning OFF leaves assignments untouched (see comment above).
+  if (isScoreable) {
+    const [jurorsRes, existingRes] = await Promise.all([
+      supabase
+        .from("jury_assignments")
+        .select("id")
+        .eq("event_id", eventId)
+        .eq("is_active", true),
+      supabase
+        .from("jury_session_assignments")
+        .select("jury_assignment_id")
+        .eq("event_id", eventId)
+        .eq("agenda_item_id", agendaItemId),
+    ]);
+
+    const already = new Set(
+      (existingRes.data ?? []).map((r) => r.jury_assignment_id)
+    );
+    const rows = (jurorsRes.data ?? [])
+      .filter((j) => !already.has(j.id))
+      .map((j) => ({
+        event_id: eventId,
+        jury_assignment_id: j.id,
+        agenda_item_id: agendaItemId,
+      }));
+
+    if (rows.length > 0) {
+      const { error: insErr } = await supabase
+        .from("jury_session_assignments")
+        .insert(rows);
+      // The toggle already succeeded — don't fail the action on backfill error.
+      if (insErr) console.error("[setSessionScoreable] auto-assign failed", insErr);
+    }
+  }
+
   revalidatePath(`/yip/dashboard/events/${eventId}/jury/sessions`);
   revalidatePath(`/yip/dashboard/events/${eventId}/jury`);
   return { success: true, data: null };

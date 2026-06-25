@@ -635,7 +635,7 @@ export default async function ParticipantPage() {
         </Card>
       )}
 
-      {/* ─── YOUR PARTY (privacy-safe roster — serial # + constituency only) */}
+      {/* ─── YOUR PARTY (privacy-safe roster — seat (constituency) number + constituency only) */}
       {partyRoster.length > 0 && (
         <Card className={partyAccent.border}>
           <div className={`h-1 w-full bg-gradient-to-r ${partyAccent.bar}`} />
@@ -662,7 +662,7 @@ export default async function ParticipantPage() {
                   <span
                     className={`inline-flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${partyAccent.chip}`}
                   >
-                    {m.serial_no != null ? `#${m.serial_no}` : "—"}
+                    {m.constituency_number != null ? `#${m.constituency_number}` : "—"}
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm text-gray-700 truncate">

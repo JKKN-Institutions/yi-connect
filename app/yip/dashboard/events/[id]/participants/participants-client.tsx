@@ -1368,12 +1368,19 @@ export function ParticipantsClient({
                   {editForm.party_number &&
                     !eventParties.includes(Number(editForm.party_number)) && (
                       <option value={editForm.party_number}>
-                        Party {editForm.party_number} (current)
+                        {(() => {
+                          const n = Number(editForm.party_number);
+                          return n >= 1 && n <= 26
+                            ? `Party ${String.fromCharCode(64 + n)}`
+                            : `Party ${editForm.party_number}`;
+                        })()} (current)
                       </option>
                     )}
                   {eventParties.map((n) => (
                     <option key={n} value={String(n)}>
-                      {String.fromCharCode(64 + n)} · Party {n}
+                      {n >= 1 && n <= 26
+                        ? `Party ${String.fromCharCode(64 + n)}`
+                        : `Party ${n}`}
                     </option>
                   ))}
                 </select>

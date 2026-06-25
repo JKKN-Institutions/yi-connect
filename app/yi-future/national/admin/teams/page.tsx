@@ -1,6 +1,10 @@
 import Link from "next/link";
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
 import { TEAM_SIZE_MIN, TEAM_SIZE_MAX, TRACK_LABELS } from "@/lib/yi-future/constants";
+import { AutoRefresh } from "@/components/yi-future/AutoRefresh";
+
+// Keep the installed PWA showing live data instead of a stale cached snapshot.
+export const dynamic = "force-dynamic";
 
 type EditionRow = {
   id: string;
@@ -198,6 +202,7 @@ export default async function NationalTeamsPage({
 
   return (
     <div className="space-y-6">
+      <AutoRefresh intervalMs={30000} />
       <div className="flex items-start justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-navy">All Teams</h2>

@@ -486,6 +486,8 @@ export function ScoringProgress({
                 <TableHeader>
                   <TableRow>
                     <TableHead>Name</TableHead>
+                    <TableHead>Constituency</TableHead>
+                    <TableHead>Committee</TableHead>
                     <TableHead>Role</TableHead>
                     <TableHead className="text-center">Juries Scored</TableHead>
                     <TableHead className="text-right">Avg So Far</TableHead>
@@ -512,6 +514,30 @@ export function ScoringProgress({
                               {p.full_name}
                             </p>
                           </div>
+                        </TableCell>
+                        <TableCell className="text-sm text-gray-700">
+                          {p.constituency_name ?? "—"}
+                          {p.constituency_number != null && (
+                            <span className="ml-1 text-xs text-gray-400 tabular-nums">
+                              #{p.constituency_number}
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-sm text-gray-700">
+                          {p.committee_number != null ? (
+                            <>
+                              <span className="tabular-nums">
+                                #{p.committee_number}
+                              </span>
+                              {p.committee_name && (
+                                <span className="ml-1 text-xs text-gray-400">
+                                  {p.committee_name}
+                                </span>
+                              )}
+                            </>
+                          ) : (
+                            "—"
+                          )}
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1.5 flex-wrap">

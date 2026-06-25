@@ -1101,6 +1101,62 @@ export async function computeResults(
   };
 }
 
+// ─── Day-2 check-in warning (interim-recompute guardrail) ────────
+// On a TWO-DAY event (>= 1 scoreable day-2 agenda item — the SAME signal
+// computeResults uses), computing results BEFORE Day-2 check-in marks every
+// student "Not ranked — absent Day 2" (Director ruling 2026-06-25). That is an
+// interim artifact — recomputing after check-in fixes it — but an all-unranked
+// leaderboard is alarming, so we surface the state on the results page. We warn
+// ONLY in the unambiguous case: a two-day event with ZERO Day-2 check-ins.
+// Partial check-in is normal mid-event and must never false-alarm.
+export async function getDay2CheckinWarning(
+  eventId: string
+): Promise<{
+  isTwoDay: boolean;
+  day2CheckedIn: number;
+  total: number;
+  shouldWarn: boolean;
+}> {
+  const none = {
+    isTwoDay: false,
+    day2CheckedIn: 0,
+    total: 0,
+    shouldWarn: false,
+  };
+  const access = await getYipEventAccess(eventId);
+  if (!access.canViewScores) return none;
+  const supabase = await createServiceClient();
+
+  const { data: day2Items } = await supabase
+    .from("agenda")
+    .select("id")
+    .eq("event_id", eventId)
+    .eq("day", 2)
+    .eq("is_scoreable", true)
+    .limit(1);
+  if (!day2Items || day2Items.length === 0) return none;
+
+  const { count: day2CheckedIn } = await supabase
+    .from("participants")
+    .select("id", { count: "exact", head: true })
+    .eq("event_id", eventId)
+    .eq("checked_in_day2", true)
+    .not("parliament_role", "is", null);
+  const { count: total } = await supabase
+    .from("participants")
+    .select("id", { count: "exact", head: true })
+    .eq("event_id", eventId)
+    .not("parliament_role", "is", null);
+
+  const checkedIn = day2CheckedIn ?? 0;
+  return {
+    isTwoDay: true,
+    day2CheckedIn: checkedIn,
+    total: total ?? 0,
+    shouldWarn: checkedIn === 0,
+  };
+}
+
 // ─── Publish Results ─────────────────────────────────────────────
 
 export async function publishResults(

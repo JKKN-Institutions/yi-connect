@@ -206,6 +206,7 @@ export function ResultsClient({
   eventLevel = "chapter",
   initialQualifiedIds = [],
   positionBonuses = {},
+  day2CheckinWarning = false,
 }: {
   eventId: string;
   eventName: string;
@@ -216,6 +217,10 @@ export function ResultsClient({
   eventLevel?: string;
   initialQualifiedIds?: string[];
   positionBonuses?: Record<string, number>;
+  // Two-day event with ZERO Day-2 check-ins: computing now marks everyone
+  // "Not ranked — absent Day 2". Surface a warning so the chair doesn't publish
+  // an all-unranked leaderboard before Day-2 check-in is done.
+  day2CheckinWarning?: boolean;
 }) {
   const router = useRouter();
 
@@ -431,9 +436,28 @@ export function ResultsClient({
     return a.localeCompare(b);
   });
 
+  // Interim-recompute guardrail: two-day event with zero Day-2 check-ins ⇒
+  // computing now marks everyone "Not ranked — absent Day 2". Shown in both the
+  // empty state and the leaderboard so the chair is warned before publishing.
+  const day2Banner = day2CheckinWarning ? (
+    <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+      <AlertCircle className="mt-0.5 size-4 shrink-0" />
+      <div>
+        <p className="font-semibold">Day-2 check-in hasn&apos;t started</p>
+        <p className="mt-0.5">
+          This is a two-day event and no students are checked in for Day&nbsp;2
+          yet. Computing results now will mark <strong>every student</strong> as
+          &quot;Not ranked — absent Day&nbsp;2&quot;. Complete Day-2 check-in
+          before computing or publishing final results.
+        </p>
+      </div>
+    </div>
+  ) : null;
+
   if (results.length === 0) {
     return (
       <div className="space-y-6">
+        {day2Banner}
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed bg-white py-16 text-center">
           <Trophy className="mb-4 size-12 text-gray-300" />
           <h3 className="text-lg font-semibold text-gray-700">
@@ -450,6 +474,7 @@ export function ResultsClient({
 
   return (
     <div className="space-y-6">
+      {day2Banner}
       {/* Message banner */}
       {message && (
         <div

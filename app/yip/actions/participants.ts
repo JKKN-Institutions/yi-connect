@@ -35,6 +35,36 @@ interface AddParticipantData {
   email?: string;
   city?: string;
   home_state?: string;
+  // Optional allocation fields — when the chair adds a fully-specified
+  // participant rather than a name-only walk-in. All optional / back-compat.
+  constituency_name?: string;
+  constituency_number?: number | null;
+  constituency_state?: string;
+  party_number?: number | null;
+  committee_number?: number | null;
+  committee_name?: string;
+  parliament_role?: ParliamentRole | null;
+  ministry?: Database["public"]["Enums"]["ministry_type"] | null;
+  serial_no?: number | null;
+  access_code?: string;
+}
+
+// Every field the chair may edit on an existing participant. All optional so a
+// partial patch only touches the named fields. Mirrors the participants row.
+interface UpdateParticipantFields {
+  full_name?: string;
+  class?: number | null;
+  school_name?: string;
+  constituency_name?: string | null;
+  constituency_number?: number | null;
+  constituency_state?: string | null;
+  party_number?: number | null;
+  committee_number?: number | null;
+  committee_name?: string | null;
+  parliament_role?: ParliamentRole | null;
+  ministry?: Database["public"]["Enums"]["ministry_type"] | null;
+  serial_no?: number | null;
+  access_code?: string;
 }
 
 interface ImportRow {
@@ -119,20 +149,76 @@ export async function addParticipant(
   eventId: string,
   data: AddParticipantData
 ): Promise<ActionResult<{ id: string; access_code: string }>> {
+  // Chair-only (canDelete): adding a participant is a roster mutation reserved
+  // for the chapter chair / national / super-admin. Ordinary organisers (who
+  // have canManage but not canDelete) may view but not add.
   const access = await getYipEventAccess(eventId);
-  if (!access.canManage) {
-    return { success: false, error: "Not authorized to manage this event" };
+  if (!access.canDelete) {
+    return { success: false, error: "Only the chapter chair can add participants." };
+  }
+  if (!data.full_name?.trim()) {
+    return { success: false, error: "Student name is required" };
   }
   const supabase = await createServiceClient();
 
   try {
-    const accessCode = await generateUniqueCode(supabase, eventId, new Set());
+    // Validate the optional numeric allocation fields up front.
+    for (const [label, val] of [
+      ["constituency number", data.constituency_number],
+      ["committee number", data.committee_number],
+      ["party number", data.party_number],
+      ["serial number", data.serial_no],
+    ] as const) {
+      if (val != null && (!Number.isInteger(val) || val <= 0)) {
+        return { success: false, error: `${label} must be a positive whole number.` };
+      }
+    }
+    if (data.class != null && (!Number.isInteger(data.class) || data.class < 9 || data.class > 12)) {
+      return { success: false, error: "Class must be between 9 and 12." };
+    }
+
+    // Access code: use the supplied one (validated unique) or generate a fresh one.
+    let accessCode: string;
+    if (data.access_code != null && data.access_code.trim() !== "") {
+      const code = data.access_code.trim();
+      const { data: clash } = await supabase
+        .from("participants")
+        .select("id")
+        .eq("event_id", eventId)
+        .eq("access_code", code)
+        .maybeSingle();
+      if (clash) {
+        return { success: false, error: "That access code is already in use for this event." };
+      }
+      accessCode = code;
+    } else {
+      accessCode = await generateUniqueCode(supabase, eventId, new Set());
+    }
+
+    // Derive party_side from the party_number (mirror updateParticipantAssignment).
+    let party_side: PartySide | null = null;
+    if (data.party_number != null) {
+      const { data: party } = await supabase
+        .from("parties")
+        .select("side")
+        .eq("event_id", eventId)
+        .eq("party_number", data.party_number)
+        .maybeSingle();
+      party_side = party?.side ?? null;
+    }
+
+    // Ministry only applies to minister roles; clear it otherwise.
+    const ministry =
+      data.parliament_role === "cabinet_minister" ||
+      data.parliament_role === "shadow_minister"
+        ? data.ministry ?? null
+        : null;
 
     const { data: participant, error } = await supabase
       .from("participants")
       .insert({
         event_id: eventId,
-        full_name: data.full_name,
+        full_name: data.full_name.trim(),
         school_name: data.school_name || "",
         class: data.class ?? 9,
         phone: data.phone || null,
@@ -140,6 +226,16 @@ export async function addParticipant(
         city: data.city || null,
         home_state: data.home_state || null,
         access_code: accessCode,
+        constituency_name: data.constituency_name?.trim() || null,
+        constituency_number: data.constituency_number ?? null,
+        constituency_state: data.constituency_state?.trim() || null,
+        party_number: data.party_number ?? null,
+        party_side,
+        committee_number: data.committee_number ?? null,
+        committee_name: data.committee_name?.trim() || null,
+        parliament_role: data.parliament_role ?? null,
+        ministry,
+        serial_no: data.serial_no ?? null,
       })
       .select("id, access_code")
       .single();
@@ -149,6 +245,7 @@ export async function addParticipant(
     }
 
     revalidatePath(`/yip/dashboard/events/${eventId}/participants`);
+    revalidatePath(`/yip/dashboard/events/${eventId}/allocation`);
     return {
       success: true,
       data: { id: participant.id, access_code: participant.access_code },
@@ -159,6 +256,165 @@ export async function addParticipant(
       error: err instanceof Error ? err.message : "Unknown error",
     };
   }
+}
+
+// ─── Update Participant (chair-only full-field edit) ───────────────
+//
+// The chapter chair can edit EVERY field of any participant right on the
+// Participants tab. Unlike updateParticipantAssignment (organiser, single field,
+// blocked when allocation is locked), this:
+//   • is CHAIR-ONLY (access.canDelete),
+//   • patches every editable field in one shot (each optional),
+//   • works EVEN WHEN allocation is locked — the lock is surfaced as a
+//     "save anyway?" warning in the UI, NOT a server block.
+// It writes the same participants row that the jury, the student app,
+// Allocation and Results all read, so an edit shows up everywhere automatically.
+
+export async function updateParticipant(
+  participantId: string,
+  eventId: string,
+  fields: UpdateParticipantFields
+): Promise<ActionResult<null>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canDelete) {
+    return { success: false, error: "Only the chapter chair can edit participants." };
+  }
+  const supabase = await createServiceClient();
+
+  const updateData: Record<string, string | number | null> = {};
+
+  // full_name — non-empty if provided.
+  if (fields.full_name !== undefined) {
+    const name = fields.full_name.trim();
+    if (!name) {
+      return { success: false, error: "Name cannot be empty." };
+    }
+    updateData.full_name = name;
+  }
+
+  // class — integer 9..12 if provided (null clears).
+  if (fields.class !== undefined) {
+    if (fields.class === null) {
+      updateData.class = null;
+    } else if (!Number.isInteger(fields.class) || fields.class < 9 || fields.class > 12) {
+      return { success: false, error: "Class must be between 9 and 12." };
+    } else {
+      updateData.class = fields.class;
+    }
+  }
+
+  // Positive-integer-or-null numeric fields.
+  for (const key of ["constituency_number", "committee_number", "party_number", "serial_no"] as const) {
+    if (fields[key] !== undefined) {
+      const val = fields[key];
+      if (val === null) {
+        updateData[key] = null;
+      } else if (!Number.isInteger(val) || (val as number) <= 0) {
+        const label = key.replace(/_/g, " ");
+        return { success: false, error: `${label} must be a positive whole number.` };
+      } else {
+        updateData[key] = val as number;
+      }
+    }
+  }
+
+  // Free-text fields (trimmed; empty → null).
+  for (const key of ["constituency_name", "constituency_state", "committee_name"] as const) {
+    if (fields[key] !== undefined) {
+      const v = fields[key];
+      updateData[key] = v == null || v.trim() === "" ? null : v.trim();
+    }
+  }
+  // school_name is privacy-stripped from the client participant list, so the edit
+  // dialog can never show its current value — it always arrives blank. Treat a
+  // blank school as "leave unchanged" and only write it when the chair actually
+  // typed a value. Otherwise EVERY edit would wipe the school (it is NOT NULL and
+  // is the data committee balancing relies on).
+  if (fields.school_name !== undefined && fields.school_name.trim() !== "") {
+    updateData.school_name = fields.school_name.trim();
+  }
+
+  if (fields.parliament_role !== undefined) {
+    updateData.parliament_role = fields.parliament_role;
+  }
+  if (fields.ministry !== undefined) {
+    updateData.ministry = fields.ministry;
+  }
+
+  // access_code — unique within this event (no OTHER participant has it).
+  if (fields.access_code !== undefined) {
+    const code = (fields.access_code ?? "").trim();
+    if (!code) {
+      return { success: false, error: "Access code cannot be empty." };
+    }
+    const { data: clash } = await supabase
+      .from("participants")
+      .select("id")
+      .eq("event_id", eventId)
+      .eq("access_code", code)
+      .neq("id", participantId)
+      .maybeSingle();
+    if (clash) {
+      return { success: false, error: "That access code is already in use for this event." };
+    }
+    updateData.access_code = code;
+  }
+
+  // Derive party_side when party_number changes (mirror updateParticipantAssignment).
+  if (fields.party_number !== undefined) {
+    const pn = updateData.party_number;
+    if (typeof pn === "number") {
+      const { data: party } = await supabase
+        .from("parties")
+        .select("side")
+        .eq("event_id", eventId)
+        .eq("party_number", pn)
+        .maybeSingle();
+      updateData.party_side = party?.side ?? null;
+    } else {
+      updateData.party_side = null;
+    }
+  }
+
+  // Role away from minister roles clears the ministry (mirror the assignment action).
+  if (
+    fields.parliament_role !== undefined &&
+    fields.parliament_role !== "cabinet_minister" &&
+    fields.parliament_role !== "shadow_minister"
+  ) {
+    updateData.ministry = null;
+  }
+
+  if (Object.keys(updateData).length === 0) {
+    return { success: false, error: "No changes to save." };
+  }
+
+  const { error } = await supabase
+    .from("participants")
+    .update(updateData)
+    .eq("id", participantId)
+    .eq("event_id", eventId);
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  await logAuditAction({
+    action_type: "update",
+    target_table: "participants",
+    target_id: participantId,
+    target_event_id: eventId,
+    metadata: { fields: Object.keys(updateData) },
+  });
+
+  // Same row the jury, student app, Allocation and Results all read — revalidate
+  // every reader so an edit shows up everywhere automatically.
+  revalidatePath(`/yip/dashboard/events/${eventId}/participants`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/allocation`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/jury`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/results`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/control`);
+  return { success: true, data: null };
 }
 
 // ─── Quick Add Walk-in (auto-assign) ──────────────────────────────

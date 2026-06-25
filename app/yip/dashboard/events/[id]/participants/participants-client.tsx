@@ -9,6 +9,7 @@ import {
   deleteAllParticipants,
   setDayCheckIn,
   bulkCheckIn,
+  updateParticipant,
 } from "@/app/yip/actions/participants";
 import { ROLE_LABELS, PARTY_COLORS } from "@/lib/yip/constants";
 import { Button } from "@/components/yip/ui/button";
@@ -45,6 +46,7 @@ import {
   Loader2,
   UserCheck,
   Zap,
+  Pencil,
 } from "lucide-react";
 import { CsvImport } from "@/components/yip/csv-import";
 import { EmailSendCodes } from "@/components/yip/email-send-codes";
@@ -82,12 +84,47 @@ type SortKey = "full_name";
 
 type CheckInFilter = "all" | "in" | "out";
 
+// Every editable field on a participant. Strings so they bind to <input>; the
+// server action parses + validates (numbers, class range, access-code uniqueness).
+type EditFields = {
+  full_name: string;
+  class: string;
+  school_name: string;
+  constituency_name: string;
+  constituency_number: string;
+  constituency_state: string;
+  party_number: string;
+  committee_number: string;
+  committee_name: string;
+  parliament_role: string;
+  ministry: string;
+  serial_no: string;
+  access_code: string;
+};
+
+// Parliament-role options for the edit dropdown (value → label from ROLE_LABELS).
+const ROLE_OPTIONS = Object.entries(ROLE_LABELS) as Array<[string, string]>;
+
+// Ministry options (mirrors the ministry_type enum). Only meaningful for the
+// cabinet_minister / shadow_minister roles.
+const MINISTRY_OPTIONS: Array<[string, string]> = [
+  ["home", "Home"],
+  ["finance", "Finance"],
+  ["education", "Education"],
+  ["health", "Health"],
+  ["women_child", "Women & Child"],
+  ["disaster_management", "Disaster Management"],
+  ["youth_sports", "Youth & Sports"],
+  ["it_digital", "IT & Digital"],
+];
+
 export function ParticipantsClient({
   eventId,
   participants: initialParticipants,
   allocationLocked,
   canDelete = true,
   canManage = false,
+  canEdit = false,
 }: {
   eventId: string;
   participants: Participant[];
@@ -96,6 +133,8 @@ export function ParticipantsClient({
   canDelete?: boolean;
   /** Organiser+ — gates the roster download and the full-roster reset. */
   canManage?: boolean;
+  /** Chair/national/super-admin only — gates Add + Edit of participant fields. */
+  canEdit?: boolean;
 }) {
   const router = useRouter();
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -198,6 +237,104 @@ export function ParticipantsClient({
     city: "",
     home_state: "",
   });
+
+  // Edit participant (chair only) — full-field edit dialog. Works even when
+  // allocation is locked (shows a "save anyway?" confirm instead of blocking).
+  const [editOpen, setEditOpen] = useState(false);
+  const [editLoading, setEditLoading] = useState(false);
+  const [editError, setEditError] = useState("");
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<EditFields>({
+    full_name: "",
+    class: "",
+    school_name: "",
+    constituency_name: "",
+    constituency_number: "",
+    constituency_state: "",
+    party_number: "",
+    committee_number: "",
+    committee_name: "",
+    parliament_role: "",
+    ministry: "",
+    serial_no: "",
+    access_code: "",
+  });
+
+  function openEdit(p: Participant) {
+    setEditId(p.id);
+    setEditError("");
+    setEditForm({
+      full_name: p.full_name ?? "",
+      class: p.class != null ? String(p.class) : "",
+      school_name: p.school_name ?? "",
+      constituency_name: p.constituency_name ?? "",
+      constituency_number:
+        p.constituency_number != null ? String(p.constituency_number) : "",
+      constituency_state: p.constituency_state ?? "",
+      party_number: p.party_number != null ? String(p.party_number) : "",
+      committee_number:
+        p.committee_number != null ? String(p.committee_number) : "",
+      committee_name: p.committee_name ?? "",
+      parliament_role: p.parliament_role ?? "",
+      ministry: (p as { ministry?: string | null }).ministry ?? "",
+      serial_no: (p as { serial_no?: number | null }).serial_no != null
+        ? String((p as { serial_no?: number | null }).serial_no)
+        : "",
+      access_code: p.access_code ?? "",
+    });
+    setEditOpen(true);
+  }
+
+  async function handleSaveEdit() {
+    if (!editId) return;
+    if (!editForm.full_name.trim()) {
+      setEditError("Student name is required");
+      return;
+    }
+    // Allocation lock is a soft gate for the chair — confirm, don't block.
+    if (
+      allocationLocked &&
+      !confirm("Allocation is locked — save anyway?")
+    ) {
+      return;
+    }
+
+    setEditLoading(true);
+    setEditError("");
+
+    const toIntOrNull = (s: string): number | null => {
+      const t = s.trim();
+      if (t === "") return null;
+      const n = parseInt(t, 10);
+      return Number.isFinite(n) ? n : null;
+    };
+
+    const result = await updateParticipant(editId, eventId, {
+      full_name: editForm.full_name.trim(),
+      class: toIntOrNull(editForm.class),
+      school_name: editForm.school_name.trim(),
+      constituency_name: editForm.constituency_name.trim(),
+      constituency_number: toIntOrNull(editForm.constituency_number),
+      constituency_state: editForm.constituency_state.trim(),
+      party_number: toIntOrNull(editForm.party_number),
+      committee_number: toIntOrNull(editForm.committee_number),
+      committee_name: editForm.committee_name.trim(),
+      parliament_role: (editForm.parliament_role || null) as never,
+      ministry: (editForm.ministry || null) as never,
+      serial_no: toIntOrNull(editForm.serial_no),
+      access_code: editForm.access_code.trim(),
+    });
+
+    if (result.success) {
+      setEditOpen(false);
+      setEditId(null);
+      toast.success("Participant updated.");
+      router.refresh();
+    } else {
+      setEditError(result.error);
+    }
+    setEditLoading(false);
+  }
 
   // Filtered & sorted list
   const displayedParticipants = useMemo(() => {
@@ -611,6 +748,7 @@ export function ParticipantsClient({
             </DialogContent>
           </Dialog>
 
+          {canEdit && (
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger
               render={
@@ -677,6 +815,7 @@ export function ParticipantsClient({
               </DialogFooter>
             </DialogContent>
           </Dialog>
+          )}
 
           {/* Full-roster reset — chair only, hidden once allocation is locked
               (mirrors the per-row delete). Two-step type-to-confirm dialog. */}
@@ -969,18 +1108,32 @@ export function ParticipantsClient({
                     </div>
                   </TableCell>
                   <TableCell>
-                    {!allocationLocked && canDelete && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDelete(p.id);
-                        }}
-                        className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600"
-                        title="Remove participant"
-                      >
-                        <Trash2 className="size-4" />
-                      </button>
-                    )}
+                    <div className="flex items-center gap-0.5">
+                      {canEdit && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openEdit(p);
+                          }}
+                          className="rounded p-1 text-gray-400 hover:bg-[#1a1a3e]/5 hover:text-[#1a1a3e]"
+                          title="Edit participant"
+                        >
+                          <Pencil className="size-4" />
+                        </button>
+                      )}
+                      {!allocationLocked && canDelete && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDelete(p.id);
+                          }}
+                          className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600"
+                          title="Remove participant"
+                        >
+                          <Trash2 className="size-4" />
+                        </button>
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -1001,6 +1154,265 @@ export function ParticipantsClient({
               : "Add students individually or import from CSV"}
           </p>
         </div>
+      )}
+
+      {/* Edit participant — chair only. Edits every field of the participants
+          row (the one the jury, student app, Allocation and Results all read).
+          Works even when allocation is locked: a "save anyway?" confirm is shown
+          on save rather than blocking the edit. */}
+      {canEdit && (
+        <Dialog
+          open={editOpen}
+          onOpenChange={(open) => {
+            setEditOpen(open);
+            if (!open) {
+              setEditId(null);
+              setEditError("");
+            }
+          }}
+        >
+          <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Edit participant</DialogTitle>
+              <DialogDescription>
+                Change any field. Updates apply everywhere — jury, student app,
+                allocation and results — automatically.
+              </DialogDescription>
+            </DialogHeader>
+
+            {allocationLocked && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+                Allocation is locked. You can still save — you&apos;ll be asked
+                to confirm.
+              </div>
+            )}
+
+            {editError && (
+              <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700">
+                {editError}
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <Label htmlFor="edit-name">Full Name *</Label>
+                <Input
+                  id="edit-name"
+                  value={editForm.full_name}
+                  onChange={(e) =>
+                    setEditForm((p) => ({ ...p, full_name: e.target.value }))
+                  }
+                  placeholder="Student full name"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="edit-class">Class (9–12)</Label>
+                <Input
+                  id="edit-class"
+                  type="number"
+                  value={editForm.class}
+                  onChange={(e) =>
+                    setEditForm((p) => ({ ...p, class: e.target.value }))
+                  }
+                  placeholder="10"
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-school">School</Label>
+                <Input
+                  id="edit-school"
+                  value={editForm.school_name}
+                  onChange={(e) =>
+                    setEditForm((p) => ({ ...p, school_name: e.target.value }))
+                  }
+                  placeholder="Hidden for privacy — type only to change"
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Left blank keeps the current school; type a value to replace it.
+                </p>
+              </div>
+
+              <div>
+                <Label htmlFor="edit-const-name">Constituency</Label>
+                <Input
+                  id="edit-const-name"
+                  value={editForm.constituency_name}
+                  onChange={(e) =>
+                    setEditForm((p) => ({
+                      ...p,
+                      constituency_name: e.target.value,
+                    }))
+                  }
+                  placeholder="Constituency name"
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-const-no">Constituency No.</Label>
+                <Input
+                  id="edit-const-no"
+                  type="number"
+                  value={editForm.constituency_number}
+                  onChange={(e) =>
+                    setEditForm((p) => ({
+                      ...p,
+                      constituency_number: e.target.value,
+                    }))
+                  }
+                  placeholder="101"
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-const-state">Constituency State/UT</Label>
+                <Input
+                  id="edit-const-state"
+                  value={editForm.constituency_state}
+                  onChange={(e) =>
+                    setEditForm((p) => ({
+                      ...p,
+                      constituency_state: e.target.value,
+                    }))
+                  }
+                  placeholder="State / UT"
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-party-no">Party No.</Label>
+                <Input
+                  id="edit-party-no"
+                  type="number"
+                  value={editForm.party_number}
+                  onChange={(e) =>
+                    setEditForm((p) => ({ ...p, party_number: e.target.value }))
+                  }
+                  placeholder="1"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="edit-cmte-no">Committee No.</Label>
+                <Input
+                  id="edit-cmte-no"
+                  type="number"
+                  value={editForm.committee_number}
+                  onChange={(e) =>
+                    setEditForm((p) => ({
+                      ...p,
+                      committee_number: e.target.value,
+                    }))
+                  }
+                  placeholder="6"
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-cmte-name">Committee</Label>
+                <Input
+                  id="edit-cmte-name"
+                  value={editForm.committee_name}
+                  onChange={(e) =>
+                    setEditForm((p) => ({
+                      ...p,
+                      committee_name: e.target.value,
+                    }))
+                  }
+                  placeholder="Committee name"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="edit-role">Parliament Role</Label>
+                <select
+                  id="edit-role"
+                  value={editForm.parliament_role}
+                  onChange={(e) =>
+                    setEditForm((p) => ({
+                      ...p,
+                      parliament_role: e.target.value,
+                      // Clear ministry when leaving a minister role.
+                      ministry:
+                        e.target.value === "cabinet_minister" ||
+                        e.target.value === "shadow_minister"
+                          ? p.ministry
+                          : "",
+                    }))
+                  }
+                  className="mt-1 w-full rounded-md border border-gray-200 bg-white px-2.5 py-2 text-sm focus:border-[#1a1a3e]/40 focus:outline-none"
+                >
+                  <option value="">— None —</option>
+                  {ROLE_OPTIONS.map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <Label htmlFor="edit-ministry">Ministry</Label>
+                <select
+                  id="edit-ministry"
+                  value={editForm.ministry}
+                  disabled={
+                    editForm.parliament_role !== "cabinet_minister" &&
+                    editForm.parliament_role !== "shadow_minister"
+                  }
+                  onChange={(e) =>
+                    setEditForm((p) => ({ ...p, ministry: e.target.value }))
+                  }
+                  className="mt-1 w-full rounded-md border border-gray-200 bg-white px-2.5 py-2 text-sm focus:border-[#1a1a3e]/40 focus:outline-none disabled:bg-gray-50 disabled:text-gray-400"
+                >
+                  <option value="">— None —</option>
+                  {MINISTRY_OPTIONS.map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <Label htmlFor="edit-serial">Serial No.</Label>
+                <Input
+                  id="edit-serial"
+                  type="number"
+                  value={editForm.serial_no}
+                  onChange={(e) =>
+                    setEditForm((p) => ({ ...p, serial_no: e.target.value }))
+                  }
+                  placeholder="SRN"
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-code">Access Code</Label>
+                <Input
+                  id="edit-code"
+                  value={editForm.access_code}
+                  onChange={(e) =>
+                    setEditForm((p) => ({ ...p, access_code: e.target.value }))
+                  }
+                  placeholder="Access code"
+                />
+              </div>
+            </div>
+
+            <DialogFooter>
+              <DialogClose render={<Button variant="outline" />}>
+                Cancel
+              </DialogClose>
+              <Button
+                className="bg-[#FF9933] text-white hover:bg-[#E68A2E]"
+                onClick={handleSaveEdit}
+                disabled={editLoading}
+              >
+                {editLoading ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Check className="size-4" />
+                )}
+                {editLoading ? "Saving..." : "Save changes"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );

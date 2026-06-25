@@ -685,8 +685,9 @@ export async function importParticipants(
 //
 // Rules locked 2026-06-25 via interview:
 //  • Every row inserted as NEW (no update/dedup of existing students).
-//  • Whole file REJECTED if any row is missing Name / Party / Committee /
-//    Constituency (State / UT is optional).
+//  • Invalid rows are SKIPPED (not whole-file reject) — a row needs Name +
+//    Party (A-Z) + Committee (number) + Constituency; the rest import and the
+//    skipped count is returned (State / UT is optional).
 //  • BLOCKED while allocation is locked.
 //  • Party letters auto-create parties with NO side (side stays null); the
 //    organizer assigns ruling vs opposition manually afterward, so each
@@ -702,7 +703,7 @@ interface AllocatedRosterImportRow {
 export async function importAllocatedRoster(
   eventId: string,
   rows: AllocatedRosterImportRow[]
-): Promise<ActionResult<{ imported: number }>> {
+): Promise<ActionResult<{ imported: number; skipped: number }>> {
   const access = await getYipEventAccess(eventId);
   if (!access.canManage) {
     return { success: false, error: "Not authorized to manage this event" };
@@ -729,36 +730,36 @@ export async function importAllocatedRoster(
     return { success: false, error: "No rows found in the file." };
   }
 
-  // ── Validate EVERY row; reject the whole file on any error ──
-  const rowErrors: string[] = [];
+  // ── Partition rows; SKIP invalid ones (skip-and-warn, not reject-all) ──
+  // A row needs Name + Party (A-Z) + Committee (positive int) + Constituency.
+  const validRows: AllocatedRosterImportRow[] = [];
+  let skipped = 0;
   const uniqueLetters = new Set<string>();
-  rows.forEach((row, i) => {
-    const n = i + 1;
-    if (!row.name || !row.name.trim()) rowErrors.push(`Row ${n}: Name is required`);
-
+  for (const row of rows) {
+    const name = (row.name ?? "").trim();
     const letter = (row.party_letter ?? "").trim().toUpperCase();
-    if (!letter) {
-      rowErrors.push(`Row ${n}: Party is required`);
-    } else if (!/^[A-Z]$/.test(letter)) {
-      rowErrors.push(`Row ${n}: Party must be a single letter A-Z (got "${row.party_letter}")`);
-    } else {
-      uniqueLetters.add(letter);
+    const consName = (row.constituency_name ?? "").trim();
+    const cmte = row.committee_number;
+    const ok =
+      name !== "" &&
+      /^[A-Z]$/.test(letter) &&
+      cmte !== undefined &&
+      cmte !== null &&
+      Number.isInteger(cmte) &&
+      cmte > 0 &&
+      consName !== "";
+    if (!ok) {
+      skipped++;
+      continue;
     }
-
-    if (row.committee_number === undefined || row.committee_number === null) {
-      rowErrors.push(`Row ${n}: Committee is required`);
-    } else if (!Number.isInteger(row.committee_number) || row.committee_number <= 0) {
-      rowErrors.push(`Row ${n}: Committee must be a positive whole number`);
-    }
-
-    if (!row.constituency_name || !row.constituency_name.trim()) {
-      rowErrors.push(`Row ${n}: Constituency is required`);
-    }
-  });
-  if (rowErrors.length > 0) {
-    const shown = rowErrors.slice(0, 25).join("\n");
-    const more = rowErrors.length > 25 ? `\n…and ${rowErrors.length - 25} more` : "";
-    return { success: false, error: `File rejected — fix these rows and re-upload:\n${shown}${more}` };
+    uniqueLetters.add(letter);
+    validRows.push(row);
+  }
+  if (validRows.length === 0) {
+    return {
+      success: false,
+      error: `No valid rows to import — all ${rows.length} were skipped. Each row needs a Name, Party letter (A-Z), Committee number, and Constituency.`,
+    };
   }
 
   // ── Create-or-find a side-less party per letter ──
@@ -828,7 +829,7 @@ export async function importAllocatedRoster(
     committee_name: string | null;
   }> = [];
 
-  for (const row of rows) {
+  for (const row of validRows) {
     const letter = row.party_letter.trim().toUpperCase();
     const rec = partyMap.get(letter);
     let code: string;
@@ -862,11 +863,11 @@ export async function importAllocatedRoster(
     action_type: "import",
     target_table: "participants",
     target_event_id: eventId,
-    metadata: { imported: inserts.length, source: "allocated_roster" },
+    metadata: { imported: inserts.length, skipped, source: "allocated_roster" },
   });
   revalidatePath(`/yip/dashboard/events/${eventId}/participants`);
   revalidatePath(`/yip/dashboard/events/${eventId}/allocation`);
-  return { success: true, data: { imported: inserts.length } };
+  return { success: true, data: { imported: inserts.length, skipped } };
 }
 
 // ─── Delete Participant ────────────────────────────────────────────

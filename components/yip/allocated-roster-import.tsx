@@ -178,7 +178,7 @@ export function AllocatedRosterImport({
   const [parseError, setParseError] = useState("");
   const [importing, setImporting] = useState(false);
   const [dupConfirmed, setDupConfirmed] = useState(false);
-  const [result, setResult] = useState<{ imported: number } | null>(null);
+  const [result, setResult] = useState<{ imported: number; skipped: number } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   function reset() {
@@ -273,12 +273,11 @@ export function AllocatedRosterImport({
   }
 
   const invalidRows = parsedRows.filter((r) => r.errors.length > 0);
+  const validRows = parsedRows.filter((r) => r.errors.length === 0);
   const hasRows = parsedRows.length > 0;
-  const fileRejected = invalidRows.length > 0;
 
   // "Vacant seat" rows = fully allocated (party + committee + constituency) but
-  // no student name. National's master sheet ships with these; surfacing them
-  // explicitly turns a confusing rejection into an actionable one.
+  // no student name. National's master sheet ships with these; they get skipped.
   const vacantSeatRows = invalidRows.filter(
     (r) =>
       !r.name &&
@@ -288,15 +287,16 @@ export function AllocatedRosterImport({
       r.errors.length === 1
   );
 
-  // Duplicate detection — names already in this event (case-insensitive).
+  // Duplicate detection — among the rows that WILL import (valid), case-insensitive.
   const existingSet = new Set(existingNames.map((n) => n.trim().toLowerCase()));
-  const dupNames = hasRows && !fileRejected
-    ? parsedRows.filter((r) => existingSet.has(r.name.trim().toLowerCase()))
-    : [];
+  const dupNames = validRows.filter((r) =>
+    existingSet.has(r.name.trim().toLowerCase())
+  );
   const needsDupConfirm = dupNames.length > 0 && !dupConfirmed;
 
+  // Skip-and-warn: import as long as ≥1 valid row; invalid rows are skipped.
   const canImport =
-    hasRows && !fileRejected && !needsDupConfirm && !allocationLocked && !importing;
+    validRows.length > 0 && !needsDupConfirm && !allocationLocked && !importing;
 
   async function handleImport() {
     if (!canImport) return;
@@ -359,6 +359,7 @@ export function AllocatedRosterImport({
               <span className="font-medium">
                 Imported {result.imported} student
                 {result.imported !== 1 ? "s" : ""}
+                {result.skipped > 0 ? `, skipped ${result.skipped}` : ""}
               </span>
             </div>
             <p className="mt-1 text-sm text-green-700">
@@ -414,26 +415,21 @@ export function AllocatedRosterImport({
               </div>
             )}
 
-            {/* Whole-file rejection banner */}
-            {fileRejected && (
-              <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+            {/* Skip warning (non-blocking — invalid rows are skipped) */}
+            {invalidRows.length > 0 && (
+              <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
                 <AlertCircle className="mt-0.5 size-4 shrink-0" />
                 <span>
                   <span className="font-medium">
-                    {invalidRows.length} row{invalidRows.length !== 1 ? "s" : ""} have
-                    problems.
+                    {invalidRows.length} row{invalidRows.length !== 1 ? "s" : ""} will be skipped
                   </span>{" "}
-                  The whole file is held back — fix the rows marked in red and
-                  upload again. Nothing has been imported.
+                  (missing Name, Party, Committee, or Constituency) — the other{" "}
+                  <span className="font-medium">{validRows.length}</span> will import.
                   {vacantSeatRows.length > 0 && (
                     <>
                       {" "}
-                      <span className="font-medium">
-                        {vacantSeatRows.length} of these are vacant seats
-                      </span>{" "}
-                      (a constituency is allocated but no student name is filled
-                      in). Delete those rows or add the student names, then
-                      re-upload.
+                      {vacantSeatRows.length} look like vacant seats (a constituency
+                      is allocated but no student name).
                     </>
                   )}
                 </span>
@@ -547,8 +543,8 @@ export function AllocatedRosterImport({
                     ) : (
                       <>
                         <Upload className="size-4" />
-                        Import {parsedRows.length} Student
-                        {parsedRows.length !== 1 ? "s" : ""}
+                        Import {validRows.length} Student
+                        {validRows.length !== 1 ? "s" : ""}
                       </>
                     )}
                   </Button>

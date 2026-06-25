@@ -3,7 +3,10 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { publishResults, unpublishResults } from "@/app/yip/actions/results";
-import type { ResultWithParticipant } from "@/app/yip/actions/results";
+import type {
+  ResultWithParticipant,
+  AwardCandidateGroup,
+} from "@/app/yip/actions/results";
 import {
   setAwardWinner,
   clearAwardOverride,
@@ -207,6 +210,7 @@ export function ResultsClient({
   initialQualifiedIds = [],
   positionBonuses = {},
   day2CheckinWarning = false,
+  awardCandidates = [],
 }: {
   eventId: string;
   eventName: string;
@@ -221,6 +225,9 @@ export function ResultsClient({
   // "Not ranked — absent Day 2". Surface a warning so the chair doesn't publish
   // an all-unranked leaderboard before Day-2 check-in is done.
   day2CheckinWarning?: boolean;
+  // Top-5 contender shortlist per award (pre-cap), with the actual winner(s)
+  // flagged (post-cap). Empty until results are computed.
+  awardCandidates?: AwardCandidateGroup[];
 }) {
   const router = useRouter();
 
@@ -625,6 +632,75 @@ export function ResultsClient({
             );
           })}
         </div>
+      )}
+
+      {/* Top-5 contenders per award — the shortlist BEFORE the one-award-per-
+          student cap, with the actual winner(s) (AFTER the cap) highlighted. Lets
+          reviewers see who was in contention and where each award landed once a
+          higher-priority award claimed a stronger student. */}
+      {awardCandidates.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Trophy className="size-4 text-[#FF9933]" />
+              Award contenders — top 5 per award
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="mb-4 text-xs text-gray-500">
+              Each student wins at most one award. These are the top-ranked
+              contenders for each award; the highlighted row is who actually
+              received it after the one-award cap.
+            </p>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {awardCandidates.map((group) => {
+                const style = getAwardStyle(group.award_label);
+                const Icon = style.icon;
+                return (
+                  <div
+                    key={group.award_key}
+                    className={`rounded-lg border ${style.border} ${style.bg} p-4`}
+                  >
+                    <div className="mb-2 flex items-center gap-2">
+                      <Icon className={`size-4 shrink-0 ${style.iconColor}`} />
+                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-600">
+                        {group.award_label}
+                      </p>
+                    </div>
+                    <ol className="space-y-1">
+                      {group.candidates.map((c) => (
+                        <li
+                          key={`${group.award_key}-${c.participant_id}`}
+                          className={`flex items-center justify-between gap-2 rounded px-2 py-1 text-sm ${
+                            c.is_winner
+                              ? "bg-white/80 font-semibold text-gray-900 ring-1 ring-[#FF9933]/40"
+                              : "text-gray-700"
+                          }`}
+                        >
+                          <span className="flex min-w-0 items-center gap-1.5">
+                            {c.is_winner ? (
+                              <Crown className="size-3.5 shrink-0 text-[#FF9933]" />
+                            ) : (
+                              <span className="w-3.5 shrink-0 text-center text-xs text-gray-400">
+                                {c.rank}
+                              </span>
+                            )}
+                            <span className="truncate">
+                              {c.participant_name ?? "—"}
+                            </span>
+                          </span>
+                          <span className="shrink-0 tabular-nums text-xs text-gray-500">
+                            {c.score.toFixed(1)}
+                          </span>
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* Manual award override — chair's final say (chapter chair or higher) */}

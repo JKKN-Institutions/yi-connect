@@ -158,68 +158,10 @@ function removeAward(r: ResultRow, awardLabel: string): void {
   r.award_category = kept.length ? kept.join(", ") : null;
 }
 
-function assignAward(
-  rows: ResultRow[],
-  participants: Map<string, ParticipantLite>,
-  awardLabel: string,
-  eligible: (p: ParticipantLite, r: ResultRow) => boolean,
-  rankBy: (r: ResultRow) => number,
-  opts: { allTied?: boolean; recipients?: number } = {}
-): void {
-  // Central day-presence gate (Director ruling 2026-06-25): a participant who
-  // did not attend BOTH days of a two-day event (dayComplete=false) is excluded
-  // from EVERY award here, in one place, so all 15 award predicates honor it
-  // uniformly without editing each one. Inert at one-day events (dayComplete is
-  // true for everyone). Folded into the eligible() check below.
-  const isEligible = (p: ParticipantLite, r: ResultRow): boolean =>
-    r.dayComplete && eligible(p, r);
-
-  let topScore = -Infinity;
-  let anyEligible = false;
-
-  for (const r of rows) {
-    const p = participants.get(r.participant_id);
-    if (!p || !isEligible(p, r)) continue;
-    anyEligible = true;
-    const s = rankBy(r);
-    if (s > topScore) topScore = s;
-  }
-
-  // No eligible participant, OR no real signal (everyone tied at 0 — e.g. an
-  // award keyed to a family/session that wasn't scored at this event). Award
-  // no one rather than the whole field (handbook intent: don't fabricate).
-  if (!anyEligible || topScore <= 0) return;
-
-  if (opts.allTied) {
-    // Team award (Director ruling): every participant at the top score co-wins
-    // — e.g. the whole top committee shares Team Spirit.
-    for (const r of rows) {
-      const p = participants.get(r.participant_id);
-      if (!p || !isEligible(p, r)) continue;
-      if (rankBy(r) === topScore) appendAward(r, awardLabel);
-    }
-    return;
-  }
-
-  // Top-N winners. recipients defaults to 1, reproducing the original single
-  // winner exactly: among eligible participants with a positive score, take the
-  // highest N by rankBy, breaking ties by overall avg_score then a stable
-  // participant_id. Only positive scorers win, so N=3 with only 2 positive
-  // scores awards 2 — never fabricates a winner.
-  const recipients = Math.max(1, opts.recipients ?? 1);
-  const ranked = rows
-    .filter((r) => {
-      const p = participants.get(r.participant_id);
-      return Boolean(p && isEligible(p, r) && rankBy(r) > 0);
-    })
-    .sort(
-      (a, b) =>
-        rankBy(b) - rankBy(a) ||
-        b.avg_score - a.avg_score ||
-        (a.participant_id < b.participant_id ? -1 : 1)
-    );
-  for (const r of ranked.slice(0, recipients)) appendAward(r, awardLabel);
-}
+// NOTE: the former per-award assignAward() helper (independent assignment, a
+// student could stack awards) was REPLACED 2026-06-25 by the single cap-aware,
+// scarce-first pass in computeResults() (ONE award per student). Its gate +
+// tiebreak live there now. appendAward / removeAward remain the only mutators.
 
 export async function computeResults(
   eventId: string
@@ -966,9 +908,11 @@ export async function computeResults(
     return { eligible, rankBy, isTeam: row.is_team ?? false };
   }
 
-  // Load award definitions + this event's overrides; award each ACTIVE one its
-  // effective recipient count (override ?? default), in display order. Untyped
-  // client view — the formula columns are newer than the generated types.
+  // Load award definitions + this event's overrides; build the ACTIVE award
+  // specs (config-driven via buildSpec when rank_mode is set — seeded for all 15
+  // — else the in-code AWARD_REGISTRY so no award ever silently disappears), with
+  // each award's effective recipient count (override ?? default). Untyped client
+  // view — the formula columns are newer than the generated types.
   const { data: awardDefs } = await (supabase as unknown as SupabaseClient)
     .from("award_definitions")
     .select(
@@ -982,23 +926,126 @@ export async function computeResults(
   const awardOverrideByKey = new Map(
     (awardCfgRows ?? []).map((o) => [o.award_key, o])
   );
+
+  // ── Cap-aware, scarce-first award assignment (Director ruling 2026-06-25) ──
+  // ONE award per student. Previously each award was assigned independently, so a
+  // strong student could stack several. Now:
+  //   1. Build every ACTIVE award's RANKED ELIGIBLE candidate list (the SAME
+  //      gate assignAward used: r.dayComplete && eligible(p,r) && rankBy(r) > 0,
+  //      sorted rankBy desc → avg_score desc → participant_id), and record its
+  //      pool size.
+  //   2. Order the awards SCARCE-FIRST (smallest eligible pool first, then by
+  //      display_order) so role-locked awards (Best Speaker has a pool of 1) are
+  //      assigned before the open-to-all merit awards and can never go empty
+  //      because a generalist grabbed the only eligible student. Team Spirit (a
+  //      large team pool) naturally lands last.
+  //   3. Assign with a global `awarded` Set: each award goes to its highest-ranked
+  //      candidate(s) NOT already holding an award; once awarded, a student is
+  //      skipped by every later award. Each student ends with AT MOST ONE award.
+  type ActiveAward = {
+    awardKey: string;
+    label: string;
+    isTeam: boolean;
+    recipients: number;
+    displayOrder: number;
+    /** The award's ranking metric — used to record each candidate's score. */
+    rankBy: (r: ResultRow) => number;
+    /** Ranked eligible candidate rows (best first), pre-cap. */
+    candidates: ResultRow[];
+    poolSize: number;
+  };
+
+  const activeAwards: ActiveAward[] = [];
   for (const def of (awardDefs ?? []) as AwardConfigRow[]) {
-    // Config-driven when rank_mode is set (seeded for all 15); else fall back to
-    // the in-code registry so no award ever silently disappears.
     const spec = def.rank_mode ? buildSpec(def) : AWARD_REGISTRY[def.award_key];
     if (!spec) continue; // unknown key (future-proof) — skip
     const ov = awardOverrideByKey.get(def.award_key);
     const active = ov?.is_active ?? def.is_active;
     if (!active) continue;
-    const recipients = ov?.recipients ?? def.default_recipients;
-    assignAward(
-      resultRows,
-      participantMap,
-      def.label,
-      spec.eligible,
-      spec.rankBy,
-      { allTied: spec.isTeam, recipients }
-    );
+    const recipients = Math.max(1, ov?.recipients ?? def.default_recipients);
+
+    // Ranked eligible candidate list — identical gate + tiebreak to assignAward:
+    // day-presence + the award's eligibility predicate + a positive rankBy
+    // signal (never fabricate a winner from an all-zero field), sorted rankBy
+    // desc, then overall avg_score desc, then a stable participant_id.
+    const candidates = resultRows
+      .filter((r) => {
+        const p = participantMap.get(r.participant_id);
+        return Boolean(
+          p && r.dayComplete && spec.eligible(p, r) && spec.rankBy(r) > 0
+        );
+      })
+      .sort(
+        (a, b) =>
+          spec.rankBy(b) - spec.rankBy(a) ||
+          b.avg_score - a.avg_score ||
+          (a.participant_id < b.participant_id ? -1 : 1)
+      );
+
+    activeAwards.push({
+      awardKey: def.award_key,
+      label: def.label,
+      isTeam: spec.isTeam ?? false,
+      recipients,
+      displayOrder: def.display_order,
+      rankBy: spec.rankBy,
+      candidates,
+      poolSize: candidates.length,
+    });
+  }
+
+  // Scarce-first ordering: rarest eligible pool first; prestige (display_order)
+  // breaks ties. This is the assignment order; the on-screen / candidate-table
+  // order stays display_order (handled at write time + in the UI).
+  const assignmentOrder = [...activeAwards].sort(
+    (a, b) => a.poolSize - b.poolSize || a.displayOrder - b.displayOrder
+  );
+
+  const awarded = new Set<string>(); // participant_ids that already hold an award
+
+  for (const aw of assignmentOrder) {
+    if (aw.isTeam) {
+      // Team award (Team Spirit): the winning committee is the candidates tied at
+      // the top committeeLevel (every member of a committee shares the same
+      // committeeLevel, so "tied at the top" == the best committee). Award its
+      // members who are NOT already awarded. If the very top committee has NO
+      // un-awarded member, CASCADE to the next committee (next-lower
+      // committeeLevel group) with ≥1 un-awarded member. So Team Spirit still
+      // lands on a strong committee even when the top one's members already won
+      // individual awards.
+      let i = 0;
+      while (i < aw.candidates.length) {
+        const level = aw.candidates[i].committeeLevel;
+        // Collect this committeeLevel group (candidates are sorted by
+        // committeeLevel desc, so equal-level rows are contiguous).
+        let j = i;
+        const group: ResultRow[] = [];
+        while (j < aw.candidates.length && aw.candidates[j].committeeLevel === level) {
+          group.push(aw.candidates[j]);
+          j++;
+        }
+        const winners = group.filter((r) => !awarded.has(r.participant_id));
+        if (winners.length > 0) {
+          for (const r of winners) {
+            appendAward(r, aw.label);
+            awarded.add(r.participant_id);
+          }
+          break; // this committee won — done (no cascade past the first that wins)
+        }
+        i = j; // whole committee already awarded → cascade to the next one
+      }
+    } else {
+      // Non-team award: walk the ranked list and give it to the first
+      // `recipients` candidates NOT already holding an award.
+      let given = 0;
+      for (const r of aw.candidates) {
+        if (given >= aw.recipients) break;
+        if (awarded.has(r.participant_id)) continue;
+        appendAward(r, aw.label);
+        awarded.add(r.participant_id);
+        given++;
+      }
+    }
   }
 
   // ── Manual award overrides (chair's final say) — final pass ───────
@@ -1006,6 +1053,17 @@ export async function computeResults(
   // last so it always beats the auto-computed holder, and re-read on every
   // recompute so it survives. If the chair's pick has no result row (not
   // scored), the auto-winner is left intact rather than the award vanishing.
+  //
+  // ONE-AWARD RULE under chair override (Director ruling 2026-06-25): pinning
+  // student X to award A must keep the one-award-per-student invariant. So we:
+  //   (a) strip award A from whoever auto-won it, then
+  //   (b) strip any OTHER award X already holds (X now holds A and only A), then
+  //   (c) give A to X.
+  // Note: stripping X's previous award B leaves B with one fewer holder — we do
+  // NOT auto-cascade B to its next contender (the chair is making a deliberate,
+  // final call; reshuffling other awards behind their back would surprise them).
+  // The top-5 candidate table still shows B's full shortlist so the next-best
+  // contender is visible if the chair wants to pin B too.
   const { data: overrides } = await supabase
     .from("award_overrides")
     .select("award_label, participant_id")
@@ -1020,7 +1078,11 @@ export async function computeResults(
     // event cannot be pinned an award; leave the auto-winner intact rather than
     // awarding an unranked student.
     if (!target.dayComplete) continue;
+    // (a) take award A away from its current auto-winner(s).
     for (const r of resultRows) removeAward(r, ov.award_label);
+    // (b) take away any OTHER award X currently holds, so X ends with only A.
+    target.award_category = null;
+    // (c) award A to X.
     appendAward(target, ov.award_label);
   }
 
@@ -1037,6 +1099,36 @@ export async function computeResults(
       r.award_category = r.notRankedReason;
     }
   }
+
+  // ── Top-5 candidate shortlist per award (Director ruling 2026-06-25) ──────
+  // For each ACTIVE award, store its top 5 ranked candidates (the pre-cap
+  // contenders, in display_order awards × rankBy order), each with the rankBy
+  // score and is_winner = whether they ACTUALLY received the award AFTER the cap
+  // + chair overrides (i.e. their final award_category carries this label). The
+  // results page renders this so reviewers see who the contenders were and who
+  // the cap/override actually landed it on. Each row holds ≤1 award, so the
+  // label-membership check is exact (and team awards correctly flag every
+  // co-winning committee member).
+  const computedAt = new Date().toISOString();
+  const candidateRecords = activeAwards.flatMap((aw) =>
+    aw.candidates.slice(0, 5).map((r, idx) => {
+      const labels = r.award_category ? r.award_category.split(", ") : [];
+      return {
+        event_id: eventId,
+        award_key: aw.awardKey,
+        award_label: aw.label,
+        rank: idx + 1,
+        participant_id: r.participant_id,
+        // The metric this award ranks on, for THIS candidate (same rankBy that
+        // ordered the list).
+        score: Math.round(aw.rankBy(r) * 100) / 100,
+        // After the cap + chair overrides each row holds ≤1 award, so a simple
+        // label-membership check is exact (team awards flag every co-winner).
+        is_winner: labels.includes(aw.label),
+        computed_at: computedAt,
+      };
+    })
+  );
 
   // 7. Replace and persist
   await supabase.from("results").delete().eq("event_id", eventId);
@@ -1061,6 +1153,19 @@ export async function computeResults(
 
   if (insertError) {
     return { success: false, error: insertError.message };
+  }
+
+  // Replace this event's top-5 candidate shortlist (same delete+insert pattern
+  // as results). Untyped client view — award_candidates is newer than the
+  // generated types. Non-fatal: a failure here doesn't roll back the results.
+  await (supabase as unknown as SupabaseClient)
+    .from("award_candidates")
+    .delete()
+    .eq("event_id", eventId);
+  if (candidateRecords.length > 0) {
+    await (supabase as unknown as SupabaseClient)
+      .from("award_candidates")
+      .insert(candidateRecords);
   }
 
   const awardsAssigned = resultRows.filter((r) => r.award_category !== null).length;
@@ -1298,6 +1403,91 @@ export async function getResults(
   if (error || !data) return [];
 
   return data as unknown as ResultWithParticipant[];
+}
+
+// ─── Get Award Candidates (top-5 per award) ──────────────────────
+
+export type AwardCandidate = {
+  award_key: string;
+  award_label: string;
+  rank: number;
+  participant_id: string;
+  participant_name: string | null;
+  score: number;
+  is_winner: boolean;
+};
+
+export type AwardCandidateGroup = {
+  award_key: string;
+  award_label: string;
+  candidates: AwardCandidate[]; // ordered rank 1..5
+};
+
+/**
+ * Top-5 contender shortlist per award for this event (computed by
+ * computeResults). Gated to the SAME audience as the leaderboard
+ * (canViewScores → national/super-admin), so the contender view only renders
+ * where the results do. Returns awards grouped + each group's candidates
+ * ordered by rank (1 = best on that award's metric); the winner row(s) carry
+ * is_winner=true.
+ */
+export async function getAwardCandidates(
+  eventId: string
+): Promise<AwardCandidateGroup[]> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canViewScores) return [];
+
+  const supabase = await createServiceClient();
+
+  // Untyped client view — award_candidates is newer than the generated types.
+  const { data, error } = await (supabase as unknown as SupabaseClient)
+    .from("award_candidates")
+    .select(
+      "award_key, award_label, rank, participant_id, score, is_winner, participant:participants(full_name)"
+    )
+    .eq("event_id", eventId)
+    .order("award_key", { ascending: true })
+    .order("rank", { ascending: true });
+
+  if (error || !data) return [];
+
+  type Row = {
+    award_key: string;
+    award_label: string;
+    rank: number;
+    participant_id: string;
+    score: number;
+    is_winner: boolean;
+    participant: { full_name: string } | { full_name: string }[] | null;
+  };
+
+  // Group by award_key, preserving the rank order within each group.
+  const groups = new Map<string, AwardCandidateGroup>();
+  for (const r of data as unknown as Row[]) {
+    const participant = Array.isArray(r.participant)
+      ? r.participant[0]
+      : r.participant;
+    const candidate: AwardCandidate = {
+      award_key: r.award_key,
+      award_label: r.award_label,
+      rank: r.rank,
+      participant_id: r.participant_id,
+      participant_name: participant?.full_name ?? null,
+      score: r.score,
+      is_winner: r.is_winner,
+    };
+    const g = groups.get(r.award_key);
+    if (g) {
+      g.candidates.push(candidate);
+    } else {
+      groups.set(r.award_key, {
+        award_key: r.award_key,
+        award_label: r.award_label,
+        candidates: [candidate],
+      });
+    }
+  }
+  return Array.from(groups.values());
 }
 
 // ─── Get Scoring Progress ────────────────────────────────────────

@@ -140,6 +140,26 @@ export async function addJury(
     return { success: false, error: error?.message ?? "Failed to add jury" };
   }
 
+  // Backfill: assign the brand-new juror to every currently-scoreable session so
+  // they don't miss sessions that were turned on before they were added.
+  const { data: scoreable } = await supabase
+    .from("agenda")
+    .select("id")
+    .eq("event_id", eventId)
+    .eq("is_scoreable", true);
+  const rows = (scoreable ?? []).map((s) => ({
+    event_id: eventId,
+    jury_assignment_id: jury.id,
+    agenda_item_id: s.id,
+  }));
+  if (rows.length > 0) {
+    const { error: insErr } = await supabase
+      .from("jury_session_assignments")
+      .insert(rows);
+    // The juror was already created — never fail addJury on a backfill error.
+    if (insErr) console.error("[addJury] auto-assign failed", insErr);
+  }
+
   revalidatePath(`/yip/dashboard/events/${eventId}/jury`);
   return { success: true, data: { id: jury.id, access_code: jury.access_code } };
 }

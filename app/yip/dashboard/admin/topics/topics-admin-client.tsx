@@ -23,6 +23,8 @@ import {
   Loader2,
   Search,
   Send,
+  ChevronRight,
+  ChevronDown,
 } from "lucide-react";
 import { YI_ZONES, type YiZone } from "@/lib/yip/hierarchy";
 import {
@@ -104,6 +106,15 @@ export function TopicsAdminClient({
   const [query, setQuery] = useState("");
   const [showInactive, setShowInactive] = useState(false);
   const [showSubpoints, setShowSubpoints] = useState(false);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  function toggleExpand(id: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
   const [editing, setEditing] = useState<AdminTopic | null>(null);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState<FormState>(EMPTY);
@@ -550,33 +561,72 @@ export function TopicsAdminClient({
                         {t.topic_number ?? "—"}
                       </TableCell>
                       <TableCell className="max-w-xl">
-                        <div className="text-sm font-semibold text-[#1a1a3e]">
-                          {t.title}
-                        </div>
-                        {/* For committee topics the description is the debate /
-                            bill topic; for central/regional it's an optional note. */}
-                        {t.description && (
-                          <div className="text-sm text-[#1a1a3e]/80 mt-0.5">
-                            {t.description}
-                          </div>
-                        )}
-                        {t.linked_scheme && (
-                          <div className="text-[11px] text-[#1a1a3e]/45 mt-0.5">
-                            Linked scheme: {t.linked_scheme}
-                          </div>
-                        )}
-                        {showSubpoints && t.sub_points.length > 0 && (
-                          <ul className="mt-1.5 ml-4 list-disc space-y-0.5 marker:text-[#1a1a3e]/30">
-                            {t.sub_points.map((s, i) => (
-                              <li
-                                key={i}
-                                className="text-xs text-[#1a1a3e]/60"
-                              >
-                                {s}
-                              </li>
-                            ))}
-                          </ul>
-                        )}
+                        {(() => {
+                          const isOpen =
+                            showSubpoints || expanded.has(t.id);
+                          const hasSubs = t.sub_points.length > 0;
+                          return (
+                            <div className="flex items-start gap-1.5">
+                              {hasSubs ? (
+                                <button
+                                  type="button"
+                                  onClick={() => toggleExpand(t.id)}
+                                  className="mt-0.5 shrink-0 text-[#1a1a3e]/40 hover:text-[#1a1a3e] transition-colors"
+                                  aria-label={
+                                    isOpen
+                                      ? "Collapse sub-points"
+                                      : "Expand sub-points"
+                                  }
+                                >
+                                  {isOpen ? (
+                                    <ChevronDown className="size-4" />
+                                  ) : (
+                                    <ChevronRight className="size-4" />
+                                  )}
+                                </button>
+                              ) : (
+                                <span className="w-4 shrink-0" />
+                              )}
+                              <div className="min-w-0 flex-1">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    hasSubs && toggleExpand(t.id)
+                                  }
+                                  disabled={!hasSubs}
+                                  className="text-left text-sm font-semibold text-[#1a1a3e] hover:underline disabled:cursor-default disabled:hover:no-underline"
+                                >
+                                  {t.title}
+                                </button>
+                                {/* For committee topics the description is the
+                                    debate / bill topic; for central/regional it's
+                                    an optional note. */}
+                                {t.description && (
+                                  <div className="text-sm text-[#1a1a3e]/80 mt-0.5">
+                                    {t.description}
+                                  </div>
+                                )}
+                                {t.linked_scheme && (
+                                  <div className="text-[11px] text-[#1a1a3e]/45 mt-0.5">
+                                    Linked scheme: {t.linked_scheme}
+                                  </div>
+                                )}
+                                {isOpen && hasSubs && (
+                                  <ul className="mt-1.5 list-disc pl-4 space-y-0.5 marker:text-[#1a1a3e]/30">
+                                    {t.sub_points.map((s, i) => (
+                                      <li
+                                        key={i}
+                                        className="text-xs text-[#1a1a3e]/60"
+                                      >
+                                        {s}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </TableCell>
                       <TableCell>
                         <ScopeBadge topic={t} />

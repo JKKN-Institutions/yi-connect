@@ -349,15 +349,30 @@ export function VoteManager({
 
   // ─── Action handlers ──────────────────────────────────────────
 
-  // Case-insensitive filter shared by every nominee picker (name or school).
+  // Case-insensitive filter shared by every nominee picker. Search by ANY of:
+  // name, constituency name, constituency number, or school.
   function filterNominees(members: VoteCandidate[]) {
     const q = nomineeSearch.trim().toLowerCase();
     if (!q) return members;
     return members.filter(
       (m) =>
         m.full_name.toLowerCase().includes(q) ||
+        (m.constituency_name ?? "").toLowerCase().includes(q) ||
+        (m.constituency_number != null &&
+          String(m.constituency_number).includes(q)) ||
         (m.school_name ?? "").toLowerCase().includes(q)
     );
+  }
+
+  // Subtitle under each nominee — prefer their constituency (the field
+  // organisers search by); fall back to school before allocation assigns one.
+  function candidateSubtitle(m: VoteCandidate): string {
+    if (m.constituency_name) {
+      return m.constituency_number != null
+        ? `#${m.constituency_number} · ${m.constituency_name}`
+        : m.constituency_name;
+    }
+    return m.school_name ?? "";
   }
 
   // Speaker: open the nomination dialog and load EVERY party's members (both
@@ -851,7 +866,7 @@ export function VoteManager({
             <Input
               value={nomineeSearch}
               onChange={(e) => setNomineeSearch(e.target.value)}
-              placeholder="Search by name or school"
+              placeholder="Search by name, constituency or No."
               className="h-8 pl-8 text-sm"
             />
           </div>
@@ -890,7 +905,7 @@ export function VoteManager({
                       {m.full_name}
                     </p>
                     <p className="truncate text-xs text-gray-500">
-                      {m.school_name}
+                      {candidateSubtitle(m)}
                     </p>
                   </div>
                   <div
@@ -1059,7 +1074,7 @@ export function VoteManager({
             <Input
               value={nomineeSearch}
               onChange={(e) => setNomineeSearch(e.target.value)}
-              placeholder="Search by name or school"
+              placeholder="Search by name, constituency or No."
               className="h-8 pl-8 text-sm"
             />
           </div>
@@ -1099,7 +1114,7 @@ export function VoteManager({
                       {m.full_name}
                     </p>
                     <p className="truncate text-xs text-gray-500">
-                      {m.school_name}
+                      {candidateSubtitle(m)}
                     </p>
                   </div>
                   <div
@@ -1327,7 +1342,7 @@ export function VoteManager({
             <Input
               value={nomineeSearch}
               onChange={(e) => setNomineeSearch(e.target.value)}
-              placeholder="Search by name or school"
+              placeholder="Search by name, constituency or No."
               className="h-8 pl-8 text-sm"
             />
           </div>
@@ -1363,7 +1378,7 @@ export function VoteManager({
                       {m.full_name}
                     </p>
                     <p className="truncate text-xs text-gray-500">
-                      {m.school_name}
+                      {candidateSubtitle(m)}
                     </p>
                   </div>
                   <div
@@ -1455,7 +1470,7 @@ export function VoteManager({
             <Input
               value={nomineeSearch}
               onChange={(e) => setNomineeSearch(e.target.value)}
-              placeholder="Search by name or school"
+              placeholder="Search by name, constituency or No."
               className="h-8 pl-8 text-sm"
             />
           </div>
@@ -1510,7 +1525,7 @@ export function VoteManager({
                             {m.full_name}
                           </p>
                           <p className="truncate text-xs text-gray-500">
-                            {m.school_name}
+                            {candidateSubtitle(m)}
                           </p>
                         </div>
                         <div

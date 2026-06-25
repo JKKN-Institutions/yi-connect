@@ -78,7 +78,8 @@ const GROUPS: TabGroup[] = [
       // Proceedings = Questions / Motions / Bills (sub-tabbed on the page).
       { label: "Proceedings", href: "/questions", icon: Gavel },
       { label: "Chat", href: "/chat", icon: MessagesSquare },
-      // Scoring = Scoring / Committee Scores (sub-tabbed on the page).
+      // Scoring tab. (The old "Committee Scores" sub-tab was retired 2026-06-25 —
+      // committee work is now scored inside the regular jury sessions.)
       { label: "Scoring", href: "/scoring", icon: Star },
       { label: "Media", href: "/media", icon: Images },
     ],
@@ -98,8 +99,7 @@ const GROUPS: TabGroup[] = [
 ];
 
 // Score-bearing tabs — visible to national / super-admins only (2026-06-13).
-// "Scoring" hosts Committee Scores as a sub-tab; "Committees" (picker) is open
-// setup and is NOT score-gated.
+// "Committees" (picker) is open setup and is NOT score-gated.
 const SCORE_TABS = new Set(["Scoring", "Results"]);
 const COLLAPSE_KEY = "yip-event-nav-collapsed";
 

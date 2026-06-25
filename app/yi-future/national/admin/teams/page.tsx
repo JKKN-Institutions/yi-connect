@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
 import { TEAM_SIZE_MIN, TEAM_SIZE_MAX, TRACK_LABELS } from "@/lib/yi-future/constants";
 import { AutoRefresh } from "@/components/yi-future/AutoRefresh";
+import { ListSearchForm } from "@/components/yi-future/table/list-table";
 
 // Keep the installed PWA showing live data instead of a stale cached snapshot.
 export const dynamic = "force-dynamic";
@@ -109,8 +110,8 @@ async function getAllTeams(editionId: string): Promise<TeamRow[]> {
 }
 
 function buildQuery(
-  current: { region: string; track: string; status: string; chapter: string },
-  changes: Partial<{ region: string; track: string; status: string; chapter: string }>
+  current: { region: string; track: string; status: string; chapter: string; q: string },
+  changes: Partial<{ region: string; track: string; status: string; chapter: string; q: string }>
 ): string {
   const merged = { ...current, ...changes };
   const parts: string[] = [];
@@ -118,7 +119,8 @@ function buildQuery(
   if (merged.track && merged.track !== "all") parts.push(`track=${encodeURIComponent(merged.track)}`);
   if (merged.status && merged.status !== "all") parts.push(`status=${encodeURIComponent(merged.status)}`);
   if (merged.chapter && merged.chapter !== "all") parts.push(`chapter=${encodeURIComponent(merged.chapter)}`);
-  return parts.length ? `/national/admin/teams?${parts.join("&")}` : "/national/admin/teams";
+  if (merged.q) parts.push(`q=${encodeURIComponent(merged.q)}`);
+  return parts.length ? `/yi-future/national/admin/teams?${parts.join("&")}` : "/yi-future/national/admin/teams";
 }
 
 function fmtDate(iso: string | null): string {
@@ -135,6 +137,7 @@ export default async function NationalTeamsPage({
     track?: string;
     status?: string;
     chapter?: string;
+    q?: string;
   }>;
 }) {
   const sp = await searchParams;
@@ -142,7 +145,8 @@ export default async function NationalTeamsPage({
   const track = (sp.track ?? "all").trim() || "all";
   const status = (sp.status ?? "all").trim() || "all";
   const chapter = (sp.chapter ?? "all").trim() || "all";
-  const current = { region, track, status, chapter };
+  const q = (sp.q ?? "").trim();
+  const current = { region, track, status, chapter, q };
 
   const edition = await getActiveEdition();
   const chapters = await getAllChapters();
@@ -178,13 +182,33 @@ export default async function NationalTeamsPage({
     return true;
   });
 
-  // KPI tiles — based on filtered set
-  const totalTeams = filtered.length;
-  const teamsWithCaptain = filtered.filter((t) => t.captain_id).length;
-  const teamsWithProblem = filtered.filter((t) => t.problem_statement_id).length;
-  const chaptersCovered = new Set(filtered.map((t) => t.chapter_id)).size;
+  // Text search across team / chapter / captain / problem / track.
+  const ql = q.toLowerCase();
+  const searched = ql
+    ? filtered.filter((t) => {
+        const chName = chapterById.get(t.chapter_id)?.name ?? "";
+        return `${t.team_name} ${chName} ${t.captain?.full_name ?? ""} ${
+          t.problem_statements?.title ?? ""
+        } ${t.problem_statements?.tracks?.name ?? ""}`
+          .toLowerCase()
+          .includes(ql);
+      })
+    : filtered;
+
+  const searchHidden = [
+    ...(region !== "all" ? [{ name: "region", value: region }] : []),
+    ...(track !== "all" ? [{ name: "track", value: track }] : []),
+    ...(status !== "all" ? [{ name: "status", value: status }] : []),
+    ...(chapter !== "all" ? [{ name: "chapter", value: chapter }] : []),
+  ];
+
+  // KPI tiles — reflect the currently shown set (filters + search).
+  const totalTeams = searched.length;
+  const teamsWithCaptain = searched.filter((t) => t.captain_id).length;
+  const teamsWithProblem = searched.filter((t) => t.problem_statement_id).length;
+  const chaptersCovered = new Set(searched.map((t) => t.chapter_id)).size;
   const tracksCovered = new Set(
-    filtered.map((t) => t.problem_statements?.tracks?.slug).filter(Boolean)
+    searched.map((t) => t.problem_statements?.tracks?.slug).filter(Boolean)
   ).size;
 
   // Counts for chips (always based on full active-edition set, not double-filtered,
@@ -198,7 +222,7 @@ export default async function NationalTeamsPage({
     if (trSlug) teamCountByTrack.set(trSlug, (teamCountByTrack.get(trSlug) ?? 0) + 1);
   }
 
-  const anyFiltered = region !== "all" || track !== "all" || status !== "all" || chapter !== "all";
+  const anyFiltered = region !== "all" || track !== "all" || status !== "all" || chapter !== "all" || q !== "";
 
   return (
     <div className="space-y-6">
@@ -383,6 +407,15 @@ export default async function NationalTeamsPage({
         </div>
       </div>
 
+      {allTeams.length > 0 && (
+        <ListSearchForm
+          action="/yi-future/national/admin/teams"
+          q={q}
+          placeholder="Search team, chapter, captain, problem…"
+          hidden={searchHidden}
+        />
+      )}
+
       {/* Table or empty state */}
       {allTeams.length === 0 ? (
         <div className="bg-white border border-navy/10 rounded-lg p-10 text-center">
@@ -401,7 +434,7 @@ export default async function NationalTeamsPage({
             ← Back to dashboard
           </Link>
         </div>
-      ) : filtered.length === 0 ? (
+      ) : searched.length === 0 ? (
         <div className="bg-white border border-navy/10 rounded-lg p-8 text-center text-navy/50">
           No teams match these filters.{" "}
           <Link href="/yi-future/national/admin/teams" className="text-yi-gold font-semibold">
@@ -426,7 +459,7 @@ export default async function NationalTeamsPage({
               </tr>
             </thead>
             <tbody>
-              {filtered.map((t) => {
+              {searched.map((t) => {
                 const ch = chapterById.get(t.chapter_id);
                 const trk = t.problem_statements?.tracks;
                 const color = trk?.color_hex ?? "#1a1a3e";

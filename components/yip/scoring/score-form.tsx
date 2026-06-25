@@ -31,8 +31,6 @@ interface ParticipantInfo {
   // No school_name — jurors must never receive it (school-blind scoring).
   ministry?: string | null;
   constituency_name?: string | null;
-  // Shown next to the name as the unique participant number.
-  serial_no?: number | null;
 }
 
 interface ExistingScore {
@@ -402,15 +400,10 @@ export function ScoreForm({
       >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
-            {/* Juror sees name + unique serial # + constituency. School is
-                intentionally not shown to jurors. */}
+            {/* Juror sees only the blind participant label (constituency
+                number, via juryLabel) + constituency. Real name, school, and
+                the roster serial number are intentionally never shown. */}
             <h2 className="text-lg font-bold text-gray-900 truncate">
-              {participant.serial_no != null && (
-                <span className="tabular-nums text-gray-400">
-                  #{participant.serial_no}
-                  {" · "}
-                </span>
-              )}
               {participant.full_name}
             </h2>
             {participant.constituency_name && (

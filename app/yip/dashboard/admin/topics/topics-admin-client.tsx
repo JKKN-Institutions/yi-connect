@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { Fragment, useState, useTransition } from "react";
 import { Badge } from "@/components/yip/ui/badge";
 import { Button } from "@/components/yip/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/yip/ui/card";
@@ -24,7 +24,7 @@ import {
   Search,
   Send,
 } from "lucide-react";
-import { type YiZone } from "@/lib/yip/hierarchy";
+import { YI_ZONES, type YiZone } from "@/lib/yip/hierarchy";
 import {
   adminCreateTopic,
   adminUpdateTopic,
@@ -47,7 +47,7 @@ type FormState = {
 };
 
 const EMPTY: FormState = {
-  category: "committee",
+  category: "central",
   zone: "",
   title: "",
   description: "",
@@ -55,6 +55,42 @@ const EMPTY: FormState = {
   handbook_page: "",
   linked_scheme: "",
 };
+
+// Section order for the grouped table: Central first, then each Yi zone in
+// canonical order, then Committee (ministries). Each section is numbered on its
+// own (topic_number is sequential within a category+zone bucket), so the "#"
+// column reads 1..N per section instead of looking random in a flat list.
+const SECTIONS: { key: "central" | "committee" | YiZone; label: string }[] = [
+  { key: "central", label: "Central Agenda" },
+  ...YI_ZONES.map((z) => ({ key: z.code, label: `Regional — ${z.label}` })),
+  { key: "committee", label: "Committee — Ministries" },
+];
+
+function zoneLabel(zone: string | null): string {
+  return YI_ZONES.find((z) => z.code === zone)?.label ?? zone ?? "—";
+}
+
+function ScopeBadge({ topic }: { topic: AdminTopic }) {
+  if (topic.category === "central") {
+    return (
+      <Badge className="bg-[#FF9933]/10 text-[#FF9933] border-[#FF9933]/20 text-[10px]">
+        Central
+      </Badge>
+    );
+  }
+  if (topic.category === "committee") {
+    return (
+      <Badge className="bg-[#1a1a3e]/10 text-[#1a1a3e] border-[#1a1a3e]/20 text-[10px]">
+        Ministry
+      </Badge>
+    );
+  }
+  return (
+    <Badge className="bg-[#138808]/10 text-[#138808] border-[#138808]/20 text-[10px]">
+      {zoneLabel(topic.zone)}
+    </Badge>
+  );
+}
 
 export function TopicsAdminClient({
   initialTopics,
@@ -89,12 +125,25 @@ export function TopicsAdminClient({
       const q = query.toLowerCase();
       if (
         !t.title.toLowerCase().includes(q) &&
+        !(t.description ?? "").toLowerCase().includes(q) &&
         !t.sub_points.some((s) => s.toLowerCase().includes(q))
       )
         return false;
     }
     return true;
   });
+
+  // Bucket the visible topics into ordered sections (only non-empty ones render).
+  const grouped = SECTIONS.map((section) => ({
+    ...section,
+    rows: visible.filter((t) =>
+      section.key === "central"
+        ? t.category === "central"
+        : section.key === "committee"
+          ? t.category === "committee"
+          : t.category === "regional" && t.zone === section.key
+    ),
+  })).filter((g) => g.rows.length > 0);
 
   function openCreate() {
     setForm(EMPTY);
@@ -124,6 +173,10 @@ export function TopicsAdminClient({
   function submit() {
     if (form.title.trim().length < 3) {
       setError("Title min 3 chars");
+      return;
+    }
+    if (form.category === "regional" && !form.zone) {
+      setError("Regional topics need a zone");
       return;
     }
     const sub_points = form.sub_points
@@ -251,11 +304,29 @@ export function TopicsAdminClient({
         </div>
       )}
 
-      {/* Filters */}
+      {/* Filters: All · Central · each Yi zone · Committee */}
       <div className="flex flex-wrap items-center gap-2">
         <FilterChip active={filter === "all"} onClick={() => setFilter("all")}>
-          All
+          All ({counts.total})
         </FilterChip>
+        <FilterChip
+          active={filter === "central"}
+          onClick={() => setFilter("central")}
+        >
+          Central ({counts.central})
+        </FilterChip>
+        {YI_ZONES.map((z) => {
+          const n = topics.filter((t) => t.zone === z.code).length;
+          return (
+            <FilterChip
+              key={z.code}
+              active={filter === z.code}
+              onClick={() => setFilter(z.code)}
+            >
+              {z.label} ({n})
+            </FilterChip>
+          );
+        })}
         <FilterChip
           active={filter === "committee"}
           onClick={() => setFilter("committee")}
@@ -292,6 +363,47 @@ export function TopicsAdminClient({
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <label className="text-xs font-medium text-[#1a1a3e]/70">
+                  Category
+                </label>
+                <select
+                  value={form.category}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      category: e.target.value as TopicCategory,
+                      zone: e.target.value === "regional" ? form.zone : "",
+                    })
+                  }
+                  className="w-full border border-input rounded-md px-3 py-2 text-sm"
+                >
+                  <option value="central">Central</option>
+                  <option value="regional">Regional</option>
+                  <option value="committee">Committee</option>
+                </select>
+              </div>
+              {form.category === "regional" && (
+                <div>
+                  <label className="text-xs font-medium text-[#1a1a3e]/70">
+                    Zone *
+                  </label>
+                  <select
+                    value={form.zone}
+                    onChange={(e) =>
+                      setForm({ ...form, zone: e.target.value as YiZone })
+                    }
+                    className="w-full border border-input rounded-md px-3 py-2 text-sm"
+                  >
+                    <option value="">— Select —</option>
+                    {YI_ZONES.map((z) => (
+                      <option key={z.code} value={z.code}>
+                        {z.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div>
                 <label className="text-xs font-medium text-[#1a1a3e]/70">
                   Handbook page
@@ -384,82 +496,94 @@ export function TopicsAdminClient({
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>#</TableHead>
-                <TableHead>Committee &amp; Topic</TableHead>
-                <TableHead>Sub-points</TableHead>
-                <TableHead>p.</TableHead>
+                <TableHead className="w-12">#</TableHead>
+                <TableHead>Topic</TableHead>
+                <TableHead className="w-24">Scope</TableHead>
+                <TableHead className="w-24">Sub-points</TableHead>
+                <TableHead className="w-12">p.</TableHead>
                 <TableHead className="w-28"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {visible.length === 0 && (
+              {grouped.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-10 text-sm text-[#1a1a3e]/50">
-                    No committee topics match your filters.
+                  <TableCell colSpan={6} className="text-center py-10 text-sm text-[#1a1a3e]/50">
+                    No topics match your filters.
                   </TableCell>
                 </TableRow>
               )}
-              {visible.map((t) => (
-                <TableRow key={t.id} className={t.is_active ? "" : "opacity-60"}>
-                  <TableCell className="font-mono text-xs">
-                    {t.topic_number ?? "—"}
-                  </TableCell>
-                  <TableCell className="max-w-xl">
-                    {/* Ministry name on top + a Ministry tag. The ministry is the
-                        topic's department label — NOT the committee (the committee
-                        is the student group assigned this topic). */}
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-[#1a1a3e]">
-                        {t.title}
-                      </span>
-                      <Badge className="bg-[#1a1a3e]/10 text-[#1a1a3e] border-[#1a1a3e]/20 text-[10px]">
-                        Ministry
-                      </Badge>
-                    </div>
-                    {/* The debate / bill topic — the main line */}
-                    {t.description && (
-                      <div className="text-sm text-[#1a1a3e]/80 mt-0.5">
-                        {t.description}
-                      </div>
-                    )}
-                    {t.linked_scheme && (
-                      <div className="text-[11px] text-[#1a1a3e]/45 mt-0.5">
-                        Linked scheme: {t.linked_scheme}
-                      </div>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-xs text-[#1a1a3e]/70">
-                    {t.sub_points.length}
-                  </TableCell>
-                  <TableCell className="text-xs font-mono text-[#1a1a3e]/50">
-                    {t.handbook_page ?? "—"}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex gap-1 justify-end">
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => openEdit(t)}
-                        disabled={pending}
-                      >
-                        <Pencil className="size-4" />
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => toggleActive(t)}
-                        disabled={pending}
-                        className={t.is_active ? "text-red-600" : "text-[#138808]"}
-                      >
-                        {t.is_active ? (
-                          <Trash2 className="size-4" />
-                        ) : (
-                          <RotateCcw className="size-4" />
+              {grouped.map((section) => (
+                <Fragment key={section.key}>
+                  <TableRow className="bg-[#1a1a3e]/[0.04] hover:bg-[#1a1a3e]/[0.04]">
+                    <TableCell
+                      colSpan={6}
+                      className="py-2 text-xs font-semibold uppercase tracking-wide text-[#1a1a3e]/70"
+                    >
+                      {section.label} · {section.rows.length}
+                    </TableCell>
+                  </TableRow>
+                  {section.rows.map((t) => (
+                    <TableRow
+                      key={t.id}
+                      className={t.is_active ? "" : "opacity-60"}
+                    >
+                      <TableCell className="font-mono text-xs text-[#1a1a3e]/50">
+                        {t.topic_number ?? "—"}
+                      </TableCell>
+                      <TableCell className="max-w-xl">
+                        <div className="text-sm font-semibold text-[#1a1a3e]">
+                          {t.title}
+                        </div>
+                        {/* For committee topics the description is the debate /
+                            bill topic; for central/regional it's an optional note. */}
+                        {t.description && (
+                          <div className="text-sm text-[#1a1a3e]/80 mt-0.5">
+                            {t.description}
+                          </div>
                         )}
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
+                        {t.linked_scheme && (
+                          <div className="text-[11px] text-[#1a1a3e]/45 mt-0.5">
+                            Linked scheme: {t.linked_scheme}
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <ScopeBadge topic={t} />
+                      </TableCell>
+                      <TableCell className="text-xs text-[#1a1a3e]/70">
+                        {t.sub_points.length}
+                      </TableCell>
+                      <TableCell className="text-xs font-mono text-[#1a1a3e]/50">
+                        {t.handbook_page ?? "—"}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-1 justify-end">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => openEdit(t)}
+                            disabled={pending}
+                          >
+                            <Pencil className="size-4" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => toggleActive(t)}
+                            disabled={pending}
+                            className={t.is_active ? "text-red-600" : "text-[#138808]"}
+                          >
+                            {t.is_active ? (
+                              <Trash2 className="size-4" />
+                            ) : (
+                              <RotateCcw className="size-4" />
+                            )}
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </Fragment>
               ))}
             </TableBody>
           </Table>

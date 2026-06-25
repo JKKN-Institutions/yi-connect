@@ -281,7 +281,6 @@ export function ParticipantDetailClient({
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <h1 className="text-xl font-bold text-gray-900">{p.full_name}</h1>
-              <p className="text-sm text-gray-500">{p.school_name}</p>
               <div className="mt-2 flex flex-wrap items-center gap-1.5">
                 {p.parliament_role && (
                   <Badge variant="secondary" className="text-[11px]">

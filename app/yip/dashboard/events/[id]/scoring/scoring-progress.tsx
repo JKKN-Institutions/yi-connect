@@ -12,6 +12,7 @@ import type { ScoringProgressData } from "@/app/yip/actions/results";
 import { ROLE_LABELS, PARTY_COLORS } from "@/lib/yip/constants";
 import { Badge } from "@/components/yip/ui/badge";
 import { Button } from "@/components/yip/ui/button";
+import { Input } from "@/components/yip/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/yip/ui/card";
 import {
   Table,
@@ -33,6 +34,7 @@ import {
   Users,
   ChevronRight,
   Download,
+  Search,
 } from "lucide-react";
 
 function formatRelative(dateStr: string | null): string {
@@ -111,6 +113,33 @@ export function ScoringProgress({
     totalParticipants > 0
       ? Math.round((participantsScored / totalParticipants) * 100)
       : 0;
+
+  // "Fully scored" = every active juror has submitted for this participant.
+  const fullyScored = participantProgress.filter(
+    (p) => p.totalJuries > 0 && p.juriesScored >= p.totalJuries
+  ).length;
+  const fullyPercent =
+    totalParticipants > 0
+      ? Math.round((fullyScored / totalParticipants) * 100)
+      : 0;
+
+  // Scoring-list controls: search by name or seat (constituency) number, and a
+  // "not scored yet" filter to surface anyone no juror has scored.
+  const [query, setQuery] = useState("");
+  const [onlyUnscored, setOnlyUnscored] = useState(false);
+  const q = query.trim().toLowerCase();
+  const filteredParticipants = participantProgress.filter((p) => {
+    if (onlyUnscored && p.juriesScored > 0) return false;
+    if (!q) return true;
+    return (
+      p.full_name.toLowerCase().includes(q) ||
+      (p.constituency_number != null &&
+        String(p.constituency_number).includes(q))
+    );
+  });
+  const unscoredCount = participantProgress.filter(
+    (p) => p.juriesScored === 0
+  ).length;
 
   async function handleLockToggle() {
     setLockLoading(true);
@@ -408,7 +437,51 @@ export function ScoringProgress({
         </CardHeader>
         <CardContent>
           {participantProgress.length > 0 ? (
-            <div className="rounded-lg border overflow-x-auto">
+            <>
+              {/* Fully-scored progress (every active juror submitted) */}
+              <div className="mb-4">
+                <div className="mb-1 flex items-center justify-between text-sm">
+                  <span className="font-medium text-gray-700">
+                    {fullyScored} of {totalParticipants} fully scored
+                  </span>
+                  <span className="text-gray-500">{fullyPercent}%</span>
+                </div>
+                <div className="h-2 w-full overflow-hidden rounded-full bg-gray-100">
+                  <div
+                    className="h-2 rounded-full bg-green-500 transition-all"
+                    style={{ width: `${fullyPercent}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Search by name/seat number + "not scored yet" filter */}
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                <div className="relative min-w-[200px] flex-1">
+                  <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-gray-400" />
+                  <Input
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="Search by name or seat number…"
+                    className="pl-8"
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant={onlyUnscored ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setOnlyUnscored((v) => !v)}
+                >
+                  Not scored yet ({unscoredCount})
+                </Button>
+                {(q || onlyUnscored) && (
+                  <span className="text-xs text-gray-500">
+                    Showing {filteredParticipants.length} of{" "}
+                    {participantProgress.length}
+                  </span>
+                )}
+              </div>
+
+              <div className="rounded-lg border overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -420,7 +493,7 @@ export function ScoringProgress({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {participantProgress.map((p) => {
+                  {filteredParticipants.map((p) => {
                     const color = statusColor(p.juriesScored, p.totalJuries);
                     const side = p.party_side as "ruling" | "opposition" | null;
                     return (
@@ -437,9 +510,6 @@ export function ScoringProgress({
                           <div>
                             <p className="font-medium text-sm">
                               {p.full_name}
-                            </p>
-                            <p className="text-xs text-gray-500">
-                              {p.school_name}
                             </p>
                           </div>
                         </TableCell>
@@ -506,7 +576,13 @@ export function ScoringProgress({
                   })}
                 </TableBody>
               </Table>
-            </div>
+              </div>
+              {filteredParticipants.length === 0 && (
+                <p className="py-8 text-center text-sm text-gray-500">
+                  No participants match your search or filter.
+                </p>
+              )}
+            </>
           ) : (
             <p className="text-sm text-gray-500 text-center py-6">
               No participants with assigned roles yet. Run allocation first.

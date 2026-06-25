@@ -2,7 +2,6 @@ import type { Metadata, Viewport } from "next";
 import { Playfair_Display, DM_Sans, JetBrains_Mono } from "next/font/google";
 import { YipBrandHeader } from "@/components/yip/brand/Header";
 import { YipBrandFooter } from "@/components/yip/brand/Footer";
-import { YipBugReporterWrapper } from "@/components/yip/bug-reporter-wrapper";
 import { YipOfflineBanner } from "@/app/yip/_components/YipOfflineBanner";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -107,17 +106,17 @@ export default async function YipLayout({
           organiser); hidden on the projector display + login/landing. Reconnecting
           auto-syncs (jury keeps its own score-sync badge). */}
       <YipOfflineBanner />
-      <YipBugReporterWrapper>
-        <div
-          className={`${playfair.variable} ${dmSans.variable} ${jetbrainsMono.variable} flex min-h-screen flex-col bg-white antialiased`}
-        >
-          <YipBrandHeader homeHref={homeHref} />
-          <main id="yip-main" className="flex-1">
-            {children}
-          </main>
-          <YipBrandFooter />
-        </div>
-      </YipBugReporterWrapper>
+      {/* Bug-reporter widget removed from YIP per Director (2026-06-25). Other
+          apps keep their own wrapper; re-add YipBugReporterWrapper to restore. */}
+      <div
+        className={`${playfair.variable} ${dmSans.variable} ${jetbrainsMono.variable} flex min-h-screen flex-col bg-white antialiased`}
+      >
+        <YipBrandHeader homeHref={homeHref} />
+        <main id="yip-main" className="flex-1">
+          {children}
+        </main>
+        <YipBrandFooter />
+      </div>
     </>
   );
 }

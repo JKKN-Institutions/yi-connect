@@ -245,14 +245,21 @@ export async function computeResults(
 
   const { data: agendaRows } = await supabase
     .from("agenda")
-    .select("id, agenda_type, session_key, is_scoreable, day")
+    .select("id, agenda_type, session_key, is_scoreable, day, exclude_from_final")
     .eq("event_id", eventId);
-  // Map agenda_item_id → { agenda_type, session_key, is_scoreable } so per-session
-  // config can be resolved by session_key FIRST (1:1), falling back to agenda_type,
-  // and so non-scoreable sessions can be excluded from aggregation (Bug A).
+  // Map agenda_item_id → { agenda_type, session_key, is_scoreable, exclude_from_final }
+  // so per-session config can be resolved by session_key FIRST (1:1), falling back
+  // to agenda_type; non-scoreable sessions are excluded from aggregation (Bug A);
+  // and exclude_from_final sessions stay jury-scoreable but are dropped from the
+  // /90 academic total (Director 2026-06-25: e.g. speech sessions = leadership-only).
   const agendaById = new Map<
     string,
-    { agenda_type: string | null; session_key: string | null; is_scoreable: boolean }
+    {
+      agenda_type: string | null;
+      session_key: string | null;
+      is_scoreable: boolean;
+      exclude_from_final: boolean;
+    }
   >(
     (agendaRows ?? []).map((a) => [
       a.id,
@@ -260,6 +267,9 @@ export async function computeResults(
         agenda_type: a.agenda_type,
         session_key: a.session_key,
         is_scoreable: a.is_scoreable === true,
+        exclude_from_final:
+          (a as { exclude_from_final?: boolean | null }).exclude_from_final ===
+          true,
       },
     ])
   );
@@ -388,9 +398,13 @@ export async function computeResults(
     // single stray 100-max score pinned a mid-rank participant at the /100 clamp,
     // jumping them from rank 69 to rank 1.
     const pScores = (scoresByParticipant.get(participant.id) ?? []).filter(
-      (s) =>
-        s.agenda_item_id != null &&
-        agendaById.get(s.agenda_item_id)?.is_scoreable === true
+      (s) => {
+        if (s.agenda_item_id == null) return false;
+        const meta = agendaById.get(s.agenda_item_id);
+        // Scoreable AND not flagged leadership-only: exclude_from_final sessions
+        // stay jury-scoreable but never enter the /90 academic total.
+        return meta?.is_scoreable === true && meta.exclude_from_final !== true;
+      }
     );
     if (pScores.length === 0) continue;
 
@@ -537,6 +551,27 @@ export async function computeResults(
         } else if (method === "average") {
           baseScore = arr.reduce((a, b) => a + b, 0) / arr.length;
           minSession = Math.min(...arr);
+        } else if (method === "weighted_pct_90") {
+          // Uniform model (Director 2026-06-25): every session is scored on its
+          // own rubric (all shown /100 in the jury UI), each normalised to a 0–1
+          // fraction of its OWN max, then weighted by the session's configured
+          // session_weight (the weightage table — NOT the rubric size). So a
+          // /100, /20 or /15 rubric carries exactly the weight the Director set,
+          // and "score out of 100 → apply weightage → /90" holds literally.
+          // base = Σ(frac × weight) ÷ Σ(weight) × 90; Position Points (≤10) on top.
+          let sumWF = 0;
+          let sumW = 0;
+          for (const e of sessionEntries) {
+            if (e.max <= 0 || e.weight <= 0) continue;
+            sumWF += (e.raw / e.max) * e.weight;
+            sumW += e.weight;
+          }
+          baseScore = sumW > 0 ? (sumWF / sumW) * 90 : 0;
+          // Consistency floor (MVP award): weakest single component on the /90 scale.
+          const ratios = sessionEntries
+            .filter((e) => e.max > 0)
+            .map((e) => (e.raw / e.max) * 90);
+          minSession = ratios.length > 0 ? Math.min(...ratios) : 0;
         } else if (method === "weighted_90") {
           // Yi 2026 Workbook (weighted average → /90): score the student only on
           // the components they were scored in. base = (Σ component means ÷ Σ

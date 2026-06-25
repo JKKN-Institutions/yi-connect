@@ -1300,9 +1300,35 @@ export function VoteManager({
   const cabinetSection = ministerSection("cabinet_minister", "ruling");
   const shadowSection = ministerSection("shadow_minister", "opposition");
 
-  // All four "run anytime" election launchers, collapsed behind one menu.
+  // Speaker launcher — agenda-pinned (only on the Speaker Election item), folded
+  // into the same "Run an election" menu as the run-anytime launchers.
+  const speakerLauncher =
+    agendaType === "speaker_election" ? (
+      <div className="space-y-3">
+        <p className="text-sm text-gray-600">
+          Nominate Speaker candidates — each party puts forward 1–2. The whole
+          House elects the Speaker; the runner-up becomes Deputy Speaker.
+        </p>
+        <Button
+          size="sm"
+          disabled={isPending}
+          onClick={handleHoldSpeakerNomination}
+          className="w-full"
+        >
+          <Crown className="size-3.5 mr-1.5" />
+          Nominate Speakers
+        </Button>
+      </div>
+    ) : null;
+
+  // Every election launcher (Speaker + the run-anytime ones), collapsed behind
+  // one menu so the panel isn't cluttered with all of them at once.
   const hasElectionLaunchers =
-    !!partyLeaderList || !!leadershipList || !!cabinetSection || !!shadowSection;
+    !!speakerLauncher ||
+    !!partyLeaderList ||
+    !!leadershipList ||
+    !!cabinetSection ||
+    !!shadowSection;
   const electionLaunchers = hasElectionLaunchers ? (
     <div className="rounded-lg border bg-card">
       <button
@@ -1314,7 +1340,7 @@ export function VoteManager({
           <Crown className="size-4 text-[#FF9933]" />
           Run an election
           <span className="hidden text-xs font-normal text-muted-foreground sm:inline">
-            party leader · PM / Deputy / LoP · cabinet · shadow
+            speaker · party leader · PM / Deputy / LoP · cabinet · shadow
           </span>
         </span>
         {electionsMenuOpen ? (
@@ -1325,6 +1351,7 @@ export function VoteManager({
       </button>
       {electionsMenuOpen && (
         <div className="space-y-4 border-t p-3">
+          {speakerLauncher}
           {partyLeaderList}
           {leadershipList}
           {cabinetSection}
@@ -2167,26 +2194,8 @@ export function VoteManager({
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Speaker Election */}
-          {agendaType === "speaker_election" && (
-            <div className="space-y-3">
-              <p className="text-sm text-gray-600">
-                Nominate Speaker candidates — each party puts forward 1–2. The
-                whole House elects the Speaker; the runner-up becomes Deputy
-                Speaker.
-              </p>
-
-              <Button
-                size="sm"
-                disabled={isPending}
-                onClick={handleHoldSpeakerNomination}
-                className="w-full"
-              >
-                <Crown className="size-3.5 mr-1.5" />
-                Nominate Speakers
-              </Button>
-            </div>
-          )}
+          {/* Speaker nomination now lives inside the "Run an election" menu
+              below (electionLaunchers), alongside the other elections. */}
 
           {/* Bill Vote */}
           {agendaType === "bill_presentation" && (

@@ -43,7 +43,7 @@ import { cn } from "@/lib/yip/utils";
 import { ROLE_LABELS, ROLE_COLORS, PARTY_COLORS } from "@/lib/yip/constants";
 import { useRealtimeEvent } from "@/lib/yip/hooks/use-realtime-event";
 import { useTimer } from "@/lib/yip/hooks/use-timer";
-import { advanceAgenda, goToPreviousAgendaItem, reopenAgendaItem, resetAgenda, startAgendaItem, skipAgendaItem, updateEventStatus, updateAgendaItemDuration, updateAgendaItemSubTimers, setChapterControlFilter, type ControlAgendaFilter } from "@/app/yip/actions/agenda";
+import { advanceAgenda, goToPreviousAgendaItem, reopenAgendaItem, reopenLastCompletedSession, resetAgenda, startAgendaItem, skipAgendaItem, updateEventStatus, updateAgendaItemDuration, updateAgendaItemSubTimers, setChapterControlFilter, type ControlAgendaFilter } from "@/app/yip/actions/agenda";
 import { setJuryAllowEarlierSessions } from "@/app/yip/actions/jury";
 import {
   getSubTimers,
@@ -274,6 +274,19 @@ export function ControlPanel({
         i.id === event.current_agenda_item_id
     );
 
+  // Paused-state controls: when there is NO current agenda item (event paused
+  // between sessions/days, e.g. day1_complete), surface backward controls only
+  // once at least one session has actually run. The last completed item is the
+  // one we re-open to resume — latest day, then latest sequence within it.
+  const lastCompletedItem = [...agendaItems]
+    .filter((i) => i.status === "completed")
+    .sort(
+      (a, b) =>
+        (b.day ?? 0) - (a.day ?? 0) ||
+        (b.sequence_order ?? 0) - (a.sequence_order ?? 0)
+    )[0];
+  const hasCompleted = lastCompletedItem != null;
+
   function handleSetControlFilter(mode: ControlAgendaFilter) {
     if (mode === controlFilter) return;
     const prev = controlFilter;
@@ -403,6 +416,72 @@ export function ControlPanel({
         });
       },
     });
+  }
+
+  // Paused-state "Go back": re-open the LAST finished session and make it live
+  // again. Chair / national only (canControlAgendaBackward). When results are
+  // already published, confirm first since re-opening may change them.
+  function handleReopenLastSession() {
+    const run = () =>
+      startTransition(async () => {
+        const result = await reopenLastCompletedSession(eventId);
+        if (result.success) {
+          toast.success("Re-opened the last session");
+          router.refresh();
+        } else {
+          toast.error(result.error);
+        }
+        setConfirmDialog((prev) => ({ ...prev, open: false }));
+      });
+    const scoresLocked = event?.scores_locked ?? false;
+    if (eventStatus === "results_published" || scoresLocked) {
+      setConfirmDialog({
+        open: true,
+        title: "Re-open the last session?",
+        description:
+          eventStatus === "results_published"
+            ? "Results are already published - this may change them. Continue?"
+            : "Scores for this event are locked. Re-opening makes the session live again but does not unlock scoring. Continue?",
+        confirmLabel: "Yes, re-open",
+        destructive: true,
+        action: run,
+      });
+      return;
+    }
+    run();
+  }
+
+  // Paused-state Reset: full rewind to the start (reuses handleResetAgenda's
+  // existing confirm). When results are already published, surface the
+  // results-published warning first, then fall through to the normal reset.
+  function handleResetAgendaGuarded() {
+    const scoresLocked = event?.scores_locked ?? false;
+    if (eventStatus === "results_published" || scoresLocked) {
+      setConfirmDialog({
+        open: true,
+        title: "Reset the agenda?",
+        description:
+          eventStatus === "results_published"
+            ? "Results are already published - this may change them. Continue?"
+            : "Scores for this event are locked. Resetting the agenda does not unlock scoring. Continue?",
+        confirmLabel: "Yes, reset agenda",
+        destructive: true,
+        action: () => {
+          startTransition(async () => {
+            const result = await resetAgenda(eventId);
+            if (result.success) {
+              toast.success("Agenda reset to the start");
+              router.refresh();
+            } else {
+              toast.error(result.error);
+            }
+            setConfirmDialog((prev) => ({ ...prev, open: false }));
+          });
+        },
+      });
+      return;
+    }
+    handleResetAgenda();
   }
 
   function handleJumpToItem(itemId: string, title: string) {
@@ -883,6 +962,47 @@ export function ControlPanel({
                       )}
                     </p>
                   )}
+                </div>
+              ) : hasCompleted ? (
+                <div className="space-y-3 py-4">
+                  <p className="text-center text-sm text-muted-foreground">
+                    The agenda is paused between sessions. Re-open the last
+                    session to pick up where you left off.
+                  </p>
+                  <div className="flex flex-wrap items-center justify-center gap-2">
+                    {canControlAgendaBackward && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={isPending}
+                        onClick={handleReopenLastSession}
+                      >
+                        <ChevronLeft className="size-4" />
+                        Re-open last session
+                      </Button>
+                    )}
+                    {canControlAgendaBackward && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={isPending}
+                        onClick={handleResetAgendaGuarded}
+                        className="border-red-300 text-red-700 hover:bg-red-50 hover:text-red-800"
+                      >
+                        <Undo2 className="size-4" />
+                        Reset
+                      </Button>
+                    )}
+                    <div className="flex flex-col items-center">
+                      <Button variant="outline" size="sm" disabled>
+                        <SkipForward className="size-4" />
+                        Skip speaker
+                      </Button>
+                      <span className="mt-1 text-[10px] text-muted-foreground">
+                        Available during a live session.
+                      </span>
+                    </div>
+                  </div>
                 </div>
               ) : (
                 <div className="py-6 text-center text-muted-foreground">

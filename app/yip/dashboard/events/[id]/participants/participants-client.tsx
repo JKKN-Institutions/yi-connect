@@ -12,6 +12,7 @@ import {
   updateParticipant,
 } from "@/app/yip/actions/participants";
 import { ROLE_LABELS, PARTY_COLORS } from "@/lib/yip/constants";
+import { CONSTITUENCIES } from "@/lib/yip/data/constituencies";
 import { Button } from "@/components/yip/ui/button";
 import { Input } from "@/components/yip/ui/input";
 import { Label } from "@/components/yip/ui/label";
@@ -118,6 +119,24 @@ const MINISTRY_OPTIONS: Array<[string, string]> = [
   ["it_digital", "IT & Digital"],
 ];
 
+// Canonical Lok Sabha constituencies (543), grouped by state for the edit
+// picker. Picking a constituency auto-fills its state, so a chair can never
+// type "Bhopal" in one place and "Gwalior" in another — the pair is locked.
+const STATE_OPTIONS = Array.from(
+  new Set(CONSTITUENCIES.map((c) => c.state))
+).sort();
+const STATE_BY_CONSTITUENCY = new Map(
+  CONSTITUENCIES.map((c) => [c.name, c.state] as const)
+);
+const CONSTITUENCIES_BY_STATE = STATE_OPTIONS.map((state) => ({
+  state,
+  names: CONSTITUENCIES.filter((c) => c.state === state).map((c) => c.name),
+}));
+
+// Shared <select> styling — matches the existing Role / Ministry dropdowns.
+const SELECT_CLASS =
+  "mt-1 w-full rounded-md border border-gray-200 bg-white px-2.5 py-2 text-sm focus:border-[#1a1a3e]/40 focus:outline-none";
+
 export function ParticipantsClient({
   eventId,
   participants: initialParticipants,
@@ -205,6 +224,28 @@ export function ParticipantsClient({
   const checkedInCount = participants.filter((p) => p.checked_in).length;
   const day1Count = participants.filter((p) => p.checked_in_day1).length;
   const day2Count = participants.filter((p) => p.checked_in_day2).length;
+
+  // Pick-lists scoped to THIS event so editing can only reassign within the
+  // committees / parties that actually exist here — committee_number ↔ name
+  // stay paired, parties stay valid. Derived from the roster, no extra fetch.
+  const eventCommittees = useMemo(() => {
+    const byNumber = new Map<number, string>();
+    for (const p of participants) {
+      if (p.committee_number != null && p.committee_name) {
+        byNumber.set(p.committee_number, p.committee_name);
+      }
+    }
+    return Array.from(byNumber.entries())
+      .sort((a, b) => a[0] - b[0])
+      .map(([number, name]) => ({ number, name }));
+  }, [participants]);
+  const eventParties = useMemo(() => {
+    const nums = new Set<number>();
+    for (const p of participants) {
+      if (p.party_number != null) nums.add(p.party_number);
+    }
+    return Array.from(nums).sort((a, b) => a - b);
+  }, [participants]);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -1235,17 +1276,41 @@ export function ParticipantsClient({
 
               <div>
                 <Label htmlFor="edit-const-name">Constituency</Label>
-                <Input
+                <select
                   id="edit-const-name"
                   value={editForm.constituency_name}
-                  onChange={(e) =>
+                  onChange={(e) => {
+                    const name = e.target.value;
                     setEditForm((p) => ({
                       ...p,
-                      constituency_name: e.target.value,
-                    }))
-                  }
-                  placeholder="Constituency name"
-                />
+                      constituency_name: name,
+                      // Auto-fill the state from the canonical list so the two
+                      // can never drift apart. Keep the old state if cleared.
+                      constituency_state:
+                        STATE_BY_CONSTITUENCY.get(name) ?? p.constituency_state,
+                    }));
+                  }}
+                  className={SELECT_CLASS}
+                >
+                  <option value="">— Select constituency —</option>
+                  {/* Preserve a current value that isn't in the canonical list
+                      (legacy data) so editing never silently changes it. */}
+                  {editForm.constituency_name &&
+                    !STATE_BY_CONSTITUENCY.has(editForm.constituency_name) && (
+                      <option value={editForm.constituency_name}>
+                        {editForm.constituency_name} (current)
+                      </option>
+                    )}
+                  {CONSTITUENCIES_BY_STATE.map((g) => (
+                    <optgroup key={g.state} label={g.state}>
+                      {g.names.map((name) => (
+                        <option key={name} value={name}>
+                          {name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
               </div>
               <div>
                 <Label htmlFor="edit-const-no">Constituency No.</Label>
@@ -1264,7 +1329,7 @@ export function ParticipantsClient({
               </div>
               <div>
                 <Label htmlFor="edit-const-state">Constituency State/UT</Label>
-                <Input
+                <select
                   id="edit-const-state"
                   value={editForm.constituency_state}
                   onChange={(e) =>
@@ -1273,50 +1338,83 @@ export function ParticipantsClient({
                       constituency_state: e.target.value,
                     }))
                   }
-                  placeholder="State / UT"
-                />
+                  className={SELECT_CLASS}
+                >
+                  <option value="">— Select state/UT —</option>
+                  {editForm.constituency_state &&
+                    !STATE_OPTIONS.includes(editForm.constituency_state) && (
+                      <option value={editForm.constituency_state}>
+                        {editForm.constituency_state} (current)
+                      </option>
+                    )}
+                  {STATE_OPTIONS.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div>
-                <Label htmlFor="edit-party-no">Party No.</Label>
-                <Input
+                <Label htmlFor="edit-party-no">Party</Label>
+                <select
                   id="edit-party-no"
-                  type="number"
                   value={editForm.party_number}
                   onChange={(e) =>
                     setEditForm((p) => ({ ...p, party_number: e.target.value }))
                   }
-                  placeholder="1"
-                />
+                  className={SELECT_CLASS}
+                >
+                  <option value="">— Select party —</option>
+                  {editForm.party_number &&
+                    !eventParties.includes(Number(editForm.party_number)) && (
+                      <option value={editForm.party_number}>
+                        Party {editForm.party_number} (current)
+                      </option>
+                    )}
+                  {eventParties.map((n) => (
+                    <option key={n} value={String(n)}>
+                      {String.fromCharCode(64 + n)} · Party {n}
+                    </option>
+                  ))}
+                </select>
               </div>
 
-              <div>
-                <Label htmlFor="edit-cmte-no">Committee No.</Label>
-                <Input
-                  id="edit-cmte-no"
-                  type="number"
-                  value={editForm.committee_number}
-                  onChange={(e) =>
-                    setEditForm((p) => ({
-                      ...p,
-                      committee_number: e.target.value,
-                    }))
-                  }
-                  placeholder="6"
-                />
-              </div>
-              <div>
+              <div className="sm:col-span-2">
                 <Label htmlFor="edit-cmte-name">Committee</Label>
-                <Input
+                <select
                   id="edit-cmte-name"
-                  value={editForm.committee_name}
-                  onChange={(e) =>
+                  // Bound to the committee NUMBER; picking one sets the matching
+                  // name too, so number ↔ name can never disagree.
+                  value={editForm.committee_number}
+                  onChange={(e) => {
+                    const num = e.target.value;
+                    const found = eventCommittees.find(
+                      (c) => String(c.number) === num
+                    );
                     setEditForm((p) => ({
                       ...p,
-                      committee_name: e.target.value,
-                    }))
-                  }
-                  placeholder="Committee name"
-                />
+                      committee_number: num,
+                      committee_name: found?.name ?? p.committee_name,
+                    }));
+                  }}
+                  className={SELECT_CLASS}
+                >
+                  <option value="">— Select committee —</option>
+                  {editForm.committee_number &&
+                    !eventCommittees.some(
+                      (c) => String(c.number) === editForm.committee_number
+                    ) && (
+                      <option value={editForm.committee_number}>
+                        {editForm.committee_number} · {editForm.committee_name}{" "}
+                        (current)
+                      </option>
+                    )}
+                  {eventCommittees.map((c) => (
+                    <option key={c.number} value={String(c.number)}>
+                      {c.number} · {c.name}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div>
@@ -1369,18 +1467,9 @@ export function ParticipantsClient({
                 </select>
               </div>
 
-              <div>
-                <Label htmlFor="edit-serial">Serial No.</Label>
-                <Input
-                  id="edit-serial"
-                  type="number"
-                  value={editForm.serial_no}
-                  onChange={(e) =>
-                    setEditForm((p) => ({ ...p, serial_no: e.target.value }))
-                  }
-                  placeholder="SRN"
-                />
-              </div>
+              {/* Serial No. is the roster's auto row-counter, not an identity —
+                  it's never chair-editable. The current value is preserved on
+                  save (carried unchanged in editForm.serial_no). */}
               <div>
                 <Label htmlFor="edit-code">Access Code</Label>
                 <Input

@@ -3,6 +3,7 @@ import { createServiceClient } from "@/lib/yi-future/supabase/server";
 import { fetchAllRows } from "@/lib/pagination";
 import { TRACK_LABELS } from "@/lib/yi-future/constants";
 import { AutoRefresh } from "@/components/yi-future/AutoRefresh";
+import { ListSearchForm } from "@/components/yi-future/table/list-table";
 
 // Keep the installed PWA showing live data instead of a stale cached snapshot.
 export const dynamic = "force-dynamic";
@@ -152,11 +153,12 @@ async function getColleges(ids: string[]): Promise<Map<string, string>> {
 export default async function UnteamedDelegatesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ region?: string; chapter?: string }>;
+  searchParams: Promise<{ region?: string; chapter?: string; q?: string }>;
 }) {
   const sp = await searchParams;
   const region = (sp.region ?? "all").trim() || "all";
   const chapter = (sp.chapter ?? "all").trim() || "all";
+  const q = (sp.q ?? "").trim();
 
   const edition = await getActiveEdition();
   if (!edition) {
@@ -187,13 +189,29 @@ export default async function UnteamedDelegatesPage({
     return true;
   });
 
+  // Text search across name / email / chapter.
+  const ql = q.toLowerCase();
+  const searched = ql
+    ? filtered.filter((d) => {
+        const chName = chapterById.get(d.chapter_id)?.name ?? "";
+        return `${d.full_name} ${d.email ?? ""} ${chName}`
+          .toLowerCase()
+          .includes(ql);
+      })
+    : filtered;
+
+  const searchHidden = [
+    ...(region !== "all" ? [{ name: "region", value: region }] : []),
+    ...(chapter !== "all" ? [{ name: "chapter", value: chapter }] : []),
+  ];
+
   // College names
-  const collegeIds = filtered.map((d) => d.college_id).filter(Boolean) as string[];
+  const collegeIds = searched.map((d) => d.college_id).filter(Boolean) as string[];
   const collegeNames = await getColleges(collegeIds);
 
   // Group by chapter
   const byChapter = new Map<string, DelegateRow[]>();
-  for (const d of filtered) {
+  for (const d of searched) {
     const list = byChapter.get(d.chapter_id) ?? [];
     list.push(d);
     byChapter.set(d.chapter_id, list);
@@ -209,9 +227,9 @@ export default async function UnteamedDelegatesPage({
     );
 
   // KPIs over filtered set
-  const totalUnteamed = filtered.length;
+  const totalUnteamed = searched.length;
   const chaptersWithUnteamed = byChapter.size;
-  const unverifiedEmails = filtered.filter((d) => !d.email_verified_at).length;
+  const unverifiedEmails = searched.filter((d) => !d.email_verified_at).length;
 
   // Region counts (full set, not double-filtered)
   const countByRegion = new Map<string, number>();
@@ -220,16 +238,17 @@ export default async function UnteamedDelegatesPage({
     countByRegion.set(r, (countByRegion.get(r) ?? 0) + 1);
   }
 
-  function buildQuery(changes: Partial<{ region: string; chapter: string }>): string {
-    const merged = { region, chapter, ...changes };
+  function buildQuery(changes: Partial<{ region: string; chapter: string; q: string }>): string {
+    const merged = { region, chapter, q, ...changes };
     const parts: string[] = [];
     if (merged.region && merged.region !== "all") parts.push(`region=${encodeURIComponent(merged.region)}`);
     if (merged.chapter && merged.chapter !== "all") parts.push(`chapter=${encodeURIComponent(merged.chapter)}`);
+    if (merged.q) parts.push(`q=${encodeURIComponent(merged.q)}`);
     return parts.length
       ? `/yi-future/national/admin/delegates/unteamed?${parts.join("&")}`
       : "/yi-future/national/admin/delegates/unteamed";
   }
-  const anyFiltered = region !== "all" || chapter !== "all";
+  const anyFiltered = region !== "all" || chapter !== "all" || q !== "";
 
   return (
     <div className="space-y-6">
@@ -319,6 +338,15 @@ export default async function UnteamedDelegatesPage({
           )}
         </div>
       </div>
+
+      {allUnteamed.length > 0 && (
+        <ListSearchForm
+          action="/yi-future/national/admin/delegates/unteamed"
+          q={q}
+          placeholder="Search name, email, chapter…"
+          hidden={searchHidden}
+        />
+      )}
 
       {/* Groups */}
       {groups.length === 0 ? (

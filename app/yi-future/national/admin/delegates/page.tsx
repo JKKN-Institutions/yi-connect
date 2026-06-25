@@ -4,6 +4,11 @@ import { createClient, createServiceClient } from "@/lib/yi-future/supabase/serv
 import { WhatsAppIconButton } from "@/components/whatsapp";
 import { fetchAllRows } from "@/lib/pagination";
 import { AutoRefresh } from "@/components/yi-future/AutoRefresh";
+import {
+  ListSearchForm,
+  ListPager,
+  pageSlice,
+} from "@/components/yi-future/table/list-table";
 
 // PostgREST caps a single response at ~1000 rows, so this list must page through
 // in full (see getAllDelegates) or it freezes at ~1003 while registrations keep
@@ -80,10 +85,17 @@ async function getAllChapters(): Promise<ChapterRow[]> {
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function buildQuery(
-  current: { region: string; chapter: string; college: string },
-  changes: Partial<{ region: string; chapter: string; college: string }>
+  current: { region: string; chapter: string; college: string; q: string },
+  changes: Partial<{
+    region: string;
+    chapter: string;
+    college: string;
+    q: string;
+    page: string;
+  }>
 ): string {
-  const merged = { ...current, ...changes };
+  // page defaults to dropped (resets to 0) unless explicitly changed.
+  const merged = { page: "", ...current, ...changes };
   const parts: string[] = [];
   if (merged.region && merged.region !== "all")
     parts.push(`region=${encodeURIComponent(merged.region)}`);
@@ -91,6 +103,9 @@ function buildQuery(
     parts.push(`chapter=${encodeURIComponent(merged.chapter)}`);
   if (merged.college && merged.college !== "all")
     parts.push(`college=${encodeURIComponent(merged.college)}`);
+  if (merged.q) parts.push(`q=${encodeURIComponent(merged.q)}`);
+  if (merged.page && merged.page !== "0")
+    parts.push(`page=${encodeURIComponent(merged.page)}`);
   return parts.length
     ? `/yi-future/national/admin/delegates?${parts.join("&")}`
     : "/yi-future/national/admin/delegates";
@@ -101,7 +116,13 @@ function buildQuery(
 export default async function AllDelegatesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ region?: string; chapter?: string; college?: string }>;
+  searchParams: Promise<{
+    region?: string;
+    chapter?: string;
+    college?: string;
+    q?: string;
+    page?: string;
+  }>;
 }) {
   // Auth check
   const supabase = await createClient();
@@ -114,7 +135,9 @@ export default async function AllDelegatesPage({
   const region = (sp.region ?? "all").trim() || "all";
   const chapter = (sp.chapter ?? "all").trim() || "all";
   const college = (sp.college ?? "all").trim() || "all";
-  const current = { region, chapter, college };
+  const q = (sp.q ?? "").trim();
+  const pageParam = Math.max(0, parseInt(sp.page ?? "0", 10) || 0);
+  const current = { region, chapter, college, q };
 
   const [allDelegates, chapters] = await Promise.all([
     getAllDelegates(),
@@ -147,6 +170,32 @@ export default async function AllDelegatesPage({
     return true;
   });
 
+  // Text search across name / email / phone / chapter / college / course / code.
+  const ql = q.toLowerCase();
+  const searched = ql
+    ? filtered.filter((d) => {
+        const chName =
+          (d.chapters ?? chapterById.get(d.chapter_id))?.name ?? "";
+        return `${d.full_name} ${d.email ?? ""} ${d.phone ?? ""} ${chName} ${
+          d.colleges?.name ?? ""
+        } ${d.course ?? ""} ${d.access_code ?? ""}`
+          .toLowerCase()
+          .includes(ql);
+      })
+    : filtered;
+
+  const { pageRows, page, pageCount, rangeStart, rangeEnd } = pageSlice(
+    searched,
+    pageParam
+  );
+
+  // Hidden inputs to carry the active filters through a search submit.
+  const searchHidden = [
+    ...(region !== "all" ? [{ name: "region", value: region }] : []),
+    ...(chapter !== "all" ? [{ name: "chapter", value: chapter }] : []),
+    ...(college !== "all" ? [{ name: "college", value: college }] : []),
+  ];
+
   // Region counts (full set, not double-filtered)
   const countByRegion = new Map<string, number>();
   for (const d of allDelegates) {
@@ -155,15 +204,15 @@ export default async function AllDelegatesPage({
   }
 
   const anyFiltered =
-    region !== "all" || chapter !== "all" || college !== "all";
+    region !== "all" || chapter !== "all" || college !== "all" || q !== "";
 
-  // KPIs
-  const totalDelegates = filtered.length;
-  const withTeam = filtered.filter(
+  // KPIs reflect the currently shown set (filters + search).
+  const totalDelegates = searched.length;
+  const withTeam = searched.filter(
     (d) => d.team_members && d.team_members.length > 0
   ).length;
   const withoutTeam = totalDelegates - withTeam;
-  const chaptersRepresented = new Set(filtered.map((d) => d.chapter_id)).size;
+  const chaptersRepresented = new Set(searched.map((d) => d.chapter_id)).size;
 
   return (
     <div className="space-y-6">
@@ -365,8 +414,16 @@ export default async function AllDelegatesPage({
         </div>
       </div>
 
+      {/* Search */}
+      <ListSearchForm
+        action="/yi-future/national/admin/delegates"
+        q={q}
+        placeholder="Search name, email, phone, chapter, college, access code…"
+        hidden={searchHidden}
+      />
+
       {/* Table */}
-      {filtered.length === 0 ? (
+      {searched.length === 0 ? (
         <div className="bg-white border border-navy/10 rounded-lg p-10 text-center">
           <div className="text-lg font-bold text-navy mb-2">
             No delegates found
@@ -416,7 +473,7 @@ export default async function AllDelegatesPage({
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((d) => {
+                {pageRows.map((d) => {
                   const ch = d.chapters ?? chapterById.get(d.chapter_id);
                   const chapterName =
                     ch && "name" in ch ? ch.name : "—";
@@ -510,6 +567,16 @@ export default async function AllDelegatesPage({
               </tbody>
             </table>
           </div>
+          <ListPager
+            hrefForPage={(p) => buildQuery(current, { page: String(p) })}
+            page={page}
+            pageCount={pageCount}
+            rangeStart={rangeStart}
+            rangeEnd={rangeEnd}
+            filteredCount={searched.length}
+            total={allDelegates.length}
+            noun="delegates"
+          />
         </div>
       )}
     </div>

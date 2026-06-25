@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { addJury, removeJury } from "@/app/yip/actions/jury";
@@ -34,6 +34,7 @@ import {
   Scale,
   Loader2,
   CalendarClock,
+  Link2,
 } from "lucide-react";
 
 type JuryAssignment = {
@@ -59,6 +60,13 @@ export function JuryClient({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  // Absolute jury access URL (the access-code entry that routes jurors to
+  // /yip/jury). Resolved client-side so it's correct on prod / preview / local.
+  const [origin, setOrigin] = useState("");
+  useEffect(() => {
+    setOrigin(window.location.origin);
+  }, []);
+  const juryUrl = origin ? `${origin}/yip/join` : "/yip/join";
 
   async function handleAddJury() {
     if (!juryName.trim()) {
@@ -103,6 +111,21 @@ export function JuryClient({
     setTimeout(() => setCopiedId(null), 2000);
   }
 
+  function handleCopyUrl() {
+    navigator.clipboard.writeText(`${window.location.origin}/yip/join`);
+    setCopiedId("__url__");
+    setTimeout(() => setCopiedId(null), 2000);
+  }
+
+  // Copy the full handout for one juror: link + their access code.
+  function handleCopyLink(j: JuryAssignment) {
+    navigator.clipboard.writeText(
+      `${window.location.origin}/yip/join\nAccess code: ${j.access_code}`
+    );
+    setCopiedId(`${j.id}:link`);
+    setTimeout(() => setCopiedId(null), 2000);
+  }
+
   return (
     <div className="space-y-4">
       {/* Per-session panels (BUG-385): assign which juror scores which session */}
@@ -116,6 +139,35 @@ export function JuryClient({
         </span>
         <span aria-hidden>→</span>
       </Link>
+
+      {/* Jury access link — share with jurors at event time alongside their code */}
+      <div className="flex items-center justify-between gap-3 rounded-lg border border-[#1a1a3e]/10 bg-white px-4 py-3">
+        <div className="min-w-0">
+          <p className="text-xs font-medium text-[#1a1a3e]/55">
+            Jury access link
+          </p>
+          <code className="block truncate text-sm font-mono text-[#1a1a3e]">
+            {juryUrl}
+          </code>
+          <p className="mt-0.5 text-xs text-[#1a1a3e]/45">
+            Jurors open this link and enter their access code (below) to start
+            scoring.
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleCopyUrl}
+          className="shrink-0"
+        >
+          {copiedId === "__url__" ? (
+            <Check className="size-4 text-green-600" />
+          ) : (
+            <Copy className="size-4" />
+          )}
+          {copiedId === "__url__" ? "Copied" : "Copy link"}
+        </Button>
+      </div>
 
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -226,12 +278,23 @@ export function JuryClient({
                       <button
                         onClick={() => handleCopy(j.access_code, j.id)}
                         className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-                        title="Copy code"
+                        title="Copy code only"
                       >
                         {copiedId === j.id ? (
                           <Check className="size-3 text-green-500" />
                         ) : (
                           <Copy className="size-3" />
+                        )}
+                      </button>
+                      <button
+                        onClick={() => handleCopyLink(j)}
+                        className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                        title="Copy access link + code"
+                      >
+                        {copiedId === `${j.id}:link` ? (
+                          <Check className="size-3 text-green-500" />
+                        ) : (
+                          <Link2 className="size-3" />
                         )}
                       </button>
                     </div>

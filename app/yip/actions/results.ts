@@ -10,14 +10,6 @@ import { getScoringSettings } from "./scoring-settings";
 import { listSessionParameters } from "./session-parameters";
 import { listScoringBuckets } from "./scoring-buckets";
 import { getScoringFlagsConfig } from "./scoring-flags";
-import { getCommitteeDimensionsConfig } from "./committee-dimensions";
-import {
-  deriveCommitteeLevels,
-  averageDimensions,
-  CMTE_LEVEL_CRITERION,
-  BILL_LEVEL_CRITERION,
-  type CommitteeDimensions,
-} from "@/lib/yip/committee-score";
 
 type ActionResult<T = null> =
   | { success: true; data: T }
@@ -132,7 +124,7 @@ type ResultRow = {
   hasDisciplinary: boolean; // any walkout / ruckus / suspension flag
   consistencyFloor: number; // MVP: weakest session as a 0–1 fraction of its max
   consistencySessionCount: number; // # scored sessions (MVP min-participation gate)
-  committeeLevel: number; // shared committee level (cmte+bill, /10) — Team Spirit award
+  committeeLevel: number; // Team Spirit award — committee's AVG member committee-session score (re-based 2026-06-25; committee-LEVEL machinery removed)
   // Day-presence eligibility (Director ruling 2026-06-25). dayComplete=false ⇒
   // the participant attended only one day of a two-day event: excluded from the
   // overall rank (rank=null) and EVERY award, but still written WITH their
@@ -388,50 +380,14 @@ export async function computeResults(
     }
   }
 
-  // Committee-once scoring (Phase 3): a committee is scored ONCE on the /60
-  // sheet; the derived committee-level points (cmte + bill, each 0–5) replace
-  // every member's per-individual committee_level criterion. When NO committee
-  // score exists (e.g. legacy events / Mizoram), nothing changes — the juror's
-  // own committee_level stays in their session total. So this is legacy-safe
-  // with no method gate: the presence of a committee_scores row is the switch.
-  // Each committee can now be scored by MULTIPLE judges (one row per judge).
-  // Group the rows by committee and average the judges' marks before deriving
-  // the two committee-level points — so the committee's level reflects the
-  // panel's average, not whichever row happened to be last.
-  const { data: committeeScoreRows } = await supabase
-    .from("committee_scores")
-    .select(
-      "committee_name, bill_draft_quality, policy_relevance, innovation, feasibility, team_collaboration, presentation_defence"
-    )
-    .eq("event_id", eventId);
-  const dimsByCommittee = new Map<string, CommitteeDimensions[]>();
-  for (const c of committeeScoreRows ?? []) {
-    const arr = dimsByCommittee.get(c.committee_name) ?? [];
-    arr.push({
-      bill_draft_quality: c.bill_draft_quality,
-      policy_relevance: c.policy_relevance,
-      innovation: c.innovation,
-      feasibility: c.feasibility,
-      team_collaboration: c.team_collaboration,
-      presentation_defence: c.presentation_defence,
-    });
-    dimsByCommittee.set(c.committee_name, arr);
-  }
-  // Admin-configurable committee-level divisors (default 10 / 2).
-  const cmteDimsCfg = await getCommitteeDimensionsConfig();
-  const cmteDivisors = {
-    draftingDivisor: cmteDimsCfg.draftingDivisor,
-    presentationDivisor: cmteDimsCfg.presentationDivisor,
-  };
-  const committeeLevelByName = new Map<string, { cmte: number; bill: number }>(
-    [...dimsByCommittee.entries()].map(([name, dimsList]) => {
-      const { cmteLevel, billLevel } = deriveCommitteeLevels(
-        averageDimensions(dimsList),
-        cmteDivisors
-      );
-      return [name, { cmte: cmteLevel, bill: billLevel }];
-    })
-  );
+  // NOTE (Director ruling 2026-06-25): the committee-LEVEL (shared /60) scoring
+  // machinery has been REMOVED. yip.committee_scores + yip.jury_committee_assignments
+  // were 0 rows platform-wide and the model was cut. Each juror's raw committee-
+  // session criterion now stands as-is (exactly the legacy no-committee-score
+  // behaviour). Team Spirit is re-based below: a committee's Team Spirit score is
+  // the AVERAGE, across its members, of each member's individual committee-session
+  // contribution (committee_bill_drafting + bill_presentation_voting), computed
+  // AFTER the per-participant loop.
 
   // 2. Participants (with constituency for Best Constituency Rep / Community Impact)
   const { data: participants, error: pError } = await supabase
@@ -471,6 +427,15 @@ export async function computeResults(
 
   // 4. Compute per-participant averages + per-criterion averages + min juror score
   const resultRows: ResultRow[] = [];
+  // Team Spirit re-base (Director ruling 2026-06-25): each participant's INDIVIDUAL
+  // contribution across the two committee sessions ('committee_bill_drafting' +
+  // 'bill_presentation_voting'), summed from sessionEntries raw. Averaged per
+  // committee AFTER the loop to set committeeLevel on every member's row.
+  const COMMITTEE_SESSION_KEYS = new Set([
+    "committee_bill_drafting",
+    "bill_presentation_voting",
+  ]);
+  const committeeContribByParticipant = new Map<string, number>();
 
   for (const participant of participants) {
     // Bug A fix (rehearsal 2026-06-14): only is_scoreable sessions count toward
@@ -494,10 +459,6 @@ export async function computeResults(
     // normalize_per_session is false (Yi 2026 Workbook additive model) the raw
     // component means are used as-is. Components are then combined per the
     // chosen method. Position Points apply ONCE on top (capped at 10).
-    // Committee-once override lookup for this participant's committee (if scored).
-    const cl = participant.committee_name
-      ? committeeLevelByName.get(participant.committee_name)
-      : undefined;
     // #4 two-level averaging: group each session's scores BY JUROR. A juror's
     // turns (occurrences) average into one per-juror mark, then the session mark
     // is the mean of those per-juror marks — every juror counts equally no
@@ -507,39 +468,10 @@ export async function computeResults(
     const bySessionJuror = new Map<string, Map<string, number[]>>();
     for (const s of pScores) {
       const key = s.agenda_item_id ?? "__none__";
-      let value = s.total_score;
-      // For the two committee-scored components, swap the juror's per-individual
-      // committee-level mark for the committee's shared value (same for every
-      // member). Guards:
-      //   (a) the committee has a /60 score (cl), AND
-      //   (b) this score row actually carries the committee-level criterion —
-      //       so we never ADD a shared mark to a session whose config has no
-      //       committee-level slot (that would inflate it with nothing to net
-      //       against), and
-      //   (c) the swapped total is clamped to the component's [0, max], so the
-      //       swap can never push a session above its configured cap (which
-      //       would let avg_score exceed 100 and mis-rank) or below 0.
-      if (cl && s.agenda_item_id) {
-        const sk = agendaById.get(s.agenda_item_id)?.session_key;
-        const sessionMax = sk ? cfgBySessionKey.get(sk)?.total_max ?? 0 : 0;
-        let swapped = false;
-        if (
-          sk === "committee_bill_drafting" &&
-          CMTE_LEVEL_CRITERION in s.criteria_scores
-        ) {
-          value = value - s.criteria_scores[CMTE_LEVEL_CRITERION] + cl.cmte;
-          swapped = true;
-        } else if (
-          sk === "bill_presentation_voting" &&
-          BILL_LEVEL_CRITERION in s.criteria_scores
-        ) {
-          value = value - s.criteria_scores[BILL_LEVEL_CRITERION] + cl.bill;
-          swapped = true;
-        }
-        if (swapped && sessionMax > 0) {
-          value = Math.max(0, Math.min(sessionMax, value));
-        }
-      }
+      // Each juror's raw total_score stands as-is. The committee-LEVEL (shared
+      // /60) swap was removed 2026-06-25 — the two committee sessions are now
+      // scored purely on each juror's individual marks.
+      const value = s.total_score;
       let jurorMap = bySessionJuror.get(key);
       if (!jurorMap) {
         jurorMap = new Map();
@@ -586,6 +518,19 @@ export async function computeResults(
         };
       }
     );
+
+    // Team Spirit basis (Director ruling 2026-06-25): this participant's individual
+    // contribution in the two committee sessions = Σ raw over the committee
+    // session_keys (0 when not scored in them). Averaged per committee after the
+    // loop to derive each committee's Team Spirit score.
+    const committeeContribution = sessionEntries.reduce(
+      (sum, e) =>
+        e.sessionKey && COMMITTEE_SESSION_KEYS.has(e.sessionKey)
+          ? sum + e.raw
+          : sum,
+      0
+    );
+    committeeContribByParticipant.set(participant.id, committeeContribution);
 
     // `aggregation_method` is widened to string here so the additive 'sum'
     // model (Yi 2026 Workbook) can be matched without changing the shared
@@ -769,10 +714,10 @@ export async function computeResults(
       hasDisciplinary,
       consistencyFloor: Math.round(consistencyFloor * 1000) / 1000,
       consistencySessionCount,
-      // Shared committee level (same for every member of a committee) — Team
-      // Spirit ranks on this so the whole top committee co-wins, matching the
-      // leaderboard's committee value (interview 2026-06-14, Bug C).
-      committeeLevel: cl ? cl.cmte + cl.bill : 0,
+      // Team Spirit basis (re-based 2026-06-25): set to 0 here, then overwritten
+      // after the loop with this committee's AVERAGE member committee-session
+      // contribution, so the whole top committee co-wins (allTied award).
+      committeeLevel: 0,
       dayComplete,
       notRankedReason,
       rank: null,
@@ -796,6 +741,33 @@ export async function computeResults(
       currentRank = i + 1;
     }
     rankableRows[i].rank = currentRank;
+  }
+
+  // 5b. Team Spirit re-base (Director ruling 2026-06-25): a committee's Team
+  //     Spirit score = the AVERAGE, across that committee's members, of each
+  //     member's individual committee-session contribution (Σ raw over
+  //     'committee_bill_drafting' + 'bill_presentation_voting'). Group the
+  //     result rows by committee_name, average the contributions, and write that
+  //     committee average onto every member's committeeLevel. Members with no
+  //     committee_name keep committeeLevel 0 (they cannot win a team award).
+  const committeeNameById = new Map<string, string | null>(
+    participants.map((p) => [p.id, p.committee_name])
+  );
+  const committeeMemberRows = new Map<string, ResultRow[]>();
+  for (const r of resultRows) {
+    const cname = committeeNameById.get(r.participant_id);
+    if (!cname) continue;
+    const arr = committeeMemberRows.get(cname) ?? [];
+    arr.push(r);
+    committeeMemberRows.set(cname, arr);
+  }
+  for (const rows of committeeMemberRows.values()) {
+    const avg =
+      rows.reduce(
+        (sum, r) => sum + (committeeContribByParticipant.get(r.participant_id) ?? 0),
+        0
+      ) / rows.length;
+    for (const r of rows) r.committeeLevel = avg;
   }
 
   // 6. Build participant lookup for award assignment
@@ -885,7 +857,8 @@ export async function computeResults(
       rankBy: sumKeys(["mupi.conduct", "zero.conduct", "bill.conduct"]),
     },
     // Team award: allTied → every member of the top committee co-wins. Ranks on
-    // the shared committee level (cmte+bill, from the /60 committee score).
+    // committeeLevel = the committee's AVERAGE member committee-session score
+    // (re-based 2026-06-25; the shared /60 committee-LEVEL model was removed).
     team_spirit: { eligible: all, rankBy: (r) => r.committeeLevel, isTeam: true },
     innovative_ideas: {
       eligible: all,

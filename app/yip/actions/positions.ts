@@ -42,6 +42,7 @@ export interface PositionRoleGroup {
 
 const KEY_ROLES: { role: ParliamentRole; label: string }[] = [
   { role: "prime_minister", label: "Prime Minister" },
+  { role: "deputy_prime_minister", label: "Deputy Prime Minister" },
   { role: "speaker", label: "Speaker" },
   { role: "deputy_speaker", label: "Deputy Speaker" },
   { role: "leader_of_opposition", label: "Leader of Opposition" },

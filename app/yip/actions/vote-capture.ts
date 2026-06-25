@@ -92,7 +92,7 @@ interface KioskActive {
 
 interface KioskPendingVoter {
   participantId: string;
-  serialNo: number | null;
+  constituencyNumber: number | null;
   fullName: string;
   constituencyName: string | null;
 }
@@ -131,7 +131,7 @@ export async function getKioskState(
   const { data: rosterAll } = await supabase
     .from("participants")
     .select(
-      "id, full_name, serial_no, constituency_name, party_id, committee_name"
+      "id, full_name, serial_no, constituency_number, constituency_name, party_id, committee_name"
     )
     .eq("event_id", eventId)
     .order("serial_no", { ascending: true, nullsFirst: false });
@@ -197,7 +197,7 @@ export async function getKioskState(
     if (candidateIds.length > 0) {
       const { data: candidates } = await supabase
         .from("participants")
-        .select("id, full_name, serial_no")
+        .select("id, full_name, constituency_number")
         .eq("event_id", eventId)
         .in("id", candidateIds);
 
@@ -210,7 +210,7 @@ export async function getKioskState(
         .filter((c): c is NonNullable<typeof c> => Boolean(c))
         .map((c) => ({
           value: c.id,
-          label: `#${c.serial_no ?? "—"} · ${c.full_name}`,
+          label: `#${c.constituency_number ?? "—"} · ${c.full_name}`,
         }));
     }
   } else if (voteSession.vote_type === "no_confidence") {
@@ -244,7 +244,7 @@ export async function getKioskState(
     .filter((p) => !votedIds.has(p.id))
     .map((p) => ({
       participantId: p.id,
-      serialNo: p.serial_no,
+      constituencyNumber: p.constituency_number,
       fullName: p.full_name,
       constituencyName: p.constituency_name,
     }));

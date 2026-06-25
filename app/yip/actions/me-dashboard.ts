@@ -190,8 +190,10 @@ export async function getMeContacts(
 
 export type MeRosterMember = {
   id: string;
-  /** Participant serial number (displayed as #N) */
+  /** Roster serial number (internal ordering only — not displayed). */
   serial_no: number | null;
+  /** Constituency (seat) number — the canonical participant number shown as #N. */
+  constituency_number: number | null;
   constituency_name: string | null;
   constituency_state: string | null;
   /** Whether this row is the requesting student (to highlight "You") */
@@ -221,14 +223,15 @@ export async function getMyPartyRoster(
   // phone / parent_phone / email / school_name here.
   const { data: members } = await supabase
     .from("participants")
-    .select("id, serial_no, constituency_name, constituency_state")
+    .select("id, serial_no, constituency_number, constituency_name, constituency_state")
     .eq("event_id", me.event_id)
     .eq("party_id", me.party_id)
-    .order("serial_no", { ascending: true });
+    .order("constituency_number", { ascending: true, nullsFirst: false });
 
   return (members ?? []).map((m) => ({
     id: m.id,
     serial_no: m.serial_no,
+    constituency_number: m.constituency_number,
     constituency_name: m.constituency_name,
     constituency_state: m.constituency_state,
     isSelf: m.id === participantId,

@@ -19,7 +19,7 @@ interface KioskActive {
 
 interface KioskPendingVoter {
   participantId: string;
-  serialNo: number | null;
+  constituencyNumber: number | null;
   fullName: string;
   constituencyName: string | null;
 }
@@ -261,7 +261,7 @@ function ListScreen({
     ? pending.filter(
         (p) =>
           p.fullName.toLowerCase().includes(q) ||
-          (p.serialNo != null && String(p.serialNo).includes(q))
+          (p.constituencyNumber != null && String(p.constituencyNumber).includes(q))
       )
     : pending;
 
@@ -285,7 +285,7 @@ function ListScreen({
         inputMode="text"
         value={search}
         onChange={(e) => onSearch(e.target.value)}
-        placeholder="Search by serial number or name"
+        placeholder="Search by seat number or name"
         className="h-12 w-full rounded-xl border-2 border-[#1a1a3e]/10 bg-white px-4 text-base text-[#1a1a3e] transition-colors focus:border-[#FF9933] focus:outline-none focus:ring-4 focus:ring-[#FF9933]/10 placeholder:text-[#1a1a3e]/30"
       />
 
@@ -312,7 +312,7 @@ function ListScreen({
                 className="flex min-h-[56px] w-full items-center gap-3 rounded-xl border border-[#1a1a3e]/8 bg-white px-4 py-3 text-left transition-colors hover:border-[#FF9933]/40 hover:bg-[#FF9933]/5 active:bg-[#FF9933]/10"
               >
                 <span className="flex h-9 min-w-9 shrink-0 items-center justify-center rounded-lg bg-[#1a1a3e]/5 px-1.5 font-[family-name:var(--font-mono)] text-sm font-bold text-[#1a1a3e]/70">
-                  {voter.serialNo ?? "—"}
+                  {voter.constituencyNumber ?? "—"}
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-base font-semibold text-[#1a1a3e]">
@@ -368,7 +368,7 @@ function HandoffScreen({
           className="mt-3 inline-flex items-center rounded-full px-4 py-1.5 font-[family-name:var(--font-mono)] text-lg font-bold text-white"
           style={{ backgroundColor: SAFFRON }}
         >
-          #{voter.serialNo ?? "—"}
+          #{voter.constituencyNumber ?? "—"}
         </p>
         {voter.constituencyName && (
           <p className="mt-3 text-base text-[#1a1a3e]/45">
@@ -423,7 +423,7 @@ function ChoiceScreen({
       <div className="flex min-h-[60vh] flex-col">
         <div className="flex flex-1 flex-col items-center justify-center text-center">
           <p className="text-base font-medium text-[#1a1a3e]/55">
-            {voter.fullName} · #{voter.serialNo ?? "—"}
+            {voter.fullName} · #{voter.constituencyNumber ?? "—"}
           </p>
           <p className="mt-4 text-2xl font-black text-[#1a1a3e]">
             Vote {pendingChoice.label}
@@ -463,7 +463,7 @@ function ChoiceScreen({
         <p className="mt-1 text-xl font-black text-[#1a1a3e]">
           {voter.fullName}
         </p>
-        <p className="text-sm text-[#1a1a3e]/45">#{voter.serialNo ?? "—"}</p>
+        <p className="text-sm text-[#1a1a3e]/45">#{voter.constituencyNumber ?? "—"}</p>
       </div>
 
       <div className="space-y-3">

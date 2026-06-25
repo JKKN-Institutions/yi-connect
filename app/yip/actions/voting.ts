@@ -490,10 +490,10 @@ export async function revealResults(
   // Motion floor vote (No-Confidence OR Impeach the Speaker): write the counted
   // tally + outcome onto the motion (the organiser-control reveal path; the
   // presiding-officer reveal in speaker.ts does the same). config.motionId
-  // identifies the motion. For a PASSED impeach_speaker, also vacate the
-  // sitting Speaker + Deputy and open a Speaker re-election — the organiser
-  // path matters here because the Speaker is the impeach target and should not
-  // have to run their own removal.
+  // identifies the motion. For a PASSED motion, DEPOSE the sitting leader to
+  // their "Ex-" variant (no_confidence → ex_prime_minister; impeach_speaker →
+  // ex_speaker / ex_deputy_speaker) so they keep their leadership points; the
+  // organiser then runs a fresh election for the replacement, who also scores.
   if (
     session.vote_type === "no_confidence" ||
     session.vote_type === "impeach_speaker"
@@ -517,46 +517,31 @@ export async function revealResults(
         .eq("id", cfg.motionId)
         .eq("event_id", session.event_id);
 
-      if (session.vote_type === "impeach_speaker" && motionOutcome === "passed") {
-        // Vacate sitting Speaker + Deputy → mp, then open a fresh Speaker
-        // election the House will resolve via the proven reset-then-elect path
-        // (this same revealResults, vote_type speaker_election). Reuses the
-        // exact mechanism in speaker.ts:vacateAndReElectSpeaker — kept inline
-        // here because speaker.ts is leadership-gated and this is the organiser
-        // path. Never opens a second session if one is already active.
-        const { data: sitting } = await supabase
-          .from("participants")
-          .select("id")
-          .eq("event_id", session.event_id)
-          .in("parliament_role", ["speaker", "deputy_speaker"]);
-        const candidateIds = (sitting ?? []).map((p) => p.id);
-
-        await supabase
-          .from("participants")
-          .update({ parliament_role: "mp" })
-          .eq("event_id", session.event_id)
-          .in("parliament_role", ["speaker", "deputy_speaker"]);
-
-        const { data: anotherSession } = await supabase
-          .from("vote_sessions")
-          .select("id")
-          .eq("event_id", session.event_id)
-          .in("status", ["open", "closed"])
-          .maybeSingle();
-        const { data: ev } = await supabase
-          .from("events")
-          .select("current_agenda_item_id")
-          .eq("id", session.event_id)
-          .maybeSingle();
-        if (!anotherSession && ev?.current_agenda_item_id) {
-          await supabase.from("vote_sessions").insert({
-            event_id: session.event_id,
-            agenda_item_id: ev.current_agenda_item_id,
-            vote_type: "speaker_election",
-            status: "open",
-            opened_at: new Date().toISOString(),
-            config: { candidateIds },
-          });
+      if (motionOutcome === "passed") {
+        // A carried removal motion DEPOSES the sitting leader to their "Ex-"
+        // variant — they KEEP their leadership points; the newly elected
+        // replacement also earns them. We do NOT auto-open the replacement
+        // election here (the organiser runs a fresh nomination, so the new
+        // leader is a real choice rather than a re-vote on the deposed person —
+        // which would also revert the Ex- status). Demotion is scoped per role
+        // so the rest of the bench is untouched.
+        if (session.vote_type === "no_confidence") {
+          await supabase
+            .from("participants")
+            .update({ parliament_role: "ex_prime_minister" })
+            .eq("event_id", session.event_id)
+            .eq("parliament_role", "prime_minister");
+        } else if (session.vote_type === "impeach_speaker") {
+          await supabase
+            .from("participants")
+            .update({ parliament_role: "ex_speaker" })
+            .eq("event_id", session.event_id)
+            .eq("parliament_role", "speaker");
+          await supabase
+            .from("participants")
+            .update({ parliament_role: "ex_deputy_speaker" })
+            .eq("event_id", session.event_id)
+            .eq("parliament_role", "deputy_speaker");
         }
       }
     }

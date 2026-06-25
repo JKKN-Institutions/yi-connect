@@ -38,7 +38,23 @@ export const PARLIAMENT_ROLES = [
   "mp",
   "independent_mp",
 ] as const;
-export type ParliamentRole = (typeof PARLIAMENT_ROLES)[number];
+
+// "Ex-" roles — a single-seat leader deposed mid-event (no-confidence, impeach,
+// or organiser depose). They keep their base role's leadership points, but are
+// SYSTEM-ASSIGNED only: kept OUT of PARLIAMENT_ROLES so they never appear in the
+// manual allocation / rubric dropdowns, while remaining part of the
+// ParliamentRole type and the DB `parliament_role` enum.
+export const EX_PARLIAMENT_ROLES = [
+  "ex_prime_minister",
+  "ex_deputy_prime_minister",
+  "ex_leader_of_opposition",
+  "ex_speaker",
+  "ex_deputy_speaker",
+] as const;
+
+export type ParliamentRole =
+  | (typeof PARLIAMENT_ROLES)[number]
+  | (typeof EX_PARLIAMENT_ROLES)[number];
 
 export const MINISTRIES = [
   { key: "home", label: "Home Affairs" },
@@ -89,6 +105,11 @@ export const ROLE_LABELS: Record<string, string> = {
   committee_chair: "Committee Chairperson",
   mp: "Member of Parliament",
   independent_mp: "Independent MP",
+  ex_prime_minister: "Ex-Prime Minister",
+  ex_deputy_prime_minister: "Ex-Deputy Prime Minister",
+  ex_leader_of_opposition: "Ex-Leader of Opposition",
+  ex_speaker: "Ex-Speaker",
+  ex_deputy_speaker: "Ex-Deputy Speaker",
 };
 
 export const ROLE_COLORS: Record<string, string> = {
@@ -106,6 +127,12 @@ export const ROLE_COLORS: Record<string, string> = {
   committee_chair: "bg-purple-700 text-white",
   mp: "bg-gray-500 text-white",
   independent_mp: "bg-emerald-600 text-white",
+  // Ex- roles use a faded variant of their base color so they read as "former".
+  ex_prime_minister: "bg-blue-200 text-blue-900",
+  ex_deputy_prime_minister: "bg-blue-100 text-blue-900",
+  ex_leader_of_opposition: "bg-red-200 text-red-900",
+  ex_speaker: "bg-amber-200 text-amber-900",
+  ex_deputy_speaker: "bg-amber-100 text-amber-900",
 };
 
 export const PARTY_COLORS = {

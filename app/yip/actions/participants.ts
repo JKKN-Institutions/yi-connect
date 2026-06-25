@@ -1008,6 +1008,61 @@ export async function setParliamentRole(
   return { success: true, data: null };
 }
 
+// ─── Depose a sitting single-seat leader to their "Ex-" role ──────
+// Unlike a plain remove (→ mp), deposing PRESERVES the participant's leadership
+// points: an Ex-Prime Minister / Ex-Speaker / etc. carries its base role's
+// bonus. Used for mid-event removals that have no dedicated motion (Deputy PM,
+// Leader of Opposition) and as the organiser equivalent of a no-confidence /
+// impeach result.
+const EX_ROLE_MAP: Record<string, ParliamentRole> = {
+  prime_minister: "ex_prime_minister",
+  deputy_prime_minister: "ex_deputy_prime_minister",
+  leader_of_opposition: "ex_leader_of_opposition",
+  speaker: "ex_speaker",
+  deputy_speaker: "ex_deputy_speaker",
+};
+
+export async function deposeToExRole(
+  participantId: string
+): Promise<ActionResult<null>> {
+  const supabase = await createServiceClient();
+
+  const { data: participant } = await supabase
+    .from("participants")
+    .select("id, event_id, parliament_role")
+    .eq("id", participantId)
+    .single();
+  if (!participant) {
+    return { success: false, error: "Participant not found" };
+  }
+
+  const access = await getYipEventAccess(participant.event_id);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
+
+  const exRole = EX_ROLE_MAP[participant.parliament_role ?? ""];
+  if (!exRole) {
+    return {
+      success: false,
+      error:
+        "Only a sitting Prime Minister, Deputy PM, Leader of Opposition, Speaker, or Deputy Speaker can be deposed.",
+    };
+  }
+
+  const { error } = await supabase
+    .from("participants")
+    .update({ parliament_role: exRole })
+    .eq("id", participantId);
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  revalidatePath(`/yip/dashboard/events/${participant.event_id}/control`);
+  revalidatePath(`/yip/dashboard/events/${participant.event_id}/participants`);
+  return { success: true, data: null };
+}
+
 // ─── Mark 90-second Speech Finished (organiser) ───────────────────
 // canManage-gated, mirrors checkInParticipant. Reversible. The desk-scoped
 // volunteer equivalent lives in app/yip/actions/volunteer-desk.ts.

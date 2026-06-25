@@ -375,10 +375,9 @@ export async function speakerRecordMotionVote(
     .update({ status: "revealed", revealed_at: nowIso, closed_at: nowIso })
     .eq("id", session.id);
 
-  // ── Impeach passed → vacate Speaker + Deputy and open a re-election ──────
-  // Reuses the PROVEN speaker_election path: revealResults(speaker_election)
-  // itself resets speaker/deputy → mp before installing the winners, so the
-  // election can never leave two Speakers even if this pre-vacate is partial.
+  // ── Impeach passed → depose Speaker + Deputy to their Ex- roles ──────────
+  // They keep their leadership points; the organiser then runs a fresh Speaker
+  // nomination for the replacement (who also scores). No auto re-election.
   // Best-effort: a failure here must not unwind the recorded impeach result.
   let reElection: ImpeachReElection | null = null;
   if (r.motion.motion_type === "impeach_speaker" && outcome === "passed") {
@@ -391,17 +390,13 @@ export async function speakerRecordMotionVote(
   return { success: true, data: { outcome, tally, reElection } };
 }
 
-// ─── Impeach pass → vacate sitting Speaker/Deputy + open a Speaker election ──
+// ─── Impeach pass → depose the sitting Speaker/Deputy to their Ex- roles ─────
 //
-// The actual re-election is run by the organiser through the existing vote
-// manager and resolved by revealResults("speaker_election") in voting.ts — the
-// SAME reset-then-elect engine the original Speaker election uses. We only:
-//   (1) flip the sitting speaker + deputy_speaker rows to mp (the impeach result
-//       is final regardless of whether/when the election completes), and
-//   (2) open a fresh speaker_election session so the House elects a new Speaker.
-// Idempotent + guarded: if a vote session is already active we do NOT open a
-// second one (one-active-session invariant), and if no agenda item is live the
-// caller still gets the vacate — the organiser opens the election manually.
+// Deposing them (not resetting to mp) preserves their leadership points. The
+// replacement is then chosen by the organiser through the normal Speaker
+// nomination + election (revealResults("speaker_election") in voting.ts), so
+// the new Speaker is a real choice rather than a re-vote on the deposed
+// officers. `electionOpened` is therefore always false here.
 export type ImpeachReElection = {
   vacated: number;
   electionOpened: boolean;
@@ -412,62 +407,25 @@ async function vacateAndReElectSpeaker(
   supabase: Awaited<ReturnType<typeof createServiceClient>>,
   eventId: string
 ): Promise<ImpeachReElection> {
-  // (1) The candidate field for the re-election = the just-removed Speaker +
-  //     Deputy Speaker(s). Capture them BEFORE the role reset so the ballot is
-  //     well-formed (getSpeakerCandidates() reads parliament_role='speaker',
-  //     which we are about to clear).
-  const { data: sitting } = await supabase
+  // DEPOSE the sitting Speaker → ex_speaker and Deputy → ex_deputy_speaker
+  // (per-role so each keeps the correct Ex-). They retain their leadership
+  // points; the organiser then runs a FRESH Speaker nomination + election so
+  // the replacement is a real choice — re-voting on the deposed officers would
+  // just revert the Ex- status. We never auto-open the replacement here, so
+  // electionOpened is always false (the caller/UI already handle that value).
+  const { data: exSpeaker } = await supabase
     .from("participants")
-    .select("id")
+    .update({ parliament_role: "ex_speaker" })
     .eq("event_id", eventId)
-    .in("parliament_role", ["speaker", "deputy_speaker"]);
-  const candidateIds = (sitting ?? []).map((p) => p.id);
-
-  // (1b) Vacate them → mp. Scoped to speaker/deputy_speaker so PM/LoP/ministers
-  //      are untouched (mirrors the reset in revealResults).
-  const { data: vacatedRows } = await supabase
-    .from("participants")
-    .update({ parliament_role: "mp" })
-    .eq("event_id", eventId)
-    .in("parliament_role", ["speaker", "deputy_speaker"])
+    .eq("parliament_role", "speaker")
     .select("id");
-  const vacated = (vacatedRows ?? []).length;
-
-  // (2) Open a fresh Speaker election — but never collide with an active vote
-  //     session (mirrors openVote's one-active-session rule).
-  const { data: existing } = await supabase
-    .from("vote_sessions")
-    .select("id")
+  const { data: exDeputy } = await supabase
+    .from("participants")
+    .update({ parliament_role: "ex_deputy_speaker" })
     .eq("event_id", eventId)
-    .in("status", ["open", "closed"])
-    .maybeSingle();
-  if (existing) {
-    return { vacated, electionOpened: false, reason: "active_session" };
-  }
+    .eq("parliament_role", "deputy_speaker")
+    .select("id");
+  const vacated = (exSpeaker ?? []).length + (exDeputy ?? []).length;
 
-  const { data: event } = await supabase
-    .from("events")
-    .select("current_agenda_item_id")
-    .eq("id", eventId)
-    .maybeSingle();
-  if (!event?.current_agenda_item_id) {
-    return { vacated, electionOpened: false, reason: "no_agenda_item" };
-  }
-
-  const { error: openErr } = await supabase.from("vote_sessions").insert({
-    event_id: eventId,
-    agenda_item_id: event.current_agenda_item_id,
-    vote_type: "speaker_election",
-    status: "open",
-    opened_at: new Date().toISOString(),
-    // candidateIds = the removed officers, the natural re-election field. The
-    // organiser can still run the floor election normally; revealResults then
-    // installs the winner via the proven reset-then-elect path.
-    config: { candidateIds },
-  });
-  if (openErr) {
-    return { vacated, electionOpened: false, reason: openErr.message };
-  }
-
-  return { vacated, electionOpened: true };
+  return { vacated, electionOpened: false, reason: "manual_reelection" };
 }

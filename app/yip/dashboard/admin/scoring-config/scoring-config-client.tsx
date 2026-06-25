@@ -68,6 +68,12 @@ const ROLE_LABELS: { key: string; label: string }[] = [
   { key: "mp", label: "Member of Parliament" },
   { key: "bill_committee", label: "Bill Committee" },
   { key: "independent_mp", label: "Independent MP" },
+  // "Ex-" deposed-leader roles — seeded to their base role's bonus; editable here.
+  { key: "ex_prime_minister", label: "Ex-Prime Minister" },
+  { key: "ex_deputy_prime_minister", label: "Ex-Deputy Prime Minister" },
+  { key: "ex_leader_of_opposition", label: "Ex-Leader of Opposition" },
+  { key: "ex_speaker", label: "Ex-Speaker" },
+  { key: "ex_deputy_speaker", label: "Ex-Deputy Speaker" },
 ];
 
 const METHOD_LABELS: { value: AggregationMethod; label: string; hint: string }[] = [

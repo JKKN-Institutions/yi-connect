@@ -351,7 +351,14 @@ export async function getPersonJourney(personId: string): Promise<JourneyStep[]>
       committee_number: (p.committee_number as number | null) ?? null,
       committee_name: (p.committee_name as string | null) ?? null,
       constituency_name: (p.constituency_name as string | null) ?? null,
-      awards: res?.award_category ?? null,
+      // The "Not ranked — absent Day N" status lives in award_category but is
+      // NOT an award (Director ruling 2026-06-25) — keep it out of the career
+      // awards rollup. rank is already null for these rows.
+      awards:
+        res?.award_category &&
+        !res.award_category.startsWith("Not ranked")
+          ? res.award_category
+          : null,
       rank: res?.rank ?? null,
       avg_score: res?.avg_score ?? null,
       results_published_at: publishedAt,

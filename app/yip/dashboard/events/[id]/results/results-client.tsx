@@ -308,10 +308,14 @@ export function ResultsClient({
     });
   }
 
-  // Select all non-qualified for qualification
+  // Select all non-qualified for qualification. A day-incomplete participant
+  // (not ranked — attended only one day of a two-day event) is excluded: they
+  // are not rank/award-eligible, so they cannot be promoted either.
   function selectAllUnqualified() {
     const unqualified = results
-      .filter((r) => !qualifiedIds.has(r.participant_id))
+      .filter(
+        (r) => !qualifiedIds.has(r.participant_id) && r.rank != null
+      )
       .map((r) => r.participant_id);
     setSelectedForQualify(new Set(unqualified));
   }
@@ -388,10 +392,20 @@ export function ResultsClient({
     setPublishLoading(false);
   }
 
+  // A day-incomplete participant (attended only one day of a two-day event) is
+  // "not ranked" — the engine writes the reason into award_category prefixed
+  // "Not ranked —". It is NOT an award: detect it here so it never renders as an
+  // award card/badge, and surface it as a distinct status instead.
+  const NOT_RANKED_PREFIX = "Not ranked";
+  const notRankedReason = (r: ResultWithParticipant): string | null =>
+    r.rank == null && r.award_category?.startsWith(NOT_RANKED_PREFIX)
+      ? r.award_category
+      : null;
+
   // Build award winners map from whatever labels the engine emitted.
   const awardWinners = new Map<string, ResultWithParticipant[]>();
   for (const r of results) {
-    if (r.award_category) {
+    if (r.award_category && !notRankedReason(r)) {
       const categories = r.award_category
         .split(",")
         .map((c) => c.trim())
@@ -768,10 +782,21 @@ export function ResultsClient({
                     | "ruling"
                     | "opposition"
                     | null;
+                  const reason = notRankedReason(r);
                   return (
-                    <TableRow key={r.id}>
+                    <TableRow
+                      key={r.id}
+                      className={reason ? "bg-red-50/40" : undefined}
+                    >
                       <TableCell className="text-center font-bold text-gray-700">
-                        {r.rank}
+                        {r.rank ?? (
+                          <span
+                            className="text-gray-400"
+                            title={reason ?? "Not ranked"}
+                          >
+                            &mdash;
+                          </span>
+                        )}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1.5">
@@ -834,22 +859,31 @@ export function ResultsClient({
                         {r.jury_count}
                       </TableCell>
                       <TableCell>
-                        {r.award_category && (
-                          <div className="flex flex-wrap gap-1">
-                            {r.award_category
-                              .split(",")
-                              .map((a) => a.trim())
-                              .filter(Boolean)
-                              .map((a) => (
-                                <Badge
-                                  key={a}
-                                  variant="secondary"
-                                  className="bg-amber-100 text-amber-800 text-[10px] px-1.5 py-0"
-                                >
-                                  {a}
-                                </Badge>
-                              ))}
-                          </div>
+                        {reason ? (
+                          <Badge
+                            variant="secondary"
+                            className="bg-red-100 text-red-700 text-[10px] px-1.5 py-0"
+                          >
+                            {reason}
+                          </Badge>
+                        ) : (
+                          r.award_category && (
+                            <div className="flex flex-wrap gap-1">
+                              {r.award_category
+                                .split(",")
+                                .map((a) => a.trim())
+                                .filter(Boolean)
+                                .map((a) => (
+                                  <Badge
+                                    key={a}
+                                    variant="secondary"
+                                    className="bg-amber-100 text-amber-800 text-[10px] px-1.5 py-0"
+                                  >
+                                    {a}
+                                  </Badge>
+                                ))}
+                            </div>
+                          )
                         )}
                       </TableCell>
                     </TableRow>
@@ -951,11 +985,14 @@ export function ResultsClient({
                     const isSelected = selectedForQualify.has(
                       r.participant_id
                     );
+                    const reason = notRankedReason(r);
                     return (
                       <TableRow
                         key={r.id}
                         className={
-                          isQualified
+                          reason
+                            ? "bg-red-50/40"
+                            : isQualified
                             ? "bg-green-50/50"
                             : isSelected
                             ? "bg-blue-50/50"
@@ -963,7 +1000,14 @@ export function ResultsClient({
                         }
                       >
                         <TableCell className="text-center">
-                          {isQualified ? (
+                          {reason ? (
+                            <span
+                              className="text-gray-300"
+                              title={reason}
+                            >
+                              &mdash;
+                            </span>
+                          ) : isQualified ? (
                             <button
                               onClick={() =>
                                 handleUnmarkQualified([r.participant_id])
@@ -999,7 +1043,11 @@ export function ResultsClient({
                           )}
                         </TableCell>
                         <TableCell className="text-center text-sm font-bold text-gray-700">
-                          {r.rank}
+                          {r.rank ?? (
+                            <span className="text-gray-300" title={reason ?? "Not ranked"}>
+                              &mdash;
+                            </span>
+                          )}
                         </TableCell>
                         <TableCell>
                           <p className="text-sm font-medium">
@@ -1013,7 +1061,14 @@ export function ResultsClient({
                           {r.avg_score?.toFixed(1) ?? "--"}
                         </TableCell>
                         <TableCell className="text-center">
-                          {isQualified ? (
+                          {reason ? (
+                            <Badge
+                              variant="secondary"
+                              className="bg-red-100 text-red-700 text-[10px] px-1.5 py-0"
+                            >
+                              {reason}
+                            </Badge>
+                          ) : isQualified ? (
                             <Badge
                               variant="secondary"
                               className="bg-green-100 text-green-700 text-[10px] px-1.5 py-0"

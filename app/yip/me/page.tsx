@@ -1018,26 +1018,34 @@ export default async function ParticipantPage() {
                     </p>
                     <p className="text-sm text-gray-500">Your Rank</p>
                   </div>
+                ) : result.award_category?.startsWith("Not ranked") ? (
+                  // Day-incomplete: attended only one day of a two-day event.
+                  // Excluded from rank + awards, but told clearly why.
+                  <p className="text-sm font-medium text-red-600">
+                    {result.award_category} — please contact your chapter
+                    organiser if this is a mistake.
+                  </p>
                 ) : (
                   <p className="text-sm text-gray-600">
                     Your rank will be announced at the Valedictory Session.
                   </p>
                 )}
 
-                {/* Award Badges */}
-                {result.award_category && (
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {result.award_category.split(", ").map((award) => (
-                      <span
-                        key={award}
-                        className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-amber-500 to-yellow-400 px-3 py-1.5 text-sm font-semibold text-white shadow-sm"
-                      >
-                        <Award className="size-3.5" />
-                        {award}
-                      </span>
-                    ))}
-                  </div>
-                )}
+                {/* Award Badges — never render the "Not ranked" status as an award */}
+                {result.award_category &&
+                  !result.award_category.startsWith("Not ranked") && (
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {result.award_category.split(", ").map((award) => (
+                        <span
+                          key={award}
+                          className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-amber-500 to-yellow-400 px-3 py-1.5 text-sm font-semibold text-white shadow-sm"
+                        >
+                          <Award className="size-3.5" />
+                          {award}
+                        </span>
+                      ))}
+                    </div>
+                  )}
               </div>
             </div>
           </div>

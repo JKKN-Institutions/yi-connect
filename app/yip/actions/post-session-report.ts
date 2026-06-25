@@ -87,10 +87,12 @@ export async function generatePostSessionReport(
   const agenda = agendaRes.data ?? [];
   const socialLinks = event.social_links ?? [];
 
-  // Awards rollup from award_category strings (comma-separated)
+  // Awards rollup from award_category strings (comma-separated). Skip the
+  // "Not ranked — absent Day N" status (Director ruling 2026-06-25): it lives in
+  // award_category but is NOT an award and must not appear in the awards rollup.
   const awardCounts = new Map<string, string[]>();
   for (const r of results) {
-    if (!r.award_category) continue;
+    if (!r.award_category || r.award_category.startsWith("Not ranked")) continue;
     const names = r.award_category.split(",").map((a) => a.trim()).filter(Boolean);
     const participant = participants.find((p) => p.id === r.participant_id);
     if (!participant) continue;

@@ -230,7 +230,9 @@ export async function getRegionalLeaderboard(
 
     entry.events_played.add(eventId);
     entry.total_score += score;
-    if (award) entry.awards_won += 1;
+    // The "Not ranked — absent Day N" status lives in award_category but is NOT
+    // an award (Director ruling 2026-06-25) — don't count it toward awards_won.
+    if (award && !award.startsWith("Not ranked")) entry.awards_won += 1;
     if (p.parliament_role && LEADERSHIP_ROLES.has(p.parliament_role)) {
       entry.speaker_count += 1;
     }

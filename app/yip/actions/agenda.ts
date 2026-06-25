@@ -201,12 +201,15 @@ export async function reopenLastCompletedSession(
   }
   const supabase = await createServiceClient();
 
-  // Find the LAST completed item: latest day, then latest sequence within it.
+  // Find the LAST session that actually ran: latest day, then latest sequence
+  // within it. We accept "in_progress" as well as "completed" so that if a day
+  // was ended while its final session was still live (an abnormal end), we
+  // re-open THAT session rather than an earlier completed one.
   const { data: items, error: itemsErr } = await supabase
     .from("agenda")
     .select("id, day")
     .eq("event_id", eventId)
-    .eq("status", "completed")
+    .in("status", ["completed", "in_progress"])
     .order("day", { ascending: false })
     .order("sequence_order", { ascending: false })
     .limit(1);
@@ -215,6 +218,16 @@ export async function reopenLastCompletedSession(
   if (!item) {
     return { success: false, error: "No finished session to re-open." };
   }
+
+  // Defensive: never leave two sessions live at once. Close out any OTHER
+  // in_progress item for this event before re-activating the target one.
+  const { error: clearErr } = await supabase
+    .from("agenda")
+    .update({ status: "completed" })
+    .eq("event_id", eventId)
+    .eq("status", "in_progress")
+    .neq("id", item.id);
+  if (clearErr) return { success: false, error: clearErr.message };
 
   // Re-activate that item: status back to in_progress, clear its end timestamp.
   const { error: agendaErr } = await supabase

@@ -433,12 +433,15 @@ export function ControlPanel({
         }
         setConfirmDialog((prev) => ({ ...prev, open: false }));
       });
-    if (eventStatus === "results_published") {
+    const scoresLocked = event?.scores_locked ?? false;
+    if (eventStatus === "results_published" || scoresLocked) {
       setConfirmDialog({
         open: true,
         title: "Re-open the last session?",
         description:
-          "Results are already published - this may change them. Continue?",
+          eventStatus === "results_published"
+            ? "Results are already published - this may change them. Continue?"
+            : "Scores for this event are locked. Re-opening makes the session live again but does not unlock scoring. Continue?",
         confirmLabel: "Yes, re-open",
         destructive: true,
         action: run,
@@ -452,12 +455,15 @@ export function ControlPanel({
   // existing confirm). When results are already published, surface the
   // results-published warning first, then fall through to the normal reset.
   function handleResetAgendaGuarded() {
-    if (eventStatus === "results_published") {
+    const scoresLocked = event?.scores_locked ?? false;
+    if (eventStatus === "results_published" || scoresLocked) {
       setConfirmDialog({
         open: true,
         title: "Reset the agenda?",
         description:
-          "Results are already published - this may change them. Continue?",
+          eventStatus === "results_published"
+            ? "Results are already published - this may change them. Continue?"
+            : "Scores for this event are locked. Resetting the agenda does not unlock scoring. Continue?",
         confirmLabel: "Yes, reset agenda",
         destructive: true,
         action: () => {

@@ -17,7 +17,7 @@ import {
   PARLIAMENT_ROLES,
 } from "@/lib/yip/constants";
 import { committeeLabel } from "@/lib/yip/committee-label";
-import { CsvImport } from "@/components/yip/csv-import";
+import { AllocatedRosterImport } from "@/components/yip/allocated-roster-import";
 import { Button } from "@/components/yip/ui/button";
 import { Badge } from "@/components/yip/ui/badge";
 import { Card, CardContent } from "@/components/yip/ui/card";
@@ -358,16 +358,20 @@ export function AllocationClient({
               Or upload an allocated roster
             </h3>
             <p className="mt-1 text-xs text-gray-500">
-              Already allocated outside the app? Upload one sheet —{" "}
+              Already allocated by National? Upload their sheet —{" "}
               <span className="font-medium">
-                Name, Party Letter, Constituency Number, Constituency Name,
-                Committee Number
+                SRN, Name, Party, Committee, Constituency, State / UT
               </span>{" "}
               — and the app creates each student (with an access code) and their
               full allocation. No steps needed.
             </p>
             <div className="mt-3">
-              <CsvImport eventId={eventId} onImported={() => router.refresh()} />
+              <AllocatedRosterImport
+                eventId={eventId}
+                allocationLocked={allocationLocked}
+                existingNames={participants.map((p) => p.full_name)}
+                onImported={() => router.refresh()}
+              />
             </div>
           </CardContent>
         </Card>

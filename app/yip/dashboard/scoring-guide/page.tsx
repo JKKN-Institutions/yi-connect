@@ -455,9 +455,99 @@ export default async function ScoringGuidePage() {
         </Analogy>
       </Section>
 
-      {/* Act 4 — awards */}
+      {/* Electing the Speaker */}
       <Section
         n={6}
+        icon={<Users className="size-5" />}
+        title="Electing the Speaker"
+        subtitle="The House chooses its own Speaker by vote"
+      >
+        <p className="text-sm text-gray-700">
+          Each party puts forward <strong>one or two Speaker nominees</strong> —
+          a maximum of two per party, so no single party can crowd the ballot.
+          Then the <strong>whole House votes</strong>. The candidate with the most
+          votes becomes <strong>Speaker</strong>; the runner-up becomes{" "}
+          <strong>Deputy Speaker</strong>.
+        </p>
+        <p className="text-sm text-gray-700">
+          Organisers pick the nominees on the control panel through a{" "}
+          <strong>searchable, party-grouped dialog</strong> — students are listed
+          under their own party, so it&apos;s easy to find and add the right
+          person from each side.
+        </p>
+        <p className="text-sm text-gray-700">
+          Both winners earn their leadership bonus from the table in Step 5 —
+          Speaker <strong>+5</strong> and Deputy Speaker <strong>+4</strong>.
+        </p>
+        <Analogy>
+          it works like a real election. Every party gets to nominate, the room
+          votes, and the two who come closest both get a post — first place runs
+          the House, second place backs them up.
+        </Analogy>
+      </Section>
+
+      {/* Deposing a leader */}
+      <Section
+        n={7}
+        icon={<Gavel className="size-5" />}
+        title="Deposing a leader keeps their points"
+        subtitle="Removed leaders become &ldquo;Ex-&rdquo; leaders and keep their bonus"
+      >
+        <p className="text-sm text-gray-700">
+          When a leader is removed part-way through an event, they don&apos;t lose
+          what they earned. They become an <strong>&ldquo;Ex-&rdquo; leader</strong>{" "}
+          — Ex-Prime Minister, Ex-Speaker, and so on — and{" "}
+          <strong>keep their leadership points</strong>. The person who replaces
+          them <strong>also earns</strong> that role&apos;s points.
+        </p>
+        <p className="text-sm text-gray-700">There are three ways this happens:</p>
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr>
+                <th className={thCls}>What happens</th>
+                <th className={thCls}>Who is deposed</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[
+                ["A No-Confidence motion passes", "Prime Minister → Ex-Prime Minister"],
+                ["An Impeach-the-Speaker motion passes", "Speaker → Ex-Speaker / Deputy Speaker → Ex-Deputy Speaker"],
+                ["An organiser presses the gavel button on the control panel", "Any single-seat leader → their Ex- version (manual “Depose to Ex-”)"],
+              ].map(([k, v]) => (
+                <tr key={k as string}>
+                  <td className={tdCls}>{k}</td>
+                  <td className={tdCls}>{v}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="flex gap-2 rounded-lg border border-[#FF9933]/30 bg-[#FF9933]/[0.06] px-4 py-3 text-sm text-[#7c3a00]">
+          <Info className="mt-0.5 size-4 shrink-0 text-[#FF9933]" />
+          <p>
+            <strong>This is deliberate:</strong> a successful no-confidence vote
+            hands out PM-level points <strong>twice</strong> — once to the
+            Ex-Prime Minister who was removed, and once to the new Prime Minister.
+            Both led the House, so both keep the credit.
+          </p>
+        </div>
+        <p className="text-sm text-gray-700">
+          One thing stays with the current holder: <strong>role-specific
+          awards</strong>. &ldquo;Best Prime Minister&rdquo; and similar awards
+          always go to whoever holds the post <em>now</em>, not to the Ex- leader.
+        </p>
+        <Analogy>
+          think of a captain who&apos;s replaced mid-tournament — they still keep
+          the runs they already scored, and the new captain starts scoring too.
+          The &ldquo;Best Captain&rdquo; trophy, though, goes to whoever is wearing
+          the armband at the end.
+        </Analogy>
+      </Section>
+
+      {/* Act 4 — awards */}
+      <Section
+        n={8}
         icon={<Trophy className="size-5" />}
         title="The awards"
         subtitle="15 awards — each rewards a different strength"
@@ -542,7 +632,7 @@ export default async function ScoringGuidePage() {
 
       {/* FAQ */}
       <Section
-        n={7}
+        n={9}
         icon={<HelpCircle className="size-5" />}
         title="Common questions"
         subtitle="What organisers usually ask"
@@ -582,7 +672,7 @@ export default async function ScoringGuidePage() {
 
       {/* Principles */}
       <Section
-        n={8}
+        n={10}
         icon={<Scale className="size-5" />}
         title="The principles behind it"
         subtitle="Why this is fair"

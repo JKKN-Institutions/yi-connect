@@ -1548,7 +1548,7 @@ export type ScoringProgressData = {
     parliament_role: string | null;
     party_side: string | null;
     party_number: number | null;
-    school_name: string;
+    constituency_number: number | null;
     juriesScored: number;
     totalJuries: number;
     avgScoreSoFar: number | null;
@@ -1574,7 +1574,7 @@ export async function getScoringProgress(
 
   const { data: participants } = await supabase
     .from("participants")
-    .select("id, full_name, parliament_role, party_side, party_number, school_name")
+    .select("id, full_name, parliament_role, party_side, party_number, constituency_number")
     .eq("event_id", eventId)
     .not("parliament_role", "is", null)
     .order("full_name");
@@ -1644,7 +1644,7 @@ export async function getScoringProgress(
       parliament_role: p.parliament_role,
       party_side: p.party_side,
       party_number: p.party_number,
-      school_name: p.school_name,
+      constituency_number: p.constituency_number,
       juriesScored: pScores.length,
       totalJuries,
       avgScoreSoFar,

@@ -13,11 +13,8 @@ import {
 } from "@/app/yip/actions/award-overrides";
 import type { AwardOverride } from "@/app/yip/actions/award-overrides";
 import { AWARD_LABELS } from "@/lib/yip/awards";
-import {
-  markQualified,
-  unmarkQualified,
-  getEventQualificationData,
-} from "@/app/yip/actions/pipeline";
+import { getEventQualificationData } from "@/app/yip/actions/pipeline";
+import { QualificationPanel } from "./qualification-panel";
 import { ROLE_LABELS, PARTY_COLORS } from "@/lib/yip/constants";
 import { StudentScoreSheet } from "./student-score-sheet";
 import { LeadershipTracker } from "./leadership-tracker";
@@ -43,7 +40,6 @@ import {
   Award,
   Crown,
   Star,
-  ArrowUpRight,
   MessageSquare,
   Lightbulb,
   BookOpen,
@@ -211,6 +207,8 @@ export function ResultsClient({
   positionBonuses = {},
   day2CheckinWarning = false,
   awardCandidates = [],
+  zoneAwardConfig = {},
+  canQualify = false,
 }: {
   eventId: string;
   eventName: string;
@@ -221,6 +219,11 @@ export function ResultsClient({
   eventLevel?: string;
   initialQualifiedIds?: string[];
   positionBonuses?: Record<string, number>;
+  // Award-based qualification (locked 2026-06-25). Per-zone config of which
+  // awards confer advancement (award_key -> qualifies; absence = true), plus
+  // whether the current viewer may lock qualifiers (super-admin only).
+  zoneAwardConfig?: Record<string, boolean>;
+  canQualify?: boolean;
   // Two-day event with ZERO Day-2 check-ins: computing now marks everyone
   // "Not ranked — absent Day 2". Surface a warning so the chair doesn't publish
   // an all-unranked leaderboard before Day-2 check-in is done.
@@ -283,14 +286,11 @@ export function ResultsClient({
     text: string;
   } | null>(null);
 
-  // Qualifier state
+  // Qualifier state. qualifiedIds drives the leaderboard "Qualified" badge and is
+  // kept in sync by the award-based QualificationPanel below (onQualifiedChange).
   const [qualifiedIds, setQualifiedIds] = useState<Set<string>>(
     new Set(initialQualifiedIds)
   );
-  const [selectedForQualify, setSelectedForQualify] = useState<Set<string>>(
-    new Set()
-  );
-  const [qualifyLoading, setQualifyLoading] = useState(false);
   const [resolvedLevel, setResolvedLevel] = useState(eventLevel);
 
   // Fetch real event level + qualified IDs on mount
@@ -307,81 +307,9 @@ export function ResultsClient({
   const showQualifiers = resolvedLevel === "chapter" || resolvedLevel === "regional";
   const nextLevelLabel = resolvedLevel === "chapter" ? "Regional" : "National";
 
-  // Toggle selection for qualification
-  function toggleQualifySelection(participantId: string) {
-    setSelectedForQualify((prev) => {
-      const next = new Set(prev);
-      if (next.has(participantId)) {
-        next.delete(participantId);
-      } else {
-        next.add(participantId);
-      }
-      return next;
-    });
-  }
-
-  // Select all non-qualified for qualification. A day-incomplete participant
-  // (not ranked — attended only one day of a two-day event) is excluded: they
-  // are not rank/award-eligible, so they cannot be promoted either.
-  function selectAllUnqualified() {
-    const unqualified = results
-      .filter(
-        (r) => !qualifiedIds.has(r.participant_id) && r.rank != null
-      )
-      .map((r) => r.participant_id);
-    setSelectedForQualify(new Set(unqualified));
-  }
-
-  // Clear selection
-  function clearSelection() {
-    setSelectedForQualify(new Set());
-  }
-
-  // Mark selected as qualified
-  async function handleMarkQualified() {
-    const ids = Array.from(selectedForQualify);
-    if (ids.length === 0) return;
-    setQualifyLoading(true);
-    setMessage(null);
-    const result = await markQualified(ids, eventId);
-    if (result.success) {
-      setQualifiedIds((prev) => {
-        const next = new Set(prev);
-        ids.forEach((id) => next.add(id));
-        return next;
-      });
-      setSelectedForQualify(new Set());
-      setMessage({
-        type: "success",
-        text: `Marked ${ids.length} student${ids.length !== 1 ? "s" : ""} as qualified for ${nextLevelLabel}`,
-      });
-    } else {
-      setMessage({ type: "error", text: result.error });
-    }
-    setQualifyLoading(false);
-  }
-
-  // Unmark specific participants
-  async function handleUnmarkQualified(participantIds: string[]) {
-    if (participantIds.length === 0) return;
-    setQualifyLoading(true);
-    setMessage(null);
-    const result = await unmarkQualified(participantIds, eventId);
-    if (result.success) {
-      setQualifiedIds((prev) => {
-        const next = new Set(prev);
-        participantIds.forEach((id) => next.delete(id));
-        return next;
-      });
-      setMessage({
-        type: "success",
-        text: `Removed qualification for ${participantIds.length} student${participantIds.length !== 1 ? "s" : ""}`,
-      });
-    } else {
-      setMessage({ type: "error", text: result.error });
-    }
-    setQualifyLoading(false);
-  }
+  // Qualification (award-based) is handled by <QualificationPanel/> below, which
+  // reuses the shared markQualified/unmarkQualified primitives. It calls back via
+  // onQualifiedChange to keep qualifiedIds (the leaderboard badge) in sync.
 
   async function handlePublishToggle() {
     setPublishLoading(true);
@@ -997,199 +925,24 @@ export function ResultsClient({
         </CardContent>
       </Card>
 
-      {/* Qualifiers Section - only for chapter/regional events */}
+      {/* Award-based qualification (locked 2026-06-25) — only for
+          chapter/regional events. Replaces the old rank-based "select N"
+          qualifier: each qualifying award's chosen advancer moves up. */}
       {showQualifiers && results.length > 0 && (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <ArrowUpRight className="size-5 text-[#138808]" />
-                <CardTitle className="text-base">
-                  Qualifiers for {nextLevelLabel}
-                </CardTitle>
-              </div>
-              <p className="text-sm text-gray-500">
-                {qualifiedIds.size} of {results.length} students qualified
-              </p>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {/* Action bar */}
-            <div className="mb-4 flex flex-wrap items-center gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={selectAllUnqualified}
-                disabled={qualifyLoading}
-              >
-                Select All Unqualified
-              </Button>
-              {selectedForQualify.size > 0 && (
-                <>
-                  <Button
-                    size="sm"
-                    className="bg-[#138808] text-white hover:bg-[#0f6b06]"
-                    onClick={handleMarkQualified}
-                    disabled={qualifyLoading}
-                  >
-                    {qualifyLoading ? (
-                      <Loader2 className="size-4 animate-spin" />
-                    ) : (
-                      <CheckCircle2 className="size-4" />
-                    )}
-                    Mark {selectedForQualify.size} as Qualified for{" "}
-                    {nextLevelLabel}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={clearSelection}
-                    disabled={qualifyLoading}
-                  >
-                    Clear Selection
-                  </Button>
-                </>
-              )}
-              {qualifiedIds.size > 0 && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="border-red-200 text-red-600 hover:bg-red-50"
-                  onClick={() =>
-                    handleUnmarkQualified(Array.from(qualifiedIds))
-                  }
-                  disabled={qualifyLoading}
-                >
-                  Unmark All ({qualifiedIds.size})
-                </Button>
-              )}
-            </div>
-
-            {/* Qualifier table */}
-            <div className="rounded-lg border overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-10 text-center">
-                      <span className="sr-only">Select</span>
-                    </TableHead>
-                    <TableHead className="w-12 text-center">#</TableHead>
-                    <TableHead>Name</TableHead>
-                    <TableHead>School</TableHead>
-                    <TableHead className="text-right">Score</TableHead>
-                    <TableHead className="text-center">Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {results.map((r) => {
-                    const isQualified = qualifiedIds.has(r.participant_id);
-                    const isSelected = selectedForQualify.has(
-                      r.participant_id
-                    );
-                    const reason = notRankedReason(r);
-                    return (
-                      <TableRow
-                        key={r.id}
-                        className={
-                          reason
-                            ? "bg-red-50/40"
-                            : isQualified
-                            ? "bg-green-50/50"
-                            : isSelected
-                            ? "bg-blue-50/50"
-                            : ""
-                        }
-                      >
-                        <TableCell className="text-center">
-                          {reason ? (
-                            <span
-                              className="text-gray-300"
-                              title={reason}
-                            >
-                              &mdash;
-                            </span>
-                          ) : isQualified ? (
-                            <button
-                              onClick={() =>
-                                handleUnmarkQualified([r.participant_id])
-                              }
-                              disabled={qualifyLoading}
-                              className="rounded p-0.5 text-red-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-50"
-                              title="Remove qualification"
-                            >
-                              <svg
-                                className="size-4"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                                strokeWidth={2}
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  d="M6 18L18 6M6 6l12 12"
-                                />
-                              </svg>
-                            </button>
-                          ) : (
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={() =>
-                                toggleQualifySelection(r.participant_id)
-                              }
-                              disabled={qualifyLoading}
-                              className="size-4 rounded border-gray-300 text-[#138808] focus:ring-[#138808]"
-                            />
-                          )}
-                        </TableCell>
-                        <TableCell className="text-center text-sm font-bold text-gray-700">
-                          {r.rank ?? (
-                            <span className="text-gray-300" title={reason ?? "Not ranked"}>
-                              &mdash;
-                            </span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <p className="text-sm font-medium">
-                            {r.participant.full_name}
-                          </p>
-                        </TableCell>
-                        <TableCell className="text-sm text-gray-600">
-                          {r.participant.school_name}
-                        </TableCell>
-                        <TableCell className="text-right font-mono text-sm font-semibold">
-                          {r.avg_score?.toFixed(1) ?? "--"}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {reason ? (
-                            <Badge
-                              variant="secondary"
-                              className="bg-red-100 text-red-700 text-[10px] px-1.5 py-0"
-                            >
-                              {reason}
-                            </Badge>
-                          ) : isQualified ? (
-                            <Badge
-                              variant="secondary"
-                              className="bg-green-100 text-green-700 text-[10px] px-1.5 py-0"
-                            >
-                              Qualified
-                            </Badge>
-                          ) : (
-                            <span className="text-xs text-gray-400">
-                              Not selected
-                            </span>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-          </CardContent>
-        </Card>
+        <QualificationPanel
+          // Remount when the shortlist changes (e.g. after a recompute) so the
+          // pre-ticked advancers reflect the latest winners, not a stale mount.
+          key={awardCandidates
+            .map((g) => `${g.award_key}:${g.candidates.find((c) => c.is_winner)?.participant_id ?? g.candidates[0]?.participant_id ?? ""}`)
+            .join("|")}
+          eventId={eventId}
+          nextLevelLabel={nextLevelLabel}
+          awardCandidates={awardCandidates}
+          zoneAwardConfig={zoneAwardConfig}
+          qualifiedIds={qualifiedIds}
+          onQualifiedChange={(ids) => setQualifiedIds(new Set(ids))}
+          canQualify={canQualify}
+        />
       )}
     </div>
   );

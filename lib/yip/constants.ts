@@ -246,7 +246,7 @@ export const DEFAULT_AGENDA_TEMPLATE = {
     { sequence: 10, title: "Government & Opposition Formation", duration: 10, type: "party_formation", mode: "party" as AgendaMode },
     { sequence: 11, title: "Seating of Speaker", duration: 5, type: "oath_taking", mode: "party" as AgendaMode },
     { sequence: 12, title: "Oath Taking Ceremony", duration: 5, type: "oath_taking", mode: "party" as AgendaMode },
-    { sequence: 13, title: "Cabinet & Party Leader Introductions", duration: 25, type: "cabinet_intro", mode: "party" as AgendaMode },
+    { sequence: 13, title: "Party Leader Selections", duration: 25, type: "cabinet_intro", mode: "party" as AgendaMode },
     { sequence: 14, title: "Break", duration: 15, type: "break", mode: "mixed" as AgendaMode },
     { sequence: 15, title: "Discussion on Matters of Urgent Public Importance (Part 1)", duration: 90, type: "opening_speech", mode: "party" as AgendaMode },
     { sequence: 16, title: "Lunch Break", duration: 45, type: "break", mode: "mixed" as AgendaMode },

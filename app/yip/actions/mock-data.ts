@@ -574,11 +574,11 @@ export async function seedMockData(): Promise<ActionResult<MockDataStats>> {
       "Perambalur",
     ];
     const COMMITTEES = [
-      "Youth in Democracy",
-      "Youth in Entrepreneurship & Economic Growth",
-      "Youth Role in Environmental Conservation",
-      "Youth Against Corruption",
-      "Youth Awareness in Cyber Security",
+      "Ministry of Education",
+      "Ministry of Finance",
+      "Ministry of Health & Family Welfare",
+      "Ministry of Environment",
+      "Ministry of Electronics & IT",
     ];
 
     const participantInserts: Array<
@@ -1374,7 +1374,7 @@ export async function seedMockData(): Promise<ActionResult<MockDataStats>> {
           parliament_role: "mp",
           constituency_name: "Chennai Central",
           constituency_state: "Tamil Nadu",
-          committee_name: "Youth in Democracy",
+          committee_name: "Ministry of Education",
           committee_number: 1,
           serial_no: 1,
           checked_in: true,
@@ -1488,7 +1488,7 @@ export async function seedMockData(): Promise<ActionResult<MockDataStats>> {
             party_side: "ruling",
             parliament_role: "cabinet_minister",
             ministry: "education",
-            committee_name: "Youth in Democracy",
+            committee_name: "Ministry of Education",
             committee_number: 1,
             serial_no: 1,
             checked_in: false,

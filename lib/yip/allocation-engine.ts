@@ -309,11 +309,11 @@ export function runAllocation(input: AllocationInput): AllocationResult {
   // Map ministry keys to committee themes for matching
   const ministryToCommitteeHint: Record<string, number> = {
     // Best-effort mapping of ministry themes to committee indices
-    // 0: Youth in Democracy
-    // 1: Youth in Entrepreneurship & Economic Growth
-    // 2: Youth Role in Environmental Conservation
-    // 3: Youth Against Corruption
-    // 4: Youth Awareness in Cyber Security
+    // 0: Ministry of Education
+    // 1: Ministry of Finance
+    // 2: Ministry of Health & Family Welfare
+    // 3: Ministry of Environment
+    // 4: Ministry of Electronics & IT
     home: 3,                // Home Affairs → Corruption
     finance: 1,             // Finance → Entrepreneurship
     education: 0,           // Education → Democracy

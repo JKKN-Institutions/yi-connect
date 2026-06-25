@@ -25,6 +25,7 @@ import {
   MessageCircleHeart,
   BookOpen,
   UserCog,
+  Crown,
   PanelLeftClose,
   PanelLeftOpen,
   CheckCircle2,
@@ -68,6 +69,10 @@ const GROUPS: TabGroup[] = [
     title: "Event Day",
     tabs: [
       { label: "Control", href: "/control", icon: Radio },
+      // Key Positions — assign PM / Speaker / LoP / Cabinet etc. (each carries a
+      // jury bonus). Lives next to Control; moved off the Control panel so it has
+      // its own room and is reachable at any event status.
+      { label: "Positions", href: "/positions", icon: Crown },
       // Roster-wide checklist for the 90-second speech every delegate gives.
       { label: "Speeches", href: "/speeches", icon: Mic },
       // Proceedings = Questions / Motions / Bills (sub-tabbed on the page).

@@ -52,12 +52,16 @@ export function maskName(
 /**
  * Jury-facing blind label. Jurors always score against the participant's
  * NUMBER, never the name — fairness, not privacy (so it applies to every
- * event regardless of privacy mode). Uses the serial number when set, and
- * falls back to the id-based pseudonym for any row without one.
+ * event regardless of privacy mode). Uses the constituency (seat) number —
+ * the SAME number shown as "Const. No." on every other screen, so a juror
+ * and an organiser looking up "Participant 101" see the same person. Falls
+ * back to the id-based pseudonym for any row without a constituency number.
  */
 export function juryLabel(
-  serialNo: number | null | undefined,
+  constituencyNumber: number | null | undefined,
   id: string,
 ): string {
-  return serialNo != null ? `Participant ${serialNo}` : participantPseudonym(id);
+  return constituencyNumber != null
+    ? `Participant ${constituencyNumber}`
+    : participantPseudonym(id);
 }

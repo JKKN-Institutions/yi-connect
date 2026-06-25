@@ -103,6 +103,7 @@ type Participant = {
   // No school_name — jurors must never receive it (school-blind scoring).
   ministry?: string | null;
   constituency_name?: string | null;
+  constituency_number?: number | null;
   serial_no?: number | null;
 };
 
@@ -218,7 +219,7 @@ function JuryScoringClientInner({
     ? {
         ...activeParticipantRaw,
         full_name: juryLabel(
-          activeParticipantRaw.serial_no,
+          activeParticipantRaw.constituency_number,
           activeParticipantRaw.id
         ),
       }
@@ -1142,10 +1143,11 @@ function JuryScoringClientInner({
           const list = q
             ? allParticipants.filter(
                 (p) =>
-                  juryLabel(p.serial_no, p.id)
+                  juryLabel(p.constituency_number, p.id)
                     .toLowerCase()
                     .includes(q) ||
-                  (p.serial_no != null && String(p.serial_no).includes(q)) ||
+                  (p.constituency_number != null &&
+                    String(p.constituency_number).includes(q)) ||
                   (p.constituency_name?.toLowerCase().includes(q) ?? false)
               )
             : allParticipants;
@@ -1207,7 +1209,7 @@ function JuryScoringClientInner({
                         <div className="flex items-center justify-between gap-2 py-3">
                           <div className="min-w-0 flex-1">
                             <p className="font-semibold text-gray-900 text-sm truncate">
-                              {juryLabel(p.serial_no, p.id)}
+                              {juryLabel(p.constituency_number, p.id)}
                             </p>
                             {/* Constituency only — school is not shown to jurors. */}
                             {p.constituency_name && (

@@ -206,7 +206,10 @@ export function HistoryClient({
             ...editParticipant,
             ministry: null,
             // Jurors score blind, against the number (id untouched for scoring).
-            full_name: juryLabel(editParticipant.serial_no, editParticipant.id),
+            full_name: juryLabel(
+              editParticipant.constituency_number,
+              editParticipant.id
+            ),
           }}
           criteria={rubric.criteria}
           rubricId={rubric.id}
@@ -256,7 +259,7 @@ export function HistoryClient({
             <ScoreCard
               key={score.id}
               participantName={juryLabel(
-                score.participant.serial_no,
+                score.participant.constituency_number,
                 score.participant_id
               )}
               constituency={score.participant.constituency_name}

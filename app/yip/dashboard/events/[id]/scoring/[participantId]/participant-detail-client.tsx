@@ -338,10 +338,12 @@ export function ParticipantDetailClient({
                 )}
               </div>
             </div>
-            {p.serial_no != null && (
+            {p.constituency_number != null && (
               <div className="shrink-0 text-right">
                 <p className="text-xs text-gray-400">Participant</p>
-                <p className="text-lg font-bold text-gray-700">#{p.serial_no}</p>
+                <p className="text-lg font-bold text-gray-700">
+                  #{p.constituency_number}
+                </p>
               </div>
             )}
           </div>

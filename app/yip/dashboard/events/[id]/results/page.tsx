@@ -1,7 +1,11 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/yip/supabase/server";
 import { getEvent } from "@/app/yip/actions/events";
-import { getResults, getDay2CheckinWarning } from "@/app/yip/actions/results";
+import {
+  getResults,
+  getDay2CheckinWarning,
+  getAwardCandidates,
+} from "@/app/yip/actions/results";
 import { getAwardOverrides } from "@/app/yip/actions/award-overrides";
 import { getPositionBonusConfigAdmin } from "@/app/yip/actions/positions";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
@@ -41,6 +45,7 @@ export default async function ResultsPage({
   const awardOverrides = await getAwardOverrides(id);
   const positionConfig = await getPositionBonusConfigAdmin();
   const day2Warning = await getDay2CheckinWarning(id);
+  const awardCandidates = await getAwardCandidates(id);
 
   return (
     <ResultsClient
@@ -52,6 +57,7 @@ export default async function ResultsPage({
       canOverrideAwards={access.canDelete}
       positionBonuses={positionConfig.bonuses}
       day2CheckinWarning={day2Warning.shouldWarn}
+      awardCandidates={awardCandidates}
     />
   );
 }

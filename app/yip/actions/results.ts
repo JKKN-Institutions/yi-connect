@@ -1539,6 +1539,7 @@ export type ScoringProgressData = {
     id: string;
     jury_name: string;
     scoresSubmitted: number;
+    draftsNotSubmitted: number;
     lastActivity: string | null;
   }>;
   participantProgress: Array<{
@@ -1591,6 +1592,15 @@ export async function getScoringProgress(
     .eq("event_id", eventId)
     .eq("status", "submitted");
 
+  // Drafts: saved but NOT yet submitted. Surfaced per-juror so an organiser can
+  // tell "nobody scored" apart from "scored but forgot to Submit". These are
+  // visibility-only — they never enter any total (final counts submitted only).
+  const { data: draftScores } = await supabase
+    .from("scores")
+    .select("jury_assignment_id")
+    .eq("event_id", eventId)
+    .eq("status", "draft");
+
   const participantList = participants ?? [];
   const juryList = juries ?? [];
   const scoreList = scores ?? [];
@@ -1610,6 +1620,9 @@ export async function getScoringProgress(
       id: j.id,
       jury_name: j.jury_name,
       scoresSubmitted: juryScores.length,
+      draftsNotSubmitted: (draftScores ?? []).filter(
+        (d) => d.jury_assignment_id === j.id
+      ).length,
       lastActivity: lastScore?.submitted_at ?? lastScore?.updated_at ?? null,
     };
   });

@@ -376,6 +376,12 @@ export function ScoringProgress({
                         >
                           {j.scoresSubmitted} / {totalParticipants}
                         </Badge>
+                        {j.draftsNotSubmitted > 0 && (
+                          <p className="mt-1 text-xs font-medium text-amber-600">
+                            {j.draftsNotSubmitted} draft
+                            {j.draftsNotSubmitted === 1 ? "" : "s"} not submitted
+                          </p>
+                        )}
                       </TableCell>
                       <TableCell className="text-right text-sm text-gray-500">
                         <RelativeTime dateStr={j.lastActivity} />

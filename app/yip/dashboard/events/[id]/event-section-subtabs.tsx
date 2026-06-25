@@ -23,7 +23,6 @@ export const MERGED_GROUPS: { siblings: Sibling[]; scoreGated?: boolean }[] = [
     scoreGated: true,
     siblings: [
       { href: "/scoring", label: "Scoring" },
-      { href: "/committee-scoring", label: "Committee Scores" },
     ],
   },
   {

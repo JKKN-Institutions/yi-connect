@@ -103,6 +103,7 @@ export function TopicsAdminClient({
   >("all");
   const [query, setQuery] = useState("");
   const [showInactive, setShowInactive] = useState(false);
+  const [showSubpoints, setShowSubpoints] = useState(false);
   const [editing, setEditing] = useState<AdminTopic | null>(null);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState<FormState>(EMPTY);
@@ -253,13 +254,19 @@ export function TopicsAdminClient({
     });
   }
 
+  // Counts reflect what's actually shown: active-only unless "Show inactive"
+  // is on. (5 legacy committee topics are deactivated, so the committee count
+  // is 15 by default, not 20.)
+  const base = showInactive ? topics : topics.filter((t) => t.is_active);
   const counts = {
-    total: topics.length,
-    active: topics.filter((t) => t.is_active).length,
-    central: topics.filter((t) => t.category === "central").length,
-    committee: topics.filter((t) => t.category === "committee").length,
-    regional: topics.filter((t) => t.category === "regional").length,
+    total: base.length,
+    central: base.filter((t) => t.category === "central").length,
+    committee: base.filter((t) => t.category === "committee").length,
+    regional: base.filter((t) => t.category === "regional").length,
   };
+  const inactiveHidden = showInactive
+    ? 0
+    : topics.filter((t) => !t.is_active).length;
 
   return (
     <div className="max-w-[1400px] mx-auto px-6 py-8 space-y-6">
@@ -272,7 +279,8 @@ export function TopicsAdminClient({
             The full YIP topic catalogue — Central, Regional and Committee topics
             that events draw from.{" "}
             {counts.central} central · {counts.regional} regional ·{" "}
-            {counts.committee} committee · {counts.active} active
+            {counts.committee} committee
+            {inactiveHidden > 0 ? ` · ${inactiveHidden} inactive hidden` : ""}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -316,7 +324,7 @@ export function TopicsAdminClient({
           Central ({counts.central})
         </FilterChip>
         {YI_ZONES.map((z) => {
-          const n = topics.filter((t) => t.zone === z.code).length;
+          const n = base.filter((t) => t.zone === z.code).length;
           return (
             <FilterChip
               key={z.code}
@@ -333,15 +341,26 @@ export function TopicsAdminClient({
         >
           Committee ({counts.committee})
         </FilterChip>
-        <label className="ml-auto flex items-center gap-2 text-xs text-[#1a1a3e]/70">
-          <input
-            type="checkbox"
-            checked={showInactive}
-            onChange={(e) => setShowInactive(e.target.checked)}
-            className="size-4"
-          />
-          Show inactive
-        </label>
+        <div className="ml-auto flex items-center gap-4">
+          <label className="flex items-center gap-2 text-xs text-[#1a1a3e]/70">
+            <input
+              type="checkbox"
+              checked={showSubpoints}
+              onChange={(e) => setShowSubpoints(e.target.checked)}
+              className="size-4"
+            />
+            Show sub-points
+          </label>
+          <label className="flex items-center gap-2 text-xs text-[#1a1a3e]/70">
+            <input
+              type="checkbox"
+              checked={showInactive}
+              onChange={(e) => setShowInactive(e.target.checked)}
+              className="size-4"
+            />
+            Show inactive
+          </label>
+        </div>
       </div>
 
       <div className="relative max-w-sm">
@@ -545,6 +564,18 @@ export function TopicsAdminClient({
                           <div className="text-[11px] text-[#1a1a3e]/45 mt-0.5">
                             Linked scheme: {t.linked_scheme}
                           </div>
+                        )}
+                        {showSubpoints && t.sub_points.length > 0 && (
+                          <ul className="mt-1.5 ml-4 list-disc space-y-0.5 marker:text-[#1a1a3e]/30">
+                            {t.sub_points.map((s, i) => (
+                              <li
+                                key={i}
+                                className="text-xs text-[#1a1a3e]/60"
+                              >
+                                {s}
+                              </li>
+                            ))}
+                          </ul>
                         )}
                       </TableCell>
                       <TableCell>

@@ -4,11 +4,6 @@ import { getEvent } from "@/app/yip/actions/events";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
 import { ControlPanel } from "./control-panel";
-import { PositionsAssignmentCard } from "@/components/yip/positions-assignment-card";
-import {
-  getParticipantsByRole,
-  getAllEventParticipants,
-} from "@/app/yip/actions/positions";
 import { getChapterControlFilter } from "@/app/yip/actions/agenda";
 
 export default async function ControlPage({
@@ -93,20 +88,8 @@ export default async function ControlPage({
     currentSpeakers = data ?? [];
   }
 
-  // F3 — position-bonus assignment data (server-fetched, mounted above the
-  // realtime ControlPanel so role assignment is always visible regardless
-  // of event status).
-  const [positionGroups, allParticipants] = await Promise.all([
-    getParticipantsByRole(id),
-    getAllEventParticipants(id),
-  ]);
-
   return (
     <div className="space-y-4">
-      <PositionsAssignmentCard
-        groups={positionGroups}
-        allParticipants={allParticipants}
-      />
       <ControlPanel
         initialEvent={event}
         initialAgendaItems={agendaItems ?? []}

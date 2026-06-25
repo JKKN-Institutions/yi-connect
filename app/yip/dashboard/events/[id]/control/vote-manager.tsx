@@ -306,6 +306,19 @@ export function VoteManager({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agendaType, eventId, voteSession?.id]);
 
+  // Auto-open the "Run a vote" menu when the current item has its OWN vote
+  // (Speaker / Bill) so that primary action needs no extra tap. Stays collapsed
+  // on other items. Re-runs only when the item changes, so a manual collapse
+  // sticks until the organiser moves to the next item.
+  useEffect(() => {
+    if (
+      agendaType === "speaker_election" ||
+      agendaType === "bill_presentation"
+    ) {
+      setElectionsMenuOpen(true);
+    }
+  }, [agendaType, currentAgendaItem?.id]);
+
   // Parties are always available to the organiser (party-leader elections can be
   // held during any agenda item).
   useEffect(() => {
@@ -1321,10 +1334,63 @@ export function VoteManager({
       </div>
     ) : null;
 
-  // Every election launcher (Speaker + the run-anytime ones), collapsed behind
-  // one menu so the panel isn't cluttered with all of them at once.
+  // Bill vote launcher — agenda-pinned (only on the Bill Presentation item).
+  const billLauncher =
+    agendaType === "bill_presentation" ? (
+      <div className="space-y-3">
+        <p className="text-sm text-gray-600">
+          Select a bill to open for voting. Participants will vote Aye, Nay, or
+          Abstain.
+        </p>
+        {bills.length > 0 ? (
+          <div className="space-y-2">
+            {bills.map((bill) => (
+              <div
+                key={bill.id}
+                className="flex items-center justify-between rounded-lg border bg-white p-3"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-gray-800 truncate">
+                    {bill.title}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    {bill.committee_name ??
+                      `${
+                        bill.party_side === "ruling"
+                          ? "Ruling Party"
+                          : bill.party_side === "opposition"
+                            ? "Opposition"
+                            : "Committee"
+                      } Bill`}
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={isPending}
+                  onClick={() => handleOpenBillVote(bill)}
+                >
+                  <Landmark className="size-3.5 mr-1" />
+                  Vote
+                </Button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-center py-4 text-sm text-muted-foreground">
+            No bills available for voting. Bills need to be submitted first.
+          </p>
+        )}
+      </div>
+    ) : null;
+
+  // Every vote launcher (Speaker, Bill, and the run-anytime elections) behind one
+  // menu so the panel isn't cluttered with all of them. The menu AUTO-OPENS (see
+  // effect below) when the current agenda item has its OWN vote (Speaker / Bill),
+  // so that primary action is visible without a tap; otherwise it's collapsed.
   const hasElectionLaunchers =
     !!speakerLauncher ||
+    !!billLauncher ||
     !!partyLeaderList ||
     !!leadershipList ||
     !!cabinetSection ||
@@ -1338,9 +1404,9 @@ export function VoteManager({
       >
         <span className="flex items-center gap-2">
           <Crown className="size-4 text-[#FF9933]" />
-          Run an election
+          Run a vote
           <span className="hidden text-xs font-normal text-muted-foreground sm:inline">
-            speaker · party leader · PM / Deputy / LoP · cabinet · shadow
+            speaker · bill · party leader · PM / Deputy / LoP · cabinet · shadow
           </span>
         </span>
         {electionsMenuOpen ? (
@@ -1352,6 +1418,7 @@ export function VoteManager({
       {electionsMenuOpen && (
         <div className="space-y-4 border-t p-3">
           {speakerLauncher}
+          {billLauncher}
           {partyLeaderList}
           {leadershipList}
           {cabinetSection}
@@ -2194,64 +2261,11 @@ export function VoteManager({
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Speaker nomination now lives inside the "Run an election" menu
-              below (electionLaunchers), alongside the other elections. */}
-
-          {/* Bill Vote */}
-          {agendaType === "bill_presentation" && (
-            <div className="space-y-3">
-              <p className="text-sm text-gray-600">
-                Select a bill to open for voting. Participants will vote Aye,
-                Nay, or Abstain.
-              </p>
-
-              {bills.length > 0 ? (
-                <div className="space-y-2">
-                  {bills.map((bill) => (
-                    <div
-                      key={bill.id}
-                      className="flex items-center justify-between rounded-lg border bg-white p-3"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-gray-800 truncate">
-                          {bill.title}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          {bill.committee_name ??
-                            `${
-                              bill.party_side === "ruling"
-                                ? "Ruling Party"
-                                : bill.party_side === "opposition"
-                                  ? "Opposition"
-                                  : "Committee"
-                            } Bill`}
-                        </p>
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={isPending}
-                        onClick={() => handleOpenBillVote(bill)}
-                      >
-                        <Landmark className="size-3.5 mr-1" />
-                        Vote
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-center py-4 text-sm text-muted-foreground">
-                  No bills available for voting. Bills need to be submitted
-                  first.
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* Party/government elections (party leader, PM/Deputy/LoP, cabinet,
-              shadow) — available on any voting item, collapsed behind one
-              "Run an election" menu so the panel stays clean. The agenda-pinned
-              Speaker/Bill votes above stay inline. */}
+          {/* All vote launchers — Speaker, Bill, and the run-anytime elections
+              — live inside the one "Run a vote" menu below (electionLaunchers).
+              It auto-opens (effect above) when the current item has its OWN vote
+              (Speaker / Bill). Live vote controls (tally, Close, Reveal) stay in
+              their own branch above. */}
           {electionLaunchers}
         </CardContent>
       </Card>

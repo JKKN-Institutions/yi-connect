@@ -10,6 +10,7 @@ import { getScoringSettings } from "./scoring-settings";
 import { listSessionParameters } from "./session-parameters";
 import { listScoringBuckets } from "./scoring-buckets";
 import { getScoringFlagsConfig } from "./scoring-flags";
+import { getSessionScoringParams } from "./scoring";
 
 type ActionResult<T = null> =
   | { success: true; data: T }
@@ -1541,6 +1542,19 @@ export type ScoringProgressData = {
     scoresSubmitted: number;
     draftsNotSubmitted: number;
     lastActivity: string | null;
+    // The actual unsubmitted drafts (so an organiser can find WHERE the draft
+    // is and submit it on the juror's behalf — drafts never count until
+    // submitted). Empty when draftsNotSubmitted === 0.
+    drafts: Array<{
+      scoreId: string;
+      participantId: string;
+      participantName: string;
+      constituencyNumber: number | null;
+      agendaItemId: string | null;
+      sessionTitle: string | null;
+      totalScore: number;
+      updatedAt: string | null;
+    }>;
   }>;
   participantProgress: Array<{
     id: string;
@@ -1595,19 +1609,36 @@ export async function getScoringProgress(
     .eq("event_id", eventId)
     .eq("status", "submitted");
 
-  // Drafts: saved but NOT yet submitted. Surfaced per-juror so an organiser can
-  // tell "nobody scored" apart from "scored but forgot to Submit". These are
-  // visibility-only — they never enter any total (final counts submitted only).
+  // Drafts: saved but NOT yet submitted. Surfaced per-juror — WITH the
+  // participant + session + saved total — so an organiser can find exactly
+  // where each stuck draft is and submit it on the juror's behalf. Drafts never
+  // enter any total until they're promoted to 'submitted'.
   const { data: draftScores } = await supabase
     .from("scores")
-    .select("jury_assignment_id")
+    .select("id, participant_id, jury_assignment_id, agenda_item_id, total_score, updated_at")
     .eq("event_id", eventId)
     .eq("status", "draft");
 
   const participantList = participants ?? [];
   const juryList = juries ?? [];
   const scoreList = scores ?? [];
+  const draftList = draftScores ?? [];
   const totalJuries = juryList.length;
+
+  // Session titles for the drafts (one fetch, only the ids in play).
+  const draftAgendaIds = Array.from(
+    new Set(draftList.map((d) => d.agenda_item_id).filter(Boolean))
+  ) as string[];
+  const agendaTitleById = new Map<string, string>();
+  if (draftAgendaIds.length > 0) {
+    const { data: ag } = await supabase
+      .from("agenda")
+      .select("id, title")
+      .in("id", draftAgendaIds);
+    for (const a of ag ?? []) agendaTitleById.set(a.id, a.title);
+  }
+  // Name + seat lookup (drafts are always for scoreable role-holders).
+  const pById = new Map(participantList.map((p) => [p.id, p]));
 
   const juryProgress = juryList.map((j) => {
     const juryScores = scoreList.filter(
@@ -1619,14 +1650,32 @@ export async function getScoringProgress(
         new Date(a.submitted_at ?? a.updated_at ?? "").getTime()
     )[0];
 
+    const drafts = draftList
+      .filter((d) => d.jury_assignment_id === j.id)
+      .map((d) => {
+        const p = pById.get(d.participant_id);
+        return {
+          scoreId: d.id,
+          participantId: d.participant_id,
+          participantName: p?.full_name ?? "Unknown participant",
+          constituencyNumber: p?.constituency_number ?? null,
+          agendaItemId: d.agenda_item_id,
+          sessionTitle: d.agenda_item_id
+            ? agendaTitleById.get(d.agenda_item_id) ?? null
+            : null,
+          totalScore: Number(d.total_score) || 0,
+          updatedAt: d.updated_at,
+        };
+      })
+      .sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""));
+
     return {
       id: j.id,
       jury_name: j.jury_name,
       scoresSubmitted: juryScores.length,
-      draftsNotSubmitted: (draftScores ?? []).filter(
-        (d) => d.jury_assignment_id === j.id
-      ).length,
+      draftsNotSubmitted: drafts.length,
       lastActivity: lastScore?.submitted_at ?? lastScore?.updated_at ?? null,
+      drafts,
     };
   });
 
@@ -1672,4 +1721,148 @@ export async function getScoringProgress(
     juryProgress,
     participantProgress,
   };
+}
+
+// ─── Submit a juror's stuck draft ON THEIR BEHALF ────────────────
+//
+// A juror who taps "Save draft" but never "Submit" leaves a score that counts
+// NOWHERE (every total reads status='submitted' only). During a live event the
+// organiser/national admin needs to recover those — find the draft, sanity-check
+// the saved total, and promote it to 'submitted'. This is an ADMIN action
+// (canManage), distinct from the juror self-service submitScore (cookie-gated):
+// the scoring overview is national/super-admin-only, and they carry canManage.
+
+/**
+ * Promote one draft score to 'submitted'. Re-validates the saved values against
+ * the session's live parameters (open write RLS on yip.scores means a stored
+ * draft could be out of range) so a bad draft can never be promoted into the
+ * leaderboard. Idempotent: an already-submitted/locked row returns ok with no
+ * change. Internal helper — the exported actions wrap it with the auth gate.
+ */
+async function promoteDraftToSubmitted(
+  supabase: Awaited<ReturnType<typeof createServiceClient>>,
+  eventId: string,
+  scoreId: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { data: row } = await supabase
+    .from("scores")
+    .select(
+      "id, event_id, status, agenda_item_id, criteria_scores, total_score, jury_assignment_id"
+    )
+    .eq("id", scoreId)
+    .maybeSingle();
+
+  if (!row) return { ok: false, error: "That draft no longer exists." };
+  if (row.event_id !== eventId)
+    return { ok: false, error: "That draft belongs to a different event." };
+  // Already counting → nothing to do (treat as success so bulk submit is clean).
+  if (row.status === "submitted" || row.status === "locked") return { ok: true };
+  if (row.status !== "draft")
+    return { ok: false, error: `Can't submit a score with status "${row.status}".` };
+
+  // Range guard — mirrors submitScore. Protects the leaderboard from a draft
+  // saved with out-of-range values (or against a since-changed session sheet).
+  const cs = row.criteria_scores;
+  const criteria: Record<string, number> =
+    cs && typeof cs === "object" && !Array.isArray(cs)
+      ? (cs as Record<string, number>)
+      : {};
+  const entries = Object.entries(criteria);
+  const total = Number(row.total_score);
+  let bad =
+    !Number.isFinite(total) ||
+    total < 0 ||
+    entries.some(([, v]) => typeof v !== "number" || !Number.isFinite(v) || v < 0);
+  if (!bad && row.agenda_item_id) {
+    const params = await getSessionScoringParams(row.agenda_item_id);
+    if (params && params.criteria.length > 0) {
+      const maxByKey = new Map(params.criteria.map((c) => [c.key, c.max_score]));
+      bad =
+        total > params.total_max ||
+        entries.some(([k]) => !maxByKey.has(k)) ||
+        entries.some(([k, v]) => v > (maxByKey.get(k) ?? Infinity));
+    }
+  }
+  if (bad) {
+    return {
+      ok: false,
+      error:
+        "This draft has scores outside the allowed range — the juror needs to re-open and re-score it before it can count.",
+    };
+  }
+
+  const nowIso = new Date().toISOString();
+  const { error: upErr } = await supabase
+    .from("scores")
+    .update({ status: "submitted", submitted_at: nowIso, updated_at: nowIso })
+    .eq("id", scoreId)
+    .eq("status", "draft"); // concurrency guard: only flip a still-draft row
+  if (upErr) return { ok: false, error: upErr.message };
+
+  // Audit trail — record WHO finalised it (organiser on behalf of the juror).
+  await supabase.from("score_audit").insert({
+    score_id: scoreId,
+    previous_scores: criteria,
+    previous_total: total,
+    new_scores: criteria,
+    new_total: total,
+    changed_by: row.jury_assignment_id,
+    reason: "Draft submitted on behalf by organiser",
+  });
+
+  return { ok: true };
+}
+
+/** Submit ONE juror's stuck draft on their behalf (admin / national only). */
+export async function submitDraftOnBehalf(
+  eventId: string,
+  scoreId: string
+): Promise<ActionResult<{ id: string }>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return {
+      success: false,
+      error: "You don't have permission to submit scores for this event.",
+    };
+  }
+  const supabase = await createServiceClient();
+  const res = await promoteDraftToSubmitted(supabase, eventId, scoreId);
+  if (!res.ok) return { success: false, error: res.error };
+  revalidatePath(`/yip/dashboard/events/${eventId}/scoring`);
+  return { success: true, data: { id: scoreId } };
+}
+
+/**
+ * Submit ALL of a juror's stuck drafts in one go. Each is validated
+ * independently; out-of-range drafts are skipped (and counted) rather than
+ * failing the batch, so one bad draft can't block the rest.
+ */
+export async function submitAllDraftsForJury(
+  eventId: string,
+  juryAssignmentId: string
+): Promise<ActionResult<{ submitted: number; skipped: number }>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return {
+      success: false,
+      error: "You don't have permission to submit scores for this event.",
+    };
+  }
+  const supabase = await createServiceClient();
+  const { data: drafts } = await supabase
+    .from("scores")
+    .select("id")
+    .eq("event_id", eventId)
+    .eq("jury_assignment_id", juryAssignmentId)
+    .eq("status", "draft");
+
+  let submitted = 0;
+  let skipped = 0;
+  for (const d of drafts ?? []) {
+    const res = await promoteDraftToSubmitted(supabase, eventId, d.id);
+    if (res.ok) submitted++;
+    else skipped++;
+  }
+  revalidatePath(`/yip/dashboard/events/${eventId}/scoring`);
+  return { success: true, data: { submitted, skipped } };
 }

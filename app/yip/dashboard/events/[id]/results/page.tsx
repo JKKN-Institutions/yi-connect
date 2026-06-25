@@ -8,6 +8,7 @@ import {
 } from "@/app/yip/actions/results";
 import { getAwardOverrides } from "@/app/yip/actions/award-overrides";
 import { getPositionBonusConfigAdmin } from "@/app/yip/actions/positions";
+import { getZoneAwardConfig } from "@/app/yip/actions/qualification";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { ResultsClient } from "./results-client";
 import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
@@ -46,6 +47,10 @@ export default async function ResultsPage({
   const positionConfig = await getPositionBonusConfigAdmin();
   const day2Warning = await getDay2CheckinWarning(id);
   const awardCandidates = await getAwardCandidates(id);
+  // Award-based qualification: which awards confer advancement is per-zone config
+  // (default = all). Locking qualifiers is a national-team (super-admin) action.
+  const zoneAwardConfig = await getZoneAwardConfig(event.yi_zone_code ?? null);
+  const canQualify = access.role === "super_admin";
 
   return (
     <ResultsClient
@@ -58,6 +63,8 @@ export default async function ResultsPage({
       positionBonuses={positionConfig.bonuses}
       day2CheckinWarning={day2Warning.shouldWarn}
       awardCandidates={awardCandidates}
+      zoneAwardConfig={zoneAwardConfig}
+      canQualify={canQualify}
     />
   );
 }

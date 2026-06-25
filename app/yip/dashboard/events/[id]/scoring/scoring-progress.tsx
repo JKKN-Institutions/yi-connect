@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Fragment } from "react";
 import { useRouter } from "next/navigation";
 import {
   lockScores,
   unlockScores,
   computeResults,
+  submitDraftOnBehalf,
+  submitAllDraftsForJury,
 } from "@/app/yip/actions/results";
 import { getAllScoresForExport } from "@/app/yip/actions/scoring-detail";
 import type { ScoringProgressData } from "@/app/yip/actions/results";
@@ -33,8 +35,10 @@ import {
   Star,
   Users,
   ChevronRight,
+  ChevronDown,
   Download,
   Search,
+  Send,
 } from "lucide-react";
 
 function formatRelative(dateStr: string | null): string {
@@ -107,6 +111,47 @@ export function ScoringProgress({
     type: "success" | "error";
     text: string;
   } | null>(null);
+  // Draft drill-down: which jury row is expanded, and which submit is in-flight
+  // (scoreId for a single draft, or `jury:<id>` for a juror's "submit all").
+  const [expandedJury, setExpandedJury] = useState<string | null>(null);
+  const [draftBusy, setDraftBusy] = useState<string | null>(null);
+
+  async function handleSubmitDraft(scoreId: string) {
+    setDraftBusy(scoreId);
+    setMessage(null);
+    const res = await submitDraftOnBehalf(eventId, scoreId);
+    if (res.success) {
+      setMessage({
+        type: "success",
+        text: "Draft submitted — it now counts toward the final.",
+      });
+      router.refresh();
+    } else {
+      setMessage({ type: "error", text: res.error });
+    }
+    setDraftBusy(null);
+  }
+
+  async function handleSubmitAllForJury(juryId: string) {
+    setDraftBusy(`jury:${juryId}`);
+    setMessage(null);
+    const res = await submitAllDraftsForJury(eventId, juryId);
+    if (res.success) {
+      const { submitted, skipped } = res.data;
+      setMessage({
+        type: skipped > 0 ? "error" : "success",
+        text:
+          `Submitted ${submitted} draft${submitted === 1 ? "" : "s"}.` +
+          (skipped > 0
+            ? ` ${skipped} skipped — out of range, the juror must re-score.`
+            : ""),
+      });
+      router.refresh();
+    } else {
+      setMessage({ type: "error", text: res.error });
+    }
+    setDraftBusy(null);
+  }
 
   const { event, totalParticipants, participantsScored, juryProgress, participantProgress } = data;
   const progressPercent =
@@ -387,36 +432,150 @@ export function ScoringProgress({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {juryProgress.map((j) => (
-                    <TableRow key={j.id}>
-                      <TableCell className="font-medium">
-                        {j.jury_name}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Badge
-                          variant="secondary"
+                  {juryProgress.map((j) => {
+                    const hasDrafts = j.drafts.length > 0;
+                    const isOpen = expandedJury === j.id;
+                    return (
+                      <Fragment key={j.id}>
+                        <TableRow
                           className={
-                            j.scoresSubmitted >= totalParticipants
-                              ? "bg-green-100 text-green-700"
-                              : j.scoresSubmitted > 0
-                              ? "bg-yellow-100 text-yellow-700"
-                              : "bg-gray-100 text-gray-500"
+                            hasDrafts ? "cursor-pointer hover:bg-amber-50/40" : ""
+                          }
+                          onClick={
+                            hasDrafts
+                              ? () => setExpandedJury(isOpen ? null : j.id)
+                              : undefined
                           }
                         >
-                          {j.scoresSubmitted} / {totalParticipants}
-                        </Badge>
-                        {j.draftsNotSubmitted > 0 && (
-                          <p className="mt-1 text-xs font-medium text-amber-600">
-                            {j.draftsNotSubmitted} draft
-                            {j.draftsNotSubmitted === 1 ? "" : "s"} not submitted
-                          </p>
+                          <TableCell className="font-medium">
+                            <div className="flex items-center gap-2">
+                              {hasDrafts &&
+                                (isOpen ? (
+                                  <ChevronDown className="size-4 text-amber-600" />
+                                ) : (
+                                  <ChevronRight className="size-4 text-amber-600" />
+                                ))}
+                              {j.jury_name}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Badge
+                              variant="secondary"
+                              className={
+                                j.scoresSubmitted >= totalParticipants
+                                  ? "bg-green-100 text-green-700"
+                                  : j.scoresSubmitted > 0
+                                  ? "bg-yellow-100 text-yellow-700"
+                                  : "bg-gray-100 text-gray-500"
+                              }
+                            >
+                              {j.scoresSubmitted} / {totalParticipants}
+                            </Badge>
+                            {j.draftsNotSubmitted > 0 && (
+                              <p className="mt-1 text-xs font-medium text-amber-600 underline-offset-2 hover:underline">
+                                {j.draftsNotSubmitted} draft
+                                {j.draftsNotSubmitted === 1 ? "" : "s"} not
+                                submitted — {isOpen ? "hide" : "click to review"}
+                              </p>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right text-sm text-gray-500">
+                            <RelativeTime dateStr={j.lastActivity} />
+                          </TableCell>
+                        </TableRow>
+
+                        {isOpen && hasDrafts && (
+                          <TableRow className="bg-amber-50/50 hover:bg-amber-50/50">
+                            <TableCell colSpan={3} className="p-0">
+                              <div className="space-y-2 px-4 py-3">
+                                <div className="flex items-center justify-between gap-2">
+                                  <p className="text-xs font-semibold text-amber-800">
+                                    Unsubmitted drafts for {j.jury_name}
+                                  </p>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={draftBusy !== null}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleSubmitAllForJury(j.id);
+                                    }}
+                                    className="h-7 gap-1 text-xs"
+                                  >
+                                    {draftBusy === `jury:${j.id}` ? (
+                                      <Loader2 className="size-3 animate-spin" />
+                                    ) : (
+                                      <Send className="size-3" />
+                                    )}
+                                    Submit all {j.drafts.length}
+                                  </Button>
+                                </div>
+                                <div className="divide-y rounded-md border border-amber-200 bg-white">
+                                  {j.drafts.map((d) => (
+                                    <div
+                                      key={d.scoreId}
+                                      className="flex items-center justify-between gap-3 px-3 py-2 text-sm"
+                                    >
+                                      <div className="min-w-0">
+                                        <p className="truncate font-medium text-gray-900">
+                                          {d.participantName}
+                                          {d.constituencyNumber != null && (
+                                            <span className="ml-1 text-xs tabular-nums text-gray-400">
+                                              #{d.constituencyNumber}
+                                            </span>
+                                          )}
+                                        </p>
+                                        <p className="truncate text-xs text-gray-500">
+                                          {d.sessionTitle ?? "Session"} · saved
+                                          total {d.totalScore}
+                                        </p>
+                                      </div>
+                                      <div className="flex shrink-0 items-center gap-1.5">
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          className="h-7 text-xs"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            router.push(
+                                              `/yip/dashboard/events/${eventId}/scoring/${d.participantId}`
+                                            );
+                                          }}
+                                        >
+                                          View
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          className="h-7 gap-1 bg-[#FF9933] text-xs text-white hover:bg-[#E68A2E]"
+                                          disabled={draftBusy !== null}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleSubmitDraft(d.scoreId);
+                                          }}
+                                        >
+                                          {draftBusy === d.scoreId ? (
+                                            <Loader2 className="size-3 animate-spin" />
+                                          ) : (
+                                            <Send className="size-3" />
+                                          )}
+                                          Submit
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                                <p className="text-[11px] text-amber-700/80">
+                                  Submitting counts the juror&apos;s saved score
+                                  toward the final. Check the saved total looks
+                                  complete first.
+                                </p>
+                              </div>
+                            </TableCell>
+                          </TableRow>
                         )}
-                      </TableCell>
-                      <TableCell className="text-right text-sm text-gray-500">
-                        <RelativeTime dateStr={j.lastActivity} />
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                      </Fragment>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>

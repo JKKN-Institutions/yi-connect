@@ -34,6 +34,7 @@ export type ParticipantProfileRow = {
   parliament_role: string | null;
   ministry: string | null;
   constituency_name: string | null;
+  constituency_number: number | null;
   constituency_state: string | null;
   committee_name: string | null;
   checked_in: boolean | null;
@@ -78,7 +79,7 @@ export type ParticipantProfile = {
 };
 
 const PARTICIPANT_COLUMNS =
-  "id, event_id, full_name, school_name, class, section, phone, email, parent_phone, city, home_state, access_code, party_side, party_number, parliament_role, ministry, constituency_name, constituency_state, committee_name, committee_number, checked_in, checked_in_at, qualified_for_next, serial_no, person_id, created_at";
+  "id, event_id, full_name, school_name, class, section, phone, email, parent_phone, city, home_state, access_code, party_side, party_number, parliament_role, ministry, constituency_name, constituency_number, constituency_state, committee_name, committee_number, checked_in, checked_in_at, qualified_for_next, serial_no, person_id, created_at";
 
 export async function getParticipantProfile(
   eventId: string,

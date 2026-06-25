@@ -87,7 +87,7 @@ export function ParticipantProfileClient({
           )}
           <div className="min-w-0">
             <h1 className="text-2xl font-bold text-[#1a1a3e] tracking-tight truncate">
-              {p.serial_no ? `#${p.serial_no} · ` : ""}
+              {p.constituency_number ? `#${p.constituency_number} · ` : ""}
               {p.full_name}
             </h1>
             <p className="text-sm text-[#1a1a3e]/60 mt-0.5">

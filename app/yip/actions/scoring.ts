@@ -442,10 +442,12 @@ export type ScoreWithParticipant = Score & {
     parliament_role: string | null;
     party_side: string | null;
     party_number: number | null;
-    // Juror identifies a participant by name + serial # + constituency.
+    // Juror identifies a participant by their constituency (seat) number —
+    // the same "Const. No." shown on every other screen.
     // School is never sent to jurors (school-blind scoring, enforced at the
     // data layer — not just hidden in the UI).
     constituency_name: string | null;
+    constituency_number: number | null;
     serial_no: number | null;
   };
   rubric: {
@@ -471,6 +473,7 @@ export async function getScoresForJury(
         party_side,
         party_number,
         constituency_name,
+        constituency_number,
         serial_no
       ),
       rubric:rubrics(total_max)
@@ -560,7 +563,9 @@ export type CurrentSpeakerInfo = {
     // School is never sent to jurors (school-blind scoring, data-layer enforced).
     ministry: string | null;
     constituency_name: string | null;
-    // Shown to jurors as the unique participant number alongside the name.
+    // Shown to jurors as the unique participant number — the constituency
+    // (seat) number, matching "Const. No." everywhere else.
+    constituency_number: number | null;
     serial_no: number | null;
   };
 };
@@ -606,6 +611,7 @@ export async function getCurrentSpeaker(
         party_number,
         ministry,
         constituency_name,
+        constituency_number,
         serial_no
       )
     `
@@ -644,6 +650,7 @@ export type ScoreableParticipant = {
   // School is never sent to jurors (school-blind scoring, data-layer enforced).
   ministry: string | null;
   constituency_name: string | null;
+  constituency_number: number | null;
   serial_no: number | null;
 };
 
@@ -654,10 +661,10 @@ export async function getScoreableParticipants(
 
   const { data, error } = await supabase
     .from("participants")
-    .select("id, full_name, parliament_role, party_side, party_number, ministry, constituency_name, serial_no")
+    .select("id, full_name, parliament_role, party_side, party_number, ministry, constituency_name, constituency_number, serial_no")
     .eq("event_id", eventId)
     .not("parliament_role", "is", null)
-    .order("serial_no", { nullsFirst: false })
+    .order("constituency_number", { nullsFirst: false })
     .order("full_name");
 
   if (error || !data) return [];

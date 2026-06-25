@@ -319,15 +319,19 @@ export async function updateParticipant(
   }
 
   // Free-text fields (trimmed; empty → null).
-  for (const key of ["school_name", "constituency_name", "constituency_state", "committee_name"] as const) {
+  for (const key of ["constituency_name", "constituency_state", "committee_name"] as const) {
     if (fields[key] !== undefined) {
       const v = fields[key];
       updateData[key] = v == null || v.trim() === "" ? null : v.trim();
     }
   }
-  // school_name is NOT NULL in the schema — coerce a cleared value to "".
-  if (updateData.school_name === null) {
-    updateData.school_name = "";
+  // school_name is privacy-stripped from the client participant list, so the edit
+  // dialog can never show its current value — it always arrives blank. Treat a
+  // blank school as "leave unchanged" and only write it when the chair actually
+  // typed a value. Otherwise EVERY edit would wipe the school (it is NOT NULL and
+  // is the data committee balancing relies on).
+  if (fields.school_name !== undefined && fields.school_name.trim() !== "") {
+    updateData.school_name = fields.school_name.trim();
   }
 
   if (fields.parliament_role !== undefined) {

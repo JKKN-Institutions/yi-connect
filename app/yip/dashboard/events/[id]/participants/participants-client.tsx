@@ -1226,8 +1226,11 @@ export function ParticipantsClient({
                   onChange={(e) =>
                     setEditForm((p) => ({ ...p, school_name: e.target.value }))
                   }
-                  placeholder="School name"
+                  placeholder="Hidden for privacy — type only to change"
                 />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Left blank keeps the current school; type a value to replace it.
+                </p>
               </div>
 
               <div>

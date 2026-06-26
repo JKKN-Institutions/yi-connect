@@ -9,7 +9,7 @@
 
 import { defaultCache } from '@serwist/next/worker'
 import type { PrecacheEntry, SerwistGlobalConfig } from 'serwist'
-import { Serwist } from 'serwist'
+import { NetworkOnly, Serwist } from 'serwist'
 
 declare global {
   interface WorkerGlobalScope extends SerwistGlobalConfig {
@@ -25,7 +25,20 @@ const serwist = new Serwist({
   skipWaiting: true,
   clientsClaim: true,
   navigationPreload: true,
-  runtimeCaching: defaultCache
+  runtimeCaching: [
+    // The venue PROJECTOR (/yip/event/<id>/display) must NEVER be served from
+    // cache. It stays open for hours on a big screen and must always reflect
+    // the latest deployed code + live data. NetworkOnly (matched before the
+    // default page strategy) keeps it out of the PWA cache entirely, so a
+    // reload always fetches fresh. The page also self-checks for new deploys
+    // and reloads itself (see projector-display.tsx).
+    {
+      matcher: ({ url, sameOrigin }) =>
+        sameOrigin && /\/yip\/event\/[^/]+\/display\/?$/.test(url.pathname),
+      handler: new NetworkOnly(),
+    },
+    ...defaultCache,
+  ]
 })
 
 // Register Serwist

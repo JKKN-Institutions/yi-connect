@@ -85,6 +85,48 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
     event?.live_banner_text ?? null
   );
 
+  // ─── Auto-update: keep the long-open projector on the latest deploy ───
+  // The projector is a kiosk that stays open for hours, so on its own it would
+  // never pick up a new deployment. It is excluded from the PWA cache (see
+  // app/sw.ts NetworkOnly), and here it asks the browser to check for a new
+  // version every few seconds. When a new version takes control it reloads
+  // ONCE — silently. There is NO periodic full reload, so the big screen never
+  // flashes during the event; it only refreshes when there is actually an update.
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) {
+      return;
+    }
+    // Only auto-reload if a service worker already controls this page. On a
+    // first-ever (uncontrolled) load the initial claim would otherwise trigger
+    // one pointless reload; the next deploy is then caught normally.
+    const controlled = Boolean(navigator.serviceWorker.controller);
+    let reloaded = false;
+    const onControllerChange = () => {
+      if (reloaded) return;
+      reloaded = true;
+      window.location.reload();
+    };
+    if (controlled) {
+      navigator.serviceWorker.addEventListener(
+        "controllerchange",
+        onControllerChange
+      );
+    }
+    const interval = setInterval(() => {
+      navigator.serviceWorker
+        .getRegistration()
+        .then((reg) => reg?.update().catch(() => {}))
+        .catch(() => {});
+    }, 8000);
+    return () => {
+      clearInterval(interval);
+      navigator.serviceWorker.removeEventListener(
+        "controllerchange",
+        onControllerChange
+      );
+    };
+  }, []);
+
   // ─── Celebration on winner reveal — confetti + spotlight + fanfare ───
   // Fires once per distinct crowned reveal. A tie crowns no one (so no
   // celebration); a defeated bill isn't celebrated. Sound needs ONE tap to

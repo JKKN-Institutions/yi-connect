@@ -23,6 +23,7 @@ import {
   Shield,
   Images,
   MessageCircleHeart,
+  FileText,
   BookOpen,
   UserCog,
   Crown,
@@ -94,6 +95,10 @@ const GROUPS: TabGroup[] = [
       { label: "Results", href: "/results", icon: Trophy },
       { label: "Certificates", href: "/certificates", icon: Award },
       { label: "Feedback", href: "/feedback", icon: MessageCircleHeart },
+      // Chapter Round Report — auto-assembled 8-section official report, printable
+      // to PDF. View-gated (canView); not score-gated, so chapter organisers reach
+      // it. Last in the After-the-Event group.
+      { label: "Report", href: "/report", icon: FileText },
     ],
   },
 ];

@@ -1,0 +1,78 @@
+/*
+ * Print styles for the YIP Chapter Round Report.
+ *
+ * Goal: when the organiser hits "Print / Save as PDF", only the report container
+ * (#yip-report) prints — the app nav, the event sidebar, headers, and every
+ * inline fill-in control are hidden — with clean page breaks between sections.
+ *
+ * Scoping: we hide ALL direct children of <body> and then un-hide the print
+ * root and its ancestors via the [data-print-root] chain. The report page sets
+ * data-print-root on the wrappers that must survive. Anything tagged
+ * `print:hidden` (Tailwind) is also hidden — this CSS is the belt to that
+ * suspenders for elements outside our control (global nav rendered by parent
+ * layouts).
+ */
+
+@media print {
+  /* Reset page margins to a tight, document-like frame. */
+  @page {
+    margin: 14mm 12mm;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+  }
+
+  /* Hide everything by default… */
+  body * {
+    visibility: hidden;
+  }
+
+  /* …then reveal the report root and everything inside it. */
+  #yip-report,
+  #yip-report * {
+    visibility: visible;
+  }
+
+  /* Pin the report to the top-left of the printed page, full width. */
+  #yip-report {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  /* Anything explicitly marked print:hidden stays hidden even inside the report
+     (the inline fill-in controls). */
+  .print\:hidden {
+    display: none !important;
+  }
+
+  /* Each report section starts on a fresh page; never split a section across a
+     page boundary if it fits. */
+  .yip-report-section {
+    break-before: page;
+    break-inside: avoid;
+  }
+
+  /* The first section follows the header on page 1 — no leading page break. */
+  .yip-report-section:first-of-type {
+    break-before: auto;
+  }
+
+  /* Keep small blocks (fact rows, leadership cards) intact across pages. */
+  .break-inside-avoid {
+    break-inside: avoid;
+  }
+
+  /* Print backgrounds/colours faithfully (saffron rules, badges). */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}

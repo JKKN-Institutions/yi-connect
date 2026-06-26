@@ -135,6 +135,24 @@ function getAwardStyle(label: string): AwardStyle {
   return AWARD_STYLES[label] ?? DEFAULT_AWARD_STYLE;
 }
 
+// What each award NEEDS in order to have a winner. Several awards are gated by
+// roles/benches/sessions the engine can't invent: if none of those exist, the
+// award produces no eligible candidate. We show all 15 awards regardless, and
+// for the ones with no winner we surface the missing prerequisite here so the
+// organiser knows what to set up (assign a Speaker, set benches, score the
+// committee sessions, …) rather than silently seeing fewer cards.
+const AWARD_REQUIREMENT: Record<string, string> = {
+  "Best Speaker": "a Speaker to be assigned (Positions tab)",
+  "Leadership Excellence":
+    "leadership roles assigned (PM / Speaker / LoP / Ministers)",
+  "Best Member — Ruling Bench": "a Ruling bench assigned (Allocation)",
+  "Best Member — Opposition Bench": "an Opposition bench assigned (Allocation)",
+  "Independent Voice of the House":
+    "at least one Independent (party-less) member",
+  "Team Spirit": "the committee sessions to be scored",
+  "Innovative Ideas": "Zero-Hour creativity / problem-solving scores",
+};
+
 
 // ─── CSV Export ──────────────────────────────────────────────────
 
@@ -371,6 +389,18 @@ export function ResultsClient({
     return a.localeCompare(b);
   });
 
+  // Show ALL 15 workbook awards in canonical order — the ones without a winner
+  // render as "Not awarded yet" with what they need (see AWARD_REQUIREMENT), so
+  // an empty award never silently disappears. Any non-canonical label the engine
+  // emitted (shouldn't happen) is appended after the 15.
+  const allAwardLabels: string[] = [
+    ...AWARD_LABELS,
+    ...awardLabels.filter(
+      (l) => !(AWARD_LABELS as readonly string[]).includes(l)
+    ),
+  ];
+  const awardsWithWinner = awardWinners.size;
+
   // Interim-recompute guardrail: two-day event with zero Day-2 check-ins ⇒
   // computing now marks everyone "Not ranked — absent Day 2". Shown in both the
   // empty state and the leaderboard so the chair is warned before publishing.
@@ -520,39 +550,70 @@ export function ResultsClient({
         </div>
       </div>
 
-      {/* Award Cards — driven entirely by the labels present in the data */}
-      {awardLabels.length > 0 && (
+      {/* Award Cards — ALL 15 workbook awards always render; ones with no
+          eligible winner show "Not awarded yet" + what they need. */}
+      <div className="space-y-2">
+        <p className="text-xs text-gray-500">
+          {awardsWithWinner} of {allAwardLabels.length} awards have a winner.
+          {awardsWithWinner < allAwardLabels.length &&
+            " The rest need leadership roles, benches, or sessions to be set up first (shown on each card)."}
+        </p>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {awardLabels.map((label) => {
+          {allAwardLabels.map((label) => {
             const winners = awardWinners.get(label) ?? [];
             const style = getAwardStyle(label);
             const Icon = style.icon;
+            const hasWinner = winners.length > 0;
             return (
-              <Card key={label} className={`${style.bg} border ${style.border}`}>
+              <Card
+                key={label}
+                className={
+                  hasWinner
+                    ? `${style.bg} border ${style.border}`
+                    : "border border-dashed border-gray-200 bg-gray-50/60"
+                }
+              >
                 <CardContent className="pt-6">
                   <div className="flex items-start gap-3">
-                    <Icon className={`size-8 shrink-0 ${style.iconColor}`} />
+                    <Icon
+                      className={`size-8 shrink-0 ${
+                        hasWinner ? style.iconColor : "text-gray-300"
+                      }`}
+                    />
                     <div className="min-w-0">
                       <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                         {label}
                       </p>
-                      {winners.map((w) => (
-                        <div key={w.participant_id} className="mt-1">
-                          <p className="text-base font-bold text-gray-900 truncate">
-                            {w.participant.full_name}
+                      {hasWinner ? (
+                        winners.map((w) => (
+                          <div key={w.participant_id} className="mt-1">
+                            <p className="text-base font-bold text-gray-900 truncate">
+                              {w.participant.full_name}
+                            </p>
+                            {w.participant.constituency_number != null && (
+                              <p className="text-xs tabular-nums text-gray-500">
+                                #{w.participant.constituency_number}
+                              </p>
+                            )}
+                            <p className="mt-1 text-lg font-bold text-gray-900">
+                              {w.avg_score?.toFixed(1)}
+                              <span className="text-xs font-normal text-gray-500">
+                                {" "}
+                                pts
+                              </span>
+                            </p>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="mt-1">
+                          <p className="text-sm font-semibold text-gray-400">
+                            Not awarded yet
                           </p>
-                          <p className="text-xs text-gray-600">
-                            {w.participant.school_name}
-                          </p>
-                          <p className="mt-1 text-lg font-bold text-gray-900">
-                            {w.avg_score?.toFixed(1)}
-                            <span className="text-xs font-normal text-gray-500">
-                              {" "}
-                              pts
-                            </span>
+                          <p className="mt-0.5 text-xs text-gray-400">
+                            Needs {AWARD_REQUIREMENT[label] ?? "a qualifying winner"}
                           </p>
                         </div>
-                      ))}
+                      )}
                     </div>
                   </div>
                 </CardContent>
@@ -560,7 +621,7 @@ export function ResultsClient({
             );
           })}
         </div>
-      )}
+      </div>
 
       {/* Top-5 contenders per award — the shortlist BEFORE the one-award-per-
           student cap, with the actual winner(s) (AFTER the cap) highlighted. Lets
@@ -707,7 +768,10 @@ export function ResultsClient({
                   <option value="">Select a participant…</option>
                   {results.map((r) => (
                     <option key={r.participant_id} value={r.participant_id}>
-                      {r.participant.full_name} — {r.participant.school_name}
+                      {r.participant.full_name}
+                      {r.participant.constituency_number != null
+                        ? ` — #${r.participant.constituency_number}`
+                        : ""}
                     </option>
                   ))}
                 </select>
@@ -797,7 +861,7 @@ export function ResultsClient({
                 <TableRow>
                   <TableHead className="w-12 text-center">#</TableHead>
                   <TableHead>Name</TableHead>
-                  <TableHead>School</TableHead>
+                  <TableHead>Constituency</TableHead>
                   <TableHead>Role</TableHead>
                   <TableHead>Party</TableHead>
                   <TableHead className="text-right">Avg Score</TableHead>
@@ -843,7 +907,12 @@ export function ResultsClient({
                         </div>
                       </TableCell>
                       <TableCell className="text-sm text-gray-600">
-                        {r.participant.school_name}
+                        {r.participant.constituency_name ?? "—"}
+                        {r.participant.constituency_number != null && (
+                          <span className="ml-1 text-xs tabular-nums text-gray-400">
+                            #{r.participant.constituency_number}
+                          </span>
+                        )}
                       </TableCell>
                       <TableCell>
                         {r.participant.parliament_role && (

@@ -53,6 +53,7 @@ function yuvaTable(sb: ServiceClient): YuvaTable {
 type RawDeskParticipant = {
   id: string;
   serial_no: number | null;
+  constituency_number: number | null;
   full_name: string;
   constituency_name: string | null;
   party_id: string | null;
@@ -63,7 +64,7 @@ type RawDeskParticipant = {
   speech_finished: boolean | null;
 };
 const DESK_ROSTER_COLS =
-  "id, serial_no, full_name, constituency_name, party_id, committee_name, checked_in, checked_in_day1, checked_in_day2, speech_finished";
+  "id, serial_no, constituency_number, full_name, constituency_name, party_id, committee_name, checked_in, checked_in_day1, checked_in_day2, speech_finished";
 type PartTable = {
   select: (cols?: string) => PartTable;
   eq: (col: string, val: unknown) => PartTable;
@@ -111,6 +112,7 @@ export type MyDesk = {
 export type DeskRosterMember = {
   id: string;
   serial_no: number | null;
+  constituency_number: number | null;
   full_name: string;
   constituency_name: string | null;
   checked_in: boolean;
@@ -215,6 +217,7 @@ export async function getMyDeskRoster(
     .map<DeskRosterMember>((m) => ({
       id: m.id,
       serial_no: m.serial_no,
+      constituency_number: m.constituency_number,
       full_name: m.full_name,
       constituency_name: m.constituency_name,
       checked_in: !!m.checked_in,

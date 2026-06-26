@@ -14,6 +14,8 @@ import {
   Copy,
   CheckCircle2,
   AlertCircle,
+  Check,
+  X,
 } from "lucide-react";
 import {
   assignChapterRole,
@@ -276,6 +278,78 @@ export function TeamClient({
                 disabled={pending}
               />
             </div>
+            {/* What each role can do — so the chair can pick the right one. */}
+            <div className="grid gap-2 sm:grid-cols-2">
+              {/* Organiser */}
+              <div className="rounded-lg border border-[#FF9933]/30 bg-[#FF9933]/5 p-3">
+                <div className="mb-2 flex items-center gap-1.5">
+                  <UserCog className="size-4 text-[#FF9933]" />
+                  <span className="text-sm font-semibold text-[#1a1a3e]">
+                    Organiser
+                  </span>
+                </div>
+                <p className="mb-1.5 text-xs font-medium text-[#1a1a3e]/70">
+                  Runs the event end-to-end:
+                </p>
+                <ul className="space-y-1 text-xs text-[#1a1a3e]/60">
+                  <li className="flex gap-1.5">
+                    <Check className="mt-0.5 size-3.5 shrink-0 text-[#138808]" />
+                    Import the roster; allocate seats &amp; committees
+                  </li>
+                  <li className="flex gap-1.5">
+                    <Check className="mt-0.5 size-3.5 shrink-0 text-[#138808]" />
+                    Manage parties, jury, topics &amp; venue
+                  </li>
+                  <li className="flex gap-1.5">
+                    <Check className="mt-0.5 size-3.5 shrink-0 text-[#138808]" />
+                    Go live: check-in, run elections &amp; votes (Control panel)
+                  </li>
+                  <li className="flex gap-1.5">
+                    <Check className="mt-0.5 size-3.5 shrink-0 text-[#138808]" />
+                    Compute &amp; publish the results
+                  </li>
+                </ul>
+                <p className="mt-2 mb-1.5 text-xs font-medium text-red-600/80">
+                  Cannot:
+                </p>
+                <ul className="space-y-1 text-xs text-[#1a1a3e]/60">
+                  <li className="flex gap-1.5">
+                    <X className="mt-0.5 size-3.5 shrink-0 text-red-500" />
+                    Delete students, parties, jury or the event
+                  </li>
+                  <li className="flex gap-1.5">
+                    <X className="mt-0.5 size-3.5 shrink-0 text-red-500" />
+                    See the scores, leaderboard or final results
+                  </li>
+                </ul>
+              </div>
+              {/* Full admin / Chair */}
+              <div className="rounded-lg border border-[#138808]/30 bg-[#138808]/5 p-3">
+                <div className="mb-2 flex items-center gap-1.5">
+                  <ShieldCheck className="size-4 text-[#138808]" />
+                  <span className="text-sm font-semibold text-[#1a1a3e]">
+                    Chapter Chair (full admin)
+                  </span>
+                </div>
+                <p className="mb-1.5 text-xs font-medium text-[#1a1a3e]/70">
+                  Everything an organiser can, plus:
+                </p>
+                <ul className="space-y-1 text-xs text-[#1a1a3e]/60">
+                  <li className="flex gap-1.5">
+                    <Check className="mt-0.5 size-3.5 shrink-0 text-[#138808]" />
+                    Delete students, parties, jury &amp; the event
+                  </li>
+                  <li className="flex gap-1.5">
+                    <Check className="mt-0.5 size-3.5 shrink-0 text-[#138808]" />
+                    View the scores, leaderboard &amp; final results
+                  </li>
+                </ul>
+                <p className="mt-2 text-xs text-[#1a1a3e]/45">
+                  Give this only to people you trust with deleting data and seeing
+                  results. Assigning a new chair replaces the previous one.
+                </p>
+              </div>
+            </div>
             <div className="flex flex-wrap items-center gap-2">
               <select
                 value={role}
@@ -283,8 +357,12 @@ export function TeamClient({
                 disabled={pending}
                 className="rounded-lg border border-[#1a1a3e]/10 px-3 py-2 text-sm"
               >
-                <option value="chapter_organizer">Organiser (cannot delete)</option>
-                <option value="chapter_admin">Chapter Chair (full admin)</option>
+                <option value="chapter_organizer">
+                  Organiser — runs the event, can&apos;t delete
+                </option>
+                <option value="chapter_admin">
+                  Chapter Chair — full admin (delete + see results)
+                </option>
               </select>
               <Button onClick={handleAdd} disabled={pending}>
                 {pending ? (

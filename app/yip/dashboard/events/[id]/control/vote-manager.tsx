@@ -417,13 +417,13 @@ export function VoteManager({
     );
   }
 
-  // Equity rule: max 2 Speaker nominees per party. Silently ignore a 3rd pick
-  // from the same party (the open-gate also enforces min 1 per party).
+  // Open nomination: NO per-party cap — nominate anyone, any number, from any
+  // party. Equal representation is decided at the vote (every member casts one
+  // vote), not restricted at the nomination stage.
   function toggleSpeakerNominee(partyId: string, id: string) {
     setSpeakerDialog((prev) => {
       const cur = prev.selectedByParty[partyId] ?? [];
       const has = cur.includes(id);
-      if (!has && cur.length >= 2) return prev;
       const next = has ? cur.filter((x) => x !== id) : [...cur, id];
       return {
         ...prev,
@@ -1319,8 +1319,9 @@ export function VoteManager({
     agendaType === "speaker_election" ? (
       <div className="space-y-3">
         <p className="text-sm text-gray-600">
-          Nominate Speaker candidates — each party puts forward 1–2. The whole
-          House elects the Speaker; the runner-up becomes Deputy Speaker.
+          Nominate Speaker candidates — pick anyone, any number, from any party
+          (at least 2). The whole House elects the Speaker; the runner-up
+          becomes Deputy Speaker.
         </p>
         <Button
           size="sm"
@@ -1566,17 +1567,12 @@ export function VoteManager({
     </Dialog>
   );
 
-  // The Speaker nomination dialog — whole-House pool grouped by party, with the
-  // equity rule baked in: each party puts forward 1–2 nominees. Mirrors the
-  // other pickers' styling; the open-gate enforces min 1 / max 2 per party.
+  // The Speaker nomination dialog — whole-House pool grouped by party for easy
+  // browsing, but nomination is OPEN: pick anyone, any number, from any party.
+  // The only floor is 2 candidates total (a real vote needs at least two
+  // names). Equal representation is decided at the vote, not at nomination.
   const speakerSelectedIds = Object.values(speakerDialog.selectedByParty).flat();
-  const speakerValid =
-    speakerDialog.groups.length > 0 &&
-    speakerDialog.groups.every((g) => {
-      const n = (speakerDialog.selectedByParty[g.party.id] ?? []).length;
-      return n >= 1 && n <= 2;
-    }) &&
-    speakerSelectedIds.length >= 2;
+  const speakerValid = speakerSelectedIds.length >= 2;
   const speakerNominationDialog = (
     <Dialog
       open={speakerDialog.open}
@@ -1592,8 +1588,9 @@ export function VoteManager({
         <DialogHeader>
           <DialogTitle>Nominate Speakers</DialogTitle>
           <DialogDescription>
-            Each party puts forward 1–2 Speaker nominees. The whole House then
-            elects the Speaker; the runner-up becomes Deputy Speaker.
+            Pick any members as Speaker nominees — any number, from any party
+            (at least 2). The whole House then elects the Speaker; the runner-up
+            becomes Deputy Speaker.
           </DialogDescription>
         </DialogHeader>
 
@@ -1628,17 +1625,13 @@ export function VoteManager({
                 <div key={g.party.id} className="space-y-1.5">
                   <p className="flex items-center justify-between px-0.5 text-xs font-semibold text-gray-600">
                     <span>{g.party.name}</span>
-                    <span
-                      className={cn(
-                        picks.length === 0 ? "text-red-500" : "text-gray-400"
-                      )}
-                    >
-                      {picks.length}/2
+                    <span className="text-gray-400">
+                      {picks.length > 0 ? `${picks.length} selected` : ""}
                     </span>
                   </p>
                   {visible.map((m) => {
                     const checked = picks.includes(m.id);
-                    const atCap = !checked && picks.length >= 2;
+                    const atCap = false; // open nomination — no per-party cap
                     return (
                       <button
                         key={m.id}
@@ -1684,7 +1677,7 @@ export function VoteManager({
 
         <DialogFooter>
           <span className="mr-auto self-center text-xs text-muted-foreground">
-            {speakerSelectedIds.length} selected · each party needs 1–2
+            {speakerSelectedIds.length} selected · pick at least 2
           </span>
           <Button
             variant="outline"

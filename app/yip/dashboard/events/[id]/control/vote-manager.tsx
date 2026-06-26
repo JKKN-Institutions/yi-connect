@@ -62,7 +62,12 @@ import {
   computeMultiSeatOutcome,
   distributeSeats,
 } from "@/lib/yip/election-outcome";
-import { MINISTRIES } from "@/lib/yip/constants";
+import {
+  MINISTRIES,
+  ROLE_LABELS,
+  ROLE_COLORS,
+  EX_PARLIAMENT_ROLES,
+} from "@/lib/yip/constants";
 import {
   getFloorPanel,
   castFloorVote,
@@ -391,6 +396,21 @@ export function VoteManager({
         : m.constituency_name;
     }
     return "";
+  }
+
+  // Ex- leaders (removed via no-confidence, impeachment, or an organiser depose)
+  // keep their leadership standing and may be nominated again. Flag their former
+  // post in every picker so organisers see the history before putting them forward.
+  function exRoleBadge(m: VoteCandidate) {
+    const role = m.parliament_role;
+    if (!role || !(EX_PARLIAMENT_ROLES as readonly string[]).includes(role)) {
+      return null;
+    }
+    return (
+      <Badge className={cn("mt-1 w-fit text-[10px]", ROLE_COLORS[role])}>
+        {ROLE_LABELS[role] ?? role}
+      </Badge>
+    );
   }
 
   // Speaker: open the nomination dialog and load EVERY party's members (both
@@ -925,6 +945,7 @@ export function VoteManager({
                     <p className="truncate text-xs text-gray-500">
                       {candidateSubtitle(m)}
                     </p>
+                    {exRoleBadge(m)}
                   </div>
                   <div
                     className={cn(
@@ -1134,6 +1155,7 @@ export function VoteManager({
                     <p className="truncate text-xs text-gray-500">
                       {candidateSubtitle(m)}
                     </p>
+                    {exRoleBadge(m)}
                   </div>
                   <div
                     className={cn(
@@ -1514,6 +1536,7 @@ export function VoteManager({
                     <p className="truncate text-xs text-gray-500">
                       {candidateSubtitle(m)}
                     </p>
+                    {exRoleBadge(m)}
                   </div>
                   <div
                     className={cn(
@@ -1779,6 +1802,7 @@ export function VoteManager({
                           <p className="truncate text-xs text-gray-500">
                             {rowSub}
                           </p>
+                          {exRoleBadge(m)}
                         </div>
                         <div
                           className={cn(

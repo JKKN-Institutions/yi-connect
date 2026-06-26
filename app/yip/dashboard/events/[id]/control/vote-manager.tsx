@@ -382,15 +382,15 @@ export function VoteManager({
     );
   }
 
-  // Subtitle under each nominee — prefer their constituency (the field
-  // organisers search by); fall back to school before allocation assigns one.
+  // Subtitle under each nominee — their constituency (the field organisers
+  // search by). School is deliberately NOT shown for vote candidates.
   function candidateSubtitle(m: VoteCandidate): string {
     if (m.constituency_name) {
       return m.constituency_number != null
         ? `#${m.constituency_number} · ${m.constituency_name}`
         : m.constituency_name;
     }
-    return m.school_name ?? "";
+    return "";
   }
 
   // Speaker: open the nomination dialog and load EVERY party's members (both
@@ -1567,12 +1567,51 @@ export function VoteManager({
     </Dialog>
   );
 
-  // The Speaker nomination dialog — whole-House pool grouped by party for easy
-  // browsing, but nomination is OPEN: pick anyone, any number, from any party.
-  // The only floor is 2 candidates total (a real vote needs at least two
-  // names). Equal representation is decided at the vote, not at nomination.
+  // The Speaker nomination dialog — whole-House pool grouped by party (A→Z) for
+  // easy browsing, but nomination is OPEN: pick anyone, any number, from any
+  // party. Floor is 2 candidates total (a real vote needs two names). A pinned
+  // "Nominated" tray shows the forming ballot with removable chips + a
+  // non-blocking party-balance nudge. Equal representation is decided at the
+  // vote, not at nomination.
   const speakerSelectedIds = Object.values(speakerDialog.selectedByParty).flat();
   const speakerValid = speakerSelectedIds.length >= 2;
+
+  // Flat lookup of every loaded member (+ their party) so the selected tray can
+  // render removable chips and the balance nudge can name the empty parties.
+  const speakerAllMembers = speakerDialog.groups.flatMap((g) =>
+    g.members.map((m) => ({
+      member: m,
+      partyId: g.party.id,
+      partyName: g.party.name,
+    }))
+  );
+  const speakerSelected = speakerAllMembers.filter((x) =>
+    speakerSelectedIds.includes(x.member.id)
+  );
+  const speakerPartiesWithPicks = speakerDialog.groups.filter(
+    (g) => (speakerDialog.selectedByParty[g.party.id] ?? []).length > 0
+  ).length;
+  const speakerEmptyParties = speakerDialog.groups
+    .filter(
+      (g) => (speakerDialog.selectedByParty[g.party.id] ?? []).length === 0
+    )
+    .map((g) => g.party.name);
+
+  // Party-side avatar colour + initials (the roster carries no photos).
+  const sideAvatar = (side: string | null) =>
+    side === "ruling"
+      ? "bg-blue-600"
+      : side === "opposition"
+        ? "bg-red-600"
+        : "bg-[#FF9933]";
+  const nomineeInitials = (name: string) =>
+    name
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((w) => w[0]?.toUpperCase() ?? "")
+      .join("");
+
   const speakerNominationDialog = (
     <Dialog
       open={speakerDialog.open}
@@ -1584,25 +1623,96 @@ export function VoteManager({
         )
       }
     >
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Nominate Speakers</DialogTitle>
-          <DialogDescription>
-            Pick any members as Speaker nominees — any number, from any party
-            (at least 2). The whole House then elects the Speaker; the runner-up
-            becomes Deputy Speaker.
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-2xl">
+        {/* Tricolor accent — ties to the projector identity */}
+        <div className="flex h-1.5 w-full">
+          <div className="flex-1 bg-[#FF9933]" />
+          <div className="flex-1 bg-white" />
+          <div className="flex-1 bg-[#138808]" />
+        </div>
 
+        <div className="px-6 pt-5">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Crown className="size-5 text-[#FF9933]" />
+              Nominate Speakers
+            </DialogTitle>
+            <DialogDescription>
+              Pick anyone, any number, from any party. The whole House votes —
+              top vote becomes Speaker, runner-up becomes Deputy Speaker.
+            </DialogDescription>
+          </DialogHeader>
+        </div>
+
+        {/* Pinned "Nominated" tray — the forming ballot + balance nudge */}
         {speakerDialog.groups.length > 0 && (
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-gray-400" />
-            <Input
-              value={nomineeSearch}
-              onChange={(e) => setNomineeSearch(e.target.value)}
-              placeholder="Search by name, constituency or No."
-              className="h-8 pl-8 text-sm"
-            />
+          <div className="mx-6 mt-3 rounded-xl border bg-muted/40 p-3">
+            <div className="flex items-center justify-between">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+                Nominated ·{" "}
+                <span className="text-gray-900">
+                  {speakerSelectedIds.length}
+                </span>
+              </p>
+              <p className="text-[11px] text-gray-400">
+                {speakerPartiesWithPicks} of {speakerDialog.groups.length}{" "}
+                parties represented
+              </p>
+            </div>
+            {speakerSelected.length === 0 ? (
+              <p className="mt-2 text-xs text-gray-400">
+                No one nominated yet — tap names below to add them.
+              </p>
+            ) : (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {speakerSelected.map((x) => (
+                  <span
+                    key={x.member.id}
+                    className="inline-flex items-center gap-1.5 rounded-full border bg-white px-2.5 py-1 text-sm text-gray-800 shadow-sm"
+                  >
+                    <span
+                      className={cn(
+                        "size-2 rounded-full",
+                        sideAvatar(x.member.party_side)
+                      )}
+                    />
+                    {x.member.full_name}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        toggleSpeakerNominee(x.partyId, x.member.id)
+                      }
+                      className="ml-0.5 text-gray-400 hover:text-gray-700"
+                      aria-label={`Remove ${x.member.full_name}`}
+                    >
+                      <XCircle className="size-3.5" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            {speakerEmptyParties.length > 0 && (
+              <p className="mt-2 text-[12px] text-amber-600">
+                {speakerEmptyParties.join(", ")}{" "}
+                {speakerEmptyParties.length === 1 ? "has" : "have"} no nominee
+                yet — add one to keep it balanced (optional).
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Search */}
+        {speakerDialog.groups.length > 0 && (
+          <div className="mx-6 mt-3">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-gray-400" />
+              <Input
+                value={nomineeSearch}
+                onChange={(e) => setNomineeSearch(e.target.value)}
+                placeholder="Search by name, constituency or number…"
+                className="h-9 pl-8 text-sm"
+              />
+            </div>
           </div>
         )}
 
@@ -1616,47 +1726,63 @@ export function VoteManager({
             No party members available to nominate.
           </p>
         ) : (
-          <div className="max-h-72 space-y-3 overflow-y-auto pr-1">
+          <div className="mx-6 mt-3 max-h-[360px] space-y-4 overflow-y-auto pr-1 pb-2">
             {speakerDialog.groups.map((g) => {
               const picks = speakerDialog.selectedByParty[g.party.id] ?? [];
               const visible = filterNominees(g.members);
               if (visible.length === 0) return null;
               return (
                 <div key={g.party.id} className="space-y-1.5">
-                  <p className="flex items-center justify-between px-0.5 text-xs font-semibold text-gray-600">
-                    <span>{g.party.name}</span>
-                    <span className="text-gray-400">
-                      {picks.length > 0 ? `${picks.length} selected` : ""}
+                  <div className="sticky top-0 z-10 -mx-1 flex items-center justify-between bg-popover/95 px-1 py-1 backdrop-blur">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-600">
+                      {g.party.name}
+                    </p>
+                    <span
+                      className={cn(
+                        "rounded-full px-2 py-0.5 text-[11px] font-medium",
+                        picks.length > 0
+                          ? "bg-gray-100 text-gray-700"
+                          : "bg-amber-50 text-amber-700"
+                      )}
+                    >
+                      {picks.length > 0 ? `${picks.length} nominated` : "none yet"}
                     </span>
-                  </p>
+                  </div>
                   {visible.map((m) => {
                     const checked = picks.includes(m.id);
-                    const atCap = false; // open nomination — no per-party cap
+                    const sub = candidateSubtitle(m);
+                    const rowSub = sub ? `${sub} · ${g.party.name}` : g.party.name;
                     return (
                       <button
                         key={m.id}
                         type="button"
-                        disabled={atCap}
                         onClick={() => toggleSpeakerNominee(g.party.id, m.id)}
                         className={cn(
-                          "flex w-full items-center justify-between rounded-lg border-2 p-3 text-left transition-all",
+                          "flex w-full items-center gap-3 rounded-xl border-2 p-2.5 text-left transition-all",
                           checked
                             ? "border-[#FF9933] bg-[#FF9933]/5"
-                            : "border-gray-200 bg-white hover:border-gray-300",
-                          atCap && "opacity-50"
+                            : "border-gray-200 bg-white hover:border-gray-300"
                         )}
                       >
+                        <span
+                          className={cn(
+                            "flex size-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white",
+                            sideAvatar(m.party_side)
+                          )}
+                        >
+                          {nomineeInitials(m.full_name)}
+                        </span>
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium text-gray-800">
+                          <p className="truncate text-sm font-medium text-gray-900">
                             {m.full_name}
                           </p>
                           <p className="truncate text-xs text-gray-500">
-                            {candidateSubtitle(m)}
+                            {rowSub}
                           </p>
                         </div>
                         <div
                           className={cn(
-                            "ml-2 flex size-5 shrink-0 items-center justify-center rounded-full border-2",
+                            "ml-1 flex size-5 shrink-0 items-center justify-center rounded-full border-2",
                             checked
                               ? "border-[#FF9933] bg-[#FF9933]"
                               : "border-gray-300 bg-white"
@@ -1675,8 +1801,8 @@ export function VoteManager({
           </div>
         )}
 
-        <DialogFooter>
-          <span className="mr-auto self-center text-xs text-muted-foreground">
+        <div className="mt-2 flex items-center gap-3 border-t px-6 py-4">
+          <span className="mr-auto text-xs text-muted-foreground">
             {speakerSelectedIds.length} selected · pick at least 2
           </span>
           <Button
@@ -1698,7 +1824,7 @@ export function VoteManager({
           >
             {isPending ? "Opening..." : "Open Election"}
           </Button>
-        </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   );

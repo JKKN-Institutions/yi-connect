@@ -14,6 +14,7 @@ export function DeskRoster({ eventId }: { eventId: string }) {
   const [loaded, setLoaded] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null); // participantId in flight
+  const [search, setSearch] = useState("");
 
   const refresh = useCallback(async () => {
     const r = await getMyDeskRoster(eventId);

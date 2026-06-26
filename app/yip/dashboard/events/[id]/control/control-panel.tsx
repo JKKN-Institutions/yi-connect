@@ -1232,10 +1232,15 @@ export function ControlPanel({
             <QuestionHourPanel eventId={eventId} />
           )}
 
-          {/* Government Formation (Ruling vs Opposition split, day-of) */}
-          {currentAgendaItem?.agenda_type === "party_formation" && (
-            <GovernmentFormationPanel eventId={eventId} />
-          )}
+          {/* Government Formation (Ruling vs Opposition split, day-of).
+              Always available so the bench split can be corrected at any point
+              in the event; auto-expands while the formation session is live. */}
+          <GovernmentFormationPanel
+            eventId={eventId}
+            isActiveSession={
+              currentAgendaItem?.agenda_type === "party_formation"
+            }
+          />
 
           {/* Bill Session (for bill_presentation agenda type) */}
           {currentAgendaItem?.agenda_type === "bill_presentation" && (

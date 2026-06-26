@@ -81,7 +81,15 @@ type Participant = {
   speech_finished?: boolean | null;
 };
 
-type SortKey = "full_name";
+type SortKey =
+  | "full_name"
+  | "party_number"
+  | "parliament_role"
+  | "constituency_number"
+  | "constituency_name"
+  | "constituency_state"
+  | "committee_number"
+  | "checkin";
 
 type CheckInFilter = "all" | "in" | "out";
 
@@ -165,6 +173,12 @@ export function ParticipantsClient({
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [checkingIn, setCheckingIn] = useState<Set<string>>(new Set());
   const [checkInFilter, setCheckInFilter] = useState<CheckInFilter>("all");
+  // Column filters (all = no filter). Party/committee match by number; role
+  // matches the parliament_role value; state matches constituency_state.
+  const [partyFilter, setPartyFilter] = useState<string>("all");
+  const [roleFilter, setRoleFilter] = useState<string>("all");
+  const [committeeFilter, setCommitteeFilter] = useState<string>("all");
+  const [stateFilter, setStateFilter] = useState<string>("all");
   const [rosterLoading, setRosterLoading] = useState(false);
   // Full-roster reset (chair only) — two-step type-to-confirm.
   const [deleteAllOpen, setDeleteAllOpen] = useState(false);
@@ -246,6 +260,23 @@ export function ParticipantsClient({
     }
     return Array.from(nums).sort((a, b) => a - b);
   }, [participants]);
+  // Distinct roles & states present in this roster — drive the filter dropdowns.
+  const eventRoles = useMemo(() => {
+    const s = new Set<string>();
+    for (const p of participants) if (p.parliament_role) s.add(p.parliament_role);
+    return Array.from(s).sort((a, b) =>
+      (ROLE_LABELS[a] ?? a).localeCompare(ROLE_LABELS[b] ?? b)
+    );
+  }, [participants]);
+  const eventStates = useMemo(() => {
+    const s = new Set<string>();
+    for (const p of participants)
+      if (p.constituency_state) s.add(p.constituency_state);
+    return Array.from(s).sort();
+  }, [participants]);
+
+  const partyLabel = (n: number) =>
+    n >= 1 && n <= 26 ? `Party ${String.fromCharCode(64 + n)}` : `Party ${n}`;
 
   // Form state
   const [formData, setFormData] = useState({
@@ -377,6 +408,23 @@ export function ParticipantsClient({
     setEditLoading(false);
   }
 
+  const filtersActive =
+    checkInFilter !== "all" ||
+    partyFilter !== "all" ||
+    roleFilter !== "all" ||
+    committeeFilter !== "all" ||
+    stateFilter !== "all" ||
+    search.trim() !== "";
+
+  function clearFilters() {
+    setCheckInFilter("all");
+    setPartyFilter("all");
+    setRoleFilter("all");
+    setCommitteeFilter("all");
+    setStateFilter("all");
+    setSearch("");
+  }
+
   // Filtered & sorted list
   const displayedParticipants = useMemo(() => {
     let filtered = participants;
@@ -387,6 +435,21 @@ export function ParticipantsClient({
     } else if (checkInFilter === "out") {
       filtered = filtered.filter((p) => !p.checked_in);
     }
+    // Column filters
+    if (partyFilter !== "all")
+      filtered = filtered.filter(
+        (p) => String(p.party_number ?? "") === partyFilter
+      );
+    if (roleFilter !== "all")
+      filtered = filtered.filter((p) => (p.parliament_role ?? "") === roleFilter);
+    if (committeeFilter !== "all")
+      filtered = filtered.filter(
+        (p) => String(p.committee_number ?? "") === committeeFilter
+      );
+    if (stateFilter !== "all")
+      filtered = filtered.filter(
+        (p) => (p.constituency_state ?? "") === stateFilter
+      );
 
     // Search filter (by name only — school is not shown or searchable)
     if (search.trim()) {
@@ -394,12 +457,59 @@ export function ParticipantsClient({
       filtered = filtered.filter((p) => p.full_name.toLowerCase().includes(q));
     }
 
-    // Sort
+    // Sort — type-aware: numbers numeric (nulls last), text alphabetical,
+    // check-in by present-days score.
+    const dir = sortAsc ? 1 : -1;
+    const numCmp = (
+      a: number | null | undefined,
+      b: number | null | undefined
+    ) => {
+      const an = a == null;
+      const bn = b == null;
+      if (an && bn) return 0;
+      if (an) return 1; // nulls always last, regardless of direction
+      if (bn) return -1;
+      return (a - b) * dir;
+    };
+    const strCmp = (a: string, b: string) => a.localeCompare(b) * dir;
+    const checkScore = (p: Participant) =>
+      (p.checked_in_day1 ? 2 : 0) + (p.checked_in_day2 ? 1 : 0);
+
     return [...filtered].sort((a, b) => {
-      const cmp = (a[sortKey] || "").localeCompare(b[sortKey] || "");
-      return sortAsc ? cmp : -cmp;
+      switch (sortKey) {
+        case "party_number":
+          return numCmp(a.party_number, b.party_number);
+        case "constituency_number":
+          return numCmp(a.constituency_number, b.constituency_number);
+        case "committee_number":
+          return numCmp(a.committee_number, b.committee_number);
+        case "parliament_role":
+          return strCmp(
+            ROLE_LABELS[a.parliament_role ?? ""] ?? a.parliament_role ?? "",
+            ROLE_LABELS[b.parliament_role ?? ""] ?? b.parliament_role ?? ""
+          );
+        case "constituency_name":
+          return strCmp(a.constituency_name ?? "", b.constituency_name ?? "");
+        case "constituency_state":
+          return strCmp(a.constituency_state ?? "", b.constituency_state ?? "");
+        case "checkin":
+          return (checkScore(a) - checkScore(b)) * dir;
+        case "full_name":
+        default:
+          return strCmp(a.full_name ?? "", b.full_name ?? "");
+      }
     });
-  }, [participants, checkInFilter, search, sortKey, sortAsc]);
+  }, [
+    participants,
+    checkInFilter,
+    partyFilter,
+    roleFilter,
+    committeeFilter,
+    stateFilter,
+    search,
+    sortKey,
+    sortAsc,
+  ]);
 
   function handleSort(key: SortKey) {
     if (sortKey === key) {
@@ -408,6 +518,27 @@ export function ParticipantsClient({
       setSortKey(key);
       setSortAsc(true);
     }
+  }
+
+  // Clickable, sort-aware column header. Highlights the active column and shows
+  // the current direction.
+  function sortHead(label: string, key: SortKey, className?: string) {
+    const active = sortKey === key;
+    return (
+      <TableHead className={className}>
+        <button
+          onClick={() => handleSort(key)}
+          className={`flex items-center gap-1 hover:text-gray-900 ${
+            active ? "font-semibold text-gray-900" : ""
+          }`}
+        >
+          {label}
+          <ArrowUpDown
+            className={`size-3 ${active ? "opacity-100" : "opacity-40"}`}
+          />
+        </button>
+      </TableHead>
+    );
   }
 
   async function handleAddParticipant() {
@@ -1005,28 +1136,84 @@ export function ParticipantsClient({
         </div>
       </div>
 
+      {/* Column filters */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs font-medium text-[#1a1a3e]/50">Filter:</span>
+        <select
+          value={partyFilter}
+          onChange={(e) => setPartyFilter(e.target.value)}
+          className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-[#1a1a3e]/80 focus:border-[#1a1a3e]/40 focus:outline-none"
+        >
+          <option value="all">All parties</option>
+          {eventParties.map((n) => (
+            <option key={n} value={String(n)}>
+              {partyLabel(n)}
+            </option>
+          ))}
+        </select>
+        <select
+          value={roleFilter}
+          onChange={(e) => setRoleFilter(e.target.value)}
+          className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-[#1a1a3e]/80 focus:border-[#1a1a3e]/40 focus:outline-none"
+        >
+          <option value="all">All roles</option>
+          {eventRoles.map((r) => (
+            <option key={r} value={r}>
+              {ROLE_LABELS[r] ?? r}
+            </option>
+          ))}
+        </select>
+        <select
+          value={committeeFilter}
+          onChange={(e) => setCommitteeFilter(e.target.value)}
+          className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-[#1a1a3e]/80 focus:border-[#1a1a3e]/40 focus:outline-none"
+        >
+          <option value="all">All committees</option>
+          {eventCommittees.map((c) => (
+            <option key={c.number} value={String(c.number)}>
+              {c.number} · {c.name.replace(/^Ministry of /i, "")}
+            </option>
+          ))}
+        </select>
+        <select
+          value={stateFilter}
+          onChange={(e) => setStateFilter(e.target.value)}
+          className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-[#1a1a3e]/80 focus:border-[#1a1a3e]/40 focus:outline-none"
+        >
+          <option value="all">All states</option>
+          {eventStates.map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+        </select>
+        <span className="text-xs text-[#1a1a3e]/50">
+          {displayedParticipants.length} shown
+        </span>
+        {filtersActive && (
+          <button
+            onClick={clearFilters}
+            className="text-xs text-[#1a1a3e]/60 underline-offset-2 hover:underline"
+          >
+            Clear filters
+          </button>
+        )}
+      </div>
+
       {/* Table */}
       {displayedParticipants.length > 0 ? (
         <div className="rounded-lg border bg-white">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-32">Check-in (D1 / D2)</TableHead>
-                <TableHead>
-                  <button
-                    onClick={() => handleSort("full_name")}
-                    className="flex items-center gap-1 hover:text-gray-900"
-                  >
-                    Name
-                    <ArrowUpDown className="size-3" />
-                  </button>
-                </TableHead>
-                <TableHead className="w-16">Party</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead className="w-20">Const. No.</TableHead>
-                <TableHead>Constituency</TableHead>
-                <TableHead>State</TableHead>
-                <TableHead>Committee</TableHead>
+                {sortHead("Check-in (D1 / D2)", "checkin", "w-32")}
+                {sortHead("Name", "full_name")}
+                {sortHead("Party", "party_number", "w-16")}
+                {sortHead("Role", "parliament_role")}
+                {sortHead("Const. No.", "constituency_number", "w-20")}
+                {sortHead("Constituency", "constituency_name")}
+                {sortHead("State", "constituency_state")}
+                {sortHead("Committee", "committee_number")}
                 <TableHead>Access Code</TableHead>
                 <TableHead className="w-10" />
               </TableRow>
@@ -1185,12 +1372,12 @@ export function ParticipantsClient({
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed bg-white py-16 text-center">
           <Users className="mb-4 size-12 text-gray-300" />
           <h3 className="text-sm font-medium text-gray-700">
-            {search || checkInFilter !== "all"
+            {filtersActive
               ? "No participants match your filters"
               : "No participants yet"}
           </h3>
           <p className="mt-1 text-xs text-gray-500">
-            {search || checkInFilter !== "all"
+            {filtersActive
               ? "Try a different search term or filter"
               : "Add students individually or import from CSV"}
           </p>

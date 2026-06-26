@@ -21,6 +21,8 @@ import {
   SlidersHorizontal,
   Scale,
   Globe,
+  Globe2,
+  Landmark,
   Table2,
   Trophy,
   Settings2,
@@ -41,6 +43,7 @@ const GROUPS: TabGroup[] = [
     tabs: [
       { label: "Pipeline", href: "/yip/dashboard/admin", icon: GitBranch, exact: true },
       { label: "Coverage", href: "/yip/dashboard/admin/coverage", icon: Globe },
+      { label: "National", href: "/yip/dashboard/admin/national", icon: Globe2 },
     ],
   },
   {
@@ -66,6 +69,7 @@ const GROUPS: TabGroup[] = [
     title: "Templates & Setup",
     tabs: [
       { label: "Topics", href: "/yip/dashboard/admin/topics", icon: BookOpen },
+      { label: "Taxonomy", href: "/yip/dashboard/admin/taxonomy", icon: Landmark },
       { label: "Agenda Template", href: "/yip/dashboard/admin/agenda", icon: CalendarClock },
       { label: "Checklist Template", href: "/yip/dashboard/admin/checklist", icon: ListChecks },
       { label: "Seasons", href: "/yip/dashboard/admin/seasons", icon: CalendarRange },

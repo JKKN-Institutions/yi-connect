@@ -55,6 +55,49 @@ export async function listParties(eventId: string): Promise<Party[]> {
   })) as Party[];
 }
 
+/**
+ * Lightweight read for the day-of Government Formation panel (Control panel).
+ * Returns each party with its current side and a live member headcount.
+ * canView-gated; the actual side change goes through updateParty (canManage).
+ */
+export async function getGovtFormationParties(eventId: string): Promise<
+  {
+    id: string;
+    party_number: number;
+    name: string;
+    side: PartySide | null;
+    members: number;
+  }[]
+> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canView) return [];
+
+  const supabase = await createServiceClient();
+  const { data, error } = await supabase
+    .from("parties")
+    .select("id, party_number, name, side")
+    .eq("event_id", eventId)
+    .order("party_number");
+
+  if (error || !data) return [];
+
+  return Promise.all(
+    data.map(async (p) => {
+      const { count } = await supabase
+        .from("participants")
+        .select("id", { count: "exact", head: true })
+        .eq("party_id", p.id);
+      return {
+        id: p.id as string,
+        party_number: p.party_number as number,
+        name: p.name as string,
+        side: (p.side ?? null) as PartySide | null,
+        members: count ?? 0,
+      };
+    })
+  );
+}
+
 export async function createParty(input: {
   event_id: string;
   // Optional: benchless parties (the default now) carry no side; ruling vs

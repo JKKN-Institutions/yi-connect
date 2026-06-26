@@ -58,6 +58,7 @@ import { setAllocationLocked, setScoresLocked, setRegistrationsFrozen, pushLiveB
 import { startTimer, stopTimer, resetTimer } from "@/app/yip/actions/timer";
 import { advanceSpeaker, skipSpeaker, generateSpeakerQueue, getSpeakerQueue } from "@/app/yip/actions/speakers";
 import { QuestionHourPanel } from "./question-hour";
+import { GovernmentFormationPanel } from "./government-formation";
 import { VoteManager } from "./vote-manager";
 import { BillSession } from "./bill-session";
 import type { Tables } from "@/types/yip/database";
@@ -1229,6 +1230,11 @@ export function ControlPanel({
           {/* Question Hour Panel (replaces speaker queue for question_hour agenda type) */}
           {currentAgendaItem?.agenda_type === "question_hour" && (
             <QuestionHourPanel eventId={eventId} />
+          )}
+
+          {/* Government Formation (Ruling vs Opposition split, day-of) */}
+          {currentAgendaItem?.agenda_type === "party_formation" && (
+            <GovernmentFormationPanel eventId={eventId} />
           )}
 
           {/* Bill Session (for bill_presentation agenda type) */}

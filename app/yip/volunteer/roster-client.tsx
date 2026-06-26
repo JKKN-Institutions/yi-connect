@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { Search } from "lucide-react";
 import {
   getMyDeskRoster,
   volunteerSetDayCheckIn,

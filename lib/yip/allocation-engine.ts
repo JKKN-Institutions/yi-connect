@@ -8,7 +8,8 @@
  *   4. Committee (distributed across 5 committees)
  */
 
-import { MINISTRIES, COMMITTEES } from "@/lib/yip/constants";
+import { COMMITTEES } from "@/lib/yip/constants";
+import { effectiveMinistries, effectiveCabinetCount } from "@/lib/yip/cabinet";
 import {
   CONSTITUENCIES,
   PROMINENT_CONSTITUENCIES,
@@ -33,6 +34,11 @@ export interface AllocationInput {
   // Mizoram, etc. Optional — when absent, only each student's home_state is
   // avoided (legacy behaviour).
   excludeState?: string;
+  // Per-event cabinet override: the ministry portfolios and how many cabinet
+  // (and shadow) seats to seat. When absent, falls back to the MINISTRIES
+  // constant (8). Mirrors events.cabinet_ministries / cabinet_ministry_count.
+  cabinetMinistries?: { key: string; label: string }[];
+  cabinetCount?: number;
 }
 
 export interface ParticipantAssignment {
@@ -213,24 +219,32 @@ export function runAllocation(input: AllocationInput): AllocationResult {
     oppositionAvailable = oppositionAvailable.slice(1);
   }
 
-  // Cabinet Ministers (8 — one per ministry) from ruling
-  const ministryKeys = MINISTRIES.map((m) => m.key);
-  const numCabinetToAssign = Math.min(ministryKeys.length, rulingAvailable.length);
+  // Cabinet Ministers (one per ministry) from ruling. The ministry list + how
+  // many seats come from the event's per-event cabinet config when set, else
+  // the MINISTRIES constant (8). When the count exceeds the named portfolios we
+  // pad with generic keys so every seat still gets a distinct ministry tag.
+  const ministries = effectiveMinistries(input.cabinetMinistries);
+  const cabinetSeats = effectiveCabinetCount(
+    input.cabinetCount,
+    input.cabinetMinistries
+  );
+  const ministryKeyAt = (i: number) => ministries[i]?.key ?? `ministry_${i + 1}`;
+  const numCabinetToAssign = Math.min(cabinetSeats, rulingAvailable.length);
   for (let i = 0; i < numCabinetToAssign; i++) {
     const p = rulingAvailable[i];
     get(p.id).parliament_role = "cabinet_minister";
-    get(p.id).ministry = ministryKeys[i];
-    cabinetMinisters.push({ id: p.id, ministry: ministryKeys[i] });
+    get(p.id).ministry = ministryKeyAt(i);
+    cabinetMinisters.push({ id: p.id, ministry: ministryKeyAt(i) });
   }
   rulingAvailable = rulingAvailable.slice(numCabinetToAssign);
 
-  // Shadow Ministers (8 — one per ministry) from opposition
-  const numShadowToAssign = Math.min(ministryKeys.length, oppositionAvailable.length);
+  // Shadow Ministers (one per ministry) from opposition
+  const numShadowToAssign = Math.min(cabinetSeats, oppositionAvailable.length);
   for (let i = 0; i < numShadowToAssign; i++) {
     const p = oppositionAvailable[i];
     get(p.id).parliament_role = "shadow_minister";
-    get(p.id).ministry = ministryKeys[i];
-    shadowMinisters.push({ id: p.id, ministry: ministryKeys[i] });
+    get(p.id).ministry = ministryKeyAt(i);
+    shadowMinisters.push({ id: p.id, ministry: ministryKeyAt(i) });
   }
   oppositionAvailable = oppositionAvailable.slice(numShadowToAssign);
 

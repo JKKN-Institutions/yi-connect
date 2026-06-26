@@ -2096,6 +2096,8 @@ export type Database = {
       events: {
         Row: {
           allocation_locked: boolean | null
+          cabinet_ministries: Json | null
+          cabinet_ministry_count: number | null
           central_agenda: string | null
           chapter_em_id: string | null
           chapter_name: string | null
@@ -2144,6 +2146,8 @@ export type Database = {
         }
         Insert: {
           allocation_locked?: boolean | null
+          cabinet_ministries?: Json | null
+          cabinet_ministry_count?: number | null
           central_agenda?: string | null
           chapter_em_id?: string | null
           chapter_name?: string | null
@@ -2192,6 +2196,8 @@ export type Database = {
         }
         Update: {
           allocation_locked?: boolean | null
+          cabinet_ministries?: Json | null
+          cabinet_ministry_count?: number | null
           central_agenda?: string | null
           chapter_em_id?: string | null
           chapter_name?: string | null

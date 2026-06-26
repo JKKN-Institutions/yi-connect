@@ -27,6 +27,7 @@ import {
   BookOpen,
   UserCog,
   Crown,
+  Landmark,
   PanelLeftClose,
   PanelLeftOpen,
   CheckCircle2,
@@ -61,6 +62,7 @@ const GROUPS: TabGroup[] = [
       { label: "Committees", href: "/topics", icon: BookOpen },
       { label: "Parties", href: "/parties", icon: Flag },
       { label: "Allocation", href: "/allocation", icon: Shuffle },
+      { label: "Cabinet", href: "/cabinet", icon: Landmark },
       { label: "Jury", href: "/jury", icon: Scale },
       // Volunteers tab also hosts YUVA Desks (sub-tabbed on the page).
       { label: "Volunteers", href: "/volunteers", icon: Shield },

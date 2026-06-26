@@ -51,7 +51,9 @@ export async function runAllocationAction(
   // Fetch event — check lock
   const { data: event } = await supabase
     .from("events")
-    .select("id, allocation_locked, committee_topics, state")
+    .select(
+      "id, allocation_locked, committee_topics, state, cabinet_ministry_count, cabinet_ministries"
+    )
     .eq("id", eventId)
     .single();
 
@@ -121,6 +123,16 @@ export async function runAllocationAction(
     // Exclude the host chapter's own state from the constituency pool
     // (e.g. an Erode/Tamil Nadu event won't hand out TN seats).
     excludeState: (event as { state?: string | null }).state ?? undefined,
+    // Per-event cabinet override (e.g. Erode's 10) → falls back to MINISTRIES.
+    cabinetMinistries:
+      (
+        event as {
+          cabinet_ministries?: { key: string; label: string }[] | null;
+        }
+      ).cabinet_ministries ?? undefined,
+    cabinetCount:
+      (event as { cabinet_ministry_count?: number | null })
+        .cabinet_ministry_count ?? undefined,
   });
 
   // Named-party fill. Two models:

@@ -105,14 +105,11 @@ export async function getOverviewData(
   // Leadership roles = chair / co-chair (app='yi').
   const chapterLeaders = await getChapterLeaders(svc, event.chapter_name);
 
-  // ── YIP Moderator Team (yip.organizers) ─────────────────────────────
-  // The organising team running this event: the chapter EM/team for the
-  // event's chapter, plus the RM and national leads for the event's zone.
-  const moderatorTeam = await getModeratorTeam(
-    svc,
-    event.chapter_name,
-    event.yi_zone_code ?? event.zone ?? null
-  );
+  // ── YIP Moderator Team (yi_directory, app='yip') ────────────────────
+  // The chapter's OWN YIP team that ran this round — chapter_admin +
+  // chapter_organizer for the event's chapter (same source as the Team tab).
+  // NOT the national Yi team / zone RM.
+  const moderatorTeam = await getModeratorTeam(svc, event.chapter_name);
 
   return {
     eventName: event.name,
@@ -233,54 +230,108 @@ async function getChapterLeaders(
   return leaders;
 }
 
-/** YIP organising team for this event (chapter EM/team + zone RM/national). */
+/**
+ * YIP Moderator Team for this event's chapter — the chapter's OWN YIP team
+ * (chapter_admin + chapter_organizer in yi_directory, app='yip'), matched by
+ * chapter NAME, active only, one row per person. Same source as the event Team
+ * tab. Deliberately NOT the national Yi team or the zone RM (that was the bug:
+ * national leads were shown on every chapter report).
+ */
 async function getModeratorTeam(
   svc: Awaited<ReturnType<typeof createServiceClient>>,
-  chapterName: string | null | undefined,
-  zone: string | null | undefined
+  chapterName: string | null | undefined
 ): Promise<ModeratorMember[]> {
-  const { data } = await svc
-    .from("organizers")
-    .select("full_name, email, role, zone, chapter_name, is_active")
-    .eq("is_active", true);
-
   const norm = (s: string | null | undefined) => (s ?? "").trim().toLowerCase();
   const chapNorm = norm(chapterName);
-  const zoneNorm = norm(zone);
+  if (!chapNorm) return [];
 
-  type OrgRow = {
-    full_name: string | null;
-    email: string | null;
-    role: string | null;
-    zone: string | null;
-    chapter_name: string | null;
-    is_active: boolean | null;
+  // yi_directory is not in the generated types — same loose cast as getChapterLeaders.
+  const dir = svc.schema("yi_directory" as never) as unknown as {
+    from: (t: string) => {
+      select: (c: string) => {
+        eq: (
+          k: string,
+          v: unknown
+        ) => Promise<{ data: Array<Record<string, unknown>> | null }>;
+      };
+    };
   };
 
-  const rows = (data ?? []) as unknown as OrgRow[];
+  const { data: rows } = await dir
+    .from("role_assignments")
+    .select("person_id, app, role, yi_chapter, title, is_active")
+    .eq("app", "yip");
 
-  const matched = rows.filter((o) => {
-    if (!o.full_name) return false;
-    const r = norm(o.role);
-    // National leads always relevant.
-    if (r === "national") return true;
-    // Regional managers for THIS event's zone.
-    if (r === "rm" && zoneNorm && norm(o.zone) === zoneNorm) return true;
-    // Chapter EM / chapter team for THIS event's chapter.
-    if (chapNorm && norm(o.chapter_name) === chapNorm) return true;
-    return false;
+  const TEAM_ROLES = new Set(["chapter_admin", "chapter_organizer"]);
+
+  const matched = (rows ?? []).filter((r) => {
+    if (r.is_active === false) return false;
+    if (!TEAM_ROLES.has(String(r.role))) return false;
+    return norm(String(r.yi_chapter ?? "")) === chapNorm;
   });
 
-  const team: ModeratorMember[] = matched.map((o) => ({
-    name: o.full_name as string,
-    email: o.email,
-    role: prettyRole(o.role ?? ""),
-    zone: o.zone,
-  }));
+  if (matched.length === 0) return [];
 
-  // Order: national → rm → chapter team, then by name.
-  const rank = (role: string) =>
-    /national/i.test(role) ? 0 : /^rm$|regional/i.test(role) ? 1 : 2;
+  const personIds = Array.from(
+    new Set(
+      matched
+        .map((r) => (r.person_id ? String(r.person_id) : null))
+        .filter((x): x is string => Boolean(x))
+    )
+  );
+  const personById = new Map<
+    string,
+    { full_name: string; email: string | null }
+  >();
+
+  if (personIds.length > 0) {
+    const dirIn = svc.schema("yi_directory" as never) as unknown as {
+      from: (t: string) => {
+        select: (c: string) => {
+          in: (
+            k: string,
+            v: string[]
+          ) => Promise<{ data: Array<Record<string, unknown>> | null }>;
+        };
+      };
+    };
+    const { data: people } = await dirIn
+      .from("people")
+      .select("id, full_name, email, is_active")
+      .in("id", personIds);
+    for (const p of people ?? []) {
+      if (p.is_active === false) continue;
+      personById.set(String(p.id), {
+        full_name: String(p.full_name ?? ""),
+        email: p.email ? String(p.email) : null,
+      });
+    }
+  }
+
+  // One entry per person; prefer their chapter_admin role over organizer.
+  const roleByPerson = new Map<string, string>();
+  for (const r of matched) {
+    const pid = r.person_id ? String(r.person_id) : null;
+    if (!pid) continue;
+    const role = String(r.role);
+    const existing = roleByPerson.get(pid);
+    if (!existing || role === "chapter_admin") roleByPerson.set(pid, role);
+  }
+
+  const team: ModeratorMember[] = [];
+  for (const [pid, role] of roleByPerson) {
+    const person = personById.get(pid);
+    if (!person || !person.full_name) continue;
+    team.push({
+      name: person.full_name,
+      email: person.email,
+      role: prettyRole(role),
+      zone: null,
+    });
+  }
+
+  // Order: chapter admin(s) first, then organisers, then by name.
+  const rank = (role: string) => (/admin|chair/i.test(role) ? 0 : 1);
   team.sort(
     (a, b) => rank(a.role) - rank(b.role) || a.name.localeCompare(b.name)
   );

@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
+import confetti from "canvas-confetti";
 import { cn } from "@/lib/yip/utils";
 import { ROLE_LABELS, PARTY_COLORS, MINISTRIES, OATH_TEXT } from "@/lib/yip/constants";
 import { computeMultiSeatOutcome } from "@/lib/yip/election-outcome";
@@ -83,6 +84,107 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
     (event?.live_banner_active ?? false) === true,
     event?.live_banner_text ?? null
   );
+
+  // ─── Celebration on winner reveal — confetti + spotlight + fanfare ───
+  // Fires once per distinct crowned reveal. A tie crowns no one (so no
+  // celebration); a defeated bill isn't celebrated. Sound needs ONE tap to
+  // satisfy the browser autoplay policy on the projector machine.
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const lastCelebratedRef = useRef<string>("");
+  const [soundArmed, setSoundArmed] = useState(false);
+
+  const armSound = useCallback(() => {
+    try {
+      const Ctor =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext?: typeof AudioContext })
+          .webkitAudioContext;
+      if (!Ctor) return;
+      audioCtxRef.current = audioCtxRef.current ?? new Ctor();
+      void audioCtxRef.current.resume();
+      setSoundArmed(true);
+    } catch {
+      /* ignore — celebration stays silent */
+    }
+  }, []);
+
+  const playFanfare = useCallback(() => {
+    const ctx = audioCtxRef.current;
+    if (!ctx) return;
+    try {
+      void ctx.resume();
+      const now = ctx.currentTime;
+      const notes: ReadonlyArray<readonly [number, number]> = [
+        [523.25, 0],
+        [659.25, 0.12],
+        [783.99, 0.24],
+        [1046.5, 0.4],
+      ];
+      for (const [freq, t] of notes) {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "triangle";
+        osc.frequency.value = freq;
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        gain.gain.setValueAtTime(0.0001, now + t);
+        gain.gain.exponentialRampToValueAtTime(0.22, now + t + 0.03);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + t + 0.5);
+        osc.start(now + t);
+        osc.stop(now + t + 0.55);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const fireConfetti = useCallback(() => {
+    const colors = ["#FF9933", "#FFFFFF", "#138808", "#FBBF24"];
+    confetti({
+      particleCount: 90,
+      spread: 75,
+      startVelocity: 55,
+      origin: { x: 0.5, y: 0.5 },
+      colors,
+      zIndex: 100,
+    });
+    const end = Date.now() + 1000;
+    const frame = () => {
+      confetti({ particleCount: 5, angle: 60, spread: 60, origin: { x: 0, y: 0.7 }, colors, zIndex: 100 });
+      confetti({ particleCount: 5, angle: 120, spread: 60, origin: { x: 1, y: 0.7 }, colors, zIndex: 100 });
+      if (Date.now() < end) requestAnimationFrame(frame);
+    };
+    frame();
+  }, []);
+
+  // Stable key for the current crowned reveal ("" = nothing to celebrate:
+  // not revealed, a tie, or a defeated/tied bill).
+  const celebrationKey = (() => {
+    if (!isRevealed || !voteSession || tallies.length === 0) return "";
+    const top = tallies[0].count;
+    if (top <= 0) return "";
+    if (voteSession.vote_type === "bill_vote") {
+      const ayes = tallies.find((t) => t.vote_value === "aye")?.count ?? 0;
+      const nays = tallies.find((t) => t.vote_value === "nay")?.count ?? 0;
+      return ayes > nays ? `${voteSession.id}:bill:pass` : "";
+    }
+    const tied = tallies.filter((t) => t.count === top).length > 1;
+    if (tied) return "";
+    if (
+      voteSession.vote_type === "cabinet_minister" ||
+      voteSession.vote_type === "shadow_minister"
+    ) {
+      return `${voteSession.id}:${voteSession.vote_type}:reveal`;
+    }
+    return `${voteSession.id}:${voteSession.vote_type}:${tallies[0].vote_value}`;
+  })();
+
+  useEffect(() => {
+    if (!celebrationKey || celebrationKey === lastCelebratedRef.current) return;
+    lastCelebratedRef.current = celebrationKey;
+    fireConfetti();
+    playFanfare();
+  }, [celebrationKey, fireConfetti, playFanfare]);
 
   // Fetch vote candidates/bill info when vote session changes
   useEffect(() => {
@@ -400,6 +502,35 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
         <div className="flex-1 bg-[#138808]" />
       </div>
 
+      {/* Winner-reveal spotlight keyframes (zoom-in + golden glow) */}
+      <style>{`
+        @keyframes yipWinnerPop {
+          0%   { transform: scale(0.6); opacity: 0; filter: blur(6px); }
+          55%  { transform: scale(1.08); opacity: 1; filter: blur(0); }
+          75%  { transform: scale(0.98); }
+          100% { transform: scale(1); }
+        }
+        @keyframes yipWinnerGlow {
+          0%, 100% { text-shadow: 0 0 18px rgba(251,191,36,0.50), 0 0 44px rgba(251,191,36,0.20); }
+          50%      { text-shadow: 0 0 36px rgba(251,191,36,0.90), 0 0 80px rgba(251,191,36,0.40); }
+        }
+        .yip-winner-pop {
+          animation: yipWinnerPop 800ms cubic-bezier(.16,1,.3,1) both,
+                     yipWinnerGlow 2.2s ease-in-out 800ms infinite;
+        }
+      `}</style>
+
+      {/* One-time tap to enable celebration sound (browser autoplay rule) */}
+      {!soundArmed && (
+        <button
+          type="button"
+          onClick={armSound}
+          className="fixed bottom-4 right-4 z-[60] rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm font-medium text-white/80 backdrop-blur transition-colors hover:bg-white/20"
+        >
+          &#128266; Tap once to enable celebration sound
+        </button>
+      )}
+
       {/* Header */}
       <header className="flex items-center justify-between px-8 py-4">
         <div>
@@ -616,7 +747,7 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
                             ? "Elected Deputy Speaker"
                             : "Elected Speaker"}
                         </p>
-                        <p className="text-5xl font-black text-amber-400">
+                        <p className="text-5xl font-black text-amber-400 yip-winner-pop">
                           {(() => {
                             const candidate = voteCandidates.find(
                               (c) => c.id === tallies[0].vote_value
@@ -645,7 +776,7 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
                               ? "Elected Deputy Prime Minister"
                               : "Elected Leader of Opposition"}
                         </p>
-                        <p className="text-5xl font-black text-amber-400">
+                        <p className="text-5xl font-black text-amber-400 yip-winner-pop">
                           {(() => {
                             const candidate = voteCandidates.find(
                               (c) => c.id === tallies[0].vote_value
@@ -693,7 +824,7 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
                             {ms.winnerIds.map((id) => (
                               <span
                                 key={id}
-                                className="text-4xl font-black text-amber-400"
+                                className="text-4xl font-black text-amber-400 yip-winner-pop"
                               >
                                 {nameOf(id)}
                               </span>

@@ -78,6 +78,7 @@ export function DeskRoster({ eventId }: { eventId: string }) {
         (m) =>
           m.full_name.toLowerCase().includes(q) ||
           (m.constituency_name ?? "").toLowerCase().includes(q) ||
+          String(m.constituency_number ?? "").includes(q) ||
           String(m.serial_no ?? "").includes(q)
       )
     : rows;
@@ -123,8 +124,11 @@ export function DeskRoster({ eventId }: { eventId: string }) {
             className="rounded-xl border border-[#1a1a3e]/8 bg-white p-3 shadow-sm"
           >
             <div className="flex items-center gap-3">
-              <span className="flex h-9 min-w-9 items-center justify-center rounded-lg bg-[#1a1a3e]/5 px-1.5 font-[family-name:var(--font-mono)] text-sm font-bold text-[#1a1a3e]/70">
-                {m.serial_no ?? "—"}
+              <span
+                className="flex h-9 min-w-9 items-center justify-center rounded-lg bg-[#1a1a3e]/5 px-1.5 font-[family-name:var(--font-mono)] text-sm font-bold text-[#1a1a3e]/70"
+                title="Constituency number"
+              >
+                {m.constituency_number ?? m.serial_no ?? "—"}
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-base font-semibold text-[#1a1a3e]">

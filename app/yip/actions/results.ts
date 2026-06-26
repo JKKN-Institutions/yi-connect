@@ -5,7 +5,7 @@ import { createServiceClient } from "@/lib/yip/supabase/server";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { revalidatePath } from "next/cache";
 import { parentScoreByKey } from "@/lib/yip/rubric";
-import { getPositionBonusConfig } from "./positions";
+import { getPositionBonusConfigAdmin } from "./positions";
 import { getScoringSettings } from "./scoring-settings";
 import { listSessionParameters } from "./session-parameters";
 import { listScoringBuckets } from "./scoring-buckets";
@@ -194,7 +194,12 @@ export async function computeResults(
   // 1c. Position points (Yi 2026 Workbook) — auto-awarded per role, applied
   // ONCE per participant and CAPPED at 10 (the Position Points component is
   // max 10 of the /100 total). Not a per-juror judgement.
-  const positionConfig = await getPositionBonusConfig();
+  // MUST use the service-role (Admin) reader: position_bonus_config has RLS on
+  // with no authenticated policy, so the anon/auth getPositionBonusConfig() reads
+  // 0 rows and silently falls back to handbook DEFAULTS — which omit every ex_*
+  // role (ex-leaders → 0 pts) and use lower base values than the configured ones.
+  // The Admin reader bypasses RLS and returns the real scoring-console values.
+  const positionConfig = await getPositionBonusConfigAdmin();
   const positionBonuses = positionConfig.bonuses;
 
   // 1d. Global scoring settings + per-session config — drive the aggregation

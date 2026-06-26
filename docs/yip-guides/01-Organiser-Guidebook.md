@@ -177,7 +177,7 @@ Day 1 in brief:
 1. **Registration Opens → Chief Guest Address** — ceremonial items. Advance with **Next**, run timers as needed.
 2. **Speaker Candidates' Speeches** — use the Debate/Speech presets to time each candidate.
 3. **Speaker Election** — when this item is current, an **Open Speaker Election** button appears in the **Digital Voting** card. Run the election (full steps in [section 6A](#a-speaker-election)). The winner becomes Speaker and the **next two automatically become Deputy Speakers**.
-4. **Government & Opposition Formation / Cabinet & Party Leader Introductions** — run the **party-leader elections** here, one party at a time ([section 6B](#b-party-leader-elections-one-per-party)).
+4. **Government & Opposition Formation / Party Leader Selections** — run the **party-leader elections** here, one party at a time ([section 6B](#b-party-leader-elections-one-per-party)).
 5. **Oath Taking Ceremony / Seating of Speaker** — ceremonial; the projector shows the oath.
 6. **Discussion on Matters of Urgent Public Importance (Part 1)** — the first scored session. Confirm jury are scoring ([section 8](#8-jury--scoring-oversight)).
 7. **Short Duration Discussion / Debate** — use the Debate presets.

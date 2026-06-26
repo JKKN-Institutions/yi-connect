@@ -360,18 +360,35 @@ export async function updateParticipant(
     updateData.access_code = code;
   }
 
-  // Derive party_side when party_number changes (mirror updateParticipantAssignment).
+  // When the party number changes, re-resolve BOTH the link (party_id) and the
+  // bench (party_side) from the matching party — they must always move together.
+  // Leaving party_id behind here was the Nischay #225 bug: the student showed the
+  // party letter (from party_number) but wasn't truly linked, so the government
+  // split and bench-based awards skipped them. If the number matches no party in
+  // this event, stop and warn rather than half-linking (a DB trigger is the
+  // belt-and-suspenders backstop for every other write path).
   if (fields.party_number !== undefined) {
     const pn = updateData.party_number;
     if (typeof pn === "number") {
       const { data: party } = await supabase
         .from("parties")
-        .select("side")
+        .select("id, side")
         .eq("event_id", eventId)
         .eq("party_number", pn)
         .maybeSingle();
-      updateData.party_side = party?.side ?? null;
+      if (!party) {
+        const letter =
+          pn >= 1 && pn <= 26 ? String.fromCharCode(64 + pn) : String(pn);
+        return {
+          success: false,
+          error: `There's no Party ${letter} in this event. Create that party first (Parties tab), then assign the student.`,
+        };
+      }
+      updateData.party_id = party.id;
+      updateData.party_side = party.side;
     } else {
+      // Party number cleared → unlink and clear the bench together.
+      updateData.party_id = null;
       updateData.party_side = null;
     }
   }

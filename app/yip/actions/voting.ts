@@ -345,6 +345,23 @@ export async function openVote(
 
   const supabase = await createServiceClient();
 
+  // Finalised events are frozen: once scores are locked or results are published,
+  // no new nomination/vote may open (re-opening a settled seat would corrupt the
+  // standings). Mirrors the agenda re-open guard. allocation_locked is NOT checked
+  // — elections are run AFTER allocation is locked, so that lock must not block here.
+  const { data: lockState, error: lockErr } = await supabase
+    .from("events")
+    .select("scores_locked, results_published_at")
+    .eq("id", eventId)
+    .single();
+  if (lockErr || !lockState) return { success: false, error: "Event not found" };
+  if (lockState.results_published_at) {
+    return { success: false, error: "Results are published — opening a vote is disabled." };
+  }
+  if (lockState.scores_locked) {
+    return { success: false, error: "Scores are locked — unlock scores before opening a vote." };
+  }
+
   // Check for existing active session
   const { data: existing } = await supabase
     .from("vote_sessions")
@@ -866,13 +883,15 @@ export async function getSpeakerCandidates(
 ): Promise<VoteCandidate[]> {
   const supabase = await createServiceClient();
 
+  // Include deposed Speakers/Deputy Speakers: an ex_speaker may be re-nominated
+  // and run again, so the role-based ballot fallback must surface them too.
   const { data, error } = await supabase
     .from("participants")
     .select(
       "id, full_name, school_name, party_side, parliament_role, constituency_name, constituency_number"
     )
     .eq("event_id", eventId)
-    .eq("parliament_role", "speaker");
+    .in("parliament_role", ["speaker", "ex_speaker", "ex_deputy_speaker"]);
 
   if (error || !data) return [];
   return data;

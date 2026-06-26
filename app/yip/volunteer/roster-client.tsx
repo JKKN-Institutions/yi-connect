@@ -163,6 +163,11 @@ export function DeskRoster({ eventId }: { eventId: string }) {
           </li>
         ))}
       </ul>
+      {q && filtered.length === 0 && (
+        <div className="rounded-2xl border border-[#1a1a3e]/8 bg-white px-4 py-8 text-center text-sm text-[#1a1a3e]/55 shadow-sm">
+          No students match “{search}”.
+        </div>
+      )}
     </div>
   );
 }

@@ -47,6 +47,7 @@ const KEY_ROLES: { role: ParliamentRole; label: string }[] = [
   { role: "deputy_speaker", label: "Deputy Speaker" },
   { role: "leader_of_opposition", label: "Leader of Opposition" },
   { role: "cabinet_minister", label: "Cabinet Minister" },
+  { role: "shadow_minister", label: "Shadow Minister" },
   { role: "mp", label: "Member of Parliament" },
 ];
 

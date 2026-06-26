@@ -286,7 +286,14 @@ export function VoteManager({
   // the wrong roll-call list and leave result names unresolved. Prefer the
   // session config; fall back to roles when no session carries one.
   useEffect(() => {
-    if (agendaType === "speaker_election") {
+    // Load the speaker ballot when EITHER the current item is the Speaker
+    // Election, OR the displayed vote session is a (still-revealed) speaker
+    // election — otherwise, once the agenda advances past the Speaker Election,
+    // the lingering result block can't resolve names and shows raw UUIDs.
+    if (
+      agendaType === "speaker_election" ||
+      voteSession?.vote_type === "speaker_election"
+    ) {
       const cfg =
         voteSession?.vote_type === "speaker_election"
           ? ((voteSession.config ?? {}) as { candidateIds?: unknown })
@@ -296,7 +303,7 @@ export function VoteManager({
         : [];
       if (ids.length > 0) {
         getVoteCandidates(ids).then(setCandidates);
-      } else {
+      } else if (agendaType === "speaker_election") {
         getSpeakerCandidates(eventId).then(setCandidates);
       }
     }
@@ -304,7 +311,7 @@ export function VoteManager({
       getEventBills(eventId).then(setBills);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agendaType, eventId, voteSession?.id]);
+  }, [agendaType, eventId, voteSession?.id, voteSession?.vote_type]);
 
   // Auto-open the "Run a vote" menu when the current item has its OWN vote
   // (Speaker / Bill) so that primary action needs no extra tap. Stays collapsed

@@ -198,12 +198,30 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
       if (!voteSession) return;
 
       if (voteSession.vote_type === "speaker_election") {
-        const { data } = await supabase
-          .from("participants")
-          .select("id, full_name, school_name")
-          .eq("event_id", eventId)
-          .eq("parliament_role", "speaker");
-        setVoteCandidates(data ?? []);
+        // Resolve names from the session's OWN ballot (config.candidateIds),
+        // NOT from parliament_role='speaker'. After the reveal only the WINNER
+        // holds the 'speaker' role (deputies → deputy_speaker, losers → mp), so
+        // the role lookup left every non-winner bar showing a raw UUID. The
+        // ballot is the authoritative list of everyone who stood.
+        const cfg = (voteSession.config ?? {}) as { candidateIds?: unknown };
+        const ids = Array.isArray(cfg.candidateIds)
+          ? cfg.candidateIds.filter((x): x is string => typeof x === "string")
+          : [];
+        if (ids.length > 0) {
+          const { data } = await supabase
+            .from("participants")
+            .select("id, full_name, school_name")
+            .in("id", ids);
+          setVoteCandidates(data ?? []);
+        } else {
+          // Legacy sessions with no candidateIds: fall back to the role lookup.
+          const { data } = await supabase
+            .from("participants")
+            .select("id, full_name, school_name")
+            .eq("event_id", eventId)
+            .eq("parliament_role", "speaker");
+          setVoteCandidates(data ?? []);
+        }
       }
 
       // Bench seats (PM / Deputy PM / Leader of Opposition) AND cabinet/shadow

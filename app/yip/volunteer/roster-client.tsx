@@ -72,6 +72,16 @@ export function DeskRoster({ eventId }: { eventId: string }) {
     );
   }
 
+  const q = search.trim().toLowerCase();
+  const filtered = q
+    ? rows.filter(
+        (m) =>
+          m.full_name.toLowerCase().includes(q) ||
+          (m.constituency_name ?? "").toLowerCase().includes(q) ||
+          String(m.serial_no ?? "").includes(q)
+      )
+    : rows;
+
   return (
     <div className="space-y-3">
       {err && (
@@ -79,8 +89,35 @@ export function DeskRoster({ eventId }: { eventId: string }) {
           {err}
         </div>
       )}
+      {/* Search — find a student fast without scrolling the whole desk */}
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#1a1a3e]/35" />
+        <input
+          type="text"
+          inputMode="search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search name, constituency or number…"
+          className="h-11 w-full rounded-xl border border-[#1a1a3e]/12 bg-white pl-9 pr-9 text-sm text-[#1a1a3e] outline-none placeholder:text-[#1a1a3e]/35 focus:border-[#1a1a3e]/30"
+        />
+        {search && (
+          <button
+            type="button"
+            onClick={() => setSearch("")}
+            aria-label="Clear search"
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-lg leading-none text-[#1a1a3e]/35 hover:text-[#1a1a3e]/70"
+          >
+            ×
+          </button>
+        )}
+      </div>
+      {q && (
+        <p className="px-1 text-xs text-[#1a1a3e]/45">
+          {filtered.length} of {rows.length} students
+        </p>
+      )}
       <ul className="space-y-2">
-        {rows.map((m) => (
+        {filtered.map((m) => (
           <li
             key={m.id}
             className="rounded-xl border border-[#1a1a3e]/8 bg-white p-3 shadow-sm"

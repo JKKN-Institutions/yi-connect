@@ -102,11 +102,9 @@ export async function addReportPhotoByUrl(
   // storage_path is NOT NULL on yip.media; for an external URL there is no
   // Storage object, so we record a logical marker path under an `external/`
   // prefix. public_url carries the real, renderable image link.
-  const uuid =
-    typeof crypto !== "undefined" && "randomUUID" in crypto
-      ? crypto.randomUUID()
-      : Math.random().toString(36).slice(2) + Date.now().toString(36);
-  const storagePath = `external/${eventId}/${uuid}_${fileName}`;
+  // crypto.randomUUID() is always available in the Next.js server runtime; no
+  // Math.random() fallback (CodeQL js/insecure-randomness, and it's dead code).
+  const storagePath = `external/${eventId}/${crypto.randomUUID()}_${fileName}`;
 
   const { error } = await svc.from("media").insert({
     event_id: eventId,

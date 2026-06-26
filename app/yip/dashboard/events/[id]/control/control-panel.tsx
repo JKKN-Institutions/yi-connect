@@ -825,7 +825,7 @@ export function ControlPanel({
           </Badge>
           {isLive && (
             <a
-              href={`/event/${eventId}/display`}
+              href={`/yip/event/${eventId}/display`}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 text-xs text-blue-600 hover:underline"

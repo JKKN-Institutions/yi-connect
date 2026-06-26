@@ -265,7 +265,7 @@ export function TestLoginClient({
                 s.event_name && (
                   <Link
                     key={s.id + "_display"}
-                    href={`/event/${s.id}/display`}
+                    href={`/yip/event/${s.id}/display`}
                     className="text-xs px-3 py-2 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 inline-flex items-center gap-1"
                   >
                     {s.event_name}

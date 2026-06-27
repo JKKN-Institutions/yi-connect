@@ -41,6 +41,7 @@ import {
   submitBill,
   getBillForCommittee,
   getBillCommitteeMembers,
+  assignBillCommitteeRoles,
   type BillCommitteeMember,
 } from "@/app/yip/actions/bills";
 import {
@@ -127,6 +128,23 @@ const EMPTY_FORM: BillFormData = {
   implementation: "",
 };
 
+// ─── Committee roles ────────────────────────────────────────────
+// The committee picks who fills each role from its own members. These map to
+// the uuid columns on yip.bills the organiser dashboard + projector display.
+
+type BillRoleKey =
+  | "lead_drafter"
+  | "presenter_1"
+  | "presenter_2"
+  | "policy_researcher";
+
+const ROLE_DEFS: { key: BillRoleKey; label: string }[] = [
+  { key: "lead_drafter", label: "Lead Drafter" },
+  { key: "presenter_1", label: "Presenter 1" },
+  { key: "presenter_2", label: "Presenter 2" },
+  { key: "policy_researcher", label: "Policy Researcher" },
+];
+
 // ─── Page Component ──────────────────────────────────────────────
 
 export function BillClient({
@@ -156,6 +174,7 @@ export function BillClient({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [confirmSubmit, setConfirmSubmit] = useState(false);
+  const [savingRole, setSavingRole] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   // Debounce timer ref
@@ -315,6 +334,34 @@ export function BillClient({
     });
   }
 
+  async function handleRoleChange(roleKey: BillRoleKey, value: string) {
+    if (!bill || !session) return;
+    const newVal = value || null;
+    if (bill[roleKey] === newVal) return;
+
+    const prevBill = bill;
+    const nextBill = { ...bill, [roleKey]: newVal } as Bill;
+    setBill(nextBill); // optimistic
+    setSavingRole(true);
+
+    const result = await assignBillCommitteeRoles(
+      bill.id,
+      {
+        lead_drafter: nextBill.lead_drafter,
+        presenter_1: nextBill.presenter_1,
+        presenter_2: nextBill.presenter_2,
+        policy_researcher: nextBill.policy_researcher,
+      },
+      session.id
+    );
+    setSavingRole(false);
+
+    if (!result.success) {
+      setBill(prevBill); // revert
+      toast.error(result.error);
+    }
+  }
+
   // ─── Loading & Auth States ────────────────────────────────────
 
   if (loading) {
@@ -408,37 +455,77 @@ export function BillClient({
         )}
       </div>
 
-      {/* Committee Members (only once the bill is unlocked) */}
-      {reportSubmitted && members.length > 0 && (
+      {/* Committee Roles — the committee picks who fills each role from its own
+          members (only once the bill is unlocked). Editable while drafting,
+          read-only once submitted. */}
+      {reportSubmitted && (
         <Card>
-          <CardContent className="pt-4 pb-4">
-            <h3 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1.5">
-              <Users className="size-4 text-purple-500" />
-              Bill Committee Members
-            </h3>
-            <div className="grid grid-cols-2 gap-2">
-              {members.map((m, idx) => {
-                const roleLabels = [
-                  "Lead Drafter",
-                  "Presenter 1",
-                  "Presenter 2",
-                  "Policy Researcher",
-                ];
-                return (
-                  <div
-                    key={m.id}
-                    className="rounded-md bg-gray-50 px-3 py-2"
-                  >
-                    <p className="text-xs text-gray-400">
-                      {roleLabels[idx] || `Member ${idx + 1}`}
-                    </p>
-                    <p className="text-sm font-medium text-gray-800 truncate">
-                      {m.full_name}
-                    </p>
-                  </div>
-                );
-              })}
+          <CardContent className="pt-4 pb-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
+                <Users className="size-4 text-purple-500" />
+                Committee Roles
+              </h3>
+              {savingRole && (
+                <span className="text-xs text-gray-400 flex items-center gap-1">
+                  <Loader2 className="size-3 animate-spin" />
+                  Saving...
+                </span>
+              )}
             </div>
+
+            {!bill ? (
+              <p className="text-sm text-gray-500">
+                Start your bill draft below, then assign who leads, presents,
+                and researches it.
+              </p>
+            ) : members.length === 0 ? (
+              <p className="text-sm text-gray-500">
+                No committee members found yet.
+              </p>
+            ) : (
+              <div className="space-y-2.5">
+                {ROLE_DEFS.map((r) => {
+                  const current = bill[r.key] ?? "";
+                  if (isDraft) {
+                    return (
+                      <div key={r.key} className="flex items-center gap-2">
+                        <span className="w-28 shrink-0 text-xs font-medium text-gray-500">
+                          {r.label}
+                        </span>
+                        <select
+                          value={current}
+                          onChange={(e) =>
+                            handleRoleChange(r.key, e.target.value)
+                          }
+                          disabled={savingRole}
+                          className="flex-1 h-9 rounded-md border border-gray-200 bg-white px-2 text-sm text-gray-800 focus:border-[#FF9933] focus:outline-none focus:ring-1 focus:ring-[#FF9933] disabled:opacity-50"
+                        >
+                          <option value="">— Unassigned —</option>
+                          {members.map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.full_name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    );
+                  }
+                  const name =
+                    members.find((m) => m.id === current)?.full_name ?? "—";
+                  return (
+                    <div key={r.key} className="flex items-center gap-2">
+                      <span className="w-28 shrink-0 text-xs font-medium text-gray-500">
+                        {r.label}
+                      </span>
+                      <span className="text-sm font-medium text-gray-800">
+                        {name}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

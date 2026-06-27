@@ -50,11 +50,26 @@ export function DeskCard({ eventId }: { eventId: string }) {
             </p>
           ))}
           {desk.committees.map((c) => (
-            <p key={c} className="text-base font-semibold text-[#1a1a3e]">
-              📋 {c} Committee
-            </p>
+            <Link
+              key={c}
+              href={`/yip/volunteer/committee/${encodeURIComponent(c)}`}
+              className="-mx-2 flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-[#FF9933]/8"
+            >
+              <span className="text-base font-semibold text-[#1a1a3e]">
+                📋 {c} Committee
+              </span>
+              <span className="ml-auto flex items-center gap-0.5 text-xs font-semibold text-[#FF9933]">
+                Manage Room →
+              </span>
+            </Link>
           ))}
         </div>
+        {desk.committees.length > 0 && (
+          <p className="mt-2 text-xs text-[#1a1a3e]/45">
+            Tap your committee to open its Room — draft the bill, run amendments
+            and submit on the committee&apos;s behalf.
+          </p>
+        )}
       </section>
 
       <section className="rounded-2xl border border-[#1a1a3e]/8 bg-white p-4 shadow-sm">

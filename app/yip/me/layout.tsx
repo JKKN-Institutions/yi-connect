@@ -119,20 +119,18 @@ export default async function ParticipantLayout({
         </div>
       </header>
 
-      {/* Main content */}
-      <main className="flex-1 px-4 py-5 mx-auto w-full max-w-lg">
+      {/* Main content — bottom padding clears the fixed tab bar (+ safe area). */}
+      <main className="flex-1 px-4 pt-5 pb-[calc(4.5rem+env(safe-area-inset-bottom))] mx-auto w-full max-w-lg">
         {children}
       </main>
 
-      {/* Floating Help — student lane */}
-      <GuideLauncher guide={GUIDES.student} variant="fab" />
-
-      {/* Footer */}
-      <footer className="border-t border-gray-100 bg-white/50 py-4 text-center">
-        <p className="text-[11px] text-gray-400">
-          Young Indians Parliament
-        </p>
-      </footer>
+      {/* Action-oriented, role-aware bottom tab bar. Replaces the floating Help
+          FAB (the Guide tab opens the same drawer) and the decorative footer. */}
+      <ParticipantBottomNav
+        desk={desk}
+        chatEnabled={CHAT_ENABLED}
+        eventId={session.eventId}
+      />
     </div>
   );
 }

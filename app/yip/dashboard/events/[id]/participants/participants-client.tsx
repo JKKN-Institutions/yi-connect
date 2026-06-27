@@ -92,6 +92,8 @@ type SortKey =
   | "checkin";
 
 type CheckInFilter = "all" | "in" | "out";
+// Which day the Checked-in / Not-checked-in chips count. "any" = either day.
+type CheckInDay = "any" | "1" | "2";
 
 // Every editable field on a participant. Strings so they bind to <input>; the
 // server action parses + validates (numbers, class range, access-code uniqueness).
@@ -173,6 +175,10 @@ export function ParticipantsClient({
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [checkingIn, setCheckingIn] = useState<Set<string>>(new Set());
   const [checkInFilter, setCheckInFilter] = useState<CheckInFilter>("all");
+  // Day the in/out chips are scoped to. Default Day 1 so the counts line up
+  // with the per-day header rather than an "either day" total that matches
+  // neither day (the count that confused Directors during the live event).
+  const [checkInDay, setCheckInDay] = useState<CheckInDay>("1");
   // Column filters (all = no filter). Party/committee match by number; role
   // matches the parliament_role value; state matches constituency_state.
   const [partyFilter, setPartyFilter] = useState<string>("all");
@@ -238,6 +244,13 @@ export function ParticipantsClient({
   const checkedInCount = participants.filter((p) => p.checked_in).length;
   const day1Count = participants.filter((p) => p.checked_in_day1).length;
   const day2Count = participants.filter((p) => p.checked_in_day2).length;
+  // "Checked in" count for the chosen chip day-scope (Day 1 / Day 2 / either).
+  const scopedInCount =
+    checkInDay === "1"
+      ? day1Count
+      : checkInDay === "2"
+        ? day2Count
+        : checkedInCount;
 
   // Pick-lists scoped to THIS event so editing can only reassign within the
   // committees / parties that actually exist here — committee_number ↔ name
@@ -430,10 +443,17 @@ export function ParticipantsClient({
     let filtered = participants;
 
     // Check-in filter
+    // Scope the in/out test to the chosen day (Day 1 / Day 2 / either day).
+    const inForScope = (p: Participant) =>
+      checkInDay === "1"
+        ? !!p.checked_in_day1
+        : checkInDay === "2"
+          ? !!p.checked_in_day2
+          : !!p.checked_in;
     if (checkInFilter === "in") {
-      filtered = filtered.filter((p) => p.checked_in);
+      filtered = filtered.filter((p) => inForScope(p));
     } else if (checkInFilter === "out") {
-      filtered = filtered.filter((p) => !p.checked_in);
+      filtered = filtered.filter((p) => !inForScope(p));
     }
     // Column filters
     if (partyFilter !== "all")
@@ -502,6 +522,7 @@ export function ParticipantsClient({
   }, [
     participants,
     checkInFilter,
+    checkInDay,
     partyFilter,
     roleFilter,
     committeeFilter,
@@ -1113,11 +1134,11 @@ export function ParticipantsClient({
           {(
             [
               { key: "all", label: "All", count: participants.length },
-              { key: "in", label: "Checked in", count: checkedInCount },
+              { key: "in", label: "Checked in", count: scopedInCount },
               {
                 key: "out",
                 label: "Not checked in",
-                count: participants.length - checkedInCount,
+                count: participants.length - scopedInCount,
               },
             ] as const
           ).map((opt) => (
@@ -1131,6 +1152,28 @@ export function ParticipantsClient({
               }`}
             >
               {opt.label} ({opt.count})
+            </button>
+          ))}
+          {/* Day scope — the Checked in / Not checked in counts above reflect
+              the selected day, matching the per-day header. */}
+          <span className="ml-1 text-xs text-[#1a1a3e]/40">for</span>
+          {(
+            [
+              { key: "1", label: "Day 1" },
+              { key: "2", label: "Day 2" },
+              { key: "any", label: "Either" },
+            ] as const
+          ).map((opt) => (
+            <button
+              key={opt.key}
+              onClick={() => setCheckInDay(opt.key)}
+              className={`text-xs px-2.5 py-1.5 rounded-full border transition-all ${
+                checkInDay === opt.key
+                  ? "bg-[#1a1a3e]/90 text-white border-[#1a1a3e]"
+                  : "bg-white text-[#1a1a3e]/70 border-[#1a1a3e]/10 hover:border-[#1a1a3e]/30"
+              }`}
+            >
+              {opt.label}
             </button>
           ))}
         </div>

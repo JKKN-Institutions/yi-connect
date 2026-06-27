@@ -1186,6 +1186,8 @@ export async function listReportedMessages(
 
 export interface SeedChannelsSummary {
   created: number;
+  pruned: number;
+  keptWithMessages: number;
   skipped: number;
   total: number;
 }
@@ -1304,10 +1306,53 @@ export async function seedChatChannels(
     if (error) return { success: false, error: error.message };
   }
 
+  // Prune ORPHAN party/committee channels — ones that match no CURRENT party /
+  // committee. Without this the set is add-only: when a chapter changes its
+  // committees after channels were first seeded, the old channels linger forever
+  // and mislead (the bug this fixes). Announcements are never pruned. To never
+  // lose history, only orphans with ZERO messages are deleted; an orphan that
+  // still holds messages is kept and reported so a human can decide.
+  const desiredKeys = new Set(
+    desired.map((d) => channelKey(d.kind, d.party_id, d.committee_name))
+  );
+  const orphans = (existingRows ?? []).filter((r) => {
+    const kind = String(r.kind);
+    if (kind !== "party" && kind !== "committee") return false;
+    return !desiredKeys.has(
+      channelKey(
+        kind,
+        (r.party_id as string | null) ?? null,
+        (r.committee_name as string | null) ?? null
+      )
+    );
+  });
+
+  let pruned = 0;
+  let keptWithMessages = 0;
+  for (const o of orphans) {
+    const { count } = await table(sb, "chat_messages")
+      .select("id", { count: "exact", head: true })
+      .eq("channel_id", String(o.id));
+    if ((count ?? 0) > 0) {
+      keptWithMessages++;
+      continue;
+    }
+    const { error: delErr } = (await table(sb, "chat_channels")
+      .delete()
+      .eq("id", String(o.id))) as {
+      data: RawAny[] | null;
+      error: PgError | null;
+    };
+    if (delErr) return { success: false, error: delErr.message };
+    pruned++;
+  }
+
   return {
     success: true,
     data: {
       created: toInsert.length,
+      pruned,
+      keptWithMessages,
       skipped: desired.length - toInsert.length,
       total: desired.length,
     },

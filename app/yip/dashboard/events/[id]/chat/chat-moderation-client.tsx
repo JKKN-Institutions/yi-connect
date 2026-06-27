@@ -131,10 +131,14 @@ export function ChatModerationClient({
       setSeedNotice(null);
       const res = await seedChatChannels(eventId);
       if (res.success) {
-        const { created, skipped, total } = res.data;
+        const { created, pruned, keptWithMessages, skipped, total } = res.data;
         setSeedNotice(
           `Created ${created} channel${created === 1 ? "" : "s"}, ` +
-            `skipped ${skipped} already existing (${total} total).`
+            `removed ${pruned} stale, ` +
+            `skipped ${skipped} already existing (${total} current).` +
+            (keptWithMessages > 0
+              ? ` Kept ${keptWithMessages} stale channel${keptWithMessages === 1 ? "" : "s"} that still ${keptWithMessages === 1 ? "has" : "have"} messages.`
+              : "")
         );
       } else {
         setError(res.error);
@@ -265,7 +269,8 @@ export function ChatModerationClient({
                   <p className="mt-1 max-w-sm text-xs text-[#1a1a3e]/50">
                     Create one channel per party, one per committee, and an
                     organiser-only Announcements channel. Safe to re-run later —
-                    it only adds what&apos;s missing.
+                    it adds missing channels and removes stale empty ones (for
+                    committees or parties that no longer exist).
                   </p>
                   <Button
                     className="mt-4"
@@ -341,7 +346,7 @@ export function ChatModerationClient({
                       disabled={pending}
                       onClick={handleSeed}
                     >
-                      <PlusCircle className="size-3.5" /> Create missing
+                      <PlusCircle className="size-3.5" /> Sync channels
                       channels
                     </Button>
                   </div>

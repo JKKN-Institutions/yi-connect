@@ -33,7 +33,7 @@ import "server-only";
  * uplifting growth motif (emerald sprout, a vertical timeline rail with saffron
  * nodes) so the two AI cards never read as duplicates.
  */
-import { Sprout, Sparkles, Target, MessageCircleHeart } from "lucide-react";
+import { Sprout, Target, MessageCircleHeart } from "lucide-react";
 import { getEventAiEnabled, getParticipantSessionFeedback } from "@/lib/yip/ai/drafts";
 import type { AiDraftRow } from "@/lib/yip/ai/types";
 
@@ -101,10 +101,6 @@ export async function YourGrowthCard({
           session — one warm tip on a strength you showed and one focus for
           next time. Keep going!
         </p>
-        <p className="mt-2.5 text-[10.5px] leading-snug text-emerald-700/70">
-          ✨ Personal coaching from AI, based on your own sessions — never a
-          score, rank or comparison.
-        </p>
       </section>
     );
   }
@@ -120,25 +116,19 @@ export async function YourGrowthCard({
       {/* emerald → saffron accent bar (growth → energy) */}
       <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-emerald-400 via-amber-300 to-[#FF9933]" />
 
-      {/* Header + AI label */}
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-emerald-100">
-            <Sprout className="size-4 text-emerald-600" />
-          </span>
-          <div>
-            <h2 className="text-base font-bold leading-tight text-[#1a1a3e]">
-              Your Growth
-            </h2>
-            <p className="text-[11px] leading-tight text-[#1a1a3e]/50">
-              Your journey through the House, session by session
-            </p>
-          </div>
-        </div>
-        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-700">
-          <Sparkles className="size-2.5" />
-          AI coaching
+      {/* Header */}
+      <div className="flex items-center gap-2">
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-emerald-100">
+          <Sprout className="size-4 text-emerald-600" />
         </span>
+        <div>
+          <h2 className="text-base font-bold leading-tight text-[#1a1a3e]">
+            Your Growth
+          </h2>
+          <p className="text-[11px] leading-tight text-[#1a1a3e]/50">
+            Your journey through the House, session by session
+          </p>
+        </div>
       </div>
 
       {/* ── Latest "focus for next time" — pulled to the top ────────────── */}
@@ -201,12 +191,6 @@ export async function YourGrowthCard({
         </div>
       )}
 
-      {/* Honesty + self-referential framing footer. */}
-      <p className="mt-4 border-t border-emerald-200/60 pt-3 text-[10.5px] leading-snug text-[#1a1a3e]/45">
-        ✨ Personal coaching from AI, based on your own sessions — never a score,
-        rank or comparison. It looks only at how your own strengths grow from one
-        session to the next.
-      </p>
     </section>
   );
 }

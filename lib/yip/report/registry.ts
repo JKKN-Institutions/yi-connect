@@ -18,6 +18,7 @@
  */
 import type { ComponentType } from "react";
 
+import ExecutiveSummarySection from "@/app/yip/dashboard/events/[id]/report/_sections/ExecutiveSummary";
 import OverviewSection from "@/app/yip/dashboard/events/[id]/report/_sections/Overview";
 import GuestsJurySection from "@/app/yip/dashboard/events/[id]/report/_sections/GuestsJury";
 import DelegatesSection from "@/app/yip/dashboard/events/[id]/report/_sections/Delegates";
@@ -44,6 +45,11 @@ export type ReportSection = {
  * template lays out. The page renders these top-to-bottom.
  */
 export const REPORT_SECTIONS: ReportSection[] = [
+  {
+    key: "executive-summary",
+    title: "Executive Summary",
+    Component: ExecutiveSummarySection,
+  },
   { key: "overview", title: "Section 1 — Event Overview", Component: OverviewSection },
   { key: "guests-jury", title: "Section 2 — Chief Guests & Jury", Component: GuestsJurySection },
   { key: "delegates", title: "Section 3 — Delegates", Component: DelegatesSection },

@@ -49,6 +49,7 @@ import {
   type MeContactInfo,
   type MeRosterMember,
 } from "@/app/yip/actions/me-dashboard";
+import { YourDayInTheHouseCard } from "./your-day-card";
 
 // ─── Session parsing ─────────────────────────────────────────────
 
@@ -482,6 +483,16 @@ export default async function ParticipantPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* ─── YOUR DAY IN THE HOUSE (AI recap — Day 2 morning) ──────────
+          Dispute-proof: renders ONLY this participant's own factual
+          participation + a warm AI recap. No scores, no rank, no comparison.
+          Self-gates on events.ai_enabled + a ready draft — renders a soft
+          placeholder otherwise. */}
+      <YourDayInTheHouseCard
+        eventId={event.id}
+        participantId={participant.id}
+      />
 
       {/* Offline staleness stamp — only renders when the student is offline */}
       <OfflineStaleNote renderedAt={new Date().toISOString()} />

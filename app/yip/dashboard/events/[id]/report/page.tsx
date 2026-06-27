@@ -17,6 +17,7 @@ import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { REPORT_SECTIONS } from "@/lib/yip/report/registry";
 import { PrintButton } from "./PrintButton";
+import { ParticipantCardsControlSection } from "./_sections/ParticipantCardsControlSection";
 import "./report-print.css";
 
 export const metadata: Metadata = {
@@ -120,6 +121,12 @@ export default async function ChapterRoundReportPage({
           </p>
         </div>
         <PrintButton />
+      </div>
+
+      {/* Chair control: enable + prepare the Day-2 participant AI recap cards.
+          Self-gates on canManage; hidden from the printout. */}
+      <div className="print:hidden mb-4">
+        <ParticipantCardsControlSection eventId={id} canManage={access.canManage} />
       </div>
 
       {/* Printable report container */}

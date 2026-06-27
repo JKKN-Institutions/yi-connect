@@ -522,6 +522,7 @@ export function ParticipantsClient({
   }, [
     participants,
     checkInFilter,
+    checkInDay,
     partyFilter,
     roleFilter,
     committeeFilter,

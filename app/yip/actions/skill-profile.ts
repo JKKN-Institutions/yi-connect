@@ -68,37 +68,56 @@ const KEY_MAX: Record<string, number> = {
   adaptability: 10,
 };
 
-// Axis → list of criterion keys. Order doesn't matter; only presence does.
-const AXIS_KEYS: Record<SkillAxis, string[]> = {
-  research: [
-    "content.research",
-    "content.relevance",
-    "content.originality",
-    "knowledge", // Speaker / Deputy Speaker fallback
-  ],
-  speaking: [
-    "communication.clarity",
-    "communication.confidence",
-    "communication.fluency",
-    "communication", // Speaker / Deputy Speaker fallback
-  ],
-  policy: [
-    "argumentation.strength",
-    "argumentation.emotional",
-    "leadership", // Speaker / Deputy Speaker fallback (decision-making proxy)
-  ],
-  process: [
-    "conduct.rules",
-    "conduct.engagement",
-    "conduct.respect",
-    "teamwork.coordination",
-    "teamwork.listening",
-    "impartiality", // Speaker / Deputy Speaker fallback
-    "time_management",
-    "support",
-    "adaptability",
-  ],
-};
+// Classify ANY recorded criterion key into one of the four axes by keyword.
+//
+// WHY KEYWORDS, NOT A FIXED LIST: jurors record under per-session-type NAMESPACED
+// keys (`mupi.*`, `qh.*`, `cmte.*`, `zero.*`, `debate.*`, `bill.*`, `pol.*`) plus
+// a few flat keys (`communication`, `vision`, …) — the live dimensions live in
+// yip.session_parameters and grow as new session types are added. A hardcoded
+// key list silently produced an all-zero profile the moment the rubric model
+// moved to namespaced keys (the "Profile builds after your first scoring round"
+// bug). Matching on the key's MEANING resolves every current dimension AND any
+// future one. Verified against all 46 active dimensions on 2026-06-27. Order is
+// significant: more specific axes are tested first so a key like
+// `qh.research_relevance` lands in research (not policy via "relevance").
+function classifyAxis(rawKey: string): SkillAxis | null {
+  const key = rawKey.toLowerCase();
+  const suffix = key.includes(".") ? key.split(".").pop()! : key;
+  const s = `${suffix} ${key}`;
+  // research — knowledge, preparation, originality, analysis, drafting.
+  if (
+    /research|knowledge|originality|prepar|critical|subject|understand|draft/.test(
+      s
+    )
+  ) {
+    return "research";
+  }
+  // speaking — communication, delivery, presentation, response, rebuttal.
+  if (
+    /communicat|delivery|present|rebuttal|response|supplementar|fluen|clarity|confidence|defence|floor_presence|speak/.test(
+      s
+    )
+  ) {
+    return "speaking";
+  }
+  // policy — vision, policy orientation, relevance, substance, feasibility, ideas.
+  if (
+    /policy|vision|relevance|feasib|ideolog|creativ|problem|argument|identity|quality_question|quality_committee/.test(
+      s
+    )
+  ) {
+    return "policy";
+  }
+  // process — conduct, procedure, time, initiative, teamwork, strategy.
+  if (
+    /conduct|procedure|time|initiative|team|collab|coalition|negoti|strateg|leadership|rules|engagement|respect|impartial|adapt|support/.test(
+      s
+    )
+  ) {
+    return "process";
+  }
+  return null;
+}
 
 interface AxisAccumulator {
   sum: number; // sum of (raw / max) ratios
@@ -161,6 +180,45 @@ export async function getSkillProfile(
     .in("participant_id", participantIds)
     .eq("status", "submitted");
 
+  // Live dimension → max_score registry, built from every active
+  // yip.session_parameters row (the authoritative source for the namespaced
+  // dims jurors actually record under). Legacy KEY_MAX is merged in as a
+  // fallback so pre-namespaced events still resolve. (session_parameters is not
+  // in the generated types → loose read; same pattern as lib/yip/ai/grounding.ts.)
+  const dimMax = new Map<string, number>();
+  const looseDb = supabase as unknown as {
+    from: (t: string) => {
+      select: (c: string) => {
+        eq: (
+          k: string,
+          v: unknown
+        ) => Promise<{ data: Array<{ parameters: unknown }> | null }>;
+      };
+    };
+  };
+  const { data: spRows } = await looseDb
+    .from("session_parameters")
+    .select("parameters")
+    .eq("is_active", true);
+  for (const sp of spRows ?? []) {
+    const params = Array.isArray(sp.parameters)
+      ? (sp.parameters as Array<{
+          key?: string;
+          max_score?: number;
+          kind?: string;
+        }>)
+      : [];
+    for (const p of params) {
+      if (p.kind && p.kind !== "evaluation") continue;
+      if (p.key && Number(p.max_score) > 0) {
+        dimMax.set(p.key, Number(p.max_score));
+      }
+    }
+  }
+  for (const [k, v] of Object.entries(KEY_MAX)) {
+    if (!dimMax.has(k)) dimMax.set(k, v);
+  }
+
   const acc: Record<SkillAxis, AxisAccumulator> = {
     research: emptyAcc(),
     speaking: emptyAcc(),
@@ -170,19 +228,23 @@ export async function getSkillProfile(
 
   const rows = scores ?? [];
 
+  // Aggregate by iterating the keys the jury ACTUALLY recorded (resolve-by-
+  // recorded-key), classifying each into an axis and normalising by its live
+  // max. A key with no resolvable max or no axis is simply skipped — never
+  // counted as zero (an unscored sub-criterion ≠ a zero score).
   for (const row of rows) {
     const cs = row.criteria_scores as Record<string, unknown> | null;
     if (!cs || typeof cs !== "object") continue;
 
-    for (const axis of Object.keys(AXIS_KEYS) as SkillAxis[]) {
-      for (const key of AXIS_KEYS[axis]) {
-        const raw = readNumber(cs[key]);
-        const max = KEY_MAX[key];
-        if (raw === null || !max) continue;
-        const ratio = Math.max(0, Math.min(1, raw / max));
-        acc[axis].sum += ratio;
-        acc[axis].count += 1;
-      }
+    for (const [key, value] of Object.entries(cs)) {
+      const raw = readNumber(value);
+      const max = dimMax.get(key);
+      if (raw === null || !max) continue;
+      const axis = classifyAxis(key);
+      if (!axis) continue;
+      const ratio = Math.max(0, Math.min(1, raw / max));
+      acc[axis].sum += ratio;
+      acc[axis].count += 1;
     }
   }
 

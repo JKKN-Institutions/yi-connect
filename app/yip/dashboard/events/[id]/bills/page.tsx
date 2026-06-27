@@ -38,12 +38,28 @@ export default async function BillsPage({
   const documents = docsResult.success ? docsResult.data : [];
   const access = await getYipEventAccess(id);
 
+  // Committee list for the manual Add-Bill picker (distinct, sorted).
+  const { data: committeeRows } = await supabase
+    .from("participants")
+    .select("committee_name")
+    .eq("event_id", id)
+    .not("committee_name", "is", null);
+  const committees = Array.from(
+    new Set(
+      (committeeRows ?? [])
+        .map((r) => (r.committee_name ?? "").trim())
+        .filter(Boolean)
+    )
+  ).sort((a, b) => a.localeCompare(b));
+
   return (
     <BillsClient
       eventId={id}
       initialBills={bills}
       initialDocuments={documents}
       canDelete={access.canDelete}
+      canManage={access.canManage}
+      committees={committees}
     />
   );
 }

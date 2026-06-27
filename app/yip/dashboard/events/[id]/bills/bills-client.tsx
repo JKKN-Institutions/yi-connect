@@ -15,6 +15,7 @@ import {
 } from "@/components/yip/ui/dialog";
 import {
   FileText,
+  Plus,
   CheckCircle2,
   XCircle,
   Clock,
@@ -29,11 +30,16 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/yip/utils";
 import { PARTY_COLORS } from "@/lib/yip/constants";
+import { Input } from "@/components/yip/ui/input";
+import { Label } from "@/components/yip/ui/label";
+import { Textarea } from "@/components/yip/ui/textarea";
+import { Switch } from "@/components/yip/ui/switch";
 import { formatBytes } from "@/lib/yip/media";
 import { toast } from "sonner";
 import {
   approveBill,
   rejectBill,
+  adminCreateBill,
   type BillWithMembers,
 } from "@/app/yip/actions/bills";
 import {
@@ -88,6 +94,10 @@ interface BillsClientProps {
   initialDocuments: BillDocumentRow[];
   /** Chair-only (getYipEventAccess.canDelete) — gates the Delete buttons. */
   canDelete: boolean;
+  /** Chair + organiser (canManage) — gates the manual Add Bill action. */
+  canManage: boolean;
+  /** Committee names in this event, for the Add Bill picker. */
+  committees: string[];
 }
 
 export function BillsClient({
@@ -95,6 +105,8 @@ export function BillsClient({
   initialBills,
   initialDocuments,
   canDelete,
+  canManage,
+  committees,
 }: BillsClientProps) {
   const router = useRouter();
   const [bills, setBills] = useState(initialBills);
@@ -105,6 +117,56 @@ export function BillsClient({
     description: string;
     action: () => void;
   }>({ open: false, title: "", description: "", action: () => {} });
+
+  // Manual Add-Bill (admin shortcut) — bypasses the committee draft/report flow.
+  const [addOpen, setAddOpen] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [form, setForm] = useState({
+    committeeName: "",
+    title: "",
+    objective: "",
+    provisions: "",
+    approved: true,
+  });
+
+  async function handleAddBill() {
+    if (!form.committeeName) {
+      toast.error("Pick a committee.");
+      return;
+    }
+    if (!form.title.trim()) {
+      toast.error("Enter a bill title.");
+      return;
+    }
+    setAdding(true);
+    const result = await adminCreateBill(eventId, {
+      committeeName: form.committeeName,
+      title: form.title,
+      objective: form.objective || undefined,
+      provisions: form.provisions
+        ? form.provisions
+            .split("\n")
+            .map((p) => p.trim())
+            .filter(Boolean)
+        : undefined,
+      approved: form.approved,
+    });
+    setAdding(false);
+    if (result.success) {
+      toast.success("Bill added — it's now available in the Bill Presentation session.");
+      setAddOpen(false);
+      setForm({
+        committeeName: "",
+        title: "",
+        objective: "",
+        provisions: "",
+        approved: true,
+      });
+      router.refresh();
+    } else {
+      toast.error(result.error);
+    }
+  }
 
   // Bills sorted committee-first so the columns read in a stable order. Benchless
   // events identify bills by committee_name (party_side null); legacy benched
@@ -178,9 +240,17 @@ export function BillsClient({
             Review and manage bills drafted by each committee
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => router.refresh()}>
-          Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          {canManage && (
+            <Button size="sm" onClick={() => setAddOpen(true)}>
+              <Plus className="size-4 mr-1" />
+              Add Bill
+            </Button>
+          )}
+          <Button variant="outline" size="sm" onClick={() => router.refresh()}>
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {/* One card per committee bill (benchless), or per party (legacy benched). */}
@@ -239,6 +309,111 @@ export function BillsClient({
             </Button>
             <Button disabled={isPending} onClick={confirmDialog.action}>
               {isPending ? "Processing..." : "Confirm"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Manual Add Bill (admin shortcut — bypasses the committee draft flow) */}
+      <Dialog
+        open={addOpen}
+        onOpenChange={(open) => {
+          if (!adding) setAddOpen(open);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add a bill manually</DialogTitle>
+            <DialogDescription>
+              Enter a committee&apos;s bill directly so it can be presented and
+              voted on — no need for the full draft → report → submit flow. It
+              appears immediately in the Control panel&apos;s Bill Presentation
+              session.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="add-bill-committee">Committee</Label>
+              <select
+                id="add-bill-committee"
+                value={form.committeeName}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, committeeName: e.target.value }))
+                }
+                className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 focus:border-[#1a1a3e]/40 focus:outline-none"
+              >
+                <option value="">Select committee…</option>
+                {committees.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="add-bill-title">Bill title</Label>
+              <Input
+                id="add-bill-title"
+                value={form.title}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, title: e.target.value }))
+                }
+                placeholder="e.g. The Clean Water Access Bill"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="add-bill-objective">Objective (optional)</Label>
+              <Textarea
+                id="add-bill-objective"
+                rows={2}
+                value={form.objective}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, objective: e.target.value }))
+                }
+                placeholder="One line on what the bill aims to achieve"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="add-bill-provisions">
+                Key provisions (optional, one per line)
+              </Label>
+              <Textarea
+                id="add-bill-provisions"
+                rows={3}
+                value={form.provisions}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, provisions: e.target.value }))
+                }
+                placeholder={"Provision 1\nProvision 2\nProvision 3"}
+              />
+            </div>
+            <div className="flex items-center justify-between rounded-md border px-3 py-2">
+              <div className="pr-3">
+                <p className="text-sm font-medium text-gray-900">
+                  Ready to present
+                </p>
+                <p className="text-xs text-gray-500">
+                  On: present &amp; vote straight away. Off: needs Approve first.
+                </p>
+              </div>
+              <Switch
+                checked={form.approved}
+                onCheckedChange={(v) =>
+                  setForm((f) => ({ ...f, approved: v }))
+                }
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              disabled={adding}
+              onClick={() => setAddOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button disabled={adding} onClick={handleAddBill}>
+              {adding ? "Adding…" : "Add Bill"}
             </Button>
           </DialogFooter>
         </DialogContent>

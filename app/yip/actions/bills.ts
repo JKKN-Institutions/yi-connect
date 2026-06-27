@@ -501,23 +501,74 @@ export async function assignBillCommitteeRoles(
     presenter_1?: string | null;
     presenter_2?: string | null;
     policy_researcher?: string | null;
-  }
+  },
+  participantId: string
 ): Promise<ActionResult> {
   const supabase = await createServiceClient();
 
-  const { data: bill } = await supabase
+  const { data: billRow } = await supabase
     .from("bills")
-    .select("event_id")
+    .select("event_id, committee_name, status")
     .eq("id", billId)
     .single();
 
-  if (!bill) {
+  if (!billRow) {
     return { success: false, error: "Bill not found" };
   }
 
-  const access = await getYipEventAccess(bill.event_id);
-  if (!access.canManage) {
-    return { success: false, error: "Not authorized to manage this event" };
+  const bill = billRow as unknown as {
+    event_id: string;
+    committee_name: string | null;
+    status: string | null;
+  };
+
+  if (!bill.committee_name) {
+    return { success: false, error: "This bill has no committee." };
+  }
+
+  // Only THIS committee's members may assign its roles — same gate as
+  // saveBillDraft / submitBill. The yip.* tables have public INSERT/UPDATE
+  // policies, so this server check is the only authorization layer.
+  const gate = await assertCommitteeMember(
+    supabase,
+    participantId,
+    bill.event_id,
+    bill.committee_name
+  );
+  if (!gate.ok) return { success: false, error: gate.error };
+
+  // Roles lock once the bill leaves drafting (mirrors the form lock).
+  if (bill.status !== "drafting") {
+    return {
+      success: false,
+      error: "The bill has been submitted — committee roles are locked.",
+    };
+  }
+
+  // Integrity: every assigned person must be a member of THIS committee, so a
+  // foreign/bad id can't be written as a role. The UI only offers committee
+  // members, but the action is the only real guard (public write policy).
+  const assignedIds = [
+    roles.lead_drafter,
+    roles.presenter_1,
+    roles.presenter_2,
+    roles.policy_researcher,
+  ].filter((v): v is string => !!v);
+
+  if (assignedIds.length > 0) {
+    const { data: valid } = await supabase
+      .from("participants")
+      .select("id")
+      .eq("event_id", bill.event_id)
+      .eq("committee_name", bill.committee_name)
+      .in("id", assignedIds);
+    const validIds = new Set((valid ?? []).map((p) => p.id));
+    if (assignedIds.some((id) => !validIds.has(id))) {
+      return {
+        success: false,
+        error: "One of the selected people isn't on this committee.",
+      };
+    }
   }
 
   const { error } = await supabase
@@ -532,5 +583,6 @@ export async function assignBillCommitteeRoles(
     .eq("id", billId);
 
   if (error) return { success: false, error: error.message };
+  revalidatePath(`/yip/dashboard/events/${bill.event_id}/bills`);
   return { success: true, data: null };
 }

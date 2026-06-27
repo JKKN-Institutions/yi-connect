@@ -1,4 +1,5 @@
 import "server-only";
+import { clauseTexts, hasClauses } from "@/lib/yip/bill-provisions";
 
 /**
  * Assemble the grounding payloads handed to the out-of-band routine.
@@ -746,11 +747,7 @@ function billHasDraftedContent(b: {
   ) {
     return true;
   }
-  if (Array.isArray(b.provisions)) return b.provisions.length > 0;
-  if (b.provisions && typeof b.provisions === "object") {
-    return Object.keys(b.provisions as Record<string, unknown>).length > 0;
-  }
-  return false;
+  return hasClauses(b.provisions);
 }
 
 /**
@@ -827,7 +824,7 @@ export async function buildBillFeedbackGrounding(
       partySide: (bill.party_side as string | null) ?? null,
       problemStatement: bill.problem_statement ?? null,
       objective: bill.objective ?? null,
-      provisions: bill.provisions ?? null,
+      provisions: clauseTexts(bill.provisions),
       expectedImpact: bill.expected_impact ?? null,
       implementation: bill.implementation ?? null,
       oppositionResponse: bill.opposition_response ?? null,

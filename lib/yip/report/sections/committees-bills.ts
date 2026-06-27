@@ -1,4 +1,5 @@
 import "server-only";
+import { clauseTexts } from "@/lib/yip/bill-provisions";
 
 /**
  * YIP Chapter Round Report — Section 5 (Committees & Bills) + Section 8 (Draft
@@ -64,11 +65,16 @@ export type CommitteeRow = {
   /** The committee's bill, if one exists. */
   bill: {
     title: string | null;
+    preamble: string | null;
+    definitions: string | null;
     objective: string | null;
+    objectives: string[];
     problemStatement: string | null;
     provisions: string[];
-    expectedImpact: string | null;
     implementation: string | null;
+    fundingBudget: string | null;
+    expectedImpact: string | null;
+    conclusion: string | null;
     votesFor: number | null;
     votesAgainst: number | null;
     votesAbstain: number | null;
@@ -91,18 +97,10 @@ export type CommitteesBillsData = {
   committees: CommitteeRow[];
 };
 
-/** Coerce a jsonb provisions value (string[] | string | null) to string[]. */
+/** Coerce any provisions shape ({id,text}[] | string[] | {clauses} | null) to
+ *  a flat list of clause texts. */
 function toProvisions(value: unknown): string[] {
-  if (Array.isArray(value)) {
-    return value
-      .map((v) => (typeof v === "string" ? v : v == null ? "" : String(v)))
-      .map((s) => s.trim())
-      .filter(Boolean);
-  }
-  if (typeof value === "string" && value.trim().length > 0) {
-    return [value.trim()];
-  }
-  return [];
+  return clauseTexts(value);
 }
 
 /** Derive the auto outcome from a bill's stored status. */
@@ -211,7 +209,7 @@ export async function getCommitteesBillsData(
   const { data: billRows } = await svc
     .from("bills")
     .select(
-      "id, committee_name, title, objective, problem_statement, provisions, expected_impact, implementation, status, votes_for, votes_against, votes_abstain"
+      "id, committee_name, title, preamble, definitions, objective, objectives, problem_statement, provisions, expected_impact, implementation, funding_budget, conclusion, status, votes_for, votes_against, votes_abstain"
     )
     .eq("event_id", eventId);
 
@@ -219,11 +217,16 @@ export async function getCommitteesBillsData(
     id: string;
     committee_name: string | null;
     title: string | null;
+    preamble: string | null;
+    definitions: string | null;
     objective: string | null;
+    objectives: unknown;
     problem_statement: string | null;
     provisions: unknown;
     expected_impact: string | null;
     implementation: string | null;
+    funding_budget: string | null;
+    conclusion: string | null;
     status: string | null;
     votes_for: number | null;
     votes_against: number | null;
@@ -326,11 +329,16 @@ export async function getCommitteesBillsData(
       bill: bill
         ? {
             title: bill.title && bill.title.trim() ? bill.title.trim() : null,
+            preamble: bill.preamble,
+            definitions: bill.definitions,
             objective: bill.objective,
+            objectives: toProvisions(bill.objectives),
             problemStatement: bill.problem_statement,
             provisions: toProvisions(bill.provisions),
-            expectedImpact: bill.expected_impact,
             implementation: bill.implementation,
+            fundingBudget: bill.funding_budget,
+            expectedImpact: bill.expected_impact,
+            conclusion: bill.conclusion,
             votesFor: bill.votes_for,
             votesAgainst: bill.votes_against,
             votesAbstain: bill.votes_abstain,

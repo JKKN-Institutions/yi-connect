@@ -333,7 +333,11 @@ export async function listChannels(
 // deleted-inclusive view is modListMessages.
 
 type ListMessagesArgs =
-  | { channelId: string; participantId?: string }
+  // threadKey scopes a channel read to a clause/amendment sub-thread:
+  //   undefined → ALL messages (back-compatible: /yip/me/chat is unchanged)
+  //   null      → only the general feed (thread_key IS NULL)
+  //   "clause:…"/"amendment:…" → only that thread
+  | { channelId: string; participantId?: string; threadKey?: string | null }
   | { dmWithVolunteerId: string; participantId: string };
 
 export async function listMessages(
@@ -379,10 +383,16 @@ export async function listMessages(
       }
     }
 
-    const { data, error } = (await table(sb, "chat_messages")
+    let mq = table(sb, "chat_messages")
       .select(MSG_COLS)
       .eq("channel_id", args.channelId)
-      .is("deleted_at", null)
+      .is("deleted_at", null);
+    // Per-clause/amendment thread scoping (see ListMessagesArgs).
+    if (args.threadKey === null) mq = mq.is("thread_key", null);
+    else if (typeof args.threadKey === "string")
+      mq = mq.eq("thread_key", args.threadKey);
+
+    const { data, error } = (await mq
       .order("created_at", { ascending: true })
       .limit(500)) as { data: RawAny[] | null; error: PgError | null };
 
@@ -441,6 +451,8 @@ export async function postChannelMessage(args: {
   participantId: string;
   channelId: string;
   body: string;
+  // Optional clause/amendment sub-thread anchor (null/undefined = general feed).
+  threadKey?: string | null;
 }): Promise<ActionResult<ChatMessage>> {
   if (!CHAT_ENABLED) return { success: false, error: DISABLED };
 
@@ -497,6 +509,7 @@ export async function postChannelMessage(args: {
       sender_participant_id: args.participantId,
       dm_to_volunteer_id: null,
       body,
+      thread_key: args.threadKey ?? null,
     })
     .select(
       "id, channel_id, sender_kind, sender_participant_id, sender_volunteer_id, body, dm_to_volunteer_id, deleted_at, created_at"

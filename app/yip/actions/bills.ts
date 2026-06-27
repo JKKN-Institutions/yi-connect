@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { randomUUID } from "node:crypto";
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { requireParticipantSession } from "@/lib/yip/auth/yip-session";
@@ -273,9 +274,11 @@ export async function adminCreateBill(
     };
   }
 
+  // Store the new stable {id,text}[] clause shape (matches the Committee Room).
   const provisions = (data.provisions ?? [])
     .map((p) => p.trim())
-    .filter(Boolean);
+    .filter(Boolean)
+    .map((text) => ({ id: randomUUID(), text }));
 
   const { data: newBill, error } = await supabase
     .from("bills")

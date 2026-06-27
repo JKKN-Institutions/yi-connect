@@ -1,9 +1,13 @@
 // Blank, fillable bill-drafting template — generated client-side as a Word
 // document (HTML that Word opens natively, saved as .doc). Zero dependencies.
 // Lets large committees pre-draft their bill offline, then type it into the
-// Yi Connect app. Mirrors the in-app bill fields exactly so nothing is lost in
-// transcription: Title, Objective, Problem Statement, 3 Key Provisions,
-// Expected Impact, Implementation Mechanism.
+// Yi Connect app.
+//
+// Follows the OFFICIAL national "Mock Parliament Bill Template" 9 sections:
+// Title, Preamble, Definitions, Objectives (2-4), Key Provisions, Implementation
+// Plan, Funding/Budget, Expected Impact, Conclusion/Call to Action — plus the
+// optional add-ons (supporting data, co-signatures, Drafter/Rapporteur). Mirrors
+// the in-app Committee Room fields exactly so nothing is lost in transcription.
 
 function esc(s: string): string {
   return s
@@ -15,15 +19,27 @@ function esc(s: string): string {
 /** A labelled section with a ruled, fill-in area. */
 function field(label: string, hint: string, lines: number): string {
   const blanks = Array.from({ length: lines })
+    .map(() => `<p class="line">&nbsp;</p>`)
+    .join("");
+  const hintRow = hint ? `<p class="hint">${esc(hint)}</p>` : "";
+  return `
+    <h2>${esc(label)}</h2>
+    ${hintRow}
+    ${blanks}`;
+}
+
+/** A numbered list of N ruled fill-in rows (objectives / provisions). */
+function numbered(label: string, hint: string, prefix: string, count: number): string {
+  const rows = Array.from({ length: count })
     .map(
-      () =>
-        `<p class="line">&nbsp;</p>`
+      (_, i) =>
+        `<p class="meta"><strong>${esc(prefix)} ${i + 1}</strong></p><p class="line">&nbsp;</p>`
     )
     .join("");
   return `
     <h2>${esc(label)}</h2>
     <p class="hint">${esc(hint)}</p>
-    ${blanks}`;
+    ${rows}`;
 }
 
 export function buildBillTemplateDoc(opts: {
@@ -43,7 +59,7 @@ export function buildBillTemplateDoc(opts: {
 <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
 <head>
 <meta charset="utf-8" />
-<title>Bill Drafting Template</title>
+<title>Mock Parliament Bill Template</title>
 <style>
   body { font-family: Calibri, Arial, sans-serif; color: #1a1a1a; font-size: 12pt; line-height: 1.5; }
   h1 { font-size: 18pt; margin: 0 0 4pt; }
@@ -56,29 +72,28 @@ export function buildBillTemplateDoc(opts: {
 </style>
 </head>
 <body>
-  <h1>Youth Parliament &#8212; Bill Drafting Template</h1>
+  <h1>Mock Parliament &#8212; Bill Template</h1>
   <p class="sub">Committee: ${committee}</p>
   ${topicRow}
   ${schemeRow}
   <p class="meta">Draft your bill below, then type it into the Yi Connect app to submit.</p>
 
-  ${field("Bill Title", "e.g., The Youth Digital Literacy Bill, 2026", 1)}
-  ${field("Objective", "What does this bill aim to achieve?", 2)}
-  ${field("Problem Statement", "What problem does this bill address? (1-2 lines)", 2)}
+  ${field("1. Title of the Bill", "A concise, descriptive title reflecting the core intent of the bill.", 1)}
+  ${field("2. Preamble", "A brief introduction outlining the rationale — the issue it addresses and its significance.", 3)}
+  ${field("3. Definitions", "Define any complex or technical terms used in the bill, to avoid misinterpretation.", 3)}
+  ${numbered("4. Objectives of the Bill", "2 to 4 key objectives — specific, measurable, and aligned with the purpose.", "Objective", 4)}
+  ${numbered("5. Key Provisions (Sections)", "The primary actions or rules — each enforceable, realistic, and precise.", "Provision", 5)}
+  ${field("6. Implementation Plan", "How the bill is executed — responsible bodies, key timelines, and processes.", 3)}
+  ${field("7. Funding / Budget (if relevant)", "Estimated funding required and the sources (govt allocation, sponsorship, PPP, etc.).", 3)}
+  ${field("8. Expected Impact", "Intended benefits, improvements, and any measurable changes anticipated.", 3)}
+  ${field("9. Conclusion / Call to Action", "A compelling summary reinforcing the urgency and importance; encourage stakeholders to act.", 3)}
 
-  <h2>3 Key Provisions</h2>
-  <p class="hint">The core clauses of the bill.</p>
-  <p class="meta"><strong>Provision 1</strong></p>
-  <p class="line">&nbsp;</p>
-  <p class="meta"><strong>Provision 2</strong></p>
-  <p class="line">&nbsp;</p>
-  <p class="meta"><strong>Provision 3</strong></p>
-  <p class="line">&nbsp;</p>
+  <h2>Optional Add-ons</h2>
+  <p class="hint">Supporting data / graphs &#183; Co-signatures from all 30 students or committee members.</p>
+  ${field("Name of the Drafter", "", 1)}
+  ${field("Name of the Rapporteur", "", 1)}
 
-  ${field("Expected Impact", "What positive impact will this bill have?", 2)}
-  ${field("Implementation Mechanism", "How will this bill be implemented?", 2)}
-
-  <p class="note">Yi Connect &#183; Youth Parliament &#8212; fill this in offline, then enter it in the app.</p>
+  <p class="note">Yi Connect &#183; Mock Parliament &#8212; fill this in offline, then enter it in the app.</p>
 </body>
 </html>`;
 }

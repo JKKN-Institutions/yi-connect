@@ -109,11 +109,15 @@ export default async function CommitteesBillsSection({
     (c) =>
       c.bill &&
       (c.bill.title ||
-        c.bill.objective ||
+        c.bill.preamble ||
+        c.bill.definitions ||
+        c.bill.objectives.length > 0 ||
         c.bill.problemStatement ||
         c.bill.provisions.length > 0 ||
+        c.bill.implementation ||
+        c.bill.fundingBudget ||
         c.bill.expectedImpact ||
-        c.bill.implementation)
+        c.bill.conclusion)
   );
 
   return (
@@ -220,16 +224,28 @@ export default async function CommitteesBillsSection({
                 </header>
 
                 <div className="space-y-3">
-                  <BillField label="Objective" value={bill.objective} />
-                  <BillField
-                    label="Problem Statement"
-                    value={bill.problemStatement}
-                  />
+                  <BillField label="Preamble" value={bill.preamble} />
+                  <BillField label="Definitions" value={bill.definitions} />
+
+                  {bill.objectives.length > 0 && (
+                    <div className="break-inside-avoid">
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-[#1a1a3e]/40">
+                        Objectives
+                      </p>
+                      <ol className="mt-1 list-decimal space-y-1 pl-5 text-sm text-[#1a1a3e]/85">
+                        {bill.objectives.map((o, i) => (
+                          <li key={i} className="whitespace-pre-wrap">
+                            {o}
+                          </li>
+                        ))}
+                      </ol>
+                    </div>
+                  )}
 
                   {bill.provisions.length > 0 && (
                     <div className="break-inside-avoid">
                       <p className="text-[11px] font-semibold uppercase tracking-wider text-[#1a1a3e]/40">
-                        Provisions
+                        Key Provisions
                       </p>
                       <ol className="mt-1 list-decimal space-y-1 pl-5 text-sm text-[#1a1a3e]/85">
                         {bill.provisions.map((prov, i) => (
@@ -242,12 +258,17 @@ export default async function CommitteesBillsSection({
                   )}
 
                   <BillField
+                    label="Implementation Plan"
+                    value={bill.implementation}
+                  />
+                  <BillField label="Funding / Budget" value={bill.fundingBudget} />
+                  <BillField
                     label="Expected Impact"
                     value={bill.expectedImpact}
                   />
                   <BillField
-                    label="Implementation"
-                    value={bill.implementation}
+                    label="Conclusion / Call to Action"
+                    value={bill.conclusion}
                   />
 
                   {/* Recorded vote, when the bill went to a floor vote. */}

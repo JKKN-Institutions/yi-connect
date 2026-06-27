@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { clauseTexts } from "@/lib/yip/bill-provisions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/yip/ui/card";
 import { Button } from "@/components/yip/ui/button";
 import { Badge } from "@/components/yip/ui/badge";
@@ -269,6 +271,7 @@ export function BillsClient({
           {sortedBills.map((b) => (
             <BillColumn
               key={b.id}
+              eventId={eventId}
               bill={b}
               onApprove={handleApprove}
               onReject={handleReject}
@@ -431,11 +434,13 @@ const NEUTRAL_BILL = {
 // ─── Bill Column Component ──────────────────────────────────────
 
 function BillColumn({
+  eventId,
   bill,
   onApprove,
   onReject,
   isPending,
 }: {
+  eventId: string;
   bill: BillWithMembers | null;
   onApprove: (billId: string, title: string) => void;
   onReject: (billId: string, title: string) => void;
@@ -456,7 +461,7 @@ function BillColumn({
   const status = bill?.status ?? "drafting";
   const statusConfig = STATUS_CONFIG[status] ?? STATUS_CONFIG.drafting;
   const StatusIcon = statusConfig.icon;
-  const provisions = (bill?.provisions as string[]) ?? [];
+  const provisions = clauseTexts(bill?.provisions);
 
   return (
     <Card className={cn("overflow-hidden", colors.border, "border")}>
@@ -486,6 +491,18 @@ function BillColumn({
           </Badge>
         )}
       </div>
+
+      {bill?.committee_name && (
+        <Link
+          href={`/yip/dashboard/events/${eventId}/committee/${encodeURIComponent(
+            bill.committee_name
+          )}`}
+          className="flex items-center justify-between gap-2 border-b border-gray-100 bg-gray-50/60 px-4 py-2 text-xs font-medium text-[#FF9933] hover:bg-[#FF9933]/5"
+        >
+          Open Committee Room — edit clauses, roles &amp; amendments
+          <span aria-hidden>→</span>
+        </Link>
+      )}
 
       <CardContent className="pt-4 pb-5">
         {!bill ? (

@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { clauseTexts } from "@/lib/yip/bill-provisions";
 import { getYipSession } from "@/lib/yip/auth/yip-session";
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import {
@@ -284,7 +285,7 @@ export default async function ParticipantPage() {
 
     approvedBills = (billsData ?? []).map((b) => ({
       ...b,
-      provisions: b.provisions as string[] | null,
+      provisions: clauseTexts(b.provisions),
     }));
   }
 

@@ -6,6 +6,9 @@ import { LogOut, MessageSquare, Home } from "lucide-react";
 import { CHAT_ENABLED } from "@/lib/yip/chat-config";
 import { GuideLauncher } from "@/components/yip/guide";
 import { GUIDES } from "@/lib/yip/guide/content";
+import { createServiceClient } from "@/lib/yip/supabase/server";
+import { getPrimaryDesk } from "@/lib/yip/participant-desk";
+import { ParticipantBottomNav } from "@/app/yip/me/_components/participant-bottom-nav";
 
 interface ParticipantSession {
   type: "participant";

@@ -69,6 +69,12 @@ export default async function JourneyPage() {
 
   if (!person) redirect("/yip/me");
 
+  // Participants must NEVER see their raw scores (Director ruling — raw scores
+  // invite comparison & disputes between students). Rank + awards stay; strip
+  // avg_score here so it is never rendered AND never serialized to the browser.
+  // The admin people page calls getPersonJourney separately and keeps scores.
+  for (const step of journey) step.avg_score = null;
+
   const totalEvents = journey.length;
   const levelsReached = new Set(journey.map((j) => j.event_level));
   const awardsList = journey
@@ -256,11 +262,7 @@ function JourneyCard({
               <div className="text-2xl font-bold text-[#1a1a3e] tabular-nums">
                 #{step.rank}
               </div>
-              {step.avg_score !== null && (
-                <div className="text-[11px] text-[#1a1a3e]/60 tabular-nums">
-                  {step.avg_score}
-                </div>
-              )}
+              {/* Raw avg score intentionally NOT shown to participants. */}
             </div>
           )}
         </div>

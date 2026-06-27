@@ -474,7 +474,7 @@ export function ResultsClient({
                 Results are published
               </span>
               <span className="text-green-600">
-                &mdash; participants can see their scores
+                &mdash; participants can see their rank &amp; awards (never raw scores)
               </span>
             </>
           ) : (

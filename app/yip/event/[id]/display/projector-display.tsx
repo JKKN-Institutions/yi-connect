@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import confetti from "canvas-confetti";
+import { clauseTexts } from "@/lib/yip/bill-provisions";
 import { cn } from "@/lib/yip/utils";
 import { ROLE_LABELS, PARTY_COLORS, MINISTRIES, OATH_TEXT } from "@/lib/yip/constants";
 import { computeMultiSeatOutcome } from "@/lib/yip/election-outcome";
@@ -483,7 +484,7 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
         objective: data.objective,
         party_side: data.party_side,
         committee_name: data.committee_name,
-        provisions: (data.provisions as string[]) ?? [],
+        provisions: clauseTexts(data.provisions),
         status: data.status,
         presenter_1_name: p1?.full_name ?? null,
         presenter_2_name: p2?.full_name ?? null,

@@ -1,4 +1,5 @@
 import "server-only";
+import { clauseTexts } from "@/lib/yip/bill-provisions";
 
 /**
  * YIP Chapter Round Report — Section 5 (Committees & Bills) + Section 8 (Draft
@@ -91,18 +92,10 @@ export type CommitteesBillsData = {
   committees: CommitteeRow[];
 };
 
-/** Coerce a jsonb provisions value (string[] | string | null) to string[]. */
+/** Coerce any provisions shape ({id,text}[] | string[] | {clauses} | null) to
+ *  a flat list of clause texts. */
 function toProvisions(value: unknown): string[] {
-  if (Array.isArray(value)) {
-    return value
-      .map((v) => (typeof v === "string" ? v : v == null ? "" : String(v)))
-      .map((s) => s.trim())
-      .filter(Boolean);
-  }
-  if (typeof value === "string" && value.trim().length > 0) {
-    return [value.trim()];
-  }
-  return [];
+  return clauseTexts(value);
 }
 
 /** Derive the auto outcome from a bill's stored status. */

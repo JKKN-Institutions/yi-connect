@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useTransition } from "react";
+import { clauseTexts } from "@/lib/yip/bill-provisions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/yip/ui/card";
 import { Button } from "@/components/yip/ui/button";
 import { Badge } from "@/components/yip/ui/badge";
@@ -224,7 +225,7 @@ function BillCard({
         : "Committee Bill");
   const status = bill.status ?? "drafting";
   const config = STATUS_CONFIG[status] ?? STATUS_CONFIG.drafting;
-  const provisions = (bill.provisions as string[]) ?? [];
+  const provisions = clauseTexts(bill.provisions);
 
   const canPresent =
     status === "approved" || status === "submitted";

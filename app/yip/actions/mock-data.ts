@@ -761,12 +761,67 @@ export async function seedMockData(): Promise<ActionResult<MockDataStats>> {
     const fallbackRubric =
       rubricsByRole.get("mp") ?? rubricsByRole.values().next().value ?? null;
 
-    // 10. Scores — 30 x 4 = 120 ─────────────────────────────────────────
+    // 10. Scored agenda sessions + per-session scores ────────────────────
+    // The /90 academic model (results.ts) attributes each score to a SCOREABLE
+    // agenda session and weights it via yip.session_parameters (resolved by
+    // session_key). The old seeder wrote scores with NO agenda_item_id, so
+    // seeded events computed to ZERO. Fix: create the academic sessions with
+    // REAL session_keys (so weights + namespaced dims resolve) and score every
+    // delegate across them, stamping agenda_item_id + the session's own dims.
+    const { data: sessionParamRows } = await supabase
+      .from("session_parameters")
+      .select("session_key, agenda_type, total_max, session_weight, parameters")
+      .eq("is_active", true)
+      .order("display_order");
+    type SpRow = {
+      session_key: string;
+      agenda_type: string | null;
+      total_max: number;
+      session_weight: number;
+      parameters: Array<{ key: string; max_score: number }> | null;
+    };
+    // Academic sessions = real weight (>1). The two weight-1 leadership sessions
+    // feed position points, not the academic /90, so they're left out here.
+    const academicSessions = ((sessionParamRows ?? []) as SpRow[]).filter(
+      (s) => Number(s.session_weight) > 1
+    );
+    const titleize = (k: string) =>
+      k.replace(/_/g, " ").replace(/\b\w/g, (m) => m.toUpperCase());
+
+    const { data: agendaCreated } = await supabase
+      .from("agenda")
+      .insert(
+        academicSessions.map((s, i) => ({
+          event_id: chapterEvent.id,
+          day: 1,
+          sequence_order: i + 1,
+          title: titleize(s.session_key),
+          agenda_type: s.agenda_type ?? "general",
+          session_key: s.session_key,
+          is_scoreable: true,
+        }))
+      )
+      .select("id, session_key");
+
+    // Pair each created session with its scoring dims (from session_parameters).
+    const spByKey = new Map(academicSessions.map((s) => [s.session_key, s]));
+    const scoredSessions = (
+      (agendaCreated ?? []) as Array<{ id: string; session_key: string }>
+    ).map((a) => {
+      const sp = spByKey.get(a.session_key);
+      const dims = (sp?.parameters ?? []).filter(
+        (p) => p && typeof p.key === "string" && Number(p.max_score) > 0
+      );
+      return { id: a.id, total_max: sp?.total_max ?? 0, dims };
+    });
+
     const scoreInserts: Array<WithMock<Database["yip"]["Tables"]["scores"]["Insert"]>> =
       [];
     const participantAvg = new Map<string, number>();
     for (let pIdx = 0; pIdx < participantsRows.length; pIdx++) {
       const participant = participantsRows[pIdx]!;
+      // rubric_id stays populated from the role rubric (the column is kept) even
+      // though the /90 model now resolves dims + weights from session_parameters.
       const rubric =
         rubricsByRole.get(participant.parliament_role ?? "mp") ?? fallbackRubric;
       if (!rubric) continue;
@@ -774,54 +829,64 @@ export async function seedMockData(): Promise<ActionResult<MockDataStats>> {
       // Per-participant "ability" modifier — some are stronger, some weaker.
       const ability = 0.75 + rng() * 0.2; // 0.75 .. 0.95
 
-      let pTotalSum = 0;
-      for (let jIdx = 0; jIdx < jurors.length; jIdx++) {
-        const juror = jurors[jIdx]!;
-        const criteriaScores: Record<string, number> = {};
-        let total = 0;
-        for (const c of rubric.criteria) {
-          // Jitter each criterion ±10% around ability, clamped
-          const jitter = (rng() - 0.5) * 0.2;
-          const pct = Math.min(1, Math.max(0.4, ability + jitter));
-          const raw = c.max_score * pct;
-          const rounded = Math.round(raw * 2) / 2; // half-points for realism
-          criteriaScores[c.key] = rounded;
-          total += rounded;
-        }
-        total = Math.round(total * 100) / 100;
-        pTotalSum += total;
+      let fracSum = 0;
+      let fracCount = 0;
+      for (let sIdx = 0; sIdx < scoredSessions.length; sIdx++) {
+        const sess = scoredSessions[sIdx]!;
+        if (sess.dims.length === 0) continue;
+        for (let jIdx = 0; jIdx < jurors.length; jIdx++) {
+          const juror = jurors[jIdx]!;
+          const criteriaScores: Record<string, number> = {};
+          let total = 0;
+          for (const d of sess.dims) {
+            // Jitter each dimension ±10% around ability, clamped.
+            const jitter = (rng() - 0.5) * 0.2;
+            const pct = Math.min(1, Math.max(0.4, ability + jitter));
+            const raw = Number(d.max_score) * pct;
+            const rounded = Math.round(raw * 2) / 2; // half-points for realism
+            criteriaScores[d.key] = rounded;
+            total += rounded;
+          }
+          total = Math.round(total * 100) / 100;
+          if (sess.total_max > 0) {
+            fracSum += total / sess.total_max;
+            fracCount += 1;
+          }
 
-        // ~85% submitted, ~15% drafts (last juror for some participants)
-        const isDraft = jIdx === 3 && pIdx % 7 === 0;
-        scoreInserts.push({
-          event_id: chapterEvent.id,
-          participant_id: participant.id,
-          jury_assignment_id: juror.id,
-          rubric_id: rubric.id,
-          criteria_scores: criteriaScores,
-          total_score: total,
-          status: isDraft ? "draft" : "submitted",
-          submitted_at: isDraft
-            ? null
-            : new Date(Date.now() - 3600_000 * (6 - jIdx)).toISOString(),
-          comments:
-            isDraft || rng() > 0.6
+          // ~15% drafts on one juror+session combo so the "N drafts" indicator
+          // has something to show.
+          const isDraft = jIdx === 3 && (pIdx + sIdx) % 9 === 0;
+          scoreInserts.push({
+            event_id: chapterEvent.id,
+            participant_id: participant.id,
+            jury_assignment_id: juror.id,
+            agenda_item_id: sess.id,
+            rubric_id: rubric.id,
+            criteria_scores: criteriaScores,
+            total_score: total,
+            status: isDraft ? "draft" : "submitted",
+            submitted_at: isDraft
               ? null
-              : `${MOCK_MARKER} ${
-                  [
-                    "Strong grasp of the issue.",
-                    "Could improve delivery confidence.",
-                    "Very articulate — well researched.",
-                    "Needed to engage more with opposition.",
-                    "Excellent parliamentary decorum.",
-                  ][Math.floor(rng() * 5)]
-                }`,
-          is_mock: true,
-        });
+              : new Date(Date.now() - 3600_000 * (6 - jIdx)).toISOString(),
+            comments:
+              isDraft || rng() > 0.6
+                ? null
+                : `${MOCK_MARKER} ${
+                    [
+                      "Strong grasp of the issue.",
+                      "Could improve delivery confidence.",
+                      "Very articulate — well researched.",
+                      "Needed to engage more with opposition.",
+                      "Excellent parliamentary decorum.",
+                    ][Math.floor(rng() * 5)]
+                  }`,
+            is_mock: true,
+          });
+        }
       }
       participantAvg.set(
         participant.id,
-        (pTotalSum / jurors.length / (rubric.total_max || 110)) * 100
+        fracCount > 0 ? (fracSum / fracCount) * 100 : 0
       );
     }
     const { error: scoresErr } = await supabase
@@ -1401,8 +1466,9 @@ export async function seedMockData(): Promise<ActionResult<MockDataStats>> {
         is_mock: true,
       });
 
-      // Regional scores — 4 jurors scoring 1 participant
-      if (rParts && rubric) {
+      // Regional scores — 4 jurors score the promoted delegate across the same
+      // academic sessions (with agenda_item_id, so the /90 model counts them).
+      if (rParts && rubric && academicSessions.length > 0) {
         const { data: regionalJury } = await supabase
           .from("jury_assignments")
           .insert(
@@ -1416,29 +1482,59 @@ export async function seedMockData(): Promise<ActionResult<MockDataStats>> {
           )
           .select("id");
 
+        // Scoreable sessions for the regional event (mirror the chapter set).
+        const { data: rAgenda } = await supabase
+          .from("agenda")
+          .insert(
+            academicSessions.map((s, i) => ({
+              event_id: regionalEvent.id,
+              day: 1,
+              sequence_order: i + 1,
+              title: titleize(s.session_key),
+              agenda_type: s.agenda_type ?? "general",
+              session_key: s.session_key,
+              is_scoreable: true,
+            }))
+          )
+          .select("id, session_key");
+        const rScored = (
+          (rAgenda ?? []) as Array<{ id: string; session_key: string }>
+        ).map((a) => {
+          const sp = spByKey.get(a.session_key);
+          const dims = (sp?.parameters ?? []).filter(
+            (p) => p && typeof p.key === "string" && Number(p.max_score) > 0
+          );
+          return { id: a.id, dims };
+        });
+
         const regionalScoreInserts: Array<
           WithMock<Database["yip"]["Tables"]["scores"]["Insert"]>
-        > = ((regionalJury ?? []) as Array<{ id: string }>).map((j) => {
-          const criteriaScores: Record<string, number> = {};
-          let total = 0;
-          for (const c of rubric.criteria) {
-            const pct = 0.85 + (rng() - 0.5) * 0.1;
-            const raw = c.max_score * pct;
-            criteriaScores[c.key] = Math.round(raw * 2) / 2;
-            total += criteriaScores[c.key]!;
+        > = [];
+        for (const j of (regionalJury ?? []) as Array<{ id: string }>) {
+          for (const sess of rScored) {
+            if (sess.dims.length === 0) continue;
+            const criteriaScores: Record<string, number> = {};
+            let total = 0;
+            for (const d of sess.dims) {
+              const pct = 0.85 + (rng() - 0.5) * 0.1;
+              const raw = Number(d.max_score) * pct;
+              criteriaScores[d.key] = Math.round(raw * 2) / 2;
+              total += criteriaScores[d.key]!;
+            }
+            regionalScoreInserts.push({
+              event_id: regionalEvent.id,
+              participant_id: rParts.id,
+              jury_assignment_id: j.id,
+              agenda_item_id: sess.id,
+              rubric_id: rubric.id,
+              criteria_scores: criteriaScores,
+              total_score: Math.round(total * 100) / 100,
+              status: "submitted",
+              submitted_at: new Date().toISOString(),
+              is_mock: true,
+            });
           }
-          return {
-            event_id: regionalEvent.id,
-            participant_id: rParts.id,
-            jury_assignment_id: j.id,
-            rubric_id: rubric.id,
-            criteria_scores: criteriaScores,
-            total_score: Math.round(total * 100) / 100,
-            status: "submitted",
-            submitted_at: new Date().toISOString(),
-            is_mock: true,
-          };
-        });
+        }
         if (regionalScoreInserts.length > 0) {
           await supabase.from("scores").insert(regionalScoreInserts);
         }

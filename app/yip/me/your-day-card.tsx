@@ -110,19 +110,13 @@ export async function YourDayInTheHouseCard({
       <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#FF9933] via-amber-300 to-[#FF9933]" />
 
       {/* Header + AI label */}
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-[#FF9933]/20">
-            <Sparkles className="size-4 text-[#FF9933]" />
-          </span>
-          <h2 className="text-base font-bold leading-tight">
-            Your Day in the House
-          </h2>
-        </div>
-        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[#FFD9A0]">
-          <Sparkles className="size-2.5" />
-          AI-generated
+      <div className="flex items-center gap-2">
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-[#FF9933]/20">
+          <Sparkles className="size-4 text-[#FF9933]" />
         </span>
+        <h2 className="text-base font-bold leading-tight">
+          Your Day in the House
+        </h2>
       </div>
 
       {/* The warm recap prose. whitespace-pre-line preserves paragraph breaks. */}
@@ -172,11 +166,6 @@ export async function YourDayInTheHouseCard({
         </div>
       )}
 
-      {/* Honesty footer: this is an AI recap of facts, not a score. */}
-      <p className="mt-3 text-[10.5px] leading-snug text-white/45">
-        ✨ Written by AI from your own participation record. It is a recap of
-        what you did — not a score, rank or comparison.
-      </p>
     </section>
   );
 }

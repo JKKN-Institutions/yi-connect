@@ -29,7 +29,10 @@ import { revalidatePath } from "next/cache";
 import { randomUUID } from "node:crypto";
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
-import { requireParticipantSession } from "@/lib/yip/auth/yip-session";
+import {
+  requireParticipantSession,
+  requireVolunteerSession,
+} from "@/lib/yip/auth/yip-session";
 import { isCommitteeEligible } from "@/lib/yip/committee-assignment";
 import { isCommitteeReportSubmitted } from "@/app/yip/actions/committee-reports";
 import { normalizeProvisions, type Clause } from "@/lib/yip/bill-provisions";

@@ -834,7 +834,7 @@ export default async function ParticipantPage() {
                 <FileText className="size-5 text-purple-600" />
                 <div>
                   <h2 className="text-sm font-bold text-gray-900">
-                    Bill Drafting
+                    Committee Room
                   </h2>
                   {myBill ? (
                     <p className="text-xs text-gray-500 mt-0.5">

@@ -6,6 +6,9 @@ import { LogOut, MessageSquare, Home } from "lucide-react";
 import { CHAT_ENABLED } from "@/lib/yip/chat-config";
 import { GuideLauncher } from "@/components/yip/guide";
 import { GUIDES } from "@/lib/yip/guide/content";
+import { createServiceClient } from "@/lib/yip/supabase/server";
+import { getPrimaryDesk } from "@/lib/yip/participant-desk";
+import { ParticipantBottomNav } from "@/app/yip/me/_components/participant-bottom-nav";
 
 interface ParticipantSession {
   type: "participant";
@@ -44,6 +47,19 @@ export default async function ParticipantLayout({
   if (!session || session.type !== "participant") {
     redirect("/yip/join");
   }
+
+  // Role-aware bottom nav: resolve the viewer's primary desk (Committee Room for
+  // committee members, leadership desk for office-bearers).
+  const supabase = await createServiceClient();
+  const { data: me } = await supabase
+    .from("participants")
+    .select("parliament_role, committee_name")
+    .eq("id", session.id)
+    .maybeSingle();
+  const desk = getPrimaryDesk(
+    (me?.parliament_role as string | null) ?? null,
+    (me?.committee_name as string | null) ?? null,
+  );
 
   return (
     <div className="flex min-h-screen flex-col bg-gradient-to-br from-[#FFF8F0] via-white to-[#F0FFF4]">
@@ -103,20 +119,18 @@ export default async function ParticipantLayout({
         </div>
       </header>
 
-      {/* Main content */}
-      <main className="flex-1 px-4 py-5 mx-auto w-full max-w-lg">
+      {/* Main content — bottom padding clears the fixed tab bar (+ safe area). */}
+      <main className="flex-1 px-4 pt-5 pb-[calc(4.5rem+env(safe-area-inset-bottom))] mx-auto w-full max-w-lg">
         {children}
       </main>
 
-      {/* Floating Help — student lane */}
-      <GuideLauncher guide={GUIDES.student} variant="fab" />
-
-      {/* Footer */}
-      <footer className="border-t border-gray-100 bg-white/50 py-4 text-center">
-        <p className="text-[11px] text-gray-400">
-          Young Indians Parliament
-        </p>
-      </footer>
+      {/* Action-oriented, role-aware bottom tab bar. Replaces the floating Help
+          FAB (the Guide tab opens the same drawer) and the decorative footer. */}
+      <ParticipantBottomNav
+        desk={desk}
+        chatEnabled={CHAT_ENABLED}
+        eventId={session.eventId}
+      />
     </div>
   );
 }

@@ -347,7 +347,6 @@ export function ChatModerationClient({
                       onClick={handleSeed}
                     >
                       <PlusCircle className="size-3.5" /> Sync channels
-                      channels
                     </Button>
                   </div>
                 </>

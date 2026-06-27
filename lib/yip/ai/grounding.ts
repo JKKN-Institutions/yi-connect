@@ -448,49 +448,60 @@ export async function buildSessionFeedbackGrounding(
   );
   if (rows.length === 0) return null;
 
-  // Resolve the criteria shape (key → label + max). The CANONICAL source is the
-  // live per-session jury config in yip.session_parameters.parameters — the SAME
-  // dimensions the jury actually scored, with keys like
-  // "mupi.research_constituency" that match criteria_scores EXACTLY. The generic
-  // yip.rubrics row a score nominally references is a fallback only: its keys
-  // (content/communication/…) do NOT match the namespaced dimension keys, which
-  // silently zeroed every ratio for most session types.
+  // Resolve the criteria shape (key → label + max). We resolve from the KEYS THE
+  // JURY ACTUALLY RECORDED (criteria_scores) against a GLOBAL dimension registry
+  // built from every active yip.session_parameters row. Why not the agenda's
+  // session_key? It is frequently null (e.g. the Mysuru MUPI item has
+  // session_key=null, agenda_type='opening_speech'), so a per-session_key lookup
+  // misses. Why not the score's rubric_id? The nominal yip.rubrics row uses
+  // generic keys (content/communication/…) that do NOT match the namespaced
+  // dimension keys (mupi.*, qh.*, …) the jury stored — which silently zeroed
+  // every ratio. The session dimension keys ARE globally unique by namespace, so
+  // resolving by recorded key is correct and robust to null session_key.
   const rubricIds = Array.from(new Set(rows.map((r) => r.rubric_id)));
   const rubricCriteriaById = new Map<string, RubricCriterionShape[]>();
 
-  // 1) Preferred: this session's own evaluation dimensions.
-  let sessionCriteria: RubricCriterionShape[] = [];
-  if (session.session_key) {
-    const { data: sp } = await loose
+  // Global registry: every individual evaluation dimension → {label, max}.
+  const dimByKey = new Map<string, { label: string; max: number }>();
+  {
+    const { data: spRows } = await loose
       .from("session_parameters")
       .select("parameters")
-      .eq("session_key", session.session_key)
-      .eq("is_active", true)
-      .maybeSingle();
-    const params = Array.isArray(sp?.parameters)
-      ? (sp!.parameters as Array<{
-          key?: string;
-          label?: string;
-          max_score?: number;
-          kind?: string;
-        }>)
-      : [];
-    // Only INDIVIDUAL evaluation dimensions feed a participant's self-referential
-    // pattern (exclude committee-/merit-level rows). If none are tagged
-    // "evaluation", fall back to every dimension with a positive max.
-    const evals = params.filter((d) => d.kind === "evaluation");
-    const usable = (evals.length > 0 ? evals : params).filter(
-      (d) => d.key && Number(d.max_score) > 0
-    );
-    sessionCriteria = usable.map((d) => ({
-      key: d.key as string,
-      label: d.label ?? (d.key as string),
-      max_score: Number(d.max_score),
-    }));
+      .eq("is_active", true);
+    for (const sp of (spRows as Array<{ parameters: unknown }>) ?? []) {
+      const params = Array.isArray(sp.parameters)
+        ? (sp.parameters as Array<{
+            key?: string;
+            label?: string;
+            max_score?: number;
+            kind?: string;
+          }>)
+        : [];
+      for (const dpar of params) {
+        // Individual evaluation dims only — exclude committee-/merit-level rows
+        // (a tagged non-"evaluation" kind). Untagged dims are treated as eval.
+        if (dpar.kind && dpar.kind !== "evaluation") continue;
+        if (!dpar.key || !(Number(dpar.max_score) > 0)) continue;
+        dimByKey.set(dpar.key, {
+          label: dpar.label ?? dpar.key,
+          max: Number(dpar.max_score),
+        });
+      }
+    }
+  }
+
+  // This session's criteria = the distinct recorded keys we can resolve.
+  const seenKeys = new Set<string>();
+  for (const r of rows)
+    for (const k of Object.keys(r.criteria_scores ?? {})) seenKeys.add(k);
+  const sessionCriteria: RubricCriterionShape[] = [];
+  for (const k of seenKeys) {
+    const dim = dimByKey.get(k);
+    if (dim) sessionCriteria.push({ key: k, label: dim.label, max_score: dim.max });
   }
 
   if (sessionCriteria.length > 0) {
-    // Every score row in this session shares the session's dimensions.
+    // Every score row in this session shares these dimensions.
     for (const rid of rubricIds) rubricCriteriaById.set(rid, sessionCriteria);
   } else if (rubricIds.length > 0) {
     // Fallback: the nominal rubric (legacy; correct only when its keys happen to

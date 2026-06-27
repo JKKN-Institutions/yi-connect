@@ -14,6 +14,7 @@ import Link from "next/link";
 import { EventDangerZone } from "@/components/yip/event-danger-zone";
 import { Switch } from "@/components/yip/ui/switch";
 import { setAllowBulkFloorVotes } from "@/app/yip/actions/vote-floor";
+import { setBillEarlyUnlock } from "@/app/yip/actions/bills";
 
 const LEVEL_OPTIONS = [
   { value: "chapter", label: "Chapter Level" },
@@ -65,6 +66,12 @@ export default function EditEventPage() {
   const [allowBulk, setAllowBulk] = useState(false);
   const [allowBulkBusy, setAllowBulkBusy] = useState(false);
 
+  // Per-event early-unlock: open bill drafting before the Committee Report is
+  // submitted, so committees can pre-draft ahead. Writes immediately via
+  // setBillEarlyUnlock.
+  const [billEarlyUnlock, setBillEarlyUnlockState] = useState(false);
+  const [billEarlyUnlockBusy, setBillEarlyUnlockBusy] = useState(false);
+
   const [form, setForm] = useState<EditFormData>({
     name: "",
     level: "chapter",
@@ -112,6 +119,12 @@ export default function EditEventPage() {
         Boolean(
           (event as { allow_bulk_floor_votes?: boolean | null })
             .allow_bulk_floor_votes
+        )
+      );
+      setBillEarlyUnlockState(
+        Boolean(
+          (event as { allow_bill_before_report?: boolean | null })
+            .allow_bill_before_report
         )
       );
       setLoading(false);
@@ -228,6 +241,24 @@ export default function EditEventPage() {
     setAllowBulk(next);
     toast.success(
       next ? "Bulk show-of-hands enabled" : "Bulk show-of-hands disabled"
+    );
+  }
+
+  // Flip the per-event bill early-unlock. Event-scoped (canManage); saves on
+  // toggle, independent of the Save button.
+  async function handleToggleBillEarlyUnlock(next: boolean) {
+    setBillEarlyUnlockBusy(true);
+    const res = await setBillEarlyUnlock(eventId, next);
+    setBillEarlyUnlockBusy(false);
+    if (!res.success) {
+      toast.error(res.error);
+      return;
+    }
+    setBillEarlyUnlockState(next);
+    toast.success(
+      next
+        ? "Bill drafting unlocked early (before the Committee Report)"
+        : "Bill drafting re-locked to the Committee Report"
     );
   }
 
@@ -431,6 +462,35 @@ export default function EditEventPage() {
               checked={allowBulk}
               onCheckedChange={handleToggleAllowBulk}
               disabled={allowBulkBusy}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Bill Drafting — per-event early-unlock. Saves immediately; independent
+          of the Save button below. */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Bill Drafting</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-start justify-between gap-4">
+            <div className="space-y-1">
+              <Label htmlFor="allow_bill_before_report" className="cursor-pointer">
+                Unlock bill drafting early
+              </Label>
+              <p className="text-xs text-gray-500">
+                By default a committee can only draft its bill after it submits
+                its Committee Report. Turn this on to open bill drafting a few
+                days ahead, so large committees can pre-draft before the report
+                is in. Saved immediately.
+              </p>
+            </div>
+            <Switch
+              id="allow_bill_before_report"
+              checked={billEarlyUnlock}
+              onCheckedChange={handleToggleBillEarlyUnlock}
+              disabled={billEarlyUnlockBusy}
             />
           </div>
         </CardContent>

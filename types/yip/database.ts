@@ -2127,6 +2127,7 @@ export type Database = {
           questions_open_at: string | null
           registrations_frozen: boolean | null
           allow_bulk_floor_votes: boolean
+          allow_bill_before_report: boolean
           results_published_at: string | null
           scores_locked: boolean | null
           jury_allow_earlier_sessions: boolean
@@ -2175,6 +2176,7 @@ export type Database = {
           questions_open_at?: string | null
           registrations_frozen?: boolean | null
           allow_bulk_floor_votes?: boolean
+          allow_bill_before_report?: boolean
           results_published_at?: string | null
           scores_locked?: boolean | null
           jury_allow_earlier_sessions?: boolean
@@ -2223,6 +2225,7 @@ export type Database = {
           questions_open_at?: string | null
           registrations_frozen?: boolean | null
           allow_bulk_floor_votes?: boolean
+          allow_bill_before_report?: boolean
           results_published_at?: string | null
           scores_locked?: boolean | null
           jury_allow_earlier_sessions?: boolean

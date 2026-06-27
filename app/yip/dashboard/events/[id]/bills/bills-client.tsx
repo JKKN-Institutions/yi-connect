@@ -255,6 +255,39 @@ export function BillsClient({
         </div>
       </div>
 
+      {/* Committee Rooms — direct entry to every committee's Room, independent of
+          whether a bill exists yet. The Room itself is gated by canManage. */}
+      {committees.length > 0 && (
+        <Card>
+          <CardContent className="py-4">
+            <div className="mb-1 flex items-center gap-2">
+              <Landmark className="size-5 text-[#FF9933]" />
+              <h2 className="text-base font-bold text-gray-900">Committee Rooms</h2>
+            </div>
+            <p className="mb-3 text-sm text-gray-500">
+              Open any committee&apos;s Room to help draft the bill, assign roles
+              or resolve amendments — even before they&apos;ve started.
+            </p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {committees.map((c) => (
+                <Link
+                  key={c}
+                  href={`/yip/dashboard/events/${eventId}/committee/${encodeURIComponent(c)}`}
+                  className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2.5 transition-colors hover:border-[#FF9933]/40 hover:bg-[#FF9933]/5"
+                >
+                  <span className="truncate text-sm font-medium text-gray-900">
+                    {c}
+                  </span>
+                  <span className="ml-auto shrink-0 text-xs font-semibold text-[#FF9933]">
+                    Open Room →
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* One card per committee bill (benchless), or per party (legacy benched). */}
       {sortedBills.length === 0 ? (
         <Card>

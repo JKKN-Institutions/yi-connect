@@ -92,6 +92,8 @@ type SortKey =
   | "checkin";
 
 type CheckInFilter = "all" | "in" | "out";
+// Which day the Checked-in / Not-checked-in chips count. "any" = either day.
+type CheckInDay = "any" | "1" | "2";
 
 // Every editable field on a participant. Strings so they bind to <input>; the
 // server action parses + validates (numbers, class range, access-code uniqueness).

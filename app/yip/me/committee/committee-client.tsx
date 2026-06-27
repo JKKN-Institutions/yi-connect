@@ -272,11 +272,13 @@ function BillTab({
   participantId,
   room,
   reload,
+  billFeedback,
 }: {
   eventId: string;
   participantId?: string;
   room: CommitteeRoom;
   reload: () => Promise<unknown>;
+  billFeedback?: React.ReactNode;
 }) {
   const p = room.permissions;
   const canEdit = p.canEditBill;

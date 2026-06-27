@@ -23,7 +23,7 @@ import "server-only";
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { ROLE_LABELS } from "@/lib/yip/constants";
 import {
-  parentScore,
+  parentScoreByKey,
   type RubricCriterionShape,
 } from "@/lib/yip/rubric";
 import type {
@@ -350,8 +350,12 @@ function aggregateCriteriaPattern(
     for (const c of criteria) {
       const max = Number(c.max_score) || 0;
       if (max <= 0) continue;
-      // parentScore handles flat + nested (sub_criteria) rubric shapes.
-      const earned = parentScore(breakdown, c);
+      // parentScoreByKey sums the parent's own key AND any "parent.sub" keys,
+      // so it reads BOTH flat parent totals (e.g. content: 22.5 — how the
+      // scoring UI actually stores them) AND nested sub-criterion breakdowns.
+      // (parentScore returned 0 for flat totals when the rubric declared
+      // sub_criteria — the all-zero-ratio bug this fixes.)
+      const earned = parentScoreByKey(breakdown, c.key);
       const ratio = Math.max(0, Math.min(1, earned / max));
       const prev = acc.get(c.key);
       if (prev) {

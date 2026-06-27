@@ -6,12 +6,14 @@ import type { SkillProfile, SkillAxis } from "@/app/yip/actions/skill-profile";
 
 // ─── Phase 19 / F — Skill Profile Card ────────────────────────────
 //
-// Renders 4 horizontal bars (research / speaking / policy / process).
-// Chose bars over a radar chart so we avoid pulling a chart library
-// for one card, the layout is mobile-friendly, and the visual matches
-// the existing Score Breakdown bars on /me. Each bar shows the axis
-// value 0–100 derived from sub-criterion averages across all of the
-// participant's submitted scores (see actions/skill-profile.ts).
+// Renders 4 strength rows (research / speaking / policy / process) as
+// QUALITATIVE BANDS — Strong / Confident / Growing / Emerging — never a
+// number. Director ruling: participants must never see a raw score, average
+// or percentage on /me (numbers invite "I beat you" comparison & disputes
+// between students). The underlying 0–100 axis value (from
+// actions/skill-profile.ts) is collapsed to a band + a band-quantised bar, so
+// two students in the same band look identical and nothing precise is
+// comparable. This card never shows rank either.
 
 interface AxisMeta {
   key: SkillAxis;
@@ -56,6 +58,18 @@ const AXES: AxisMeta[] = [
     tint: "text-violet-600",
   },
 ];
+
+// Collapse a 0–100 axis value into a qualitative, NON-NUMERIC band. Bands are
+// self-referential (where a participant's OWN strength sits), and the bar fill
+// is quantised to the band so it is never a precise, screenshot-comparable
+// figure. Order matters: highest threshold first.
+function axisBand(value: number): { label: string; fill: number } {
+  if (value <= 0) return { label: "Not yet rated", fill: 6 };
+  if (value >= 75) return { label: "Strong", fill: 92 };
+  if (value >= 55) return { label: "Confident", fill: 72 };
+  if (value >= 35) return { label: "Growing", fill: 50 };
+  return { label: "Emerging", fill: 28 };
+}
 
 export function SkillProfileCard({ profile }: { profile: SkillProfile }) {
   const hasAny =
@@ -110,7 +124,7 @@ export function SkillProfileCard({ profile }: { profile: SkillProfile }) {
               <p className="text-xs text-gray-500 mt-0.5">
                 {isEarly
                   ? "Early indicator — builds with each round"
-                  : `Based on ${profile.sample_size} jury scores across your YIP rounds`}
+                  : "Where your strengths sit, across your YIP rounds"}
               </p>
             </div>
           </div>
@@ -132,14 +146,14 @@ export function SkillProfileCard({ profile }: { profile: SkillProfile }) {
                     <Icon className={`size-3.5 ${axis.tint}`} />
                     <span className="font-medium">{axis.label}</span>
                   </span>
-                  <span className="font-semibold text-gray-900 tabular-nums">
-                    {value}
+                  <span className={`font-semibold ${axis.tint}`}>
+                    {axisBand(value).label}
                   </span>
                 </div>
                 <div className="h-2 w-full rounded-full bg-gray-100 overflow-hidden">
                   <div
                     className={`h-full rounded-full bg-gradient-to-r ${axis.gradient} transition-[width] duration-500`}
-                    style={{ width: `${Math.max(2, Math.min(100, value))}%` }}
+                    style={{ width: `${axisBand(value).fill}%` }}
                   />
                 </div>
                 <p className="text-[11px] text-gray-400 mt-0.5">{axis.hint}</p>
@@ -149,8 +163,8 @@ export function SkillProfileCard({ profile }: { profile: SkillProfile }) {
         </div>
 
         <p className="text-[11px] text-gray-400 mt-4 italic leading-relaxed">
-          Derived from your jury sub-criterion scores. Scores are
-          normalised against the handbook&apos;s max for each criterion.
+          A reflection of your own strengths across the jury&apos;s criteria —
+          shown as bands, never a score, rank or comparison to other delegates.
         </p>
       </CardContent>
     </Card>

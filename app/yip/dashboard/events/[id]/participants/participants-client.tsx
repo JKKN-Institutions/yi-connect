@@ -1134,11 +1134,11 @@ export function ParticipantsClient({
           {(
             [
               { key: "all", label: "All", count: participants.length },
-              { key: "in", label: "Checked in", count: checkedInCount },
+              { key: "in", label: "Checked in", count: scopedInCount },
               {
                 key: "out",
                 label: "Not checked in",
-                count: participants.length - checkedInCount,
+                count: participants.length - scopedInCount,
               },
             ] as const
           ).map((opt) => (
@@ -1152,6 +1152,28 @@ export function ParticipantsClient({
               }`}
             >
               {opt.label} ({opt.count})
+            </button>
+          ))}
+          {/* Day scope — the Checked in / Not checked in counts above reflect
+              the selected day, matching the per-day header. */}
+          <span className="ml-1 text-xs text-[#1a1a3e]/40">for</span>
+          {(
+            [
+              { key: "1", label: "Day 1" },
+              { key: "2", label: "Day 2" },
+              { key: "any", label: "Either" },
+            ] as const
+          ).map((opt) => (
+            <button
+              key={opt.key}
+              onClick={() => setCheckInDay(opt.key)}
+              className={`text-xs px-2.5 py-1.5 rounded-full border transition-all ${
+                checkInDay === opt.key
+                  ? "bg-[#1a1a3e]/90 text-white border-[#1a1a3e]"
+                  : "bg-white text-[#1a1a3e]/70 border-[#1a1a3e]/10 hover:border-[#1a1a3e]/30"
+              }`}
+            >
+              {opt.label}
             </button>
           ))}
         </div>

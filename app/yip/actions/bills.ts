@@ -54,6 +54,17 @@ async function assertReportSubmitted(
     .eq("committee_name", committeeName)
     .maybeSingle();
   if (data?.status === "submitted") return null;
+
+  // Per-event early-unlock: organisers can open bill drafting BEFORE the report
+  // is submitted (e.g. so large committees pre-draft a few days ahead). The
+  // column defaults false, so the report gate stands unless explicitly opened.
+  const { data: ev } = await supabase
+    .from("events")
+    .select("allow_bill_before_report")
+    .eq("id", eventId)
+    .maybeSingle();
+  if (ev?.allow_bill_before_report) return null;
+
   return "Submit your Committee Report first — the bill unlocks once the report is in.";
 }
 
@@ -584,5 +595,30 @@ export async function assignBillCommitteeRoles(
 
   if (error) return { success: false, error: error.message };
   revalidatePath(`/yip/dashboard/events/${bill.event_id}/bills`);
+  return { success: true, data: null };
+}
+
+// ─── Per-event early-unlock toggle ─────────────────────────────
+// Opens bill drafting BEFORE the Committee Report is submitted, so large
+// committees can pre-draft a few days ahead. Event-scoped (gated by canManage);
+// saves immediately, independent of the event Save button. Default false keeps
+// the report gate in place.
+export async function setBillEarlyUnlock(
+  eventId: string,
+  allow: boolean
+): Promise<ActionResult> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
+
+  const supabase = await createServiceClient();
+  const { error } = await supabase
+    .from("events")
+    .update({ allow_bill_before_report: allow })
+    .eq("id", eventId);
+
+  if (error) return { success: false, error: error.message };
+  revalidatePath(`/yip/dashboard/events/${eventId}/edit`);
   return { success: true, data: null };
 }

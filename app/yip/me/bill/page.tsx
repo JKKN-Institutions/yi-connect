@@ -63,10 +63,22 @@ export default async function BillDraftingPage() {
     committeeScheme = ct?.linked_scheme ?? null;
   }
 
-  // The bill is locked until this committee submits its Committee Report.
-  const reportSubmitted = p?.committee_name
-    ? await isCommitteeReportSubmitted(session.eventId, p.committee_name)
-    : false;
+  // The bill is locked until this committee submits its Committee Report —
+  // UNLESS the organiser has flipped the per-event early-unlock toggle (so
+  // committees can pre-draft a few days ahead). Either path unlocks the bill.
+  let reportSubmitted = false;
+  if (p?.committee_name) {
+    const submitted = await isCommitteeReportSubmitted(
+      session.eventId,
+      p.committee_name
+    );
+    const { data: ev } = await supabase
+      .from("events")
+      .select("allow_bill_before_report")
+      .eq("id", session.eventId)
+      .maybeSingle();
+    reportSubmitted = submitted || Boolean(ev?.allow_bill_before_report);
+  }
 
   return (
     <div className="space-y-5">

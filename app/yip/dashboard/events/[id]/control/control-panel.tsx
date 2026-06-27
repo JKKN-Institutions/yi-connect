@@ -39,6 +39,7 @@ import {
 } from "lucide-react";
 import { Switch } from "@/components/yip/ui/switch";
 import { Textarea } from "@/components/yip/ui/textarea";
+import { MissionControl } from "./mission-control";
 import { cn } from "@/lib/yip/utils";
 import { ROLE_LABELS, ROLE_COLORS, PARTY_COLORS } from "@/lib/yip/constants";
 import { useRealtimeEvent } from "@/lib/yip/hooks/use-realtime-event";
@@ -854,6 +855,10 @@ export function ControlPanel({
           )}
         </div>
       </div>
+
+      {/* Mission Control — non-blocking guided readiness board for organisers
+          (additive overlay; never blocks any action). */}
+      <MissionControl eventId={initialEvent.id} />
 
       {/* Jury catch-up switch (BUG-393) — organiser lets jurors score earlier
           sessions, not only the current + immediately-previous one. */}

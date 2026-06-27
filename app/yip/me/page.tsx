@@ -41,6 +41,7 @@ import {
   Lock,
 } from "lucide-react";
 import { VoteClient } from "./vote/vote-client";
+import { GoIndependentButton } from "./go-independent-button";
 import { LiveNowCard } from "./live-now-card";
 import { ModuleWelcome } from "@/components/yip/guide/module-welcome";
 import { logGuideEvent } from "@/lib/yip/guide/actions";
@@ -720,6 +721,17 @@ export default async function ParticipantPage() {
             <p className="mt-3 text-[11px] text-gray-400">
               Contact details are private. Reach members through your YUVA.
             </p>
+
+            {/* Self-service "go Independent" — only a plain MP may leave their
+                party themselves; role-holders must ask an organiser. */}
+            {role === "mp" && (
+              <div className="mt-3 border-t border-gray-100 pt-3">
+                <GoIndependentButton
+                  participantId={participant.id}
+                  eventId={participant.event_id}
+                />
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

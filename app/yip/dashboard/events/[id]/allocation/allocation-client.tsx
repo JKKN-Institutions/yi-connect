@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { getCabinetConfig } from "@/app/yip/actions/cabinet";
 import Link from "next/link";
 import {
   runAllocationAction,
@@ -105,6 +106,22 @@ export function AllocationClient({
   const partyName = (n: number | null): string | null =>
     n == null ? null : (partyByNumber.get(n)?.name ?? `Party ${n}`);
   const [loading, setLoading] = useState(false);
+  // Per-event cabinet portfolios for the ministry picker (falls back to the
+  // MINISTRIES default until loaded). Lets a 10-ministry event show all 10.
+  const [ministryOptions, setMinistryOptions] = useState<
+    { key: string; label: string }[]
+  >(MINISTRIES.map((m) => ({ key: m.key, label: m.label })));
+  useEffect(() => {
+    let active = true;
+    getCabinetConfig(eventId)
+      .then((c) => {
+        if (active && c.ministries.length > 0) setMinistryOptions(c.ministries);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [eventId]);
   const [lockLoading, setLockLoading] = useState(false);
   const [confirmRerun, setConfirmRerun] = useState(false);
   const [confirmLock, setConfirmLock] = useState(false);
@@ -847,6 +864,7 @@ export function AllocationClient({
           participant={editingParticipant}
           parties={parties}
           committeeNames={committeeNames}
+          ministries={ministryOptions}
           onClose={() => setEditingParticipant(null)}
           onSave={handleFieldChange}
         />
@@ -869,7 +887,10 @@ function LeaderRow({
   const ministryLabel = (key: string | null) => {
     if (!key) return "--";
     const m = MINISTRIES.find((m) => m.key === key);
-    return m ? m.label : key;
+    if (m) return m.label;
+    // Per-event custom ministry (not in the default set): humanise the slug
+    // (e.g. "external_affairs" → "External Affairs") for display.
+    return key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
   };
 
   return (
@@ -954,12 +975,14 @@ function EditAssignmentDialog({
   participant,
   parties,
   committeeNames,
+  ministries,
   onClose,
   onSave,
 }: {
   participant: Participant;
   parties: { party_number: number | null; name: string; side: string | null }[];
   committeeNames: string[];
+  ministries: { key: string; label: string }[];
   onClose: () => void;
   onSave: (
     id: string,
@@ -1112,7 +1135,7 @@ function EditAssignmentDialog({
                 className="flex h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
               >
                 <option value="">-- None --</option>
-                {MINISTRIES.map((m) => (
+                {ministries.map((m) => (
                   <option key={m.key} value={m.key}>
                     {m.label}
                   </option>

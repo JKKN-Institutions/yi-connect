@@ -29,11 +29,17 @@ type Vote = Tables<{ schema: "yip" }, "votes">;
 // appends a version banner that corrupts the generated file). Narrow,
 // file-local accessor for the votes table only — the app/yip/actions/chat.ts
 // pattern. Every other table in this file stays fully typed.
-type VoteRowLite = { id?: string; vote_value: string; participant_id: string | null };
+type VoteRowLite = {
+  id?: string;
+  vote_value: string;
+  participant_id: string | null;
+  entry_method?: string | null;
+};
 type VotesPgError = { code?: string; message: string };
 type VotesTable = {
   select: (cols: string) => VotesTable;
   insert: (row: Record<string, unknown>) => Promise<{ error: VotesPgError | null }>;
+  update: (row: Record<string, unknown>) => VotesTable;
   eq: (col: string, val: unknown) => VotesTable;
   is: (col: string, val: unknown) => VotesTable;
   maybeSingle: () => Promise<{ data: VoteRowLite | null; error: VotesPgError | null }>;
@@ -521,8 +527,9 @@ export async function revealResults(
   // presiding-officer reveal in speaker.ts does the same). config.motionId
   // identifies the motion. For a PASSED motion, DEPOSE the sitting leader to
   // their "Ex-" variant (no_confidence → ex_prime_minister; impeach_speaker →
-  // ex_speaker / ex_deputy_speaker) so they keep their leadership points; the
-  // organiser then runs a fresh election for the replacement, who also scores.
+  // ex_speaker ONLY — the Deputy stays in place to keep presiding) so they keep
+  // their leadership points; the organiser then runs a fresh election for the
+  // replacement, who also scores.
   if (
     session.vote_type === "no_confidence" ||
     session.vote_type === "impeach_speaker"
@@ -561,16 +568,16 @@ export async function revealResults(
             .eq("event_id", session.event_id)
             .eq("parliament_role", "prime_minister");
         } else if (session.vote_type === "impeach_speaker") {
+          // Depose ONLY the Speaker → ex_speaker (keeps leadership points). The
+          // Deputy Speaker is deliberately LEFT in place so the house never
+          // stalls — a deputy_speaker is in PRESIDING_ROLES and can chair the
+          // session until the organiser runs a fresh Speaker election (whose
+          // reveal below then reseats both Speaker and Deputy).
           await supabase
             .from("participants")
             .update({ parliament_role: "ex_speaker" })
             .eq("event_id", session.event_id)
             .eq("parliament_role", "speaker");
-          await supabase
-            .from("participants")
-            .update({ parliament_role: "ex_deputy_speaker" })
-            .eq("event_id", session.event_id)
-            .eq("parliament_role", "deputy_speaker");
         }
       }
     }
@@ -780,19 +787,37 @@ export async function castVote(
   // Check if already voted — in THIS session. A round-1 voter must be able to
   // vote again in a runoff session on the same agenda item.
   const { data: existingVote } = await votesTable(supabase)
-    .select("id")
+    .select("id, entry_method")
     .eq("session_id", session.id)
     .eq("participant_id", participantId)
     .maybeSingle();
 
   if (existingVote) {
+    // Phone-overrides-proxy: a vote a COORDINATOR cast on the student's behalf
+    // at the floor kiosk (entry_method "volunteer_kiosk") is provisional — the
+    // student's OWN phone vote overrides it (they have the final say). A vote
+    // the student already cast themselves ("self") or one an organiser recorded
+    // ("organizer") is final and is NOT overridden.
+    if (existingVote.entry_method === "volunteer_kiosk") {
+      const { error: updErr } = await votesTable(supabase)
+        .update({
+          vote_value: voteValue,
+          entry_method: "self",
+          recorded_by_volunteer_id: null,
+          cast_at: new Date().toISOString(),
+        })
+        .eq("id", existingVote.id);
+      if (updErr) return { success: false, error: updErr.message };
+      return { success: true, data: { status: "success" } };
+    }
     return {
       success: true,
       data: { status: "already_voted" },
     };
   }
 
-  // Cast the vote, stamped with its session.
+  // Cast the vote, stamped with its session. Explicit entry_method so the floor
+  // "channels" breakdown counts this as a self (phone) vote.
   const { error } = await votesTable(supabase).insert({
     event_id: session.event_id,
     agenda_item_id: session.agenda_item_id,
@@ -800,6 +825,7 @@ export async function castVote(
     participant_id: participantId,
     vote_type: session.vote_type,
     vote_value: voteValue,
+    entry_method: "self",
   });
 
   if (error) {

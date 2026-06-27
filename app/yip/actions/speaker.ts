@@ -407,25 +407,19 @@ async function vacateAndReElectSpeaker(
   supabase: Awaited<ReturnType<typeof createServiceClient>>,
   eventId: string
 ): Promise<ImpeachReElection> {
-  // DEPOSE the sitting Speaker → ex_speaker and Deputy → ex_deputy_speaker
-  // (per-role so each keeps the correct Ex-). They retain their leadership
-  // points; the organiser then runs a FRESH Speaker nomination + election so
-  // the replacement is a real choice — re-voting on the deposed officers would
-  // just revert the Ex- status. We never auto-open the replacement here, so
-  // electionOpened is always false (the caller/UI already handle that value).
+  // DEPOSE ONLY the sitting Speaker → ex_speaker (keeps their leadership
+  // points). The Deputy Speaker is deliberately LEFT in place so the house
+  // never stalls — a deputy_speaker is in PRESIDING_ROLES and can chair the
+  // session until the organiser runs a FRESH Speaker nomination + election
+  // (whose reveal in voting.ts then reseats both Speaker and Deputy). We never
+  // auto-open the replacement here, so electionOpened is always false.
   const { data: exSpeaker } = await supabase
     .from("participants")
     .update({ parliament_role: "ex_speaker" })
     .eq("event_id", eventId)
     .eq("parliament_role", "speaker")
     .select("id");
-  const { data: exDeputy } = await supabase
-    .from("participants")
-    .update({ parliament_role: "ex_deputy_speaker" })
-    .eq("event_id", eventId)
-    .eq("parliament_role", "deputy_speaker")
-    .select("id");
-  const vacated = (exSpeaker ?? []).length + (exDeputy ?? []).length;
+  const vacated = (exSpeaker ?? []).length;
 
   return { vacated, electionOpened: false, reason: "manual_reelection" };
 }

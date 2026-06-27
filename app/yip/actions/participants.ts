@@ -4,6 +4,7 @@ import { createClient, createServiceClient } from "@/lib/yip/supabase/server";
 import { generateAccessCode } from "@/lib/yip/access-code";
 import { logAuditAction } from "@/lib/yip/audit/log-action";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
+import { requireParticipantSession } from "@/lib/yip/auth/yip-session";
 import { COMMITTEES } from "@/lib/yip/constants";
 import { getCommitteeNumbering } from "@/lib/yip/committee-number";
 import {
@@ -1333,6 +1334,78 @@ export async function deposeToExRole(
 
   revalidatePath(`/yip/dashboard/events/${participant.event_id}/control`);
   revalidatePath(`/yip/dashboard/events/${participant.event_id}/participants`);
+  return { success: true, data: null };
+}
+
+// ─── Leave my party → become an Independent MP (participant self-service) ──
+// Per the Erode 2026 orientation: an MP may leave their alliance and sit as an
+// Independent. Self-service (the MP does it from /yip/me), but RESTRICTED to a
+// plain MP — anyone holding a role (party leader, PM, Speaker, minister, etc.)
+// must go through an organiser, because vacating a key post mid-event has to be
+// deliberate, not a stray tap. Independents are on no bench, so the existing
+// vote-tally scoping (buildTallies) already excludes them from party/cabinet/
+// leader elections while they keep debate, question-hour, bill and motion
+// votes. Votes already cast are untouched (they are keyed to the vote session,
+// not the live party state).
+export async function goIndependent(
+  participantId: string,
+  eventId: string
+): Promise<ActionResult<null>> {
+  // Participant self-service: verify the caller's session owns participantId.
+  const sess = await requireParticipantSession(participantId, eventId);
+  if (!sess.ok) return { success: false, error: sess.error };
+
+  const supabase = await createServiceClient();
+
+  const { data: participant } = await supabase
+    .from("participants")
+    .select("id, event_id, parliament_role, party_id")
+    .eq("id", participantId)
+    .eq("event_id", eventId)
+    .single();
+  if (!participant) {
+    return { success: false, error: "Participant not found" };
+  }
+
+  const currentRole = participant.parliament_role ?? "mp";
+  if (currentRole === "independent_mp") {
+    return { success: false, error: "You are already an Independent MP." };
+  }
+  // Guard: only a plain MP may self-switch. Role-holders must ask an organiser.
+  if (currentRole !== "mp") {
+    return {
+      success: false,
+      error:
+        "You hold a parliamentary role, so you can't switch yourself to Independent. Please ask an organiser.",
+    };
+  }
+
+  const { error } = await supabase
+    .from("participants")
+    .update({
+      parliament_role: "independent_mp",
+      party_side: null,
+      party_id: null,
+    })
+    .eq("id", participantId);
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  await logAuditAction({
+    action_type: "update",
+    target_table: "participants",
+    target_id: participantId,
+    target_event_id: eventId,
+    metadata: {
+      change: "go_independent",
+      from_party_id: participant.party_id ?? null,
+    },
+  });
+
+  revalidatePath("/yip/me");
+  revalidatePath(`/yip/dashboard/events/${eventId}/control`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/participants`);
   return { success: true, data: null };
 }
 

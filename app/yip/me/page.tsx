@@ -50,6 +50,7 @@ import {
   type MeRosterMember,
 } from "@/app/yip/actions/me-dashboard";
 import { YourDayInTheHouseCard } from "./your-day-card";
+import { YourGrowthCard } from "./your-growth-card";
 
 // ─── Session parsing ─────────────────────────────────────────────
 
@@ -490,6 +491,17 @@ export default async function ParticipantPage() {
           Self-gates on events.ai_enabled + a ready draft — renders a soft
           placeholder otherwise. */}
       <YourDayInTheHouseCard
+        eventId={event.id}
+        participantId={participant.id}
+      />
+
+      {/* ─── YOUR GROWTH (per-session AI coaching journey) ─────────────
+          The self-improving loop's participant surface: an encouraging
+          per-session timeline of coaching notes + the latest "focus for
+          next time" pulled to the top. ZERO numbers, never reads scores,
+          never comparative. Self-gates on events.ai_enabled; renders a soft
+          placeholder until the first note is ready. */}
+      <YourGrowthCard
         eventId={event.id}
         participantId={participant.id}
       />

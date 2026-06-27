@@ -10,8 +10,9 @@
 
 /** What an AI draft is about. */
 export type AiDraftKind =
-  | "participant_story" // subject_id = participants.id — dispute-proof, NO scores
-  | "round_narrative" // subject_id = null — event-level chair report narrative
+  | "participant_story" // subject_id = participants.id; agenda_item_id NULL — dispute-proof, NO scores
+  | "round_narrative" // subject_id = null; agenda_item_id NULL — event-level chair report narrative
+  | "session_feedback" // subject_id = participants.id; agenda_item_id = agenda.id — per-session growth note, NO numbers
   | "ministry_verdict"; // future
 
 /**
@@ -19,7 +20,8 @@ export type AiDraftKind =
  *   requested  — app enqueued it; the routine has not picked it up.
  *   generating — the routine claimed it (optional intermediate; the routine may
  *                POST straight to a terminal status).
- *   ready      — participant_story is complete and auto-shows (no review gate).
+ *   ready      — participant_story / session_feedback is complete and auto-shows
+ *                (no review gate; still gated on events.ai_enabled).
  *   pending_review — round_narrative draft is ready and AWAITS chair approval.
  *   approved   — chair approved; approved_text is the canonical text.
  *   rejected   — chair discarded the draft.
@@ -34,9 +36,13 @@ export type AiDraftStatus =
 
 /** One anti-hallucination citation: a row the draft was grounded on. */
 export type AiSourceRef = {
-  /** e.g. "participant", "party", "committee_topic", "central_topic", "event". */
+  /**
+   * e.g. "participant", "party", "committee_topic", "central_topic", "event",
+   * "session" (a scored agenda item), "criteria_pattern" (the self-referential
+   * strength/focus pattern a session_feedback note was grounded on).
+   */
   type: string;
-  /** The source row id when applicable (participant id, topic id, …). */
+  /** The source row id when applicable (participant id, topic id, agenda id…). */
   id?: string | null;
   /** A short human-readable label for the reviewer chip, e.g. the topic title. */
   label: string;
@@ -48,6 +54,11 @@ export type AiDraftRow = {
   event_id: string;
   kind: AiDraftKind;
   subject_id: string | null;
+  /**
+   * The scored agenda item a session_feedback row is about. NULL for every
+   * other kind (participant_story, round_narrative, ministry_verdict).
+   */
+  agenda_item_id: string | null;
   status: AiDraftStatus;
   draft_text: string | null;
   source_refs: AiSourceRef[];
@@ -67,6 +78,13 @@ export type AiDraftRow = {
 // payload MUST NOT contain any numeric score, rank, average, or comparison to
 // other participants. Exact scores cause disputes. The payload carries ONLY the
 // participant's own factual participation.
+//
+// session_feedback is the ONE grounding that DOES carry score-derived signal —
+// but ONLY a per-criterion normalized ratio of the participant against THEIR
+// OWN other criteria (self-referential), never a raw score, never a rank,
+// never another participant. It flows ONLY to the routine via the bearer
+// endpoint and NEVER reaches a participant surface (the card reads draft_text
+// alone). See lib/yip/ai/grounding.ts getSessionFeedbackWork for the contract.
 
 /** Grounding for kind='participant_story'. NO SCORES. NO RANK. NO COMPARISON. */
 export type ParticipantStoryGrounding = {
@@ -127,7 +145,82 @@ export type RoundNarrativeGrounding = {
   sourceRefs: AiSourceRef[];
 };
 
-export type AiGrounding = ParticipantStoryGrounding | RoundNarrativeGrounding;
+/**
+ * One criterion's SELF-REFERENTIAL signal for a single (participant, session).
+ *
+ * `ratio` is the participant's averaged-across-judges score on this criterion
+ * NORMALISED to its own max_score (0..1). It exists ONLY so the routine can
+ * rank the participant's OWN criteria against EACH OTHER and pick the
+ * relatively-stronger / relatively-weaker one. It is NEVER a comparison to
+ * another participant, NEVER a rank, and NEVER shown to a participant — the
+ * card reads draft_text alone and never sees this number.
+ */
+export type SessionCriterionPattern = {
+  /** Rubric criterion key (e.g. "communication", "cmte.initiative"). */
+  key: string;
+  /** Human label verbatim from the rubric (e.g. "Clarity of Communication"). */
+  label: string;
+  /** 0..1 — own score on this criterion ÷ its max. ROUTINE-ONLY. */
+  ratio: number;
+  /** The criterion's declared max points (for the routine's context only). */
+  max: number;
+};
+
+/**
+ * One unit of session_feedback work: everything the routine needs to write a
+ * warm, self-referential, NUMBER-FREE growth note for ONE (participant,
+ * scored session). Cross-participant data NEVER enters this object — it is
+ * assembled from a single participant's own rows for a single session.
+ */
+export type SessionFeedbackGrounding = {
+  kind: "session_feedback";
+  participant: {
+    id: string;
+    fullName: string;
+    roleLabel: string | null;
+    roleSlug: string | null;
+  };
+  session: {
+    /** agenda.id — the scored agenda item this note is about. */
+    id: string;
+    title: string;
+    day: number | null;
+    sequenceOrder: number | null;
+  };
+  event: {
+    id: string;
+    name: string;
+    chapterName: string | null;
+  };
+  /**
+   * The participant's per-criterion pattern for THIS session, averaged across
+   * judges and normalised to each criterion's own max. ROUTINE-ONLY — used to
+   * pick the relatively-stronger and relatively-weaker criterion. NEVER shown.
+   */
+  criteria: SessionCriterionPattern[];
+  /**
+   * The participant's own relatively-STRONGEST criterion this session (highest
+   * own ratio). null if no criteria. The routine acknowledges this by label.
+   */
+  strength: SessionCriterionPattern | null;
+  /**
+   * The participant's own relatively-WEAKEST criterion this session (lowest own
+   * ratio) — the growth focus for the NEXT session. null if no criteria.
+   */
+  growthFocus: SessionCriterionPattern | null;
+  /**
+   * Short excerpts of this participant's EARLIER session_feedback notes (in
+   * session order) so the routine can write continuity ("last time you focused
+   * on …"). Their own prior notes only — never anyone else's.
+   */
+  priorNotes: { sessionTitle: string; note: string }[];
+  sourceRefs: AiSourceRef[];
+};
+
+export type AiGrounding =
+  | ParticipantStoryGrounding
+  | RoundNarrativeGrounding
+  | SessionFeedbackGrounding;
 
 /** A pending request handed to the routine: the row + its grounding payload. */
 export type PendingAiRequest = {
@@ -135,6 +228,8 @@ export type PendingAiRequest = {
   eventId: string;
   kind: AiDraftKind;
   subjectId: string | null;
+  /** The scored agenda item for session_feedback; null otherwise. */
+  agendaItemId: string | null;
   status: AiDraftStatus;
   grounding: AiGrounding | null;
 };

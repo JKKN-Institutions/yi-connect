@@ -949,6 +949,200 @@ export async function importParticipants(
   };
 }
 
+// ─── Import Allocated Roster (National format) ─────────────────────
+// Accepts National's YIP "allocated student list" — columns: SRN, Name, Party
+// (letter A-Z), Committee (number), Constituency, State / UT. That format has
+// no School/Class, so School is stored empty and Class defaults to 10 (the
+// codebase-wide fallback for unknown class — participants.class is NOT NULL and
+// CHECK (9..12), so blank/null is impossible).
+//
+// Rules locked 2026-06-25 via interview:
+//  • Every row inserted as NEW (no update/dedup of existing students).
+//  • Invalid rows are SKIPPED (not whole-file reject) — a row needs Name +
+//    Party (A-Z) + Committee (number) + Constituency; the rest import and the
+//    skipped count is returned (State / UT is optional).
+//  • BLOCKED while allocation is locked.
+//  • Party letters auto-create parties with NO side (side stays null); the
+//    organizer assigns ruling vs opposition manually afterward, so each
+//    participant's party_side is left null on import.
+interface AllocatedRosterImportRow {
+  name: string;
+  party_letter: string;
+  committee_number: number;
+  constituency_name: string;
+  constituency_state?: string;
+}
+
+export async function importAllocatedRoster(
+  eventId: string,
+  rows: AllocatedRosterImportRow[]
+): Promise<ActionResult<{ imported: number; skipped: number }>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
+  const supabase = await createServiceClient();
+
+  // ── Block while allocation is locked ──
+  const { data: event } = await supabase
+    .from("events")
+    .select("id, allocation_locked")
+    .eq("id", eventId)
+    .single();
+  if (!event) {
+    return { success: false, error: "Event not found" };
+  }
+  if (event.allocation_locked) {
+    return {
+      success: false,
+      error: "Allocation is locked. Unlock it before uploading an allocated roster.",
+    };
+  }
+
+  if (rows.length === 0) {
+    return { success: false, error: "No rows found in the file." };
+  }
+
+  // ── Partition rows; SKIP invalid ones (skip-and-warn, not reject-all) ──
+  // A row needs Name + Party (A-Z) + Committee (positive int) + Constituency.
+  const validRows: AllocatedRosterImportRow[] = [];
+  let skipped = 0;
+  const uniqueLetters = new Set<string>();
+  for (const row of rows) {
+    const name = (row.name ?? "").trim();
+    const letter = (row.party_letter ?? "").trim().toUpperCase();
+    const consName = (row.constituency_name ?? "").trim();
+    const cmte = row.committee_number;
+    const ok =
+      name !== "" &&
+      /^[A-Z]$/.test(letter) &&
+      cmte !== undefined &&
+      cmte !== null &&
+      Number.isInteger(cmte) &&
+      cmte > 0 &&
+      consName !== "";
+    if (!ok) {
+      skipped++;
+      continue;
+    }
+    uniqueLetters.add(letter);
+    validRows.push(row);
+  }
+  if (validRows.length === 0) {
+    return {
+      success: false,
+      error: `No valid rows to import — all ${rows.length} were skipped. Each row needs a Name, Party letter (A-Z), Committee number, and Constituency.`,
+    };
+  }
+
+  // ── Create-or-find a side-less party per letter ──
+  // side stays null on creation (organizer assigns ruling/opposition manually).
+  const sortedLetters = [...uniqueLetters].sort();
+  const partyMap = new Map<string, { id: string; number: number }>();
+  if (sortedLetters.length > 0) {
+    const { data: existingParties, error: partyFetchErr } = await supabase
+      .from("parties")
+      .select("id, name, party_number")
+      .eq("event_id", eventId);
+    if (partyFetchErr) {
+      return { success: false, error: `Failed to read parties: ${partyFetchErr.message}` };
+    }
+    const byName = new Map<string, { id: string; number: number }>();
+    for (const p of existingParties ?? []) {
+      byName.set(p.name, { id: p.id, number: p.party_number });
+    }
+    for (const letter of sortedLetters) {
+      const name = `Party ${letter}`;
+      const found = byName.get(name);
+      if (found) {
+        partyMap.set(letter, found);
+        continue;
+      }
+      const number = letterToIndex(letter);
+      const { data: inserted, error: insErr } = await supabase
+        .from("parties")
+        // side stays NULL (DB column is nullable; organizer sets ruling/
+        // opposition manually). Cast is only to satisfy the stale generated
+        // type that still marks side non-null.
+        .insert({
+          event_id: eventId,
+          name,
+          party_number: number,
+          side: null as unknown as PartySide,
+        })
+        .select("id, party_number")
+        .single();
+      if (insErr || !inserted) {
+        return {
+          success: false,
+          error: `Failed to create party ${name}: ${insErr?.message ?? "unknown"}`,
+        };
+      }
+      const rec = { id: inserted.id, number: inserted.party_number };
+      partyMap.set(letter, rec);
+      byName.set(name, rec);
+    }
+  }
+
+  // ── Build inserts — every row NEW; class defaults to 10, school empty,
+  //    party_side left null for manual assignment ──
+  const existingCodes = new Set<string>();
+  const inserts: Array<{
+    event_id: string;
+    full_name: string;
+    school_name: string;
+    class: number;
+    access_code: string;
+    party_id: string | null;
+    party_number: number | null;
+    party_side: PartySide | null;
+    constituency_name: string | null;
+    constituency_state: string | null;
+    committee_number: number | null;
+    committee_name: string | null;
+  }> = [];
+
+  for (const row of validRows) {
+    const letter = row.party_letter.trim().toUpperCase();
+    const rec = partyMap.get(letter);
+    let code: string;
+    try {
+      code = await generateUniqueCode(supabase, eventId, existingCodes);
+    } catch {
+      return { success: false, error: "Failed to generate unique access codes." };
+    }
+    inserts.push({
+      event_id: eventId,
+      full_name: row.name.trim(),
+      school_name: "",
+      class: 10,
+      access_code: code,
+      party_id: rec?.id ?? null,
+      party_number: rec?.number ?? null,
+      party_side: null,
+      constituency_name: row.constituency_name.trim(),
+      constituency_state: row.constituency_state?.trim() || null,
+      committee_number: row.committee_number,
+      committee_name: `Committee ${row.committee_number}`,
+    });
+  }
+
+  const { error: insertError } = await supabase.from("participants").insert(inserts);
+  if (insertError) {
+    return { success: false, error: insertError.message };
+  }
+
+  await logAuditAction({
+    action_type: "import",
+    target_table: "participants",
+    target_event_id: eventId,
+    metadata: { imported: inserts.length, skipped, source: "allocated_roster" },
+  });
+  revalidatePath(`/yip/dashboard/events/${eventId}/participants`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/allocation`);
+  return { success: true, data: { imported: inserts.length, skipped } };
+}
+
 // ─── Delete Participant ────────────────────────────────────────────
 
 export async function deleteParticipant(

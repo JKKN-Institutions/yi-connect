@@ -50,6 +50,7 @@ import {
   Pencil,
 } from "lucide-react";
 import { CsvImport } from "@/components/yip/csv-import";
+import { AllocatedRosterImport } from "@/components/yip/allocated-roster-import";
 import { EmailSendCodes } from "@/components/yip/email-send-codes";
 import { exportAllocationRoster } from "@/app/yip/actions/school-export";
 import { toast } from "sonner";
@@ -808,6 +809,13 @@ export function ParticipantsClient({
           )}
 
           <CsvImport eventId={eventId} onImported={() => router.refresh()} />
+
+          <AllocatedRosterImport
+            eventId={eventId}
+            allocationLocked={allocationLocked}
+            existingNames={initialParticipants.map((p) => p.full_name)}
+            onImported={() => router.refresh()}
+          />
 
           {/* Download the current allocation roster (organiser+). Re-runnable
               any time — re-download after adding late registrants and re-running

@@ -303,8 +303,22 @@ function BillTab({
     conclusion: bill?.conclusion ?? "",
   });
   const [fields, setFields] = useState(buildFields);
+  // The last server snapshot we synced from. When the bill changes (notably
+  // the create-on-first-write reload, which flips bill.id undefined→uuid), we
+  // adopt the new server values ONLY for fields the user hasn't edited since
+  // the last sync — otherwise an in-progress, not-yet-blurred field would be
+  // blanked. Local unsaved edits always win.
+  const lastSyncedFields = useRef(buildFields());
   useEffect(() => {
-    setFields(buildFields());
+    const server = buildFields();
+    setFields((local) => {
+      const next = { ...local };
+      (Object.keys(server) as (keyof typeof server)[]).forEach((key) => {
+        if (local[key] === lastSyncedFields.current[key]) next[key] = server[key];
+      });
+      return next;
+    });
+    lastSyncedFields.current = server;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bill?.id, bill?.status]);
 

@@ -48,6 +48,19 @@ export default async function ParticipantLayout({
     redirect("/yip/join");
   }
 
+  // Role-aware bottom nav: resolve the viewer's primary desk (Committee Room for
+  // committee members, leadership desk for office-bearers).
+  const supabase = await createServiceClient();
+  const { data: me } = await supabase
+    .from("participants")
+    .select("parliament_role, committee_name")
+    .eq("id", session.id)
+    .maybeSingle();
+  const desk = getPrimaryDesk(
+    (me?.parliament_role as string | null) ?? null,
+    (me?.committee_name as string | null) ?? null,
+  );
+
   return (
     <div className="flex min-h-screen flex-col bg-gradient-to-br from-[#FFF8F0] via-white to-[#F0FFF4]">
       {/* Header */}

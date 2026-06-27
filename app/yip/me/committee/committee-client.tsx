@@ -653,7 +653,7 @@ function BillTab({
         topic={room.topic}
         scheme={room.scheme}
       />
-      <BillFeedbackCard eventId={eventId} committeeName={room.committeeName} />
+      {billFeedback}
       {participantId && (
         <CommitteeDocumentsSection eventId={eventId} participantId={participantId} />
       )}

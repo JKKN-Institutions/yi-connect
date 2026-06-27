@@ -244,6 +244,13 @@ export function ParticipantsClient({
   const checkedInCount = participants.filter((p) => p.checked_in).length;
   const day1Count = participants.filter((p) => p.checked_in_day1).length;
   const day2Count = participants.filter((p) => p.checked_in_day2).length;
+  // "Checked in" count for the chosen chip day-scope (Day 1 / Day 2 / either).
+  const scopedInCount =
+    checkInDay === "1"
+      ? day1Count
+      : checkInDay === "2"
+        ? day2Count
+        : checkedInCount;
 
   // Pick-lists scoped to THIS event so editing can only reassign within the
   // committees / parties that actually exist here — committee_number ↔ name

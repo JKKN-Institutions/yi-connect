@@ -215,6 +215,80 @@ export async function submitBill(
   return { success: true, data: null };
 }
 
+// ─── Admin Add Bill (manual — bypasses the committee draft→report→submit flow) ──
+// Lets an organiser/chair enter a bill straight from the dashboard Bills page so
+// the House can still vote when committees drafted on paper or ran out of time.
+// Inserts as "approved" (ready to present) or "submitted" so it immediately
+// appears in the Control panel's Bill Presentation session. Event-scoped:
+// gated by canManage (chair + organiser), like the other dashboard mutations.
+export async function adminCreateBill(
+  eventId: string,
+  data: {
+    committeeName: string;
+    title: string;
+    objective?: string;
+    problemStatement?: string;
+    provisions?: string[];
+    approved?: boolean;
+  }
+): Promise<ActionResult<{ billId: string }>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return {
+      success: false,
+      error: "You don't have permission to add bills for this event.",
+    };
+  }
+
+  const title = data.title?.trim();
+  const committeeName = data.committeeName?.trim();
+  if (!title) return { success: false, error: "Bill title is required." };
+  if (!committeeName)
+    return { success: false, error: "Pick a committee for the bill." };
+
+  const supabase = await createServiceClient();
+
+  // One bill per committee per event (matches the drafting flow's assumption).
+  const { data: existing } = await supabase
+    .from("bills")
+    .select("id")
+    .eq("event_id", eventId)
+    .eq("committee_name" as never, committeeName as never)
+    .maybeSingle();
+  if (existing) {
+    return {
+      success: false,
+      error: `A bill already exists for ${committeeName}. Delete it first to re-add.`,
+    };
+  }
+
+  const provisions = (data.provisions ?? [])
+    .map((p) => p.trim())
+    .filter(Boolean);
+
+  const { data: newBill, error } = await supabase
+    .from("bills")
+    .insert({
+      event_id: eventId,
+      committee_name: committeeName,
+      title,
+      objective: data.objective?.trim() || null,
+      problem_statement: data.problemStatement?.trim() || null,
+      provisions: provisions as unknown as Json,
+      status: data.approved ? "approved" : "submitted",
+      updated_at: new Date().toISOString(),
+    } as never)
+    .select("id")
+    .single();
+
+  if (error || !newBill) {
+    return { success: false, error: error?.message ?? "Failed to add bill" };
+  }
+
+  revalidatePath(`/yip/dashboard/events/${eventId}/bills`);
+  return { success: true, data: { billId: newBill.id } };
+}
+
 // ─── Approve Bill ──────────────────────────────────────────────
 
 export async function approveBill(

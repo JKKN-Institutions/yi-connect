@@ -235,7 +235,13 @@ export function CommitteeClient({
       </div>
 
       {tab === "bill" && (
-        <BillTab eventId={eventId} participantId={participantId} room={room} reload={reload} />
+        <BillTab
+          eventId={eventId}
+          participantId={participantId}
+          room={room}
+          reload={reload}
+          billFeedback={billFeedback}
+        />
       )}
       {tab === "discussion" && (
         <DiscussionTab

@@ -459,7 +459,9 @@ export function VoteClient({
                     <div className="flex items-center gap-1.5 mt-1.5">
                       <GraduationCap className="size-3.5 text-gray-400" />
                       <span className="text-sm text-gray-600">
-                        {candidate.school_name}
+                        {candidate.school_number != null
+                          ? `School #${candidate.school_number}`
+                          : "School #—"}
                       </span>
                     </div>
                     {partySide && (

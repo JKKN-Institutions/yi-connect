@@ -19,6 +19,10 @@ import {
   getPersonJourney,
 } from "@/app/yip/actions/people";
 import { ROLE_LABELS } from "@/lib/yip/constants";
+import {
+  getEventSchoolNumbers,
+  schoolNumberOf,
+} from "@/lib/yip/school-numbers";
 
 interface ParticipantSession {
   type: "participant";
@@ -68,6 +72,11 @@ export default async function JourneyPage() {
   ]);
 
   if (!person) redirect("/yip/me");
+
+  // Participants see their school as an anonymised per-event NUMBER, never the
+  // name (director decision 2026-06-27), consistent with /yip/me and the ballot.
+  const schoolNumbers = await getEventSchoolNumbers(session.eventId);
+  const schoolNum = schoolNumberOf(schoolNumbers, person.school_name);
 
   // Participants must NEVER see their raw scores (Director ruling — raw scores
   // invite comparison & disputes between students). Rank + awards stay; strip
@@ -126,7 +135,7 @@ export default async function JourneyPage() {
               </div>
               {person.school_name && (
                 <div className="text-sm text-[#1a1a3e]/60">
-                  {person.school_name}
+                  {schoolNum != null ? `School #${schoolNum}` : "School #—"}
                   {person.home_state ? ` · ${person.home_state}` : ""}
                 </div>
               )}

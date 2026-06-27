@@ -89,6 +89,7 @@ export function CommitteeClient({
   participantId,
   participantName,
   committeeName: committeeNameProp,
+  billFeedback,
 }: {
   eventId: string;
   // Participant mode → participantId set (committee derived from session).
@@ -96,6 +97,9 @@ export function CommitteeClient({
   participantId?: string;
   participantName?: string;
   committeeName?: string;
+  // The AI bill-feedback card, pre-rendered server-side (it's a server
+  // component) and slotted into the Bill tab. Null in organiser mode.
+  billFeedback?: React.ReactNode;
 }) {
   const [room, setRoom] = useState<CommitteeRoom | null>(null);
   const [loading, setLoading] = useState(true);

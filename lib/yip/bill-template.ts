@@ -64,7 +64,7 @@ export function buildBillTemplateDoc(opts: {
 
   ${field("Bill Title", "e.g., The Youth Digital Literacy Bill, 2026", 1)}
   ${field("Objective", "What does this bill aim to achieve?", 2)}
-  ${field("Problem Statement", "What problem does this bill address? (1&#8211;2 lines)", 2)}
+  ${field("Problem Statement", "What problem does this bill address? (1-2 lines)", 2)}
 
   <h2>3 Key Provisions</h2>
   <p class="hint">The core clauses of the bill.</p>

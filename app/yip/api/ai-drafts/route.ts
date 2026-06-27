@@ -19,12 +19,16 @@
  */
 import { NextResponse, type NextRequest } from "next/server";
 import {
+  enqueueAiDraft,
   listPendingAiDrafts,
   writeAiDraft,
 } from "@/lib/yip/ai/drafts";
 import {
   buildParticipantStoryGrounding,
   buildRoundNarrativeGrounding,
+  buildSessionFeedbackGrounding,
+  getSessionFeedbackWork,
+  listAiEnabledEventIds,
 } from "@/lib/yip/ai/grounding";
 import type {
   AiDraftStatus,
@@ -53,6 +57,35 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // SELF-RUNNING LOOP — before draining, detect newly-scored sessions that have
+  // no session_feedback draft yet and enqueue a 'requested' row for each. The
+  // candidate set is every AI-opted-in event (events.ai_enabled = true) — an
+  // intentionally small, opt-in set, NOT the pending-draft set. This is the key
+  // fix: in steady state an event's participant_story / round_narrative rows are
+  // already 'ready'/'approved' (no longer pending), so sourcing candidates from
+  // the pending set would never sweep them and the loop would silently stop.
+  // For each ai_enabled event, getSessionFeedbackWork() finds its scored-but-
+  // unfed (participant, session) pairs (and no-ops when the event has no scores
+  // yet), so a freshly-scored session yields a growth note next cycle with no
+  // manual button. Detection is best-effort and must never block draining.
+  try {
+    const aiEventIds = await listAiEnabledEventIds();
+    for (const eventId of aiEventIds) {
+      const work = await getSessionFeedbackWork(eventId);
+      for (const w of work) {
+        await enqueueAiDraft({
+          eventId,
+          kind: "session_feedback",
+          subjectId: w.participantId,
+          agendaItemId: w.agendaItemId,
+        });
+      }
+    }
+  } catch {
+    // A failure here must not block draining existing requests; the next hourly
+    // run retries.
+  }
+
   const pending = await listPendingAiDrafts(100);
 
   const requests: PendingAiRequest[] = [];
@@ -66,6 +99,19 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         );
       } else if (row.kind === "round_narrative") {
         grounding = await buildRoundNarrativeGrounding(row.event_id);
+      } else if (
+        row.kind === "session_feedback" &&
+        row.subject_id &&
+        row.agenda_item_id
+      ) {
+        // ROUTINE-ONLY grounding: carries the participant's own per-criterion
+        // pattern (self-referential ratios), never another participant, never a
+        // rank. Reached ONLY here behind the bearer secret.
+        grounding = await buildSessionFeedbackGrounding(
+          row.event_id,
+          row.subject_id,
+          row.agenda_item_id
+        );
       }
       // ministry_verdict and any unknown kind → grounding stays null (skipped).
     } catch {
@@ -76,6 +122,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       eventId: row.event_id,
       kind: row.kind,
       subjectId: row.subject_id,
+      agendaItemId: row.agenda_item_id,
       status: row.status,
       grounding,
     });
@@ -133,6 +180,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
+  // The chair narrative is the ONLY review-gated kind. participant_story and
+  // session_feedback both auto-show ('ready') — they are dispute-proof / number-
+  // free by construction and gated on events.ai_enabled at the card.
   const targetStatus: AiDraftStatus =
     row.kind === "round_narrative" ? "pending_review" : "ready";
 

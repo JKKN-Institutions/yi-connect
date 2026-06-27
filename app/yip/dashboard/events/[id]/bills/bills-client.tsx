@@ -240,9 +240,17 @@ export function BillsClient({
             Review and manage bills drafted by each committee
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => router.refresh()}>
-          Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          {canManage && (
+            <Button size="sm" onClick={() => setAddOpen(true)}>
+              <Plus className="size-4 mr-1" />
+              Add Bill
+            </Button>
+          )}
+          <Button variant="outline" size="sm" onClick={() => router.refresh()}>
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {/* One card per committee bill (benchless), or per party (legacy benched). */}

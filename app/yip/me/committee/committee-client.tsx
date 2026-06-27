@@ -65,7 +65,6 @@ import {
   BillTemplateButton,
   CommitteeDocumentsSection,
 } from "./committee-extras";
-import { BillFeedbackCard } from "@/app/yip/me/bill/bill-feedback-card";
 
 const ORANGE = "#FF9933";
 

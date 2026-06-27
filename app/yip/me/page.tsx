@@ -3,6 +3,10 @@ import { redirect } from "next/navigation";
 import { getYipSession } from "@/lib/yip/auth/yip-session";
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import {
+  getEventSchoolNumbers,
+  schoolNumberOf,
+} from "@/lib/yip/school-numbers";
+import {
   ROLE_LABELS,
   ROLE_COLORS,
   PARTY_COLORS,
@@ -147,6 +151,16 @@ export default async function ParticipantPage() {
   if (!event) {
     redirect("/yip/join");
   }
+
+  // Participants see their school as an anonymised per-event NUMBER, never the
+  // name (director decision 2026-06-27). school_name stays an opaque seating key.
+  const schoolNumbers = await getEventSchoolNumbers(event.id);
+  const schoolNum = schoolNumberOf(schoolNumbers, participant.school_name);
+  const schoolDisplay: string = participant.school_name
+    ? schoolNum != null
+      ? `#${schoolNum}`
+      : "#—"
+    : "";
 
   // The student's actual party NAME (e.g. "Bharat Progressive Front"), not just
   // the bench. party_id is the primary key; fall back to (event, party_number)
@@ -404,7 +418,7 @@ export default async function ParticipantPage() {
               <DetailItem
                 icon={GraduationCap}
                 label="School"
-                value={participant.school_name}
+                value={schoolDisplay}
                 fullWidth
               />
               {participant.constituency_name && (

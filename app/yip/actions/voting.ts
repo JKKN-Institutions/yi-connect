@@ -6,6 +6,10 @@ import { requireParticipantSession } from "@/lib/yip/auth/yip-session";
 import { assertCheckedInForVote } from "@/lib/yip/vote-eligibility";
 import { validateVoteValue } from "@/lib/yip/vote-validate";
 import {
+  getEventSchoolNumbers,
+  schoolNumberOf,
+} from "@/lib/yip/school-numbers";
+import {
   computeElectionOutcome,
   computeDeputyRunoffOutcome,
   computeMultiSeatOutcome,
@@ -72,6 +76,10 @@ export interface VoteCandidate {
   id: string;
   full_name: string;
   school_name: string;
+  // Participant-facing school NUMBER (per-event, anonymised — see
+  // lib/yip/school-numbers.ts). Participant surfaces render this, never
+  // school_name; organiser/chair surfaces keep using school_name.
+  school_number: number | null;
   party_side: string | null;
   parliament_role: string | null;
   // Constituency (assigned at allocation; null before then) — exposed so the
@@ -894,7 +902,11 @@ export async function getSpeakerCandidates(
     .in("parliament_role", ["speaker", "ex_speaker", "ex_deputy_speaker"]);
 
   if (error || !data) return [];
-  return data;
+  const schoolNumbers = await getEventSchoolNumbers(eventId);
+  return data.map((c) => ({
+    ...c,
+    school_number: schoolNumberOf(schoolNumbers, c.school_name),
+  }));
 }
 
 // ─── Get Bills for Voting ───────────────────────────────────────
@@ -1068,7 +1080,11 @@ export async function getPartyMembers(
     .eq("party_id", partyId)
     .order("full_name");
   if (error || !data) return [];
-  return data;
+  const schoolNumbers = await getEventSchoolNumbers(eventId);
+  return data.map((c) => ({
+    ...c,
+    school_number: schoolNumberOf(schoolNumbers, c.school_name),
+  }));
 }
 
 // ─── Vote candidates by id (ballot rendering) ───────────────────
@@ -1085,12 +1101,26 @@ export async function getVoteCandidates(
   const { data, error } = await supabase
     .from("participants")
     .select(
-      "id, full_name, school_name, party_side, parliament_role, constituency_name, constituency_number"
+      "id, full_name, school_name, party_side, parliament_role, constituency_name, constituency_number, event_id"
     )
     .in("id", ids)
     .order("full_name");
-  if (error || !data) return [];
-  return data;
+  if (error || !data || data.length === 0) return [];
+  // All candidates on one ballot share an event; derive it for the number map.
+  const eventId = (data[0] as { event_id?: string | null }).event_id ?? null;
+  const schoolNumbers = eventId
+    ? await getEventSchoolNumbers(eventId)
+    : new Map<string, number>();
+  return data.map((c) => ({
+    id: c.id,
+    full_name: c.full_name,
+    school_name: c.school_name,
+    school_number: schoolNumberOf(schoolNumbers, c.school_name),
+    party_side: c.party_side,
+    parliament_role: c.parliament_role,
+    constituency_name: c.constituency_name,
+    constituency_number: c.constituency_number,
+  }));
 }
 
 // ─── Open a tie-runoff ──────────────────────────────────────────

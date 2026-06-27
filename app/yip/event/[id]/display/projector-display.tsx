@@ -619,7 +619,15 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
       {/* Main content */}
       <main className="flex flex-1 flex-col items-center justify-center px-8">
         {/* ─── VOTING DISPLAY ─────────────────────────────────── */}
-        {voteSession && (isOpen || isClosed || isRevealed) && (
+        {/* Only show a vote that belongs to the CURRENT agenda item. A vote
+            session has no terminal status (only open/closed/revealed), so a
+            revealed vote would otherwise keep dominating the screen for the
+            rest of the event — e.g. Day-1's Speaker Election still showing
+            during Day-2 Question Hour. Scoping to the live item retires it the
+            moment the moderator advances. */}
+        {voteSession &&
+          voteSession.agenda_item_id === currentAgendaItem?.id &&
+          (isOpen || isClosed || isRevealed) && (
           <div className="w-full max-w-4xl space-y-8 text-center">
             {/* Voting Open */}
             {isOpen && (

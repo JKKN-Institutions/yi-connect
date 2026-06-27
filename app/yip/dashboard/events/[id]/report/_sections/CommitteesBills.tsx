@@ -297,6 +297,24 @@ export default async function CommitteesBillsSection({
                       </ul>
                     </div>
                   )}
+
+                  {/* AI craft feedback on the bill (only when the chair opted the
+                      event into AI and a ready note exists). Prose about the
+                      bill's craft — never a score, rank, or person. */}
+                  {c.billFeedback ? (
+                    <div className="break-inside-avoid rounded-lg border border-sky-200/70 bg-sky-50/50 px-3 py-2.5">
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-sky-700/70">
+                        Feedback on the Bill&apos;s Craft
+                      </p>
+                      <p className="mt-1 whitespace-pre-line text-sm leading-relaxed text-[#1a1a3e]/85">
+                        {c.billFeedback}
+                      </p>
+                      <p className="mt-1.5 text-[10px] leading-snug text-[#1a1a3e]/40">
+                        Constructive AI feedback on the bill&apos;s craft — never
+                        a score, rank, or comparison of people.
+                      </p>
+                    </div>
+                  ) : null}
                 </div>
               </article>
             );

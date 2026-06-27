@@ -4,6 +4,7 @@ import { getYipSession } from "@/lib/yip/auth/yip-session";
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { isCommitteeReportSubmitted } from "@/app/yip/actions/committee-reports";
 import { BillClient, type ParticipantSession } from "./bill-client";
+import { BillFeedbackCard } from "./bill-feedback-card";
 
 // The yip_session cookie is httpOnly (set by app/yip/actions/auth.ts), so it
 // must be read server-side — a client component's document.cookie never sees
@@ -68,13 +69,21 @@ export default async function BillDraftingPage() {
     : false;
 
   return (
-    <BillClient
-      initialSession={session}
-      parliamentRole={p?.parliament_role ?? null}
-      committeeName={p?.committee_name ?? null}
-      committeeTopic={committeeTopic}
-      committeeScheme={committeeScheme}
-      reportSubmitted={reportSubmitted}
-    />
+    <div className="space-y-5">
+      <BillClient
+        initialSession={session}
+        parliamentRole={p?.parliament_role ?? null}
+        committeeName={p?.committee_name ?? null}
+        committeeTopic={committeeTopic}
+        committeeScheme={committeeScheme}
+        reportSubmitted={reportSubmitted}
+      />
+      {/* AI craft feedback on this committee's bill. Self-gates: renders nothing
+          unless events.ai_enabled is on and the viewer has a committee. */}
+      <BillFeedbackCard
+        eventId={session.eventId}
+        committeeName={p?.committee_name ?? null}
+      />
+    </div>
   );
 }

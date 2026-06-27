@@ -195,6 +195,52 @@ export async function getParticipantSessionFeedback(
 }
 
 /**
+ * PARTICIPANT-FACING READER for the bill-feedback card (/yip/me/bill).
+ *
+ * The participant page only knows the viewer's committee_name, so this resolves
+ * committee → its bill → that bill's kind='bill_feedback' draft. Reads ONLY
+ * yip.bills + yip.ai_drafts — NEVER yip.scores / yip.results. Returns null when
+ * the committee has no bill or no draft yet (the card then shows a placeholder).
+ *
+ * If a committee somehow has >1 bill, the latest-created one wins (deterministic).
+ */
+export async function getBillFeedbackForCommittee(
+  eventId: string,
+  committeeName: string
+): Promise<AiDraftRow | null> {
+  const db = await svcLoose();
+  const { data: bill } = await db
+    .from("bills")
+    .select("id")
+    .eq("event_id", eventId)
+    .eq("committee_name", committeeName)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const billId = (bill as { id?: string } | null)?.id;
+  if (!billId) return null;
+  // bill_feedback is keyed by subject_id=bill.id with agenda_item_id NULL.
+  return getAiDraft(eventId, "bill_feedback", billId, null);
+}
+
+/**
+ * REPORT READER: every bill_feedback draft for an event (any status). The
+ * chapter-report section joins these to committees by bill id (subject_id).
+ * Reads ai_drafts only — never yip.scores / yip.results.
+ */
+export async function listBillFeedbackForEvent(
+  eventId: string
+): Promise<AiDraftRow[]> {
+  const db = await svcLoose();
+  const { data } = await db
+    .from("ai_drafts")
+    .select(SELECT_COLS)
+    .eq("event_id", eventId)
+    .eq("kind", "bill_feedback");
+  return ((data as RawAiDraft[]) ?? []).map(normalize);
+}
+
+/**
  * Enqueue a request row (status='requested') for the routine to pick up.
  *
  * For participant_story / round_narrative (agendaItemId omitted) this is

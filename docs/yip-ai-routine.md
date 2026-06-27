@@ -42,6 +42,7 @@ both authenticated with the header `X-Cron-Secret: <YIP_AI_ROUTINE_SECRET>`.
 | ------------------- | ----------------------- | ------------------- | ----------------------------------------------------- |
 | `participant_story` | the participant (minor) | none (auto-shows)   | **never**                                             |
 | `session_feedback`  | the participant (minor) | none (auto-shows)   | **self-referential signal only** (own criteria, no raw numbers) |
+| `bill_feedback`     | the committee drafters (minors) + chair report | none (auto-shows) | **never** (reads only the bill's own fields) |
 | `round_narrative`   | the chapter chair       | yes (chair approves)| **never**                                             |
 
 `session_feedback` is the **self-improving growth loop**: after every scored session the app
@@ -236,6 +237,42 @@ FORBIDDEN in this note: any number, score, average, rank, percentage, count of j
 "you scored", "you improved by", percentile, "top/best/strongest", comparison to other
 participants/parties/constituencies, jury identities or jury comments, and any vote/award
 outcome. If you cannot praise without a number, praise the BEHAVIOUR the criterion names.
+
+=== kind = "bill_feedback" (the committee's "Feedback on Your Bill" note) ===
+
+Audience: the committee's drafting team (often minors) on their bill page, AND the chapter
+report's committee annexure (chair/organiser). Tone: warm, constructive, like a mentor
+reviewing a draft. Length: **2–4 sentences**. This is a TEAM-LEVEL note about ONE BILL's
+CRAFT — never about a person.
+
+Fires automatically once a committee's bill has real drafted content. It is about the bill's
+problem framing, provisions, expected impact, implementation, and how it could better answer
+the opposition — so the team can sharpen the draft.
+
+Use these fields from grounding (any may be null — omit cleanly if so):
+  bill.title, bill.committeeName, bill.partySide ("ruling"/"opposition"),
+  bill.problemStatement, bill.objective, bill.provisions[] (the clauses),
+  bill.expectedImpact, bill.implementation, bill.oppositionResponse,
+  bill.voteOutcome { status, for, against, abstain } — the bill's OWN public record only,
+  ministry.topic, ministry.scheme — the brief the committee wrote the bill on,
+  event.name, event.chapterName.
+
+Write the note in this shape (2–4 sentences, no headings):
+  1. ONE GENUINE STRENGTH OF THE BILL: name something the draft does well — a sharp problem
+     statement, a concrete provision, a realistic implementation step, a clear objective.
+     Tie it to the committee's brief (ministry.topic) where natural.
+  2. ONE CONCRETE WAY TO STRENGTHEN IT: one specific, do-able improvement to the BILL — a
+     provision to tighten, an impact to quantify in words, an implementation gap to fill, or
+     how it could better pre-empt the opposition's response.
+  3. (Optional) If voteOutcome.status is "passed" or "rejected", you MAY mention the bill's own
+     result as LEARNING ("the House passed it — build on that" / "it didn't carry this time —
+     here's one way to win the room next time"), framed forward, never as judgement.
+
+FORBIDDEN in this note: any score, rank, percentage, jury comment, or jury identity; ANY
+comparison to other bills/committees/parties ("best/worst/strongest bill", "better than");
+naming or praising/blaming any individual drafter or presenter (you are given NONE — the
+grounding omits the people on purpose); and any put-down of the opposing bench. Keep it about
+the BILL, addressed to the team as "your committee" / "this bill".
 
 === kind = "round_narrative" (the chair's report executive summary) ===
 
@@ -448,7 +485,7 @@ Content-Type: application/json
 ```
 
 - **Do not send `status`.** The server derives it: `participant_story → ready`,
-  `session_feedback → ready`, `round_narrative → pending_review`.
+  `session_feedback → ready`, `bill_feedback → ready`, `round_narrative → pending_review`.
 - **Do not send `agendaItemId`.** The session is fixed on the pre-inserted row at enqueue
   time and is immutable on write-back — the server already knows which session this note is
   about. Sending it is ignored.

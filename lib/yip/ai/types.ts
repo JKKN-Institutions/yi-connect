@@ -13,6 +13,7 @@ export type AiDraftKind =
   | "participant_story" // subject_id = participants.id; agenda_item_id NULL — dispute-proof, NO scores
   | "round_narrative" // subject_id = null; agenda_item_id NULL — event-level chair report narrative
   | "session_feedback" // subject_id = participants.id; agenda_item_id = agenda.id — per-session growth note, NO numbers
+  | "bill_feedback" // subject_id = bills.id; agenda_item_id NULL — team-level note on a BILL's craft, NO scores/people
   | "ministry_verdict"; // future
 
 /**
@@ -217,10 +218,64 @@ export type SessionFeedbackGrounding = {
   sourceRefs: AiSourceRef[];
 };
 
+/**
+ * Grounding for kind='bill_feedback' — a TEAM-LEVEL note on ONE bill's CRAFT.
+ *
+ * CONTENT-SAFE (Director rule, non-negotiable — enforced by construction):
+ *   • Carries ONLY the bill's own fields (problem framing, provisions, expected
+ *     impact, implementation, how it could answer the opposition) + factual
+ *     event context. It NEVER carries a score, rank, percentage, jury comment,
+ *     or any cross-bill comparison.
+ *   • It NEVER carries the drafting people (lead_drafter / presenter_* /
+ *     policy_researcher are intentionally OMITTED), so no individual can be
+ *     named or blamed.
+ *   • voteOutcome is the bill's OWN public record (passed / rejected / pending),
+ *     framed by the routine as learning — never a "best/worst bill" judgement.
+ *   • Built from yip.bills + yip.events only — NEVER yip.scores / yip.results.
+ */
+export type BillFeedbackGrounding = {
+  kind: "bill_feedback";
+  bill: {
+    /** bills.id — the subject of this draft. */
+    id: string;
+    title: string | null;
+    committeeName: string | null;
+    /** "ruling" | "opposition" | null — which bench drafted it. */
+    partySide: string | null;
+    problemStatement: string | null;
+    objective: string | null;
+    /** The bill's clauses/provisions (free-form JSON from the drafting UI). */
+    provisions: unknown;
+    expectedImpact: string | null;
+    implementation: string | null;
+    /** The opposition's recorded response to the bill, if any. */
+    oppositionResponse: string | null;
+    /** The bill's own public vote outcome — factual, framed as learning. */
+    voteOutcome: {
+      status: string | null; // e.g. "passed" | "rejected" | "presented" | draft status
+      for: number | null;
+      against: number | null;
+      abstain: number | null;
+    };
+  };
+  /** The committee/ministry brief the bill was written on (from yip.topics). */
+  ministry: {
+    topic: string | null;
+    scheme: string | null;
+  } | null;
+  event: {
+    id: string;
+    name: string;
+    chapterName: string | null;
+  };
+  sourceRefs: AiSourceRef[];
+};
+
 export type AiGrounding =
   | ParticipantStoryGrounding
   | RoundNarrativeGrounding
-  | SessionFeedbackGrounding;
+  | SessionFeedbackGrounding
+  | BillFeedbackGrounding;
 
 /** A pending request handed to the routine: the row + its grounding payload. */
 export type PendingAiRequest = {

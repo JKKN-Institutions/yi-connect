@@ -28,6 +28,7 @@ import {
 } from "@/lib/yip/rubric";
 import type {
   AiSourceRef,
+  BillFeedbackGrounding,
   ParticipantStoryGrounding,
   RoundNarrativeGrounding,
   SessionCriterionPattern,
@@ -719,4 +720,184 @@ export async function getSessionFeedbackWork(
     work.push({ participantId, agendaItemId });
   }
   return work;
+}
+
+// ─── Bill feedback (team-level note on a BILL's craft) ──────────────────────
+
+/**
+ * Does this bill have enough drafted substance to coach? We never write craft
+ * feedback on a bare title-only stub. "Enough" = at least one of the meaty
+ * fields (objective / problem_statement / expected_impact / implementation) has
+ * real text, OR provisions carries at least one entry. Reads bill fields only.
+ */
+function billHasDraftedContent(b: {
+  objective: string | null;
+  problem_statement: string | null;
+  expected_impact: string | null;
+  implementation: string | null;
+  provisions: unknown;
+}): boolean {
+  const hasText = (s: string | null) => !!s && s.trim().length > 0;
+  if (
+    hasText(b.objective) ||
+    hasText(b.problem_statement) ||
+    hasText(b.expected_impact) ||
+    hasText(b.implementation)
+  ) {
+    return true;
+  }
+  if (Array.isArray(b.provisions)) return b.provisions.length > 0;
+  if (b.provisions && typeof b.provisions === "object") {
+    return Object.keys(b.provisions as Record<string, unknown>).length > 0;
+  }
+  return false;
+}
+
+/**
+ * Build the bill_feedback grounding for ONE bill. CONTENT-SAFE by construction:
+ * reads ONLY yip.bills (its own fields) + yip.events + the committee's brief
+ * from yip.topics — NEVER yip.scores / yip.results, and NEVER the drafting
+ * people columns (lead_drafter / presenter_* / policy_researcher are not
+ * selected). Returns null when the bill or event is missing.
+ */
+export async function buildBillFeedbackGrounding(
+  eventId: string,
+  billId: string
+): Promise<BillFeedbackGrounding | null> {
+  const svc = await createServiceClient();
+
+  // The bill — its OWN craft fields only. People columns are intentionally
+  // omitted so no individual can be named or blamed.
+  const { data: bill } = await svc
+    .from("bills")
+    .select(
+      "id, title, committee_name, party_side, problem_statement, objective, provisions, expected_impact, implementation, opposition_response, status, votes_for, votes_against, votes_abstain"
+    )
+    .eq("id", billId)
+    .eq("event_id", eventId)
+    .maybeSingle();
+  if (!bill) return null;
+
+  // Event (name + chapter for warm framing).
+  const { data: event } = await svc
+    .from("events")
+    .select("id, name, chapter_name")
+    .eq("id", eventId)
+    .maybeSingle();
+  if (!event) return null;
+
+  // The committee's official brief (topic + linked scheme) from yip.topics —
+  // same lookup as app/yip/me/bill/page.tsx. Older committee names that predate
+  // the catalogue simply stay null.
+  let ministry: BillFeedbackGrounding["ministry"] = null;
+  if (bill.committee_name) {
+    const { data: ct } = await svc
+      .from("topics")
+      .select("description, linked_scheme")
+      .eq("category", "committee")
+      .eq("title", bill.committee_name)
+      .eq("is_active", true)
+      .maybeSingle();
+    if (ct) {
+      ministry = {
+        topic: ct.description ?? null,
+        scheme: ct.linked_scheme ?? null,
+      };
+    }
+  }
+
+  const sourceRefs: AiSourceRef[] = [
+    { type: "bill", id: bill.id, label: bill.title ?? "Untitled Bill" },
+    { type: "event", id: event.id, label: event.name },
+  ];
+  if (bill.committee_name) {
+    sourceRefs.push({
+      type: "committee",
+      id: null,
+      label: bill.committee_name,
+    });
+  }
+
+  return {
+    kind: "bill_feedback",
+    bill: {
+      id: bill.id,
+      title: bill.title ?? null,
+      committeeName: bill.committee_name ?? null,
+      partySide: (bill.party_side as string | null) ?? null,
+      problemStatement: bill.problem_statement ?? null,
+      objective: bill.objective ?? null,
+      provisions: bill.provisions ?? null,
+      expectedImpact: bill.expected_impact ?? null,
+      implementation: bill.implementation ?? null,
+      oppositionResponse: bill.opposition_response ?? null,
+      voteOutcome: {
+        status: bill.status ?? null,
+        for: bill.votes_for ?? null,
+        against: bill.votes_against ?? null,
+        abstain: bill.votes_abstain ?? null,
+      },
+    },
+    ministry,
+    event: {
+      id: event.id,
+      name: event.name,
+      chapterName: event.chapter_name ?? null,
+    },
+    sourceRefs,
+  };
+}
+
+/**
+ * SELF-RUNNING DETECTOR for bill_feedback. For an ai_enabled event, find every
+ * bill that has DRAFTED CONTENT but does NOT yet have a bill_feedback ai_draft
+ * row, and return the bill ids that need a note. Mirrors getSessionFeedbackWork
+ * for sessions. Reads yip.bills + yip.ai_drafts only — never scores/results.
+ */
+export async function getBillFeedbackWork(
+  eventId: string
+): Promise<{ billId: string }[]> {
+  const svc = await createServiceClient();
+  const loose = svc as unknown as LooseSvc;
+
+  // ai_enabled gate (loose — column not in generated types).
+  const { data: ev } = await loose
+    .from("events")
+    .select("id, ai_enabled")
+    .eq("id", eventId)
+    .maybeSingle();
+  if (!ev || !ev.ai_enabled) return [];
+
+  // Bills for this event with their content fields (no people columns).
+  const { data: bills } = await svc
+    .from("bills")
+    .select(
+      "id, objective, problem_statement, expected_impact, implementation, provisions"
+    )
+    .eq("event_id", eventId);
+  const candidates = ((bills as Array<{
+    id: string;
+    objective: string | null;
+    problem_statement: string | null;
+    expected_impact: string | null;
+    implementation: string | null;
+    provisions: unknown;
+  }>) ?? []).filter((b) => billHasDraftedContent(b));
+  if (candidates.length === 0) return [];
+
+  // Existing bill_feedback drafts (any status) — never re-enqueue.
+  const { data: existing } = await loose
+    .from("ai_drafts")
+    .select("subject_id")
+    .eq("event_id", eventId)
+    .eq("kind", "bill_feedback");
+  const have = new Set(
+    ((existing as Array<{ subject_id: string | null }>) ?? [])
+      .map((r) => r.subject_id)
+      .filter((x): x is string => !!x)
+  );
+
+  return candidates
+    .filter((b) => !have.has(b.id))
+    .map((b) => ({ billId: b.id }));
 }

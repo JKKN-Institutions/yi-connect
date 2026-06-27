@@ -118,6 +118,56 @@ export function BillsClient({
     action: () => void;
   }>({ open: false, title: "", description: "", action: () => {} });
 
+  // Manual Add-Bill (admin shortcut) — bypasses the committee draft/report flow.
+  const [addOpen, setAddOpen] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [form, setForm] = useState({
+    committeeName: "",
+    title: "",
+    objective: "",
+    provisions: "",
+    approved: true,
+  });
+
+  async function handleAddBill() {
+    if (!form.committeeName) {
+      toast.error("Pick a committee.");
+      return;
+    }
+    if (!form.title.trim()) {
+      toast.error("Enter a bill title.");
+      return;
+    }
+    setAdding(true);
+    const result = await adminCreateBill(eventId, {
+      committeeName: form.committeeName,
+      title: form.title,
+      objective: form.objective || undefined,
+      provisions: form.provisions
+        ? form.provisions
+            .split("\n")
+            .map((p) => p.trim())
+            .filter(Boolean)
+        : undefined,
+      approved: form.approved,
+    });
+    setAdding(false);
+    if (result.success) {
+      toast.success("Bill added — it's now available in the Bill Presentation session.");
+      setAddOpen(false);
+      setForm({
+        committeeName: "",
+        title: "",
+        objective: "",
+        provisions: "",
+        approved: true,
+      });
+      router.refresh();
+    } else {
+      toast.error(result.error);
+    }
+  }
+
   // Bills sorted committee-first so the columns read in a stable order. Benchless
   // events identify bills by committee_name (party_side null); legacy benched
   // events keep ruling first, then opposition.

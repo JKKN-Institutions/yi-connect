@@ -78,7 +78,7 @@ export function buildBillTemplateDoc(opts: {
   ${field("Expected Impact", "What positive impact will this bill have?", 2)}
   ${field("Implementation Mechanism", "How will this bill be implemented?", 2)}
 
-  <p class="note">Yi Connect · Youth Parliament — fill this in offline, then enter it in the app.</p>
+  <p class="note">Yi Connect &#183; Youth Parliament &#8212; fill this in offline, then enter it in the app.</p>
 </body>
 </html>`;
 }

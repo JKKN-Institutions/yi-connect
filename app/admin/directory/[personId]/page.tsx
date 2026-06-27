@@ -24,7 +24,7 @@ export default async function DirectoryPersonDetailPage({
       <div className="rounded-lg border border-red-200 bg-red-50 p-6">
         <h1 className="text-lg font-semibold text-red-900">403 · Forbidden</h1>
         <p className="mt-2 text-sm text-red-800">
-          Only the platform super-admin (director) can view the cross-vertical Yi
+          Only the platform super-admin (director) can view the cross-app Yi
           Directory.
         </p>
       </div>

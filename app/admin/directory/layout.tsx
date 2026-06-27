@@ -1,9 +1,9 @@
 /**
  * Directory Admin — Layout (Phase A, 2026-05-28)
  *
- * Top-level shell for the cross-vertical Directory Admin UI. Neutral palette
+ * Top-level shell for the cross-app Directory Admin UI. Neutral palette
  * (NOT YIP saffron) because this is a Yi-National-level view that spans every
- * vertical (yip / future / yuva / thalir / masoom / ...).
+ * app (yip / future / yuva / yifi / thalir / masoom / ...).
  */
 import Link from "next/link";
 import { Users } from "lucide-react";
@@ -45,7 +45,7 @@ export default function DirectoryAdminLayout({
               Sync Status
             </Link>
             <span className="text-xs text-slate-500">
-              Cross-vertical · read-only
+              All apps · read-only
             </span>
           </div>
         </div>

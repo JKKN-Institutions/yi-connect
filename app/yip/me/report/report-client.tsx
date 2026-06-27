@@ -297,7 +297,7 @@ export function ReportClient({
           </Card>
           <Link href="/yip/me/bill">
             <Button className="w-full bg-[#FF9933] hover:bg-[#E68A2E]">
-              Go to Bill Drafting
+              Go to Committee Room
               <ArrowRight className="size-4 ml-1.5" />
             </Button>
           </Link>

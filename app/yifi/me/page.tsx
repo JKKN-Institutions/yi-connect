@@ -5,6 +5,10 @@ import { createServiceClient } from "@/lib/yifi/supabase/server";
 import { CensusPrompt } from "./census-prompt";
 import { RoutingCard } from "./routing-card";
 import { VowSection } from "./vow-section";
+import { GUIDES } from "@/lib/yifi/guide/content";
+import { logGuideEvent } from "@/lib/yifi/guide/actions";
+import { OnboardingLauncher } from "@/app/yifi/_components/OnboardingLauncher";
+import { ModuleWelcome } from "@/app/yifi/_components/ModuleWelcome";
 
 export const metadata = {
   title: "My YiFi",
@@ -106,6 +110,23 @@ export default async function MyYiFiPage() {
       </header>
 
       <div className="max-w-2xl mx-auto px-4 py-6 space-y-8">
+        <ModuleWelcome
+          moduleKey="participant-home"
+          lane="participant"
+          title="Welcome to YiFi"
+          body="This is your home for the event — your routing card, your vows and your dossier all live here. Start with your census so we can match you."
+          cta={{ label: "Show me how", href: "/yifi/guide?lane=participant" }}
+          onEvent={logGuideEvent}
+        />
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-white/40 text-sm">First time here? Take the quick tour.</p>
+          <OnboardingLauncher
+            content={GUIDES.participant}
+            lane="participant"
+            onEvent={logGuideEvent}
+          />
+        </div>
+
         {!registrant.census_complete && <CensusPrompt registrant={registrant} />}
 
         <section>

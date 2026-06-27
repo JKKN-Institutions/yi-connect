@@ -3,6 +3,10 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/yifi/supabase/server";
 import { LogoutButton } from "./logout-button";
+import { GUIDES } from "@/lib/yifi/guide/content";
+import { getCompletedSteps, logGuideEvent } from "@/lib/yifi/guide/actions";
+import { OnboardingLauncher } from "@/app/yifi/_components/OnboardingLauncher";
+import { ModuleWelcome } from "@/app/yifi/_components/ModuleWelcome";
 
 export const metadata = {
   title: "YiFi Admin",
@@ -73,6 +77,7 @@ export default async function YiFiAdminPage() {
 
   const userRoles = roles.map((r: any) => r.role).join(", ");
   const permissions = [...new Set(roles.flatMap((r: any) => r.permissions || []))];
+  const guideCompleted = await getCompletedSteps("organiser");
 
   return (
     <main className="min-h-screen bg-[#000066]">
@@ -92,6 +97,34 @@ export default async function YiFiAdminPage() {
       </header>
 
       <div className="max-w-5xl mx-auto px-4 py-8 space-y-8">
+        {/* First-entry welcome + onboarding launcher */}
+        <ModuleWelcome
+          moduleKey="organiser-home"
+          lane="organiser"
+          title="Welcome to the YiFi event console"
+          body="This is your command center for the edition — live stats, registrants, census, matches, vows and the reveal. Here's a quick tour of how it fits together."
+          cta={{ label: "Show me how", href: "/yifi/guide?lane=organiser" }}
+        />
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-white/50 text-sm">
+            New to the console? Take the quick walkthrough.
+          </p>
+          <div className="flex items-center gap-2">
+            <OnboardingLauncher
+              content={GUIDES.organiser}
+              lane="organiser"
+              completed={guideCompleted}
+              onEvent={logGuideEvent}
+            />
+            <Link
+              href="/yifi/guide"
+              className="inline-flex items-center rounded-lg border border-white/15 px-3 py-2 text-sm text-white/60 transition-colors hover:text-white"
+            >
+              Guide
+            </Link>
+          </div>
+        </div>
+
         {/* Live Stats */}
         {permissions.includes("stats") && stats && (
           <section>

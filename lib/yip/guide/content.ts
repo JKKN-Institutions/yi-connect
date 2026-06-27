@@ -403,9 +403,9 @@ const student: PersonaGuide = {
       title: "Draft your committee bill",
       steps: [
         {
-          action: "If you're on a bill committee, open **Bill Drafting** to write your committee's bill.",
+          action: "If you're on a bill committee, open the **Committee Room** to write, discuss and amend your committee's bill.",
           detail: "Work it out together with your committee team.",
-          link: { label: "Open Bill", href: "/yip/me/bill" },
+          link: { label: "Open Committee Room", href: "/yip/me/bill" },
         },
         {
           action: "Have **one** committee member upload the final bill.",

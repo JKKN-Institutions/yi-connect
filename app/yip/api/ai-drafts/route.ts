@@ -42,10 +42,38 @@ import type {
 // This route does live DB reads/writes — never cache it.
 export const dynamic = "force-dynamic";
 
+// Draining a busy live event means building grounding for up to 100 rows, each
+// of which does several DB reads. Give the function real headroom so the hourly
+// routine never gets cut off mid-drain.
+export const maxDuration = 300;
+
 function isAuthorized(request: NextRequest): boolean {
   const secret = process.env.YIP_AI_ROUTINE_SECRET;
   if (!secret) return false; // fail closed when unconfigured
   return request.headers.get("x-cron-secret") === secret;
+}
+
+/**
+ * Run `fn` over `items` with at most `limit` in flight at once, preserving input
+ * order in the result. Keeps the endpoint fast (parallel DB work) without
+ * opening an unbounded number of PostgREST connections at once.
+ */
+async function mapPool<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T, index: number) => Promise<R>
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let cursor = 0;
+  const workerCount = Math.max(1, Math.min(limit, items.length));
+  const workers = Array.from({ length: workerCount }, async () => {
+    while (cursor < items.length) {
+      const i = cursor++;
+      results[i] = await fn(items[i], i);
+    }
+  });
+  await Promise.all(workers);
+  return results;
 }
 
 /**
@@ -72,28 +100,44 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   // manual button. Detection is best-effort and must never block draining.
   try {
     const aiEventIds = await listAiEnabledEventIds();
-    for (const eventId of aiEventIds) {
-      const work = await getSessionFeedbackWork(eventId);
+
+    // Gather each event's detectable work (reads) in parallel. The AI-opted-in
+    // set is intentionally small, so a modest pool is plenty.
+    const perEvent = await mapPool(aiEventIds, 4, async (eventId) => {
+      const [work, billWork] = await Promise.all([
+        getSessionFeedbackWork(eventId),
+        getBillFeedbackWork(eventId),
+      ]);
+      return { eventId, work, billWork };
+    });
+
+    // Flatten to enqueue tasks. Every task targets a DISTINCT
+    // (event, kind, subject, session) key — getSessionFeedbackWork yields one
+    // row per (participant, session) and getBillFeedbackWork one per bill — so
+    // running them concurrently can't race the read-then-write in enqueueAiDraft.
+    const enqueueTasks: Array<() => Promise<unknown>> = [];
+    for (const { eventId, work, billWork } of perEvent) {
       for (const w of work) {
-        await enqueueAiDraft({
-          eventId,
-          kind: "session_feedback",
-          subjectId: w.participantId,
-          agendaItemId: w.agendaItemId,
-        });
+        enqueueTasks.push(() =>
+          enqueueAiDraft({
+            eventId,
+            kind: "session_feedback",
+            subjectId: w.participantId,
+            agendaItemId: w.agendaItemId,
+          })
+        );
       }
-      // SAME-LOOP companion: detect drafted-but-unfed bills and enqueue one
-      // bill_feedback row each (subject_id=bill.id, agenda_item_id NULL). Coexists
-      // with the session_feedback enqueue inside this try block.
-      const billWork = await getBillFeedbackWork(eventId);
       for (const b of billWork) {
-        await enqueueAiDraft({
-          eventId,
-          kind: "bill_feedback",
-          subjectId: b.billId,
-        });
+        enqueueTasks.push(() =>
+          enqueueAiDraft({
+            eventId,
+            kind: "bill_feedback",
+            subjectId: b.billId,
+          })
+        );
       }
     }
+    await mapPool(enqueueTasks, 8, (task) => task());
   } catch {
     // A failure here must not block draining existing requests; the next hourly
     // run retries.
@@ -101,8 +145,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   const pending = await listPendingAiDrafts(100);
 
-  const requests: PendingAiRequest[] = [];
-  for (const row of pending) {
+  // Build each row's grounding in parallel (bounded) — these are independent
+  // reads and are the dominant cost of this endpoint. mapPool preserves order,
+  // so the response stays sorted by created_at exactly as before.
+  const requests: PendingAiRequest[] = await mapPool(pending, 8, async (row) => {
     let grounding: AiGrounding | null = null;
     try {
       if (row.kind === "participant_story" && row.subject_id) {
@@ -138,7 +184,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     } catch {
       grounding = null;
     }
-    requests.push({
+    return {
       id: row.id,
       eventId: row.event_id,
       kind: row.kind,
@@ -146,8 +192,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       agendaItemId: row.agenda_item_id,
       status: row.status,
       grounding,
-    });
-  }
+    };
+  });
 
   return NextResponse.json({ count: requests.length, requests });
 }

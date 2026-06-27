@@ -175,6 +175,10 @@ export function ParticipantsClient({
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [checkingIn, setCheckingIn] = useState<Set<string>>(new Set());
   const [checkInFilter, setCheckInFilter] = useState<CheckInFilter>("all");
+  // Day the in/out chips are scoped to. Default Day 1 so the counts line up
+  // with the per-day header rather than an "either day" total that matches
+  // neither day (the count that confused Directors during the live event).
+  const [checkInDay, setCheckInDay] = useState<CheckInDay>("1");
   // Column filters (all = no filter). Party/committee match by number; role
   // matches the parliament_role value; state matches constituency_state.
   const [partyFilter, setPartyFilter] = useState<string>("all");

@@ -52,6 +52,7 @@ import {
   type BillDocumentRow,
 } from "@/app/yip/actions/bill-documents";
 import type { Tables } from "@/types/yip/database";
+import { buildBillTemplateDoc } from "@/lib/yip/bill-template";
 
 type Bill = Tables<{ schema: "yip" }, "bills">;
 
@@ -318,6 +319,30 @@ export function BillClient({
     setConfirmSubmit(true);
   }
 
+  // Download a blank, fillable bill template as a Word document so large
+  // committees can pre-draft offline, then type it into the app. Built fully
+  // client-side (HTML that Word opens) — no dependency, no server round-trip.
+  function handleDownloadTemplate() {
+    const html = buildBillTemplateDoc({
+      committeeName,
+      topic: committeeTopic,
+      scheme: committeeScheme,
+    });
+    const blob = new Blob([html], { type: "application/msword" });
+    const url = URL.createObjectURL(blob);
+    const slug = (committeeName ?? "committee")
+      .replace(/[^a-z0-9]+/gi, "-")
+      .replace(/^-+|-+$/g, "")
+      .toLowerCase();
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `bill-template-${slug || "committee"}.doc`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
   function confirmSubmitBill() {
     if (!bill) return;
 
@@ -454,6 +479,17 @@ export function BillClient({
           </div>
         )}
       </div>
+
+      {/* Pre-draft offline: download a blank Word template matching the app's
+          bill fields. Always available (even before the bill unlocks). */}
+      <Button
+        variant="outline"
+        onClick={handleDownloadTemplate}
+        className="w-full"
+      >
+        <Download className="size-4 mr-1.5" />
+        Download bill template (Word)
+      </Button>
 
       {/* Committee Roles — the committee picks who fills each role from its own
           members (only once the bill is unlocked). Editable while drafting,

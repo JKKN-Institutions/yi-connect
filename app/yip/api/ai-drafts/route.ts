@@ -24,9 +24,11 @@ import {
   writeAiDraft,
 } from "@/lib/yip/ai/drafts";
 import {
+  buildBillFeedbackGrounding,
   buildParticipantStoryGrounding,
   buildRoundNarrativeGrounding,
   buildSessionFeedbackGrounding,
+  getBillFeedbackWork,
   getSessionFeedbackWork,
   listAiEnabledEventIds,
 } from "@/lib/yip/ai/grounding";
@@ -80,6 +82,17 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           agendaItemId: w.agendaItemId,
         });
       }
+      // SAME-LOOP companion: detect drafted-but-unfed bills and enqueue one
+      // bill_feedback row each (subject_id=bill.id, agenda_item_id NULL). Coexists
+      // with the session_feedback enqueue inside this try block.
+      const billWork = await getBillFeedbackWork(eventId);
+      for (const b of billWork) {
+        await enqueueAiDraft({
+          eventId,
+          kind: "bill_feedback",
+          subjectId: b.billId,
+        });
+      }
     }
   } catch {
     // A failure here must not block draining existing requests; the next hourly
@@ -111,6 +124,14 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           row.event_id,
           row.subject_id,
           row.agenda_item_id
+        );
+      } else if (row.kind === "bill_feedback" && row.subject_id) {
+        // CONTENT-SAFE grounding: reads ONLY the bill's own craft fields +
+        // event/committee context, never yip.scores/results, never the bill's
+        // drafting people. subject_id = bills.id; agenda_item_id is NULL.
+        grounding = await buildBillFeedbackGrounding(
+          row.event_id,
+          row.subject_id
         );
       }
       // ministry_verdict and any unknown kind → grounding stays null (skipped).

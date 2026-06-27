@@ -37,6 +37,10 @@ import "server-only";
  */
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
+import {
+  getEventAiEnabled,
+  listBillFeedbackForEvent,
+} from "@/lib/yip/ai/drafts";
 
 /** Report-only outcome a committee's bill may be set to. */
 export type BillOutcome = "passed" | "rejected" | "not_presented";
@@ -75,6 +79,12 @@ export type CommitteeRow = {
   outcomeOverridden: boolean;
   /** Supporting documents uploaded for this committee's bill. */
   documents: CommitteeBillDocument[];
+  /**
+   * AI craft-feedback note on this committee's bill (kind='bill_feedback'),
+   * present only when the chair has opted the event into AI AND a ready note
+   * exists. Prose about the BILL's craft — never a score, rank, or person.
+   */
+  billFeedback: string | null;
 };
 
 export type CommitteesBillsData = {
@@ -201,11 +211,12 @@ export async function getCommitteesBillsData(
   const { data: billRows } = await svc
     .from("bills")
     .select(
-      "committee_name, title, objective, problem_statement, provisions, expected_impact, implementation, status, votes_for, votes_against, votes_abstain"
+      "id, committee_name, title, objective, problem_statement, provisions, expected_impact, implementation, status, votes_for, votes_against, votes_abstain"
     )
     .eq("event_id", eventId);
 
   type BillRow = {
+    id: string;
     committee_name: string | null;
     title: string | null;
     objective: string | null;
@@ -224,6 +235,25 @@ export async function getCommitteesBillsData(
     if (!key) continue;
     // First bill per committee wins (there is at most one per committee).
     if (!billByKey.has(key)) billByKey.set(key, b);
+  }
+
+  // ── bill_feedback: AI craft note per committee, gated on events.ai_enabled.
+  //    Joins kind='bill_feedback' drafts to committees by bill id (subject_id).
+  //    Content-safe: prose about the bill's craft, never a score/rank/person.
+  const feedbackByKey = new Map<string, string>();
+  if (await getEventAiEnabled(eventId)) {
+    const billIdToKey = new Map<string, string>();
+    for (const [key, b] of billByKey) billIdToKey.set(b.id, key);
+    if (billIdToKey.size > 0) {
+      const drafts = await listBillFeedbackForEvent(eventId);
+      for (const d of drafts) {
+        if (d.status !== "ready" && d.status !== "approved") continue;
+        const key = d.subject_id ? billIdToKey.get(d.subject_id) : undefined;
+        if (!key) continue;
+        const text = (d.approved_text ?? d.draft_text ?? "").trim();
+        if (text) feedbackByKey.set(key, text);
+      }
+    }
   }
 
   // ── bill_documents: file name + description grouped by committee.
@@ -309,6 +339,7 @@ export async function getCommitteesBillsData(
       outcome,
       outcomeOverridden: override != null,
       documents: docsByKey.get(key) ?? [],
+      billFeedback: feedbackByKey.get(key) ?? null,
     });
   }
 

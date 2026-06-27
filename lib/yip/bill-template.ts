@@ -56,7 +56,7 @@ export function buildBillTemplateDoc(opts: {
 </style>
 </head>
 <body>
-  <h1>Youth Parliament — Bill Drafting Template</h1>
+  <h1>Youth Parliament &#8212; Bill Drafting Template</h1>
   <p class="sub">Committee: ${committee}</p>
   ${topicRow}
   ${schemeRow}

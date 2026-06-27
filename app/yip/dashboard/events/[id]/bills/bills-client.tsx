@@ -30,6 +30,10 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/yip/utils";
 import { PARTY_COLORS } from "@/lib/yip/constants";
+import { Input } from "@/components/yip/ui/input";
+import { Label } from "@/components/yip/ui/label";
+import { Textarea } from "@/components/yip/ui/textarea";
+import { Switch } from "@/components/yip/ui/switch";
 import { formatBytes } from "@/lib/yip/media";
 import { toast } from "sonner";
 import {

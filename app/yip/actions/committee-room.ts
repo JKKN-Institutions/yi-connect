@@ -29,7 +29,10 @@ import { revalidatePath } from "next/cache";
 import { randomUUID } from "node:crypto";
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
-import { requireParticipantSession } from "@/lib/yip/auth/yip-session";
+import {
+  requireParticipantSession,
+  requireVolunteerSession,
+} from "@/lib/yip/auth/yip-session";
 import { isCommitteeEligible } from "@/lib/yip/committee-assignment";
 import { isCommitteeReportSubmitted } from "@/app/yip/actions/committee-reports";
 import { normalizeProvisions, type Clause } from "@/lib/yip/bill-provisions";
@@ -219,24 +222,46 @@ async function resolveRoomAuth(
     };
   }
 
-  // Organiser path — must hold canManage and name the committee explicitly.
+  // Manager path (organiser OR assigned YUVA volunteer) — must name the
+  // committee explicitly. Both get chair-equivalent powers, but ONLY for the
+  // committee named here.
   const want = trim(input.committeeName);
   if (!want) return { ok: false, error: "Missing committee." };
-  const access = await getYipEventAccess(input.eventId);
-  if (!access.canManage) {
-    return { ok: false, error: "Not authorized for this committee." };
-  }
-  return {
-    ok: true,
-    auth: {
-      committeeName: want,
-      isOrganiser: true,
-      isMember: false,
-      isChair: false,
-      participantId: null,
-      participantRole: null,
-    },
+
+  const managerAuth: RoomAuth = {
+    committeeName: want,
+    isOrganiser: true,
+    isMember: false,
+    isChair: false,
+    participantId: null,
+    participantRole: null,
   };
+
+  // (a) Organiser / chair / admin — getYipEventAccess.canManage.
+  const access = await getYipEventAccess(input.eventId);
+  if (access.canManage) {
+    return { ok: true, auth: managerAuth };
+  }
+
+  // (b) YUVA volunteer assigned to THIS committee — chair-equivalent powers,
+  // STRICTLY scoped to their own committee + event (director decision
+  // 2026-06-28). Fail-closed: the assignment row must match volunteer + event +
+  // committee exactly; any mismatch falls through to the deny below.
+  const vol = await requireVolunteerSession(input.eventId);
+  if (vol.ok) {
+    const { data: assigned } = await sb
+      .from("yuva_assignments")
+      .select("id")
+      .eq("volunteer_id", vol.volunteerId)
+      .eq("event_id", input.eventId)
+      .eq("committee_name", want)
+      .maybeSingle();
+    if (assigned) {
+      return { ok: true, auth: managerAuth };
+    }
+  }
+
+  return { ok: false, error: "Not authorized for this committee." };
 }
 
 // ─── Bill helpers ────────────────────────────────────────────────────────

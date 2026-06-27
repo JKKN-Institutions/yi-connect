@@ -427,7 +427,7 @@ export async function buildSessionFeedbackGrounding(
   // The session (this agenda item) — must be scoreable.
   const { data: session } = await loose
     .from("agenda")
-    .select("id, title, day, sequence_order, is_scoreable")
+    .select("id, title, day, sequence_order, is_scoreable, session_key")
     .eq("id", agendaItemId)
     .eq("event_id", eventId)
     .maybeSingle();
@@ -448,10 +448,53 @@ export async function buildSessionFeedbackGrounding(
   );
   if (rows.length === 0) return null;
 
-  // Resolve each distinct rubric's criteria shape (key → label + max + sub).
+  // Resolve the criteria shape (key → label + max). The CANONICAL source is the
+  // live per-session jury config in yip.session_parameters.parameters — the SAME
+  // dimensions the jury actually scored, with keys like
+  // "mupi.research_constituency" that match criteria_scores EXACTLY. The generic
+  // yip.rubrics row a score nominally references is a fallback only: its keys
+  // (content/communication/…) do NOT match the namespaced dimension keys, which
+  // silently zeroed every ratio for most session types.
   const rubricIds = Array.from(new Set(rows.map((r) => r.rubric_id)));
   const rubricCriteriaById = new Map<string, RubricCriterionShape[]>();
-  if (rubricIds.length > 0) {
+
+  // 1) Preferred: this session's own evaluation dimensions.
+  let sessionCriteria: RubricCriterionShape[] = [];
+  if (session.session_key) {
+    const { data: sp } = await loose
+      .from("session_parameters")
+      .select("parameters")
+      .eq("session_key", session.session_key)
+      .eq("is_active", true)
+      .maybeSingle();
+    const params = Array.isArray(sp?.parameters)
+      ? (sp!.parameters as Array<{
+          key?: string;
+          label?: string;
+          max_score?: number;
+          kind?: string;
+        }>)
+      : [];
+    // Only INDIVIDUAL evaluation dimensions feed a participant's self-referential
+    // pattern (exclude committee-/merit-level rows). If none are tagged
+    // "evaluation", fall back to every dimension with a positive max.
+    const evals = params.filter((d) => d.kind === "evaluation");
+    const usable = (evals.length > 0 ? evals : params).filter(
+      (d) => d.key && Number(d.max_score) > 0
+    );
+    sessionCriteria = usable.map((d) => ({
+      key: d.key as string,
+      label: d.label ?? (d.key as string),
+      max_score: Number(d.max_score),
+    }));
+  }
+
+  if (sessionCriteria.length > 0) {
+    // Every score row in this session shares the session's dimensions.
+    for (const rid of rubricIds) rubricCriteriaById.set(rid, sessionCriteria);
+  } else if (rubricIds.length > 0) {
+    // Fallback: the nominal rubric (legacy; correct only when its keys happen to
+    // match the stored criteria_scores keys, e.g. flat-keyed sessions).
     const { data: rubricRows } = await loose
       .from("rubrics")
       .select("id, criteria")

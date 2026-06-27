@@ -39,6 +39,8 @@ type ActionResult<T = null> =
   | { success: false; error: string };
 
 const MIN_PROVISIONS = 3;
+const MIN_OBJECTIVES = 2;
+const MAX_OBJECTIVES = 4;
 
 // ─── Untyped access for the new tables (not in generated types yet) ──────
 type AnyTable = {
@@ -70,12 +72,18 @@ const trim = (s: unknown) => (typeof s === "string" ? s.trim() : "");
 export interface RoomBill {
   id: string;
   title: string;
-  objective: string;
-  problemStatement: string;
+  // Official Mock Parliament Bill Template sections (2026-06-27):
+  preamble: string;
+  definitions: string;
+  objectives: Clause[]; // 2-4 objectives (the official list)
+  objective: string; // legacy joined mirror (kept for old readers)
+  problemStatement: string; // legacy — folded into preamble
   expectedImpact: string;
   implementation: string;
+  fundingBudget: string;
+  conclusion: string;
   status: string;
-  clauses: Clause[];
+  clauses: Clause[]; // Key Provisions
   leadDrafter: string | null;
   presenter1: string | null;
   presenter2: string | null;
@@ -143,8 +151,10 @@ export interface CommitteeRoom {
   members: RoomMember[];
   amendments: RoomAmendment[];
   readiness: {
-    hasProblem: boolean;
-    hasObjective: boolean;
+    hasTitle: boolean;
+    hasPreamble: boolean;
+    objectiveCount: number;
+    minObjectives: number;
     provisionCount: number;
     minProvisions: number;
     hasPresenters: boolean;
@@ -237,11 +247,16 @@ interface BillRow {
   committee_name: string | null;
   status: string | null;
   title: string | null;
+  preamble: string | null;
+  definitions: string | null;
   objective: string | null;
+  objectives: unknown;
   problem_statement: string | null;
   provisions: unknown;
   expected_impact: string | null;
   implementation: string | null;
+  funding_budget: string | null;
+  conclusion: string | null;
   lead_drafter: string | null;
   presenter_1: string | null;
   presenter_2: string | null;
@@ -253,7 +268,7 @@ interface BillRow {
 }
 
 const BILL_COLS =
-  "id, event_id, committee_name, status, title, objective, problem_statement, provisions, expected_impact, implementation, lead_drafter, presenter_1, presenter_2, policy_researcher, opposition_response, votes_for, votes_against, votes_abstain";
+  "id, event_id, committee_name, status, title, preamble, definitions, objective, objectives, problem_statement, provisions, expected_impact, implementation, funding_budget, conclusion, lead_drafter, presenter_1, presenter_2, policy_researcher, opposition_response, votes_for, votes_against, votes_abstain";
 
 async function loadBill(
   sb: ServiceClient,
@@ -309,6 +324,7 @@ async function ensureBill(
       status: "drafting",
       title: "Untitled Bill",
       provisions: [],
+      objectives: [],
       updated_at: new Date().toISOString(),
     })
     .select(BILL_COLS)
@@ -417,8 +433,9 @@ export async function getCommitteeRoom(input: {
     chatChannelId = (ch?.id as string | null) ?? null;
   }
 
-  // Clauses + amendments.
+  // Key Provisions (clauses) + Objectives (the official 2-4 list) + amendments.
   const clauses = bill ? normalizeProvisions(bill.provisions) : [];
+  const objectives = bill ? normalizeProvisions(bill.objectives) : [];
   const clauseTextById = new Map(clauses.map((c) => [c.id, c.text]));
   let amendments: RoomAmendment[] = [];
   if (bill) {
@@ -494,17 +511,18 @@ export async function getCommitteeRoom(input: {
   const editable = billEditable(bill, reportSubmitted);
   const isLead = isLeadDrafterOf(auth, bill);
   const canEditBill = canEdit(auth, bill) && editable && !presentationMode;
-  const readyProblem = Boolean(trim(bill?.problem_statement));
-  const readyObjective = Boolean(trim(bill?.objective));
+  const hasTitle =
+    Boolean(trim(bill?.title)) && trim(bill?.title) !== "Untitled Bill";
+  const hasPreamble = Boolean(trim(bill?.preamble));
+  const objectiveCount = objectives.length;
   const provisionCount = clauses.length;
   const hasPresenters = Boolean(bill?.presenter_1);
   const ready =
-    readyProblem &&
-    readyObjective &&
+    hasTitle &&
+    hasPreamble &&
+    objectiveCount >= MIN_OBJECTIVES &&
     provisionCount >= MIN_PROVISIONS &&
-    hasPresenters &&
-    Boolean(trim(bill?.title)) &&
-    trim(bill?.title) !== "Untitled Bill";
+    hasPresenters;
 
   const phase: CommitteeRoom["phase"] = presentationMode
     ? "presentation"
@@ -543,10 +561,15 @@ export async function getCommitteeRoom(input: {
       ? {
           id: bill.id,
           title: bill.title ?? "",
+          preamble: bill.preamble ?? "",
+          definitions: bill.definitions ?? "",
+          objectives,
           objective: bill.objective ?? "",
           problemStatement: bill.problem_statement ?? "",
           expectedImpact: bill.expected_impact ?? "",
           implementation: bill.implementation ?? "",
+          fundingBudget: bill.funding_budget ?? "",
+          conclusion: bill.conclusion ?? "",
           status: bill.status ?? "drafting",
           clauses,
           leadDrafter: bill.lead_drafter,
@@ -562,8 +585,10 @@ export async function getCommitteeRoom(input: {
     members,
     amendments,
     readiness: {
-      hasProblem: readyProblem,
-      hasObjective: readyObjective,
+      hasTitle,
+      hasPreamble,
+      objectiveCount,
+      minObjectives: MIN_OBJECTIVES,
       provisionCount,
       minProvisions: MIN_PROVISIONS,
       hasPresenters,
@@ -577,12 +602,17 @@ export async function getCommitteeRoom(input: {
 
 // ─── 2. Edit bill scalar fields ──────────────────────────────────────────
 
+// The official-template scalar sections. (Objectives + Key Provisions are
+// lists, handled by their own actions; Problem Statement is folded into the
+// Preamble and mirrored below.)
 const BILL_FIELDS = {
   title: "title",
-  objective: "objective",
-  problem_statement: "problem_statement",
+  preamble: "preamble",
+  definitions: "definitions",
   expected_impact: "expected_impact",
   implementation: "implementation",
+  funding_budget: "funding_budget",
+  conclusion: "conclusion",
 } as const;
 type BillField = keyof typeof BILL_FIELDS;
 
@@ -619,8 +649,15 @@ export async function saveBillField(input: {
   }
 
   const value = input.field === "title" ? input.value.trim() : input.value;
+  const update: Record<string, unknown> = {
+    [input.field]: value || null,
+    updated_at: new Date().toISOString(),
+  };
+  // Mirror the Preamble into the legacy problem_statement column so old readers
+  // (dashboard/control/projector) keep showing it without separate changes.
+  if (input.field === "preamble") update.problem_statement = value || null;
   const { error } = (await t(sb, "bills")
-    .update({ [input.field]: value || null, updated_at: new Date().toISOString() })
+    .update(update)
     .eq("id", bill.id)) as { error: PgError | null };
   if (error) return { success: false, error: error.message };
 
@@ -716,6 +753,95 @@ export async function removeClause(input: {
     return { success: false, error: "Clause not found." };
   }
   const res = await writeProvisions(sb, gate.bill.id, next);
+  if (res.success) revalidatePath("/yip/me/committee");
+  return res;
+}
+
+// ─── 3b. Objectives (the official 2-4 list) ──────────────────────────────
+
+async function writeObjectives(
+  sb: ServiceClient,
+  billId: string,
+  objectives: Clause[]
+): Promise<ActionResult> {
+  // Mirror the joined objectives into the legacy single `objective` column so
+  // old readers (dashboard/control/projector) keep working unchanged.
+  const joined = objectives.map((o) => o.text).join("; ");
+  const { error } = (await t(sb, "bills")
+    .update({
+      objectives: objectives as unknown as RawAny,
+      objective: joined || null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", billId)) as { error: PgError | null };
+  if (error) return { success: false, error: error.message };
+  return { success: true, data: null };
+}
+
+export async function saveObjective(input: {
+  eventId: string;
+  committeeName: string;
+  participantId?: string | null;
+  objectiveId: string;
+  text: string;
+}): Promise<ActionResult> {
+  const sb = await createServiceClient();
+  const gate = await editGate(sb, input);
+  if (!gate.ok) return { success: false, error: gate.error };
+  const text = input.text.trim();
+  if (!text) return { success: false, error: "Objective cannot be empty." };
+  const objectives = normalizeProvisions(gate.bill.objectives);
+  if (!objectives.some((o) => o.id === input.objectiveId)) {
+    return { success: false, error: "Objective not found." };
+  }
+  const next = objectives.map((o) =>
+    o.id === input.objectiveId ? { ...o, text } : o
+  );
+  const res = await writeObjectives(sb, gate.bill.id, next);
+  if (res.success) revalidatePath("/yip/me/committee");
+  return res;
+}
+
+export async function addObjective(input: {
+  eventId: string;
+  committeeName: string;
+  participantId?: string | null;
+  text: string;
+}): Promise<ActionResult<{ objectiveId: string }>> {
+  const sb = await createServiceClient();
+  const gate = await editGate(sb, input);
+  if (!gate.ok) return { success: false, error: gate.error };
+  const text = input.text.trim();
+  if (!text) return { success: false, error: "Objective cannot be empty." };
+  const objectives = normalizeProvisions(gate.bill.objectives);
+  if (objectives.length >= MAX_OBJECTIVES) {
+    return {
+      success: false,
+      error: `The template allows at most ${MAX_OBJECTIVES} objectives.`,
+    };
+  }
+  const obj: Clause = { id: randomUUID(), text };
+  const res = await writeObjectives(sb, gate.bill.id, [...objectives, obj]);
+  if (!res.success) return res;
+  revalidatePath("/yip/me/committee");
+  return { success: true, data: { objectiveId: obj.id } };
+}
+
+export async function removeObjective(input: {
+  eventId: string;
+  committeeName: string;
+  participantId?: string | null;
+  objectiveId: string;
+}): Promise<ActionResult> {
+  const sb = await createServiceClient();
+  const gate = await editGate(sb, input);
+  if (!gate.ok) return { success: false, error: gate.error };
+  const objectives = normalizeProvisions(gate.bill.objectives);
+  const next = objectives.filter((o) => o.id !== input.objectiveId);
+  if (next.length === objectives.length) {
+    return { success: false, error: "Objective not found." };
+  }
+  const res = await writeObjectives(sb, gate.bill.id, next);
   if (res.success) revalidatePath("/yip/me/committee");
   return res;
 }
@@ -992,16 +1118,21 @@ export async function submitCommitteeBill(input: {
     return { success: false, error: "The bill has already been submitted." };
   }
 
-  // Readiness — problem + objective + >= 3 provisions + a presenter + real title.
+  // Readiness (official template) — title + preamble + >= 2 objectives +
+  // >= 3 provisions + a presenter.
   const clauses = normalizeProvisions(bill.provisions);
+  const objectives = normalizeProvisions(bill.objectives);
   if (!trim(bill.title) || trim(bill.title) === "Untitled Bill") {
     return { success: false, error: "Give the bill a title first." };
   }
-  if (!trim(bill.objective)) {
-    return { success: false, error: "Add the bill's objective first." };
+  if (!trim(bill.preamble)) {
+    return { success: false, error: "Write the preamble first." };
   }
-  if (!trim(bill.problem_statement)) {
-    return { success: false, error: "Add the problem statement first." };
+  if (objectives.length < MIN_OBJECTIVES) {
+    return {
+      success: false,
+      error: `Add at least ${MIN_OBJECTIVES} objectives before submitting.`,
+    };
   }
   if (clauses.length < MIN_PROVISIONS) {
     return {

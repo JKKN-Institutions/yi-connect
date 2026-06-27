@@ -48,6 +48,9 @@ import {
   saveClause,
   addClause,
   removeClause,
+  saveObjective,
+  addObjective,
+  removeObjective,
   assignBillRole,
   proposeAmendment,
   voteAmendment,
@@ -288,22 +291,21 @@ function BillTab({
   const [newClause, setNewClause] = useState("");
   const [confirmSubmit, setConfirmSubmit] = useState(false);
 
-  // Local editable mirrors of the scalar fields (save on blur).
-  const [fields, setFields] = useState({
+  // Local editable mirrors of the official-template scalar sections (save on
+  // blur). Keys match the server BILL_FIELDS names.
+  const buildFields = () => ({
     title: bill?.title ?? "",
-    objective: bill?.objective ?? "",
-    problem_statement: bill?.problemStatement ?? "",
-    expected_impact: bill?.expectedImpact ?? "",
+    preamble: bill?.preamble ?? "",
+    definitions: bill?.definitions ?? "",
     implementation: bill?.implementation ?? "",
+    funding_budget: bill?.fundingBudget ?? "",
+    expected_impact: bill?.expectedImpact ?? "",
+    conclusion: bill?.conclusion ?? "",
   });
+  const [fields, setFields] = useState(buildFields);
   useEffect(() => {
-    setFields({
-      title: bill?.title ?? "",
-      objective: bill?.objective ?? "",
-      problem_statement: bill?.problemStatement ?? "",
-      expected_impact: bill?.expectedImpact ?? "",
-      implementation: bill?.implementation ?? "",
-    });
+    setFields(buildFields());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bill?.id, bill?.status]);
 
   // Per-clause local text (save on blur).
@@ -314,19 +316,66 @@ function BillTab({
     setClauseText(m);
   }, [bill?.id, JSON.stringify(bill?.clauses ?? [])]);
 
-  async function persistField(field: keyof typeof fields, value: string) {
+  // Per-objective local text (save on blur) + add box.
+  const [objectiveText, setObjectiveText] = useState<Record<string, string>>({});
+  const [newObjective, setNewObjective] = useState("");
+  useEffect(() => {
+    const m: Record<string, string> = {};
+    for (const o of bill?.objectives ?? []) m[o.id] = o.text;
+    setObjectiveText(m);
+  }, [bill?.id, JSON.stringify(bill?.objectives ?? [])]);
+
+  async function persistObjective(objectiveId: string, value: string) {
     if (!canEdit) return;
     const original =
-      field === "title"
-        ? bill?.title ?? ""
-        : field === "objective"
-        ? bill?.objective ?? ""
-        : field === "problem_statement"
-        ? bill?.problemStatement ?? ""
-        : field === "expected_impact"
-        ? bill?.expectedImpact ?? ""
-        : bill?.implementation ?? "";
-    if (value === original) return;
+      bill?.objectives.find((o) => o.id === objectiveId)?.text ?? "";
+    if (value.trim() === original) return;
+    const r = await saveObjective({
+      eventId,
+      committeeName: room.committeeName,
+      participantId,
+      objectiveId,
+      text: value,
+    });
+    if (!r.success) toast.error(r.error);
+    else await reload();
+  }
+
+  function handleAddObjective() {
+    const text = newObjective.trim();
+    if (!text) return;
+    startTransition(async () => {
+      const r = await addObjective({
+        eventId,
+        committeeName: room.committeeName,
+        participantId,
+        text,
+      });
+      if (!r.success) toast.error(r.error);
+      else {
+        setNewObjective("");
+        await reload();
+      }
+    });
+  }
+
+  function handleRemoveObjective(objectiveId: string) {
+    startTransition(async () => {
+      const r = await removeObjective({
+        eventId,
+        committeeName: room.committeeName,
+        participantId,
+        objectiveId,
+      });
+      if (!r.success) toast.error(r.error);
+      else await reload();
+    });
+  }
+
+  async function persistField(field: keyof typeof fields, value: string) {
+    if (!canEdit) return;
+    const originals: Record<string, string> = buildFields();
+    if (value === (originals[field] ?? "")) return;
     const r = await saveBillField({
       eventId,
       committeeName: room.committeeName,
@@ -456,9 +505,12 @@ function BillTab({
               Ready to submit?
             </p>
             <ul className="space-y-1.5">
-              <Check ok={!!fields.title.trim() && fields.title.trim() !== "Untitled Bill"} label="Bill has a title" />
-              <Check ok={r.hasObjective} label="Objective written" />
-              <Check ok={r.hasProblem} label="Problem statement written" />
+              <Check ok={r.hasTitle} label="Bill has a title" />
+              <Check ok={r.hasPreamble} label="Preamble written" />
+              <Check
+                ok={r.objectiveCount >= r.minObjectives}
+                label={`At least ${r.minObjectives} objectives (${r.objectiveCount}/${r.minObjectives})`}
+              />
               <Check
                 ok={r.provisionCount >= r.minProvisions}
                 label={`At least ${r.minProvisions} provisions (${r.provisionCount}/${r.minProvisions})`}
@@ -500,7 +552,8 @@ function BillTab({
 
       <Card>
         <CardContent className="py-4 space-y-4">
-          <Field label="Bill Title" required>
+          {/* 1. Title */}
+          <Field label="Title of the Bill" required>
             <Input
               value={fields.title}
               disabled={readOnly}
@@ -509,32 +562,103 @@ function BillTab({
               placeholder="e.g., The Youth Digital Literacy Bill, 2026"
             />
           </Field>
-          <Field label="Objective" required>
+
+          {/* 2. Preamble */}
+          <Field label="Preamble" required>
             <Textarea
-              value={fields.objective}
+              value={fields.preamble}
               disabled={readOnly}
-              rows={2}
-              onChange={(e) => setFields((f) => ({ ...f, objective: e.target.value }))}
-              onBlur={(e) => persistField("objective", e.target.value)}
-              placeholder="What does this bill aim to achieve?"
-            />
-          </Field>
-          <Field label="Problem Statement">
-            <Textarea
-              value={fields.problem_statement}
-              disabled={readOnly}
-              rows={2}
+              rows={3}
               onChange={(e) =>
-                setFields((f) => ({ ...f, problem_statement: e.target.value }))
+                setFields((f) => ({ ...f, preamble: e.target.value }))
               }
-              onBlur={(e) => persistField("problem_statement", e.target.value)}
-              placeholder="What problem does this bill address?"
+              onBlur={(e) => persistField("preamble", e.target.value)}
+              placeholder="The rationale behind the bill — the issue it addresses and its significance."
             />
           </Field>
 
-          {/* Provisions / clauses */}
+          {/* 3. Definitions */}
+          <Field label="Definitions">
+            <Textarea
+              value={fields.definitions}
+              disabled={readOnly}
+              rows={2}
+              onChange={(e) =>
+                setFields((f) => ({ ...f, definitions: e.target.value }))
+              }
+              onBlur={(e) => persistField("definitions", e.target.value)}
+              placeholder="Define any technical terms used in the bill, to avoid misinterpretation."
+            />
+          </Field>
+
+          {/* 4. Objectives (2-4 list) */}
           <div>
-            <p className="text-sm font-medium text-gray-700">Provisions</p>
+            <p className="text-sm font-medium text-gray-700">
+              Objectives of the Bill <span className="text-[#FF9933]">*</span>
+            </p>
+            <p className="text-[11px] text-gray-400 mb-2">
+              2 to 4 key objectives — specific, measurable, aligned with the purpose.
+            </p>
+            <div className="space-y-2">
+              {(bill?.objectives ?? []).map((o, i) => (
+                <div key={o.id} className="flex items-start gap-2">
+                  <span className="mt-2 flex size-5 shrink-0 items-center justify-center rounded-full bg-[#138808]/15 text-[10px] font-bold text-[#138808]">
+                    {i + 1}
+                  </span>
+                  <Textarea
+                    value={objectiveText[o.id] ?? o.text}
+                    disabled={readOnly}
+                    rows={1}
+                    onChange={(e) =>
+                      setObjectiveText((m) => ({ ...m, [o.id]: e.target.value }))
+                    }
+                    onBlur={(e) => persistObjective(o.id, e.target.value)}
+                    className="flex-1 bg-white"
+                  />
+                  {canEdit && (
+                    <button
+                      onClick={() => handleRemoveObjective(o.id)}
+                      disabled={isPending}
+                      className="mt-1 rounded p-1.5 text-red-500 hover:bg-red-50"
+                      title="Remove objective"
+                    >
+                      <Trash2 className="size-3.5" />
+                    </button>
+                  )}
+                </div>
+              ))}
+              {(bill?.objectives ?? []).length === 0 && (
+                <p className="text-sm text-gray-400 py-1">
+                  No objectives yet{canEdit ? " — add 2–4 below." : "."}
+                </p>
+              )}
+            </div>
+            {canEdit && (bill?.objectives?.length ?? 0) < 4 && (
+              <div className="mt-2 flex items-start gap-2">
+                <Textarea
+                  value={newObjective}
+                  rows={1}
+                  onChange={(e) => setNewObjective(e.target.value)}
+                  placeholder="Add an objective…"
+                  className="flex-1"
+                />
+                <Button
+                  onClick={handleAddObjective}
+                  disabled={isPending || !newObjective.trim()}
+                  variant="outline"
+                  className="shrink-0"
+                >
+                  <Plus className="size-4" />
+                </Button>
+              </div>
+            )}
+          </div>
+
+          {/* 5. Key Provisions / clauses */}
+          <div>
+            <p className="text-sm font-medium text-gray-700">
+              Key Provisions (Sections)
+            </p>
             <p className="text-[11px] text-gray-400 mb-2">
               The clauses of the bill. Each can be discussed and amended.
             </p>
@@ -609,6 +733,35 @@ function BillTab({
             )}
           </div>
 
+          {/* 6. Implementation Plan */}
+          <Field label="Implementation Plan">
+            <Textarea
+              value={fields.implementation}
+              disabled={readOnly}
+              rows={2}
+              onChange={(e) =>
+                setFields((f) => ({ ...f, implementation: e.target.value }))
+              }
+              onBlur={(e) => persistField("implementation", e.target.value)}
+              placeholder="Responsible bodies, key timelines, and processes for rollout."
+            />
+          </Field>
+
+          {/* 7. Funding / Budget */}
+          <Field label="Funding / Budget (if relevant)">
+            <Textarea
+              value={fields.funding_budget}
+              disabled={readOnly}
+              rows={2}
+              onChange={(e) =>
+                setFields((f) => ({ ...f, funding_budget: e.target.value }))
+              }
+              onBlur={(e) => persistField("funding_budget", e.target.value)}
+              placeholder="Estimated funding required and sources (govt allocation, sponsorship, PPP…)."
+            />
+          </Field>
+
+          {/* 8. Expected Impact */}
           <Field label="Expected Impact">
             <Textarea
               value={fields.expected_impact}
@@ -618,19 +771,21 @@ function BillTab({
                 setFields((f) => ({ ...f, expected_impact: e.target.value }))
               }
               onBlur={(e) => persistField("expected_impact", e.target.value)}
-              placeholder="What positive impact will this bill have?"
+              placeholder="Intended benefits, improvements, and measurable changes."
             />
           </Field>
-          <Field label="Implementation Mechanism">
+
+          {/* 9. Conclusion / Call to Action */}
+          <Field label="Conclusion / Call to Action">
             <Textarea
-              value={fields.implementation}
+              value={fields.conclusion}
               disabled={readOnly}
               rows={2}
               onChange={(e) =>
-                setFields((f) => ({ ...f, implementation: e.target.value }))
+                setFields((f) => ({ ...f, conclusion: e.target.value }))
               }
-              onBlur={(e) => persistField("implementation", e.target.value)}
-              placeholder="How will this bill be implemented?"
+              onBlur={(e) => persistField("conclusion", e.target.value)}
+              placeholder="A compelling summary that reinforces the bill's urgency and importance."
             />
           </Field>
         </CardContent>

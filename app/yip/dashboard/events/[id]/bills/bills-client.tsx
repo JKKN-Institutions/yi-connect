@@ -94,6 +94,10 @@ interface BillsClientProps {
   initialDocuments: BillDocumentRow[];
   /** Chair-only (getYipEventAccess.canDelete) — gates the Delete buttons. */
   canDelete: boolean;
+  /** Chair + organiser (canManage) — gates the manual Add Bill action. */
+  canManage: boolean;
+  /** Committee names in this event, for the Add Bill picker. */
+  committees: string[];
 }
 
 export function BillsClient({
@@ -101,6 +105,8 @@ export function BillsClient({
   initialBills,
   initialDocuments,
   canDelete,
+  canManage,
+  committees,
 }: BillsClientProps) {
   const router = useRouter();
   const [bills, setBills] = useState(initialBills);

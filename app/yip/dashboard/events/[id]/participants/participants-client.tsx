@@ -443,10 +443,17 @@ export function ParticipantsClient({
     let filtered = participants;
 
     // Check-in filter
+    // Scope the in/out test to the chosen day (Day 1 / Day 2 / either day).
+    const inForScope = (p: Participant) =>
+      checkInDay === "1"
+        ? !!p.checked_in_day1
+        : checkInDay === "2"
+          ? !!p.checked_in_day2
+          : !!p.checked_in;
     if (checkInFilter === "in") {
-      filtered = filtered.filter((p) => p.checked_in);
+      filtered = filtered.filter((p) => inForScope(p));
     } else if (checkInFilter === "out") {
-      filtered = filtered.filter((p) => !p.checked_in);
+      filtered = filtered.filter((p) => !inForScope(p));
     }
     // Column filters
     if (partyFilter !== "all")

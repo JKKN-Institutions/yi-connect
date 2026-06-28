@@ -49,6 +49,7 @@ const KEY_ROLES: { role: ParliamentRole; label: string }[] = [
   { role: "cabinet_minister", label: "Cabinet Minister" },
   { role: "shadow_minister", label: "Shadow Minister" },
   { role: "mp", label: "Member of Parliament" },
+  { role: "committee_chair", label: "Committee Chairperson" },
 ];
 
 // ─── Actions ───────────────────────────────────────────────────────

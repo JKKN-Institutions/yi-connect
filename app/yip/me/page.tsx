@@ -44,6 +44,7 @@ import {
 import { VoteClient } from "./vote/vote-client";
 import { GoIndependentButton } from "./go-independent-button";
 import { LiveNowCard } from "./live-now-card";
+import { AnnouncementStrip } from "./announcement-strip";
 import { ModuleWelcome } from "@/components/yip/guide/module-welcome";
 import { logGuideEvent } from "@/lib/yip/guide/actions";
 import { OfflineStaleNote } from "./offline-stale-note";
@@ -555,6 +556,12 @@ export default async function ParticipantPage() {
 
       {/* Offline staleness stamp — only renders when the student is offline */}
       <OfflineStaleNote renderedAt={new Date().toISOString()} />
+
+      {/* ─── ANNOUNCEMENTS (scrolling feed — sits above LIVE NOW) ─────
+          Fully defensive: self-fetches the announcement channel, renders
+          NOTHING on empty/error, and is wrapped in an error boundary so it
+          can never take down the live ballot below it. */}
+      <AnnouncementStrip eventId={event.id} participantId={participant.id} />
 
       {/* ─── LIVE NOW (realtime agenda + timer) ────────────────────── */}
       <LiveNowCard eventId={event.id} />

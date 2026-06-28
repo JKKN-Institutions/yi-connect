@@ -39,6 +39,23 @@ export interface PositionRoleGroup {
   participants: PositionParticipant[];
 }
 
+// committee_chair is committee-SCOPED (one chair per committee), unlike the
+// event-wide KEY_ROLES. It gets its own committee-wise card instead of a flat
+// tile, so the organiser sees and assigns a chair per committee.
+export interface CommitteeChairRow {
+  committee: string;
+  /** Current chair(s) for this committee (normally 0 or 1). */
+  chairs: PositionParticipant[];
+  /** Everyone on this committee — the pool eligible to be made its chair. */
+  members: PositionParticipant[];
+}
+
+export interface CommitteeChairsData {
+  /** The committee_chair jury bonus (true live value via the admin reader). */
+  bonus: number;
+  committees: CommitteeChairRow[];
+}
+
 // ─── Display order + labels for the 6 "key" roles shown on the card ──
 
 const KEY_ROLES: { role: ParliamentRole; label: string }[] = [

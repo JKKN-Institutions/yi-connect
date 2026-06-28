@@ -790,6 +790,12 @@ export async function reportMessage(args: {
 
 export interface ModChannel extends ChatChannel {
   messageCount: number;
+  /** Distinct students who have posted (activity, not membership). */
+  activeParticipants: number;
+  /** ISO timestamp of the most recent message, or null if none. */
+  lastMessageAt: string | null;
+  /** Messages flagged by students, awaiting moderation. */
+  reportedCount: number;
 }
 
 export interface ModMessage {
@@ -906,18 +912,47 @@ export async function modListChannels(
   if (error) return { success: false, error: error.message };
 
   const channels = (data ?? []).map(toChannel);
-  const counts = await Promise.all(
+  const stats = await Promise.all(
     channels.map(async (ch) => {
-      const { count } = await table(sb, "chat_messages")
-        .select("id", { count: "exact", head: true })
-        .eq("channel_id", ch.id);
-      return count ?? 0;
+      const [totalRes, reportedRes, recentRes] = await Promise.all([
+        // Accurate total (head count).
+        table(sb, "chat_messages")
+          .select("id", { count: "exact", head: true })
+          .eq("channel_id", ch.id),
+        // Flagged messages awaiting moderation.
+        table(sb, "chat_messages")
+          .select("id", { count: "exact", head: true })
+          .eq("channel_id", ch.id)
+          .not("reported_at", "is", null),
+        // Recent window → last activity + distinct active students.
+        table(sb, "chat_messages")
+          .select("sender_participant_id, created_at")
+          .eq("channel_id", ch.id)
+          .order("created_at", { ascending: false })
+          .limit(1000),
+      ]);
+
+      const recent = (recentRes.data ?? []) as {
+        sender_participant_id: string | null;
+        created_at: string;
+      }[];
+      const senders = new Set<string>();
+      for (const r of recent) {
+        if (r.sender_participant_id) senders.add(r.sender_participant_id);
+      }
+
+      return {
+        messageCount: totalRes.count ?? 0,
+        reportedCount: reportedRes.count ?? 0,
+        lastMessageAt: recent[0]?.created_at ?? null,
+        activeParticipants: senders.size,
+      };
     })
   );
 
   return {
     success: true,
-    data: channels.map((ch, i) => ({ ...ch, messageCount: counts[i] })),
+    data: channels.map((ch, i) => ({ ...ch, ...stats[i] })),
   };
 }
 

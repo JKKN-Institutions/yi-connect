@@ -11,7 +11,7 @@
  */
 
 import { useState } from "react";
-import { Reply, SmilePlus, X, Pin } from "lucide-react";
+import { Reply, SmilePlus, X, Pin, Search, Loader2 } from "lucide-react";
 import { cn } from "@/lib/yip/utils";
 import { CHAT_REACTION_EMOJIS } from "@/lib/yip/chat-reactions";
 import type {
@@ -89,6 +89,128 @@ export function ReplyQuote({
         >
           <X className="size-3.5" />
         </button>
+      )}
+    </div>
+  );
+}
+
+function formatMsgTime(iso: string): string {
+  try {
+    return new Date(iso).toLocaleString("en-IN", {
+      day: "numeric",
+      month: "short",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Per-channel message search. Drops into a channel header; expands to an input
+ * + a results panel. The caller supplies the gated search action and (optionally)
+ * a name resolver so results can show who said it.
+ */
+export function ChannelSearch({
+  onSearch,
+  nameOf,
+}: {
+  onSearch: (query: string) => Promise<ChatMessage[]>;
+  nameOf?: (m: ChatMessage) => string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const [results, setResults] = useState<ChatMessage[] | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  async function run() {
+    const query = q.trim();
+    if (query.length < 2) {
+      setResults([]);
+      return;
+    }
+    setLoading(true);
+    try {
+      setResults(await onSearch(query));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function close() {
+    setOpen(false);
+    setQ("");
+    setResults(null);
+  }
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="flex size-8 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100"
+        aria-label="Search messages"
+      >
+        <Search className="size-4" />
+      </button>
+    );
+  }
+
+  return (
+    <div className="w-full">
+      <div className="flex items-center gap-2">
+        <div className="flex flex-1 items-center gap-2 rounded-xl border border-gray-200 px-3 py-1.5">
+          <Search className="size-4 shrink-0 text-gray-400" />
+          <input
+            autoFocus
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                run();
+              }
+              if (e.key === "Escape") close();
+            }}
+            placeholder="Search messages…"
+            className="flex-1 bg-transparent text-sm focus:outline-none"
+          />
+          {loading && <Loader2 className="size-4 animate-spin text-gray-400" />}
+        </div>
+        <button
+          type="button"
+          onClick={close}
+          className="flex size-8 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100"
+          aria-label="Close search"
+        >
+          <X className="size-4" />
+        </button>
+      </div>
+
+      {results !== null && (
+        <div className="mt-2 max-h-72 overflow-y-auto rounded-xl border border-gray-100 bg-white">
+          {results.length === 0 ? (
+            <p className="px-3 py-4 text-center text-xs text-gray-400">
+              {q.trim().length < 2
+                ? "Type at least 2 characters."
+                : "No messages found."}
+            </p>
+          ) : (
+            results.map((m) => (
+              <div
+                key={m.id}
+                className="border-b border-gray-50 px-3 py-2 last:border-0"
+              >
+                <div className="mb-0.5 flex items-center gap-2 text-[10px] text-gray-400">
+                  {nameOf && <span className="font-medium">{nameOf(m)}</span>}
+                  <span>{formatMsgTime(m.createdAt)}</span>
+                </div>
+                <p className="line-clamp-2 text-xs text-gray-700">{m.body}</p>
+              </div>
+            ))
+          )}
+        </div>
       )}
     </div>
   );

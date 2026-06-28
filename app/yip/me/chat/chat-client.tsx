@@ -21,6 +21,7 @@ import {
   ReactionChips,
   MessageActions,
   PinnedBanner,
+  ChannelSearch,
 } from "@/components/yip/chat-message-extras";
 import {
   listChannels,
@@ -31,6 +32,7 @@ import {
   reportMessage,
   toggleReaction,
   listPinnedMessages,
+  searchMessages,
   type ChatChannel,
   type ChatMessage,
   type ChatReplyPreview,
@@ -109,6 +111,14 @@ export function ChatClient({
         loadPinned={() =>
           listPinnedMessages({ channelId: view.channel.id, participantId })
         }
+        search={async (query) => {
+          const r = await searchMessages({
+            channelId: view.channel.id,
+            query,
+            participantId,
+          });
+          return r.success ? r.data : [];
+        }}
         canReply
         // Announcements are read-only for students — organisers broadcast,
         // students listen. The server rejects student posts regardless; this
@@ -278,6 +288,8 @@ interface ThreadProps {
     | { success: true; data: ChatMessage[] }
     | { success: false; error: string }
   >;
+  /** Search messages in this channel (channels only). */
+  search?: (query: string) => Promise<ChatMessage[]>;
   /** When set, the composer is replaced by this read-only note. */
   readOnlyNote?: string;
   /** Report a message to the organisers (hidden on the student's own messages). */
@@ -296,6 +308,7 @@ function Thread({
   send,
   canReply,
   loadPinned,
+  search,
   readOnlyNote,
   onReport,
 }: ThreadProps) {
@@ -374,17 +387,32 @@ function Thread({
   return (
     <div className="flex h-[calc(100vh-7.5rem)] flex-col">
       {/* Thread header */}
-      <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
-        <button
-          onClick={onBack}
-          className="flex size-8 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100"
-          aria-label="Back"
-        >
-          <ArrowLeft className="size-4.5" />
-        </button>
-        <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-gray-900">{title}</p>
-          <p className="truncate text-xs text-gray-400">{subtitle}</p>
+      <div className="space-y-2 border-b border-gray-100 pb-3">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onBack}
+            className="flex size-8 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100"
+            aria-label="Back"
+          >
+            <ArrowLeft className="size-4.5" />
+          </button>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-semibold text-gray-900">
+              {title}
+            </p>
+            <p className="truncate text-xs text-gray-400">{subtitle}</p>
+          </div>
+          {search && (
+            <ChannelSearch
+              onSearch={search}
+              nameOf={(m) =>
+                m.senderKind === "student" &&
+                m.senderParticipantId === participantId
+                  ? "You"
+                  : senderLabel(m.senderKind)
+              }
+            />
+          )}
         </div>
       </div>
 

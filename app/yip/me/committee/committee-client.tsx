@@ -66,6 +66,7 @@ import {
   postChannelMessage,
   toggleReaction,
   listPinnedMessages,
+  searchMessages,
   type ChatMessage,
   type ChatReplyPreview,
 } from "@/app/yip/actions/chat";
@@ -75,6 +76,7 @@ import {
   ReactionChips,
   MessageActions,
   PinnedBanner,
+  ChannelSearch,
 } from "@/components/yip/chat-message-extras";
 import {
   BillTemplateButton,
@@ -1717,6 +1719,20 @@ function ThreadView({
 
   return (
     <div className="flex flex-col">
+      <div className="mb-2 flex justify-end">
+        <ChannelSearch
+          onSearch={async (query) => {
+            const r = await searchMessages({
+              channelId,
+              query,
+              participantId,
+              threadKey,
+            });
+            return r.success ? r.data : [];
+          }}
+          nameOf={nameOf}
+        />
+      </div>
       <PinnedBanner pinned={pinned} />
       <div
         className={`space-y-2 overflow-y-auto ${

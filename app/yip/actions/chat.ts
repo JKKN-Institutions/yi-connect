@@ -105,6 +105,7 @@ type AnyTable = {
   is: (col: string, val: unknown) => AnyTable;
   gte: (col: string, val: unknown) => AnyTable;
   in: (col: string, vals: unknown[]) => AnyTable;
+  ilike: (col: string, pattern: string) => AnyTable;
   not: (col: string, op: string, val: unknown) => AnyTable;
   order: (col: string, opts?: Record<string, unknown>) => AnyTable;
   limit: (n: number) => AnyTable;
@@ -1895,6 +1896,67 @@ export async function listPinnedMessages(args: {
     data: RawAny[] | null;
     error: PgError | null;
   };
+  if (error) return { success: false, error: error.message };
+  const enriched = await enrichMessages(sb, (data ?? []).map(toMessage), me);
+  return { success: true, data: enriched };
+}
+
+/**
+ * Full-text-ish search within a channel (case-insensitive body match). Same
+ * membership gating as listMessages; threadKey scopes to a sub-thread. Returns
+ * up to 50 newest matches (enriched), so the caller can show them in a panel.
+ */
+export async function searchMessages(args: {
+  channelId: string;
+  query: string;
+  participantId?: string;
+  threadKey?: string | null;
+}): Promise<ActionResult<ChatMessage[]>> {
+  if (!CHAT_ENABLED) return { success: false, error: DISABLED };
+  if (!args.channelId) return { success: false, error: "Missing channel." };
+  const q = (args.query ?? "").trim();
+  if (q.length < 2) return { success: true, data: [] };
+
+  const sb = await createServiceClient();
+  const { data: chRow } = (await table(sb, "chat_channels")
+    .select(CHANNEL_COLS)
+    .eq("id", args.channelId)
+    .maybeSingle()) as { data: RawAny | null; error: PgError | null };
+  if (!chRow) return { success: false, error: "Channel not found." };
+  const channel = toChannel(chRow);
+
+  let me: ReactorIdentity | null = null;
+  if (args.participantId) {
+    const auth = await requireParticipantSession(args.participantId, channel.eventId);
+    if (!auth.ok) return { success: false, error: auth.error };
+    const p = await loadParticipantChatRow(sb, args.participantId, channel.eventId);
+    if (!p || !channelVisibleToParticipant(channel, p)) {
+      return { success: false, error: "You don't have access to this channel." };
+    }
+    me = { kind: "student", id: args.participantId };
+  } else {
+    const access = await getYipEventAccess(channel.eventId);
+    if (!access.canManage) {
+      return { success: false, error: "Not authorized to read this channel." };
+    }
+    const uid = await getAuthUserId();
+    if (uid) me = { kind: "admin", id: uid };
+  }
+
+  // Escape LIKE wildcards in user input so they match literally.
+  const safe = q.replace(/[\\%_]/g, (c) => `\\${c}`);
+  let mq = table(sb, "chat_messages")
+    .select(MSG_COLS)
+    .eq("channel_id", args.channelId)
+    .is("deleted_at", null)
+    .ilike("body", `%${safe}%`);
+  if (args.threadKey === null) mq = mq.is("thread_key", null);
+  else if (typeof args.threadKey === "string")
+    mq = mq.eq("thread_key", args.threadKey);
+
+  const { data, error } = (await mq
+    .order("created_at", { ascending: false })
+    .limit(50)) as { data: RawAny[] | null; error: PgError | null };
   if (error) return { success: false, error: error.message };
   const enriched = await enrichMessages(sb, (data ?? []).map(toMessage), me);
   return { success: true, data: enriched };

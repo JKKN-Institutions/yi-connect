@@ -62,16 +62,16 @@ export interface CommitteeReportFields {
 export async function saveReportDraft(
   eventId: string,
   committeeName: string,
-  participantId: string,
+  participantId: string | null,
   data: CommitteeReportFields
 ): Promise<ActionResult<{ reportId: string }>> {
   const supabase = await createServiceClient();
 
-  const gate = await assertCommitteeMember(
+  const gate = await assertReportAccess(
     supabase,
-    participantId,
     eventId,
-    committeeName
+    committeeName,
+    participantId
   );
   if (!gate.ok) return { success: false, error: gate.error };
 

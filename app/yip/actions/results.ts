@@ -1139,10 +1139,15 @@ export async function computeResults(
   );
   const isCappedAward = (label: string | null) =>
     Boolean(label) && !teamLabels.has(label as string);
+  // award_category is a comma-joined field; read it as a list so the count stays
+  // correct even if a row ever carries more than one label. "Holds an individual
+  // award" = at least one of its labels is a (non-team) capped award.
+  const holdsCappedAward = (cat: string | null) =>
+    (cat ?? "").split(", ").some((l) => isCappedAward(l));
   const countIndividualBySchool = () => {
     const m = new Map<string, number>();
     for (const r of resultRows) {
-      if (isCappedAward(r.award_category)) {
+      if (holdsCappedAward(r.award_category)) {
         const s = schoolOf(r.participant_id);
         if (s) m.set(s, (m.get(s) ?? 0) + 1);
       }

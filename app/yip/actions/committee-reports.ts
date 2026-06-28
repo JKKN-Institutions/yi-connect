@@ -2,6 +2,7 @@
 
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { requireParticipantSession } from "@/lib/yip/auth/yip-session";
+import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { isCommitteeEligible } from "@/lib/yip/committee-assignment";
 import type { Tables } from "@/types/yip/database";
 

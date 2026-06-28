@@ -39,6 +39,7 @@ import {
   ArrowRight,
   ClipboardList,
   Megaphone,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { CHAT_ENABLED } from "@/lib/yip/chat-config";
@@ -52,6 +53,7 @@ import {
   addObjective,
   removeObjective,
   assignBillRole,
+  setBillRoleMembers,
   proposeAmendment,
   voteAmendment,
   resolveAmendment,
@@ -1220,12 +1222,75 @@ function AmendmentCard({
 
 // ─── Roles tab ───────────────────────────────────────────────────────────
 
-const ROLE_DEFS: { key: "lead_drafter" | "presenter_1" | "presenter_2" | "policy_researcher"; label: string }[] = [
-  { key: "lead_drafter", label: "Lead Drafter" },
-  { key: "presenter_1", label: "Presenter 1" },
-  { key: "presenter_2", label: "Presenter 2" },
-  { key: "policy_researcher", label: "Policy Researcher" },
-];
+function MultiRoleRow({
+  label,
+  singular,
+  ids,
+  members,
+  canAssign,
+  onAdd,
+  onRemove,
+}: {
+  label: string;
+  singular: string;
+  ids: string[];
+  members: CommitteeRoom["members"];
+  canAssign: boolean;
+  onAdd: (id: string) => void;
+  onRemove: (id: string) => void;
+}) {
+  const chosen = new Set(ids);
+  const available = members.filter((m) => !chosen.has(m.id));
+  return (
+    <div className="space-y-1.5">
+      <span className="text-xs font-medium text-gray-500">{label}</span>
+      <div className="flex flex-wrap gap-1.5">
+        {ids.length === 0 && (
+          <span className="text-sm text-gray-400">— none yet —</span>
+        )}
+        {ids.map((id) => {
+          const m = members.find((x) => x.id === id);
+          return (
+            <span
+              key={id}
+              className="inline-flex items-center gap-1 rounded-full bg-purple-50 py-1 pl-2.5 pr-1 text-xs font-medium text-purple-700"
+            >
+              {m?.name ?? "—"}
+              {m?.isChair ? " (Chair)" : ""}
+              {canAssign && (
+                <button
+                  type="button"
+                  onClick={() => onRemove(id)}
+                  aria-label={`Remove ${m?.name ?? "member"}`}
+                  className="-mr-0.5 flex size-5 items-center justify-center rounded-full text-purple-400 hover:bg-red-50 hover:text-red-500"
+                >
+                  <X className="size-3.5" />
+                </button>
+              )}
+            </span>
+          );
+        })}
+      </div>
+      {canAssign && available.length > 0 && (
+        <select
+          value=""
+          onChange={(e) => {
+            if (e.target.value) onAdd(e.target.value);
+          }}
+          className="h-9 w-full rounded-md border border-gray-200 bg-white px-2 text-sm"
+        >
+          <option value="">+ Add {singular}…</option>
+          {available.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.name}
+              {m.isChair ? " (Chair)" : ""}
+            </option>
+          ))}
+        </select>
+      )}
+    </div>
+  );
+}
 
 function RolesTab({
   eventId,
@@ -1239,90 +1304,200 @@ function RolesTab({
   reload: () => Promise<unknown>;
 }) {
   const bill = room.bill;
+  const billId = bill?.id ?? null;
   const canAssign = room.permissions.canAssignRoles;
-  const [saving, setSaving] = useState<string | null>(null);
 
-  const current: Record<string, string | null> = {
-    lead_drafter: bill?.leadDrafter ?? null,
-    presenter_1: bill?.presenter1 ?? null,
-    presenter_2: bill?.presenter2 ?? null,
-    policy_researcher: bill?.policyResearcher ?? null,
+  // Optimistic local lists so fast successive add/remove never clobber each
+  // other (each handler computes the next list from a ref, not a stale prop).
+  // Re-sync from the server only when the bill IDENTITY changes (first load /
+  // switching committees) and after a burst of edits fully settles — never
+  // mid-burst.
+  const [drafters, setDrafters] = useState<string[]>(bill?.drafters ?? []);
+  const [presenters, setPresenters] = useState<string[]>(bill?.presenters ?? []);
+  const draftersRef = useRef(drafters);
+  draftersRef.current = drafters;
+  const presentersRef = useRef(presenters);
+  presentersRef.current = presenters;
+
+  const lastBillId = useRef<string | null>(billId);
+  useEffect(() => {
+    if (billId !== lastBillId.current) {
+      lastBillId.current = billId;
+      setDrafters(bill?.drafters ?? []);
+      setPresenters(bill?.presenters ?? []);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [billId]);
+
+  const [busy, setBusy] = useState(false);
+  const [savingResearcher, setSavingResearcher] = useState(false);
+  const chain = useRef<Promise<unknown>>(Promise.resolve());
+  const inflight = useRef(0);
+
+  const persist = useCallback(
+    (role: "drafter" | "presenter", ids: string[]) => {
+      inflight.current += 1;
+      setBusy(true);
+      chain.current = chain.current
+        .then(() =>
+          setBillRoleMembers({
+            eventId,
+            committeeName: room.committeeName,
+            participantId,
+            role,
+            participantIds: ids,
+          })
+        )
+        .then((r) => {
+          if (r && !r.success) toast.error(r.error);
+        })
+        .catch(() => toast.error("Couldn't save roles. Try again."))
+        .finally(() => {
+          inflight.current -= 1;
+          if (inflight.current === 0) {
+            setBusy(false);
+            // Burst done → reconcile local with the server's truth.
+            void reload().then((res) => {
+              const r = res as
+                | { success: true; data: CommitteeRoom }
+                | { success: false }
+                | undefined;
+              if (r && r.success && r.data.bill) {
+                setDrafters(r.data.bill.drafters);
+                setPresenters(r.data.bill.presenters);
+              }
+            });
+          }
+        });
+    },
+    [eventId, participantId, room.committeeName, reload]
+  );
+
+  const addDrafter = (id: string) => {
+    if (draftersRef.current.includes(id)) return;
+    const next = [...draftersRef.current, id];
+    draftersRef.current = next;
+    setDrafters(next);
+    persist("drafter", next);
+  };
+  const removeDrafter = (id: string) => {
+    const next = draftersRef.current.filter((x) => x !== id);
+    draftersRef.current = next;
+    setDrafters(next);
+    persist("drafter", next);
+  };
+  const addPresenter = (id: string) => {
+    if (presentersRef.current.includes(id)) return;
+    const next = [...presentersRef.current, id];
+    presentersRef.current = next;
+    setPresenters(next);
+    persist("presenter", next);
+  };
+  const removePresenter = (id: string) => {
+    const next = presentersRef.current.filter((x) => x !== id);
+    presentersRef.current = next;
+    setPresenters(next);
+    persist("presenter", next);
   };
 
-  async function assign(role: ROLEKEY, assigneeId: string | null) {
-    setSaving(role);
+  async function assignResearcher(assigneeId: string | null) {
+    setSavingResearcher(true);
     const r = await assignBillRole({
       eventId,
       committeeName: room.committeeName,
       participantId,
-      role,
+      role: "policy_researcher",
       assigneeId,
     });
-    setSaving(null);
+    setSavingResearcher(false);
     if (!r.success) toast.error(r.error);
     else await reload();
   }
-
-  const nameOf = (id: string | null) =>
-    id ? room.members.find((m) => m.id === id)?.name ?? "—" : "—";
 
   if (!bill) {
     return (
       <Card>
         <CardContent className="py-6 text-center text-sm text-gray-500">
-          Start the bill draft first, then assign who leads, presents and
-          researches it.
+          Start the bill draft first, then add who drafts and presents it.
         </CardContent>
       </Card>
     );
   }
 
+  const nameOf = (id: string | null) =>
+    id ? room.members.find((m) => m.id === id)?.name ?? "—" : "—";
+
   return (
     <Card>
-      <CardContent className="py-4 space-y-3">
+      <CardContent className="py-4 space-y-4">
         <div className="flex items-center gap-1.5">
           <Users className="size-4 text-purple-500" />
-          <p className="text-sm font-semibold text-gray-700">
-            Committee roles
-          </p>
-        </div>
-        {ROLE_DEFS.map((rd) => (
-          <div key={rd.key} className="flex items-center gap-2">
-            <span className="w-28 shrink-0 text-xs font-medium text-gray-500">
-              {rd.label}
+          <p className="text-sm font-semibold text-gray-700">Committee roles</p>
+          {busy && (
+            <span className="ml-auto inline-flex items-center gap-1 text-[11px] text-gray-400">
+              <Loader2 className="size-3 animate-spin" />
+              Saving…
             </span>
-            {canAssign ? (
-              <select
-                value={current[rd.key] ?? ""}
-                disabled={saving === rd.key}
-                onChange={(e) => assign(rd.key, e.target.value || null)}
-                className="flex-1 h-9 rounded-md border border-gray-200 bg-white px-2 text-sm disabled:opacity-50"
-              >
-                <option value="">— Unassigned —</option>
-                {room.members.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name}
-                    {m.isChair ? " (Chair)" : ""}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <span className="text-sm font-medium text-gray-800">
-                {nameOf(current[rd.key])}
-              </span>
-            )}
-          </div>
-        ))}
-        {!canAssign && (
-          <p className="text-[11px] text-gray-400 pt-1">
-            The chair assigns roles.
+          )}
+        </div>
+
+        <MultiRoleRow
+          label="Drafters"
+          singular="drafter"
+          ids={drafters}
+          members={room.members}
+          canAssign={canAssign}
+          onAdd={addDrafter}
+          onRemove={removeDrafter}
+        />
+        <MultiRoleRow
+          label="Presenters"
+          singular="presenter"
+          ids={presenters}
+          members={room.members}
+          canAssign={canAssign}
+          onAdd={addPresenter}
+          onRemove={removePresenter}
+        />
+
+        <div className="space-y-1.5">
+          <span className="text-xs font-medium text-gray-500">
+            Policy Researcher
+          </span>
+          {canAssign ? (
+            <select
+              value={bill.policyResearcher ?? ""}
+              disabled={savingResearcher}
+              onChange={(e) => assignResearcher(e.target.value || null)}
+              className="h-9 w-full rounded-md border border-gray-200 bg-white px-2 text-sm disabled:opacity-50"
+            >
+              <option value="">— Unassigned —</option>
+              {room.members.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                  {m.isChair ? " (Chair)" : ""}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <span className="text-sm font-medium text-gray-800">
+              {nameOf(bill.policyResearcher)}
+            </span>
+          )}
+        </div>
+
+        {canAssign ? (
+          <p className="text-[11px] text-gray-400">
+            Add as many drafters and presenters as your committee needs.
+            Drafters can edit the bill; presenters present it to the House.
           </p>
+        ) : (
+          <p className="text-[11px] text-gray-400">The chair assigns roles.</p>
         )}
       </CardContent>
     </Card>
   );
 }
-type ROLEKEY = "lead_drafter" | "presenter_1" | "presenter_2" | "policy_researcher";
 
 // ─── Discussion tab + clause thread ──────────────────────────────────────
 

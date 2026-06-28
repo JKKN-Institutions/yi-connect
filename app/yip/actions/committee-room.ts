@@ -87,6 +87,11 @@ export interface RoomBill {
   conclusion: string;
   status: string;
   clauses: Clause[]; // Key Provisions
+  // Configurable role lists (any number per committee). The legacy single
+  // fields below are kept in sync (drafters[0] / presenters[0] / presenters[1])
+  // for the dashboard / control / projector readers that still use them.
+  drafters: string[];
+  presenters: string[];
   leadDrafter: string | null;
   presenter1: string | null;
   presenter2: string | null;
@@ -285,6 +290,8 @@ interface BillRow {
   lead_drafter: string | null;
   presenter_1: string | null;
   presenter_2: string | null;
+  drafters: unknown;
+  presenters: unknown;
   policy_researcher: string | null;
   opposition_response: string | null;
   votes_for: number | null;
@@ -293,7 +300,7 @@ interface BillRow {
 }
 
 const BILL_COLS =
-  "id, event_id, committee_name, status, title, preamble, definitions, objective, objectives, problem_statement, provisions, expected_impact, implementation, funding_budget, conclusion, lead_drafter, presenter_1, presenter_2, policy_researcher, opposition_response, votes_for, votes_against, votes_abstain";
+  "id, event_id, committee_name, status, title, preamble, definitions, objective, objectives, problem_statement, provisions, expected_impact, implementation, funding_budget, conclusion, lead_drafter, presenter_1, presenter_2, drafters, presenters, policy_researcher, opposition_response, votes_for, votes_against, votes_abstain";
 
 async function loadBill(
   sb: ServiceClient,
@@ -329,15 +336,37 @@ async function reportUnlocked(
   return Boolean(ev?.allow_bill_before_report);
 }
 
-const isLeadDrafterOf = (auth: RoomAuth, bill: BillRow | null) =>
-  Boolean(auth.participantId && bill && bill.lead_drafter === auth.participantId);
+/** Parse a jsonb id array (string[] or stringified) into a clean string[]. */
+function parseIdList(v: unknown): string[] {
+  let arr: unknown = v;
+  if (typeof v === "string") {
+    try {
+      arr = JSON.parse(v);
+    } catch {
+      return [];
+    }
+  }
+  return Array.isArray(arr)
+    ? arr.filter((x): x is string => typeof x === "string" && x.length > 0)
+    : [];
+}
+
+// A "drafter" (full edit rights, same as the old single lead drafter) is anyone
+// in the configurable drafters[] list. Falls back to the legacy lead_drafter
+// column so bills written before this change still grant the original drafter.
+const isDrafterOf = (auth: RoomAuth, bill: BillRow | null) => {
+  if (!auth.participantId || !bill) return false;
+  const drafters = parseIdList(bill.drafters);
+  if (drafters.length) return drafters.includes(auth.participantId);
+  return bill.lead_drafter === auth.participantId;
+};
 
 /** Bill content is editable only while drafting AND after the report unlock. */
 const billEditable = (bill: BillRow | null, reportSubmitted: boolean) =>
   reportSubmitted && (!bill || (bill.status ?? "drafting") === "drafting");
 
 const canEdit = (auth: RoomAuth, bill: BillRow | null) =>
-  auth.isOrganiser || auth.isChair || isLeadDrafterOf(auth, bill);
+  auth.isOrganiser || auth.isChair || isDrafterOf(auth, bill);
 
 /** Ensure a drafting bill row exists for this committee; create on first write. */
 async function ensureBill(
@@ -546,14 +575,17 @@ export async function getCommitteeRoom(input: {
 
   // Permissions.
   const editable = billEditable(bill, reportSubmitted);
-  const isLead = isLeadDrafterOf(auth, bill);
+  const isLead = isDrafterOf(auth, bill);
   const canEditBill = canEdit(auth, bill) && editable && !presentationMode;
   const hasTitle =
     Boolean(trim(bill?.title)) && trim(bill?.title) !== "Untitled Bill";
   const hasPreamble = Boolean(trim(bill?.preamble));
   const objectiveCount = objectives.length;
   const provisionCount = clauses.length;
-  const hasPresenters = Boolean(bill?.presenter_1);
+  // Configurable role lists (any number). Empty bill ⇒ empty lists.
+  const drafters = parseIdList(bill?.drafters);
+  const presenters = parseIdList(bill?.presenters);
+  const hasPresenters = presenters.length > 0;
   const ready =
     hasTitle &&
     hasPreamble &&
@@ -582,7 +614,7 @@ export async function getCommitteeRoom(input: {
     canAssignRoles:
       (auth.isOrganiser || auth.isChair) && editable && !presentationMode,
     canSubmit: canEdit(auth, bill) && editable && !presentationMode,
-    needsChair: !hasChair && !bill?.lead_drafter,
+    needsChair: !hasChair && drafters.length === 0,
   };
 
   const room: CommitteeRoom = {
@@ -609,6 +641,8 @@ export async function getCommitteeRoom(input: {
           conclusion: bill.conclusion ?? "",
           status: bill.status ?? "drafting",
           clauses,
+          drafters,
+          presenters,
           leadDrafter: bill.lead_drafter,
           presenter1: bill.presenter_1,
           presenter2: bill.presenter_2,
@@ -946,6 +980,72 @@ export async function assignBillRole(input: {
   return { success: true, data: null };
 }
 
+/**
+ * Set the FULL list of members holding a configurable bill role (drafter or
+ * presenter) — any number per committee. The caller sends the complete desired
+ * list; we replace the stored array and mirror the first 1-2 ids back into the
+ * legacy single columns so the dashboard / control / projector keep working.
+ * Chair or organiser only; same report + lock gates as assignBillRole.
+ */
+export async function setBillRoleMembers(input: {
+  eventId: string;
+  committeeName: string;
+  participantId?: string | null;
+  role: "drafter" | "presenter";
+  participantIds: string[];
+}): Promise<ActionResult> {
+  if (input.role !== "drafter" && input.role !== "presenter") {
+    return { success: false, error: "Unknown role." };
+  }
+  const sb = await createServiceClient();
+  const authed = await resolveRoomAuth(sb, input);
+  if (!authed.ok) return { success: false, error: authed.error };
+  const auth = authed.auth;
+  if (
+    !(await reportUnlocked(sb, input.eventId, auth.committeeName, auth.isOrganiser))
+  ) {
+    return { success: false, error: "Submit your Committee Report first." };
+  }
+  const bill = await loadBill(sb, input.eventId, auth.committeeName);
+  if (!bill) return { success: false, error: "Start the bill draft first." };
+  if (!billEditable(bill, true)) {
+    return { success: false, error: "Roles are locked — the bill is submitted." };
+  }
+  if (!(auth.isOrganiser || auth.isChair)) {
+    return { success: false, error: "Only the chair can assign roles." };
+  }
+
+  // De-dupe, preserve order, and verify every id is on THIS committee.
+  const ids = Array.from(
+    new Set((input.participantIds ?? []).filter((x) => typeof x === "string" && x))
+  );
+  if (ids.length) {
+    const { data: rows } = await sb
+      .from("participants")
+      .select("id")
+      .eq("event_id", input.eventId)
+      .eq("committee_name", auth.committeeName)
+      .in("id", ids);
+    const valid = new Set((rows ?? []).map((r) => r.id as string));
+    if (ids.some((id) => !valid.has(id))) {
+      return { success: false, error: "Someone you picked isn't on this committee." };
+    }
+  }
+
+  const patch: Record<string, unknown> =
+    input.role === "drafter"
+      ? { drafters: ids, lead_drafter: ids[0] ?? null }
+      : { presenters: ids, presenter_1: ids[0] ?? null, presenter_2: ids[1] ?? null };
+  patch.updated_at = new Date().toISOString();
+
+  const { error } = (await t(sb, "bills")
+    .update(patch)
+    .eq("id", bill.id)) as { error: PgError | null };
+  if (error) return { success: false, error: error.message };
+  revalidatePath("/yip/me/committee");
+  return { success: true, data: null };
+}
+
 // ─── 5. Amendments: propose / vote / resolve ─────────────────────────────
 
 export async function proposeAmendment(input: {
@@ -1177,8 +1277,8 @@ export async function submitCommitteeBill(input: {
       error: `Add at least ${MIN_PROVISIONS} provisions before submitting.`,
     };
   }
-  if (!bill.presenter_1) {
-    return { success: false, error: "Choose who presents the bill first." };
+  if (parseIdList(bill.presenters).length === 0 && !bill.presenter_1) {
+    return { success: false, error: "Choose at least one presenter first." };
   }
 
   const { error } = (await t(sb, "bills")

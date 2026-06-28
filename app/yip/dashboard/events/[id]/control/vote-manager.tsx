@@ -876,12 +876,14 @@ export function VoteManager({
                 <p className="text-xs text-gray-500">
                   {party.member_count} member
                   {party.member_count === 1 ? "" : "s"}
-                  {party.party_leader_id && (
-                    <span className="ml-1 inline-flex items-center gap-1 text-amber-700">
-                      · <Crown className="size-3 text-amber-500" />
-                      Leader elected
-                    </span>
-                  )}
+                  {party.party_leader_id &&
+                    leaderSessionByParty.get(party.id)?.status !== "open" &&
+                    leaderSessionByParty.get(party.id)?.status !== "closed" && (
+                      <span className="ml-1 inline-flex items-center gap-1 text-amber-700">
+                        · <Crown className="size-3 text-amber-500" />
+                        Leader elected
+                      </span>
+                    )}
                 </p>
               </div>
               {(() => {
@@ -913,9 +915,9 @@ export function VoteManager({
                       )}
                     >
                       {sess.status === "open"
-                        ? `Voting · ${sess.totalVotes}`
+                        ? `Voting · ${sess.totalVotes} / ${party.member_count}`
                         : sess.status === "closed"
-                          ? "Closed"
+                          ? `Closed · ${sess.totalVotes} votes`
                           : "Revealed"}
                     </Badge>
                     {sess.status === "open" && (
@@ -1077,7 +1079,7 @@ export function VoteManager({
             disabled={
               isPending ||
               leaderDialog.selectedIds.length < 3 ||
-              leaderDialog.selectedIds.length > 5
+              leaderDialog.selectedIds.length > 10
             }
             onClick={handleOpenLeaderElection}
           >

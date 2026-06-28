@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useTransition, useCallback } from "react";
+import { getCabinetConfig } from "@/app/yip/actions/cabinet";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/yip/ui/card";
 import { Button } from "@/components/yip/ui/button";
 import { Badge } from "@/components/yip/ui/badge";
@@ -178,6 +179,26 @@ export function VoteManager({
   const [totalShadowSeats, setTotalShadowSeats] = useState<number>(
     MINISTRIES.length
   );
+
+  // Default the cabinet/shadow seat totals to THIS event's configured cabinet
+  // size (e.g. 10 for Erode), falling back to MINISTRIES.length. Runs once on
+  // mount; the organiser can still adjust each total afterwards.
+  useEffect(() => {
+    let active = true;
+    getCabinetConfig(eventId)
+      .then((c) => {
+        if (active && c.count > 0) {
+          setTotalCabinetSeats(c.count);
+          setTotalShadowSeats(c.count);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eventId]);
+
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean;
     title: string;

@@ -77,7 +77,10 @@ export function AdminCommitteeReport({
   function handleSave() {
     startTransition(async () => {
       const r = await saveReportDraft(eventId, committeeName, null, form);
-      if (!r.success) return toast.error(r.error);
+      if (!r.success) {
+        toast.error(r.error);
+        return;
+      }
       const fresh = await getReportForCommittee(eventId, committeeName);
       if (fresh) setReport(fresh);
       toast.success("Report saved");

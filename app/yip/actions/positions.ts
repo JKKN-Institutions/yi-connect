@@ -14,6 +14,7 @@
 
 import { createClient, createServiceClient } from "@/lib/yip/supabase/server";
 import { requireSuperAdmin } from "@/lib/yip/auth/require-super-admin";
+import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { revalidatePath } from "next/cache";
 import type { Database } from "@/types/yip/database";
 

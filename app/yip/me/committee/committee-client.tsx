@@ -1228,16 +1228,16 @@ function MultiRoleRow({
   ids,
   members,
   canAssign,
-  saving,
-  onChange,
+  onAdd,
+  onRemove,
 }: {
   label: string;
   singular: string;
   ids: string[];
   members: CommitteeRoom["members"];
   canAssign: boolean;
-  saving: boolean;
-  onChange: (ids: string[]) => void;
+  onAdd: (id: string) => void;
+  onRemove: (id: string) => void;
 }) {
   const chosen = new Set(ids);
   const available = members.filter((m) => !chosen.has(m.id));
@@ -1253,19 +1253,18 @@ function MultiRoleRow({
           return (
             <span
               key={id}
-              className="inline-flex items-center gap-1 rounded-full bg-purple-50 px-2.5 py-1 text-xs font-medium text-purple-700"
+              className="inline-flex items-center gap-1 rounded-full bg-purple-50 py-1 pl-2.5 pr-1 text-xs font-medium text-purple-700"
             >
               {m?.name ?? "—"}
               {m?.isChair ? " (Chair)" : ""}
               {canAssign && (
                 <button
                   type="button"
-                  onClick={() => onChange(ids.filter((x) => x !== id))}
-                  disabled={saving}
+                  onClick={() => onRemove(id)}
                   aria-label={`Remove ${m?.name ?? "member"}`}
-                  className="ml-0.5 text-purple-400 hover:text-red-500 disabled:opacity-50"
+                  className="-mr-0.5 flex size-5 items-center justify-center rounded-full text-purple-400 hover:bg-red-50 hover:text-red-500"
                 >
-                  <X className="size-3" />
+                  <X className="size-3.5" />
                 </button>
               )}
             </span>
@@ -1275,11 +1274,10 @@ function MultiRoleRow({
       {canAssign && available.length > 0 && (
         <select
           value=""
-          disabled={saving}
           onChange={(e) => {
-            if (e.target.value) onChange([...ids, e.target.value]);
+            if (e.target.value) onAdd(e.target.value);
           }}
-          className="h-9 w-full rounded-md border border-gray-200 bg-white px-2 text-sm disabled:opacity-50"
+          className="h-9 w-full rounded-md border border-gray-200 bg-white px-2 text-sm"
         >
           <option value="">+ Add {singular}…</option>
           {available.map((m) => (
@@ -1306,25 +1304,104 @@ function RolesTab({
   reload: () => Promise<unknown>;
 }) {
   const bill = room.bill;
+  const billId = bill?.id ?? null;
   const canAssign = room.permissions.canAssignRoles;
-  const [saving, setSaving] = useState(false);
 
-  async function setMembers(role: "drafter" | "presenter", ids: string[]) {
-    setSaving(true);
-    const r = await setBillRoleMembers({
-      eventId,
-      committeeName: room.committeeName,
-      participantId,
-      role,
-      participantIds: ids,
-    });
-    setSaving(false);
-    if (!r.success) toast.error(r.error);
-    else await reload();
-  }
+  // Optimistic local lists so fast successive add/remove never clobber each
+  // other (each handler computes the next list from a ref, not a stale prop).
+  // Re-sync from the server only when the bill IDENTITY changes (first load /
+  // switching committees) and after a burst of edits fully settles — never
+  // mid-burst.
+  const [drafters, setDrafters] = useState<string[]>(bill?.drafters ?? []);
+  const [presenters, setPresenters] = useState<string[]>(bill?.presenters ?? []);
+  const draftersRef = useRef(drafters);
+  draftersRef.current = drafters;
+  const presentersRef = useRef(presenters);
+  presentersRef.current = presenters;
+
+  const lastBillId = useRef<string | null>(billId);
+  useEffect(() => {
+    if (billId !== lastBillId.current) {
+      lastBillId.current = billId;
+      setDrafters(bill?.drafters ?? []);
+      setPresenters(bill?.presenters ?? []);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [billId]);
+
+  const [busy, setBusy] = useState(false);
+  const [savingResearcher, setSavingResearcher] = useState(false);
+  const chain = useRef<Promise<unknown>>(Promise.resolve());
+  const inflight = useRef(0);
+
+  const persist = useCallback(
+    (role: "drafter" | "presenter", ids: string[]) => {
+      inflight.current += 1;
+      setBusy(true);
+      chain.current = chain.current
+        .then(() =>
+          setBillRoleMembers({
+            eventId,
+            committeeName: room.committeeName,
+            participantId,
+            role,
+            participantIds: ids,
+          })
+        )
+        .then((r) => {
+          if (r && !r.success) toast.error(r.error);
+        })
+        .catch(() => toast.error("Couldn't save roles. Try again."))
+        .finally(() => {
+          inflight.current -= 1;
+          if (inflight.current === 0) {
+            setBusy(false);
+            // Burst done → reconcile local with the server's truth.
+            void reload().then((res) => {
+              const r = res as
+                | { success: true; data: CommitteeRoom }
+                | { success: false }
+                | undefined;
+              if (r && r.success && r.data.bill) {
+                setDrafters(r.data.bill.drafters);
+                setPresenters(r.data.bill.presenters);
+              }
+            });
+          }
+        });
+    },
+    [eventId, participantId, room.committeeName, reload]
+  );
+
+  const addDrafter = (id: string) => {
+    if (draftersRef.current.includes(id)) return;
+    const next = [...draftersRef.current, id];
+    draftersRef.current = next;
+    setDrafters(next);
+    persist("drafter", next);
+  };
+  const removeDrafter = (id: string) => {
+    const next = draftersRef.current.filter((x) => x !== id);
+    draftersRef.current = next;
+    setDrafters(next);
+    persist("drafter", next);
+  };
+  const addPresenter = (id: string) => {
+    if (presentersRef.current.includes(id)) return;
+    const next = [...presentersRef.current, id];
+    presentersRef.current = next;
+    setPresenters(next);
+    persist("presenter", next);
+  };
+  const removePresenter = (id: string) => {
+    const next = presentersRef.current.filter((x) => x !== id);
+    presentersRef.current = next;
+    setPresenters(next);
+    persist("presenter", next);
+  };
 
   async function assignResearcher(assigneeId: string | null) {
-    setSaving(true);
+    setSavingResearcher(true);
     const r = await assignBillRole({
       eventId,
       committeeName: room.committeeName,
@@ -1332,7 +1409,7 @@ function RolesTab({
       role: "policy_researcher",
       assigneeId,
     });
-    setSaving(false);
+    setSavingResearcher(false);
     if (!r.success) toast.error(r.error);
     else await reload();
   }
@@ -1356,25 +1433,31 @@ function RolesTab({
         <div className="flex items-center gap-1.5">
           <Users className="size-4 text-purple-500" />
           <p className="text-sm font-semibold text-gray-700">Committee roles</p>
+          {busy && (
+            <span className="ml-auto inline-flex items-center gap-1 text-[11px] text-gray-400">
+              <Loader2 className="size-3 animate-spin" />
+              Saving…
+            </span>
+          )}
         </div>
 
         <MultiRoleRow
           label="Drafters"
           singular="drafter"
-          ids={bill.drafters}
+          ids={drafters}
           members={room.members}
           canAssign={canAssign}
-          saving={saving}
-          onChange={(ids) => setMembers("drafter", ids)}
+          onAdd={addDrafter}
+          onRemove={removeDrafter}
         />
         <MultiRoleRow
           label="Presenters"
           singular="presenter"
-          ids={bill.presenters}
+          ids={presenters}
           members={room.members}
           canAssign={canAssign}
-          saving={saving}
-          onChange={(ids) => setMembers("presenter", ids)}
+          onAdd={addPresenter}
+          onRemove={removePresenter}
         />
 
         <div className="space-y-1.5">
@@ -1384,7 +1467,7 @@ function RolesTab({
           {canAssign ? (
             <select
               value={bill.policyResearcher ?? ""}
-              disabled={saving}
+              disabled={savingResearcher}
               onChange={(e) => assignResearcher(e.target.value || null)}
               className="h-9 w-full rounded-md border border-gray-200 bg-white px-2 text-sm disabled:opacity-50"
             >

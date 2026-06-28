@@ -14,12 +14,39 @@ type ServiceClient = Awaited<ReturnType<typeof createServiceClient>>;
  * Returns a clear, user-facing error on failure — never a silent redirect/drop
  * (CLAUDE.md #27). Operational dependency: complete that day's check-in BEFORE
  * opening any vote on that day, or every cast is correctly blocked.
+ *
+ * ONLINE EVENTS (2026-06-28): an online event has no physical check-in desk, so
+ * presence can't be verified. When the event has `skip_vote_checkin = true`,
+ * this gate is bypassed entirely (every registered student with a valid
+ * participant session may vote, on any day). Default is false, so in-person
+ * chapters are unchanged. The bypass lives here so all three vote paths (self,
+ * kiosk, floor) honour it from one place.
  */
 export async function assertCheckedInForVote(
   supabase: ServiceClient,
   participantId: string,
   agendaItemId: string | null
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  // Resolve the vote's day AND its event up front — the event's online flag can
+  // skip the whole gate before we even look at the participant's check-in state.
+  let day: number | null | undefined;
+  if (agendaItemId) {
+    const { data: item } = await supabase
+      .from("agenda")
+      .select("day, event_id")
+      .eq("id", agendaItemId)
+      .maybeSingle();
+    day = item?.day ?? null;
+    if (item?.event_id) {
+      const { data: ev } = await supabase
+        .from("events")
+        .select("skip_vote_checkin")
+        .eq("id", item.event_id)
+        .maybeSingle();
+      if (ev?.skip_vote_checkin) return { ok: true };
+    }
+  }
+
   const { data: participant } = await supabase
     .from("participants")
     .select("checked_in, checked_in_day1, checked_in_day2")
@@ -28,23 +55,12 @@ export async function assertCheckedInForVote(
 
   if (!participant) return { ok: false, error: "Participant not found." };
 
-  let present: boolean;
-  if (agendaItemId) {
-    const { data: item } = await supabase
-      .from("agenda")
-      .select("day")
-      .eq("id", agendaItemId)
-      .maybeSingle();
-    const day = item?.day;
-    present =
-      day === 1
-        ? !!participant.checked_in_day1
-        : day === 2
-          ? !!participant.checked_in_day2
-          : !!participant.checked_in;
-  } else {
-    present = !!participant.checked_in;
-  }
+  const present =
+    day === 1
+      ? !!participant.checked_in_day1
+      : day === 2
+        ? !!participant.checked_in_day2
+        : !!participant.checked_in;
 
   if (!present) {
     return {

@@ -757,7 +757,11 @@ export async function getEvent(eventId: string) {
 
 async function setEventLock(
   eventId: string,
-  field: "allocation_locked" | "scores_locked" | "registrations_frozen",
+  field:
+    | "allocation_locked"
+    | "scores_locked"
+    | "registrations_frozen"
+    | "skip_vote_checkin",
   value: boolean
 ): Promise<ActionResult<null>> {
   const access = await getYipEventAccess(eventId);
@@ -803,6 +807,18 @@ export async function setRegistrationsFrozen(
   value: boolean
 ): Promise<ActionResult<null>> {
   return setEventLock(eventId, "registrations_frozen", value);
+}
+
+/**
+ * Online event toggle. When true, the check-in eligibility gate is bypassed for
+ * every vote on this event (no physical check-in desk online). Default false —
+ * in-person chapters keep requiring check-in. See lib/yip/vote-eligibility.ts.
+ */
+export async function setVoteCheckinSkipped(
+  eventId: string,
+  value: boolean
+): Promise<ActionResult<null>> {
+  return setEventLock(eventId, "skip_vote_checkin", value);
 }
 
 // ─── Get Event With Details ────────────────────────────────────────

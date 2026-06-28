@@ -2128,6 +2128,7 @@ export type Database = {
           questions_close_at: string | null
           questions_open_at: string | null
           registrations_frozen: boolean | null
+          skip_vote_checkin: boolean
           allow_bulk_floor_votes: boolean
           allow_bill_before_report: boolean
           results_published_at: string | null
@@ -2179,6 +2180,7 @@ export type Database = {
           questions_close_at?: string | null
           questions_open_at?: string | null
           registrations_frozen?: boolean | null
+          skip_vote_checkin?: boolean
           allow_bulk_floor_votes?: boolean
           allow_bill_before_report?: boolean
           results_published_at?: string | null
@@ -2230,6 +2232,7 @@ export type Database = {
           questions_close_at?: string | null
           questions_open_at?: string | null
           registrations_frozen?: boolean | null
+          skip_vote_checkin?: boolean
           allow_bulk_floor_votes?: boolean
           allow_bill_before_report?: boolean
           results_published_at?: string | null

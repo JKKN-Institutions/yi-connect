@@ -1,6 +1,7 @@
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
 import { CommitteeClient } from "@/app/yip/me/committee/committee-client";
+import { AdminCommitteeReport } from "./admin-committee-report";
 
 // Organiser view of a committee's Room — the SAME surface participants use, but
 // driven by canManage (no participant session). The organiser can read + edit

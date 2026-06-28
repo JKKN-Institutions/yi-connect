@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { createClient } from "@/lib/yip/supabase/client";
 import type { Tables } from "@/types/yip/database";
+import { getSessionVoteCounts } from "@/app/yip/actions/voting";
 
 type VoteSession = Tables<{ schema: "yip" }, "vote_sessions">;
 
@@ -25,12 +26,11 @@ export function useActiveVoteSessions(eventId: string): {
   const supabase = createClient();
   const [sessions, setSessions] = useState<ActiveVoteSession[]>([]);
   const [loading, setLoading] = useState(true);
+  // Whether any session is OPEN — drives live turnout polling.
+  const [hasOpen, setHasOpen] = useState(false);
 
   // Only the latest fetch may commit (guards out-of-order refetches).
   const seqRef = useRef(0);
-  // Current session ids, so the (unfilterable) votes subscription can ignore
-  // ballots belonging to OTHER events.
-  const idsRef = useRef<string[]>([]);
 
   const fetchAll = useCallback(async () => {
     const mySeq = ++seqRef.current;
@@ -42,33 +42,19 @@ export function useActiveVoteSessions(eventId: string): {
       .order("opened_at", { ascending: false })
       .limit(100);
     const all = rows ?? [];
-    idsRef.current = all.map((s) => s.id);
 
-    // Live counts are shown only for OPEN sessions, so count only those — keeps
-    // the query small and well under the PostgREST ~1000-row cap even late in an
-    // event (closed/revealed sessions would otherwise accumulate thousands of
-    // ballots and undercount). session_id is not in the generated DB types yet,
-    // so use a narrow untyped accessor — same pattern as use-vote-session.ts.
+    // Live turnout counts: yip.votes RLS hides ballots until a session is
+    // REVEALED (secret ballot), so a client-side read of an OPEN election always
+    // returns 0. Count via the organiser-gated server action, which uses the
+    // service role and returns ONLY the per-session count (never the ballots).
+    // Only OPEN sessions need a live count.
     const openIds = all
       .filter((s) => s.status === "open")
       .map((s) => s.id);
-    const counts: Record<string, number> = {};
+    let counts: Record<string, number> = {};
     if (openIds.length > 0) {
-      type VotesQuery = {
-        select: (c: string) => VotesQuery;
-        in: (c: string, v: string[]) => VotesQuery;
-        then: Promise<{ data: { session_id: string | null }[] | null }>["then"];
-      };
-      const votesClient = supabase as unknown as {
-        from: (t: string) => VotesQuery;
-      };
-      const { data: votes } = await votesClient
-        .from("votes")
-        .select("session_id")
-        .in("session_id", openIds);
-      (votes ?? []).forEach((v) => {
-        if (v.session_id) counts[v.session_id] = (counts[v.session_id] ?? 0) + 1;
-      });
+      const res = await getSessionVoteCounts(eventId, openIds);
+      if (res.success) counts = res.data;
     }
 
     if (mySeq !== seqRef.current) return; // superseded by a newer fetch
@@ -76,6 +62,7 @@ export function useActiveVoteSessions(eventId: string): {
     setSessions(
       all.map((s) => ({ session: s, totalVotes: counts[s.id] ?? 0 }))
     );
+    setHasOpen(openIds.length > 0);
     setLoading(false);
   }, [eventId, supabase]);
 
@@ -88,7 +75,9 @@ export function useActiveVoteSessions(eventId: string): {
     fetchAll();
   }, [fetchAll]);
 
-  // Realtime: refetch on any session change for this event, or any new ballot.
+  // Realtime: refetch on any session status change (open/close/reveal). Ballot
+  // INSERTs are NOT subscribed — yip.votes RLS gives the organiser no realtime
+  // events for unrevealed ballots, so live turnout is driven by polling below.
   useEffect(() => {
     const channel = supabase
       .channel(`yip:active-votes:${eventId}`)
@@ -102,18 +91,6 @@ export function useActiveVoteSessions(eventId: string): {
         },
         () => fetchRef.current()
       )
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "yip", table: "votes" },
-        (payload) => {
-          // votes has no event_id to filter on server-side, so ignore ballots
-          // that don't belong to one of THIS event's sessions (avoids a
-          // refetch storm from other chapters' concurrent events).
-          const sid = (payload.new as { session_id?: string | null })
-            ?.session_id;
-          if (sid && idsRef.current.includes(sid)) fetchRef.current();
-        }
-      )
       .subscribe();
 
     return () => {
@@ -121,6 +98,19 @@ export function useActiveVoteSessions(eventId: string): {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId]);
+
+  // Live turnout poll while any election is OPEN. Pauses when the tab is hidden
+  // and when nothing is open, so it costs nothing outside an active vote.
+  useEffect(() => {
+    if (!hasOpen) return;
+    const tick = () => {
+      if (typeof document === "undefined" || !document.hidden) {
+        fetchRef.current();
+      }
+    };
+    const id = setInterval(tick, 3500);
+    return () => clearInterval(id);
+  }, [hasOpen]);
 
   return { sessions, loading };
 }

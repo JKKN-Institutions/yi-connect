@@ -50,6 +50,7 @@ type VotesTable = {
   insert: (row: Record<string, unknown>) => Promise<{ error: VotesPgError | null }>;
   update: (row: Record<string, unknown>) => VotesTable;
   eq: (col: string, val: unknown) => VotesTable;
+  in: (col: string, vals: readonly unknown[]) => VotesTable;
   is: (col: string, val: unknown) => VotesTable;
   maybeSingle: () => Promise<{ data: VoteRowLite | null; error: VotesPgError | null }>;
   then: Promise<{ data: VoteRowLite[] | null; error: VotesPgError | null }>["then"];
@@ -1494,4 +1495,35 @@ export async function getMyVoteScope(): Promise<
     success: true,
     data: { partyId: data?.party_id ?? null, side },
   };
+}
+
+// ─── Live turnout counts (organiser only) ───────────────────────
+// yip.votes RLS hides ballots until a session is REVEALED (secret ballot), so a
+// client-side count of an OPEN election always reads 0. This returns ONLY the
+// per-session ballot COUNT (never the ballots themselves) via the service role,
+// gated to organisers, so the control panel can show live turnout while a vote
+// is open without leaking who voted for whom.
+export async function getSessionVoteCounts(
+  eventId: string,
+  sessionIds: string[]
+): Promise<ActionResult<Record<string, number>>> {
+  if (sessionIds.length === 0) return { success: true, data: {} };
+
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
+
+  const supabase = await createServiceClient();
+  const { data, error } = await votesTable(supabase)
+    .select("session_id")
+    .in("session_id", sessionIds);
+  if (error) return { success: false, error: error.message };
+
+  const rows = (data ?? []) as unknown as { session_id: string | null }[];
+  const counts: Record<string, number> = {};
+  for (const r of rows) {
+    if (r.session_id) counts[r.session_id] = (counts[r.session_id] ?? 0) + 1;
+  }
+  return { success: true, data: counts };
 }

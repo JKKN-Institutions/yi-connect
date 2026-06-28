@@ -129,7 +129,7 @@ export async function saveReportDraft(
 
 export async function submitReport(
   reportId: string,
-  participantId: string
+  participantId: string | null
 ): Promise<ActionResult> {
   const supabase = await createServiceClient();
 
@@ -143,11 +143,11 @@ export async function submitReport(
 
   if (!report) return { success: false, error: "Report not found." };
 
-  const gate = await assertCommitteeMember(
+  const gate = await assertReportAccess(
     supabase,
-    participantId,
     report.event_id,
-    report.committee_name
+    report.committee_name,
+    participantId
   );
   if (!gate.ok) return { success: false, error: gate.error };
 

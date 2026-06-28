@@ -879,9 +879,9 @@ export function VoteManager({
                   {party.party_leader_id &&
                     leaderSessionByParty.get(party.id)?.status !== "open" &&
                     leaderSessionByParty.get(party.id)?.status !== "closed" && (
-                      <span className="ml-1 inline-flex items-center gap-1 text-amber-700">
+                      <span className="ml-1 inline-flex items-center gap-1 font-medium text-amber-700">
                         · <Crown className="size-3 text-amber-500" />
-                        Leader elected
+                        {party.party_leader_name ?? "Leader elected"}
                       </span>
                     )}
                 </p>

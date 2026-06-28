@@ -4,10 +4,12 @@ import { getEvent } from "@/app/yip/actions/events";
 import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
 import { PositionsAssignmentCard } from "@/components/yip/positions-assignment-card";
 import { CommitteeChairsCard } from "@/components/yip/committee-chairs-card";
+import { CommitteeMinistersCard } from "@/components/yip/committee-ministers-card";
 import {
   getParticipantsByRole,
   getAllEventParticipants,
   getCommitteeChairs,
+  getCommitteeMinisters,
 } from "@/app/yip/actions/positions";
 
 export default async function PositionsPage({

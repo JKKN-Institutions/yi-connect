@@ -62,6 +62,7 @@ import { QuestionHourPanel } from "./question-hour";
 import { GovernmentFormationPanel } from "./government-formation";
 import { VoteManager } from "./vote-manager";
 import { BillSession } from "./bill-session";
+import { ElectionResultsRollup } from "./election-results-rollup";
 import type { Tables } from "@/types/yip/database";
 import { toast } from "sonner";
 
@@ -1269,6 +1270,10 @@ export function ControlPanel({
               totalParticipants={stats.totalParticipants}
             />
           )}
+
+          {/* Persistent results roll-up — every revealed vote stays visible here
+              even after the live VoteManager card flips to a newer session. */}
+          <ElectionResultsRollup eventId={eventId} />
 
           {/* Current Speaker */}
           {currentAgendaItem && currentAgendaItem.agenda_type !== "question_hour" && (

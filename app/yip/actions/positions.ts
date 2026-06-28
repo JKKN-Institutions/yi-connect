@@ -162,6 +162,75 @@ export async function getParticipantsByRole(
 }
 
 /**
+ * Committee-wise chairs for the Positions tab. committee_chair is committee-
+ * scoped (one chair per committee), so this returns one row per committee —
+ * derived from the committees that actually have members — with its current
+ * chair(s) and the full member pool eligible to be made chair. Reuses
+ * setParliamentRole for the write: that sets only parliament_role and leaves
+ * committee_name intact, so making a committee's own member a committee_chair
+ * makes them that committee's chair (isChair = role===committee_chair &&
+ * committee_name===room → needsChair flips false, bill editing unlocks).
+ */
+export async function getCommitteeChairs(
+  eventId: string
+): Promise<CommitteeChairsData> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canView) return { bonus: 0, committees: [] };
+
+  const supabase = await createServiceClient();
+  const [{ bonuses }, participantsRes] = await Promise.all([
+    // Admin (service-client) reader — the anon reader RLS-falls-back to defaults
+    // that omit committee_chair, which would show "+0" for a role that earns +2.
+    getPositionBonusConfigAdmin(),
+    supabase
+      .from("participants")
+      .select("id, full_name, party_side, parliament_role, committee_name")
+      .eq("event_id", eventId)
+      .not("committee_name", "is", null)
+      .order("full_name"),
+  ]);
+
+  const bonus = bonuses["committee_chair"] ?? 0;
+
+  type Member = {
+    id: string;
+    full_name: string;
+    party_side: string | null;
+    parliament_role: ParliamentRole | null;
+  };
+  const byCommittee = new Map<string, Member[]>();
+  for (const p of participantsRes.data ?? []) {
+    const committee = (p.committee_name ?? "").trim();
+    if (!committee) continue;
+    const m: Member = {
+      id: p.id,
+      full_name: p.full_name,
+      party_side: p.party_side,
+      parliament_role: p.parliament_role,
+    };
+    const list = byCommittee.get(committee);
+    if (list) list.push(m);
+    else byCommittee.set(committee, [m]);
+  }
+
+  const committees: CommitteeChairRow[] = [...byCommittee.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([committee, members]) => ({
+      committee,
+      chairs: members
+        .filter((m) => m.parliament_role === "committee_chair")
+        .map(({ id, full_name, party_side }) => ({ id, full_name, party_side })),
+      members: members.map(({ id, full_name, party_side }) => ({
+        id,
+        full_name,
+        party_side,
+      })),
+    }));
+
+  return { bonus, committees };
+}
+
+/**
  * All participants for an event (used to populate the assignment dropdown).
  * Light-weight projection — keep payload small.
  */

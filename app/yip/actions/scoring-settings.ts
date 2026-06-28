@@ -23,13 +23,21 @@ export type AggregationMethod =
   | "average"
   | "best_n"
   | "sum"
-  | "weighted_90";
+  | "weighted_90"
+  // Uniform /100 model (#635/#636): every session scored on its own rubric,
+  // normalised to a fraction of its own max, weighted by session_weight → /90.
+  // The engine (results.ts) + DB CHECK constraint already accept this; it was
+  // missing ONLY from this app-level allow-list, so getScoringSettings silently
+  // sanitised the live setting back to weighted_average — the intended model
+  // never ran. Adding it here makes the configured method actually take effect.
+  | "weighted_pct_90";
 const METHODS: AggregationMethod[] = [
   "weighted_average",
   "average",
   "best_n",
   "sum",
   "weighted_90",
+  "weighted_pct_90",
 ];
 
 export type ScoringSettings = {

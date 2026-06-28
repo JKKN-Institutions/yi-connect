@@ -256,6 +256,83 @@ export async function getCommitteeChairs(
 }
 
 /**
+ * Committee-wise Cabinet & Shadow ministers for the Positions tab. Mirrors
+ * getCommitteeChairs, but each committee has two bench-restricted seats: the
+ * Cabinet Minister is picked from the committee's RULING members and the Shadow
+ * Minister from its OPPOSITION members. Writes reuse setParliamentRole (sets only
+ * parliament_role; committee_name is untouched), so making a committee's own
+ * ruling member a cabinet_minister makes them that committee's cabinet minister.
+ */
+export async function getCommitteeMinisters(
+  eventId: string
+): Promise<CommitteeMinistersData> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canView)
+    return { cabinetBonus: 0, shadowBonus: 0, committees: [] };
+
+  const supabase = await createServiceClient();
+  const [{ bonuses }, participantsRes] = await Promise.all([
+    // Admin (service-client) reader — the anon reader RLS-falls-back to defaults
+    // that omit shadow_minister, which would show "+0" for a role that earns points.
+    getPositionBonusConfigAdmin(),
+    supabase
+      .from("participants")
+      .select("id, full_name, party_side, parliament_role, committee_name")
+      .eq("event_id", eventId)
+      .not("committee_name", "is", null)
+      .order("full_name"),
+  ]);
+
+  const cabinetBonus = bonuses["cabinet_minister"] ?? 0;
+  const shadowBonus = bonuses["shadow_minister"] ?? 0;
+
+  type Member = {
+    id: string;
+    full_name: string;
+    party_side: string | null;
+    parliament_role: ParliamentRole | null;
+  };
+  const byCommittee = new Map<string, Member[]>();
+  for (const p of participantsRes.data ?? []) {
+    const committee = (p.committee_name ?? "").trim();
+    if (!committee) continue;
+    const m: Member = {
+      id: p.id,
+      full_name: p.full_name,
+      party_side: p.party_side,
+      parliament_role: p.parliament_role,
+    };
+    const list = byCommittee.get(committee);
+    if (list) list.push(m);
+    else byCommittee.set(committee, [m]);
+  }
+
+  const strip = ({ id, full_name, party_side }: Member): PositionParticipant => ({
+    id,
+    full_name,
+    party_side,
+  });
+
+  const committees: CommitteeMinisterRow[] = [...byCommittee.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([committee, members]) => ({
+      committee,
+      cabinet: members
+        .filter((m) => m.parliament_role === "cabinet_minister")
+        .map(strip),
+      shadow: members
+        .filter((m) => m.parliament_role === "shadow_minister")
+        .map(strip),
+      rulingMembers: members.filter((m) => m.party_side === "ruling").map(strip),
+      oppositionMembers: members
+        .filter((m) => m.party_side === "opposition")
+        .map(strip),
+    }));
+
+  return { cabinetBonus, shadowBonus, committees };
+}
+
+/**
  * All participants for an event (used to populate the assignment dropdown).
  * Light-weight projection — keep payload small.
  */

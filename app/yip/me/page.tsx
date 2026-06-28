@@ -166,24 +166,55 @@ export default async function ParticipantPage() {
 
   // The student's actual party NAME (e.g. "Bharat Progressive Front"), not just
   // the bench. party_id is the primary key; fall back to (event, party_number)
-  // since some participants carry only party_number.
+  // since some participants carry only party_number. We also pull the party's
+  // own identity (symbol, tagline, 4-point manifesto) so the dashboard can show
+  // it — scoped to THIS student's party only.
   let partyName: string | null = null;
-  if (participant.party_id) {
-    const { data: party } = await supabase
-      .from("parties")
-      .select("name")
-      .eq("id", participant.party_id)
-      .maybeSingle();
-    partyName = party?.name ?? null;
-  }
-  if (!partyName && participant.party_number != null) {
-    const { data: party } = await supabase
-      .from("parties")
-      .select("name")
-      .eq("event_id", event.id)
-      .eq("party_number", participant.party_number)
-      .maybeSingle();
-    partyName = party?.name ?? null;
+  let partyDetails: {
+    symbol_url: string | null;
+    tagline: string | null;
+    manifesto: string[];
+  } | null = null;
+  {
+    let partyRow:
+      | {
+          name: string | null;
+          symbol_url: string | null;
+          tagline: string | null;
+          manifesto: unknown;
+        }
+      | null = null;
+    if (participant.party_id) {
+      const { data } = await supabase
+        .from("parties")
+        .select("name, symbol_url, tagline, manifesto")
+        .eq("id", participant.party_id)
+        .maybeSingle();
+      partyRow = data ?? null;
+    }
+    if (!partyRow && participant.party_number != null) {
+      const { data } = await supabase
+        .from("parties")
+        .select("name, symbol_url, tagline, manifesto")
+        .eq("event_id", event.id)
+        .eq("party_number", participant.party_number)
+        .maybeSingle();
+      partyRow = data ?? null;
+    }
+    if (partyRow) {
+      partyName = partyRow.name ?? null;
+      // manifesto is a jsonb string[] of planks; each plank may carry newlines.
+      const planks = Array.isArray(partyRow.manifesto)
+        ? (partyRow.manifesto as unknown[]).filter(
+            (m): m is string => typeof m === "string" && m.trim().length > 0
+          )
+        : [];
+      partyDetails = {
+        symbol_url: partyRow.symbol_url ?? null,
+        tagline: partyRow.tagline ?? null,
+        manifesto: planks,
+      };
+    }
   }
 
   // Fetch results if published. Students see their RANK + any awards only —
@@ -736,6 +767,69 @@ export default async function ParticipantPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* ─── YOUR PARTY MANIFESTO (this student's own party only) ──────
+          Symbol + tagline + the 4-point manifesto the chapter set on the
+          Parties page. Shown only when the party has any of these filled, and
+          only for the viewer's OWN party — no other party's platform leaks. */}
+      {partyDetails &&
+        (partyDetails.symbol_url ||
+          partyDetails.tagline ||
+          partyDetails.manifesto.length > 0) && (
+          <Card className={partyAccent.border}>
+            <div className={`h-1 w-full bg-gradient-to-r ${partyAccent.bar}`} />
+            <CardContent className="pt-4 pb-4">
+              <div className="flex items-center gap-3 mb-3">
+                {partyDetails.symbol_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={partyDetails.symbol_url}
+                    alt={partyName ?? "Party symbol"}
+                    className="size-11 shrink-0 rounded-lg border bg-white object-contain"
+                  />
+                ) : (
+                  <span
+                    className={`inline-flex size-11 shrink-0 items-center justify-center rounded-lg ${partyAccent.chip}`}
+                  >
+                    <Flag className="size-5" />
+                  </span>
+                )}
+                <div className="min-w-0">
+                  <h2 className="text-sm font-bold text-gray-900 truncate">
+                    {partyName ?? "Your Party"}
+                  </h2>
+                  {partyDetails.tagline && (
+                    <p className="text-xs text-gray-500 mt-0.5 truncate">
+                      {partyDetails.tagline}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {partyDetails.manifesto.length > 0 && (
+                <>
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-2">
+                    Our Manifesto
+                  </p>
+                  <ol className="space-y-2">
+                    {partyDetails.manifesto.map((plank, i) => (
+                      <li key={i} className="flex gap-2.5">
+                        <span
+                          className={`inline-flex size-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${partyAccent.chip}`}
+                        >
+                          {i + 1}
+                        </span>
+                        <span className="text-sm text-gray-700 whitespace-pre-line">
+                          {plank}
+                        </span>
+                      </li>
+                    ))}
+                  </ol>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
       {/* ─── QUESTION HOUR ────────────────────────────────────────── */}
       <Card className="border-cyan-200/50 overflow-hidden">

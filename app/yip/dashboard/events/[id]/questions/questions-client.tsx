@@ -15,6 +15,12 @@ import {
   TableCell,
 } from "@/components/yip/ui/table";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/yip/ui/dialog";
+import {
   MessageSquare,
   CheckCircle2,
   XCircle,
@@ -157,6 +163,7 @@ export function QuestionsClient({
   const [activeTab, setActiveTab] = useState<FilterTab>("all");
   const [benchFilter, setBenchFilter] = useState<BenchFilter>("all");
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [viewing, setViewing] = useState<QuestionWithSubmitter | null>(null);
 
   // ─── Stats ──────────────────────────────────────────────────
 
@@ -643,9 +650,18 @@ export function QuestionsClient({
                         </span>
                       </TableCell>
 
-                      {/* Question Text */}
+                      {/* Question Text — click to read in full */}
                       <TableCell className="text-sm text-gray-700 max-w-[300px]">
-                        <p className="line-clamp-2">{q.question_text}</p>
+                        <button
+                          type="button"
+                          onClick={() => setViewing(q)}
+                          className="text-left w-full group/q cursor-pointer"
+                          title="Click to read the full question"
+                        >
+                          <p className="line-clamp-2 group-hover/q:text-blue-700 group-hover/q:underline decoration-dotted underline-offset-2">
+                            {q.question_text}
+                          </p>
+                        </button>
                       </TableCell>
 
                       {/* Type (starred/unstarred) */}
@@ -758,7 +774,154 @@ export function QuestionsClient({
           </CardContent>
         </Card>
       )}
+
+      {/* Full-question drill-down */}
+      <QuestionDetailDialog
+        question={
+          viewing ? questions.find((x) => x.id === viewing.id) ?? viewing : null
+        }
+        onClose={() => setViewing(null)}
+        onApprove={(id) => {
+          handleApprove(id);
+        }}
+        onReject={(id) => {
+          handleReject(id);
+        }}
+        isPending={isPending}
+      />
     </div>
+  );
+}
+
+// ─── Question Detail Dialog ─────────────────────────────────────
+
+function QuestionDetailDialog({
+  question,
+  onClose,
+  onApprove,
+  onReject,
+  isPending,
+}: {
+  question: QuestionWithSubmitter | null;
+  onClose: () => void;
+  onApprove: (id: string) => void;
+  onReject: (id: string) => void;
+  isPending: boolean;
+}) {
+  const q = question;
+  const status = q?.status ?? "submitted";
+  const statusBadge = STATUS_BADGES[status] ?? STATUS_BADGES.submitted;
+  const bench = q ? getBench(q) : null;
+  const canApprove =
+    status !== "approved" && status !== "answered" && status !== "asked";
+  const canReject =
+    status !== "rejected" && status !== "answered" && status !== "asked";
+
+  return (
+    <Dialog open={!!q} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-2xl">
+        {q && (
+          <>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                Question
+                <Badge
+                  variant="secondary"
+                  className={`text-[10px] ${statusBadge.className}`}
+                >
+                  {statusBadge.label}
+                </Badge>
+                {q.question_type === "starred" && (
+                  <Star className="size-4 fill-amber-400 text-amber-400" />
+                )}
+              </DialogTitle>
+            </DialogHeader>
+
+            {/* Submitter meta */}
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm border-b pb-3">
+              <div>
+                <span className="text-gray-400 text-xs block">Student</span>
+                <span className="font-medium">
+                  {q.submitter?.full_name ?? "Unknown"}
+                </span>
+              </div>
+              <div>
+                <span className="text-gray-400 text-xs block">Bench</span>
+                {bench ? (
+                  <Badge
+                    variant="secondary"
+                    className={`text-[10px] ${BENCH_BADGES[bench].className}`}
+                  >
+                    {BENCH_BADGES[bench].label}
+                  </Badge>
+                ) : (
+                  <span className="text-gray-400">—</span>
+                )}
+              </div>
+              <div>
+                <span className="text-gray-400 text-xs block">Constituency</span>
+                <span>{q.submitter?.constituency_name ?? "—"}</span>
+              </div>
+              <div>
+                <span className="text-gray-400 text-xs block">
+                  Directed to ministry
+                </span>
+                <span>{getMinistryLabel(q.directed_to_ministry)}</span>
+              </div>
+              {q.submitter?.school_name && (
+                <div className="col-span-2">
+                  <span className="text-gray-400 text-xs block">School</span>
+                  <span>{q.submitter.school_name}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Full question text */}
+            <div className="py-1">
+              <span className="text-gray-400 text-xs block mb-1">
+                Full question
+              </span>
+              <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
+                {q.question_text}
+              </p>
+            </div>
+
+            {/* Actions */}
+            {(canApprove || canReject) && (
+              <div className="flex items-center justify-end gap-2 pt-2 border-t">
+                {canReject && (
+                  <Button
+                    variant="outline"
+                    disabled={isPending}
+                    onClick={() => {
+                      onReject(q.id);
+                      onClose();
+                    }}
+                    className="text-red-700 border-red-200 hover:bg-red-50"
+                  >
+                    <X className="size-4 mr-1" />
+                    Reject
+                  </Button>
+                )}
+                {canApprove && (
+                  <Button
+                    disabled={isPending}
+                    onClick={() => {
+                      onApprove(q.id);
+                      onClose();
+                    }}
+                    className="bg-green-600 hover:bg-green-700 text-white"
+                  >
+                    <Check className="size-4 mr-1" />
+                    Approve
+                  </Button>
+                )}
+              </div>
+            )}
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
 

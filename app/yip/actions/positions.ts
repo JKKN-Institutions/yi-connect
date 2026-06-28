@@ -14,6 +14,7 @@
 
 import { createClient, createServiceClient } from "@/lib/yip/supabase/server";
 import { requireSuperAdmin } from "@/lib/yip/auth/require-super-admin";
+import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { revalidatePath } from "next/cache";
 import type { Database } from "@/types/yip/database";
 
@@ -38,6 +39,23 @@ export interface PositionRoleGroup {
   participants: PositionParticipant[];
 }
 
+// committee_chair is committee-SCOPED (one chair per committee), unlike the
+// event-wide KEY_ROLES. It gets its own committee-wise card instead of a flat
+// tile, so the organiser sees and assigns a chair per committee.
+export interface CommitteeChairRow {
+  committee: string;
+  /** Current chair(s) for this committee (normally 0 or 1). */
+  chairs: PositionParticipant[];
+  /** Everyone on this committee — the pool eligible to be made its chair. */
+  members: PositionParticipant[];
+}
+
+export interface CommitteeChairsData {
+  /** The committee_chair jury bonus (true live value via the admin reader). */
+  bonus: number;
+  committees: CommitteeChairRow[];
+}
+
 // ─── Display order + labels for the 6 "key" roles shown on the card ──
 
 const KEY_ROLES: { role: ParliamentRole; label: string }[] = [
@@ -49,7 +67,6 @@ const KEY_ROLES: { role: ParliamentRole; label: string }[] = [
   { role: "cabinet_minister", label: "Cabinet Minister" },
   { role: "shadow_minister", label: "Shadow Minister" },
   { role: "mp", label: "Member of Parliament" },
-  { role: "committee_chair", label: "Committee Chairperson" },
 ];
 
 // ─── Actions ───────────────────────────────────────────────────────
@@ -116,7 +133,11 @@ export async function getParticipantsByRole(
   if (!user) return [];
 
   const [{ bonuses }, participantsRes] = await Promise.all([
-    getPositionBonusConfig(),
+    // Service-client read: the anon getPositionBonusConfig() RLS-falls-back to a
+    // partial defaults dict (0 for committee_chair / deputy_pm / shadow_minister),
+    // so the card would show "+0 bonus" for roles that actually earn points. Use
+    // the admin reader so the displayed bonus matches what the jury awards.
+    getPositionBonusConfigAdmin(),
     supabase
       .from("participants")
       .select("id, full_name, party_side, parliament_role")
@@ -138,6 +159,75 @@ export async function getParticipantsByRole(
         party_side: p.party_side,
       })),
   }));
+}
+
+/**
+ * Committee-wise chairs for the Positions tab. committee_chair is committee-
+ * scoped (one chair per committee), so this returns one row per committee —
+ * derived from the committees that actually have members — with its current
+ * chair(s) and the full member pool eligible to be made chair. Reuses
+ * setParliamentRole for the write: that sets only parliament_role and leaves
+ * committee_name intact, so making a committee's own member a committee_chair
+ * makes them that committee's chair (isChair = role===committee_chair &&
+ * committee_name===room → needsChair flips false, bill editing unlocks).
+ */
+export async function getCommitteeChairs(
+  eventId: string
+): Promise<CommitteeChairsData> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canView) return { bonus: 0, committees: [] };
+
+  const supabase = await createServiceClient();
+  const [{ bonuses }, participantsRes] = await Promise.all([
+    // Admin (service-client) reader — the anon reader RLS-falls-back to defaults
+    // that omit committee_chair, which would show "+0" for a role that earns +2.
+    getPositionBonusConfigAdmin(),
+    supabase
+      .from("participants")
+      .select("id, full_name, party_side, parliament_role, committee_name")
+      .eq("event_id", eventId)
+      .not("committee_name", "is", null)
+      .order("full_name"),
+  ]);
+
+  const bonus = bonuses["committee_chair"] ?? 0;
+
+  type Member = {
+    id: string;
+    full_name: string;
+    party_side: string | null;
+    parliament_role: ParliamentRole | null;
+  };
+  const byCommittee = new Map<string, Member[]>();
+  for (const p of participantsRes.data ?? []) {
+    const committee = (p.committee_name ?? "").trim();
+    if (!committee) continue;
+    const m: Member = {
+      id: p.id,
+      full_name: p.full_name,
+      party_side: p.party_side,
+      parliament_role: p.parliament_role,
+    };
+    const list = byCommittee.get(committee);
+    if (list) list.push(m);
+    else byCommittee.set(committee, [m]);
+  }
+
+  const committees: CommitteeChairRow[] = [...byCommittee.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([committee, members]) => ({
+      committee,
+      chairs: members
+        .filter((m) => m.parliament_role === "committee_chair")
+        .map(({ id, full_name, party_side }) => ({ id, full_name, party_side })),
+      members: members.map(({ id, full_name, party_side }) => ({
+        id,
+        full_name,
+        party_side,
+      })),
+    }));
+
+  return { bonus, committees };
 }
 
 /**

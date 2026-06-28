@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/yip/supabase/server";
 import { getScoringSettings } from "@/app/yip/actions/scoring-settings";
 import { getScoringFlagsConfig, type FlagDeltas } from "@/app/yip/actions/scoring-flags";
-import { getPositionBonusConfig } from "@/app/yip/actions/positions";
+import { getPositionBonusConfigAdmin } from "@/app/yip/actions/positions";
 import { ScoringRulesClient } from "./scoring-rules-client";
 
 // Super-admin: global scoring rules — aggregation, special-remarks values,
@@ -17,7 +17,7 @@ export default async function AdminScoringRulesPage() {
   const [settings, flags, bonus] = await Promise.all([
     getScoringSettings(),
     getScoringFlagsConfig(),
-    getPositionBonusConfig(),
+    getPositionBonusConfigAdmin(),
   ]);
 
   const deltas: FlagDeltas = flags.success

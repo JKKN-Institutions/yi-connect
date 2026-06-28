@@ -3,9 +3,11 @@ import { createClient } from "@/lib/yip/supabase/server";
 import { getEvent } from "@/app/yip/actions/events";
 import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
 import { PositionsAssignmentCard } from "@/components/yip/positions-assignment-card";
+import { CommitteeChairsCard } from "@/components/yip/committee-chairs-card";
 import {
   getParticipantsByRole,
   getAllEventParticipants,
+  getCommitteeChairs,
 } from "@/app/yip/actions/positions";
 
 export default async function PositionsPage({
@@ -34,9 +36,10 @@ export default async function PositionsPage({
 
   // Position-bonus assignment data. Moved off the Control panel onto its own tab
   // so role assignment has room to breathe and is reachable at any event status.
-  const [positionGroups, allParticipants] = await Promise.all([
+  const [positionGroups, allParticipants, committeeChairs] = await Promise.all([
     getParticipantsByRole(id),
     getAllEventParticipants(id),
+    getCommitteeChairs(id),
   ]);
 
   return (
@@ -45,6 +48,7 @@ export default async function PositionsPage({
         groups={positionGroups}
         allParticipants={allParticipants}
       />
+      <CommitteeChairsCard data={committeeChairs} />
     </div>
   );
 }

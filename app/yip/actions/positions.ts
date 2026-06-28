@@ -15,6 +15,7 @@
 import { createClient, createServiceClient } from "@/lib/yip/supabase/server";
 import { requireSuperAdmin } from "@/lib/yip/auth/require-super-admin";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
+import { effectiveMinistries } from "@/lib/yip/cabinet";
 import { revalidatePath } from "next/cache";
 import type { Database } from "@/types/yip/database";
 
@@ -56,18 +57,23 @@ export interface CommitteeChairsData {
   committees: CommitteeChairRow[];
 }
 
-// Cabinet / Shadow ministers are committee-SCOPED like chairs, but each committee
-// has TWO seats with bench-restricted pools: the Cabinet Minister comes from the
-// RULING bench, the Shadow Minister from the OPPOSITION bench.
+// Cabinet / Shadow ministers come in two flavours depending on the event:
+//  • PORTFOLIO mode (the event configured its cabinet on the Cabinet tab) — one
+//    row per CHOSEN MINISTRY; pools are the whole ruling/opposition bench (a
+//    minister need not sit in any matching committee). `committee` holds the
+//    ministry label; the holder's portfolio is stored in participants.cabinet_portfolio.
+//  • COMMITTEE mode (no cabinet configured) — one row per committee, pools
+//    restricted to that committee's members. Legacy behaviour, unchanged.
 export interface CommitteeMinisterRow {
+  /** Ministry label (portfolio mode) or committee name (committee mode). */
   committee: string;
-  /** Current cabinet minister(s) for this committee (normally 0 or 1). */
+  /** Current cabinet minister(s) for this ministry/committee (normally 0 or 1). */
   cabinet: PositionParticipant[];
-  /** Current shadow minister(s) for this committee (normally 0 or 1). */
+  /** Current shadow minister(s) for this ministry/committee (normally 0 or 1). */
   shadow: PositionParticipant[];
-  /** Ruling-bench members of this committee — eligible to be Cabinet Minister. */
+  /** Members eligible to be Cabinet Minister (ruling bench). */
   rulingMembers: PositionParticipant[];
-  /** Opposition-bench members of this committee — eligible to be Shadow Minister. */
+  /** Members eligible to be Shadow Minister (opposition bench). */
   oppositionMembers: PositionParticipant[];
 }
 
@@ -76,6 +82,8 @@ export interface CommitteeMinistersData {
   cabinetBonus: number;
   /** Shadow Minister jury bonus (true live value via the admin reader). */
   shadowBonus: number;
+  /** True when rows are the chapter's chosen ministries (Cabinet tab), not committees. */
+  portfolioMode: boolean;
   committees: CommitteeMinisterRow[];
 }
 
@@ -268,19 +276,28 @@ export async function getCommitteeMinisters(
 ): Promise<CommitteeMinistersData> {
   const access = await getYipEventAccess(eventId);
   if (!access.canView)
-    return { cabinetBonus: 0, shadowBonus: 0, committees: [] };
+    return { cabinetBonus: 0, shadowBonus: 0, portfolioMode: false, committees: [] };
 
   const supabase = await createServiceClient();
-  const [{ bonuses }, participantsRes] = await Promise.all([
+  const [{ bonuses }, participantsRes, eventRes] = await Promise.all([
     // Admin (service-client) reader — the anon reader RLS-falls-back to defaults
     // that omit shadow_minister, which would show "+0" for a role that earns points.
     getPositionBonusConfigAdmin(),
-    supabase
-      .from("participants")
-      .select("id, full_name, party_side, parliament_role, committee_name")
+    // No committee_name filter — portfolio-mode pools span the whole bench, so we
+    // need every participant; committee-mode grouping skips null committees below.
+    // cabinet_portfolio is a newer column not yet in the generated types, hence
+    // the loose builder cast (the read is plain text).
+    (supabase.from("participants") as ReturnType<typeof supabase.from>)
+      .select(
+        "id, full_name, party_side, parliament_role, committee_name, cabinet_portfolio"
+      )
       .eq("event_id", eventId)
-      .not("committee_name", "is", null)
       .order("full_name"),
+    supabase
+      .from("events")
+      .select("cabinet_ministries")
+      .eq("id", eventId)
+      .single(),
   ]);
 
   const cabinetBonus = bonuses["cabinet_minister"] ?? 0;
@@ -291,21 +308,10 @@ export async function getCommitteeMinisters(
     full_name: string;
     party_side: string | null;
     parliament_role: ParliamentRole | null;
+    committee_name: string | null;
+    cabinet_portfolio: string | null;
   };
-  const byCommittee = new Map<string, Member[]>();
-  for (const p of participantsRes.data ?? []) {
-    const committee = (p.committee_name ?? "").trim();
-    if (!committee) continue;
-    const m: Member = {
-      id: p.id,
-      full_name: p.full_name,
-      party_side: p.party_side,
-      parliament_role: p.parliament_role,
-    };
-    const list = byCommittee.get(committee);
-    if (list) list.push(m);
-    else byCommittee.set(committee, [m]);
-  }
+  const all = (participantsRes.data ?? []) as unknown as Member[];
 
   const strip = ({ id, full_name, party_side }: Member): PositionParticipant => ({
     id,
@@ -313,23 +319,161 @@ export async function getCommitteeMinisters(
     party_side,
   });
 
-  const committees: CommitteeMinisterRow[] = [...byCommittee.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([committee, members]) => ({
-      committee,
-      cabinet: members
-        .filter((m) => m.parliament_role === "cabinet_minister")
-        .map(strip),
-      shadow: members
-        .filter((m) => m.parliament_role === "shadow_minister")
-        .map(strip),
-      rulingMembers: members.filter((m) => m.party_side === "ruling").map(strip),
-      oppositionMembers: members
-        .filter((m) => m.party_side === "opposition")
-        .map(strip),
-    }));
+  const cabinetJson = eventRes.data?.cabinet_ministries ?? null;
+  const portfolioMode = Array.isArray(cabinetJson) && cabinetJson.length > 0;
 
-  return { cabinetBonus, shadowBonus, committees };
+  let committees: CommitteeMinisterRow[];
+
+  if (portfolioMode) {
+    // One row per chosen ministry (in the chapter's chosen order). Pools are the
+    // whole ruling/opposition bench, minus anyone who already holds a DIFFERENT
+    // ministry post (so they can't be double-booked). The holder of THIS row is
+    // matched by parliament_role + cabinet_portfolio === ministry label.
+    const labels = effectiveMinistries(cabinetJson).map((m) => m.label.trim());
+    const isMinister = (m: Member) =>
+      m.parliament_role === "cabinet_minister" ||
+      m.parliament_role === "shadow_minister";
+
+    committees = labels.map((label) => {
+      const cabinet = all.filter(
+        (m) =>
+          m.parliament_role === "cabinet_minister" &&
+          (m.cabinet_portfolio ?? "").trim() === label
+      );
+      const shadow = all.filter(
+        (m) =>
+          m.parliament_role === "shadow_minister" &&
+          (m.cabinet_portfolio ?? "").trim() === label
+      );
+      const cabinetIds = new Set(cabinet.map((m) => m.id));
+      const shadowIds = new Set(shadow.map((m) => m.id));
+      // Eligible = bench member who is NOT already a minister elsewhere, OR is the
+      // current holder of this exact seat (so they show as removable).
+      const rulingMembers = all.filter(
+        (m) =>
+          m.party_side === "ruling" && (!isMinister(m) || cabinetIds.has(m.id))
+      );
+      const oppositionMembers = all.filter(
+        (m) =>
+          m.party_side === "opposition" &&
+          (!isMinister(m) || shadowIds.has(m.id))
+      );
+      return {
+        committee: label,
+        cabinet: cabinet.map(strip),
+        shadow: shadow.map(strip),
+        rulingMembers: rulingMembers.map(strip),
+        oppositionMembers: oppositionMembers.map(strip),
+      };
+    });
+  } else {
+    // Legacy committee mode — one row per committee, pools restricted to that
+    // committee's members. Unchanged from before the portfolio model.
+    const byCommittee = new Map<string, Member[]>();
+    for (const m of all) {
+      const committee = (m.committee_name ?? "").trim();
+      if (!committee) continue;
+      const list = byCommittee.get(committee);
+      if (list) list.push(m);
+      else byCommittee.set(committee, [m]);
+    }
+    committees = [...byCommittee.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([committee, members]) => ({
+        committee,
+        cabinet: members
+          .filter((m) => m.parliament_role === "cabinet_minister")
+          .map(strip),
+        shadow: members
+          .filter((m) => m.parliament_role === "shadow_minister")
+          .map(strip),
+        rulingMembers: members
+          .filter((m) => m.party_side === "ruling")
+          .map(strip),
+        oppositionMembers: members
+          .filter((m) => m.party_side === "opposition")
+          .map(strip),
+      }));
+  }
+
+  return { cabinetBonus, shadowBonus, portfolioMode, committees };
+}
+
+/**
+ * Assign a participant to a ministry portfolio (Cabinet or Shadow Minister) in
+ * the portfolio-based cabinet model. Sets BOTH parliament_role and
+ * participants.cabinet_portfolio (the ministry label), decoupled from committee.
+ * Bench is enforced: Cabinet Minister must be ruling, Shadow Minister opposition.
+ * Organiser-gated (canManage).
+ */
+export async function setCabinetPortfolio(input: {
+  eventId: string;
+  participantId: string;
+  ministry: string;
+  seat: "cabinet" | "shadow";
+}): Promise<{ success: boolean; error?: string }> {
+  const access = await getYipEventAccess(input.eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
+  const ministry = input.ministry.trim();
+  if (!ministry) return { success: false, error: "Missing ministry" };
+
+  const supabase = await createServiceClient();
+  const { data: participant } = await supabase
+    .from("participants")
+    .select("id, party_side")
+    .eq("id", input.participantId)
+    .eq("event_id", input.eventId)
+    .single();
+  if (!participant) return { success: false, error: "Participant not found" };
+
+  const wantSide = input.seat === "cabinet" ? "ruling" : "opposition";
+  if (participant.party_side !== wantSide) {
+    return {
+      success: false,
+      error:
+        input.seat === "cabinet"
+          ? "Cabinet Ministers must be from the ruling bench."
+          : "Shadow Ministers must be from the opposition bench.",
+    };
+  }
+
+  const role = input.seat === "cabinet" ? "cabinet_minister" : "shadow_minister";
+  const { error } = await (
+    supabase.from("participants") as ReturnType<typeof supabase.from>
+  )
+    .update({ parliament_role: role, cabinet_portfolio: ministry })
+    .eq("id", input.participantId);
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/yip/dashboard/events/${input.eventId}/positions`);
+  return { success: true };
+}
+
+/**
+ * Remove a participant from their ministry portfolio: clears cabinet_portfolio
+ * and resets parliament_role to plain MP. Organiser-gated (canManage).
+ */
+export async function clearCabinetPortfolio(input: {
+  eventId: string;
+  participantId: string;
+}): Promise<{ success: boolean; error?: string }> {
+  const access = await getYipEventAccess(input.eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
+  const supabase = await createServiceClient();
+  const { error } = await (
+    supabase.from("participants") as ReturnType<typeof supabase.from>
+  )
+    .update({ parliament_role: "mp", cabinet_portfolio: null })
+    .eq("id", input.participantId)
+    .eq("event_id", input.eventId);
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/yip/dashboard/events/${input.eventId}/positions`);
+  return { success: true };
 }
 
 /**

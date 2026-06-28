@@ -1509,7 +1509,7 @@ export function ControlPanel({
                       size="xs"
                       onClick={() => setActiveDay(0)}
                     >
-                      Pre-event
+                      Pre-Event (Online)
                     </Button>
                   )}
                   <Button
@@ -1698,7 +1698,7 @@ export function ControlPanel({
                 {dayItems.length === 0 && (
                   <p className="py-4 text-center text-xs text-muted-foreground">
                     No agenda items for{" "}
-                    {activeDay === 0 ? "Pre-event" : `Day ${activeDay}`}
+                    {activeDay === 0 ? "Pre-Event (Online)" : `Day ${activeDay}`}
                   </p>
                 )}
               </div>

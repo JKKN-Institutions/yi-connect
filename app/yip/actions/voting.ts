@@ -19,6 +19,7 @@ import {
   type ElectionOutcome,
 } from "@/lib/yip/election-outcome";
 import type { Tables, Json } from "@/types/yip/database";
+import type { RollupEntry, RollupOption } from "@/lib/yip/election-rollup";
 
 type VoteSession = Tables<{ schema: "yip" }, "vote_sessions">;
 type Vote = Tables<{ schema: "yip" }, "votes">;
@@ -691,6 +692,177 @@ export async function revealResults(
   };
 
   return { success: true, data: results };
+}
+
+// ─── Election Results Roll-up (persistent control-panel summary) ──
+//
+// Returns the LATEST revealed result for each election "slot" — Speaker, each
+// party's leader, PM / Deputy PM / Leader of Opposition, each party's cabinet /
+// shadow ministers, each bill, and motions — so the control panel can keep every
+// result visible even after a newer vote opens (a revealed session is otherwise
+// hidden the moment a later vote starts). Read-only; canView-gated.
+export async function getElectionResults(
+  eventId: string
+): Promise<RollupEntry[]> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canView) return [];
+
+  const supabase = await createServiceClient();
+
+  const { data: sessions } = await supabase
+    .from("vote_sessions")
+    .select(
+      "id, agenda_item_id, vote_type, event_id, config, bill_id, opened_at, revealed_at"
+    )
+    .eq("event_id", eventId)
+    .eq("status", "revealed")
+    .order("opened_at", { ascending: true });
+
+  if (!sessions || sessions.length === 0) return [];
+
+  // Resolve display names in bulk (one query each, not per session).
+  const [participantsRes, partiesRes, billsRes] = await Promise.all([
+    supabase
+      .from("participants")
+      .select("id, full_name")
+      .eq("event_id", eventId),
+    supabase.from("parties").select("id, name").eq("event_id", eventId),
+    supabase.from("bills").select("id, title").eq("event_id", eventId),
+  ]);
+  const nameOf = new Map(
+    (participantsRes.data ?? []).map((p) => [p.id, p.full_name])
+  );
+  const partyOf = new Map((partiesRes.data ?? []).map((p) => [p.id, p.name]));
+  const billOf = new Map((billsRes.data ?? []).map((b) => [b.id, b.title]));
+
+  // Tally every revealed session in parallel — buildTallies handles session
+  // scoping, the legacy NULL-session fallback, and party-scoping for us.
+  const built = await Promise.all(
+    sessions.map(async (s) => ({ s, ...(await buildTallies(supabase, s)) }))
+  );
+
+  const CANDIDATE_TYPES = new Set([
+    "speaker_election",
+    "party_leader",
+    "prime_minister",
+    "deputy_prime_minister",
+    "leader_of_opposition",
+    "cabinet_minister",
+    "shadow_minister",
+  ]);
+
+  // Keep only the LATEST revealed session per slot. Sessions are opened_at ASC,
+  // so a later session of the same slot overwrites the earlier one here.
+  const bySlot = new Map<string, RollupEntry>();
+
+  for (const { s, tallies, totalVotes } of built) {
+    if (totalVotes === 0) continue; // skip empty / test reveals
+
+    const cfg = (s.config ?? {}) as { partyId?: string };
+    const partyName = cfg.partyId ? partyOf.get(cfg.partyId) ?? null : null;
+    const isCandidate = CANDIDATE_TYPES.has(s.vote_type);
+
+    let slot: string;
+    let title: string;
+    let subtitle: string | null = null;
+
+    switch (s.vote_type) {
+      case "speaker_election":
+        slot = "speaker";
+        title = "Speaker Election";
+        subtitle = "Top vote → Speaker · runner-up → Deputy Speaker";
+        break;
+      case "party_leader":
+        slot = `party_leader:${cfg.partyId ?? s.id}`;
+        title = `${partyName ?? "Party"} — Party Leader`;
+        break;
+      case "prime_minister":
+        slot = "prime_minister";
+        title = "Prime Minister";
+        break;
+      case "deputy_prime_minister":
+        slot = "deputy_prime_minister";
+        title = "Deputy Prime Minister";
+        break;
+      case "leader_of_opposition":
+        slot = "leader_of_opposition";
+        title = "Leader of Opposition";
+        break;
+      case "cabinet_minister":
+        slot = `cabinet_minister:${cfg.partyId ?? s.id}`;
+        title = `${partyName ?? "Party"} — Cabinet Ministers`;
+        break;
+      case "shadow_minister":
+        slot = `shadow_minister:${cfg.partyId ?? s.id}`;
+        title = `${partyName ?? "Party"} — Shadow Ministers`;
+        break;
+      case "bill_vote":
+        slot = `bill:${s.bill_id ?? s.id}`;
+        title = `Bill — ${(s.bill_id && billOf.get(s.bill_id)) || "Untitled"}`;
+        break;
+      case "no_confidence":
+        slot = `no_confidence:${s.id}`;
+        title = "No-Confidence Motion";
+        break;
+      case "impeach_speaker":
+        slot = `impeach_speaker:${s.id}`;
+        title = "Motion to Impeach Speaker";
+        break;
+      default:
+        slot = `${s.vote_type}:${s.id}`;
+        title = s.vote_type
+          .replace(/_/g, " ")
+          .replace(/\b\w/g, (c) => c.toUpperCase());
+    }
+
+    const topCount = tallies[0]?.count ?? 0;
+    const winnersAtTop = tallies.filter((t) => t.count === topCount).length;
+
+    const options: RollupOption[] = tallies.map((t) => {
+      const v = t.vote_value.toLowerCase();
+      let label: string;
+      let kind: RollupOption["kind"];
+      if (v === "aye" || v === "yes") {
+        label = v === "aye" ? "AYE" : "YES";
+        kind = "aye";
+      } else if (v === "nay" || v === "no") {
+        label = v === "nay" ? "NAY" : "NO";
+        kind = "nay";
+      } else if (v === "abstain") {
+        label = "ABSTAIN";
+        kind = "abstain";
+      } else {
+        label = nameOf.get(t.vote_value) ?? t.vote_value;
+        kind = "candidate";
+      }
+      const isWinner =
+        isCandidate && topCount > 0 && t.count === topCount && winnersAtTop === 1;
+      return { label, count: t.count, isWinner, kind };
+    });
+
+    if (s.vote_type === "bill_vote") {
+      const aye =
+        tallies.find((t) => t.vote_value.toLowerCase() === "aye")?.count ?? 0;
+      const nay =
+        tallies.find((t) => t.vote_value.toLowerCase() === "nay")?.count ?? 0;
+      subtitle = aye > nay ? "Passed" : "Rejected";
+    }
+
+    bySlot.set(slot, {
+      sessionId: s.id,
+      voteType: s.vote_type,
+      title,
+      subtitle,
+      totalVotes,
+      options,
+      revealedAt: s.revealed_at ?? null,
+    });
+  }
+
+  // Chronological by reveal time — Speaker (run first) appears first.
+  return [...bySlot.values()].sort((a, b) =>
+    (a.revealedAt ?? "").localeCompare(b.revealedAt ?? "")
+  );
 }
 
 // ─── Cast Vote ──────────────────────────────────────────────────

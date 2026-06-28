@@ -70,9 +70,11 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
   const [presentedBill, setPresentedBill] = useState<BillDisplayInfo | null>(null);
   const supabase = createClient();
 
-  // Vote session realtime
+  // Vote session realtime. Ignore parallel party-leader elections: they are
+  // party-private and several run at once, so the public projector must not flip
+  // to one arbitrary party. It drives the one-at-a-time House/bench/cabinet votes.
   const { session: voteSession, isOpen, isClosed, isRevealed, tallies, totalVotes } =
-    useVoteSession(eventId, { trackVotes: true });
+    useVoteSession(eventId, { trackVotes: true, excludeParallel: true });
 
   const timer = useTimer(
     event?.live_timer_end ?? null,

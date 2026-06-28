@@ -16,8 +16,10 @@ import { toast } from "sonner";
 import { cn } from "@/lib/yip/utils";
 import { PARTY_COLORS, ROLE_LABELS } from "@/lib/yip/constants";
 import { useVoteSession } from "@/lib/yip/hooks/use-vote-session";
+import type { ViewerScope } from "@/lib/yip/vote-scope";
 import {
   castVote,
+  getMyVoteScope,
   getSpeakerCandidates,
   getVoteCandidates,
   hasParticipantVoted,
@@ -58,8 +60,23 @@ export function VoteClient({
   const [motionSubject, setMotionSubject] = useState<string | null>(null);
 
   const eventId = session?.eventId ?? "";
+
+  // The voter's party + bench so they see ONLY their own party's election (plus
+  // House-wide votes). Starts null = fail closed: party ballots stay hidden
+  // until this resolves, so a member never sees another party's election.
+  const [viewer, setViewer] = useState<ViewerScope | null>(null);
+  useEffect(() => {
+    let active = true;
+    getMyVoteScope().then((res) => {
+      if (active && res.success) setViewer(res.data);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const { session: voteSession, isOpen, isClosed, isRevealed, loading } =
-    useVoteSession(eventId);
+    useVoteSession(eventId, { viewer });
 
   // Load candidates / bill info when vote session becomes available
   useEffect(() => {

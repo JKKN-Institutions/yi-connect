@@ -24,7 +24,7 @@ import { toast } from "sonner";
 import { setParliamentRole } from "@/app/yip/actions/participants";
 import type {
   CommitteeChairsData,
-  PositionParticipant,
+  CommitteeChairMember,
 } from "@/app/yip/actions/positions";
 
 interface Props {
@@ -35,6 +35,15 @@ function partyDot(side: string | null) {
   if (side === "ruling") return "bg-blue-500";
   if (side === "opposition") return "bg-red-500";
   return "bg-[#FF9933]";
+}
+
+// Canonical participant identity: "#<constituency no> · <constituency name>"
+// (matches how the app labels people elsewhere). Empty when neither is set.
+function constLabel(m: CommitteeChairMember): string {
+  const parts: string[] = [];
+  if (m.constituency_number != null) parts.push(`#${m.constituency_number}`);
+  if (m.constituency_name) parts.push(m.constituency_name);
+  return parts.join(" · ");
 }
 
 export function CommitteeChairsCard({ data }: Props) {
@@ -58,7 +67,7 @@ export function CommitteeChairsCard({ data }: Props) {
     });
   }
 
-  function handleRemove(p: PositionParticipant, committee: string) {
+  function handleRemove(p: CommitteeChairMember, committee: string) {
     startTransition(async () => {
       const result = await setParliamentRole(p.id, null);
       if (result.success) {
@@ -135,6 +144,11 @@ export function CommitteeChairsCard({ data }: Props) {
                               )}
                             />
                             <span className="truncate">{p.full_name}</span>
+                            {constLabel(p) && (
+                              <span className="shrink-0 text-[10px] text-muted-foreground">
+                                {constLabel(p)}
+                              </span>
+                            )}
                           </span>
                           <button
                             type="button"
@@ -162,7 +176,9 @@ export function CommitteeChairsCard({ data }: Props) {
                         <option value="">Select a committee member…</option>
                         {candidates.map((p) => (
                           <option key={p.id} value={p.id}>
-                            {p.full_name}
+                            {constLabel(p)
+                              ? `${constLabel(p)} — ${p.full_name}`
+                              : p.full_name}
                           </option>
                         ))}
                       </select>

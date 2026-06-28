@@ -42,12 +42,23 @@ export interface PositionRoleGroup {
 // committee_chair is committee-SCOPED (one chair per committee), unlike the
 // event-wide KEY_ROLES. It gets its own committee-wise card instead of a flat
 // tile, so the organiser sees and assigns a chair per committee.
+// A committee member in the chair picker — carries constituency so the organiser
+// can identify people by their canonical constituency number/name, not just the
+// display name (multiple participants can share a name).
+export interface CommitteeChairMember {
+  id: string;
+  full_name: string;
+  party_side: string | null;
+  constituency_number: number | null;
+  constituency_name: string | null;
+}
+
 export interface CommitteeChairRow {
   committee: string;
   /** Current chair(s) for this committee (normally 0 or 1). */
-  chairs: PositionParticipant[];
+  chairs: CommitteeChairMember[];
   /** Everyone on this committee — the pool eligible to be made its chair. */
-  members: PositionParticipant[];
+  members: CommitteeChairMember[];
 }
 
 export interface CommitteeChairsData {
@@ -184,18 +195,20 @@ export async function getCommitteeChairs(
     getPositionBonusConfigAdmin(),
     supabase
       .from("participants")
-      .select("id, full_name, party_side, parliament_role, committee_name")
+      .select(
+        "id, full_name, party_side, parliament_role, committee_name, constituency_number, constituency_name"
+      )
       .eq("event_id", eventId)
       .not("committee_name", "is", null)
+      // Order by the canonical constituency number (nulls last), then name, so the
+      // picker reads in constituency order.
+      .order("constituency_number", { nullsFirst: false })
       .order("full_name"),
   ]);
 
   const bonus = bonuses["committee_chair"] ?? 0;
 
-  type Member = {
-    id: string;
-    full_name: string;
-    party_side: string | null;
+  type Member = CommitteeChairMember & {
     parliament_role: ParliamentRole | null;
   };
   const byCommittee = new Map<string, Member[]>();
@@ -206,6 +219,8 @@ export async function getCommitteeChairs(
       id: p.id,
       full_name: p.full_name,
       party_side: p.party_side,
+      constituency_number: p.constituency_number,
+      constituency_name: p.constituency_name,
       parliament_role: p.parliament_role,
     };
     const list = byCommittee.get(committee);
@@ -213,18 +228,28 @@ export async function getCommitteeChairs(
     else byCommittee.set(committee, [m]);
   }
 
+  const toMember = ({
+    id,
+    full_name,
+    party_side,
+    constituency_number,
+    constituency_name,
+  }: Member): CommitteeChairMember => ({
+    id,
+    full_name,
+    party_side,
+    constituency_number,
+    constituency_name,
+  });
+
   const committees: CommitteeChairRow[] = [...byCommittee.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([committee, members]) => ({
       committee,
       chairs: members
         .filter((m) => m.parliament_role === "committee_chair")
-        .map(({ id, full_name, party_side }) => ({ id, full_name, party_side })),
-      members: members.map(({ id, full_name, party_side }) => ({
-        id,
-        full_name,
-        party_side,
-      })),
+        .map(toMember),
+      members: members.map(toMember),
     }));
 
   return { bonus, committees };

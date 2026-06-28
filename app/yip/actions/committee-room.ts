@@ -313,8 +313,13 @@ async function loadBill(
 async function reportUnlocked(
   sb: ServiceClient,
   eventId: string,
-  committeeName: string
+  committeeName: string,
+  isManager = false
 ): Promise<boolean> {
+  // Managers (organiser / chapter admin / assigned volunteer) bypass the report
+  // gate entirely — they can draft and submit the bill without waiting for a
+  // member to file the report (director decision 2026-06-28).
+  if (isManager) return true;
   if (await isCommitteeReportSubmitted(eventId, committeeName)) return true;
   const { data: ev } = await sb
     .from("events")

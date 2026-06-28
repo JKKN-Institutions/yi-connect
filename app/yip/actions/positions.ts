@@ -56,7 +56,12 @@ export interface CommitteeChairsData {
   committees: CommitteeChairRow[];
 }
 
-// ─── Display order + labels for the 6 "key" roles shown on the card ──
+// ─── Display order + labels for the single-seat "key" roles ──────────
+// Cabinet Minister / Shadow Minister are NOT here — they are committee-SCOPED
+// (one cabinet minister from the ruling bench and one shadow minister from the
+// opposition bench, per committee), so they get their own committee-wise card
+// (getCommitteeMinisters) just like committee_chair. "Member of Parliament" is
+// intentionally omitted — it's the default role, not a key position.
 
 const KEY_ROLES: { role: ParliamentRole; label: string }[] = [
   { role: "prime_minister", label: "Prime Minister" },
@@ -64,9 +69,6 @@ const KEY_ROLES: { role: ParliamentRole; label: string }[] = [
   { role: "speaker", label: "Speaker" },
   { role: "deputy_speaker", label: "Deputy Speaker" },
   { role: "leader_of_opposition", label: "Leader of Opposition" },
-  { role: "cabinet_minister", label: "Cabinet Minister" },
-  { role: "shadow_minister", label: "Shadow Minister" },
-  { role: "mp", label: "Member of Parliament" },
 ];
 
 // ─── Actions ───────────────────────────────────────────────────────

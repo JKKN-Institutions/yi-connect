@@ -38,11 +38,13 @@ export default async function PositionsPage({
 
   // Position-bonus assignment data. Moved off the Control panel onto its own tab
   // so role assignment has room to breathe and is reachable at any event status.
-  const [positionGroups, allParticipants, committeeChairs] = await Promise.all([
-    getParticipantsByRole(id),
-    getAllEventParticipants(id),
-    getCommitteeChairs(id),
-  ]);
+  const [positionGroups, allParticipants, committeeChairs, committeeMinisters] =
+    await Promise.all([
+      getParticipantsByRole(id),
+      getAllEventParticipants(id),
+      getCommitteeChairs(id),
+      getCommitteeMinisters(id),
+    ]);
 
   return (
     <div className="space-y-4">
@@ -50,6 +52,7 @@ export default async function PositionsPage({
         groups={positionGroups}
         allParticipants={allParticipants}
       />
+      <CommitteeMinistersCard data={committeeMinisters} />
       <CommitteeChairsCard data={committeeChairs} />
     </div>
   );

@@ -17,14 +17,25 @@ import { Button } from "@/components/yip/ui/button";
 import { cn } from "@/lib/yip/utils";
 import { useLiveThread } from "@/lib/yip/use-live-thread";
 import {
+  ReplyQuote,
+  ReactionChips,
+  MessageActions,
+  PinnedBanner,
+  ChannelSearch,
+} from "@/components/yip/chat-message-extras";
+import {
   listChannels,
   listMessages,
   postChannelMessage,
   postDmToYuva,
   listYuvaContacts,
   reportMessage,
+  toggleReaction,
+  listPinnedMessages,
+  searchMessages,
   type ChatChannel,
   type ChatMessage,
+  type ChatReplyPreview,
   type YuvaContact,
 } from "@/app/yip/actions/chat";
 
@@ -109,13 +120,26 @@ export function ChatClient({
         load={(afterIso) =>
           listMessages({ channelId: view.channel.id, participantId, afterIso })
         }
-        send={(body) =>
+        send={(body, meta) =>
           postChannelMessage({
             participantId,
             channelId: view.channel.id,
             body,
+            replyToId: meta?.replyToId ?? null,
           })
         }
+        loadPinned={() =>
+          listPinnedMessages({ channelId: view.channel.id, participantId })
+        }
+        search={async (query) => {
+          const r = await searchMessages({
+            channelId: view.channel.id,
+            query,
+            participantId,
+          });
+          return r.success ? r.data : [];
+        }}
+        canReply
         // Announcements are read-only for students — organisers broadcast,
         // students listen. The server rejects student posts regardless; this
         // hides the composer so nobody hits that error.
@@ -271,11 +295,21 @@ interface ThreadProps {
     | { success: false; error: string }
   >;
   send: (
-    body: string
+    body: string,
+    meta?: { replyToId?: string | null; replyPreview?: ChatReplyPreview | null }
   ) => Promise<
     | { success: true; data: ChatMessage }
     | { success: false; error: string }
   >;
+  /** Allow replying to messages (channels only — DMs don't support reply). */
+  canReply?: boolean;
+  /** Load pinned messages for the channel banner (channels only). */
+  loadPinned?: () => Promise<
+    | { success: true; data: ChatMessage[] }
+    | { success: false; error: string }
+  >;
+  /** Search messages in this channel (channels only). */
+  search?: (query: string) => Promise<ChatMessage[]>;
   /** When set, the composer is replaced by this read-only note. */
   readOnlyNote?: string;
   /** Report a message to the organisers (hidden on the student's own messages). */
@@ -292,31 +326,72 @@ function Thread({
   onBack,
   load,
   send,
+  canReply,
+  loadPinned,
+  search,
   readOnlyNote,
   onReport,
 }: ThreadProps) {
   const [draft, setDraft] = useState("");
   const [reportedIds, setReportedIds] = useState<Set<string>>(new Set());
+  const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
+  const [pinned, setPinned] = useState<ChatMessage[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!loadPinned) {
+      setPinned([]);
+      return;
+    }
+    let active = true;
+    loadPinned().then((r) => {
+      if (active && r.success) setPinned(r.data);
+    });
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [threadId]);
 
   // Live thread: instant optimistic send + visibility-aware polling for new
   // messages (see lib/yip/use-live-thread). Replaces the old load-once model.
-  const { messages, loading, error, sending, sendMessage } = useLiveThread({
-    threadId,
-    participantId,
-    load,
-    send,
-  });
+  const { messages, loading, error, sending, sendMessage, patchMessage } =
+    useLiveThread({
+      threadId,
+      participantId,
+      load,
+      send,
+    });
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length]);
 
+  function previewOf(m: ChatMessage): ChatReplyPreview {
+    const mine =
+      m.senderKind === "student" && m.senderParticipantId === participantId;
+    return {
+      id: m.id,
+      senderName: mine ? "You" : senderLabel(m.senderKind),
+      body: m.body,
+      deleted: false,
+    };
+  }
+
   function handleSend() {
     const body = draft.trim();
     if (!body || sending) return;
+    const meta = replyingTo
+      ? { replyToId: replyingTo.id, replyPreview: previewOf(replyingTo) }
+      : undefined;
     setDraft("");
-    sendMessage(body);
+    setReplyingTo(null);
+    sendMessage(body, meta);
+  }
+
+  async function handleToggleReaction(messageId: string, emoji: string) {
+    const res = await toggleReaction({ messageId, emoji, participantId });
+    if (res.success) patchMessage(messageId, { reactions: res.data });
   }
 
   async function handleReport(messageId: string) {
@@ -332,22 +407,38 @@ function Thread({
   return (
     <div className="flex h-[calc(100vh-7.5rem)] flex-col">
       {/* Thread header */}
-      <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
-        <button
-          onClick={onBack}
-          className="flex size-8 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100"
-          aria-label="Back"
-        >
-          <ArrowLeft className="size-4.5" />
-        </button>
-        <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-gray-900">{title}</p>
-          <p className="truncate text-xs text-gray-400">{subtitle}</p>
+      <div className="space-y-2 border-b border-gray-100 pb-3">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onBack}
+            className="flex size-8 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100"
+            aria-label="Back"
+          >
+            <ArrowLeft className="size-4.5" />
+          </button>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-semibold text-gray-900">
+              {title}
+            </p>
+            <p className="truncate text-xs text-gray-400">{subtitle}</p>
+          </div>
+          {search && (
+            <ChannelSearch
+              onSearch={search}
+              nameOf={(m) =>
+                m.senderKind === "student" &&
+                m.senderParticipantId === participantId
+                  ? "You"
+                  : senderLabel(m.senderKind)
+              }
+            />
+          )}
         </div>
       </div>
 
       {/* Messages */}
       <div className="flex-1 space-y-2.5 overflow-y-auto py-4">
+        <PinnedBanner pinned={pinned} />
         {loading ? (
           <div className="flex justify-center py-10">
             <Loader2 className="size-5 animate-spin text-[#FF9933]" />
@@ -383,6 +474,12 @@ function Thread({
                       {senderLabel(m.senderKind)}
                     </span>
                   )}
+                  {m.replyPreview && (
+                    <ReplyQuote
+                      preview={m.replyPreview}
+                      tone={mine ? "accent" : "light"}
+                    />
+                  )}
                   <span className="whitespace-pre-wrap break-words">
                     {m.body}
                   </span>
@@ -396,23 +493,41 @@ function Thread({
                       {m.failed ? "Not sent — tap send to retry" : "Sending…"}
                     </span>
                   )}
-                  {!mine && onReport && (
-                    <span className="mt-1 flex justify-end">
-                      {reported ? (
-                        <span className="text-[10px] font-medium text-gray-400">
-                          Reported
-                        </span>
-                      ) : (
-                        <button
-                          onClick={() => handleReport(m.id)}
-                          className="flex items-center gap-1 text-[10px] text-gray-400 transition-colors hover:text-red-500"
-                          aria-label="Report this message"
-                        >
-                          <Flag className="size-2.5" />
-                          Report
-                        </button>
+                  <ReactionChips
+                    reactions={m.reactions}
+                    onToggle={(emoji) => handleToggleReaction(m.id, emoji)}
+                    disabled={m.pending || m.failed}
+                  />
+                  {!(m.pending || m.failed) && (
+                    <div
+                      className={cn(
+                        "mt-1 flex items-center gap-2",
+                        mine ? "justify-end" : "justify-between"
                       )}
-                    </span>
+                    >
+                      <MessageActions
+                        tone={mine ? "accent" : "light"}
+                        align={mine ? "end" : "start"}
+                        onReply={canReply ? () => setReplyingTo(m) : undefined}
+                        onReact={(emoji) => handleToggleReaction(m.id, emoji)}
+                      />
+                      {!mine && onReport && (
+                        reported ? (
+                          <span className="text-[10px] font-medium text-gray-400">
+                            Reported
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => handleReport(m.id)}
+                            className="flex items-center gap-1 text-[10px] text-gray-400 transition-colors hover:text-red-500"
+                            aria-label="Report this message"
+                          >
+                            <Flag className="size-2.5" />
+                            Report
+                          </button>
+                        )
+                      )}
+                    </div>
                   )}
                 </div>
               </div>
@@ -435,7 +550,16 @@ function Thread({
           {readOnlyNote}
         </p>
       ) : (
-      <div className="flex items-end gap-2 border-t border-gray-100 pt-3">
+      <div className="border-t border-gray-100 pt-3">
+        {replyingTo && (
+          <div className="mb-2">
+            <ReplyQuote
+              preview={previewOf(replyingTo)}
+              onCancel={() => setReplyingTo(null)}
+            />
+          </div>
+        )}
+        <div className="flex items-end gap-2">
         <textarea
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
@@ -461,6 +585,7 @@ function Thread({
             <Send className="size-4" />
           )}
         </Button>
+        </div>
       </div>
       )}
     </div>

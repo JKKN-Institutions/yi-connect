@@ -64,9 +64,20 @@ import {
 import {
   listMessages,
   postChannelMessage,
+  toggleReaction,
+  listPinnedMessages,
+  searchMessages,
   type ChatMessage,
+  type ChatReplyPreview,
 } from "@/app/yip/actions/chat";
 import { useLiveThread } from "@/lib/yip/use-live-thread";
+import {
+  ReplyQuote,
+  ReactionChips,
+  MessageActions,
+  PinnedBanner,
+  ChannelSearch,
+} from "@/components/yip/chat-message-extras";
 import {
   BillTemplateButton,
   CommitteeDocumentsSection,
@@ -1622,7 +1633,19 @@ function ThreadView({
   compact?: boolean;
 }) {
   const [body, setBody] = useState("");
+  const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
+  const [pinned, setPinned] = useState<ChatMessage[]>([]);
   const endRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    listPinnedMessages({ channelId, participantId, threadKey }).then((r) => {
+      if (active && r.success) setPinned(r.data);
+    });
+    return () => {
+      active = false;
+    };
+  }, [channelId, threadKey, participantId]);
 
   const nameOf = useCallback(
     (m: ChatMessage) => {
@@ -1638,14 +1661,36 @@ function ThreadView({
 
   // Live thread: instant optimistic send + visibility-aware polling for new
   // messages (see lib/yip/use-live-thread). Replaces the old load-once model.
-  const { messages, loading, error, sending, sendMessage } = useLiveThread({
-    threadId: `${channelId}:${threadKey ?? "general"}`,
-    participantId,
-    load: (afterIso) =>
-      listMessages({ channelId, participantId, threadKey, afterIso }),
-    send: (text) =>
-      postChannelMessage({ participantId, channelId, body: text, threadKey }),
-  });
+  const { messages, loading, error, sending, sendMessage, patchMessage } =
+    useLiveThread({
+      threadId: `${channelId}:${threadKey ?? "general"}`,
+      participantId,
+      load: (afterIso) =>
+        listMessages({ channelId, participantId, threadKey, afterIso }),
+      send: (text, meta) =>
+        postChannelMessage({
+          participantId,
+          channelId,
+          body: text,
+          threadKey,
+          replyToId: meta?.replyToId ?? null,
+        }),
+    });
+
+  const previewOf = useCallback(
+    (m: ChatMessage): ChatReplyPreview => ({
+      id: m.id,
+      senderName: nameOf(m),
+      body: m.body,
+      deleted: false,
+    }),
+    [nameOf]
+  );
+
+  async function handleToggleReaction(messageId: string, emoji: string) {
+    const res = await toggleReaction({ messageId, emoji, participantId });
+    if (res.success) patchMessage(messageId, { reactions: res.data });
+  }
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -1664,12 +1709,31 @@ function ThreadView({
   function send() {
     const text = body.trim();
     if (!text || sending) return;
+    const meta = replyingTo
+      ? { replyToId: replyingTo.id, replyPreview: previewOf(replyingTo) }
+      : undefined;
     setBody("");
-    sendMessage(text);
+    setReplyingTo(null);
+    sendMessage(text, meta);
   }
 
   return (
     <div className="flex flex-col">
+      <div className="mb-2 flex justify-end">
+        <ChannelSearch
+          onSearch={async (query) => {
+            const r = await searchMessages({
+              channelId,
+              query,
+              participantId,
+              threadKey,
+            });
+            return r.success ? r.data : [];
+          }}
+          nameOf={nameOf}
+        />
+      </div>
+      <PinnedBanner pinned={pinned} />
       <div
         className={`space-y-2 overflow-y-auto ${
           compact ? "max-h-64" : "max-h-[60vh]"
@@ -1699,7 +1763,22 @@ function ThreadView({
                       : "bg-gray-100 text-gray-800 rounded-bl-sm"
                   } ${m.pending ? "opacity-70" : ""}`}
                 >
+                  {m.replyPreview && (
+                    <ReplyQuote
+                      preview={m.replyPreview}
+                      tone={mine ? "accent" : "light"}
+                    />
+                  )}
                   {m.body}
+                </div>
+                <div
+                  className={`max-w-[80%] ${mine ? "items-end" : "items-start"}`}
+                >
+                  <ReactionChips
+                    reactions={m.reactions}
+                    onToggle={(emoji) => handleToggleReaction(m.id, emoji)}
+                    disabled={m.pending || m.failed}
+                  />
                 </div>
                 {mine && (m.pending || m.failed) && (
                   <span
@@ -1710,6 +1789,14 @@ function ThreadView({
                     {m.failed ? "Not sent — tap send to retry" : "Sending…"}
                   </span>
                 )}
+                {canPost && !(m.pending || m.failed) && (
+                  <MessageActions
+                    tone="light"
+                    align={mine ? "end" : "start"}
+                    onReply={() => setReplyingTo(m)}
+                    onReact={(emoji) => handleToggleReaction(m.id, emoji)}
+                  />
+                )}
               </div>
             );
           })
@@ -1718,7 +1805,16 @@ function ThreadView({
       </div>
 
       {canPost ? (
-        <div className="mt-3 flex items-end gap-2">
+        <div className="mt-3">
+          {replyingTo && (
+            <div className="mb-2">
+              <ReplyQuote
+                preview={previewOf(replyingTo)}
+                onCancel={() => setReplyingTo(null)}
+              />
+            </div>
+          )}
+          <div className="flex items-end gap-2">
           <Textarea
             value={body}
             rows={1}
@@ -1744,6 +1840,7 @@ function ThreadView({
               <Send className="size-4" />
             )}
           </Button>
+          </div>
         </div>
       ) : (
         <p className="mt-2 text-[11px] text-gray-400 text-center">

@@ -28,7 +28,13 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ChatMessage } from "@/app/yip/actions/chat";
+import type { ChatMessage, ChatReplyPreview } from "@/app/yip/actions/chat";
+
+/** Optional metadata for an optimistic send (e.g. the reply quote to show now). */
+export interface SendMeta {
+  replyToId?: string | null;
+  replyPreview?: ChatReplyPreview | null;
+}
 
 type LoadResult =
   | { success: true; data: ChatMessage[] }
@@ -55,7 +61,8 @@ export interface UseLiveThreadOptions {
   participantId: string;
   /** Full load when called with no cursor; delta load when given an ISO cursor. */
   load: (afterIso?: string) => Promise<LoadResult>;
-  send: (body: string) => Promise<SendResult>;
+  /** Send a message; meta carries the reply anchor when replying. */
+  send: (body: string, meta?: SendMeta) => Promise<SendResult>;
   /** Poll cadence (ms) for new messages while open + visible. Default 3500. */
   pollMs?: number;
   /** Set false to stop the thread entirely (e.g. a closed dialog). Default true. */
@@ -68,7 +75,10 @@ export interface UseLiveThread {
   loading: boolean;
   error: string | null;
   sending: boolean;
-  sendMessage: (body: string) => void;
+  /** Send a message; pass meta to show a reply quote on the optimistic bubble. */
+  sendMessage: (body: string, meta?: SendMeta) => void;
+  /** Patch one already-loaded message in place (e.g. after a reaction toggle). */
+  patchMessage: (id: string, patch: Partial<ChatMessage>) => void;
 }
 
 function mergeById(base: ChatMessage[], incoming: ChatMessage[]): ChatMessage[] {
@@ -174,8 +184,22 @@ export function useLiveThread({
     };
   }, [enabled, pollMs, fetchMessages]);
 
+  const patchMessage = useCallback(
+    (id: string, patch: Partial<ChatMessage>) => {
+      setConfirmed((prev) => {
+        const next = prev.map((m) => (m.id === id ? { ...m, ...patch } : m));
+        confirmedRef.current = next;
+        return next;
+      });
+      setPending((prev) =>
+        prev.map((m) => (m.id === id ? { ...m, ...patch } : m))
+      );
+    },
+    []
+  );
+
   const sendMessage = useCallback(
-    (raw: string) => {
+    (raw: string, meta?: SendMeta) => {
       const body = raw.trim();
       if (!body || sendingRef.current) return;
 
@@ -190,6 +214,10 @@ export function useLiveThread({
         dmToVolunteerId: null,
         deletedAt: null,
         createdAt: new Date().toISOString(),
+        replyToId: meta?.replyToId ?? null,
+        replyPreview: meta?.replyPreview ?? null,
+        reactions: [],
+        pinnedAt: null,
         pending: true,
       };
       setPending((prev) => [...prev, optimistic]);
@@ -198,7 +226,7 @@ export function useLiveThread({
 
       void (async () => {
         try {
-          const res = await sendRef.current(body);
+          const res = await sendRef.current(body, meta);
           if (res.success) {
             // Drop the optimistic copy and merge in the real saved row.
             setPending((prev) => prev.filter((m) => m.id !== tempId));
@@ -233,5 +261,6 @@ export function useLiveThread({
     error,
     sending,
     sendMessage,
+    patchMessage,
   };
 }

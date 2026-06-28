@@ -55,7 +55,7 @@ import {
   SUB_TIMER_MAX_SECONDS,
   type SubTimer,
 } from "@/lib/yip/sub-timers";
-import { setAllocationLocked, setScoresLocked, setRegistrationsFrozen, pushLiveBanner, clearLiveBanner } from "@/app/yip/actions/events";
+import { setAllocationLocked, setScoresLocked, setRegistrationsFrozen, setVoteCheckinSkipped, pushLiveBanner, clearLiveBanner } from "@/app/yip/actions/events";
 import { startTimer, stopTimer, resetTimer } from "@/app/yip/actions/timer";
 import { advanceSpeaker, skipSpeaker, generateSpeakerQueue, getSpeakerQueue } from "@/app/yip/actions/speakers";
 import { QuestionHourPanel } from "./question-hour";
@@ -798,6 +798,21 @@ export function ControlPanel({
     });
   }
 
+  function handleToggleSkipVoteCheckin(next: boolean) {
+    startTransition(async () => {
+      const result = await setVoteCheckinSkipped(eventId, next);
+      if (result.success) {
+        toast.success(
+          next
+            ? "Online voting on — students can vote without check-in"
+            : "Online voting off — check-in required to vote"
+        );
+      } else {
+        toast.error(result.error);
+      }
+    });
+  }
+
   function handleGenerateSpeakers() {
     if (!currentItemId) return;
     startTransition(async () => {
@@ -1494,7 +1509,7 @@ export function ControlPanel({
                       size="xs"
                       onClick={() => setActiveDay(0)}
                     >
-                      Pre-event
+                      Pre-Event (Online)
                     </Button>
                   )}
                   <Button
@@ -1683,7 +1698,7 @@ export function ControlPanel({
                 {dayItems.length === 0 && (
                   <p className="py-4 text-center text-xs text-muted-foreground">
                     No agenda items for{" "}
-                    {activeDay === 0 ? "Pre-event" : `Day ${activeDay}`}
+                    {activeDay === 0 ? "Pre-Event (Online)" : `Day ${activeDay}`}
                   </p>
                 )}
               </div>
@@ -1743,6 +1758,24 @@ export function ControlPanel({
                     disabled={isPending}
                     onCheckedChange={handleToggleScoresLock}
                     aria-label="Toggle scores lock"
+                  />
+                </div>
+                <div className="flex items-start justify-between gap-3 border-t pt-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium">Online event</p>
+                    <p className="text-[11px] leading-tight text-muted-foreground">
+                      Lets students vote without checking in (no physical desk
+                      online). Applies to every vote, all days.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={
+                      (event as unknown as { skip_vote_checkin?: boolean | null })
+                        .skip_vote_checkin ?? false
+                    }
+                    disabled={isPending}
+                    onCheckedChange={handleToggleSkipVoteCheckin}
+                    aria-label="Toggle online event (vote without check-in)"
                   />
                 </div>
               </div>

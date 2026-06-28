@@ -2,7 +2,11 @@
 
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
-import { requireParticipantSession } from "@/lib/yip/auth/yip-session";
+import {
+  requireParticipantSession,
+  getYipSession,
+} from "@/lib/yip/auth/yip-session";
+import { isParallelKind } from "@/lib/yip/vote-scope";
 import { assertCheckedInForVote } from "@/lib/yip/vote-eligibility";
 import { validateVoteValue } from "@/lib/yip/vote-validate";
 import {
@@ -376,15 +380,44 @@ export async function openVote(
     return { success: false, error: "Scores are locked — unlock scores before opening a vote." };
   }
 
-  // Check for existing active session
-  const { data: existing } = await supabase
+  // Concurrency rule: party-scoped elections (party leader / cabinet / shadow)
+  // may run in PARALLEL — one per party — so a chapter can hold every party's
+  // leader election at once and members only ever see their own. House-wide and
+  // bench votes stay exclusive (one at a time across the whole House).
+  const { data: activeSessions } = await supabase
     .from("vote_sessions")
-    .select("id")
+    .select("id, vote_type, config")
     .eq("event_id", eventId)
-    .in("status", ["open", "closed"])
-    .maybeSingle();
+    .in("status", ["open", "closed"]);
 
-  if (existing) {
+  const actives = activeSessions ?? [];
+
+  if (isParallelKind(voteType)) {
+    // Party-leader elections run in parallel — but only alongside OTHER party-
+    // leader elections. Any other kind of vote in flight shares these voters.
+    if (actives.some((s) => !isParallelKind(s.vote_type))) {
+      return {
+        success: false,
+        error:
+          "Another vote is active. Close or reveal it before opening party-leader elections.",
+      };
+    }
+    // One election per party at a time.
+    const newPartyId = config?.partyId ?? null;
+    const samePartyActive = actives.some((s) => {
+      const cfg = (s.config ?? {}) as { partyId?: string };
+      return !!newPartyId && cfg.partyId === newPartyId;
+    });
+    if (samePartyActive) {
+      return {
+        success: false,
+        error:
+          "This party already has an active election. Close or reveal it first.",
+      };
+    }
+    // Other parties' leader elections may coexist → allow.
+  } else if (actives.length > 0) {
+    // Everything else (House-wide, bench, cabinet/shadow) stays exclusive.
     return {
       success: false,
       error: "There is already an active vote session. Close or reveal it first.",
@@ -1222,4 +1255,36 @@ export async function openRunoff(
     runoffSeat: outcome.tie.seat,
     openDeputySeats,
   });
+}
+
+// ─── My vote scope (participant self-vote screen) ───────────────
+// Returns the logged-in participant's party + bench so their screen shows ONLY
+// the elections that apply to them: their OWN party's leader/cabinet/shadow
+// election, bench votes for their side, and every House-wide vote. Reads the
+// httpOnly session cookie — never trusts a client-supplied id. Fails closed:
+// callers treat a null partyId as "hide all party-scoped ballots".
+export async function getMyVoteScope(): Promise<
+  ActionResult<{ partyId: string | null; side: "ruling" | "opposition" | null }>
+> {
+  const sess = await getYipSession();
+  if (!sess || sess.type !== "participant") {
+    return { success: false, error: "Not signed in as a participant" };
+  }
+
+  const supabase = await createServiceClient();
+  const { data } = await supabase
+    .from("participants")
+    .select("party_id, party_side")
+    .eq("id", sess.id)
+    .maybeSingle();
+
+  const side =
+    data?.party_side === "ruling" || data?.party_side === "opposition"
+      ? data.party_side
+      : null;
+
+  return {
+    success: true,
+    data: { partyId: data?.party_id ?? null, side },
+  };
 }

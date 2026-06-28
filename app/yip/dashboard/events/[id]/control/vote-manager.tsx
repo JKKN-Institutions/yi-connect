@@ -44,6 +44,7 @@ import {
 import { cn } from "@/lib/yip/utils";
 import { toast } from "sonner";
 import { useVoteSession } from "@/lib/yip/hooks/use-vote-session";
+import { useActiveVoteSessions } from "@/lib/yip/hooks/use-active-vote-sessions";
 import {
   openVote,
   closeVote,
@@ -224,7 +225,27 @@ export function VoteManager({
     isRevealed,
     tallies,
     totalVotes,
-  } = useVoteSession(eventId, { trackVotes: true });
+  } = useVoteSession(eventId, { trackVotes: true, excludeParallel: true });
+
+  // Live state of every PARALLEL party-leader election (run one per party, all
+  // at once). The main panel above ignores these (excludeParallel); each party
+  // row below drives its own election.
+  const { sessions: activeVoteSessions } = useActiveVoteSessions(eventId);
+  const leaderSessionByParty = new Map<
+    string,
+    { id: string; status: string | null; totalVotes: number }
+  >();
+  for (const av of activeVoteSessions) {
+    if (av.session.vote_type !== "party_leader") continue;
+    const cfg = (av.session.config ?? {}) as { partyId?: string };
+    if (cfg.partyId) {
+      leaderSessionByParty.set(cfg.partyId, {
+        id: av.session.id,
+        status: av.session.status,
+        totalVotes: av.totalVotes,
+      });
+    }
+  }
 
   // Clear the "start new vote" override as soon as a non-revealed session is
   // surfaced — i.e. the new ballot was actually opened (or the old one reverted
@@ -805,9 +826,25 @@ export function VoteManager({
 
   // ─── Reusable party-leader elements (shared by both render branches) ──
 
-  // The list of parties with a "Hold Election" action. Rendered in the
-  // no-session branch and (as "hold the next party's") after a revealed
-  // party-leader result, so the organiser can run each party in sequence.
+  // Parallel party-leader elections: each party runs independently, so these
+  // close/reveal a specific session id (not "the" active session).
+  function handleParallelClose(sessionId: string) {
+    startTransition(async () => {
+      const res = await closeVote(sessionId);
+      if (res.success) toast.success("Election closed — reveal to see the winner.");
+      else toast.error(res.error);
+    });
+  }
+  function handleParallelReveal(sessionId: string) {
+    startTransition(async () => {
+      const res = await revealResults(sessionId);
+      if (res.success) toast.success("Leader revealed.");
+      else toast.error(res.error);
+    });
+  }
+
+  // The list of parties, each with its OWN election control. Every party can run
+  // at the same time — members only ever see their own party's ballot.
   const partyLeaderList =
     parties.length > 0 ? (
       <div className="space-y-3">
@@ -817,7 +854,7 @@ export function VoteManager({
         </div>
         <p className="text-xs text-gray-500">
           Each party elects its own leader — only that party&apos;s members can
-          vote. Hold one election at a time.
+          vote. Run them all at once; close and reveal each below.
         </p>
         <div className="space-y-2">
           {parties.map((party) => (
@@ -840,15 +877,75 @@ export function VoteManager({
                   )}
                 </p>
               </div>
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={isPending || party.member_count < 2}
-                onClick={() => handleHoldLeaderElection(party)}
-              >
-                <Vote className="size-3.5 mr-1" />
-                {party.party_leader_id ? "Re-elect" : "Hold Election"}
-              </Button>
+              {(() => {
+                const sess = leaderSessionByParty.get(party.id);
+                if (!sess) {
+                  return (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={isPending || party.member_count < 2}
+                      onClick={() => handleHoldLeaderElection(party)}
+                    >
+                      <Vote className="size-3.5 mr-1" />
+                      {party.party_leader_id ? "Re-elect" : "Hold Election"}
+                    </Button>
+                  );
+                }
+                return (
+                  <div className="flex items-center gap-2">
+                    <Badge
+                      className={cn(
+                        "text-xs",
+                        sess.status === "open" &&
+                          "bg-green-100 text-green-700 animate-pulse",
+                        sess.status === "closed" &&
+                          "bg-amber-100 text-amber-700",
+                        sess.status === "revealed" &&
+                          "bg-blue-100 text-blue-700"
+                      )}
+                    >
+                      {sess.status === "open"
+                        ? `Voting · ${sess.totalVotes}`
+                        : sess.status === "closed"
+                          ? "Closed"
+                          : "Revealed"}
+                    </Badge>
+                    {sess.status === "open" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={isPending}
+                        onClick={() => handleParallelClose(sess.id)}
+                      >
+                        <StopCircle className="size-3.5 mr-1" />
+                        Close
+                      </Button>
+                    )}
+                    {sess.status === "closed" && (
+                      <Button
+                        size="sm"
+                        disabled={isPending}
+                        onClick={() => handleParallelReveal(sess.id)}
+                      >
+                        <Eye className="size-3.5 mr-1" />
+                        Reveal
+                      </Button>
+                    )}
+                    {sess.status === "revealed" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={isPending || party.member_count < 2}
+                        onClick={() => handleHoldLeaderElection(party)}
+                      >
+                        <Vote className="size-3.5 mr-1" />
+                        Re-elect
+                      </Button>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           ))}
         </div>

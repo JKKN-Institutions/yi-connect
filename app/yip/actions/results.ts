@@ -797,6 +797,29 @@ export async function computeResults(
   );
   const mvpMinSessions = Math.max(1, Math.ceil(maxScoredSessions / 2));
 
+  // ── Participation bar (Director ruling 2026-06-26) ──────────────────
+  // To WIN A NAMED AWARD or ADVANCE, a participant must be scored in at least
+  // HALF of the sessions that actually ran (rounded up). This does NOT affect
+  // the leaderboard RANK — a below-bar participant keeps their score + rank, but
+  // is excluded from award candidacy (and therefore from advancement, which
+  // promotes award winners). LEADERS auto-clear the bar: presiding/leading IS
+  // full participation, so a Speaker is never blocked for being scored in fewer
+  // regular sessions. "Sessions that ran" = distinct SCOREABLE agenda items that
+  // received any submitted score (counted by what a juror actually scored, since
+  // per-session presence isn't tracked — the coverage check guards omissions).
+  const sessionsRun = new Set(
+    scores
+      .filter(
+        (s) =>
+          s.agenda_item_id != null &&
+          agendaById.get(s.agenda_item_id)?.is_scoreable === true
+      )
+      .map((s) => s.agenda_item_id as string)
+  ).size;
+  const participationBar = Math.max(1, Math.ceil(sessionsRun / 2));
+  const clearsParticipationBar = (p: ParticipantLite, r: ResultRow): boolean =>
+    isLeadership(p) || r.consistencySessionCount >= participationBar;
+
   // The award MATH (eligibility + ranking) lives in this registry keyed by
   // award_key; the workbook formulas are fixed, so they stay in code. The
   // yip.award_definitions table owns label / recipient count / on-off / order
@@ -1005,23 +1028,35 @@ export async function computeResults(
     if (!active) continue;
     const recipients = Math.max(1, ov?.recipients ?? def.default_recipients);
 
-    // Ranked eligible candidate list — identical gate + tiebreak to assignAward:
-    // day-presence + the award's eligibility predicate + a positive rankBy
-    // signal (never fabricate a winner from an all-zero field), sorted rankBy
-    // desc, then overall avg_score desc, then a stable participant_id.
-    const candidates = resultRows
+    // Ranked eligible candidate list — base gate: day-presence + the award's
+    // eligibility predicate + a positive rankBy signal (never fabricate a winner
+    // from an all-zero field). Sorted rankBy desc, then overall avg_score desc,
+    // then a stable participant_id.
+    const tiebreak = (a: ResultRow, b: ResultRow) =>
+      spec.rankBy(b) - spec.rankBy(a) ||
+      b.avg_score - a.avg_score ||
+      (a.participant_id < b.participant_id ? -1 : 1);
+    const baseEligible = (r: ResultRow): boolean => {
+      const p = participantMap.get(r.participant_id);
+      return Boolean(p && r.dayComplete && spec.eligible(p, r) && spec.rankBy(r) > 0);
+    };
+    // Apply the participation bar (Director ruling 2026-06-26): award candidacy —
+    // and thus advancement — requires clearing the bar (or holding a leadership
+    // role). A below-bar participant keeps their leaderboard rank but wins no
+    // named award.
+    let candidates = resultRows
       .filter((r) => {
         const p = participantMap.get(r.participant_id);
-        return Boolean(
-          p && r.dayComplete && spec.eligible(p, r) && spec.rankBy(r) > 0
-        );
+        return Boolean(p && baseEligible(r) && clearsParticipationBar(p, r));
       })
-      .sort(
-        (a, b) =>
-          spec.rankBy(b) - spec.rankBy(a) ||
-          b.avg_score - a.avg_score ||
-          (a.participant_id < b.participant_id ? -1 : 1)
-      );
+      .sort(tiebreak);
+    // Empty-award fallback (Director ruling 2026-06-26): if NO bar-clearing
+    // candidate exists for an active award, give it to the top otherwise-eligible
+    // scorer anyway (so the award is never blank) — and that fallback winner DOES
+    // advance. Rare: triggers only when nobody cleared the bar for this award.
+    if (candidates.length === 0) {
+      candidates = resultRows.filter((r) => baseEligible(r)).sort(tiebreak);
+    }
 
     activeAwards.push({
       awardKey: def.award_key,

@@ -56,7 +56,35 @@ export interface CommitteeChairsData {
   committees: CommitteeChairRow[];
 }
 
-// ─── Display order + labels for the 6 "key" roles shown on the card ──
+// Cabinet / Shadow ministers are committee-SCOPED like chairs, but each committee
+// has TWO seats with bench-restricted pools: the Cabinet Minister comes from the
+// RULING bench, the Shadow Minister from the OPPOSITION bench.
+export interface CommitteeMinisterRow {
+  committee: string;
+  /** Current cabinet minister(s) for this committee (normally 0 or 1). */
+  cabinet: PositionParticipant[];
+  /** Current shadow minister(s) for this committee (normally 0 or 1). */
+  shadow: PositionParticipant[];
+  /** Ruling-bench members of this committee — eligible to be Cabinet Minister. */
+  rulingMembers: PositionParticipant[];
+  /** Opposition-bench members of this committee — eligible to be Shadow Minister. */
+  oppositionMembers: PositionParticipant[];
+}
+
+export interface CommitteeMinistersData {
+  /** Cabinet Minister jury bonus (true live value via the admin reader). */
+  cabinetBonus: number;
+  /** Shadow Minister jury bonus (true live value via the admin reader). */
+  shadowBonus: number;
+  committees: CommitteeMinisterRow[];
+}
+
+// ─── Display order + labels for the single-seat "key" roles ──────────
+// Cabinet Minister / Shadow Minister are NOT here — they are committee-SCOPED
+// (one cabinet minister from the ruling bench and one shadow minister from the
+// opposition bench, per committee), so they get their own committee-wise card
+// (getCommitteeMinisters) just like committee_chair. "Member of Parliament" is
+// intentionally omitted — it's the default role, not a key position.
 
 const KEY_ROLES: { role: ParliamentRole; label: string }[] = [
   { role: "prime_minister", label: "Prime Minister" },
@@ -64,9 +92,6 @@ const KEY_ROLES: { role: ParliamentRole; label: string }[] = [
   { role: "speaker", label: "Speaker" },
   { role: "deputy_speaker", label: "Deputy Speaker" },
   { role: "leader_of_opposition", label: "Leader of Opposition" },
-  { role: "cabinet_minister", label: "Cabinet Minister" },
-  { role: "shadow_minister", label: "Shadow Minister" },
-  { role: "mp", label: "Member of Parliament" },
 ];
 
 // ─── Actions ───────────────────────────────────────────────────────
@@ -228,6 +253,83 @@ export async function getCommitteeChairs(
     }));
 
   return { bonus, committees };
+}
+
+/**
+ * Committee-wise Cabinet & Shadow ministers for the Positions tab. Mirrors
+ * getCommitteeChairs, but each committee has two bench-restricted seats: the
+ * Cabinet Minister is picked from the committee's RULING members and the Shadow
+ * Minister from its OPPOSITION members. Writes reuse setParliamentRole (sets only
+ * parliament_role; committee_name is untouched), so making a committee's own
+ * ruling member a cabinet_minister makes them that committee's cabinet minister.
+ */
+export async function getCommitteeMinisters(
+  eventId: string
+): Promise<CommitteeMinistersData> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canView)
+    return { cabinetBonus: 0, shadowBonus: 0, committees: [] };
+
+  const supabase = await createServiceClient();
+  const [{ bonuses }, participantsRes] = await Promise.all([
+    // Admin (service-client) reader — the anon reader RLS-falls-back to defaults
+    // that omit shadow_minister, which would show "+0" for a role that earns points.
+    getPositionBonusConfigAdmin(),
+    supabase
+      .from("participants")
+      .select("id, full_name, party_side, parliament_role, committee_name")
+      .eq("event_id", eventId)
+      .not("committee_name", "is", null)
+      .order("full_name"),
+  ]);
+
+  const cabinetBonus = bonuses["cabinet_minister"] ?? 0;
+  const shadowBonus = bonuses["shadow_minister"] ?? 0;
+
+  type Member = {
+    id: string;
+    full_name: string;
+    party_side: string | null;
+    parliament_role: ParliamentRole | null;
+  };
+  const byCommittee = new Map<string, Member[]>();
+  for (const p of participantsRes.data ?? []) {
+    const committee = (p.committee_name ?? "").trim();
+    if (!committee) continue;
+    const m: Member = {
+      id: p.id,
+      full_name: p.full_name,
+      party_side: p.party_side,
+      parliament_role: p.parliament_role,
+    };
+    const list = byCommittee.get(committee);
+    if (list) list.push(m);
+    else byCommittee.set(committee, [m]);
+  }
+
+  const strip = ({ id, full_name, party_side }: Member): PositionParticipant => ({
+    id,
+    full_name,
+    party_side,
+  });
+
+  const committees: CommitteeMinisterRow[] = [...byCommittee.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([committee, members]) => ({
+      committee,
+      cabinet: members
+        .filter((m) => m.parliament_role === "cabinet_minister")
+        .map(strip),
+      shadow: members
+        .filter((m) => m.parliament_role === "shadow_minister")
+        .map(strip),
+      rulingMembers: members.filter((m) => m.party_side === "ruling").map(strip),
+      oppositionMembers: members
+        .filter((m) => m.party_side === "opposition")
+        .map(strip),
+    }));
+
+  return { cabinetBonus, shadowBonus, committees };
 }
 
 /**

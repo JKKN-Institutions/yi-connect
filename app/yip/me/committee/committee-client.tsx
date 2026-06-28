@@ -39,6 +39,7 @@ import {
   ArrowRight,
   ClipboardList,
   Megaphone,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { CHAT_ENABLED } from "@/lib/yip/chat-config";
@@ -52,6 +53,7 @@ import {
   addObjective,
   removeObjective,
   assignBillRole,
+  setBillRoleMembers,
   proposeAmendment,
   voteAmendment,
   resolveAmendment,
@@ -1220,12 +1222,77 @@ function AmendmentCard({
 
 // ─── Roles tab ───────────────────────────────────────────────────────────
 
-const ROLE_DEFS: { key: "lead_drafter" | "presenter_1" | "presenter_2" | "policy_researcher"; label: string }[] = [
-  { key: "lead_drafter", label: "Lead Drafter" },
-  { key: "presenter_1", label: "Presenter 1" },
-  { key: "presenter_2", label: "Presenter 2" },
-  { key: "policy_researcher", label: "Policy Researcher" },
-];
+function MultiRoleRow({
+  label,
+  singular,
+  ids,
+  members,
+  canAssign,
+  saving,
+  onChange,
+}: {
+  label: string;
+  singular: string;
+  ids: string[];
+  members: CommitteeRoom["members"];
+  canAssign: boolean;
+  saving: boolean;
+  onChange: (ids: string[]) => void;
+}) {
+  const chosen = new Set(ids);
+  const available = members.filter((m) => !chosen.has(m.id));
+  return (
+    <div className="space-y-1.5">
+      <span className="text-xs font-medium text-gray-500">{label}</span>
+      <div className="flex flex-wrap gap-1.5">
+        {ids.length === 0 && (
+          <span className="text-sm text-gray-400">— none yet —</span>
+        )}
+        {ids.map((id) => {
+          const m = members.find((x) => x.id === id);
+          return (
+            <span
+              key={id}
+              className="inline-flex items-center gap-1 rounded-full bg-purple-50 px-2.5 py-1 text-xs font-medium text-purple-700"
+            >
+              {m?.name ?? "—"}
+              {m?.isChair ? " (Chair)" : ""}
+              {canAssign && (
+                <button
+                  type="button"
+                  onClick={() => onChange(ids.filter((x) => x !== id))}
+                  disabled={saving}
+                  aria-label={`Remove ${m?.name ?? "member"}`}
+                  className="ml-0.5 text-purple-400 hover:text-red-500 disabled:opacity-50"
+                >
+                  <X className="size-3" />
+                </button>
+              )}
+            </span>
+          );
+        })}
+      </div>
+      {canAssign && available.length > 0 && (
+        <select
+          value=""
+          disabled={saving}
+          onChange={(e) => {
+            if (e.target.value) onChange([...ids, e.target.value]);
+          }}
+          className="h-9 w-full rounded-md border border-gray-200 bg-white px-2 text-sm disabled:opacity-50"
+        >
+          <option value="">+ Add {singular}…</option>
+          {available.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.name}
+              {m.isChair ? " (Chair)" : ""}
+            </option>
+          ))}
+        </select>
+      )}
+    </div>
+  );
+}
 
 function RolesTab({
   eventId,
@@ -1240,89 +1307,114 @@ function RolesTab({
 }) {
   const bill = room.bill;
   const canAssign = room.permissions.canAssignRoles;
-  const [saving, setSaving] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
-  const current: Record<string, string | null> = {
-    lead_drafter: bill?.leadDrafter ?? null,
-    presenter_1: bill?.presenter1 ?? null,
-    presenter_2: bill?.presenter2 ?? null,
-    policy_researcher: bill?.policyResearcher ?? null,
-  };
-
-  async function assign(role: ROLEKEY, assigneeId: string | null) {
-    setSaving(role);
-    const r = await assignBillRole({
+  async function setMembers(role: "drafter" | "presenter", ids: string[]) {
+    setSaving(true);
+    const r = await setBillRoleMembers({
       eventId,
       committeeName: room.committeeName,
       participantId,
       role,
-      assigneeId,
+      participantIds: ids,
     });
-    setSaving(null);
+    setSaving(false);
     if (!r.success) toast.error(r.error);
     else await reload();
   }
 
-  const nameOf = (id: string | null) =>
-    id ? room.members.find((m) => m.id === id)?.name ?? "—" : "—";
+  async function assignResearcher(assigneeId: string | null) {
+    setSaving(true);
+    const r = await assignBillRole({
+      eventId,
+      committeeName: room.committeeName,
+      participantId,
+      role: "policy_researcher",
+      assigneeId,
+    });
+    setSaving(false);
+    if (!r.success) toast.error(r.error);
+    else await reload();
+  }
 
   if (!bill) {
     return (
       <Card>
         <CardContent className="py-6 text-center text-sm text-gray-500">
-          Start the bill draft first, then assign who leads, presents and
-          researches it.
+          Start the bill draft first, then add who drafts and presents it.
         </CardContent>
       </Card>
     );
   }
 
+  const nameOf = (id: string | null) =>
+    id ? room.members.find((m) => m.id === id)?.name ?? "—" : "—";
+
   return (
     <Card>
-      <CardContent className="py-4 space-y-3">
+      <CardContent className="py-4 space-y-4">
         <div className="flex items-center gap-1.5">
           <Users className="size-4 text-purple-500" />
-          <p className="text-sm font-semibold text-gray-700">
-            Committee roles
-          </p>
+          <p className="text-sm font-semibold text-gray-700">Committee roles</p>
         </div>
-        {ROLE_DEFS.map((rd) => (
-          <div key={rd.key} className="flex items-center gap-2">
-            <span className="w-28 shrink-0 text-xs font-medium text-gray-500">
-              {rd.label}
+
+        <MultiRoleRow
+          label="Drafters"
+          singular="drafter"
+          ids={bill.drafters}
+          members={room.members}
+          canAssign={canAssign}
+          saving={saving}
+          onChange={(ids) => setMembers("drafter", ids)}
+        />
+        <MultiRoleRow
+          label="Presenters"
+          singular="presenter"
+          ids={bill.presenters}
+          members={room.members}
+          canAssign={canAssign}
+          saving={saving}
+          onChange={(ids) => setMembers("presenter", ids)}
+        />
+
+        <div className="space-y-1.5">
+          <span className="text-xs font-medium text-gray-500">
+            Policy Researcher
+          </span>
+          {canAssign ? (
+            <select
+              value={bill.policyResearcher ?? ""}
+              disabled={saving}
+              onChange={(e) => assignResearcher(e.target.value || null)}
+              className="h-9 w-full rounded-md border border-gray-200 bg-white px-2 text-sm disabled:opacity-50"
+            >
+              <option value="">— Unassigned —</option>
+              {room.members.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                  {m.isChair ? " (Chair)" : ""}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <span className="text-sm font-medium text-gray-800">
+              {nameOf(bill.policyResearcher)}
             </span>
-            {canAssign ? (
-              <select
-                value={current[rd.key] ?? ""}
-                disabled={saving === rd.key}
-                onChange={(e) => assign(rd.key, e.target.value || null)}
-                className="flex-1 h-9 rounded-md border border-gray-200 bg-white px-2 text-sm disabled:opacity-50"
-              >
-                <option value="">— Unassigned —</option>
-                {room.members.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name}
-                    {m.isChair ? " (Chair)" : ""}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <span className="text-sm font-medium text-gray-800">
-                {nameOf(current[rd.key])}
-              </span>
-            )}
-          </div>
-        ))}
-        {!canAssign && (
-          <p className="text-[11px] text-gray-400 pt-1">
-            The chair assigns roles.
+          )}
+        </div>
+
+        {canAssign ? (
+          <p className="text-[11px] text-gray-400">
+            Add as many drafters and presenters as your committee needs.
+            Drafters can edit the bill; presenters present it to the House.
           </p>
+        ) : (
+          <p className="text-[11px] text-gray-400">The chair assigns roles.</p>
         )}
       </CardContent>
     </Card>
   );
 }
-type ROLEKEY = "lead_drafter" | "presenter_1" | "presenter_2" | "policy_researcher";
 
 // ─── Discussion tab + clause thread ──────────────────────────────────────
 

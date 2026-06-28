@@ -1,17 +1,14 @@
 "use client";
 
 /**
- * Committee Ministers Card (Positions tab).
+ * Cabinet / Shadow Ministers Card (Positions tab).
  *
- * Cabinet Minister / Shadow Minister are committee-SCOPED — one each per
- * committee — so they get a committee-wise card like Committee Chairs. Each
- * committee tile has TWO seats with bench-restricted pools:
- *   • Cabinet Minister — chosen from that committee's RULING members.
- *   • Shadow Minister  — chosen from that committee's OPPOSITION members.
- *
- * Writes reuse `setParliamentRole` from `participants.ts` (sets only
- * parliament_role; committee_name is untouched), so a committee member made
- * cabinet_minister / shadow_minister becomes that committee's minister.
+ * Two modes (driven by getCommitteeMinisters → data.portfolioMode):
+ *   • PORTFOLIO mode — rows are the chapter's chosen ministries (Cabinet tab).
+ *     A minister is ANY ruling/opposition MP (not committee-bound); the post is
+ *     stored via setCabinetPortfolio (parliament_role + cabinet_portfolio).
+ *   • COMMITTEE mode (legacy, no cabinet configured) — rows are committees,
+ *     pools restricted to committee members; writes reuse setParliamentRole.
  */
 
 import { useState, useTransition } from "react";
@@ -23,6 +20,10 @@ import { Landmark, X, Plus } from "lucide-react";
 import { cn } from "@/lib/yip/utils";
 import { toast } from "sonner";
 import { setParliamentRole } from "@/app/yip/actions/participants";
+import {
+  setCabinetPortfolio,
+  clearCabinetPortfolio,
+} from "@/app/yip/actions/positions";
 import type {
   CommitteeMinistersData,
   CommitteeMinisterRow,
@@ -31,6 +32,7 @@ import type {
 
 interface Props {
   data: CommitteeMinistersData;
+  eventId: string;
 }
 
 type Seat = "cabinet" | "shadow";
@@ -41,9 +43,10 @@ function partyDot(side: string | null) {
   return "bg-[#FF9933]";
 }
 
-export function CommitteeMinistersCard({ data }: Props) {
+export function CommitteeMinistersCard({ data, eventId }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const portfolio = data.portfolioMode;
   // Open picker is keyed by `${committee}::${seat}` so only one is open at a time.
   const [openSlot, setOpenSlot] = useState<string | null>(null);
   const [pickValue, setPickValue] = useState<string>("");
@@ -58,7 +61,14 @@ export function CommitteeMinistersCard({ data }: Props) {
   function handleAssign(committee: string, seat: Seat, participantId: string) {
     if (!participantId) return;
     startTransition(async () => {
-      const result = await setParliamentRole(participantId, seatRole(seat));
+      const result = portfolio
+        ? await setCabinetPortfolio({
+            eventId,
+            participantId,
+            ministry: committee,
+            seat,
+          })
+        : await setParliamentRole(participantId, seatRole(seat));
       if (result.success) {
         toast.success(`${seatLabel(seat)} set for ${committee}`);
         setOpenSlot(null);
@@ -72,7 +82,9 @@ export function CommitteeMinistersCard({ data }: Props) {
 
   function handleRemove(p: PositionParticipant, committee: string, seat: Seat) {
     startTransition(async () => {
-      const result = await setParliamentRole(p.id, null);
+      const result = portfolio
+        ? await clearCabinetPortfolio({ eventId, participantId: p.id })
+        : await setParliamentRole(p.id, null);
       if (result.success) {
         toast.success(
           `${p.full_name} removed as ${seatLabel(seat)} of ${committee}`
@@ -163,7 +175,9 @@ export function CommitteeMinistersCard({ data }: Props) {
             >
               <option value="">
                 {candidates.length === 0
-                  ? `No ${seat === "cabinet" ? "ruling" : "opposition"} members in this committee`
+                  ? `No ${seat === "cabinet" ? "ruling" : "opposition"} ${
+                      portfolio ? "MPs available" : "members in this committee"
+                    }`
                   : "Select a member…"}
               </option>
               {candidates.map((p) => (
@@ -222,16 +236,18 @@ export function CommitteeMinistersCard({ data }: Props) {
           <Landmark className="size-4 text-[#FF9933]" />
           Cabinet &amp; Shadow Ministers
           <span className="ml-auto text-xs font-normal text-muted-foreground">
-            One Cabinet Minister (ruling) and one Shadow Minister (opposition) per
-            committee. Jury adds the role bonus to their scores.
+            One Cabinet Minister (ruling) and one Shadow Minister (opposition) per{" "}
+            {portfolio ? "ministry" : "committee"}. Jury adds the role bonus to
+            their scores.
           </span>
         </CardTitle>
       </CardHeader>
       <CardContent className="pt-0">
         {data.committees.length === 0 ? (
           <div className="text-xs italic text-muted-foreground">
-            No committees yet. Allocate participants to committees on the
-            Allocation tab, then assign each committee&apos;s ministers here.
+            {portfolio
+              ? "No cabinet ministries chosen yet. Pick them on the Cabinet tab, then assign each ministry's ministers here."
+              : "No committees yet. Allocate participants to committees on the Allocation tab, then assign each committee's ministers here."}
           </div>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

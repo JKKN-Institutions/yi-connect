@@ -52,7 +52,7 @@ export default async function PositionsPage({
         groups={positionGroups}
         allParticipants={allParticipants}
       />
-      <CommitteeMinistersCard data={committeeMinisters} />
+      <CommitteeMinistersCard data={committeeMinisters} eventId={id} />
       <CommitteeChairsCard data={committeeChairs} />
     </div>
   );

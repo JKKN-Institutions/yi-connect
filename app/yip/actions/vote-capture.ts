@@ -5,6 +5,7 @@ import { requireVolunteerSession } from "@/lib/yip/auth/yip-session";
 import { assertCheckedInForVote } from "@/lib/yip/vote-eligibility";
 import { validateVoteValue } from "@/lib/yip/vote-validate";
 import { matchesDesk, type DeskAssignment } from "@/lib/yip/yuva-desk";
+import { voteScopeKind, benchSideForType } from "@/lib/yip/vote-scope";
 
 /**
  * Floor-voting kiosk capture actions.
@@ -127,11 +128,11 @@ export async function getKioskState(
     session.volunteerId
   );
 
-  // Desk roster — party_id + committee_name are needed to apply the scope.
+  // Desk roster — party_id/party_side + committee_name apply the scope.
   const { data: rosterAll } = await supabase
     .from("participants")
     .select(
-      "id, full_name, serial_no, constituency_number, constituency_name, party_id, committee_name"
+      "id, full_name, serial_no, constituency_number, constituency_name, party_id, party_side, committee_name"
     )
     .eq("event_id", eventId)
     .order("serial_no", { ascending: true, nullsFirst: false });
@@ -143,15 +144,42 @@ export async function getKioskState(
     )
   );
 
-  // The event's currently-open vote session (if any).
-  const { data: voteSession } = await supabase
+  // Several party-leader elections can run in PARALLEL, so the kiosk picks the
+  // open session that belongs to THIS desk's party (House-wide votes apply to
+  // every desk; bench votes apply to the desk's bench).
+  const deskPartyIds = new Set(
+    deskRoster.map((p) => p.party_id).filter((x): x is string => !!x)
+  );
+  const deskSides = new Set(
+    deskRoster
+      .map((p) => p.party_side)
+      .filter(
+        (x): x is "ruling" | "opposition" =>
+          x === "ruling" || x === "opposition"
+      )
+  );
+
+  const { data: openSessions } = await supabase
     .from("vote_sessions")
     .select("id, agenda_item_id, vote_type, bill_id, config, status")
     .eq("event_id", eventId)
     .eq("status", "open")
     .order("opened_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .limit(100);
+
+  const voteSession =
+    (openSessions ?? []).find((s) => {
+      const kind = voteScopeKind(s.vote_type);
+      if (kind === "house") return true;
+      const cfg = (s.config ?? {}) as { partyId?: string; side?: string };
+      if (kind === "party")
+        return !!cfg.partyId && deskPartyIds.has(cfg.partyId);
+      const side =
+        cfg.side === "ruling" || cfg.side === "opposition"
+          ? cfg.side
+          : benchSideForType(s.vote_type);
+      return !!side && deskSides.has(side);
+    }) ?? null;
 
   // No open session → nothing to vote on; turnout is zero against the desk.
   if (!voteSession) {
@@ -308,13 +336,41 @@ export async function castKioskVote(
   // public, so a forged participantId must be rejected here).
   const { data: participant } = await supabase
     .from("participants")
-    .select("id, party_id, committee_name")
+    .select("id, party_id, party_side, committee_name")
     .eq("id", participantId)
     .eq("event_id", eventId)
     .maybeSingle();
 
   if (!participant) {
     return { success: false, error: "Student not found for this event" };
+  }
+
+  // Party / bench scope — mirrors the self path (voting.ts castVote). A desk can
+  // span multiple parties (committee desks), and several party-leader elections
+  // run in parallel, so the desk check alone is not enough: reject an
+  // out-of-party / out-of-bench ballot rather than mis-stamping it onto the
+  // wrong session. Fails CLOSED (missing scope key → reject).
+  const scopeKind = voteScopeKind(voteSession.vote_type);
+  if (scopeKind === "party") {
+    const cfg = (voteSession.config ?? {}) as { partyId?: string };
+    if (!cfg.partyId || participant.party_id !== cfg.partyId) {
+      return {
+        success: false,
+        error: "That student is not a member of this party.",
+      };
+    }
+  } else if (scopeKind === "bench") {
+    const cfg = (voteSession.config ?? {}) as { side?: string };
+    const side =
+      cfg.side === "ruling" || cfg.side === "opposition"
+        ? cfg.side
+        : benchSideForType(voteSession.vote_type);
+    if (!side || participant.party_side !== side) {
+      return {
+        success: false,
+        error: `That student is not on the ${side ?? "required"} bench.`,
+      };
+    }
   }
 
   const assignments = await callerDeskAssignments(

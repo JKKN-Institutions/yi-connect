@@ -2,7 +2,15 @@
 
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
-import { requireParticipantSession } from "@/lib/yip/auth/yip-session";
+import {
+  requireParticipantSession,
+  getYipSession,
+} from "@/lib/yip/auth/yip-session";
+import {
+  isParallelKind,
+  isPartyScoped,
+  isBenchScoped,
+} from "@/lib/yip/vote-scope";
 import { assertCheckedInForVote } from "@/lib/yip/vote-eligibility";
 import { validateVoteValue } from "@/lib/yip/vote-validate";
 import {
@@ -377,15 +385,65 @@ export async function openVote(
     return { success: false, error: "Scores are locked — unlock scores before opening a vote." };
   }
 
-  // Check for existing active session
-  const { data: existing } = await supabase
-    .from("vote_sessions")
-    .select("id")
-    .eq("event_id", eventId)
-    .in("status", ["open", "closed"])
-    .maybeSingle();
+  // Fail CLOSED: a party/bench election MUST carry its scope key, else the cast
+  // and tally guards (which are conditioned on it) would fail open — anyone
+  // could vote and every ballot would count for a seat that belongs to one
+  // party/bench.
+  if (isPartyScoped(voteType) && !config?.partyId) {
+    return {
+      success: false,
+      error: "This election needs a party — reopen it from the party's row.",
+    };
+  }
+  if (
+    isBenchScoped(voteType) &&
+    config?.side !== "ruling" &&
+    config?.side !== "opposition"
+  ) {
+    return {
+      success: false,
+      error: "This bench election needs a side (ruling or opposition).",
+    };
+  }
 
-  if (existing) {
+  // Concurrency rule: party-scoped elections (party leader / cabinet / shadow)
+  // may run in PARALLEL — one per party — so a chapter can hold every party's
+  // leader election at once and members only ever see their own. House-wide and
+  // bench votes stay exclusive (one at a time across the whole House).
+  const { data: activeSessions } = await supabase
+    .from("vote_sessions")
+    .select("id, vote_type, config")
+    .eq("event_id", eventId)
+    .in("status", ["open", "closed"]);
+
+  const actives = activeSessions ?? [];
+
+  if (isParallelKind(voteType)) {
+    // Party-leader elections run in parallel — but only alongside OTHER party-
+    // leader elections. Any other kind of vote in flight shares these voters.
+    if (actives.some((s) => !isParallelKind(s.vote_type))) {
+      return {
+        success: false,
+        error:
+          "Another vote is active. Close or reveal it before opening party-leader elections.",
+      };
+    }
+    // One election per party at a time.
+    const newPartyId = config?.partyId ?? null;
+    const samePartyActive = actives.some((s) => {
+      const cfg = (s.config ?? {}) as { partyId?: string };
+      return !!newPartyId && cfg.partyId === newPartyId;
+    });
+    if (samePartyActive) {
+      return {
+        success: false,
+        error:
+          "This party already has an active election. Close or reveal it first.",
+      };
+    }
+    // Other parties' leader elections may coexist → allow.
+  } else if (actives.length > 0) {
+    // Everything else (House-wide, bench, cabinet/shadow) stays exclusive.
     return {
       success: false,
       error: "There is already an active vote session. Close or reveal it first.",
@@ -420,6 +478,16 @@ export async function openVote(
     .single();
 
   if (error || !data) {
+    // The partial unique index yip_one_active_party_leader_per_party closes the
+    // read-then-insert race: a second concurrent open for the same party trips
+    // 23505 here even if both passed the application guard above.
+    if (error?.code === "23505") {
+      return {
+        success: false,
+        error:
+          "This party already has an active election. Close or reveal it first.",
+      };
+    }
     return { success: false, error: error?.message ?? "Failed to open vote session" };
   }
 
@@ -1394,4 +1462,36 @@ export async function openRunoff(
     runoffSeat: outcome.tie.seat,
     openDeputySeats,
   });
+}
+
+// ─── My vote scope (participant self-vote screen) ───────────────
+// Returns the logged-in participant's party + bench so their screen shows ONLY
+// the elections that apply to them: their OWN party's leader/cabinet/shadow
+// election, bench votes for their side, and every House-wide vote. Reads the
+// httpOnly session cookie — never trusts a client-supplied id. Fails closed:
+// callers treat a null partyId as "hide all party-scoped ballots".
+export async function getMyVoteScope(): Promise<
+  ActionResult<{ partyId: string | null; side: "ruling" | "opposition" | null }>
+> {
+  const sess = await getYipSession();
+  if (!sess || sess.type !== "participant") {
+    return { success: false, error: "Not signed in as a participant" };
+  }
+
+  const supabase = await createServiceClient();
+  const { data } = await supabase
+    .from("participants")
+    .select("party_id, party_side")
+    .eq("id", sess.id)
+    .maybeSingle();
+
+  const side =
+    data?.party_side === "ruling" || data?.party_side === "opposition"
+      ? data.party_side
+      : null;
+
+  return {
+    success: true,
+    data: { partyId: data?.party_id ?? null, side },
+  };
 }

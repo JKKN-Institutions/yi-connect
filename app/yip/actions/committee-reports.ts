@@ -12,30 +12,41 @@ type ActionResult<T = null> =
   | { success: true; data: T }
   | { success: false; error: string };
 
-// ─── Committee membership gate ─────────────────────────────────
-// Reports are per-COMMITTEE, like bills. Only committee-eligible members
-// (ordinary MPs assigned to THIS committee) may draft/submit its report. The
-// yip.committee_reports table is service-role-only (RLS on, no policies), so
-// this server check is the only auth layer — same pattern as bills.ts.
+// ─── Report access gate ────────────────────────────────────────
+// Reports are per-COMMITTEE, like bills. Two callers may draft/submit a
+// committee's report:
+//   • a committee MEMBER (participantId provided + assigned to THIS committee), or
+//   • an ORGANISER / chapter admin (canManage) acting on the committee's behalf
+//     (director decision 2026-06-28 — admins can run the workflow without
+//     waiting for a member to file the report).
+// yip.committee_reports is service-role-only (RLS on, no policies), so this
+// server check is the only auth layer — same pattern as bills.ts / committee-room.
 
-async function assertCommitteeMember(
+async function assertReportAccess(
   supabase: Awaited<ReturnType<typeof createServiceClient>>,
-  participantId: string,
   eventId: string,
-  committeeName: string
+  committeeName: string,
+  participantId?: string | null
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const sess = await requireParticipantSession(participantId, eventId);
-  if (!sess.ok) return { ok: false, error: sess.error };
-  const { data: p } = await supabase
-    .from("participants")
-    .select("parliament_role, committee_name")
-    .eq("id", participantId)
-    .maybeSingle();
-  if (!p) return { ok: false, error: "Participant not found." };
-  if (!isCommitteeEligible(p.parliament_role) || p.committee_name !== committeeName) {
-    return { ok: false, error: "Only this committee's members can write its report." };
+  // Member path — a committee participant writing their own committee's report.
+  if (participantId) {
+    const sess = await requireParticipantSession(participantId, eventId);
+    if (!sess.ok) return { ok: false, error: sess.error };
+    const { data: p } = await supabase
+      .from("participants")
+      .select("parliament_role, committee_name")
+      .eq("id", participantId)
+      .maybeSingle();
+    if (!p) return { ok: false, error: "Participant not found." };
+    if (!isCommitteeEligible(p.parliament_role) || p.committee_name !== committeeName) {
+      return { ok: false, error: "Only this committee's members can write its report." };
+    }
+    return { ok: true };
   }
-  return { ok: true };
+  // Manager path — organiser / chapter admin (canManage) on the committee's behalf.
+  const access = await getYipEventAccess(eventId);
+  if (access.canManage) return { ok: true };
+  return { ok: false, error: "Not authorized for this committee's report." };
 }
 
 export interface CommitteeReportFields {

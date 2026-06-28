@@ -1176,11 +1176,11 @@ export async function computeResults(
     const tSchool = schoolOf(target.participant_id);
     if (isCappedAward(A) && tSchool) {
       let projected = schoolCount.get(tSchool) ?? 0;
-      if (isCappedAward(target.award_category)) projected -= 1; // X swaps its award for A
+      if (holdsCappedAward(target.award_category)) projected -= 1; // X swaps its award for A
       for (const r of resultRows) {
         if (
           r.participant_id !== target.participant_id &&
-          r.award_category === A &&
+          (r.award_category ?? "").split(", ").includes(A) &&
           schoolOf(r.participant_id) === tSchool
         ) {
           projected -= 1; // a same-school current holder of A loses it

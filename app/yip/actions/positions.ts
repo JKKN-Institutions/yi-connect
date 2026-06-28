@@ -15,6 +15,7 @@
 import { createClient, createServiceClient } from "@/lib/yip/supabase/server";
 import { requireSuperAdmin } from "@/lib/yip/auth/require-super-admin";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
+import { effectiveMinistries } from "@/lib/yip/cabinet";
 import { revalidatePath } from "next/cache";
 import type { Database } from "@/types/yip/database";
 
@@ -271,7 +272,7 @@ export async function getCommitteeMinisters(
     return { cabinetBonus: 0, shadowBonus: 0, committees: [] };
 
   const supabase = await createServiceClient();
-  const [{ bonuses }, participantsRes] = await Promise.all([
+  const [{ bonuses }, participantsRes, eventRes] = await Promise.all([
     // Admin (service-client) reader — the anon reader RLS-falls-back to defaults
     // that omit shadow_minister, which would show "+0" for a role that earns points.
     getPositionBonusConfigAdmin(),
@@ -281,6 +282,14 @@ export async function getCommitteeMinisters(
       .eq("event_id", eventId)
       .not("committee_name", "is", null)
       .order("full_name"),
+    // The chapter's chosen cabinet portfolios (Cabinet settings tab). When set,
+    // these — not the raw allocation committees — define which ministries get a
+    // Cabinet/Shadow Minister seat here.
+    supabase
+      .from("events")
+      .select("cabinet_ministries")
+      .eq("id", eventId)
+      .single(),
   ]);
 
   const cabinetBonus = bonuses["cabinet_minister"] ?? 0;
@@ -313,21 +322,40 @@ export async function getCommitteeMinisters(
     party_side,
   });
 
-  const committees: CommitteeMinisterRow[] = [...byCommittee.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([committee, members]) => ({
-      committee,
-      cabinet: members
-        .filter((m) => m.parliament_role === "cabinet_minister")
-        .map(strip),
-      shadow: members
-        .filter((m) => m.parliament_role === "shadow_minister")
-        .map(strip),
-      rulingMembers: members.filter((m) => m.party_side === "ruling").map(strip),
-      oppositionMembers: members
-        .filter((m) => m.party_side === "opposition")
-        .map(strip),
-    }));
+  // Which ministries get a Cabinet/Shadow Minister seat, and in what order:
+  //  • Configured (Cabinet settings tab) → exactly the chapter's chosen
+  //    portfolios, in their chosen order — even ones with no members yet (an
+  //    empty row tells the organiser no one is allocated there). Their eligible
+  //    pools come from the matching committee's members (labels are the same
+  //    official catalogue, so committee_name === ministry label).
+  //  • Unconfigured → every committee that has allocated members, alphabetical
+  //    (unchanged behaviour, so other chapters / pre-config events are untouched).
+  const cabinetJson = eventRes.data?.cabinet_ministries ?? null;
+  const configured = Array.isArray(cabinetJson) && cabinetJson.length > 0;
+  const orderedCommittees: string[] = configured
+    ? effectiveMinistries(cabinetJson).map((m) => m.label.trim())
+    : [...byCommittee.keys()].sort((a, b) => a.localeCompare(b));
+
+  const committees: CommitteeMinisterRow[] = orderedCommittees.map(
+    (committee) => {
+      const members = byCommittee.get(committee) ?? [];
+      return {
+        committee,
+        cabinet: members
+          .filter((m) => m.parliament_role === "cabinet_minister")
+          .map(strip),
+        shadow: members
+          .filter((m) => m.parliament_role === "shadow_minister")
+          .map(strip),
+        rulingMembers: members
+          .filter((m) => m.party_side === "ruling")
+          .map(strip),
+        oppositionMembers: members
+          .filter((m) => m.party_side === "opposition")
+          .map(strip),
+      };
+    }
+  );
 
   return { cabinetBonus, shadowBonus, committees };
 }

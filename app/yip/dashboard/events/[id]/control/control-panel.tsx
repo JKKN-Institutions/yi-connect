@@ -156,7 +156,10 @@ export function ControlPanel({
     useState<ControlAgendaFilter>(initialControlFilter);
   const [timerDuration, setTimerDuration] = useState(90);
   const [speakers, setSpeakers] = useState<SpeakerWithParticipant[]>(initialSpeakers);
-  const [activeDay, setActiveDay] = useState<1 | 2>(() => {
+  // 0 = Pre-event (day-0 prep items), 1 = Day 1, 2 = Day 2. We never auto-open
+  // Pre-event — it's an opt-in tab the moderator taps; the day always defaults
+  // to the live day.
+  const [activeDay, setActiveDay] = useState<0 | 1 | 2>(() => {
     if (initialEvent.status === "day2_live") return 2;
     if (initialEvent.status === "day1_complete") return 2;
     return 1;
@@ -266,6 +269,9 @@ export function ControlPanel({
   // Per-chapter Control-panel filter (Maria item 4): "scored_voted_only" trims
   // the agenda list to sessions that are scored or voted, but always keeps the
   // item that is live right now visible so the moderator can see where they are.
+  // Show the "Pre-event" tab only when the event actually has day-0 prep items
+  // (otherwise older/other chapters would see an empty tab).
+  const hasPreEventItems = agendaItems.some((i) => i.day === 0);
   const dayItems = agendaItems
     .filter((i) => i.day === activeDay)
     .filter(
@@ -1482,6 +1488,15 @@ export function ControlPanel({
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm">Agenda</CardTitle>
                 <div className="flex gap-1">
+                  {hasPreEventItems && (
+                    <Button
+                      variant={activeDay === 0 ? "default" : "outline"}
+                      size="xs"
+                      onClick={() => setActiveDay(0)}
+                    >
+                      Pre-event
+                    </Button>
+                  )}
                   <Button
                     variant={activeDay === 1 ? "default" : "outline"}
                     size="xs"
@@ -1667,7 +1682,8 @@ export function ControlPanel({
                 })}
                 {dayItems.length === 0 && (
                   <p className="py-4 text-center text-xs text-muted-foreground">
-                    No agenda items for Day {activeDay}
+                    No agenda items for{" "}
+                    {activeDay === 0 ? "Pre-event" : `Day ${activeDay}`}
                   </p>
                 )}
               </div>

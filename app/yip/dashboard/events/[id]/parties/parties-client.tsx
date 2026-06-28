@@ -19,6 +19,7 @@ import {
   Hash,
   Wand2,
   Lock,
+  Upload,
 } from "lucide-react";
 import {
   createParty,
@@ -27,6 +28,7 @@ import {
   assignParticipantsToParty,
   electPartyLeader,
   createBenchlessParties,
+  uploadPartySymbol,
   type Party,
 } from "@/app/yip/actions/parties";
 import { assignCommittees } from "@/app/yip/actions/allocation";
@@ -87,6 +89,38 @@ export function PartiesClient({
   const [assignOpen, setAssignOpen] = useState<string | null>(null);
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [setupCount, setSetupCount] = useState(5);
+  const [uploadingSymbol, setUploadingSymbol] = useState(false);
+
+  // Read a chosen image, upload it to the public event-media bucket via the
+  // gated server action, and drop the returned URL into the form. Pasting a URL
+  // still works — this is just an easier path for organisers without a host.
+  async function handleSymbolFile(file: File) {
+    setError(null);
+    setUploadingSymbol(true);
+    try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () =>
+          resolve(((reader.result as string) || "").split(",")[1] ?? "");
+        reader.onerror = () => reject(new Error("Could not read the file."));
+        reader.readAsDataURL(file);
+      });
+      const res = await uploadPartySymbol({
+        eventId,
+        base64,
+        contentType: file.type,
+      });
+      if (!res.success) {
+        setError(res.error);
+        return;
+      }
+      setForm((f) => ({ ...f, symbol_url: res.data.url }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Upload failed.");
+    } finally {
+      setUploadingSymbol(false);
+    }
+  }
 
   function handleCreateParties() {
     startTransition(async () => {
@@ -443,12 +477,63 @@ export function PartiesClient({
                 />
               </div>
               <div className="md:col-span-2">
-                <label className="text-xs font-medium text-[#1a1a3e]/70">Symbol URL</label>
-                <Input
-                  value={form.symbol_url}
-                  onChange={(e) => setForm({ ...form, symbol_url: e.target.value })}
-                  placeholder="https://…"
-                />
+                <label className="text-xs font-medium text-[#1a1a3e]/70">Symbol</label>
+                <div className="mt-1 flex items-start gap-2">
+                  {form.symbol_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={form.symbol_url}
+                      alt="Party symbol"
+                      className="size-10 shrink-0 rounded border bg-white object-contain"
+                    />
+                  ) : (
+                    <div className="flex size-10 shrink-0 items-center justify-center rounded border bg-gray-50">
+                      <Hash className="size-4 text-[#1a1a3e]/40" />
+                    </div>
+                  )}
+                  <div className="flex-1 space-y-1.5">
+                    <Input
+                      value={form.symbol_url}
+                      onChange={(e) =>
+                        setForm({ ...form, symbol_url: e.target.value })
+                      }
+                      placeholder="Paste an image URL…"
+                    />
+                    <div className="flex items-center gap-3">
+                      <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-[#1a1a3e]/15 bg-white px-2.5 py-1 text-xs font-medium text-[#1a1a3e]/70 hover:bg-gray-50">
+                        {uploadingSymbol ? (
+                          <Loader2 className="size-3.5 animate-spin" />
+                        ) : (
+                          <Upload className="size-3.5" />
+                        )}
+                        {uploadingSymbol ? "Uploading…" : "Upload image"}
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                          className="hidden"
+                          disabled={uploadingSymbol}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleSymbolFile(file);
+                            e.target.value = "";
+                          }}
+                        />
+                      </label>
+                      {form.symbol_url && (
+                        <button
+                          type="button"
+                          onClick={() => setForm({ ...form, symbol_url: "" })}
+                          className="text-xs text-red-600 hover:underline"
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-[#1a1a3e]/45">
+                      PNG, JPG, WEBP or SVG · 2 MB max. Or paste a URL above.
+                    </p>
+                  </div>
+                </div>
               </div>
               <div>
                 <label className="text-xs font-medium text-[#1a1a3e]/70">Tagline</label>

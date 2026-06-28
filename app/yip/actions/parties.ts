@@ -255,6 +255,62 @@ export async function updateParty(
   return { success: true, data: data as Party };
 }
 
+// ── Party symbol upload ────────────────────────────────────────────────────
+// Organisers may paste a URL OR upload an image file for the party symbol.
+// Uploads land in the PUBLIC `event-media` bucket (symbols are shown to every
+// student + on the projector — not sensitive), under party-symbols/<eventId>/.
+// 2 MB cap (base64 travels inside the server-action POST, well under Vercel's
+// ~4.5 MB body limit). canManage-gated. Returns the public URL for the form to
+// store in parties.symbol_url.
+const PARTY_SYMBOL_BUCKET = "event-media";
+const PARTY_SYMBOL_MAX_BYTES = 2 * 1024 * 1024;
+const PARTY_SYMBOL_CONTENT_TYPES = new Map<string, string>([
+  ["image/png", "png"],
+  ["image/jpeg", "jpg"],
+  ["image/webp", "webp"],
+  ["image/svg+xml", "svg"],
+]);
+
+export async function uploadPartySymbol(input: {
+  eventId: string;
+  base64: string;
+  contentType: string;
+}): Promise<ActionResult<{ url: string }>> {
+  const access = await getYipEventAccess(input.eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
+  const ext = PARTY_SYMBOL_CONTENT_TYPES.get(input.contentType);
+  if (!ext) {
+    return { success: false, error: "Use a PNG, JPG, WEBP or SVG image." };
+  }
+  let buffer: Buffer;
+  try {
+    buffer = Buffer.from(input.base64, "base64");
+  } catch {
+    return { success: false, error: "Could not read the image." };
+  }
+  if (buffer.byteLength === 0) {
+    return { success: false, error: "The image is empty." };
+  }
+  if (buffer.byteLength > PARTY_SYMBOL_MAX_BYTES) {
+    return { success: false, error: "Image is too large — 2 MB max." };
+  }
+  const supabase = await createServiceClient();
+  const path = `party-symbols/${input.eventId}/${crypto.randomUUID()}.${ext}`;
+  const { error: upErr } = await supabase.storage
+    .from(PARTY_SYMBOL_BUCKET)
+    .upload(path, buffer, { contentType: input.contentType, upsert: false });
+  if (upErr) return { success: false, error: upErr.message };
+  const { data } = supabase.storage
+    .from(PARTY_SYMBOL_BUCKET)
+    .getPublicUrl(path);
+  if (!data?.publicUrl) {
+    return { success: false, error: "Upload saved but no URL came back." };
+  }
+  return { success: true, data: { url: data.publicUrl } };
+}
+
 export async function deleteParty(id: string, eventId: string): Promise<ActionResult> {
   const access = await getYipEventAccess(eventId);
   if (!access.canDelete) {

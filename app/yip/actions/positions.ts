@@ -133,7 +133,11 @@ export async function getParticipantsByRole(
   if (!user) return [];
 
   const [{ bonuses }, participantsRes] = await Promise.all([
-    getPositionBonusConfig(),
+    // Service-client read: the anon getPositionBonusConfig() RLS-falls-back to a
+    // partial defaults dict (0 for committee_chair / deputy_pm / shadow_minister),
+    // so the card would show "+0 bonus" for roles that actually earn points. Use
+    // the admin reader so the displayed bonus matches what the jury awards.
+    getPositionBonusConfigAdmin(),
     supabase
       .from("participants")
       .select("id, full_name, party_side, parliament_role")

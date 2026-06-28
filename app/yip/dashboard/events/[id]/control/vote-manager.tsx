@@ -235,16 +235,23 @@ export function VoteManager({
     string,
     { id: string; status: string | null; totalVotes: number }
   >();
+  // A party can have BOTH a finished (revealed) election and a new running one
+  // (re-elect). Show the most relevant: open > closed > revealed. activeVote-
+  // Sessions is newest-first, so among equal status the newest wins.
+  const statusRank = (s: string | null) =>
+    s === "open" ? 3 : s === "closed" ? 2 : 1;
   for (const av of activeVoteSessions) {
     if (av.session.vote_type !== "party_leader") continue;
     const cfg = (av.session.config ?? {}) as { partyId?: string };
-    if (cfg.partyId) {
-      leaderSessionByParty.set(cfg.partyId, {
-        id: av.session.id,
-        status: av.session.status,
-        totalVotes: av.totalVotes,
-      });
-    }
+    if (!cfg.partyId) continue;
+    const existing = leaderSessionByParty.get(cfg.partyId);
+    if (existing && statusRank(av.session.status) <= statusRank(existing.status))
+      continue;
+    leaderSessionByParty.set(cfg.partyId, {
+      id: av.session.id,
+      status: av.session.status,
+      totalVotes: av.totalVotes,
+    });
   }
 
   // Clear the "start new vote" override as soon as a non-revealed session is
@@ -533,8 +540,8 @@ export function VoteManager({
   function toggleLeaderNominee(id: string) {
     setLeaderDialog((prev) => {
       const has = prev.selectedIds.includes(id);
-      // Cap at 5 nominees; ignore further picks once full.
-      if (!has && prev.selectedIds.length >= 5) return prev;
+      // Cap at 10 nominees; ignore further picks once full.
+      if (!has && prev.selectedIds.length >= 10) return prev;
       return {
         ...prev,
         selectedIds: has
@@ -978,7 +985,7 @@ export function VoteManager({
               : "Hold Party Leader Election"}
           </DialogTitle>
           <DialogDescription>
-            Choose 3–5 nominees from this party. Only this party&apos;s members
+            Choose 3–10 nominees from this party. Only this party&apos;s members
             will be able to vote.
           </DialogDescription>
         </DialogHeader>
@@ -1008,7 +1015,7 @@ export function VoteManager({
           <div className="max-h-72 space-y-1.5 overflow-y-auto pr-1">
             {filterNominees(leaderDialog.members).map((m) => {
               const checked = leaderDialog.selectedIds.includes(m.id);
-              const atCap = !checked && leaderDialog.selectedIds.length >= 5;
+              const atCap = !checked && leaderDialog.selectedIds.length >= 10;
               return (
                 <button
                   key={m.id}

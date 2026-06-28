@@ -22,6 +22,7 @@ export default async function OrganiserCommitteeRoomPage({
   const committeeName = decodeURIComponent(committee);
   return (
     <div className="mx-auto w-full max-w-lg px-4 py-5">
+      <AdminCommitteeReport eventId={id} committeeName={committeeName} />
       <CommitteeClient eventId={id} committeeName={committeeName} />
     </div>
   );

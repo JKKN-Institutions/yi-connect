@@ -395,11 +395,14 @@ export async function getCommitteeRoom(input: {
   const committeeName = auth.committeeName;
 
   const bill = await loadBill(sb, eventId, committeeName);
-  // Managers (organiser / chapter admin / assigned volunteer) bypass the report
-  // gate — they can draft and submit the bill without waiting for a committee
-  // member to file the report (director decision 2026-06-28).
-  const reportSubmitted =
-    auth.isOrganiser || (await reportUnlocked(sb, eventId, committeeName));
+  // Managers bypass the report gate (passed through to reportUnlocked, which the
+  // mutation actions also use — keeps read + write paths consistent).
+  const reportSubmitted = await reportUnlocked(
+    sb,
+    eventId,
+    committeeName,
+    auth.isOrganiser
+  );
 
   // Members of this committee (presiding officers never carry a committee_name).
   const { data: memberRows } = await sb

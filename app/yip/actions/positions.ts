@@ -56,6 +56,29 @@ export interface CommitteeChairsData {
   committees: CommitteeChairRow[];
 }
 
+// Cabinet / Shadow ministers are committee-SCOPED like chairs, but each committee
+// has TWO seats with bench-restricted pools: the Cabinet Minister comes from the
+// RULING bench, the Shadow Minister from the OPPOSITION bench.
+export interface CommitteeMinisterRow {
+  committee: string;
+  /** Current cabinet minister(s) for this committee (normally 0 or 1). */
+  cabinet: PositionParticipant[];
+  /** Current shadow minister(s) for this committee (normally 0 or 1). */
+  shadow: PositionParticipant[];
+  /** Ruling-bench members of this committee — eligible to be Cabinet Minister. */
+  rulingMembers: PositionParticipant[];
+  /** Opposition-bench members of this committee — eligible to be Shadow Minister. */
+  oppositionMembers: PositionParticipant[];
+}
+
+export interface CommitteeMinistersData {
+  /** Cabinet Minister jury bonus (true live value via the admin reader). */
+  cabinetBonus: number;
+  /** Shadow Minister jury bonus (true live value via the admin reader). */
+  shadowBonus: number;
+  committees: CommitteeMinisterRow[];
+}
+
 // ─── Display order + labels for the single-seat "key" roles ──────────
 // Cabinet Minister / Shadow Minister are NOT here — they are committee-SCOPED
 // (one cabinet minister from the ruling bench and one shadow minister from the

@@ -91,9 +91,15 @@ export function AdminCommitteeReport({
     startTransition(async () => {
       // Persist first so a report row exists, then submit it.
       const saved = await saveReportDraft(eventId, committeeName, null, form);
-      if (!saved.success) return toast.error(saved.error);
+      if (!saved.success) {
+        toast.error(saved.error);
+        return;
+      }
       const r = await submitReport(saved.data.reportId, null);
-      if (!r.success) return toast.error(r.error);
+      if (!r.success) {
+        toast.error(r.error);
+        return;
+      }
       const fresh = await getReportForCommittee(eventId, committeeName);
       if (fresh) setReport(fresh);
       toast.success("Report submitted — bill drafting is unlocked for the committee.");

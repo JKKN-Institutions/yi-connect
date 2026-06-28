@@ -17,7 +17,7 @@ export default async function AdminScoringRulesPage() {
   const [settings, flags, bonus] = await Promise.all([
     getScoringSettings(),
     getScoringFlagsConfig(),
-    getPositionBonusConfig(),
+    getPositionBonusConfigAdmin(),
   ]);
 
   const deltas: FlagDeltas = flags.success

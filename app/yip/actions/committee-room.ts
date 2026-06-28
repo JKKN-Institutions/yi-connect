@@ -668,7 +668,7 @@ export async function saveBillField(input: {
   if (!authed.ok) return { success: false, error: authed.error };
   const auth = authed.auth;
 
-  if (!(await reportUnlocked(sb, input.eventId, auth.committeeName))) {
+  if (!(await reportUnlocked(sb, input.eventId, auth.committeeName, auth.isOrganiser))) {
     return { success: false, error: "Submit your Committee Report first." };
   }
   const ensured = await ensureBill(sb, input.eventId, auth.committeeName);
@@ -714,7 +714,7 @@ async function editGate(
   const authed = await resolveRoomAuth(sb, input);
   if (!authed.ok) return { ok: false, error: authed.error };
   const auth = authed.auth;
-  if (!(await reportUnlocked(sb, input.eventId, auth.committeeName))) {
+  if (!(await reportUnlocked(sb, input.eventId, auth.committeeName, auth.isOrganiser))) {
     return { ok: false, error: "Submit your Committee Report first." };
   }
   const ensured = await ensureBill(sb, input.eventId, auth.committeeName);
@@ -907,7 +907,7 @@ export async function assignBillRole(input: {
   const authed = await resolveRoomAuth(sb, input);
   if (!authed.ok) return { success: false, error: authed.error };
   const auth = authed.auth;
-  if (!(await reportUnlocked(sb, input.eventId, auth.committeeName))) {
+  if (!(await reportUnlocked(sb, input.eventId, auth.committeeName, auth.isOrganiser))) {
     return { success: false, error: "Submit your Committee Report first." };
   }
   const bill = await loadBill(sb, input.eventId, auth.committeeName);
@@ -963,7 +963,7 @@ export async function proposeAmendment(input: {
   if (!auth.isMember) {
     return { success: false, error: "Only committee members can propose amendments." };
   }
-  if (!(await reportUnlocked(sb, input.eventId, auth.committeeName))) {
+  if (!(await reportUnlocked(sb, input.eventId, auth.committeeName, auth.isOrganiser))) {
     return { success: false, error: "The bill isn't open yet." };
   }
   const bill = await loadBill(sb, input.eventId, auth.committeeName);
@@ -1140,7 +1140,7 @@ export async function submitCommitteeBill(input: {
   if (!authed.ok) return { success: false, error: authed.error };
   const auth = authed.auth;
 
-  if (!(await reportUnlocked(sb, input.eventId, auth.committeeName))) {
+  if (!(await reportUnlocked(sb, input.eventId, auth.committeeName, auth.isOrganiser))) {
     return { success: false, error: "Submit your Committee Report first." };
   }
   const bill = await loadBill(sb, input.eventId, auth.committeeName);

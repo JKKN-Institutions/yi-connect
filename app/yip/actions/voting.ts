@@ -1296,6 +1296,8 @@ export interface PartyLite {
   side: string | null;
   party_number: number;
   party_leader_id: string | null;
+  /** Name of the elected leader (resolved from party_leader_id), or null. */
+  party_leader_name: string | null;
   member_count: number;
 }
 
@@ -1320,12 +1322,30 @@ export async function getEventParties(
     if (m.party_id) counts[m.party_id] = (counts[m.party_id] ?? 0) + 1;
   });
 
+  // Resolve elected-leader names so the control row can name the winner.
+  const leaderIds = parties
+    .map((p) => p.party_leader_id)
+    .filter((x): x is string => !!x);
+  const leaderNames: Record<string, string> = {};
+  if (leaderIds.length > 0) {
+    const { data: leaders } = await supabase
+      .from("participants")
+      .select("id, full_name")
+      .in("id", leaderIds);
+    (leaders ?? []).forEach((l) => {
+      leaderNames[l.id] = l.full_name;
+    });
+  }
+
   return parties.map((p) => ({
     id: p.id,
     name: p.name,
     side: p.side,
     party_number: p.party_number,
     party_leader_id: p.party_leader_id,
+    party_leader_name: p.party_leader_id
+      ? (leaderNames[p.party_leader_id] ?? null)
+      : null,
     member_count: counts[p.id] ?? 0,
   }));
 }

@@ -696,7 +696,7 @@ export function AllocationClient({
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-14">S.No</TableHead>
+                <TableHead className="w-20">Const. No.</TableHead>
                 <TableHead>Participant</TableHead>
                 <TableHead>Party</TableHead>
                 <TableHead>Role</TableHead>
@@ -710,7 +710,7 @@ export function AllocationClient({
               {participants.map((p) => (
                 <TableRow key={p.id}>
                   <TableCell className="font-mono text-xs tabular-nums text-[#1a1a3e]/70">
-                    {p.serial_no ?? "—"}
+                    {p.constituency_number ?? "—"}
                   </TableCell>
                   <TableCell className="font-medium">{p.full_name}</TableCell>
                   <TableCell className="text-xs">

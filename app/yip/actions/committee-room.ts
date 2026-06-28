@@ -1006,13 +1006,16 @@ export async function setBillRoleMembers(input: {
   ) {
     return { success: false, error: "Submit your Committee Report first." };
   }
-  const bill = await loadBill(sb, input.eventId, auth.committeeName);
-  if (!bill) return { success: false, error: "Start the bill draft first." };
-  if (!billEditable(bill, true)) {
-    return { success: false, error: "Roles are locked — the bill is submitted." };
-  }
   if (!(auth.isOrganiser || auth.isChair)) {
     return { success: false, error: "Only the chair can assign roles." };
+  }
+  // Auto-start the bill on first role assignment — you pick who drafts BEFORE
+  // any drafting has happened, so the Roles tab must work with no bill yet.
+  const ensured = await ensureBill(sb, input.eventId, auth.committeeName);
+  if (!ensured.ok) return { success: false, error: ensured.error };
+  const bill = ensured.bill;
+  if (!billEditable(bill, true)) {
+    return { success: false, error: "Roles are locked — the bill is submitted." };
   }
 
   // De-dupe, preserve order, and verify every id is on THIS committee.

@@ -1414,11 +1414,15 @@ function RolesTab({
     else await reload();
   }
 
-  if (!bill) {
+  // A viewer who can't assign and has no bill yet sees only a hint. Chairs /
+  // organisers fall through and can add roles right away — the first add
+  // auto-starts the bill (see setBillRoleMembers → ensureBill).
+  if (!bill && !canAssign) {
     return (
       <Card>
         <CardContent className="py-6 text-center text-sm text-gray-500">
-          Start the bill draft first, then add who drafts and presents it.
+          Roles appear once the chair starts the bill and adds who drafts and
+          presents it.
         </CardContent>
       </Card>
     );
@@ -1460,31 +1464,33 @@ function RolesTab({
           onRemove={removePresenter}
         />
 
-        <div className="space-y-1.5">
-          <span className="text-xs font-medium text-gray-500">
-            Policy Researcher
-          </span>
-          {canAssign ? (
-            <select
-              value={bill.policyResearcher ?? ""}
-              disabled={savingResearcher}
-              onChange={(e) => assignResearcher(e.target.value || null)}
-              className="h-9 w-full rounded-md border border-gray-200 bg-white px-2 text-sm disabled:opacity-50"
-            >
-              <option value="">— Unassigned —</option>
-              {room.members.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name}
-                  {m.isChair ? " (Chair)" : ""}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <span className="text-sm font-medium text-gray-800">
-              {nameOf(bill.policyResearcher)}
+        {bill && (
+          <div className="space-y-1.5">
+            <span className="text-xs font-medium text-gray-500">
+              Policy Researcher
             </span>
-          )}
-        </div>
+            {canAssign ? (
+              <select
+                value={bill.policyResearcher ?? ""}
+                disabled={savingResearcher}
+                onChange={(e) => assignResearcher(e.target.value || null)}
+                className="h-9 w-full rounded-md border border-gray-200 bg-white px-2 text-sm disabled:opacity-50"
+              >
+                <option value="">— Unassigned —</option>
+                {room.members.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                    {m.isChair ? " (Chair)" : ""}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <span className="text-sm font-medium text-gray-800">
+                {nameOf(bill.policyResearcher)}
+              </span>
+            )}
+          </div>
+        )}
 
         {canAssign ? (
           <p className="text-[11px] text-gray-400">

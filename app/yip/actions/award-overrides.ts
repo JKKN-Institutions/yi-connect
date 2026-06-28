@@ -102,6 +102,15 @@ export async function setAwardWinner(
     // best-effort — the override still records via the audit log
   }
 
+  // Capture any existing override for this award so a blocked new pin (e.g. the
+  // 3-per-school cap) can be rolled back without dropping the prior valid pin.
+  const { data: priorOverride } = await supabase
+    .from("award_overrides")
+    .select("participant_id, note, set_by_email")
+    .eq("event_id", eventId)
+    .eq("award_label", awardLabel)
+    .maybeSingle();
+
   const { error } = await supabase.from("award_overrides").upsert(
     {
       event_id: eventId,
@@ -128,6 +137,49 @@ export async function setAwardWinner(
     return {
       success: false,
       error: `Override saved, but the results recompute failed: ${recompute.error}`,
+    };
+  }
+
+  // The 3-per-school cap binds overrides too (Director ruling 2026-06-28): the
+  // recompute leaves the auto-winner intact when a pin would breach the cap (or
+  // when the pick didn't attend every day). Verify the pin actually landed; if
+  // not, roll back to the prior state so a blocked pin doesn't silently drop an
+  // earlier valid override, and tell the chair why.
+  const { data: landedRow } = await supabase
+    .from("results")
+    .select("award_category")
+    .eq("event_id", eventId)
+    .eq("participant_id", participantId)
+    .maybeSingle();
+  const landed = (landedRow?.award_category ?? "")
+    .split(", ")
+    .includes(awardLabel);
+  if (!landed) {
+    if (priorOverride && priorOverride.participant_id !== participantId) {
+      await supabase.from("award_overrides").upsert(
+        {
+          event_id: eventId,
+          award_label: awardLabel,
+          participant_id: priorOverride.participant_id,
+          note: priorOverride.note,
+          set_by_email: priorOverride.set_by_email,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "event_id,award_label" }
+      );
+      await computeResults(eventId);
+    } else {
+      await supabase
+        .from("award_overrides")
+        .delete()
+        .eq("event_id", eventId)
+        .eq("award_label", awardLabel);
+    }
+    revalidatePath(`/yip/dashboard/events/${eventId}/results`);
+    return {
+      success: false,
+      error:
+        "Couldn't pin this winner: that student's school already holds the maximum of 3 awards, or the student didn't attend every day. Choose a student from a school under the cap.",
     };
   }
 

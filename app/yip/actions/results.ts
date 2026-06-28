@@ -164,6 +164,12 @@ function removeAward(r: ResultRow, awardLabel: string): void {
 // scarce-first pass in computeResults() (ONE award per student). Its gate +
 // tiebreak live there now. appendAward / removeAward remain the only mutators.
 
+// Per-school award cap (Director ruling 2026-06-28): at most this many INDIVIDUAL
+// awards per school. Team awards (Team Spirit) are a single collective committee
+// prize and are EXEMPT. Blank/unknown school is exempt too (each blank is its own
+// unknown school — grouping distinct unknown-school students would be wrong).
+const SCHOOL_AWARD_CAP = 3;
+
 export async function computeResults(
   eventId: string
 ): Promise<ActionResult<{ computed: number; awards_assigned: number }>> {
@@ -1043,6 +1049,11 @@ export async function computeResults(
   );
 
   const awarded = new Set<string>(); // participant_ids that already hold an award
+  // Per-school INDIVIDUAL-award count (Director ruling 2026-06-28). Team awards
+  // don't touch this; blank/unknown school is uncapped.
+  const schoolAwardCount = new Map<string, number>();
+  const schoolOf = (pid: string) =>
+    (participantMap.get(pid)?.school_name ?? "").trim();
 
   for (const aw of assignmentOrder) {
     if (aw.isTeam) {
@@ -1077,13 +1088,23 @@ export async function computeResults(
       }
     } else {
       // Non-team award: walk the ranked list and give it to the first
-      // `recipients` candidates NOT already holding an award.
+      // `recipients` candidates NOT already holding an award AND whose school is
+      // under the per-school cap.
       let given = 0;
       for (const r of aw.candidates) {
         if (given >= aw.recipients) break;
         if (awarded.has(r.participant_id)) continue;
+        // Per-school cap: skip a candidate whose school already holds the max
+        // individual awards (blank/unknown school is exempt → never capped).
+        const school = schoolOf(r.participant_id);
+        if (school && (schoolAwardCount.get(school) ?? 0) >= SCHOOL_AWARD_CAP) {
+          continue;
+        }
         appendAward(r, aw.label);
         awarded.add(r.participant_id);
+        if (school) {
+          schoolAwardCount.set(school, (schoolAwardCount.get(school) ?? 0) + 1);
+        }
         given++;
       }
     }
@@ -1109,6 +1130,27 @@ export async function computeResults(
     .from("award_overrides")
     .select("award_label, participant_id")
     .eq("event_id", eventId);
+  // The per-school cap also binds chair overrides (Director ruling 2026-06-28:
+  // overrides RESPECT the cap). Team-award labels are exempt. Build the team-label
+  // set + a live per-school INDIVIDUAL-award count from the post-auto state (each
+  // row holds ≤1 award here, so award_category is a single label or null).
+  const teamLabels = new Set(
+    activeAwards.filter((a) => a.isTeam).map((a) => a.label)
+  );
+  const isCappedAward = (label: string | null) =>
+    Boolean(label) && !teamLabels.has(label as string);
+  const countIndividualBySchool = () => {
+    const m = new Map<string, number>();
+    for (const r of resultRows) {
+      if (isCappedAward(r.award_category)) {
+        const s = schoolOf(r.participant_id);
+        if (s) m.set(s, (m.get(s) ?? 0) + 1);
+      }
+    }
+    return m;
+  };
+  let schoolCount = countIndividualBySchool();
+
   for (const ov of overrides ?? []) {
     const target = resultRows.find(
       (r) => r.participant_id === ov.participant_id
@@ -1119,12 +1161,38 @@ export async function computeResults(
     // event cannot be pinned an award; leave the auto-winner intact rather than
     // awarding an unranked student.
     if (!target.dayComplete) continue;
+    const A = ov.award_label;
+
+    // Cap check for INDIVIDUAL awards: would pinning A to X push X's school past
+    // the cap? Account for the strips this pin performs — X drops any award it
+    // holds, and A's current same-school holders drop A. If it would still
+    // breach, leave the auto-winner intact (the override is ignored this
+    // recompute; setAwardWinner surfaces the reason to the chair).
+    const tSchool = schoolOf(target.participant_id);
+    if (isCappedAward(A) && tSchool) {
+      let projected = schoolCount.get(tSchool) ?? 0;
+      if (isCappedAward(target.award_category)) projected -= 1; // X swaps its award for A
+      for (const r of resultRows) {
+        if (
+          r.participant_id !== target.participant_id &&
+          r.award_category === A &&
+          schoolOf(r.participant_id) === tSchool
+        ) {
+          projected -= 1; // a same-school current holder of A loses it
+        }
+      }
+      projected += 1; // X gains A
+      if (projected > SCHOOL_AWARD_CAP) continue; // respect the cap
+    }
+
     // (a) take award A away from its current auto-winner(s).
-    for (const r of resultRows) removeAward(r, ov.award_label);
+    for (const r of resultRows) removeAward(r, A);
     // (b) take away any OTHER award X currently holds, so X ends with only A.
     target.award_category = null;
     // (c) award A to X.
-    appendAward(target, ov.award_label);
+    appendAward(target, A);
+    // Refresh the per-school count so later overrides see this change.
+    schoolCount = countIndividualBySchool();
   }
 
   // ── Surface the "not ranked" reason (Director ruling 2026-06-25) ──────

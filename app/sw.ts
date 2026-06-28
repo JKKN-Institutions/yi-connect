@@ -37,6 +37,18 @@ const serwist = new Serwist({
         sameOrigin && /\/yip\/event\/[^/]+\/display\/?$/.test(url.pathname),
       handler: new NetworkOnly(),
     },
+    // The community CHAT (/yip/me/chat) and COMMITTEE ROOM (/yip/me/committee)
+    // are live, conversational surfaces — they must always reflect the latest
+    // messages and the latest deployed code, never a stale cached shell.
+    // NetworkOnly (matched before the default page strategy) keeps them out of
+    // the PWA cache so every load is fresh. The main learner dashboard
+    // (/yip/me itself) is deliberately NOT matched here, so it stays in
+    // defaultCache and keeps working offline.
+    {
+      matcher: ({ url, sameOrigin }) =>
+        sameOrigin && /\/yip\/me\/(chat|committee)(\/.*)?$/.test(url.pathname),
+      handler: new NetworkOnly(),
+    },
     ...defaultCache,
   ]
 })

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useTransition, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   MessageSquare,
   Send,
@@ -13,9 +13,9 @@ import {
   Flag,
   PauseCircle,
 } from "lucide-react";
-import { Card } from "@/components/yip/ui/card";
 import { Button } from "@/components/yip/ui/button";
 import { cn } from "@/lib/yip/utils";
+import { useLiveThread } from "@/lib/yip/use-live-thread";
 import {
   listChannels,
   listMessages,
@@ -83,10 +83,11 @@ export function ChatClient({
       <Thread
         title={view.channel.name}
         subtitle={labelForKind(view.channel.kind)}
+        threadId={`channel:${view.channel.id}`}
         participantId={participantId}
         onBack={() => setView({ kind: "list" })}
-        load={() =>
-          listMessages({ channelId: view.channel.id, participantId })
+        load={(afterIso) =>
+          listMessages({ channelId: view.channel.id, participantId, afterIso })
         }
         send={(body) =>
           postChannelMessage({
@@ -113,12 +114,14 @@ export function ChatClient({
       <Thread
         title={view.volunteer.name}
         subtitle="YUVA mentor · private message"
+        threadId={`dm:${view.volunteer.volunteerId}`}
         participantId={participantId}
         onBack={() => setView({ kind: "list" })}
-        load={() =>
+        load={(afterIso) =>
           listMessages({
             dmWithVolunteerId: view.volunteer.volunteerId,
             participantId,
+            afterIso,
           })
         }
         send={(body) =>
@@ -237,9 +240,13 @@ export function ChatClient({
 interface ThreadProps {
   title: string;
   subtitle: string;
+  /** Stable identity of this thread (channel:<id> or dm:<volunteerId>). */
+  threadId: string;
   participantId: string;
   onBack: () => void;
-  load: () => Promise<
+  load: (
+    afterIso?: string
+  ) => Promise<
     | { success: true; data: ChatMessage[] }
     | { success: false; error: string }
   >;
@@ -260,6 +267,7 @@ interface ThreadProps {
 function Thread({
   title,
   subtitle,
+  threadId,
   participantId,
   onBack,
   load,
@@ -267,29 +275,18 @@ function Thread({
   readOnlyNote,
   onReport,
 }: ThreadProps) {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
-  const [pending, startTransition] = useTransition();
   const [reportedIds, setReportedIds] = useState<Set<string>>(new Set());
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  const refresh = useCallback(async () => {
-    const res = await load();
-    if (res.success) {
-      setMessages(res.data);
-      setError(null);
-    } else {
-      setError(res.error);
-    }
-    setLoading(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
+  // Live thread: instant optimistic send + visibility-aware polling for new
+  // messages (see lib/yip/use-live-thread). Replaces the old load-once model.
+  const { messages, loading, error, sending, sendMessage } = useLiveThread({
+    threadId,
+    participantId,
+    load,
+    send,
+  });
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -297,16 +294,9 @@ function Thread({
 
   function handleSend() {
     const body = draft.trim();
-    if (!body || pending) return;
-    startTransition(async () => {
-      const res = await send(body);
-      if (res.success) {
-        setDraft("");
-        await refresh();
-      } else {
-        setError(res.error);
-      }
-    });
+    if (!body || sending) return;
+    setDraft("");
+    sendMessage(body);
   }
 
   async function handleReport(messageId: string) {
@@ -314,8 +304,6 @@ function Thread({
     const res = await onReport(messageId);
     if (res.success) {
       setReportedIds((prev) => new Set(prev).add(messageId));
-    } else {
-      setError(res.error);
     }
   }
 
@@ -366,7 +354,8 @@ function Thread({
                       ? "bg-[#FF9933] text-white"
                       : m.senderKind === "yuva"
                         ? "bg-[#138808]/10 text-gray-900"
-                        : "bg-gray-100 text-gray-900"
+                        : "bg-gray-100 text-gray-900",
+                    m.pending && "opacity-70"
                   )}
                 >
                   {!mine && (
@@ -377,6 +366,16 @@ function Thread({
                   <span className="whitespace-pre-wrap break-words">
                     {m.body}
                   </span>
+                  {mine && (m.pending || m.failed) && (
+                    <span
+                      className={cn(
+                        "mt-0.5 block text-right text-[10px]",
+                        m.failed ? "text-red-100" : "text-white/70"
+                      )}
+                    >
+                      {m.failed ? "Not sent — tap send to retry" : "Sending…"}
+                    </span>
+                  )}
                   {!mine && onReport && (
                     <span className="mt-1 flex justify-end">
                       {reported ? (
@@ -433,10 +432,10 @@ function Thread({
         />
         <Button
           onClick={handleSend}
-          disabled={pending || !draft.trim()}
+          disabled={sending || !draft.trim()}
           className="size-10 shrink-0 rounded-xl bg-[#FF9933] p-0 hover:bg-[#E68A2E]"
         >
-          {pending ? (
+          {sending ? (
             <Loader2 className="size-4 animate-spin" />
           ) : (
             <Send className="size-4" />

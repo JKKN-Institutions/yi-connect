@@ -81,6 +81,7 @@ type AnyTable = {
   delete: () => AnyTable;
   eq: (col: string, val: unknown) => AnyTable;
   is: (col: string, val: unknown) => AnyTable;
+  gte: (col: string, val: unknown) => AnyTable;
   in: (col: string, vals: unknown[]) => AnyTable;
   not: (col: string, op: string, val: unknown) => AnyTable;
   order: (col: string, opts?: Record<string, unknown>) => AnyTable;
@@ -337,8 +338,19 @@ type ListMessagesArgs =
   //   undefined → ALL messages (back-compatible: /yip/me/chat is unchanged)
   //   null      → only the general feed (thread_key IS NULL)
   //   "clause:…"/"amendment:…" → only that thread
-  | { channelId: string; participantId?: string; threadKey?: string | null }
-  | { dmWithVolunteerId: string; participantId: string };
+  //
+  // afterIso = live-poll cursor. When set, only messages with
+  // created_at >= afterIso are returned (the boundary row repeats and is
+  // de-duplicated client-side by id), so the WhatsApp-style live thread can
+  // fetch ONLY what is new every few seconds instead of re-downloading the
+  // whole 500-row window. Omit it for the initial full load.
+  | {
+      channelId: string;
+      participantId?: string;
+      threadKey?: string | null;
+      afterIso?: string;
+    }
+  | { dmWithVolunteerId: string; participantId: string; afterIso?: string };
 
 export async function listMessages(
   args: ListMessagesArgs
@@ -392,6 +404,10 @@ export async function listMessages(
     else if (typeof args.threadKey === "string")
       mq = mq.eq("thread_key", args.threadKey);
 
+    // Live-poll delta: only rows at/after the cursor (boundary row de-duped
+    // client-side by id). Omitted ⇒ full window (initial load).
+    if (args.afterIso) mq = mq.gte("created_at", args.afterIso);
+
     const { data, error } = (await mq
       .order("created_at", { ascending: true })
       .limit(500)) as { data: RawAny[] | null; error: PgError | null };
@@ -429,12 +445,17 @@ export async function listMessages(
   // === participantId), AND the query below filters on
   // sender_participant_id = participantId. Both the cookie AND the query are
   // bound to the same id, so this can never return another student's thread.
-  const { data, error } = (await table(sb, "chat_messages")
+  let dmq = table(sb, "chat_messages")
     .select(MSG_COLS)
     .eq("event_id", eventId)
     .eq("sender_participant_id", participantId)
     .eq("dm_to_volunteer_id", dmWithVolunteerId)
-    .is("deleted_at", null)
+    .is("deleted_at", null);
+
+  // Live-poll delta cursor (see ListMessagesArgs.afterIso).
+  if (args.afterIso) dmq = dmq.gte("created_at", args.afterIso);
+
+  const { data, error } = (await dmq
     .order("created_at", { ascending: true })
     .limit(500)) as { data: RawAny[] | null; error: PgError | null };
 

@@ -64,6 +64,7 @@ import {
   postChannelMessage,
   type ChatMessage,
 } from "@/app/yip/actions/chat";
+import { useLiveThread } from "@/lib/yip/use-live-thread";
 import {
   BillTemplateButton,
   CommitteeDocumentsSection,
@@ -1439,10 +1440,7 @@ function ThreadView({
   emptyHint: string;
   compact?: boolean;
 }) {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [loading, setLoading] = useState(true);
   const [body, setBody] = useState("");
-  const [sending, setSending] = useState(false);
   const endRef = useRef<HTMLDivElement | null>(null);
 
   const nameOf = useCallback(
@@ -1457,36 +1455,36 @@ function ThreadView({
     [members, participantId]
   );
 
-  const load = useCallback(async () => {
-    const r = await listMessages({ channelId, participantId, threadKey });
-    if (r.success) setMessages(r.data);
-    setLoading(false);
-  }, [channelId, participantId, threadKey]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+  // Live thread: instant optimistic send + visibility-aware polling for new
+  // messages (see lib/yip/use-live-thread). Replaces the old load-once model.
+  const { messages, loading, error, sending, sendMessage } = useLiveThread({
+    threadId: `${channelId}:${threadKey ?? "general"}`,
+    participantId,
+    load: (afterIso) =>
+      listMessages({ channelId, participantId, threadKey, afterIso }),
+    send: (text) =>
+      postChannelMessage({ participantId, channelId, body: text, threadKey }),
+  });
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length]);
 
-  async function send() {
-    const text = body.trim();
-    if (!text) return;
-    setSending(true);
-    const r = await postChannelMessage({
-      participantId,
-      channelId,
-      body: text,
-      threadKey,
-    });
-    setSending(false);
-    if (!r.success) toast.error(r.error);
-    else {
-      setBody("");
-      await load();
+  // Surface a failed send once (the bubble also shows a "Not sent" marker).
+  const lastErr = useRef<string | null>(null);
+  useEffect(() => {
+    if (error && error !== lastErr.current) {
+      lastErr.current = error;
+      toast.error(error);
     }
+    if (!error) lastErr.current = null;
+  }, [error]);
+
+  function send() {
+    const text = body.trim();
+    if (!text || sending) return;
+    setBody("");
+    sendMessage(text);
   }
 
   return (
@@ -1518,10 +1516,19 @@ function ThreadView({
                     mine
                       ? "bg-[#FF9933] text-white rounded-br-sm"
                       : "bg-gray-100 text-gray-800 rounded-bl-sm"
-                  }`}
+                  } ${m.pending ? "opacity-70" : ""}`}
                 >
                   {m.body}
                 </div>
+                {mine && (m.pending || m.failed) && (
+                  <span
+                    className={`px-1 text-[10px] ${
+                      m.failed ? "text-red-500" : "text-gray-400"
+                    }`}
+                  >
+                    {m.failed ? "Not sent — tap send to retry" : "Sending…"}
+                  </span>
+                )}
               </div>
             );
           })

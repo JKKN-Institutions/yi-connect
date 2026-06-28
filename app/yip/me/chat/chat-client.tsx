@@ -17,14 +17,21 @@ import { Button } from "@/components/yip/ui/button";
 import { cn } from "@/lib/yip/utils";
 import { useLiveThread } from "@/lib/yip/use-live-thread";
 import {
+  ReplyQuote,
+  ReactionChips,
+  MessageActions,
+} from "@/components/yip/chat-message-extras";
+import {
   listChannels,
   listMessages,
   postChannelMessage,
   postDmToYuva,
   listYuvaContacts,
   reportMessage,
+  toggleReaction,
   type ChatChannel,
   type ChatMessage,
+  type ChatReplyPreview,
   type YuvaContact,
 } from "@/app/yip/actions/chat";
 
@@ -89,13 +96,15 @@ export function ChatClient({
         load={(afterIso) =>
           listMessages({ channelId: view.channel.id, participantId, afterIso })
         }
-        send={(body) =>
+        send={(body, meta) =>
           postChannelMessage({
             participantId,
             channelId: view.channel.id,
             body,
+            replyToId: meta?.replyToId ?? null,
           })
         }
+        canReply
         // Announcements are read-only for students — organisers broadcast,
         // students listen. The server rejects student posts regardless; this
         // hides the composer so nobody hits that error.
@@ -251,11 +260,14 @@ interface ThreadProps {
     | { success: false; error: string }
   >;
   send: (
-    body: string
+    body: string,
+    meta?: { replyToId?: string | null; replyPreview?: ChatReplyPreview | null }
   ) => Promise<
     | { success: true; data: ChatMessage }
     | { success: false; error: string }
   >;
+  /** Allow replying to messages (channels only — DMs don't support reply). */
+  canReply?: boolean;
   /** When set, the composer is replaced by this read-only note. */
   readOnlyNote?: string;
   /** Report a message to the organisers (hidden on the student's own messages). */
@@ -272,31 +284,54 @@ function Thread({
   onBack,
   load,
   send,
+  canReply,
   readOnlyNote,
   onReport,
 }: ThreadProps) {
   const [draft, setDraft] = useState("");
   const [reportedIds, setReportedIds] = useState<Set<string>>(new Set());
+  const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   // Live thread: instant optimistic send + visibility-aware polling for new
   // messages (see lib/yip/use-live-thread). Replaces the old load-once model.
-  const { messages, loading, error, sending, sendMessage } = useLiveThread({
-    threadId,
-    participantId,
-    load,
-    send,
-  });
+  const { messages, loading, error, sending, sendMessage, patchMessage } =
+    useLiveThread({
+      threadId,
+      participantId,
+      load,
+      send,
+    });
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length]);
 
+  function previewOf(m: ChatMessage): ChatReplyPreview {
+    const mine =
+      m.senderKind === "student" && m.senderParticipantId === participantId;
+    return {
+      id: m.id,
+      senderName: mine ? "You" : senderLabel(m.senderKind),
+      body: m.body,
+      deleted: false,
+    };
+  }
+
   function handleSend() {
     const body = draft.trim();
     if (!body || sending) return;
+    const meta = replyingTo
+      ? { replyToId: replyingTo.id, replyPreview: previewOf(replyingTo) }
+      : undefined;
     setDraft("");
-    sendMessage(body);
+    setReplyingTo(null);
+    sendMessage(body, meta);
+  }
+
+  async function handleToggleReaction(messageId: string, emoji: string) {
+    const res = await toggleReaction({ messageId, emoji, participantId });
+    if (res.success) patchMessage(messageId, { reactions: res.data });
   }
 
   async function handleReport(messageId: string) {
@@ -363,6 +398,12 @@ function Thread({
                       {senderLabel(m.senderKind)}
                     </span>
                   )}
+                  {m.replyPreview && (
+                    <ReplyQuote
+                      preview={m.replyPreview}
+                      tone={mine ? "accent" : "light"}
+                    />
+                  )}
                   <span className="whitespace-pre-wrap break-words">
                     {m.body}
                   </span>
@@ -376,23 +417,41 @@ function Thread({
                       {m.failed ? "Not sent — tap send to retry" : "Sending…"}
                     </span>
                   )}
-                  {!mine && onReport && (
-                    <span className="mt-1 flex justify-end">
-                      {reported ? (
-                        <span className="text-[10px] font-medium text-gray-400">
-                          Reported
-                        </span>
-                      ) : (
-                        <button
-                          onClick={() => handleReport(m.id)}
-                          className="flex items-center gap-1 text-[10px] text-gray-400 transition-colors hover:text-red-500"
-                          aria-label="Report this message"
-                        >
-                          <Flag className="size-2.5" />
-                          Report
-                        </button>
+                  <ReactionChips
+                    reactions={m.reactions}
+                    onToggle={(emoji) => handleToggleReaction(m.id, emoji)}
+                    disabled={m.pending || m.failed}
+                  />
+                  {!(m.pending || m.failed) && (
+                    <div
+                      className={cn(
+                        "mt-1 flex items-center gap-2",
+                        mine ? "justify-end" : "justify-between"
                       )}
-                    </span>
+                    >
+                      <MessageActions
+                        tone={mine ? "accent" : "light"}
+                        align={mine ? "end" : "start"}
+                        onReply={canReply ? () => setReplyingTo(m) : undefined}
+                        onReact={(emoji) => handleToggleReaction(m.id, emoji)}
+                      />
+                      {!mine && onReport && (
+                        reported ? (
+                          <span className="text-[10px] font-medium text-gray-400">
+                            Reported
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => handleReport(m.id)}
+                            className="flex items-center gap-1 text-[10px] text-gray-400 transition-colors hover:text-red-500"
+                            aria-label="Report this message"
+                          >
+                            <Flag className="size-2.5" />
+                            Report
+                          </button>
+                        )
+                      )}
+                    </div>
                   )}
                 </div>
               </div>
@@ -415,7 +474,16 @@ function Thread({
           {readOnlyNote}
         </p>
       ) : (
-      <div className="flex items-end gap-2 border-t border-gray-100 pt-3">
+      <div className="border-t border-gray-100 pt-3">
+        {replyingTo && (
+          <div className="mb-2">
+            <ReplyQuote
+              preview={previewOf(replyingTo)}
+              onCancel={() => setReplyingTo(null)}
+            />
+          </div>
+        )}
+        <div className="flex items-end gap-2">
         <textarea
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
@@ -441,6 +509,7 @@ function Thread({
             <Send className="size-4" />
           )}
         </Button>
+        </div>
       </div>
       )}
     </div>

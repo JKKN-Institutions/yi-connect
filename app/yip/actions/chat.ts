@@ -35,6 +35,7 @@ import { createClient, createServiceClient } from "@/lib/yip/supabase/server";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { requireParticipantSession } from "@/lib/yip/auth/yip-session";
 import { CHAT_ENABLED } from "@/lib/yip/chat-config";
+import { isAllowedReaction } from "@/lib/yip/chat-reactions";
 
 type ActionResult<T = null> =
   | { success: true; data: T }
@@ -55,6 +56,20 @@ export interface ChatChannel {
   createdAt: string;
 }
 
+export interface ChatReactionSummary {
+  emoji: string;
+  count: number;
+  /** True when the calling user has reacted with this emoji. */
+  mine: boolean;
+}
+
+export interface ChatReplyPreview {
+  id: string;
+  senderName: string;
+  body: string;
+  deleted: boolean;
+}
+
 export interface ChatMessage {
   id: string;
   channelId: string | null;
@@ -65,6 +80,13 @@ export interface ChatMessage {
   dmToVolunteerId: string | null;
   deletedAt: string | null;
   createdAt: string;
+  /** WhatsApp-style reply: the message this one replies to (preview), if any. */
+  replyToId: string | null;
+  replyPreview: ChatReplyPreview | null;
+  /** Aggregated emoji reactions on this message. */
+  reactions: ChatReactionSummary[];
+  /** Pin: set when an organiser has pinned this message to the channel. */
+  pinnedAt: string | null;
 }
 
 // ─── Untyped table access (chat_* not in generated DB types yet) ────
@@ -121,7 +143,7 @@ function toChannel(r: RawAny): ChatChannel {
 const CHANNEL_COLS =
   "id, event_id, kind, party_id, committee_name, name, frozen_at, created_at";
 const MSG_COLS =
-  "id, channel_id, sender_kind, sender_participant_id, sender_volunteer_id, body, dm_to_volunteer_id, deleted_at, created_at";
+  "id, channel_id, sender_kind, sender_participant_id, sender_volunteer_id, body, dm_to_volunteer_id, deleted_at, created_at, reply_to_id, pinned_at";
 const MOD_MSG_COLS = `${MSG_COLS}, reported_at, reported_by_participant_id`;
 
 // ─── Internal helpers (NOT exported — a "use server" file may only export
@@ -263,7 +285,128 @@ function toMessage(r: RawAny): ChatMessage {
     dmToVolunteerId: (r.dm_to_volunteer_id as string | null) ?? null,
     deletedAt: (r.deleted_at as string | null) ?? null,
     createdAt: String(r.created_at),
+    replyToId: (r.reply_to_id as string | null) ?? null,
+    // replyPreview + reactions are filled by enrichMessages(); a bare row
+    // (e.g. the just-inserted send result) starts empty and is enriched before return.
+    replyPreview: null,
+    reactions: [],
+    pinnedAt: (r.pinned_at as string | null) ?? null,
   };
+}
+
+// ─── Reaction + reply enrichment ────────────────────────────────
+// listMessages/post* return ChatMessage with reply previews + aggregated
+// reactions. Identity of the caller (for the `mine` flag) is one of:
+//   participant access-code session → { kind: "student", id: participantId }
+//   organiser (canManage)           → { kind: "admin",   id: authUserId }
+type ReactorIdentity = { kind: "student" | "yuva" | "admin"; id: string };
+
+async function enrichMessages(
+  sb: ServiceClient,
+  msgs: ChatMessage[],
+  me: ReactorIdentity | null
+): Promise<ChatMessage[]> {
+  if (msgs.length === 0) return msgs;
+  const ids = msgs.map((m) => m.id);
+
+  // 1) Reply previews — fetch the replied-to rows + their sender names.
+  const replyIds = Array.from(
+    new Set(msgs.map((m) => m.replyToId).filter((x): x is string => !!x))
+  );
+  const replyMap = new Map<string, ChatReplyPreview>();
+  if (replyIds.length > 0) {
+    const { data: repRows } = (await table(sb, "chat_messages")
+      .select(
+        "id, body, deleted_at, sender_participant_id, sender_volunteer_id"
+      )
+      .in("id", replyIds)) as { data: RawAny[] | null; error: PgError | null };
+    const rows = repRows ?? [];
+    const pIds = rows
+      .map((r) => r.sender_participant_id as string | null)
+      .filter((x): x is string => !!x);
+    const vIds = rows
+      .map((r) => r.sender_volunteer_id as string | null)
+      .filter((x): x is string => !!x);
+    const { pNames, vNames } = await loadNameMaps(sb, pIds, vIds);
+    for (const r of rows) {
+      const deleted = !!r.deleted_at;
+      const name =
+        pNames.get(String(r.sender_participant_id)) ??
+        vNames.get(String(r.sender_volunteer_id)) ??
+        "Someone";
+      replyMap.set(String(r.id), {
+        id: String(r.id),
+        senderName: name,
+        body: deleted ? "" : String(r.body ?? ""),
+        deleted,
+      });
+    }
+  }
+
+  // 2) Reactions — aggregate per message + emoji, flag the caller's own.
+  const reactionMap = new Map<string, Map<string, { count: number; mine: boolean }>>();
+  const { data: reactRows } = (await table(sb, "chat_message_reactions")
+    .select("message_id, emoji, reactor_kind, reactor_id")
+    .in("message_id", ids)) as { data: RawAny[] | null; error: PgError | null };
+  for (const r of reactRows ?? []) {
+    const mid = String(r.message_id);
+    const emoji = String(r.emoji);
+    let perMsg = reactionMap.get(mid);
+    if (!perMsg) {
+      perMsg = new Map();
+      reactionMap.set(mid, perMsg);
+    }
+    const cur = perMsg.get(emoji) ?? { count: 0, mine: false };
+    cur.count += 1;
+    if (me && r.reactor_kind === me.kind && String(r.reactor_id) === me.id) {
+      cur.mine = true;
+    }
+    perMsg.set(emoji, cur);
+  }
+
+  return msgs.map((m) => {
+    const perMsg = reactionMap.get(m.id);
+    const reactions: ChatReactionSummary[] = perMsg
+      ? Array.from(perMsg.entries()).map(([emoji, v]) => ({
+          emoji,
+          count: v.count,
+          mine: v.mine,
+        }))
+      : [];
+    return {
+      ...m,
+      replyPreview: m.replyToId ? replyMap.get(m.replyToId) ?? null : null,
+      reactions,
+    };
+  });
+}
+
+/**
+ * Validate a reply anchor: returns the id only if it's a live (non-deleted)
+ * message in the SAME channel and (when threadKey is specified) the same
+ * sub-thread. Returns null for a missing/invalid/cross-channel anchor so the
+ * message still posts, just without a dangling reply. FAIL SOFT (never throws).
+ */
+async function validateReplyAnchor(
+  sb: ServiceClient,
+  replyToId: string | null | undefined,
+  channelId: string,
+  threadKey: string | null | undefined
+): Promise<string | null> {
+  if (!replyToId) return null;
+  const { data } = (await table(sb, "chat_messages")
+    .select("id, channel_id, thread_key, deleted_at")
+    .eq("id", replyToId)
+    .maybeSingle()) as { data: RawAny | null; error: PgError | null };
+  if (!data) return null;
+  if (String(data.channel_id ?? "") !== channelId) return null;
+  if (data.deleted_at) return null;
+  // When the caller scopes to a sub-thread, the anchor must be in it too.
+  if (threadKey !== undefined) {
+    const anchorThread = (data.thread_key as string | null) ?? null;
+    if (anchorThread !== threadKey) return null;
+  }
+  return replyToId;
 }
 
 // ─── 1. List channels for an event ──────────────────────────────
@@ -371,6 +514,7 @@ export async function listMessages(
     if (!chRow) return { success: false, error: "Channel not found." };
     const channel = toChannel(chRow);
 
+    let me: ReactorIdentity | null = null;
     if (args.participantId) {
       const auth = await requireParticipantSession(
         args.participantId,
@@ -388,11 +532,14 @@ export async function listMessages(
           error: "You don't have access to this channel.",
         };
       }
+      me = { kind: "student", id: args.participantId };
     } else {
       const access = await getYipEventAccess(channel.eventId);
       if (!access.canManage) {
         return { success: false, error: "Not authorized to read this channel." };
       }
+      const uid = await getAuthUserId();
+      if (uid) me = { kind: "admin", id: uid };
     }
 
     let mq = table(sb, "chat_messages")
@@ -413,7 +560,8 @@ export async function listMessages(
       .limit(500)) as { data: RawAny[] | null; error: PgError | null };
 
     if (error) return { success: false, error: error.message };
-    return { success: true, data: (data ?? []).map(toMessage) };
+    const enriched = await enrichMessages(sb, (data ?? []).map(toMessage), me);
+    return { success: true, data: enriched };
   }
 
   // DM thread: the calling student may only read their OWN thread with a YUVA.
@@ -460,7 +608,12 @@ export async function listMessages(
     .limit(500)) as { data: RawAny[] | null; error: PgError | null };
 
   if (error) return { success: false, error: error.message };
-  return { success: true, data: (data ?? []).map(toMessage) };
+  const enriched = await enrichMessages(
+    sb,
+    (data ?? []).map(toMessage),
+    { kind: "student", id: participantId }
+  );
+  return { success: true, data: enriched };
 }
 
 // ─── 3. Post a message into a group channel ─────────────────────
@@ -474,6 +627,9 @@ export async function postChannelMessage(args: {
   body: string;
   // Optional clause/amendment sub-thread anchor (null/undefined = general feed).
   threadKey?: string | null;
+  // Optional WhatsApp-style reply anchor — must be a non-deleted message in the
+  // SAME channel (validated below); ignored otherwise.
+  replyToId?: string | null;
 }): Promise<ActionResult<ChatMessage>> {
   if (!CHAT_ENABLED) return { success: false, error: DISABLED };
 
@@ -522,6 +678,14 @@ export async function postChannelMessage(args: {
   if (!mute.ok) return { success: false, error: mute.error };
   if (mute.muted) return { success: false, error: MUTED_ERROR };
 
+  // Reply anchor — accept only a live message in THIS channel + thread.
+  const replyToId = await validateReplyAnchor(
+    sb,
+    args.replyToId,
+    args.channelId,
+    args.threadKey ?? null
+  );
+
   const { data, error } = (await table(sb, "chat_messages")
     .insert({
       event_id: eventId,
@@ -531,16 +695,19 @@ export async function postChannelMessage(args: {
       dm_to_volunteer_id: null,
       body,
       thread_key: args.threadKey ?? null,
+      reply_to_id: replyToId,
     })
-    .select(
-      "id, channel_id, sender_kind, sender_participant_id, sender_volunteer_id, body, dm_to_volunteer_id, deleted_at, created_at"
-    )
+    .select(MSG_COLS)
     .single()) as { data: RawAny | null; error: PgError | null };
 
   if (error || !data) {
     return { success: false, error: error?.message ?? "Failed to post." };
   }
-  return { success: true, data: toMessage(data) };
+  const [enriched] = await enrichMessages(sb, [toMessage(data)], {
+    kind: "student",
+    id: args.participantId,
+  });
+  return { success: true, data: enriched };
 }
 
 // ─── 4. Student → YUVA direct message ───────────────────────────
@@ -1492,4 +1659,241 @@ export async function modPostAnnouncement(
     return { success: false, error: error?.message ?? "Failed to post." };
   }
   return { success: true, data: toMessage(data) };
+}
+
+// ─── Reactions / Pin (WhatsApp-style message actions) ───────────
+// Same gating as listMessages: a participant access-code session that can see
+// the message's channel, OR an organiser with canManage. Reactions are open to
+// either; pin/unpin is organiser-only.
+
+type MessageAccess = {
+  channelId: string | null;
+  eventId: string;
+  threadKey: string | null;
+  me: ReactorIdentity;
+};
+
+/** Resolve + authorize the caller against a message they want to act on. */
+async function resolveMessageAccess(
+  sb: ServiceClient,
+  messageId: string,
+  participantId: string | undefined
+): Promise<{ ok: true; ctx: MessageAccess } | { ok: false; error: string }> {
+  const { data: m } = (await table(sb, "chat_messages")
+    .select(
+      "id, event_id, channel_id, thread_key, dm_to_volunteer_id, sender_participant_id, deleted_at"
+    )
+    .eq("id", messageId)
+    .maybeSingle()) as { data: RawAny | null; error: PgError | null };
+  if (!m) return { ok: false, error: "Message not found." };
+  if (m.deleted_at) return { ok: false, error: "That message was removed." };
+
+  const eventId = String(m.event_id);
+  const channelId = (m.channel_id as string | null) ?? null;
+  const threadKey = (m.thread_key as string | null) ?? null;
+
+  if (participantId) {
+    const auth = await requireParticipantSession(participantId, eventId);
+    if (!auth.ok) return { ok: false, error: auth.error };
+
+    if (channelId) {
+      // Channel message — the participant must be a member of that channel.
+      const { data: chRow } = (await table(sb, "chat_channels")
+        .select(CHANNEL_COLS)
+        .eq("id", channelId)
+        .maybeSingle()) as { data: RawAny | null; error: PgError | null };
+      if (!chRow) return { ok: false, error: "Channel not found." };
+      const channel = toChannel(chRow);
+      const p = await loadParticipantChatRow(sb, participantId, eventId);
+      if (!p || !channelVisibleToParticipant(channel, p)) {
+        return { ok: false, error: "You don't have access to this message." };
+      }
+    } else {
+      // DM message — the caller must own the thread (they are the student side).
+      if (String(m.sender_participant_id ?? "") !== participantId) {
+        return { ok: false, error: "You don't have access to this message." };
+      }
+    }
+    return {
+      ok: true,
+      ctx: { channelId, eventId, threadKey, me: { kind: "student", id: participantId } },
+    };
+  }
+
+  // Organiser path.
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { ok: false, error: "Not authorized for this message." };
+  }
+  const uid = await getAuthUserId();
+  if (!uid) return { ok: false, error: "Not signed in." };
+  return {
+    ok: true,
+    ctx: { channelId, eventId, threadKey, me: { kind: "admin", id: uid } },
+  };
+}
+
+/** Current aggregated reactions for one message, from the caller's view. */
+async function reactionsForMessage(
+  sb: ServiceClient,
+  messageId: string,
+  me: ReactorIdentity
+): Promise<ChatReactionSummary[]> {
+  const { data } = (await table(sb, "chat_message_reactions")
+    .select("emoji, reactor_kind, reactor_id")
+    .eq("message_id", messageId)) as {
+    data: RawAny[] | null;
+    error: PgError | null;
+  };
+  const byEmoji = new Map<string, { count: number; mine: boolean }>();
+  for (const r of data ?? []) {
+    const emoji = String(r.emoji);
+    const cur = byEmoji.get(emoji) ?? { count: 0, mine: false };
+    cur.count += 1;
+    if (r.reactor_kind === me.kind && String(r.reactor_id) === me.id) {
+      cur.mine = true;
+    }
+    byEmoji.set(emoji, cur);
+  }
+  return Array.from(byEmoji.entries()).map(([emoji, v]) => ({
+    emoji,
+    count: v.count,
+    mine: v.mine,
+  }));
+}
+
+/**
+ * Toggle the caller's reaction (one of CHAT_REACTION_EMOJIS) on a message.
+ * Returns the message's updated reaction summary so the client can patch it
+ * immediately. Idempotent per (message, emoji, caller).
+ */
+export async function toggleReaction(args: {
+  messageId: string;
+  emoji: string;
+  participantId?: string;
+}): Promise<ActionResult<ChatReactionSummary[]>> {
+  if (!CHAT_ENABLED) return { success: false, error: DISABLED };
+  if (!args.messageId) return { success: false, error: "Missing message." };
+  if (!isAllowedReaction(args.emoji)) {
+    return { success: false, error: "That reaction isn't allowed." };
+  }
+
+  const sb = await createServiceClient();
+  const res = await resolveMessageAccess(sb, args.messageId, args.participantId);
+  if (!res.ok) return { success: false, error: res.error };
+  const { me } = res.ctx;
+
+  const { data: existing } = (await table(sb, "chat_message_reactions")
+    .select("id")
+    .eq("message_id", args.messageId)
+    .eq("emoji", args.emoji)
+    .eq("reactor_kind", me.kind)
+    .eq("reactor_id", me.id)
+    .maybeSingle()) as { data: RawAny | null; error: PgError | null };
+
+  if (existing) {
+    const { error } = (await table(sb, "chat_message_reactions")
+      .delete()
+      .eq("id", String(existing.id))) as { error: PgError | null };
+    if (error) return { success: false, error: error.message };
+  } else {
+    const { error } = (await table(sb, "chat_message_reactions").insert({
+      message_id: args.messageId,
+      emoji: args.emoji,
+      reactor_kind: me.kind,
+      reactor_id: me.id,
+    })) as { error: PgError | null };
+    if (error) return { success: false, error: error.message };
+  }
+
+  return { success: true, data: await reactionsForMessage(sb, args.messageId, me) };
+}
+
+/** Pin a message to its channel (organiser only). */
+export async function pinMessage(args: {
+  messageId: string;
+}): Promise<ActionResult<null>> {
+  if (!CHAT_ENABLED) return { success: false, error: DISABLED };
+  if (!args.messageId) return { success: false, error: "Missing message." };
+  const sb = await createServiceClient();
+  // Organiser-only: resolve with no participant id forces the canManage gate.
+  const res = await resolveMessageAccess(sb, args.messageId, undefined);
+  if (!res.ok) return { success: false, error: res.error };
+  const { error } = (await table(sb, "chat_messages")
+    .update({ pinned_at: new Date().toISOString(), pinned_by: res.ctx.me.id })
+    .eq("id", args.messageId)) as { error: PgError | null };
+  if (error) return { success: false, error: error.message };
+  return { success: true, data: null };
+}
+
+/** Unpin a message (organiser only). */
+export async function unpinMessage(args: {
+  messageId: string;
+}): Promise<ActionResult<null>> {
+  if (!CHAT_ENABLED) return { success: false, error: DISABLED };
+  if (!args.messageId) return { success: false, error: "Missing message." };
+  const sb = await createServiceClient();
+  const res = await resolveMessageAccess(sb, args.messageId, undefined);
+  if (!res.ok) return { success: false, error: res.error };
+  const { error } = (await table(sb, "chat_messages")
+    .update({ pinned_at: null, pinned_by: null })
+    .eq("id", args.messageId)) as { error: PgError | null };
+  if (error) return { success: false, error: error.message };
+  return { success: true, data: null };
+}
+
+/**
+ * Pinned messages for a channel (newest pin first). Same membership gating as
+ * listMessages; threadKey scopes to a sub-thread when given.
+ */
+export async function listPinnedMessages(args: {
+  channelId: string;
+  participantId?: string;
+  threadKey?: string | null;
+}): Promise<ActionResult<ChatMessage[]>> {
+  if (!CHAT_ENABLED) return { success: false, error: DISABLED };
+  if (!args.channelId) return { success: false, error: "Missing channel." };
+
+  const sb = await createServiceClient();
+  const { data: chRow } = (await table(sb, "chat_channels")
+    .select(CHANNEL_COLS)
+    .eq("id", args.channelId)
+    .maybeSingle()) as { data: RawAny | null; error: PgError | null };
+  if (!chRow) return { success: false, error: "Channel not found." };
+  const channel = toChannel(chRow);
+
+  let me: ReactorIdentity | null = null;
+  if (args.participantId) {
+    const auth = await requireParticipantSession(args.participantId, channel.eventId);
+    if (!auth.ok) return { success: false, error: auth.error };
+    const p = await loadParticipantChatRow(sb, args.participantId, channel.eventId);
+    if (!p || !channelVisibleToParticipant(channel, p)) {
+      return { success: false, error: "You don't have access to this channel." };
+    }
+    me = { kind: "student", id: args.participantId };
+  } else {
+    const access = await getYipEventAccess(channel.eventId);
+    if (!access.canManage) {
+      return { success: false, error: "Not authorized to read this channel." };
+    }
+    const uid = await getAuthUserId();
+    if (uid) me = { kind: "admin", id: uid };
+  }
+
+  let mq = table(sb, "chat_messages")
+    .select(MSG_COLS)
+    .eq("channel_id", args.channelId)
+    .is("deleted_at", null)
+    .not("pinned_at", "is", null);
+  if (args.threadKey === null) mq = mq.is("thread_key", null);
+  else if (typeof args.threadKey === "string")
+    mq = mq.eq("thread_key", args.threadKey);
+
+  const { data, error } = (await mq.order("pinned_at", { ascending: false })) as {
+    data: RawAny[] | null;
+    error: PgError | null;
+  };
+  if (error) return { success: false, error: error.message };
+  const enriched = await enrichMessages(sb, (data ?? []).map(toMessage), me);
+  return { success: true, data: enriched };
 }

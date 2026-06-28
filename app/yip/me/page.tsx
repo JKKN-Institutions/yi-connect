@@ -45,6 +45,7 @@ import { VoteClient } from "./vote/vote-client";
 import { GoIndependentButton } from "./go-independent-button";
 import { LiveNowCard } from "./live-now-card";
 import { AnnouncementStrip } from "./announcement-strip";
+import { PushToggle } from "@/components/yip/push-toggle";
 import { ModuleWelcome } from "@/components/yip/guide/module-welcome";
 import { logGuideEvent } from "@/lib/yip/guide/actions";
 import { OfflineStaleNote } from "./offline-stale-note";
@@ -553,6 +554,9 @@ export default async function ParticipantPage() {
         eventId={event.id}
         participantId={participant.id}
       />
+
+      {/* Push opt-in — get pinged when someone @mentions you in chat. */}
+      <PushToggle participantId={participant.id} eventId={event.id} />
 
       {/* Offline staleness stamp — only renders when the student is offline */}
       <OfflineStaleNote renderedAt={new Date().toISOString()} />

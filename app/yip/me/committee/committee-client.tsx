@@ -77,6 +77,8 @@ import {
   MessageActions,
   PinnedBanner,
   ChannelSearch,
+  MentionInput,
+  MessageBody,
 } from "@/components/yip/chat-message-extras";
 import {
   BillTemplateButton,
@@ -1635,6 +1637,7 @@ function ThreadView({
   const [body, setBody] = useState("");
   const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
   const [pinned, setPinned] = useState<ChatMessage[]>([]);
+  const [mentionIds, setMentionIds] = useState<string[]>([]);
   const endRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -1674,6 +1677,7 @@ function ThreadView({
           body: text,
           threadKey,
           replyToId: meta?.replyToId ?? null,
+          mentions: meta?.mentions ?? [],
         }),
     });
 
@@ -1709,11 +1713,19 @@ function ThreadView({
   function send() {
     const text = body.trim();
     if (!text || sending) return;
-    const meta = replyingTo
-      ? { replyToId: replyingTo.id, replyPreview: previewOf(replyingTo) }
-      : undefined;
+    // Keep only mentions still referenced by an @FirstName token in the text.
+    const liveMentions = mentionIds.filter((id) => {
+      const first = members.find((mm) => mm.id === id)?.name.split(" ")[0];
+      return first ? text.includes(`@${first}`) : false;
+    });
+    const meta = {
+      replyToId: replyingTo?.id ?? null,
+      replyPreview: replyingTo ? previewOf(replyingTo) : null,
+      mentions: liveMentions,
+    };
     setBody("");
     setReplyingTo(null);
+    setMentionIds([]);
     sendMessage(text, meta);
   }
 
@@ -1769,7 +1781,10 @@ function ThreadView({
                       tone={mine ? "accent" : "light"}
                     />
                   )}
-                  {m.body}
+                  <MessageBody
+                    body={m.body}
+                    mentionsMe={!mine && m.mentions.includes(participantId)}
+                  />
                 </div>
                 <div
                   className={`max-w-[80%] ${mine ? "items-end" : "items-start"}`}
@@ -1815,18 +1830,17 @@ function ThreadView({
             </div>
           )}
           <div className="flex items-end gap-2">
-          <Textarea
+          <MentionInput
             value={body}
-            rows={1}
-            onChange={(e) => setBody(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                send();
-              }
-            }}
-            placeholder="Message your committee…"
-            className="flex-1 resize-none"
+            onChange={setBody}
+            members={members.map((mm) => ({ id: mm.id, name: mm.name }))}
+            onAddMention={(id) =>
+              setMentionIds((prev) =>
+                prev.includes(id) ? prev : [...prev, id]
+              )
+            }
+            onSubmit={send}
+            placeholder="Message your committee… (@ to mention)"
           />
           <Button
             onClick={send}

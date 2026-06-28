@@ -65,6 +65,7 @@ import {
   listMessages,
   postChannelMessage,
   toggleReaction,
+  listPinnedMessages,
   type ChatMessage,
   type ChatReplyPreview,
 } from "@/app/yip/actions/chat";
@@ -73,6 +74,7 @@ import {
   ReplyQuote,
   ReactionChips,
   MessageActions,
+  PinnedBanner,
 } from "@/components/yip/chat-message-extras";
 import {
   BillTemplateButton,
@@ -1630,7 +1632,18 @@ function ThreadView({
 }) {
   const [body, setBody] = useState("");
   const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
+  const [pinned, setPinned] = useState<ChatMessage[]>([]);
   const endRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    listPinnedMessages({ channelId, participantId, threadKey }).then((r) => {
+      if (active && r.success) setPinned(r.data);
+    });
+    return () => {
+      active = false;
+    };
+  }, [channelId, threadKey, participantId]);
 
   const nameOf = useCallback(
     (m: ChatMessage) => {
@@ -1704,6 +1717,7 @@ function ThreadView({
 
   return (
     <div className="flex flex-col">
+      <PinnedBanner pinned={pinned} />
       <div
         className={`space-y-2 overflow-y-auto ${
           compact ? "max-h-64" : "max-h-[60vh]"

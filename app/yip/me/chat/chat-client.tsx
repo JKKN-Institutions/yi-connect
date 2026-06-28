@@ -20,6 +20,7 @@ import {
   ReplyQuote,
   ReactionChips,
   MessageActions,
+  PinnedBanner,
 } from "@/components/yip/chat-message-extras";
 import {
   listChannels,
@@ -29,6 +30,7 @@ import {
   listYuvaContacts,
   reportMessage,
   toggleReaction,
+  listPinnedMessages,
   type ChatChannel,
   type ChatMessage,
   type ChatReplyPreview,
@@ -103,6 +105,9 @@ export function ChatClient({
             body,
             replyToId: meta?.replyToId ?? null,
           })
+        }
+        loadPinned={() =>
+          listPinnedMessages({ channelId: view.channel.id, participantId })
         }
         canReply
         // Announcements are read-only for students — organisers broadcast,
@@ -268,6 +273,11 @@ interface ThreadProps {
   >;
   /** Allow replying to messages (channels only — DMs don't support reply). */
   canReply?: boolean;
+  /** Load pinned messages for the channel banner (channels only). */
+  loadPinned?: () => Promise<
+    | { success: true; data: ChatMessage[] }
+    | { success: false; error: string }
+  >;
   /** When set, the composer is replaced by this read-only note. */
   readOnlyNote?: string;
   /** Report a message to the organisers (hidden on the student's own messages). */
@@ -285,13 +295,30 @@ function Thread({
   load,
   send,
   canReply,
+  loadPinned,
   readOnlyNote,
   onReport,
 }: ThreadProps) {
   const [draft, setDraft] = useState("");
   const [reportedIds, setReportedIds] = useState<Set<string>>(new Set());
   const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
+  const [pinned, setPinned] = useState<ChatMessage[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!loadPinned) {
+      setPinned([]);
+      return;
+    }
+    let active = true;
+    loadPinned().then((r) => {
+      if (active && r.success) setPinned(r.data);
+    });
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [threadId]);
 
   // Live thread: instant optimistic send + visibility-aware polling for new
   // messages (see lib/yip/use-live-thread). Replaces the old load-once model.
@@ -363,6 +390,7 @@ function Thread({
 
       {/* Messages */}
       <div className="flex-1 space-y-2.5 overflow-y-auto py-4">
+        <PinnedBanner pinned={pinned} />
         {loading ? (
           <div className="flex justify-center py-10">
             <Loader2 className="size-5 animate-spin text-[#FF9933]" />

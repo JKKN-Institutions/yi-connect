@@ -977,6 +977,7 @@ export interface ModMessage {
   dmToVolunteerId: string | null;
   deletedAt: string | null;
   reportedAt: string | null;
+  pinnedAt: string | null;
   createdAt: string;
 }
 
@@ -1021,6 +1022,7 @@ function toModMessage(
     dmToVolunteerId: (r.dm_to_volunteer_id as string | null) ?? null,
     deletedAt: (r.deleted_at as string | null) ?? null,
     reportedAt: (r.reported_at as string | null) ?? null,
+    pinnedAt: (r.pinned_at as string | null) ?? null,
     createdAt: String(r.created_at),
   };
 }

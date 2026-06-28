@@ -26,6 +26,8 @@ import {
   RefreshCw,
   PlusCircle,
   Send,
+  Pin,
+  PinOff,
 } from "lucide-react";
 import { Button } from "@/components/yip/ui/button";
 import { cn } from "@/lib/yip/utils";
@@ -40,6 +42,8 @@ import {
   freezeChannel,
   unfreezeChannel,
   deleteMessage,
+  pinMessage,
+  unpinMessage,
   seedChatChannels,
   modPostAnnouncement,
   type ModChannel,
@@ -584,6 +588,16 @@ function ThreadPanel({
     });
   }
 
+  function handleTogglePin(m: ModMessage) {
+    startTransition(async () => {
+      const res = m.pinnedAt
+        ? await unpinMessage({ messageId: m.id })
+        : await pinMessage({ messageId: m.id });
+      if (!res.success) setError(res.error);
+      await refresh();
+    });
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
@@ -627,6 +641,11 @@ function ThreadPanel({
                   ? () => onMute(m.senderParticipantId as string)
                   : undefined
               }
+              onTogglePin={
+                view.kind === "channel" && m.channelId && !m.deletedAt
+                  ? () => handleTogglePin(m)
+                  : undefined
+              }
             />
           ))}
         </div>
@@ -642,11 +661,13 @@ function MessageRow({
   pending,
   onDelete,
   onMute,
+  onTogglePin,
 }: {
   message: ModMessage;
   pending: boolean;
   onDelete?: () => void;
   onMute?: () => void;
+  onTogglePin?: () => void;
 }) {
   return (
     <div className="rounded-xl border border-[#1a1a3e]/5 bg-white px-3 py-2.5 shadow-sm">
@@ -678,6 +699,12 @@ function MessageRow({
             Removed
           </span>
         )}
+        {m.pinnedAt && (
+          <span className="flex items-center gap-1 rounded-full bg-[#FF9933]/10 px-2 py-0.5 text-[10px] font-medium text-[#FF9933]">
+            <Pin className="size-2.5" />
+            Pinned
+          </span>
+        )}
         <span className="ml-auto shrink-0 text-[10px] text-[#1a1a3e]/30">
           {formatTime(m.createdAt)}
         </span>
@@ -690,8 +717,26 @@ function MessageRow({
       >
         {m.body}
       </p>
-      {(onDelete || onMute) && (
+      {(onDelete || onMute || onTogglePin) && (
         <div className="mt-2 flex gap-2">
+          {onTogglePin && (
+            <Button
+              variant="outline"
+              size="xs"
+              disabled={pending}
+              onClick={onTogglePin}
+            >
+              {m.pinnedAt ? (
+                <>
+                  <PinOff className="size-3" /> Unpin
+                </>
+              ) : (
+                <>
+                  <Pin className="size-3" /> Pin
+                </>
+              )}
+            </Button>
+          )}
           {onDelete && (
             <Button
               variant="outline"

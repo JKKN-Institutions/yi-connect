@@ -11,12 +11,47 @@
  */
 
 import { useState } from "react";
-import { Reply, SmilePlus, X } from "lucide-react";
+import { Reply, SmilePlus, X, Pin } from "lucide-react";
 import { cn } from "@/lib/yip/utils";
 import { CHAT_REACTION_EMOJIS } from "@/lib/yip/chat-reactions";
-import type { ChatReactionSummary, ChatReplyPreview } from "@/app/yip/actions/chat";
+import type {
+  ChatMessage,
+  ChatReactionSummary,
+  ChatReplyPreview,
+} from "@/app/yip/actions/chat";
 
 type Tone = "light" | "accent";
+
+/** Banner shown at the top of a channel with the organiser's pinned message(s). */
+export function PinnedBanner({ pinned }: { pinned: ChatMessage[] }) {
+  const [expanded, setExpanded] = useState(false);
+  if (!pinned || pinned.length === 0) return null;
+  const shown = expanded ? pinned : pinned.slice(0, 1);
+  return (
+    <div className="mb-2 rounded-lg border border-[#FF9933]/30 bg-[#FF9933]/5 px-3 py-2">
+      <div className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-[#b5651d]">
+        <Pin className="size-3" />
+        Pinned{pinned.length > 1 ? ` · ${pinned.length}` : ""}
+      </div>
+      <div className="space-y-1">
+        {shown.map((m) => (
+          <p key={m.id} className="line-clamp-2 text-xs text-gray-700">
+            {m.body}
+          </p>
+        ))}
+      </div>
+      {pinned.length > 1 && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="mt-1 text-[11px] font-medium text-[#FF9933] hover:underline"
+        >
+          {expanded ? "Show less" : `Show ${pinned.length - 1} more`}
+        </button>
+      )}
+    </div>
+  );
+}
 
 export function ReplyQuote({
   preview,

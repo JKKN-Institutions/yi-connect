@@ -32,6 +32,13 @@ interface ChatClientProps {
   eventId: string;
   participantId: string;
   participantName: string;
+  /**
+   * Deep-link target. When set (e.g. arriving from the /yip/me announcements
+   * strip with ?channel=announcement), the matching channel opens directly once
+   * channels load, instead of landing on the channel list. One-shot: if the
+   * user navigates Back to the list we don't re-open it.
+   */
+  openChannelKind?: ChatChannel["kind"];
 }
 
 type View =
@@ -49,12 +56,14 @@ export function ChatClient({
   eventId,
   participantId,
   participantName,
+  openChannelKind,
 }: ChatClientProps) {
   const [view, setView] = useState<View>({ kind: "list" });
   const [channels, setChannels] = useState<ChatChannel[]>([]);
   const [yuvas, setYuvas] = useState<YuvaContact[]>([]);
   const [loadingList, setLoadingList] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
+  const didDeepLink = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -74,6 +83,17 @@ export function ChatClient({
       active = false;
     };
   }, [eventId, participantId]);
+
+  // Deep-link: open the requested channel directly once channels have loaded.
+  // One-shot so a user who taps Back to the list isn't yanked back in.
+  useEffect(() => {
+    if (didDeepLink.current || !openChannelKind || channels.length === 0) return;
+    const target = channels.find((c) => c.kind === openChannelKind);
+    if (target) {
+      didDeepLink.current = true;
+      setView({ kind: "channel", channel: target });
+    }
+  }, [channels, openChannelKind]);
 
   const report = (messageId: string) =>
     reportMessage({ participantId, eventId, messageId });

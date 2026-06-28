@@ -381,6 +381,17 @@ export function ChatModerationClient({
                         <span className="block text-xs text-[#1a1a3e]/40">
                           {ch.kind} · {ch.messageCount} message
                           {ch.messageCount === 1 ? "" : "s"}
+                          {ch.activeParticipants > 0 &&
+                            ` · ${ch.activeParticipants} active`}
+                          {ch.lastMessageAt
+                            ? ` · last ${formatTime(ch.lastMessageAt)}`
+                            : " · quiet"}
+                          {ch.reportedCount > 0 && (
+                            <span className="font-medium text-red-500">
+                              {" · "}
+                              {ch.reportedCount} reported
+                            </span>
+                          )}
                         </span>
                       </button>
                       <Button

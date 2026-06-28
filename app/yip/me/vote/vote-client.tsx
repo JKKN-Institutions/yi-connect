@@ -10,7 +10,7 @@ import {
   Clock,
   AlertTriangle,
   Landmark,
-  GraduationCap,
+  MapPin,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/yip/utils";
@@ -457,11 +457,15 @@ export function VoteClient({
                       {candidate.full_name}
                     </p>
                     <div className="flex items-center gap-1.5 mt-1.5">
-                      <GraduationCap className="size-3.5 text-gray-400" />
+                      <MapPin className="size-3.5 text-gray-400" />
                       <span className="text-sm text-gray-600">
-                        {candidate.school_number != null
-                          ? `School #${candidate.school_number}`
-                          : "School #—"}
+                        {candidate.constituency_name
+                          ? candidate.constituency_number != null
+                            ? `#${candidate.constituency_number} · ${candidate.constituency_name}`
+                            : candidate.constituency_name
+                          : candidate.constituency_number != null
+                            ? `#${candidate.constituency_number}`
+                            : "Constituency not set"}
                       </span>
                     </div>
                     {partySide && (

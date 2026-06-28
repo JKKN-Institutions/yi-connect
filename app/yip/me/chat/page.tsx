@@ -32,11 +32,22 @@ function parseSession(raw: string | undefined): ParticipantSession | null {
   }
 }
 
-export default async function CommunityChatPage() {
+export default async function CommunityChatPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ channel?: string }>;
+}) {
   const session = await getYipSession();
 
   // The layout already gates this, but be defensive.
   if (!session || session.type !== "participant") redirect("/yip/join");
+
+  // Deep-link target (e.g. ?channel=announcement from the /yip/me news strip).
+  const { channel } = await searchParams;
+  const openChannelKind =
+    channel === "announcement" || channel === "party" || channel === "committee"
+      ? channel
+      : undefined;
 
   // When the flag is off, students see a placeholder only.
   if (!CHAT_ENABLED) {
@@ -61,6 +72,7 @@ export default async function CommunityChatPage() {
       eventId={session.eventId}
       participantId={session.id}
       participantName={session.name}
+      openChannelKind={openChannelKind}
     />
   );
 }

@@ -1,7 +1,8 @@
 "use client";
 
 import { Component, type ReactNode, useEffect, useRef, useState } from "react";
-import { Megaphone } from "lucide-react";
+import Link from "next/link";
+import { Megaphone, ChevronRight } from "lucide-react";
 import { getEventAnnouncements } from "./announcement-actions";
 
 type Item = { id: string; body: string; createdAt: string };
@@ -89,8 +90,13 @@ function AnnouncementStripInner({ eventId, participantId }: Props) {
     </div>
   );
 
+  // The whole strip is a tap target → opens the announcements thread directly.
   return (
-    <div className="overflow-hidden rounded-xl border border-amber-200 bg-gradient-to-r from-amber-50 to-yellow-50">
+    <Link
+      href="/yip/me/chat?channel=announcement"
+      aria-label="Open announcements"
+      className="group block overflow-hidden rounded-xl border border-amber-200 bg-gradient-to-r from-amber-50 to-yellow-50 transition-shadow hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 active:scale-[0.99]"
+    >
       <style>{`
         @keyframes yipAnnScroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
         @media (prefers-reduced-motion: reduce) {
@@ -114,15 +120,18 @@ function AnnouncementStripInner({ eventId, participantId }: Props) {
           }}
         >
           <div
-            className="yip-ann-track flex w-max whitespace-nowrap hover:[animation-play-state:paused]"
+            className="yip-ann-track flex w-max whitespace-nowrap group-hover:[animation-play-state:paused]"
             style={{ animation: `yipAnnScroll ${durationSec}s linear infinite` }}
           >
             <Track />
             <Track ariaHidden />
           </div>
         </div>
+        <div className="flex shrink-0 items-center pl-1 pr-2 text-amber-500 transition-transform group-hover:translate-x-0.5">
+          <ChevronRight className="size-4" />
+        </div>
       </div>
-    </div>
+    </Link>
   );
 }
 

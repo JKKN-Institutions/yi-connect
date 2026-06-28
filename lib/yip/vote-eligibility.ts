@@ -15,37 +15,31 @@ type ServiceClient = Awaited<ReturnType<typeof createServiceClient>>;
  * (CLAUDE.md #27). Operational dependency: complete that day's check-in BEFORE
  * opening any vote on that day, or every cast is correctly blocked.
  *
- * ONLINE EVENTS (2026-06-28): an online event has no physical check-in desk, so
- * presence can't be verified. When the event has `skip_vote_checkin = true`,
- * this gate is bypassed entirely (every registered student with a valid
- * participant session may vote, on any day). Default is false, so in-person
- * chapters are unchanged. The bypass lives here so all three vote paths (self,
- * kiosk, floor) honour it from one place.
+ * PRE-EVENT (ONLINE) — same for EVERY chapter (2026-06-28): pre-event activity
+ * (day 0) runs online, before anyone has physically checked in — e.g. the
+ * Speaker Election and party-candidate selection. So day-0 votes NEVER require
+ * check-in. Day 1 & Day 2 are the in-person event days and always require that
+ * day's check-in. The rule lives here so all three vote paths (self, kiosk,
+ * floor) honour it from one place.
  */
 export async function assertCheckedInForVote(
   supabase: ServiceClient,
   participantId: string,
   agendaItemId: string | null
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  // Resolve the vote's day AND its event up front — the event's online flag can
-  // skip the whole gate before we even look at the participant's check-in state.
+  // Resolve the vote's day first. Pre-event (day 0) is online for every chapter
+  // and happens before in-person check-in, so those votes skip the gate.
   let day: number | null | undefined;
   if (agendaItemId) {
     const { data: item } = await supabase
       .from("agenda")
-      .select("day, event_id")
+      .select("day")
       .eq("id", agendaItemId)
       .maybeSingle();
     day = item?.day ?? null;
-    if (item?.event_id) {
-      const { data: ev } = await supabase
-        .from("events")
-        .select("skip_vote_checkin")
-        .eq("id", item.event_id)
-        .maybeSingle();
-      if (ev?.skip_vote_checkin) return { ok: true };
-    }
   }
+
+  if (day === 0) return { ok: true };
 
   const { data: participant } = await supabase
     .from("participants")

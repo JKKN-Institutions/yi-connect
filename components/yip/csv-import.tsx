@@ -84,7 +84,7 @@ const COL_ALIASES: Record<
   ],
   city: ["city", "town"],
   home_state_explicit: ["home_state", "home state"],
-  constituency_state_explicit: ["constituency_state", "state_constituency"],
+  constituency_state_explicit: ["constituency_state", "state_constituency", "state / ut", "state ut", "state/ut"],
   party_letter: ["party", "party_letter", "party letter"],
   constituency_name: ["constituency", "constituency_name", "constituency name"],
   constituency_number: [

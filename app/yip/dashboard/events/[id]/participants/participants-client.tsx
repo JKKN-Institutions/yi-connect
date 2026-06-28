@@ -69,6 +69,7 @@ type Participant = {
   constituency_name: string | null;
   constituency_number: number | null;
   constituency_state: string | null;
+  serial_no: number | null;
   committee_name: string | null;
   committee_number: number | null;
   access_code: string;
@@ -82,6 +83,7 @@ type Participant = {
 };
 
 type SortKey =
+  | "serial_no"
   | "full_name"
   | "party_number"
   | "parliament_role"
@@ -497,6 +499,8 @@ export function ParticipantsClient({
 
     return [...filtered].sort((a, b) => {
       switch (sortKey) {
+        case "serial_no":
+          return numCmp(a.serial_no, b.serial_no);
         case "party_number":
           return numCmp(a.party_number, b.party_number);
         case "constituency_number":
@@ -1250,6 +1254,7 @@ export function ParticipantsClient({
             <TableHeader>
               <TableRow>
                 {sortHead("Check-in (D1 / D2)", "checkin", "w-32")}
+                {sortHead("S.No", "serial_no", "w-14")}
                 {sortHead("Name", "full_name")}
                 {sortHead("Party", "party_number", "w-16")}
                 {sortHead("Role", "parliament_role")}
@@ -1302,6 +1307,15 @@ export function ParticipantsClient({
                         );
                       })}
                     </div>
+                  </TableCell>
+                  <TableCell>
+                    {p.serial_no != null ? (
+                      <span className="font-mono text-xs tabular-nums text-[#1a1a3e]/60">
+                        {p.serial_no}
+                      </span>
+                    ) : (
+                      <span className="text-gray-400">—</span>
+                    )}
                   </TableCell>
                   <TableCell className="font-medium">{p.full_name}</TableCell>
                   <TableCell>

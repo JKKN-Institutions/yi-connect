@@ -3,9 +3,11 @@ import { createClient } from "@/lib/yip/supabase/server";
 import { getEvent } from "@/app/yip/actions/events";
 import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
 import { PositionsAssignmentCard } from "@/components/yip/positions-assignment-card";
+import { CommitteeChairsCard } from "@/components/yip/committee-chairs-card";
 import {
   getParticipantsByRole,
   getAllEventParticipants,
+  getCommitteeChairs,
 } from "@/app/yip/actions/positions";
 
 export default async function PositionsPage({

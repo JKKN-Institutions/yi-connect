@@ -190,6 +190,8 @@ export async function getMeContacts(
 
 export type MeRosterMember = {
   id: string;
+  /** Member's name (shown in the roster so a student knows who is in their party). */
+  full_name: string;
   /** Roster serial number (internal ordering only — not displayed). */
   serial_no: number | null;
   /** Constituency (seat) number — the canonical participant number shown as #N. */
@@ -201,10 +203,10 @@ export type MeRosterMember = {
 };
 
 /**
- * The student's OWN party members. PRIVACY-CRITICAL (Change Request §3):
- * returns ONLY serial number + constituency. Phone numbers and school names
- * are NEVER fetched — the SELECT below deliberately omits `phone`,
- * `parent_phone`, `email`, and `school_name`.
+ * The student's OWN party members. Returns name + constituency so a member can
+ * see who is in their own party. PRIVACY-CRITICAL: contact PII is NEVER fetched
+ * — the SELECT below deliberately omits `phone`, `parent_phone`, `email`, and
+ * `school_name`.
  */
 export async function getMyPartyRoster(
   participantId: string
@@ -219,17 +221,18 @@ export async function getMyPartyRoster(
 
   if (!me || !me.party_id) return [];
 
-  // NOTE: SELECT is intentionally limited to non-PII columns. Do NOT add
-  // phone / parent_phone / email / school_name here.
+  // NOTE: SELECT includes the member's name but is intentionally limited to
+  // NON-CONTACT columns. Do NOT add phone / parent_phone / email / school_name.
   const { data: members } = await supabase
     .from("participants")
-    .select("id, serial_no, constituency_number, constituency_name, constituency_state")
+    .select("id, full_name, serial_no, constituency_number, constituency_name, constituency_state")
     .eq("event_id", me.event_id)
     .eq("party_id", me.party_id)
     .order("constituency_number", { ascending: true, nullsFirst: false });
 
   return (members ?? []).map((m) => ({
     id: m.id,
+    full_name: m.full_name ?? "",
     serial_no: m.serial_no,
     constituency_number: m.constituency_number,
     constituency_name: m.constituency_name,

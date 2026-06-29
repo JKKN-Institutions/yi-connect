@@ -14,6 +14,13 @@ import {
 import { Loader2, ArrowLeft, ClipboardList } from "lucide-react";
 import { Button } from "@/components/yip/ui/button";
 import { juryLabel } from "@/lib/yip/pii";
+import {
+  SectionShell,
+  INK,
+  SAFFRON,
+  SERIF,
+  inkA,
+} from "@/app/yip/me/credential-ui";
 
 interface Criterion {
   key: string;
@@ -226,8 +233,10 @@ export function HistoryClient({
   if (loadingEdit) {
     return (
       <div className="flex flex-col items-center justify-center py-20 gap-3">
-        <Loader2 className="size-8 animate-spin text-blue-600" />
-        <p className="text-sm text-gray-500">Loading score...</p>
+        <Loader2 className="size-8 animate-spin" style={{ color: SAFFRON }} />
+        <p className="text-sm" style={{ color: inkA(0.6) }}>
+          Loading score...
+        </p>
       </div>
     );
   }
@@ -237,22 +246,43 @@ export function HistoryClient({
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-lg font-bold text-gray-900">Scoring History</h1>
-        <p className="text-sm text-gray-500 mt-0.5">
+        <p
+          className="text-[10px] font-bold uppercase tracking-[0.16em]"
+          style={{ color: SAFFRON }}
+        >
+          Jury Record
+        </p>
+        <h1
+          className="mt-0.5 text-[24px] font-bold leading-[1.1] tracking-tight"
+          style={{ ...SERIF, color: INK }}
+        >
+          Scoring History
+        </h1>
+        <p className="text-sm mt-1.5" style={{ color: inkA(0.6) }}>
           {scores.length} {scores.length === 1 ? "score" : "scores"} recorded
         </p>
       </div>
 
       {scores.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <div className="size-16 rounded-full bg-gray-100 flex items-center justify-center mb-4">
-            <ClipboardList className="size-8 text-gray-400" />
+        <SectionShell accent={SAFFRON}>
+          <div className="flex flex-col items-center justify-center py-16 px-5 text-center">
+            <div
+              className="size-16 rounded-full flex items-center justify-center mb-4"
+              style={{ background: `${SAFFRON}1f` }}
+            >
+              <ClipboardList className="size-8" style={{ color: SAFFRON }} />
+            </div>
+            <h2
+              className="text-lg font-semibold"
+              style={{ ...SERIF, color: INK }}
+            >
+              No scores yet
+            </h2>
+            <p className="text-sm mt-2 max-w-xs" style={{ color: inkA(0.6) }}>
+              Your scores will appear here as you evaluate participants.
+            </p>
           </div>
-          <h2 className="text-lg font-semibold text-gray-900">No scores yet</h2>
-          <p className="text-sm text-gray-500 mt-2 max-w-xs">
-            Your scores will appear here as you evaluate participants.
-          </p>
-        </div>
+        </SectionShell>
       ) : (
         <div className="space-y-3">
           {scores.map((score) => (

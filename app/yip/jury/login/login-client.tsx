@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { juryLoginByEmail } from "@/app/yip/actions/auth";
+import { SectionShell, INK, SAFFRON, SERIF } from "@/app/yip/me/credential-ui";
 
 type EventOption = {
   id: string;
@@ -97,7 +98,16 @@ export function JuryLoginClient({ events }: { events: EventOption[] }) {
         <div className="relative w-full max-w-md">
           {/* Logo removed 2026-06-16 — re-add later */}
           <div className="mb-8 text-center">
-            <h1 className="font-[family-name:var(--font-heading)] text-2xl font-bold text-[#1a1a3e]">
+            <p
+              className="text-[10px] font-bold uppercase tracking-[0.16em]"
+              style={{ color: SAFFRON }}
+            >
+              The Bench
+            </p>
+            <h1
+              className="mt-0.5 text-2xl font-bold"
+              style={{ ...SERIF, color: INK }}
+            >
               Jury Sign-In
             </h1>
             <p className="mt-1.5 text-sm text-[#1a1a3e]/40">
@@ -105,14 +115,15 @@ export function JuryLoginClient({ events }: { events: EventOption[] }) {
             </p>
           </div>
 
-          <div className="overflow-hidden rounded-2xl border border-[#1a1a3e]/5 bg-white shadow-xl shadow-[#1a1a3e]/5">
+          <SectionShell accent={SAFFRON} className="shadow-xl shadow-[#1a1a3e]/5">
             <div className="p-6 sm:p-8">
               <form method="post" action="#" onSubmit={handleSubmit} className="space-y-5">
                 {/* Email */}
                 <div>
                   <label
                     htmlFor="jury-email"
-                    className="block text-sm font-medium text-[#1a1a3e]"
+                    className="block text-sm font-medium"
+                    style={{ ...SERIF, color: INK }}
                   >
                     Your email
                   </label>
@@ -137,7 +148,8 @@ export function JuryLoginClient({ events }: { events: EventOption[] }) {
                 <div>
                   <label
                     htmlFor="jury-chapter-search"
-                    className="block text-sm font-medium text-[#1a1a3e]"
+                    className="block text-sm font-medium"
+                    style={{ ...SERIF, color: INK }}
                   >
                     Find your chapter
                   </label>
@@ -155,7 +167,8 @@ export function JuryLoginClient({ events }: { events: EventOption[] }) {
                 <div>
                   <label
                     htmlFor="jury-event"
-                    className="block text-sm font-medium text-[#1a1a3e]"
+                    className="block text-sm font-medium"
+                    style={{ ...SERIF, color: INK }}
                   >
                     Select event
                   </label>
@@ -240,7 +253,7 @@ export function JuryLoginClient({ events }: { events: EventOption[] }) {
               <div className="flex-1 bg-white" />
               <div className="flex-1 bg-[#138808]" />
             </div>
-          </div>
+          </SectionShell>
 
           <p className="mt-6 text-center text-sm text-[#1a1a3e]/35">
             Have an access code instead?{" "}

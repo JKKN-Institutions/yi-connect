@@ -8,7 +8,6 @@ import {
   useTransition,
 } from "react";
 import Link from "next/link";
-import { Card, CardContent } from "@/components/yip/ui/card";
 import { Button } from "@/components/yip/ui/button";
 import { Input } from "@/components/yip/ui/input";
 import { Textarea } from "@/components/yip/ui/textarea";
@@ -82,6 +81,16 @@ import {
   BillTemplateButton,
   CommitteeDocumentsSection,
 } from "./committee-extras";
+import {
+  SectionShell,
+  SectionHeading,
+  INK,
+  SAFFRON,
+  GREEN,
+  GOLD,
+  SERIF,
+  inkA,
+} from "../credential-ui";
 
 const ORANGE = "#FF9933";
 
@@ -149,17 +158,17 @@ export function CommitteeClient({
 
   if (!room) {
     return (
-      <Card className="border-amber-200 bg-amber-50/60">
-        <CardContent className="py-8 text-center space-y-2">
+      <SectionShell accent={SAFFRON}>
+        <div className="py-8 px-5 text-center space-y-2">
           <XCircle className="mx-auto size-9 text-amber-400" />
-          <p className="font-medium text-gray-800">
+          <p className="font-semibold" style={{ ...SERIF, color: INK }}>
             You&apos;re not in a committee yet
           </p>
-          <p className="text-sm text-gray-600">
+          <p className="text-sm" style={{ color: inkA(0.6) }}>
             Committee work opens once the organisers allocate you to one.
           </p>
-        </CardContent>
-      </Card>
+        </div>
+      </SectionShell>
     );
   }
 
@@ -184,44 +193,64 @@ export function CommitteeClient({
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="rounded-xl border border-purple-200 bg-purple-50/70 p-3.5">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <p className="text-base font-bold text-gray-900 truncate">
-              {room.committeeName}
-            </p>
-            <p className="text-xs text-gray-500">Committee · bill workspace</p>
-          </div>
-          <Badge variant="secondary" className={phase.className}>
-            {phase.label}
-          </Badge>
-        </div>
-        {room.topic && (
-          <div className="mt-2 rounded-lg bg-white/70 px-3 py-2">
-            <p className="text-sm font-medium text-gray-800">{room.topic}</p>
-            {room.scheme && (
-              <p className="text-[11px] text-gray-500 mt-0.5">
-                Linked scheme / policy: {room.scheme}
+      <SectionShell accent={SAFFRON}>
+        <div className="px-5 py-4">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p
+                className="text-[10px] font-bold uppercase tracking-[0.16em]"
+                style={{ color: SAFFRON }}
+              >
+                The Committee
               </p>
-            )}
+              <p
+                className="mt-0.5 text-lg font-bold leading-snug truncate"
+                style={{ ...SERIF, color: INK }}
+              >
+                {room.committeeName}
+              </p>
+              <p className="text-xs" style={{ color: inkA(0.55) }}>
+                Committee · bill workspace
+              </p>
+            </div>
+            <Badge variant="secondary" className={phase.className}>
+              {phase.label}
+            </Badge>
           </div>
-        )}
-        {room.permissions.needsChair && room.reportSubmitted && (
-          <p className="mt-2 text-[11px] text-amber-700 bg-amber-100/70 rounded-md px-2 py-1.5">
-            No committee chair set yet — an organiser can assign one. Until then
-            only organisers can edit the bill.
-          </p>
-        )}
-      </div>
+          {room.topic && (
+            <div
+              className="mt-3 rounded-lg px-3 py-2"
+              style={{ background: inkA(0.03) }}
+            >
+              <p className="text-sm font-medium" style={{ color: INK }}>
+                {room.topic}
+              </p>
+              {room.scheme && (
+                <p className="text-[11px] mt-0.5" style={{ color: inkA(0.5) }}>
+                  Linked scheme / policy: {room.scheme}
+                </p>
+              )}
+            </div>
+          )}
+          {room.permissions.needsChair && room.reportSubmitted && (
+            <p className="mt-2 text-[11px] text-amber-700 bg-amber-100/70 rounded-md px-2 py-1.5">
+              No committee chair set yet — an organiser can assign one. Until then
+              only organisers can edit the bill.
+            </p>
+          )}
+        </div>
+      </SectionShell>
 
       {/* Presentation-day banner */}
       {room.presentationMode && (
-        <div className="rounded-lg border border-purple-300 bg-purple-100/70 px-3 py-2 flex items-center gap-2">
-          <Megaphone className="size-4 text-purple-600 shrink-0" />
-          <p className="text-xs text-purple-800">
-            Presentation time — the bill is locked. Get your presenters ready.
-          </p>
-        </div>
+        <SectionShell accent={GOLD}>
+          <div className="px-5 py-3 flex items-center gap-2">
+            <Megaphone className="size-4 shrink-0" style={{ color: GOLD }} />
+            <p className="text-xs" style={{ color: inkA(0.7) }}>
+              Presentation time — the bill is locked. Get your presenters ready.
+            </p>
+          </div>
+        </SectionShell>
       )}
 
       {/* Tab bar */}
@@ -485,16 +514,16 @@ function BillTab({
   if (!room.reportSubmitted) {
     return (
       <div className="space-y-4">
-      <Card className="border-amber-200 bg-amber-50/50">
-        <CardContent className="py-6 text-center space-y-3">
+      <SectionShell accent={GOLD}>
+        <div className="py-6 px-5 text-center space-y-3">
           <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-amber-100">
             <Lock className="size-6 text-amber-500" />
           </div>
           <div>
-            <p className="font-semibold text-gray-900">
+            <p className="font-semibold" style={{ ...SERIF, color: INK }}>
               Submit your Committee Report first
             </p>
-            <p className="text-sm text-gray-600 mt-1">
+            <p className="text-sm mt-1" style={{ color: inkA(0.6) }}>
               The bill is built from your report&apos;s findings. Once the report
               is submitted, drafting unlocks here.
             </p>
@@ -506,8 +535,8 @@ function BillTab({
               <ArrowRight className="size-4 ml-1.5" />
             </Button>
           </Link>
-        </CardContent>
-      </Card>
+        </div>
+      </SectionShell>
       <BillTemplateButton
         committeeName={room.committeeName}
         topic={room.topic}
@@ -527,11 +556,14 @@ function BillTab({
     <div className="space-y-4">
       {/* Readiness / submit */}
       {bill?.status === "drafting" || !bill ? (
-        <Card>
-          <CardContent className="py-3.5 space-y-2.5">
-            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-              Ready to submit?
-            </p>
+        <SectionShell accent={GREEN}>
+          <div className="px-5 py-4 space-y-2.5">
+            <SectionHeading
+              eyebrow="Before You Submit"
+              title="Ready to submit?"
+              icon={CheckCircle2}
+              accent={GREEN}
+            />
             <ul className="space-y-1.5">
               <Check ok={r.hasTitle} label="Bill has a title" />
               <Check ok={r.hasPreamble} label="Preamble written" />
@@ -561,8 +593,8 @@ function BillTab({
                 The chair or lead drafter submits the bill.
               </p>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </SectionShell>
       ) : (
         <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 flex items-center gap-2">
           <CheckCircle2 className="size-4" />
@@ -578,8 +610,8 @@ function BillTab({
         </p>
       )}
 
-      <Card>
-        <CardContent className="py-4 space-y-4">
+      <SectionShell accent={GOLD}>
+        <div className="px-5 py-4 space-y-4">
           {/* 1. Title */}
           <Field label="Title of the Bill" required>
             <Input
@@ -816,18 +848,22 @@ function BillTab({
               placeholder="A compelling summary that reinforces the bill's urgency and importance."
             />
           </Field>
-        </CardContent>
-      </Card>
+        </div>
+      </SectionShell>
 
       {room.presentationMode && bill?.oppositionResponse && (
-        <Card className="border-purple-200">
-          <CardContent className="py-3.5">
-            <p className="text-xs font-semibold uppercase tracking-wide text-purple-600">
-              Opposition response
+        <SectionShell accent="#9A3324">
+          <div className="px-5 py-4">
+            <SectionHeading
+              eyebrow="From the Floor"
+              title="Opposition response"
+              accent="#9A3324"
+            />
+            <p className="text-sm mt-3" style={{ color: inkA(0.75) }}>
+              {bill.oppositionResponse}
             </p>
-            <p className="text-sm text-gray-700 mt-1">{bill.oppositionResponse}</p>
-          </CardContent>
-        </Card>
+          </div>
+        </SectionShell>
       )}
 
       {/* Carried over from the old bill page: template · AI feedback · docs. */}
@@ -990,11 +1026,14 @@ function AmendmentsTab({
     <div className="space-y-4">
       {/* Propose */}
       {p.canPropose && bill && (
-        <Card>
-          <CardContent className="py-3.5 space-y-2.5">
-            <p className="text-sm font-semibold text-gray-700">
-              Propose an amendment
-            </p>
+        <SectionShell accent={SAFFRON}>
+          <div className="px-5 py-4 space-y-2.5">
+            <SectionHeading
+              eyebrow="The Floor"
+              title="Propose an amendment"
+              icon={GitPullRequestArrow}
+              accent={SAFFRON}
+            />
             <div className="grid grid-cols-3 gap-1.5">
               {(["edit", "add", "remove"] as const).map((k) => (
                 <button
@@ -1044,8 +1083,8 @@ function AmendmentsTab({
               <GitPullRequestArrow className="size-4 mr-1.5" />
               Propose
             </Button>
-          </CardContent>
-        </Card>
+          </div>
+        </SectionShell>
       )}
 
       {/* Open amendments */}
@@ -1154,11 +1193,20 @@ function AmendmentCard({
     rejected: "bg-red-100 text-red-600",
     withdrawn: "bg-gray-100 text-gray-500",
   };
+  const accent =
+    am.status === "accepted"
+      ? GREEN
+      : am.status === "rejected"
+        ? "#9A3324"
+        : SAFFRON;
   return (
-    <Card>
-      <CardContent className="py-3 space-y-2">
+    <SectionShell accent={accent}>
+      <div className="px-4 py-3 space-y-2">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-xs font-semibold text-gray-700">
+          <span
+            className="text-xs font-semibold"
+            style={{ ...SERIF, color: INK }}
+          >
             {amendmentSummary(am)}
           </span>
           <Badge variant="secondary" className={statusBadge[am.status]}>
@@ -1226,8 +1274,8 @@ function AmendmentCard({
         {am.status !== "open" && am.resolutionNote && (
           <p className="text-[11px] text-gray-500">Note: {am.resolutionNote}</p>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </SectionShell>
   );
 }
 
@@ -1430,12 +1478,15 @@ function RolesTab({
   // auto-starts the bill (see setBillRoleMembers → ensureBill).
   if (!bill && !canAssign) {
     return (
-      <Card>
-        <CardContent className="py-6 text-center text-sm text-gray-500">
+      <SectionShell accent={SAFFRON}>
+        <div
+          className="py-6 px-5 text-center text-sm"
+          style={{ color: inkA(0.55) }}
+        >
           Roles appear once the chair starts the bill and adds who drafts and
           presents it.
-        </CardContent>
-      </Card>
+        </div>
+      </SectionShell>
     );
   }
 
@@ -1443,18 +1494,25 @@ function RolesTab({
     id ? room.members.find((m) => m.id === id)?.name ?? "—" : "—";
 
   return (
-    <Card>
-      <CardContent className="py-4 space-y-4">
-        <div className="flex items-center gap-1.5">
-          <Users className="size-4 text-purple-500" />
-          <p className="text-sm font-semibold text-gray-700">Committee roles</p>
-          {busy && (
-            <span className="ml-auto inline-flex items-center gap-1 text-[11px] text-gray-400">
-              <Loader2 className="size-3 animate-spin" />
-              Saving…
-            </span>
-          )}
-        </div>
+    <SectionShell accent={SAFFRON}>
+      <div className="px-5 py-4 space-y-4">
+        <SectionHeading
+          eyebrow="The Committee"
+          title="Committee roles"
+          icon={Users}
+          accent={SAFFRON}
+          trailing={
+            busy && (
+              <span
+                className="inline-flex items-center gap-1 text-[11px]"
+                style={{ color: inkA(0.45) }}
+              >
+                <Loader2 className="size-3 animate-spin" />
+                Saving…
+              </span>
+            )
+          }
+        />
 
         <MultiRoleRow
           label="Drafters"
@@ -1511,8 +1569,8 @@ function RolesTab({
         ) : (
           <p className="text-[11px] text-gray-400">The chair assigns roles.</p>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </SectionShell>
   );
 }
 
@@ -1532,10 +1590,10 @@ function DiscussionTab({
   // rather than re-implementing the moderator chat view.
   if (!participantId) {
     return (
-      <Card>
-        <CardContent className="py-8 text-center space-y-3">
+      <SectionShell accent={SAFFRON}>
+        <div className="py-8 px-5 text-center space-y-3">
           <MessageSquare className="mx-auto size-8 text-gray-300" />
-          <p className="text-sm text-gray-600">
+          <p className="text-sm" style={{ color: inkA(0.6) }}>
             Committee discussion is moderated from the event&apos;s Chat page.
           </p>
           <Link href={`/yip/dashboard/events/${room.eventId}/chat`}>
@@ -1544,21 +1602,21 @@ function DiscussionTab({
               <ArrowRight className="size-4 ml-1.5" />
             </Button>
           </Link>
-        </CardContent>
-      </Card>
+        </div>
+      </SectionShell>
     );
   }
   if (!CHAT_ENABLED || !room.chatChannelId) {
     return (
-      <Card>
-        <CardContent className="py-8 text-center space-y-2">
+      <SectionShell accent={SAFFRON}>
+        <div className="py-8 px-5 text-center space-y-2">
           <MessageSquare className="mx-auto size-8 text-gray-300" />
-          <p className="text-sm text-gray-500">
+          <p className="text-sm" style={{ color: inkA(0.55) }}>
             Committee discussion opens once the organisers enable chat for this
             event.
           </p>
-        </CardContent>
-      </Card>
+        </div>
+      </SectionShell>
     );
   }
   return (

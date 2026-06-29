@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/yip/ui/card";
 import { Badge } from "@/components/yip/ui/badge";
 import {
   ArrowLeft,
@@ -15,6 +14,7 @@ import {
   REFERENCE_LINKS,
 } from "@/lib/yip/handbook-learn";
 import { OATH_TEXT } from "@/lib/yip/constants";
+import { SectionShell, SectionHeading, INK, SAFFRON, GOLD, SERIF, inkA } from "../credential-ui";
 
 export default function LearnPage() {
   return (
@@ -27,41 +27,45 @@ export default function LearnPage() {
         >
           <ArrowLeft className="size-3" /> Back to My Dashboard
         </Link>
-        <h1 className="text-3xl font-bold text-[#1a1a3e] tracking-tight flex items-center gap-2">
-          <BookOpen className="size-7 text-[#FF9933]" />
+        <p
+          className="text-[10px] font-bold uppercase tracking-[0.16em] flex items-center gap-1.5"
+          style={{ color: SAFFRON }}
+        >
+          <BookOpen className="size-3.5" />
+          The Handbook
+        </p>
+        <h1
+          className="mt-0.5 text-[28px] font-bold leading-[1.1] tracking-tight"
+          style={{ ...SERIF, color: INK }}
+        >
           Learn YIP
         </h1>
-        <p className="text-sm text-[#1a1a3e]/60 mt-1">
+        <p className="text-sm mt-1.5" style={{ color: inkA(0.6) }}>
           Everything a participant needs — from parliamentary procedure to the oath itself.
         </p>
       </div>
 
       {/* Oath block */}
-      <Card className="bg-gradient-to-br from-[#FF9933]/5 via-white to-[#138808]/5 border-[#FF9933]/20">
-        <CardHeader>
-          <CardTitle className="text-sm uppercase tracking-widest text-[#FF9933] flex items-center gap-2">
-            <Quote className="size-4" />
-            Oath of Office
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
+      <SectionShell accent={GOLD}>
+        <div className="px-5 py-4">
+          <SectionHeading eyebrow="Ceremony" title="Oath of Office" icon={Quote} accent={GOLD} />
           <p
-            className="font-serif text-lg leading-relaxed italic text-[#1a1a3e]"
-            style={{ fontFamily: "'Playfair Display', Georgia, serif" }}
+            className="text-lg leading-relaxed italic mt-3.5"
+            style={{ ...SERIF, color: INK }}
           >
             {OATH_TEXT}
           </p>
-          <p className="text-xs text-[#1a1a3e]/50 mt-3">
+          <p className="text-xs mt-3" style={{ color: inkA(0.5) }}>
             — Constitution of India · Handbook page 44
           </p>
-        </CardContent>
-      </Card>
+        </div>
+      </SectionShell>
 
       {/* FAQs */}
       <section className="space-y-3">
         <div className="flex items-center gap-2">
           <HelpCircle className="size-5 text-[#FF9933]" />
-          <h2 className="text-xl font-bold text-[#1a1a3e]">
+          <h2 className="text-xl font-bold" style={{ ...SERIF, color: INK }}>
             Student FAQs
           </h2>
           <Badge variant="secondary" className="text-[10px]">
@@ -96,7 +100,7 @@ export default function LearnPage() {
       <section className="space-y-3">
         <div className="flex items-center gap-2">
           <FileText className="size-5 text-[#FF9933]" />
-          <h2 className="text-xl font-bold text-[#1a1a3e]">
+          <h2 className="text-xl font-bold" style={{ ...SERIF, color: INK }}>
             Sample Parliamentary Script
           </h2>
           <Badge variant="secondary" className="text-[10px]">
@@ -110,8 +114,8 @@ export default function LearnPage() {
 
         <div className="space-y-2">
           {SAMPLE_SCRIPT.map((s, i) => (
-            <Card key={i} className="border-[#1a1a3e]/8">
-              <CardContent className="pt-4 space-y-2">
+            <SectionShell key={i}>
+              <div className="px-5 py-4 space-y-2">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-xs font-semibold uppercase tracking-wider text-[#FF9933]">
                     {s.title}
@@ -123,8 +127,8 @@ export default function LearnPage() {
                 <p className="text-sm text-[#1a1a3e] leading-relaxed italic border-l-2 border-[#FF9933]/30 pl-3">
                   {s.line}
                 </p>
-              </CardContent>
-            </Card>
+              </div>
+            </SectionShell>
           ))}
         </div>
       </section>
@@ -133,7 +137,7 @@ export default function LearnPage() {
       <section className="space-y-3">
         <div className="flex items-center gap-2">
           <ExternalLink className="size-5 text-[#FF9933]" />
-          <h2 className="text-xl font-bold text-[#1a1a3e]">Reference Sources</h2>
+          <h2 className="text-xl font-bold" style={{ ...SERIF, color: INK }}>Reference Sources</h2>
           <Badge variant="secondary" className="text-[10px]">
             Handbook p. 25
           </Badge>
@@ -166,20 +170,20 @@ export default function LearnPage() {
 
       {/* Dress + What to Carry */}
       <section className="space-y-3">
-        <h2 className="text-xl font-bold text-[#1a1a3e]">On the Day</h2>
+        <h2 className="text-xl font-bold" style={{ ...SERIF, color: INK }}>On the Day</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <Card>
-            <CardContent className="pt-5">
+          <SectionShell accent={SAFFRON}>
+            <div className="px-5 py-4">
               <div className="text-xs font-semibold uppercase tracking-widest text-[#FF9933] mb-2">
                 Dress Code
               </div>
               <p className="text-sm text-[#1a1a3e]">
                 Formal / semi-formal Indian attire, or school uniform.
               </p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-5">
+            </div>
+          </SectionShell>
+          <SectionShell accent={SAFFRON}>
+            <div className="px-5 py-4">
               <div className="text-xs font-semibold uppercase tracking-widest text-[#FF9933] mb-2">
                 What to Carry
               </div>
@@ -188,8 +192,8 @@ export default function LearnPage() {
                 <li>Your prepared 90-second speech</li>
                 <li>Clear understanding of your role, party, and topic</li>
               </ul>
-            </CardContent>
-          </Card>
+            </div>
+          </SectionShell>
         </div>
       </section>
     </div>

@@ -7,7 +7,6 @@
 // {eventId, participantId} instead of a session object.
 
 import { useState, useEffect, useRef } from "react";
-import { Card, CardContent } from "@/components/yip/ui/card";
 import { Button } from "@/components/yip/ui/button";
 import { Input } from "@/components/yip/ui/input";
 import { Textarea } from "@/components/yip/ui/textarea";
@@ -30,6 +29,7 @@ import {
   deleteMyBillDocument,
   type BillDocumentRow,
 } from "@/app/yip/actions/bill-documents";
+import { SectionShell, SectionHeading, SAFFRON, inkA } from "../credential-ui";
 
 const ORANGE = "#FF9933";
 
@@ -190,14 +190,16 @@ export function CommitteeDocumentsSection({
   }
 
   return (
-    <Card>
-      <CardContent className="pt-4 pb-5 space-y-4">
+    <SectionShell accent={SAFFRON}>
+      <div className="px-5 pt-4 pb-5 space-y-4">
         <div>
-          <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
-            <FolderOpen className="size-4" style={{ color: ORANGE }} />
-            Committee Documents
-          </h3>
-          <p className="text-xs text-gray-400 mt-0.5">
+          <SectionHeading
+            eyebrow="The Repository"
+            title="Committee Documents"
+            icon={FolderOpen}
+            accent={SAFFRON}
+          />
+          <p className="text-xs mt-1.5" style={{ color: inkA(0.5) }}>
             Supporting documents and drawings for your committee&apos;s bill
             {committeeName ? ` — ${committeeName}` : ""}
           </p>
@@ -324,7 +326,7 @@ export function CommitteeDocumentsSection({
             </div>
           </>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </SectionShell>
   );
 }

@@ -17,6 +17,17 @@ import {
   MOTION_STATUS_COLORS,
   type MotionStatus,
 } from "@/lib/yip/motions";
+import { Gavel, Vote, CheckCircle2, type LucideIcon } from "lucide-react";
+import {
+  SectionShell,
+  SectionHeading,
+  INK,
+  SAFFRON,
+  GREEN,
+  GOLD,
+  SERIF,
+  inkA,
+} from "../credential-ui";
 
 const TYPE_LABEL = new Map(MOTION_TYPES.map((t) => [t.code, t.label]));
 
@@ -85,8 +96,19 @@ export function SpeakerClient({
   return (
     <div className="mx-auto w-full max-w-md space-y-5 px-4 py-5 pb-24">
       <header>
-        <h1 className="text-lg font-bold text-[#1a1a3e]">Speaker&apos;s Desk</h1>
-        <p className="text-sm text-[#1a1a3e]/55">
+        <p
+          className="text-[10px] font-bold uppercase tracking-[0.16em]"
+          style={{ color: GOLD }}
+        >
+          The Chair
+        </p>
+        <h1
+          className="mt-0.5 text-[28px] font-bold leading-[1.1] tracking-tight"
+          style={{ ...SERIF, color: INK }}
+        >
+          Speaker&apos;s Desk
+        </h1>
+        <p className="text-sm mt-1.5" style={{ color: inkA(0.6) }}>
           {roleLabel} · rule on motions for the House
         </p>
       </header>
@@ -97,10 +119,10 @@ export function SpeakerClient({
         </div>
       )}
 
-      <Section title={`Awaiting your ruling (${pending.length})`}>
+      <Section title={`Awaiting your ruling (${pending.length})`} icon={Gavel} accent={SAFFRON}>
         {pending.length === 0 && <Empty>No motions waiting.</Empty>}
         {pending.map((m) => (
-          <MotionCard key={m.id} m={m}>
+          <MotionCard key={m.id} m={m} accent={SAFFRON}>
             {rejecting[m.id] !== undefined ? (
               <div className="space-y-2">
                 <textarea
@@ -159,10 +181,10 @@ export function SpeakerClient({
         ))}
       </Section>
 
-      <Section title={`On the floor (${active.length})`}>
+      <Section title={`On the floor (${active.length})`} icon={Vote} accent={GOLD}>
         {active.length === 0 && <Empty>Nothing under discussion.</Empty>}
         {active.map((m) => (
-          <MotionCard key={m.id} m={m}>
+          <MotionCard key={m.id} m={m} accent={GOLD}>
             {m.status === "voting" ? (
               <FloorVote
                 state={voteStates[m.id]}
@@ -181,12 +203,12 @@ export function SpeakerClient({
         ))}
       </Section>
 
-      <Section title={`Resolved (${done.length})`}>
+      <Section title={`Resolved (${done.length})`} icon={CheckCircle2} accent={GREEN}>
         {done.length === 0 && <Empty>Nothing resolved yet.</Empty>}
         {done.map((m) => (
-          <MotionCard key={m.id} m={m}>
+          <MotionCard key={m.id} m={m} accent={GREEN}>
             {m.outcome && (
-              <p className="text-sm font-semibold text-[#1a1a3e]">
+              <p className="text-sm font-semibold" style={{ ...SERIF, color: INK }}>
                 Outcome: {m.outcome === "passed" ? "Passed" : "Rejected"}
                 {(m.votes_for || m.votes_against || m.votes_abstain) ? (
                   <span className="font-normal text-[#1a1a3e]/55">
@@ -205,10 +227,20 @@ export function SpeakerClient({
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  title,
+  icon,
+  accent,
+  children,
+}: {
+  title: string;
+  icon?: LucideIcon;
+  accent?: string;
+  children: React.ReactNode;
+}) {
   return (
-    <section className="space-y-2">
-      <h2 className="text-xs font-bold uppercase tracking-wide text-[#FF9933]">{title}</h2>
+    <section className="space-y-3">
+      <SectionHeading title={title} icon={icon} accent={accent} />
       {children}
     </section>
   );
@@ -216,35 +248,52 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 function Empty({ children }: { children: React.ReactNode }) {
   return (
-    <div className="rounded-xl border border-[#1a1a3e]/8 bg-white px-4 py-6 text-center text-sm text-[#1a1a3e]/45">
-      {children}
-    </div>
+    <SectionShell>
+      <div
+        className="px-5 py-6 text-center text-sm"
+        style={{ color: inkA(0.45) }}
+      >
+        {children}
+      </div>
+    </SectionShell>
   );
 }
 
-function MotionCard({ m, children }: { m: Motion; children: React.ReactNode }) {
+function MotionCard({
+  m,
+  accent = SAFFRON,
+  children,
+}: {
+  m: Motion;
+  accent?: string;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="rounded-2xl border border-[#1a1a3e]/8 bg-white p-4 shadow-sm">
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-sm font-bold text-[#1a1a3e]">{m.subject}</p>
-        <span
-          className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
-            MOTION_STATUS_COLORS[m.status as MotionStatus] ?? "bg-gray-100 text-gray-700 border-gray-200"
-          }`}
-        >
-          {MOTION_STATUS_LABELS[m.status as MotionStatus] ?? m.status}
-        </span>
+    <SectionShell accent={accent}>
+      <div className="px-5 py-4">
+        <div className="flex items-start justify-between gap-2">
+          <p className="text-sm font-bold" style={{ ...SERIF, color: INK }}>
+            {m.subject}
+          </p>
+          <span
+            className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+              MOTION_STATUS_COLORS[m.status as MotionStatus] ?? "bg-gray-100 text-gray-700 border-gray-200"
+            }`}
+          >
+            {MOTION_STATUS_LABELS[m.status as MotionStatus] ?? m.status}
+          </span>
+        </div>
+        <p className="mt-0.5 text-xs font-medium" style={{ color: SAFFRON }}>
+          {TYPE_LABEL.get(m.motion_type) ?? m.motion_type}
+        </p>
+        {m.details && <p className="mt-1.5 text-sm text-[#1a1a3e]/70">{m.details}</p>}
+        <p className="mt-1.5 text-xs text-[#1a1a3e]/45">
+          Raised by {m.raised_by_name ?? "—"}
+          {m.raised_by_role ? ` · ${m.raised_by_role}` : ""}
+        </p>
+        <div className="mt-3">{children}</div>
       </div>
-      <p className="mt-0.5 text-xs font-medium text-[#FF9933]">
-        {TYPE_LABEL.get(m.motion_type) ?? m.motion_type}
-      </p>
-      {m.details && <p className="mt-1.5 text-sm text-[#1a1a3e]/70">{m.details}</p>}
-      <p className="mt-1.5 text-xs text-[#1a1a3e]/45">
-        Raised by {m.raised_by_name ?? "—"}
-        {m.raised_by_role ? ` · ${m.raised_by_role}` : ""}
-      </p>
-      <div className="mt-3">{children}</div>
-    </div>
+    </SectionShell>
   );
 }
 
@@ -322,7 +371,7 @@ function Pill({
   return (
     <div className={`flex-1 rounded-lg border px-2 py-1.5 ${cls}`}>
       <span className="block text-[10px] font-semibold uppercase">{label}</span>
-      <span className="block text-lg font-bold">{value}</span>
+      <span className="block text-lg font-bold" style={SERIF}>{value}</span>
     </div>
   );
 }

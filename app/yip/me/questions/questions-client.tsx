@@ -3,11 +3,19 @@
 import { useState, useEffect, useTransition } from "react";
 import { MINISTRIES } from "@/lib/yip/constants";
 import { submitQuestion, getMyQuestions } from "@/app/yip/actions/questions";
-import { Card, CardContent } from "@/components/yip/ui/card";
 import { Button } from "@/components/yip/ui/button";
 import { Textarea } from "@/components/yip/ui/textarea";
 import { Badge } from "@/components/yip/ui/badge";
 import { Label } from "@/components/yip/ui/label";
+import {
+  SectionShell,
+  INK,
+  SAFFRON,
+  GREEN,
+  GOLD,
+  SERIF,
+  inkA,
+} from "../credential-ui";
 import {
   MessageSquare,
   Send,
@@ -70,6 +78,15 @@ const STATUS_CONFIG: Record<
     className: "bg-gray-100 text-gray-500",
     icon: XCircle,
   },
+};
+
+const STATUS_ACCENT: Record<string, string> = {
+  submitted: SAFFRON,
+  approved: GREEN,
+  rejected: "#9A3324",
+  asked: GOLD,
+  answered: GREEN,
+  skipped: inkA(0.2),
 };
 
 function getMinistryLabel(key: string): string {
@@ -148,11 +165,19 @@ export function QuestionsClient({
     <div className="space-y-5">
       {/* Header */}
       <div>
-        <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-          <MessageSquare className="size-5 text-[#FF9933]" />
+        <p
+          className="text-[10px] font-bold uppercase tracking-[0.16em]"
+          style={{ color: SAFFRON }}
+        >
+          The Floor
+        </p>
+        <h1
+          className="mt-0.5 text-[28px] font-bold leading-[1.1] tracking-tight"
+          style={{ ...SERIF, color: INK }}
+        >
           Question Hour
         </h1>
-        <p className="text-sm text-gray-500 mt-1">
+        <p className="text-sm mt-1.5" style={{ color: inkA(0.6) }}>
           Submit your questions for the Cabinet Ministers during Question Hour
         </p>
       </div>
@@ -172,21 +197,21 @@ export function QuestionsClient({
       </div>
 
       {/* Instruction */}
-      <Card className="border-[#FF9933]/20 bg-[#FF9933]/5">
-        <CardContent className="pt-4 pb-4">
-          <p className="text-sm text-gray-700">
+      <SectionShell accent={SAFFRON}>
+        <div className="px-5 py-4">
+          <p className="text-sm" style={{ color: inkA(0.75) }}>
             Your questions will be directed to the relevant Cabinet Minister
             during Question Hour. Each participant can submit up to 3 questions.
             Questions are reviewed by the organizers before being presented in
             the House.
           </p>
-        </CardContent>
-      </Card>
+        </div>
+      </SectionShell>
 
       {/* Submission Form */}
       {canSubmit ? (
-        <Card>
-          <CardContent className="pt-5 space-y-4">
+        <SectionShell accent={SAFFRON}>
+          <div className="px-5 py-4 space-y-4">
             <div>
               <Label htmlFor="ministry" className="text-sm font-medium">
                 Directed to Ministry *
@@ -241,11 +266,11 @@ export function QuestionsClient({
                 </>
               )}
             </Button>
-          </CardContent>
-        </Card>
+          </div>
+        </SectionShell>
       ) : (
-        <Card className="border-amber-200/50 bg-amber-50/30">
-          <CardContent className="pt-5 text-center py-6">
+        <SectionShell accent={GOLD}>
+          <div className="px-5 py-6 text-center">
             <HelpCircle className="mx-auto size-8 text-amber-400 mb-2" />
             <p className="text-sm font-medium text-gray-700">
               Maximum questions reached
@@ -253,8 +278,8 @@ export function QuestionsClient({
             <p className="text-xs text-gray-500 mt-1">
               You have submitted all 3 allowed questions.
             </p>
-          </CardContent>
-        </Card>
+          </div>
+        </SectionShell>
       )}
 
       {/* Submitted Questions List */}
@@ -264,7 +289,10 @@ export function QuestionsClient({
         </div>
       ) : questions.length > 0 ? (
         <div className="space-y-3">
-          <h2 className="text-sm font-semibold text-gray-700">
+          <h2
+            className="text-[18px] font-semibold"
+            style={{ ...SERIF, color: INK }}
+          >
             Your Submitted Questions
           </h2>
           {questions.map((q, idx) => {
@@ -272,8 +300,11 @@ export function QuestionsClient({
             const config = STATUS_CONFIG[status] ?? STATUS_CONFIG.submitted;
             const StatusIcon = config.icon;
             return (
-              <Card key={q.id} className="overflow-hidden">
-                <CardContent className="pt-4 pb-4">
+              <SectionShell
+                key={q.id}
+                accent={STATUS_ACCENT[status] ?? SAFFRON}
+              >
+                <div className="px-5 py-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1.5">
@@ -307,8 +338,8 @@ export function QuestionsClient({
                       )}
                     </div>
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+              </SectionShell>
             );
           })}
         </div>

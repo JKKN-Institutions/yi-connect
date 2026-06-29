@@ -36,6 +36,12 @@ import {
   getBillFeedbackForCommittee,
   getEventAiEnabled,
 } from "@/lib/yip/ai/drafts";
+import {
+  SectionShell,
+  SectionHeading,
+  SAFFRON,
+  inkA,
+} from "../credential-ui";
 
 /** The text a drafter sees — prose only, never a score. */
 function feedbackTextOf(text: string | null): string {
@@ -79,76 +85,95 @@ export async function BillFeedbackCard({
   // up). A warm placeholder so the team knows feedback is coming.
   if (!note) {
     return (
-      <section className="rounded-2xl border border-dashed border-sky-400/45 bg-sky-50/60 px-5 py-4">
-        <div className="flex items-center gap-2">
-          <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-sky-100">
-            <ScrollText className="size-4 text-sky-600" />
-          </span>
-          <h2 className="text-sm font-bold text-[#1a1a3e]">
-            Feedback on Your Bill
-          </h2>
+      <SectionShell accent={SAFFRON}>
+        <div className="px-5 py-4">
+          <SectionHeading
+            eyebrow="Bill craft"
+            title="Feedback on Your Bill"
+            icon={ScrollText}
+            accent={SAFFRON}
+          />
+          <p
+            className="mt-3.5 text-xs leading-relaxed"
+            style={{ color: inkA(0.55) }}
+          >
+            Once your committee has drafted enough of the bill, a short, friendly
+            note will appear here — one strength of your bill and one idea to make
+            it even stronger. Keep drafting!
+          </p>
+          <p
+            className="mt-2.5 text-[10.5px] leading-snug"
+            style={{ color: inkA(0.45) }}
+          >
+            ✨ Constructive feedback from AI on your bill&apos;s craft — never a
+            score, rank, or comparison of people.
+          </p>
         </div>
-        <p className="mt-1.5 text-xs leading-relaxed text-[#1a1a3e]/55">
-          Once your committee has drafted enough of the bill, a short, friendly
-          note will appear here — one strength of your bill and one idea to make
-          it even stronger. Keep drafting!
-        </p>
-        <p className="mt-2.5 text-[10.5px] leading-snug text-sky-700/70">
-          ✨ Constructive feedback from AI on your bill&apos;s craft — never a
-          score, rank, or comparison of people.
-        </p>
-      </section>
+      </SectionShell>
     );
   }
 
   return (
-    <section className="relative overflow-hidden rounded-2xl border border-sky-200/70 bg-gradient-to-br from-sky-50/80 via-white to-indigo-50/40 px-5 py-5 shadow-sm">
-      {/* sky → indigo accent bar (craft → polish) */}
-      <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-sky-400 via-indigo-300 to-[#FF9933]" />
+    <SectionShell accent={SAFFRON}>
+      <div className="px-5 py-5">
+        {/* Header + AI label */}
+        <SectionHeading
+          eyebrow="Bill craft"
+          title="Feedback on Your Bill"
+          icon={ScrollText}
+          accent={SAFFRON}
+          trailing={
+            <span
+              className="inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider"
+              style={{ background: `${SAFFRON}1f`, color: SAFFRON }}
+            >
+              <Sparkles className="size-2.5" />
+              AI feedback
+            </span>
+          }
+        />
+        <p
+          className="mt-1.5 text-[11px] leading-tight"
+          style={{ color: inkA(0.5) }}
+        >
+          {billTitle
+            ? `On: ${billTitle}`
+            : "How your committee can sharpen the bill"}
+        </p>
 
-      {/* Header + AI label */}
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-sky-100">
-            <ScrollText className="size-4 text-sky-600" />
-          </span>
-          <div>
-            <h2 className="text-base font-bold leading-tight text-[#1a1a3e]">
-              Feedback on Your Bill
-            </h2>
-            <p className="text-[11px] leading-tight text-[#1a1a3e]/50">
-              {billTitle
-                ? `On: ${billTitle}`
-                : "How your committee can sharpen the bill"}
-            </p>
+        {/* The constructive note (strength + one way to strengthen). */}
+        <div
+          className="mt-3.5 rounded-xl px-4 py-3.5"
+          style={{ border: `1px solid ${inkA(0.08)}`, background: inkA(0.02) }}
+        >
+          <div className="flex items-center gap-1.5">
+            <Lightbulb className="size-3.5" style={{ color: SAFFRON }} />
+            <span
+              className="text-[11px] font-bold uppercase tracking-wide"
+              style={{ color: SAFFRON }}
+            >
+              What&apos;s strong &amp; how to strengthen it
+            </span>
           </div>
+          <p
+            className="mt-1.5 whitespace-pre-line text-[13.5px] leading-relaxed"
+            style={{ color: inkA(0.9) }}
+          >
+            {note}
+          </p>
         </div>
-        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-sky-700">
-          <Sparkles className="size-2.5" />
-          AI feedback
-        </span>
-      </div>
 
-      {/* The constructive note (strength + one way to strengthen). */}
-      <div className="mt-4 rounded-xl border border-sky-200/60 bg-white/70 px-4 py-3.5">
-        <div className="flex items-center gap-1.5">
-          <Lightbulb className="size-3.5 text-[#FF9933]" />
-          <span className="text-[11px] font-bold uppercase tracking-wide text-[#FF9933]">
-            What&apos;s strong &amp; how to strengthen it
-          </span>
-        </div>
-        <p className="mt-1.5 whitespace-pre-line text-[13.5px] leading-relaxed text-[#1a1a3e]/90">
-          {note}
+        {/* Content-safe framing footer. */}
+        <p
+          className="mt-4 pt-3 text-[10.5px] leading-snug"
+          style={{ borderTop: `1px solid ${inkA(0.08)}`, color: inkA(0.45) }}
+        >
+          ✨ Constructive feedback from AI on your bill&apos;s craft — its problem
+          framing, provisions, impact, and implementation. It is about the bill,
+          never a score, rank, or comparison of people.
         </p>
       </div>
-
-      {/* Content-safe framing footer. */}
-      <p className="mt-4 border-t border-sky-200/60 pt-3 text-[10.5px] leading-snug text-[#1a1a3e]/45">
-        ✨ Constructive feedback from AI on your bill&apos;s craft — its problem
-        framing, provisions, impact, and implementation. It is about the bill,
-        never a score, rank, or comparison of people.
-      </p>
-    </section>
+    </SectionShell>
   );
 }
 

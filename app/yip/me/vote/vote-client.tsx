@@ -1,9 +1,18 @@
 "use client";
 
 import { useState, useEffect, useTransition } from "react";
-import { Card, CardContent } from "@/components/yip/ui/card";
 import { Button } from "@/components/yip/ui/button";
 import { Badge } from "@/components/yip/ui/badge";
+import {
+  SectionShell,
+  SectionHeading,
+  INK,
+  SAFFRON,
+  GREEN,
+  GOLD,
+  SERIF,
+  inkA,
+} from "../credential-ui";
 import {
   Vote,
   CheckCircle2,
@@ -233,10 +242,14 @@ export function VoteClient({
   if (!session) {
     if (embedded) return null;
     return (
-      <div className="flex flex-col items-center justify-center py-12">
-        <AlertTriangle className="size-10 text-amber-400 mb-3" />
-        <p className="text-gray-600">Session not found. Please rejoin the event.</p>
-      </div>
+      <SectionShell accent={SAFFRON}>
+        <div className="flex flex-col items-center justify-center px-5 py-12 text-center">
+          <AlertTriangle className="size-10 mb-3" style={{ color: SAFFRON }} />
+          <p style={{ color: inkA(0.6) }}>
+            Session not found. Please rejoin the event.
+          </p>
+        </div>
+      </SectionShell>
     );
   }
 
@@ -259,21 +272,31 @@ export function VoteClient({
     return (
       <div className="space-y-5">
         <div>
-          <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-            <Vote className="size-5 text-[#FF9933]" />
+          <p
+            className="text-[10px] font-bold uppercase tracking-[0.16em]"
+            style={{ color: SAFFRON }}
+          >
+            The Division
+          </p>
+          <h1
+            className="mt-0.5 text-[28px] font-bold leading-[1.1] tracking-tight"
+            style={{ ...SERIF, color: INK }}
+          >
             Digital Voting
           </h1>
         </div>
-        <Card className="border-gray-200">
-          <CardContent className="pt-5 text-center py-10">
-            <Clock className="mx-auto size-12 text-gray-300 mb-3" />
-            <p className="font-medium text-gray-700">No Vote in Progress</p>
-            <p className="text-sm text-gray-500 mt-1">
+        <SectionShell accent={SAFFRON}>
+          <div className="px-5 text-center py-10">
+            <Clock className="mx-auto size-12 mb-3" style={{ color: inkA(0.25) }} />
+            <p className="font-medium" style={{ color: INK }}>
+              No Vote in Progress
+            </p>
+            <p className="text-sm mt-1" style={{ color: inkA(0.55) }}>
               You will be notified when voting opens. Check back during the
               relevant agenda item.
             </p>
-          </CardContent>
-        </Card>
+          </div>
+        </SectionShell>
       </div>
     );
   }
@@ -283,42 +306,52 @@ export function VoteClient({
   if (hasVoted) {
     if (embedded) {
       return (
-        <Card className="border-green-200 bg-green-50/50 overflow-hidden">
-          <CardContent className="py-4">
+        <SectionShell accent={GREEN}>
+          <div className="px-5 py-4">
             <div className="flex items-center gap-2.5">
-              <CheckCircle2 className="size-5 shrink-0 text-green-600" />
+              <CheckCircle2 className="size-5 shrink-0" style={{ color: GREEN }} />
               <div>
-                <p className="text-sm font-bold text-green-800">Vote recorded</p>
-                <p className="mt-0.5 text-xs text-green-600">
+                <p className="text-sm font-bold" style={{ color: GREEN }}>
+                  Vote recorded
+                </p>
+                <p className="mt-0.5 text-xs" style={{ color: inkA(0.6) }}>
                   Your vote has been cast.
                   {isClosed ? " Results will be revealed shortly." : " Results will be announced."}
                 </p>
               </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </SectionShell>
       );
     }
     return (
       <div className="space-y-5">
         <div>
-          <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-            <Vote className="size-5 text-[#FF9933]" />
+          <p
+            className="text-[10px] font-bold uppercase tracking-[0.16em]"
+            style={{ color: SAFFRON }}
+          >
+            The Division
+          </p>
+          <h1
+            className="mt-0.5 text-[28px] font-bold leading-[1.1] tracking-tight"
+            style={{ ...SERIF, color: INK }}
+          >
             Digital Voting
           </h1>
         </div>
-        <Card className="border-green-200 bg-green-50/50">
-          <CardContent className="pt-5 text-center py-10">
-            <CheckCircle2 className="mx-auto size-14 text-green-500 mb-3" />
-            <p className="text-lg font-bold text-green-800">
+        <SectionShell accent={GREEN}>
+          <div className="px-5 text-center py-10">
+            <CheckCircle2 className="mx-auto size-14 mb-3" style={{ color: GREEN }} />
+            <p className="text-lg font-bold" style={{ ...SERIF, color: INK }}>
               Your vote has been recorded
             </p>
-            <p className="text-sm text-green-600 mt-1">
+            <p className="text-sm mt-1" style={{ color: inkA(0.6) }}>
               Thank you for participating in the democratic process.
               {isClosed && " Results will be revealed shortly."}
             </p>
-          </CardContent>
-        </Card>
+          </div>
+        </SectionShell>
       </div>
     );
   }
@@ -330,20 +363,30 @@ export function VoteClient({
     return (
       <div className="space-y-5">
         <div>
-          <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-            <Vote className="size-5 text-[#FF9933]" />
+          <p
+            className="text-[10px] font-bold uppercase tracking-[0.16em]"
+            style={{ color: SAFFRON }}
+          >
+            The Division
+          </p>
+          <h1
+            className="mt-0.5 text-[28px] font-bold leading-[1.1] tracking-tight"
+            style={{ ...SERIF, color: INK }}
+          >
             Digital Voting
           </h1>
         </div>
-        <Card className="border-amber-200 bg-amber-50/50">
-          <CardContent className="pt-5 text-center py-10">
-            <Clock className="mx-auto size-12 text-amber-400 mb-3" />
-            <p className="font-medium text-gray-700">Voting Has Closed</p>
-            <p className="text-sm text-gray-500 mt-1">
+        <SectionShell accent={SAFFRON}>
+          <div className="px-5 text-center py-10">
+            <Clock className="mx-auto size-12 mb-3" style={{ color: SAFFRON }} />
+            <p className="font-medium" style={{ color: INK }}>
+              Voting Has Closed
+            </p>
+            <p className="text-sm mt-1" style={{ color: inkA(0.55) }}>
               The voting window has ended. Results will be revealed shortly.
             </p>
-          </CardContent>
-        </Card>
+          </div>
+        </SectionShell>
       </div>
     );
   }
@@ -430,23 +473,33 @@ export function VoteClient({
     return (
       <div className="space-y-5">
         <div>
-          <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-            <Vote className="size-5 text-[#FF9933]" />
+          <p
+            className="text-[10px] font-bold uppercase tracking-[0.16em]"
+            style={{ color: SAFFRON }}
+          >
+            Cast Your Vote
+          </p>
+          <h1
+            className="mt-0.5 text-[28px] font-bold leading-[1.1] tracking-tight"
+            style={{ ...SERIF, color: INK }}
+          >
             {ballotCopy.heading}
           </h1>
-          <p className="text-sm text-gray-500 mt-1">{ballotCopy.subtitle}</p>
+          <p className="text-sm mt-1.5" style={{ color: inkA(0.6) }}>
+            {ballotCopy.subtitle}
+          </p>
         </div>
 
         {/* Instruction */}
-        <Card className="border-[#FF9933]/20 bg-[#FF9933]/5">
-          <CardContent className="pt-4 pb-4">
-            <p className="text-sm text-gray-700">
+        <SectionShell accent={SAFFRON}>
+          <div className="px-5 py-4">
+            <p className="text-sm" style={{ color: inkA(0.7) }}>
               {ballotCopy.scopeNote}
               Tap on a candidate to select them, then press &quot;Cast Vote&quot;
               to confirm. Your vote is secret and cannot be changed once cast.
             </p>
-          </CardContent>
-        </Card>
+          </div>
+        </SectionShell>
 
         {/* Candidate Grid */}
         <div className="space-y-3">
@@ -548,11 +601,19 @@ export function VoteClient({
     return (
       <div className="space-y-5">
         <div>
-          <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-            <Landmark className="size-5 text-red-600" />
+          <p
+            className="text-[10px] font-bold uppercase tracking-[0.16em]"
+            style={{ color: "#9A3324" }}
+          >
+            Cast Your Vote
+          </p>
+          <h1
+            className="mt-0.5 text-[28px] font-bold leading-[1.1] tracking-tight"
+            style={{ ...SERIF, color: INK }}
+          >
             {isImpeach ? "Impeach the Speaker" : "No-Confidence Motion"}
           </h1>
-          <p className="text-sm text-gray-500 mt-1">
+          <p className="text-sm mt-1.5" style={{ color: inkA(0.6) }}>
             {isImpeach
               ? "A vote of the whole House on the conduct of the Speaker"
               : "A vote of the whole House on confidence in the Government"}
@@ -560,17 +621,21 @@ export function VoteClient({
         </div>
 
         {motionSubject && (
-          <Card className="border-red-200/60 overflow-hidden">
-            <div className="h-1 w-full bg-gradient-to-r from-red-400 to-orange-400" />
-            <CardContent className="pt-4 pb-4">
-              <h2 className="text-base font-bold text-gray-900">{motionSubject}</h2>
-            </CardContent>
-          </Card>
+          <SectionShell accent="#9A3324">
+            <div className="px-5 py-4">
+              <SectionHeading
+                eyebrow="The Motion"
+                title={motionSubject}
+                icon={Landmark}
+                accent="#9A3324"
+              />
+            </div>
+          </SectionShell>
         )}
 
-        <Card className="border-[#FF9933]/20 bg-[#FF9933]/5">
-          <CardContent className="pt-4 pb-4">
-            <p className="text-sm text-gray-700">
+        <SectionShell accent={SAFFRON}>
+          <div className="px-5 py-4">
+            <p className="text-sm" style={{ color: inkA(0.7) }}>
               {isImpeach ? (
                 <>
                   Vote <strong>Aye</strong> to impeach (remove) the Speaker,{" "}
@@ -587,8 +652,8 @@ export function VoteClient({
                 </>
               )}
             </p>
-          </CardContent>
-        </Card>
+          </div>
+        </SectionShell>
 
         <div className="space-y-3">
           <button
@@ -660,34 +725,48 @@ export function VoteClient({
     return (
       <div className="space-y-5">
         <div>
-          <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-            <Landmark className="size-5 text-[#FF9933]" />
+          <p
+            className="text-[10px] font-bold uppercase tracking-[0.16em]"
+            style={{ color: SAFFRON }}
+          >
+            Cast Your Vote
+          </p>
+          <h1
+            className="mt-0.5 text-[28px] font-bold leading-[1.1] tracking-tight"
+            style={{ ...SERIF, color: INK }}
+          >
             Vote on Bill
           </h1>
         </div>
 
         {/* Bill Info */}
         {billTitle && (
-          <Card className="border-purple-200/50 overflow-hidden">
-            <div className="h-1 w-full bg-gradient-to-r from-purple-400 to-violet-400" />
-            <CardContent className="pt-4 pb-4">
-              <h2 className="text-base font-bold text-gray-900">{billTitle}</h2>
+          <SectionShell accent={GOLD}>
+            <div className="px-5 py-4">
+              <SectionHeading
+                eyebrow="The Bill"
+                title={billTitle}
+                icon={Landmark}
+                accent={GOLD}
+              />
               {billObjective && (
-                <p className="text-sm text-gray-600 mt-2">{billObjective}</p>
+                <p className="text-sm mt-3.5" style={{ color: inkA(0.7) }}>
+                  {billObjective}
+                </p>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </SectionShell>
         )}
 
         {/* Instruction */}
-        <Card className="border-[#FF9933]/20 bg-[#FF9933]/5">
-          <CardContent className="pt-4 pb-4">
-            <p className="text-sm text-gray-700">
+        <SectionShell accent={SAFFRON}>
+          <div className="px-5 py-4">
+            <p className="text-sm" style={{ color: inkA(0.7) }}>
               Cast your vote on the bill. You may vote Aye (in favor), Nay
               (against), or Abstain. Your vote cannot be changed once cast.
             </p>
-          </CardContent>
-        </Card>
+          </div>
+        </SectionShell>
 
         {/* Vote Buttons */}
         <div className="space-y-3">

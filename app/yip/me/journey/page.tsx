@@ -3,7 +3,6 @@ import { redirect } from "next/navigation";
 import { getYipSession } from "@/lib/yip/auth/yip-session";
 import Link from "next/link";
 import { Badge } from "@/components/yip/ui/badge";
-import { Card, CardContent } from "@/components/yip/ui/card";
 import {
   ArrowLeft,
   Trophy,
@@ -23,6 +22,7 @@ import {
   getEventSchoolNumbers,
   schoolNumberOf,
 } from "@/lib/yip/school-numbers";
+import { SectionShell, SectionHeading, INK, SAFFRON, GOLD, SERIF, inkA } from "../credential-ui";
 
 interface ParticipantSession {
   type: "participant";
@@ -54,14 +54,14 @@ export default async function JourneyPage() {
         >
           <ArrowLeft className="size-3" /> Back
         </Link>
-        <Card>
-          <CardContent className="py-12 text-center">
-            <p className="text-sm text-[#1a1a3e]/60">
+        <SectionShell accent={SAFFRON}>
+          <div className="py-12 px-5 text-center">
+            <p className="text-sm" style={{ color: inkA(0.6) }}>
               Your profile is not yet linked to a person record. Check back after
               your organizer completes setup.
             </p>
-          </CardContent>
-        </Card>
+          </div>
+        </SectionShell>
       </div>
     );
   }
@@ -101,17 +101,28 @@ export default async function JourneyPage() {
         >
           <ArrowLeft className="size-3" /> Back to My Dashboard
         </Link>
-        <h1 className="text-3xl font-bold text-[#1a1a3e] tracking-tight">
+        <p
+          className="text-[10px] font-bold uppercase tracking-[0.16em]"
+          style={{ color: SAFFRON }}
+        >
+          The Record
+        </p>
+        <h1
+          className="mt-0.5 text-[28px] font-bold leading-[1.1] tracking-tight"
+          style={{ ...SERIF, color: INK }}
+        >
           Your YIP Journey
         </h1>
-        <p className="text-sm text-[#1a1a3e]/60 mt-1">
+        <p className="text-sm mt-1.5" style={{ color: inkA(0.6) }}>
           Every chapter, regional, and national round you've been part of.
         </p>
       </div>
 
       {/* Summary */}
-      <Card className="bg-gradient-to-br from-[#FF9933]/5 via-white to-[#138808]/5 border-[#FF9933]/20">
-        <CardContent className="pt-5">
+      <SectionShell
+        accent={`linear-gradient(to right, #FF9933 0 33.33%, ${GOLD} 33.33% 66.66%, #138808 66.66% 100%)`}
+      >
+        <div className="px-5 py-4">
           <div className="flex items-center gap-3 mb-4">
             {person.photo_url ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -130,36 +141,42 @@ export default async function JourneyPage() {
               </div>
             )}
             <div>
-              <div className="text-xl font-bold text-[#1a1a3e]">
+              <div
+                className="text-xl font-bold"
+                style={{ ...SERIF, color: INK }}
+              >
                 {person.full_name}
               </div>
               {person.school_name && (
-                <div className="text-sm text-[#1a1a3e]/60">
+                <div className="text-sm" style={{ color: inkA(0.6) }}>
                   {schoolNum != null ? `School #${schoolNum}` : "School #—"}
                   {person.home_state ? ` · ${person.home_state}` : ""}
                 </div>
               )}
             </div>
           </div>
-          <div className="grid grid-cols-3 gap-3 pt-3 border-t border-[#1a1a3e]/5">
+          <div
+            className="grid grid-cols-3 gap-3 pt-3"
+            style={{ borderTop: `1px solid ${inkA(0.06)}` }}
+          >
             <Stat value={totalEvents} label="Rounds" />
             <Stat value={levelsReached.size} label="Levels" />
             <Stat value={uniqueAwards.length} label="Awards" />
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </SectionShell>
 
       {/* Awards aggregate */}
       {uniqueAwards.length > 0 && (
-        <Card>
-          <CardContent className="pt-5">
-            <div className="flex items-center gap-2 mb-3">
-              <Trophy className="size-4 text-amber-500" />
-              <span className="text-sm font-semibold text-[#1a1a3e]">
-                Career Awards
-              </span>
-            </div>
-            <div className="flex flex-wrap gap-2">
+        <SectionShell accent={GOLD}>
+          <div className="px-5 py-4">
+            <SectionHeading
+              eyebrow="Honours"
+              title="Career Awards"
+              icon={Trophy}
+              accent={GOLD}
+            />
+            <div className="flex flex-wrap gap-2 mt-3.5">
               {uniqueAwards.map((a) => (
                 <Badge
                   key={a}
@@ -170,19 +187,27 @@ export default async function JourneyPage() {
                 </Badge>
               ))}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </SectionShell>
       )}
 
       {/* Journey timeline */}
       <div className="space-y-3">
-        <h2 className="text-lg font-semibold text-[#1a1a3e]">Timeline</h2>
+        <h2
+          className="text-[18px] font-semibold"
+          style={{ ...SERIF, color: INK }}
+        >
+          Timeline
+        </h2>
         {journey.length === 0 ? (
-          <Card>
-            <CardContent className="py-12 text-center text-sm text-[#1a1a3e]/60">
+          <SectionShell>
+            <div
+              className="py-12 px-5 text-center text-sm"
+              style={{ color: inkA(0.6) }}
+            >
               No events yet.
-            </CardContent>
-          </Card>
+            </div>
+          </SectionShell>
         ) : (
           journey.map((step, idx) => (
             <JourneyCard key={step.participant_id} step={step} isFirst={idx === 0} />
@@ -196,10 +221,16 @@ export default async function JourneyPage() {
 function Stat({ value, label }: { value: number | string; label: string }) {
   return (
     <div>
-      <div className="text-2xl font-bold text-[#1a1a3e] tabular-nums">
+      <div
+        className="text-2xl font-bold tabular-nums"
+        style={{ ...SERIF, color: INK }}
+      >
         {value}
       </div>
-      <div className="text-[10px] uppercase tracking-widest text-[#1a1a3e]/50">
+      <div
+        className="text-[10px] uppercase tracking-widest"
+        style={{ color: inkA(0.5) }}
+      >
         {label}
       </div>
     </div>
@@ -218,14 +249,22 @@ function JourneyCard({
     regional: "bg-blue-50 text-blue-700 border-blue-200",
     national: "bg-[#138808]/10 text-[#138808] border-[#138808]/20",
   };
+  const levelAccent: Record<string, string> = {
+    chapter: SAFFRON,
+    regional: "#2563eb",
+    national: "#138808",
+  };
 
   const awardList = step.awards
     ? step.awards.split(",").map((a) => a.trim()).filter(Boolean)
     : [];
 
   return (
-    <Card className={isFirst ? "border-[#FF9933]/30 shadow-sm" : ""}>
-      <CardContent className="pt-4 pb-4 space-y-3">
+    <SectionShell
+      accent={levelAccent[step.event_level] ?? inkA(0.2)}
+      className={isFirst ? "shadow-sm" : ""}
+    >
+      <div className="px-5 py-4 space-y-3">
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
@@ -246,7 +285,10 @@ function JourneyCard({
                 </Badge>
               )}
             </div>
-            <div className="text-base font-semibold text-[#1a1a3e] mt-1">
+            <div
+              className="text-base font-semibold mt-1"
+              style={{ ...SERIF, color: INK }}
+            >
               {step.event_name}
             </div>
             {step.day1_date && (
@@ -268,7 +310,10 @@ function JourneyCard({
           </div>
           {step.rank && (
             <div className="text-right shrink-0">
-              <div className="text-2xl font-bold text-[#1a1a3e] tabular-nums">
+              <div
+                className="text-2xl font-bold tabular-nums"
+                style={{ ...SERIF, color: INK }}
+              >
                 #{step.rank}
               </div>
               {/* Raw avg score intentionally NOT shown to participants. */}
@@ -349,7 +394,7 @@ function JourneyCard({
             Results published — no ranked placement
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </SectionShell>
   );
 }

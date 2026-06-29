@@ -24,6 +24,15 @@ import {
   ChannelSearch,
 } from "@/components/yip/chat-message-extras";
 import {
+  SectionShell,
+  SectionHeading,
+  INK,
+  SAFFRON,
+  GREEN,
+  SERIF,
+  inkA,
+} from "../credential-ui";
+import {
   listChannels,
   listMessages,
   postChannelMessage,
@@ -184,17 +193,27 @@ export function ChatClient({
           <MessageSquare className="size-5 text-white" />
         </div>
         <div>
-          <h1 className="text-base font-semibold text-gray-900">
+          <p
+            className="text-[10px] font-bold uppercase tracking-[0.16em]"
+            style={{ color: SAFFRON }}
+          >
+            The House Floor
+          </p>
+          <h1 className="text-base font-semibold" style={{ ...SERIF, color: INK }}>
             Community chat
           </h1>
-          <p className="text-xs text-gray-500">Signed in as {participantName}</p>
+          <p className="text-xs" style={{ color: inkA(0.55) }}>
+            Signed in as {participantName}
+          </p>
         </div>
       </div>
 
       {loadingList ? (
-        <div className="flex justify-center py-10">
-          <Loader2 className="size-5 animate-spin text-[#FF9933]" />
-        </div>
+        <SectionShell>
+          <div className="flex justify-center py-10">
+            <Loader2 className="size-5 animate-spin text-[#FF9933]" />
+          </div>
+        </SectionShell>
       ) : (
         <>
           {listError && (
@@ -204,10 +223,14 @@ export function ChatClient({
           )}
 
           {/* Channels */}
-          <section className="space-y-2">
-            <h2 className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">
-              Channels
-            </h2>
+          <SectionShell accent={SAFFRON}>
+            <div className="space-y-2 px-4 py-3">
+            <SectionHeading
+              eyebrow="Where the House meets"
+              title="Channels"
+              icon={MessageSquare}
+              accent={SAFFRON}
+            />
             {channels.length === 0 ? (
               <p className="text-sm text-gray-400">No channels yet.</p>
             ) : (
@@ -240,13 +263,18 @@ export function ChatClient({
                 );
               })
             )}
-          </section>
+            </div>
+          </SectionShell>
 
           {/* YUVA mentors */}
-          <section className="space-y-2">
-            <h2 className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">
-              Message a YUVA mentor
-            </h2>
+          <SectionShell accent={GREEN}>
+            <div className="space-y-2 px-4 py-3">
+            <SectionHeading
+              eyebrow="Private line"
+              title="Message a YUVA mentor"
+              icon={UserCircle2}
+              accent={GREEN}
+            />
             {yuvas.length === 0 ? (
               <p className="text-sm text-gray-400">
                 No YUVA mentors available yet.
@@ -267,7 +295,8 @@ export function ChatClient({
                 </button>
               ))
             )}
-          </section>
+            </div>
+          </SectionShell>
 
           <p className="pt-2 text-center text-[11px] leading-relaxed text-gray-400">
             You can post in channels and privately message a YUVA mentor.
@@ -417,10 +446,18 @@ function Thread({
             <ArrowLeft className="size-4.5" />
           </button>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold text-gray-900">
+            <p
+              className="truncate text-[10px] font-bold uppercase tracking-[0.16em]"
+              style={{ color: SAFFRON }}
+            >
+              {subtitle}
+            </p>
+            <p
+              className="truncate text-sm font-semibold"
+              style={{ ...SERIF, color: INK }}
+            >
               {title}
             </p>
-            <p className="truncate text-xs text-gray-400">{subtitle}</p>
           </div>
           {search && (
             <ChannelSearch
@@ -444,9 +481,11 @@ function Thread({
             <Loader2 className="size-5 animate-spin text-[#FF9933]" />
           </div>
         ) : visible.length === 0 ? (
-          <p className="py-10 text-center text-sm text-gray-400">
-            No messages yet. Say hello.
-          </p>
+          <SectionShell>
+            <p className="py-10 text-center text-sm" style={{ color: inkA(0.45) }}>
+              No messages yet. Say hello.
+            </p>
+          </SectionShell>
         ) : (
           visible.map((m) => {
             const mine =

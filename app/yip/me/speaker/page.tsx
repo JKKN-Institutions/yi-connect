@@ -7,6 +7,7 @@ import { ROLE_LABELS } from "@/lib/yip/constants";
 import { getSpeakerMotions } from "@/app/yip/actions/speaker";
 import { PRESIDING_ROLES } from "@/lib/yip/auth/leadership";
 import { SpeakerClient } from "./speaker-client";
+import { INK, GOLD, SERIF, inkA } from "../credential-ui";
 
 interface ParticipantSession {
   type: "participant";
@@ -49,8 +50,19 @@ export default async function SpeakerPage() {
   if (!isPresiding) {
     return (
       <div className="mx-auto max-w-md px-4 py-16 text-center">
-        <h1 className="text-lg font-bold text-[#1a1a3e]">Speaker&apos;s Desk</h1>
-        <p className="mt-2 text-sm text-[#1a1a3e]/60">
+        <p
+          className="text-[10px] font-bold uppercase tracking-[0.16em]"
+          style={{ color: GOLD }}
+        >
+          The Chair
+        </p>
+        <h1
+          className="mt-0.5 text-[28px] font-bold leading-[1.1] tracking-tight"
+          style={{ ...SERIF, color: INK }}
+        >
+          Speaker&apos;s Desk
+        </h1>
+        <p className="mt-2 text-sm" style={{ color: inkA(0.6) }}>
           This area is only for the Speaker and Deputy Speaker — for presiding over
           and ruling on motions. Your role doesn&apos;t include it.
         </p>

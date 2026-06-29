@@ -30,6 +30,7 @@ import {
   MessageCircleHeart,
   FileText,
   ChevronRight,
+  ChevronDown,
   Megaphone,
   Gavel,
   Phone,
@@ -626,69 +627,88 @@ export default async function ParticipantPage() {
         </SectionShell>
       )}
 
-      {/* ─── YOUR PARTY (privacy-safe roster — seat (constituency) number + constituency only) */}
+      {/* ─── YOUR PARTY (collapsible roster — name + constituency; no contact PII) */}
       {partyRoster.length > 0 && (
         <SectionShell accent={partySideColor}>
-          <div className="px-5 py-4">
-            <SectionHeading
-              eyebrow="Your Party"
-              title={`Your Party${side ? ` · ${side === "ruling" ? "Ruling" : "Opposition"}` : ""}`}
-              icon={Users}
-              accent={partySideColor}
-              trailing={
-                <span className="font-mono text-[10px] tracking-wide" style={{ color: inkA(0.45) }}>
-                  {partyRoster.length} members
-                </span>
-              }
-            />
-
-            <div className="mt-3.5 divide-y" style={{ borderColor: inkA(0.06) }}>
-              {partyRoster.map((m) => (
-                <div
-                  key={m.id}
-                  className="flex items-center gap-3 py-2"
-                  style={m.isSelf ? { background: `${GOLD}14`, borderRadius: "6px", margin: "0 -8px", padding: "6px 8px" } : undefined}
-                >
-                  <span
-                    className="inline-flex size-8 shrink-0 items-center justify-center rounded-full font-mono text-[11px] font-bold"
-                    style={{ background: `${partySideColor}18`, color: partySideColor }}
-                  >
-                    {m.constituency_number != null ? `#${m.constituency_number}` : "—"}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm truncate" style={{ color: inkA(0.75) }}>
-                      {m.constituency_name
-                        ? `${m.constituency_name}${m.constituency_state ? `, ${m.constituency_state}` : ""}`
-                        : "Constituency not assigned"}
-                    </p>
-                  </div>
-                  {m.isSelf && (
-                    <span
-                      className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white"
-                      style={{ background: GOLD }}
-                    >
-                      You
+          {/* Native <details> = collapsible with zero client JS. Collapsed by
+              default so a full party (25+) doesn't dominate the page. */}
+          <details className="roster-details">
+            <style>{`.roster-details[open] .roster-chevron{transform:rotate(180deg)}`}</style>
+            <summary className="cursor-pointer list-none px-5 py-4 [&::-webkit-details-marker]:hidden">
+              <SectionHeading
+                eyebrow="Your Party"
+                title={`Your Party${side ? ` · ${side === "ruling" ? "Ruling" : "Opposition"}` : ""}`}
+                icon={Users}
+                accent={partySideColor}
+                trailing={
+                  <span className="flex items-center gap-2">
+                    <span className="font-mono text-[10px] tracking-wide" style={{ color: inkA(0.45) }}>
+                      {partyRoster.length} members
                     </span>
-                  )}
-                </div>
-              ))}
+                    <ChevronDown
+                      className="roster-chevron size-4 transition-transform"
+                      style={{ color: inkA(0.4) }}
+                    />
+                  </span>
+                }
+              />
+            </summary>
+
+            <div className="px-5 pb-4">
+              <div className="divide-y" style={{ borderColor: inkA(0.06) }}>
+                {partyRoster.map((m) => (
+                  <div
+                    key={m.id}
+                    className="flex items-center gap-3 py-2"
+                    style={m.isSelf ? { background: `${GOLD}14`, borderRadius: "6px", margin: "0 -8px", padding: "6px 8px" } : undefined}
+                  >
+                    <span
+                      className="inline-flex size-8 shrink-0 items-center justify-center rounded-full font-mono text-[11px] font-bold"
+                      style={{ background: `${partySideColor}18`, color: partySideColor }}
+                    >
+                      {m.constituency_number != null ? `#${m.constituency_number}` : "—"}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium" style={{ color: inkA(0.85) }}>
+                        {m.full_name || "Member"}
+                      </p>
+                      <p className="truncate text-xs" style={{ color: inkA(0.5) }}>
+                        {m.constituency_name
+                          ? `${m.constituency_name}${m.constituency_state ? `, ${m.constituency_state}` : ""}`
+                          : "Constituency not assigned"}
+                      </p>
+                    </div>
+                    {m.isSelf && (
+                      <span
+                        className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white"
+                        style={{ background: GOLD }}
+                      >
+                        You
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <p className="mt-3 text-[11px]" style={{ color: inkA(0.4) }}>
+                Contact details are private. Reach members through your YUVA.
+              </p>
             </div>
+          </details>
 
-            <p className="mt-3 text-[11px]" style={{ color: inkA(0.4) }}>
-              Contact details are private. Reach members through your YUVA.
-            </p>
-
-            {/* Self-service "go Independent" — only a plain MP may leave their
-                party themselves; role-holders must ask an organiser. */}
-            {role === "mp" && (
-              <div className="mt-3 pt-3" style={{ borderTop: `1px solid ${inkA(0.08)}` }}>
+          {/* Self-service "go Independent" — only a plain MP may leave their
+              party themselves; role-holders must ask an organiser. Kept outside
+              the collapse so it's always reachable. */}
+          {role === "mp" && (
+            <div className="px-5 pb-4">
+              <div className="pt-3" style={{ borderTop: `1px solid ${inkA(0.08)}` }}>
                 <GoIndependentButton
                   participantId={participant.id}
                   eventId={participant.event_id}
                 />
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </SectionShell>
       )}
 

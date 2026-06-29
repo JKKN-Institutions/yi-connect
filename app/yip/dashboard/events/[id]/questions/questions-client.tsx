@@ -44,6 +44,7 @@ import {
   setQuestionsOpen,
 } from "@/app/yip/actions/questions";
 import type { QuestionWithSubmitter } from "@/app/yip/actions/questions";
+import { INK, SAFFRON, SERIF, SectionShell } from "@/app/yip/me/credential-ui";
 import { toast } from "sonner";
 
 // ─── Types & Helpers ────────────────────────────────────────────
@@ -754,25 +755,23 @@ export function QuestionsClient({
           </CardContent>
         </Card>
       ) : (
-        <Card>
-          <CardContent className="py-12 text-center">
-            <Inbox className="mx-auto size-12 text-gray-300 mb-3" />
-            <p className="text-gray-500 font-medium">
-              {activeTab === "all" && benchFilter === "all"
-                ? "No questions submitted yet"
-                : `No ${activeTab === "all" ? "" : `${activeTab} `}questions${
-                    benchFilter === "all"
-                      ? ""
-                      : ` from the ${BENCH_BADGES[benchFilter].label} bench`
-                  }`}
+        <SectionShell accent={SAFFRON} className="py-12 text-center">
+          <Inbox className="mx-auto size-12 text-gray-300 mb-3" />
+          <p className="text-gray-500 font-medium">
+            {activeTab === "all" && benchFilter === "all"
+              ? "No questions submitted yet"
+              : `No ${activeTab === "all" ? "" : `${activeTab} `}questions${
+                  benchFilter === "all"
+                    ? ""
+                    : ` from the ${BENCH_BADGES[benchFilter].label} bench`
+                }`}
+          </p>
+          {activeTab === "all" && benchFilter === "all" && (
+            <p className="text-sm text-gray-400 mt-1">
+              Share the link with participants to collect questions.
             </p>
-            {activeTab === "all" && benchFilter === "all" && (
-              <p className="text-sm text-gray-400 mt-1">
-                Share the link with participants to collect questions.
-              </p>
-            )}
-          </CardContent>
-        </Card>
+          )}
+        </SectionShell>
       )}
 
       {/* Full-question drill-down */}
@@ -945,7 +944,7 @@ function StatCard({
           <Icon className={cn("size-4", color)} />
           <span className="text-xs text-gray-500">{label}</span>
         </div>
-        <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
+        <p className="mt-1 text-2xl font-bold" style={{ ...SERIF, color: INK }}>{value}</p>
       </CardContent>
     </Card>
   );

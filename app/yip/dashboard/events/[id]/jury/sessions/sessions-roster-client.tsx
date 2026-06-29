@@ -7,6 +7,7 @@ import {
   type SessionRoster,
 } from "@/app/yip/actions/jury-sessions";
 import { ArrowLeft, Check, Loader2, CalendarClock } from "lucide-react";
+import { INK, SAFFRON, SERIF } from "@/app/yip/me/credential-ui";
 
 export function SessionRosterClient({
   eventId,
@@ -65,7 +66,8 @@ export function SessionRosterClient({
           <ArrowLeft className="size-4" />
           Back to Jury
         </Link>
-        <h1 className="mt-2 flex items-center gap-2 text-xl font-bold text-gray-900">
+        <p className="text-[10px] font-bold uppercase tracking-[0.16em]" style={{ color: SAFFRON }}>JURY</p>
+        <h1 className="mt-0.5 flex items-center gap-2 text-xl font-bold tracking-tight" style={{ ...SERIF, color: INK }}>
           <CalendarClock className="size-5 text-[#FF9933]" />
           Session assignments
         </h1>

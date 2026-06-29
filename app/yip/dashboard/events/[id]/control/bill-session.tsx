@@ -30,6 +30,7 @@ import {
   type BillWithMembers,
 } from "@/app/yip/actions/bills";
 import { openVote } from "@/app/yip/actions/voting";
+import { INK, SAFFRON, SERIF } from "@/app/yip/me/credential-ui";
 
 // ─── Types ──────────────────────────────────────────────────────
 
@@ -140,7 +141,8 @@ export function BillSession({ eventId, agendaItemId }: BillSessionProps) {
     <>
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-sm text-muted-foreground">
+          <p className="text-[10px] font-bold uppercase tracking-[0.16em]" style={{ color: SAFFRON }}>BILL SESSION</p>
+          <CardTitle className="flex items-center gap-2 text-sm text-muted-foreground" style={{ ...SERIF, color: INK }}>
             <FileText className="size-4" />
             Bill Presentation & Voting
           </CardTitle>

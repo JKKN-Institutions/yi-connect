@@ -15,6 +15,7 @@ import { EventDangerZone } from "@/components/yip/event-danger-zone";
 import { Switch } from "@/components/yip/ui/switch";
 import { setAllowBulkFloorVotes } from "@/app/yip/actions/vote-floor";
 import { setBillEarlyUnlock } from "@/app/yip/actions/bills";
+import { INK, SAFFRON, SERIF, inkA, SectionShell } from "@/app/yip/me/credential-ui";
 
 const LEVEL_OPTIONS = [
   { value: "chapter", label: "Chapter Level" },
@@ -275,8 +276,9 @@ export default function EditEventPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900">Edit Event</h2>
-          <p className="text-sm text-gray-500">
+          <p className="text-[10px] font-bold uppercase tracking-[0.16em]" style={{ color: SAFFRON }}>EDIT EVENT</p>
+          <h2 className="mt-0.5 text-lg font-semibold tracking-tight" style={{ ...SERIF, color: INK }}>Edit Event</h2>
+          <p className="text-sm" style={{ color: inkA(0.5) }}>
             Update basic event information
           </p>
         </div>

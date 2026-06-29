@@ -17,6 +17,7 @@ import {
   getEventReadiness,
   type EventReadiness,
 } from "@/app/yip/actions/event-readiness";
+import { INK, SAFFRON, SERIF } from "@/app/yip/me/credential-ui";
 
 /**
  * "Mission Control" — a NON-BLOCKING, volunteer-facing readiness board at the
@@ -60,7 +61,8 @@ export function MissionControl({ eventId }: { eventId: string }) {
           <div className="flex items-center gap-2">
             <Compass className="size-5 text-indigo-600" />
             <div>
-              <h2 className="text-sm font-bold text-gray-900">Mission Control</h2>
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em]" style={{ color: SAFFRON }}>READINESS</p>
+              <h2 className="text-sm font-bold" style={{ ...SERIF, color: INK }}>Mission Control</h2>
               <p className="text-xs text-gray-500">
                 {data
                   ? `${data.okCount} of ${data.totalCount} steps ready`

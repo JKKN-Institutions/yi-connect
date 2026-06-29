@@ -38,6 +38,7 @@ import {
   BookmarkPlus,
   FolderDown,
 } from "lucide-react";
+import { INK, SAFFRON, SERIF, inkA, SectionShell } from "@/app/yip/me/credential-ui";
 
 // scheduled_date post-dates the generated types; extend the row type locally.
 type AgendaItem = Tables<{ schema: "yip" }, "agenda"> & {
@@ -371,11 +372,12 @@ export function AgendaSetupClient({
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-4">
-      <div className="mb-1 flex items-center gap-2">
+      <p className="text-[10px] font-bold uppercase tracking-[0.16em]" style={{ color: SAFFRON }}>AGENDA</p>
+      <div className="mt-0.5 mb-1 flex items-center gap-2">
         <CalendarClock className="size-5 text-[#FF9933]" />
-        <h1 className="text-lg font-bold text-gray-900">Agenda setup</h1>
+        <h1 className="text-lg font-bold tracking-tight" style={{ ...SERIF, color: INK }}>Agenda setup</h1>
       </div>
-      <p className="mb-3 text-sm text-gray-500">
+      <p className="mb-3 text-sm" style={{ color: inkA(0.5) }}>
         Choose which agenda items run live on the day, and in what order. Switch
         an item off if your chapter does it before the event (e.g. party
         formation) or skips it — it won&apos;t show on the Control panel or
@@ -873,7 +875,7 @@ export function AgendaSetupClient({
       <div className="mt-5 border-t border-gray-100 pt-4">
         <div className="mb-1 flex items-center gap-2">
           <FolderDown className="size-4 text-[#FF9933]" />
-          <h2 className="text-sm font-bold text-gray-900">
+          <h2 className="text-sm font-bold" style={{ ...SERIF, color: INK }}>
             Agenda presets
           </h2>
         </div>

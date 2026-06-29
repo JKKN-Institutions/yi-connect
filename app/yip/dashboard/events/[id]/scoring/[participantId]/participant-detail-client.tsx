@@ -25,6 +25,7 @@ import {
   X,
   Loader2,
 } from "lucide-react";
+import { INK, SAFFRON, SERIF } from "@/app/yip/me/credential-ui";
 
 const FLAG_LABELS: Record<keyof ParticipantScoreRow["flags"], string> = {
   no_confidence_brought: "No-Confidence Motion",
@@ -280,7 +281,8 @@ export function ParticipantDetailClient({
         <CardContent className="pt-6">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <h1 className="text-xl font-bold text-gray-900">{p.full_name}</h1>
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em]" style={{ color: SAFFRON }}>DELEGATE</p>
+              <h1 className="mt-0.5 text-xl font-bold tracking-tight" style={{ ...SERIF, color: INK }}>{p.full_name}</h1>
               <div className="mt-2 flex flex-wrap items-center gap-1.5">
                 {p.parliament_role && (
                   <Badge variant="secondary" className="text-[11px]">
@@ -361,17 +363,17 @@ export function ParticipantDetailClient({
           <CardContent className="space-y-3">
             <div className="grid grid-cols-3 gap-3 text-center">
               <div>
-                <p className="text-2xl font-bold text-gray-900">#{result.rank}</p>
+                <p className="text-2xl font-bold" style={{ ...SERIF, color: INK }}>#{result.rank}</p>
                 <p className="text-xs text-gray-500">Rank</p>
               </div>
               <div>
-                <p className="text-2xl font-bold text-gray-900">
+                <p className="text-2xl font-bold" style={{ ...SERIF, color: INK }}>
                   {result.avg_score.toFixed(1)}
                 </p>
                 <p className="text-xs text-gray-500">Final Score</p>
               </div>
               <div>
-                <p className="text-2xl font-bold text-gray-900">
+                <p className="text-2xl font-bold" style={{ ...SERIF, color: INK }}>
                   {result.jury_count}
                 </p>
                 <p className="text-xs text-gray-500">Jurors</p>

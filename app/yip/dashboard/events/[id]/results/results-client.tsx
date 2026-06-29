@@ -51,6 +51,7 @@ import {
   Pencil,
   X,
 } from "lucide-react";
+import { INK, SAFFRON, SERIF, SectionShell } from "@/app/yip/me/credential-ui";
 
 // ─── Award card styling ───────────────────────────────────────────
 // The engine decides which awards exist and emits their labels in
@@ -423,7 +424,7 @@ export function ResultsClient({
     return (
       <div className="space-y-6">
         {day2Banner}
-        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed bg-white py-16 text-center">
+        <SectionShell accent={SAFFRON} className="flex flex-col items-center justify-center py-16 text-center">
           <Trophy className="mb-4 size-12 text-gray-300" />
           <h3 className="text-lg font-semibold text-gray-700">
             No Results Yet
@@ -432,7 +433,7 @@ export function ResultsClient({
             Go to the Scoring tab and click &quot;Compute Results&quot; after
             jury members have submitted their scores.
           </p>
-        </div>
+        </SectionShell>
       </div>
     );
   }
@@ -493,7 +494,7 @@ export function ResultsClient({
 
       {/* Header with actions */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <h2 className="text-lg font-semibold text-gray-900">
+        <h2 className="text-lg font-semibold tracking-tight" style={{ ...SERIF, color: INK }}>
           Results &amp; Awards
         </h2>
         <div className="flex items-center gap-2">

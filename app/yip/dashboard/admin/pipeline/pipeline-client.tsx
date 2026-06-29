@@ -21,6 +21,7 @@ import {
   MapPin,
   Trophy,
 } from "lucide-react";
+import { INK, SAFFRON, SERIF, inkA, SectionShell } from "@/app/yip/me/credential-ui";
 
 // ─── Helpers ────────────────────────────────────────────────────
 
@@ -213,7 +214,7 @@ function PipelineColumn({
     <div className="flex flex-col">
       {/* Column header */}
       <div className={`rounded-t-lg border-t-4 ${color} bg-gray-50 px-4 py-3`}>
-        <h3 className="text-sm font-bold text-gray-900">{title}</h3>
+        <h3 className="text-sm font-bold" style={{ ...SERIF, color: INK }}>{title}</h3>
         <div className="mt-1 flex items-center gap-3 text-xs text-gray-500">
           <span>{events.length} event{events.length !== 1 ? "s" : ""}</span>
           <span>{totalParticipants} participants</span>
@@ -228,10 +229,10 @@ function PipelineColumn({
       {/* Cards */}
       <div className="flex-1 space-y-3 rounded-b-lg border border-t-0 border-gray-200 bg-gray-50/50 p-3 min-h-[200px]">
         {events.length === 0 ? (
-          <div className="flex h-full min-h-[160px] flex-col items-center justify-center rounded-lg border border-dashed border-gray-300 bg-white p-4">
+          <SectionShell accent={SAFFRON} className="flex h-full min-h-[160px] flex-col items-center justify-center p-4">
             <Trophy className="mb-2 size-8 text-gray-300" />
             <p className="text-center text-xs text-gray-400">{emptyMessage}</p>
-          </div>
+          </SectionShell>
         ) : (
           children
         )}
@@ -303,13 +304,13 @@ export function PipelineClient({ seasons }: { seasons: Season[] }) {
 
   if (seasons.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center rounded-lg border border-dashed bg-white py-16 text-center">
+      <SectionShell accent={SAFFRON} className="flex flex-col items-center justify-center py-16 text-center">
         <GitBranch className="mb-4 size-12 text-gray-300" />
         <h3 className="text-lg font-semibold text-gray-700">No Seasons Found</h3>
         <p className="mt-1 max-w-sm text-sm text-gray-500">
           Create a season first before viewing the pipeline.
         </p>
-      </div>
+      </SectionShell>
     );
   }
 
@@ -325,8 +326,9 @@ export function PipelineClient({ seasons }: { seasons: Season[] }) {
             </Button>
           </Link>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Season Pipeline</h1>
-            <p className="text-sm text-gray-500">
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em]" style={{ color: SAFFRON }}>PIPELINE</p>
+            <h1 className="mt-0.5 text-2xl font-bold tracking-tight" style={{ ...SERIF, color: INK }}>Season Pipeline</h1>
+            <p className="text-sm" style={{ color: inkA(0.5) }}>
               Chapter &rarr; Regional &rarr; National progression
             </p>
           </div>

@@ -20,6 +20,7 @@ import {
   type FeedbackPayload,
   type FeedbackRespondentType,
 } from "@/lib/yip/feedback";
+import { INK, SAFFRON, SERIF, inkA, SectionShell } from "@/app/yip/me/credential-ui";
 
 type Props = {
   eventId: string;
@@ -86,9 +87,10 @@ export function OrganizerFeedbackFormClient({
     return (
       <div className="mx-auto w-full max-w-xl px-4 py-8">
         <div className="rounded-2xl bg-gradient-to-br from-[#FF9933]/10 via-white to-[#138808]/10 p-6 shadow-sm ring-1 ring-[#FF9933]/20 mb-6">
-          <div className="flex items-center gap-2 mb-2">
+          <p className="text-[10px] font-bold uppercase tracking-[0.16em]" style={{ color: SAFFRON }}>FEEDBACK</p>
+          <div className="flex items-center gap-2 mt-0.5 mb-2">
             <Landmark className="size-5 text-[#FF9933]" />
-            <h1 className="text-lg font-bold text-gray-900">
+            <h1 className="text-lg font-bold tracking-tight" style={{ ...SERIF, color: INK }}>
               Feedback for {eventName}
             </h1>
           </div>
@@ -178,7 +180,7 @@ export function OrganizerFeedbackFormClient({
       {/* Header */}
       <div className="rounded-2xl bg-gradient-to-br from-[#FF9933]/10 via-white to-[#138808]/10 p-5 ring-1 ring-[#FF9933]/20 shadow-sm">
         <div className="flex items-center justify-between mb-1">
-          <h1 className="text-base font-bold text-gray-900">
+          <h1 className="text-base font-bold" style={{ ...SERIF, color: INK }}>
             {eventName}
           </h1>
           <button
@@ -490,7 +492,7 @@ function ThankYou() {
           <div className="inline-flex size-16 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-emerald-400 shadow-md mb-4">
             <PartyPopper className="size-8 text-white" />
           </div>
-          <h1 className="text-xl font-bold text-gray-900 mb-2">
+          <h1 className="text-xl font-bold mb-2" style={{ ...SERIF, color: INK }}>
             Thank you — received.
           </h1>
           <p className="text-sm text-gray-600 leading-relaxed max-w-sm mx-auto">

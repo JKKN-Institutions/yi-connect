@@ -8,6 +8,7 @@ import { EventsGridClient, type EventCard } from "./events-grid-client";
 import { OnboardingLauncher } from "@/components/yip/guide/onboarding-launcher";
 import { GUIDES } from "@/lib/yip/guide/content";
 import { getCompletedSteps, logGuideEvent } from "@/lib/yip/guide/actions";
+import { SectionShell, INK, SAFFRON, SERIF, inkA } from "@/app/yip/me/credential-ui";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -107,8 +108,19 @@ export default async function DashboardPage() {
       {/* Page header */}
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="font-[family-name:var(--font-heading)] text-2xl font-bold text-[#1a1a3e]">My Events</h1>
-          <p className="text-sm text-[#1a1a3e]/40">
+          <p
+            className="text-[10px] font-bold uppercase tracking-[0.16em]"
+            style={{ color: SAFFRON }}
+          >
+            Organiser
+          </p>
+          <h1
+            className="mt-0.5 font-[family-name:var(--font-heading)] text-2xl font-bold"
+            style={{ color: INK }}
+          >
+            My Events
+          </h1>
+          <p className="text-sm" style={{ color: inkA(0.4) }}>
             Manage your Young Indians Parliament events
           </p>
         </div>
@@ -133,12 +145,15 @@ export default async function DashboardPage() {
         <EventsGridClient events={eventsForClient} />
       ) : (
         /* Empty state */
-        <div className="overflow-hidden rounded-xl border border-[#1a1a3e]/5 bg-white py-16 shadow-sm">
-          <div className="flex flex-col items-center px-5 text-center">
+        <SectionShell accent={SAFFRON} className="shadow-sm">
+          <div className="flex flex-col items-center px-5 py-16 text-center">
             <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#FF9933]/10">
               <CalendarDays className="size-8 text-[#FF9933]" />
             </div>
-            <h3 className="mb-2 font-[family-name:var(--font-heading)] text-lg font-semibold text-[#1a1a3e]">
+            <h3
+              className="mb-2 font-[family-name:var(--font-heading)] text-lg font-semibold"
+              style={{ color: INK }}
+            >
               No events yet
             </h3>
             <p className="mb-6 max-w-sm text-sm text-[#1a1a3e]/40">
@@ -153,7 +168,7 @@ export default async function DashboardPage() {
               </button>
             </Link>
           </div>
-        </div>
+        </SectionShell>
       )}
     </div>
   );

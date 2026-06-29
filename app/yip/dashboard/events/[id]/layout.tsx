@@ -5,6 +5,7 @@ import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { EventTabNav } from "./event-tab-nav";
 import { EventSectionSubTabs } from "./event-section-subtabs";
 import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
+import { INK, SAFFRON, SERIF } from "@/app/yip/me/credential-ui";
 
 export default async function EventLayout({
   children,
@@ -44,7 +45,18 @@ export default async function EventLayout({
     <div>
       {/* Event Header */}
       <div className="mb-4">
-        <h1 className="text-2xl font-bold text-gray-900">{event.name}</h1>
+        <p
+          className="text-[10px] font-bold uppercase tracking-[0.16em]"
+          style={{ color: SAFFRON }}
+        >
+          The Event
+        </p>
+        <h1
+          className="mt-0.5 text-2xl font-bold tracking-tight"
+          style={{ ...SERIF, color: INK }}
+        >
+          {event.name}
+        </h1>
       </div>
 
       {/* Vertical sidebar nav (desktop) + dropdown (mobile), beside the content */}

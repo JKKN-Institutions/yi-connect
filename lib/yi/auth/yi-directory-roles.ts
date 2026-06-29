@@ -307,6 +307,22 @@ export async function getYipChapterScopes(
     if (a.yi_chapter) chapters.add(a.yi_chapter);
   }
 
+  // Directory-chair recognition (YIP-only): a Yi directory chapter_chair /
+  // chapter_co_chair is the canonical chair of their chapter and auto-administers
+  // that chapter's YIP events even without a separate app='yip' role — mirrors
+  // getYipEventAccess step 3a-ii. Without this, a directory chair who is NOT also
+  // the chapter's chair_email (e.g. it was repointed to another admin) saw an
+  // EMPTY YIP dashboard despite getYipEventAccess granting them admin on the event.
+  if (app === "yip") {
+    for (const a of me.assignments) {
+      if (!a.is_active) continue;
+      if (a.app !== "yi") continue;
+      if (a.role !== "chapter_chair" && a.role !== "chapter_co_chair") continue;
+      if (yi_year !== undefined && a.yi_year !== yi_year) continue;
+      if (a.yi_chapter) chapters.add(a.yi_chapter);
+    }
+  }
+
   // chair_email fallback (YIP-only). Other apps recognise their chapter chair
   // via their own role/context layer, not yi.chapters.chair_email.
   if (app === "yip") {

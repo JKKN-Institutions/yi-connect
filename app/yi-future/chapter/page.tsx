@@ -17,6 +17,7 @@ import { TrackIcon } from "@/components/yi-future/TrackIcon";
 import { NextStepWidget } from "@/components/yi-future/guide";
 import { GUIDES } from "@/lib/yi-future/guide/content";
 import { getCompletedSteps, logGuideEvent } from "@/lib/yi-future/guide/actions";
+import { getRoleFocus } from "@/lib/yi-future/auth/chapter-permissions";
 
 type CoreTeamRole = Database["future"]["Enums"]["user_role"];
 
@@ -346,6 +347,44 @@ export default async function ChapterDashboard() {
         <PushSubscribe />
       </div>
 
+      {/* Role-aware focus (soft/tailored — no access is removed) */}
+      {(() => {
+        const focus = getRoleFocus(ctx.role);
+        return (
+          <div
+            className="rounded-xl border p-5"
+            style={{ borderColor: "#F5A62333", background: "#F5A6230d" }}
+          >
+            <div className="flex items-center gap-2">
+              <span
+                className="rounded-full px-2 py-0.5 text-[11px] font-bold text-white"
+                style={{ background: "#1a1a3e" }}
+              >
+                {focus.label}
+              </span>
+              <span className="text-sm font-bold" style={{ color: "#1a1a3e" }}>
+                {focus.title}
+              </span>
+            </div>
+            <p className="mt-1.5 text-sm" style={{ color: "#1a1a3eb3" }}>
+              {focus.blurb}
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {focus.primary.map((p) => (
+                <Link
+                  key={p.href}
+                  href={p.href}
+                  className="rounded-md border bg-white px-3 py-1.5 text-xs font-semibold"
+                  style={{ borderColor: "#1a1a3e22", color: "#1a1a3e" }}
+                >
+                  {p.label} →
+                </Link>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
         {[
           {
@@ -526,17 +565,11 @@ export default async function ChapterDashboard() {
         </div>
       )}
 
-      <div className="bg-white border border-navy/10 rounded-lg p-6">
-        <h3 className="text-lg font-bold text-navy">Your role</h3>
-        <p className="mt-2 text-sm text-navy/70">
-          You are signed in as{" "}
-          <strong>{ctx.userEmail ?? "an admin"}</strong> with role{" "}
-          <code className="px-1.5 py-0.5 bg-navy/5 rounded text-xs font-mono">
-            {ctx.role}
-          </code>
-          . Your edits are scoped to this chapter and the active edition.
-        </p>
-      </div>
+      <p className="text-xs text-navy/50">
+        Signed in as <strong>{ctx.userEmail ?? "an admin"}</strong> ·{" "}
+        {getRoleFocus(ctx.role).label} · edits scoped to {ctx.chapterName} for
+        the active edition.
+      </p>
     </div>
   );
 }

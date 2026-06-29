@@ -8,6 +8,7 @@ import { getCompletedSteps, logGuideEvent } from "@/lib/yi-future/guide/actions"
 
 const NAV: NavItem[] = [
   { label: "Dashboard", href: "/yi-future/national/admin" },
+  { label: "Announcements", href: "/yi-future/national/admin/announcements" },
   { label: "Editions", href: "/yi-future/national/admin/editions" },
   { label: "Tracks", href: "/yi-future/national/admin/tracks" },
   { label: "Problems", href: "/yi-future/national/admin/problems" },

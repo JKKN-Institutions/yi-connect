@@ -11,7 +11,7 @@ import {
 } from "@/lib/auth/branded-password-reset";
 
 // ─── SHARED ─────────────────────────────────────────────────────────
-type AccessCodeRole = "delegate" | "mentor" | "jury" | "partner";
+type AccessCodeRole = "delegate" | "mentor" | "jury" | "partner" | "expert";
 
 type SessionPayload = {
   type: AccessCodeRole;
@@ -168,6 +168,24 @@ export async function validateAccessCode(
       name: partner.organization ?? undefined,
     });
     return { ok: true, redirect: "/yi-future/partner" };
+  }
+
+  // 5. Expert — access_code / is_active are new columns not in generated types.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: expert } = await (svc as any)
+    .schema("future")
+    .from("experts")
+    .select("id, edition_id, full_name, is_active")
+    .eq("access_code", code)
+    .maybeSingle();
+  if (expert && expert.is_active !== false) {
+    await writeSession({
+      type: "expert",
+      id: expert.id,
+      edition_id: expert.edition_id,
+      name: expert.full_name ?? undefined,
+    });
+    return { ok: true, redirect: "/yi-future/expert" };
   }
 
   return {

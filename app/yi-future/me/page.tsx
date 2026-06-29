@@ -7,6 +7,7 @@ import { getVapidPublicKey } from "@/lib/yi-future/vapid";
 import PushSubscribeButton from "@/components/yi-future/push/PushSubscribeButton";
 import { ModuleWelcome } from "@/components/yi-future/guide";
 import { logGuideEvent } from "@/lib/yi-future/guide/actions";
+import { DelegateAnnouncementsPanel } from "@/components/yi-future/announcements/DelegateAnnouncementsPanel";
 
 type DelegateView = {
   id: string;
@@ -117,9 +118,13 @@ export default async function DelegateHome() {
         </div>
       </div>
 
+      {/* Announcements (hidden when none) */}
+      <DelegateAnnouncementsPanel />
+
       {/* Quick nav */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
         {[
+          { label: "Announcements", href: "/yi-future/me/announcements" },
           { label: "Journey", href: "/yi-future/me/journey" },
           { label: "Submissions", href: "/yi-future/me/submissions" },
           { label: "Feedback", href: "/yi-future/me/feedback" },

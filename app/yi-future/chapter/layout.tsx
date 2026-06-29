@@ -1,4 +1,6 @@
 import { requireFutureAdmin } from "@/lib/yi-future/auth/require-access";
+import { getChapterContext } from "@/lib/yi-future/chapter-context";
+import { roleShortLabel } from "@/lib/yi-future/auth/chapter-permissions";
 import { AdminShell, type NavItem } from "@/components/yi-future/admin/AdminShell";
 import { GuideLauncher, OnboardingLauncher } from "@/components/yi-future/guide";
 import { GUIDES } from "@/lib/yi-future/guide/content";
@@ -15,6 +17,7 @@ const NAV: NavItem[] = [
   { label: "Problem Statements", href: "/yi-future/chapter/problems" },
   { label: "Journey", href: "/yi-future/chapter/journey" },
   { label: "Messages", href: "/yi-future/chapter/messages" },
+  { label: "Announcements", href: "/yi-future/chapter/announcements" },
   { label: "Mentors", href: "/yi-future/chapter/mentors" },
   { label: "Experts", href: "/yi-future/chapter/experts" },
   { label: "Jury", href: "/yi-future/chapter/jury" },
@@ -34,11 +37,17 @@ export default async function ChapterLayout({
   // shell. Server actions are independently gated, but this stops the UI too.
   await requireFutureAdmin();
 
+  // Role-aware badge (soft RBAC): chapter core-team members see their specific
+  // role (Event Lead / Outreach Lead / …); national admins viewing the shell
+  // (no chapter context) fall back to "Chapter".
+  const ctx = await getChapterContext();
+  const roleLabel = ctx ? roleShortLabel(ctx.role) : "Chapter";
+
   const completed = await getCompletedSteps("chapter");
 
   return (
     <>
-      <AdminShell title="Chapter Admin" roleLabel="Chapter" items={NAV}>
+      <AdminShell title="Chapter Admin" roleLabel={roleLabel} items={NAV}>
         <div className="mb-6">
           <OnboardingLauncher
             guide={GUIDES.lanes.chapter}

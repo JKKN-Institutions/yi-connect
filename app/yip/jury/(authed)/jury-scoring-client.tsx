@@ -41,6 +41,15 @@ import {
   patchOfflineCache,
 } from "@/lib/yip/offline-cache";
 import type { RubricCriterionShape } from "@/lib/yip/rubric";
+import {
+  SectionShell,
+  SectionHeading,
+  INK,
+  SAFFRON,
+  GOLD,
+  SERIF,
+  inkA,
+} from "@/app/yip/me/credential-ui";
 
 // ─── Types ────────────────────────────────────────────────────────
 
@@ -789,8 +798,10 @@ function JuryScoringClientInner({
         <div className="size-16 rounded-full bg-amber-100 flex items-center justify-center mb-4">
           <AlertTriangle className="size-8 text-amber-600" />
         </div>
-        <h2 className="text-lg font-bold text-gray-900">No sessions assigned</h2>
-        <p className="text-sm text-gray-500 mt-2 max-w-xs">
+        <h2 className="text-lg font-bold" style={{ ...SERIF, color: INK }}>
+          No sessions assigned
+        </h2>
+        <p className="text-sm mt-2 max-w-xs" style={{ color: inkA(0.55) }}>
           You haven&apos;t been assigned to any sessions yet. Ask the organizer to
           add you to the sessions you&apos;ll be judging.
         </p>
@@ -912,54 +923,82 @@ function JuryScoringClientInner({
         );
         if (!active) return null;
         return (
-          <div className="mx-4 mt-3 rounded-xl border border-blue-200 bg-blue-50/60 px-4 py-3">
-            <div className="flex items-center gap-2 text-sm font-semibold text-blue-900">
-              <Info className="size-4 shrink-0" />
-              <span>{active.title}</span>
-            </div>
-            {active.description ? (
-              <p className="mt-1 text-xs leading-relaxed text-blue-800/80">
-                {active.description}
-              </p>
-            ) : (
-              <p className="mt-1 text-xs italic text-blue-800/60">
-                Day {active.day} session — score each participant on the
-                criteria below.
-              </p>
-            )}
+          <div className="mx-4 mt-3">
+            <SectionShell accent={SAFFRON}>
+              <div className="px-4 py-3">
+                <SectionHeading
+                  eyebrow="This session"
+                  title={active.title}
+                  icon={Info}
+                  accent={SAFFRON}
+                />
+                {active.description ? (
+                  <p
+                    className="mt-2 text-xs leading-relaxed"
+                    style={{ color: inkA(0.6) }}
+                  >
+                    {active.description}
+                  </p>
+                ) : (
+                  <p
+                    className="mt-2 text-xs italic"
+                    style={{ color: inkA(0.45) }}
+                  >
+                    Day {active.day} session — score each participant on the
+                    criteria below.
+                  </p>
+                )}
+              </div>
+            </SectionShell>
           </div>
         );
       })()}
 
       {/* Current agenda context */}
       {currentSpeaker && !manualParticipant && (
-        <div className="rounded-xl bg-[#FF9933]/10 border border-[#FF9933]/30 px-4 py-3 mx-4 mt-4">
-          <div className="flex items-center gap-2 text-sm font-semibold text-[#994d00]">
-            <Mic className="size-4 shrink-0" />
-            <span>Now Speaking</span>
-          </div>
-          <p className="text-xs text-[#994d00]/80 mt-0.5 truncate">
-            {currentSpeaker.agendaItemTitle}
-          </p>
+        <div className="mx-4 mt-4">
+          <SectionShell accent={SAFFRON}>
+            <div className="px-4 py-3">
+              <SectionHeading
+                eyebrow="Live"
+                title="Now Speaking"
+                icon={Mic}
+                accent={SAFFRON}
+              />
+              <p
+                className="text-xs mt-1.5 truncate"
+                style={{ color: inkA(0.6) }}
+              >
+                {currentSpeaker.agendaItemTitle}
+              </p>
+            </div>
+          </SectionShell>
         </div>
       )}
 
       {/* Manual participant override */}
       {manualParticipant && (
-        <div className="rounded-xl bg-[#1a1a3e]/5 border border-[#1a1a3e]/20 px-4 py-3 mx-4 mt-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-sm font-semibold text-[#1a1a3e]">
-              <Users className="size-4 shrink-0" />
-              <span>Manual Selection</span>
+        <div className="mx-4 mt-4">
+          <SectionShell accent={INK}>
+            <div className="px-4 py-3">
+              <div className="flex items-center justify-between">
+                <div
+                  className="flex items-center gap-2 text-sm font-semibold"
+                  style={{ ...SERIF, color: INK }}
+                >
+                  <Users className="size-4 shrink-0" />
+                  <span>Manual Selection</span>
+                </div>
+                <button
+                  onClick={clearManualSelection}
+                  className="text-xs font-semibold text-[#1a1a3e] hover:underline underline-offset-2 active:opacity-70 touch-manipulation"
+                  style={{ minHeight: "44px", minWidth: "80px" }}
+                >
+                  Back to live
+                </button>
+              </div>
             </div>
-            <button
-              onClick={clearManualSelection}
-              className="text-xs font-semibold text-[#1a1a3e] hover:underline underline-offset-2 active:opacity-70 touch-manipulation"
-              style={{ minHeight: "44px", minWidth: "80px" }}
-            >
-              Back to live
-            </button>
-          </div>
+          </SectionShell>
         </div>
       )}
 
@@ -968,7 +1007,10 @@ function JuryScoringClientInner({
           applied at result-computation time, not added to the live total. */}
       {activeParticipant && rubric && (
         <div className="mx-4 rounded-xl border-2 border-amber-200 bg-amber-50/60 px-4 py-3">
-          <div className="flex items-center gap-2 text-sm font-semibold text-amber-900">
+          <div
+            className="flex items-center gap-2 text-sm font-semibold text-amber-900"
+            style={{ ...SERIF }}
+          >
             <AlertTriangle className="size-4 shrink-0" />
             <span>Special Remarks</span>
           </div>
@@ -1035,50 +1077,58 @@ function JuryScoringClientInner({
           once, so the turns strip is hidden entirely. */}
       {activeParticipant && rubric && !eventLocked && !sessionLocksOnSubmit &&
         (occurrences.length > 0 || addingTurn) && (
-          <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3">
-            <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-xs font-semibold text-blue-900">
-                  {addingTurn
-                    ? "Scoring a new turn"
-                    : `Turns scored: ${occurrences.length}`}
-                </p>
-                {occurrences.length > 0 && (
-                  <p className="text-xs text-blue-700 truncate">
-                    {occurrences
-                      .map((o) => `T${o.occurrence}: ${o.total_score}`)
-                      .join(" · ")}
-                    {occurrences.length > 1 && (
-                      <>
-                        {" · avg "}
-                        {(
-                          occurrences.reduce((a, o) => a + o.total_score, 0) /
-                          occurrences.length
-                        ).toFixed(1)}
-                      </>
-                    )}
+          <SectionShell accent={GOLD}>
+            <div className="px-4 py-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p
+                    className="text-xs font-semibold"
+                    style={{ ...SERIF, color: INK }}
+                  >
+                    {addingTurn
+                      ? "Scoring a new turn"
+                      : `Turns scored: ${occurrences.length}`}
                   </p>
+                  {occurrences.length > 0 && (
+                    <p
+                      className="text-xs truncate"
+                      style={{ color: inkA(0.6) }}
+                    >
+                      {occurrences
+                        .map((o) => `T${o.occurrence}: ${o.total_score}`)
+                        .join(" · ")}
+                      {occurrences.length > 1 && (
+                        <>
+                          {" · avg "}
+                          {(
+                            occurrences.reduce((a, o) => a + o.total_score, 0) /
+                            occurrences.length
+                          ).toFixed(1)}
+                        </>
+                      )}
+                    </p>
+                  )}
+                </div>
+                {addingTurn ? (
+                  <button
+                    type="button"
+                    onClick={cancelAnotherTurn}
+                    className="shrink-0 rounded-md border border-blue-300 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100"
+                  >
+                    Cancel
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={startAnotherTurn}
+                    className="shrink-0 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
+                  >
+                    + Score another turn
+                  </button>
                 )}
               </div>
-              {addingTurn ? (
-                <button
-                  type="button"
-                  onClick={cancelAnotherTurn}
-                  className="shrink-0 rounded-md border border-blue-300 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100"
-                >
-                  Cancel
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={startAnotherTurn}
-                  className="shrink-0 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
-                >
-                  + Score another turn
-                </button>
-              )}
             </div>
-          </div>
+          </SectionShell>
         )}
 
       {/* Score form -- show when we have an active participant + rubric */}
@@ -1102,10 +1152,16 @@ function JuryScoringClientInner({
           <div className="size-20 rounded-full bg-[#FF9933]/10 flex items-center justify-center mb-4 landscape-hide">
             <Mic className="size-10 text-[#FF9933]" />
           </div>
-          <h2 className="text-xl font-bold text-gray-900">
+          <h2
+            className="text-xl font-bold"
+            style={{ ...SERIF, color: INK }}
+          >
             Waiting for next speaker...
           </h2>
-          <p className="text-sm text-gray-500 mt-2 max-w-xs landscape-hide">
+          <p
+            className="text-sm mt-2 max-w-xs landscape-hide"
+            style={{ color: inkA(0.55) }}
+          >
             The score form will appear automatically when the moderator starts
             the next speaker.
           </p>

@@ -47,10 +47,16 @@ export default async function JuryLayout({
               <Scale className="size-5 text-white" />
             </div>
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-gray-900 truncate">
+              <p
+                className="text-[15px] font-bold leading-none truncate"
+                style={{
+                  fontFamily: "var(--font-heading), ui-serif, Georgia, serif",
+                  color: "#1a1a3e",
+                }}
+              >
                 YIP Jury Scoring
               </p>
-              <p className="text-[11px] text-gray-500 truncate">
+              <p className="mt-0.5 text-[11px] truncate" style={{ color: "#1a1a3e80" }}>
                 {session.name}
               </p>
             </div>

@@ -108,6 +108,7 @@ function StepCard({
             size="lg"
             variant="outline"
             className="h-11 w-full justify-between border-[#FF9933]/40 text-[0.9rem] font-medium hover:bg-[#FF9933]/10 hover:text-foreground"
+            nativeButton={false}
             render={
               <Link href={href} onClick={onNavigate}>
                 <span>{step.link.label}</span>
@@ -279,6 +280,7 @@ export function GuideDrawer({ guide, eventId, open, onClose }: GuideDrawerProps)
               size="sm"
               variant="outline"
               className="h-9 gap-2 border-[#FF9933]/40 bg-background/70 px-3 text-[0.8rem] font-medium hover:bg-[#FF9933]/10 hover:text-foreground"
+              nativeButton={false}
               render={
                 <Link
                   href={`/yip/guide?persona=${guide.persona}`}
@@ -293,6 +295,7 @@ export function GuideDrawer({ guide, eventId, open, onClose }: GuideDrawerProps)
               size="sm"
               variant="outline"
               className="h-9 gap-2 border-[#FF9933]/40 bg-background/70 px-3 text-[0.8rem] font-medium hover:bg-[#FF9933]/10 hover:text-foreground"
+              nativeButton={false}
               render={
                 <a href={guide.pdfPath} download target="_blank" rel="noopener noreferrer">
                   <DownloadIcon className="size-3.5 text-[#FF9933]" />

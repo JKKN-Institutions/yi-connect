@@ -25,9 +25,14 @@ export type SyncState = {
  *   <OfflineSyncBadge state={sync} />
  */
 export function useOfflineSync(juryAssignmentId: string | null): SyncState {
-  const [isOnline, setIsOnline] = useState<boolean>(() =>
-    typeof navigator === "undefined" ? true : navigator.onLine
-  );
+  // Assume online for SSR + the first client render so server and client agree.
+  // The old `typeof navigator === "undefined"` guard no longer holds: Node 20+
+  // (the Next server runtime) defines a global `navigator` WITHOUT `onLine`, so
+  // the guard fell through to `navigator.onLine` → `undefined` on the server,
+  // rendering the offline badge in the SSR HTML and causing a hydration mismatch
+  // on every load. The on-mount effect below sets the real status immediately
+  // after hydration.
+  const [isOnline, setIsOnline] = useState(true);
   const [pendingCount, setPendingCount] = useState(0);
   const [pendingSubmits, setPendingSubmits] = useState(0);
   const [syncing, setSyncing] = useState(false);

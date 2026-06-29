@@ -24,6 +24,7 @@ import {
   Trophy,
   Users,
 } from "lucide-react";
+import { INK, SAFFRON, SERIF, inkA, SectionShell } from "@/app/yip/me/credential-ui";
 
 // ─── Print styles injected into iframe ───────────────────────────
 
@@ -158,8 +159,9 @@ export function CertificatesClient({
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900">Certificates</h2>
-          <p className="mt-1 text-sm text-gray-500">
+          <p className="text-[10px] font-bold uppercase tracking-[0.16em]" style={{ color: SAFFRON }}>CERTIFICATES</p>
+          <h2 className="mt-0.5 text-lg font-semibold tracking-tight" style={{ ...SERIF, color: INK }}>Certificates</h2>
+          <p className="mt-1 text-sm" style={{ color: inkA(0.5) }}>
             Generate and print participation and award certificates.
           </p>
         </div>
@@ -186,7 +188,7 @@ export function CertificatesClient({
             <div className="flex items-center gap-3">
               <Users className="size-8 text-blue-500" />
               <div>
-                <p className="text-2xl font-bold">{allParticipants.length}</p>
+                <p className="text-2xl font-bold" style={{ ...SERIF, color: INK }}>{allParticipants.length}</p>
                 <p className="text-xs text-gray-500">Total Participants</p>
               </div>
             </div>
@@ -197,7 +199,7 @@ export function CertificatesClient({
             <div className="flex items-center gap-3">
               <Trophy className="size-8 text-amber-500" />
               <div>
-                <p className="text-2xl font-bold">{awardWinners.length}</p>
+                <p className="text-2xl font-bold" style={{ ...SERIF, color: INK }}>{awardWinners.length}</p>
                 <p className="text-xs text-gray-500">Award Winners</p>
               </div>
             </div>
@@ -208,7 +210,7 @@ export function CertificatesClient({
             <div className="flex items-center gap-3">
               <FileText className="size-8 text-green-500" />
               <div>
-                <p className="text-2xl font-bold">
+                <p className="text-2xl font-bold" style={{ ...SERIF, color: INK }}>
                   {allParticipants.length + awardWinners.length}
                 </p>
                 <p className="text-xs text-gray-500">Total Certificates</p>
@@ -478,7 +480,7 @@ function CertificatePreview({
         {/* Top bar */}
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h3 className="font-semibold text-gray-900">
+            <h3 className="font-semibold" style={{ ...SERIF, color: INK }}>
               Certificate Preview
             </h3>
             <p className="text-xs text-gray-500">

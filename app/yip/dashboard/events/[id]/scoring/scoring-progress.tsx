@@ -40,6 +40,7 @@ import {
   Search,
   Send,
 } from "lucide-react";
+import { INK, SAFFRON, SERIF, inkA } from "@/app/yip/me/credential-ui";
 
 function formatRelative(dateStr: string | null): string {
   if (!dateStr) return "Never";
@@ -285,10 +286,11 @@ export function ScoringProgress({
       {/* Header with actions */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900">
+          <p className="text-[10px] font-bold uppercase tracking-[0.16em]" style={{ color: SAFFRON }}>SCORING</p>
+          <h2 className="mt-0.5 text-lg font-semibold tracking-tight" style={{ ...SERIF, color: INK }}>
             Scoring Progress
           </h2>
-          <p className="text-sm text-gray-500">
+          <p className="text-sm" style={{ color: inkA(0.5) }}>
             Track jury scoring and compute final results
           </p>
         </div>
@@ -373,7 +375,7 @@ export function ScoringProgress({
               <Users className="size-5 text-blue-600" />
             </div>
             <div>
-              <p className="text-2xl font-bold">{totalParticipants}</p>
+              <p className="text-2xl font-bold" style={{ ...SERIF, color: INK }}>{totalParticipants}</p>
               <p className="text-xs text-gray-500">Scoreable Participants</p>
             </div>
           </CardContent>
@@ -384,7 +386,7 @@ export function ScoringProgress({
               <Star className="size-5 text-[#FF9933]" />
             </div>
             <div>
-              <p className="text-2xl font-bold">
+              <p className="text-2xl font-bold" style={{ ...SERIF, color: INK }}>
                 {juryProgress.reduce((s, j) => s + j.entriesSubmitted, 0)}
               </p>
               <p className="text-xs text-gray-500">Total Scores Submitted</p>
@@ -397,7 +399,7 @@ export function ScoringProgress({
               <Clock className="size-5 text-purple-600" />
             </div>
             <div>
-              <p className="text-2xl font-bold">{juryProgress.length}</p>
+              <p className="text-2xl font-bold" style={{ ...SERIF, color: INK }}>{juryProgress.length}</p>
               <p className="text-xs text-gray-500">Active Juries</p>
             </div>
           </CardContent>

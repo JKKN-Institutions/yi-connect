@@ -6,6 +6,7 @@ import {
   type CommitteeAssignmentRoster,
 } from "@/app/yip/actions/committee-scores";
 import { Check, Loader2, ShieldCheck } from "lucide-react";
+import { INK, SAFFRON, SERIF } from "@/app/yip/me/credential-ui";
 
 export function CommitteeRosterClient({
   eventId,
@@ -67,7 +68,8 @@ export function CommitteeRosterClient({
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="flex items-center gap-2 text-xl font-bold text-gray-900">
+        <p className="text-[10px] font-bold uppercase tracking-[0.16em]" style={{ color: SAFFRON }}>JURY</p>
+        <h2 className="mt-0.5 flex items-center gap-2 text-xl font-bold tracking-tight" style={{ ...SERIF, color: INK }}>
           <ShieldCheck className="size-5 text-[#FF9933]" />
           Committee assignments
         </h2>

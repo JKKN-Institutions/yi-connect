@@ -80,6 +80,7 @@ import {
   type FloorManualEntry,
 } from "@/app/yip/actions/vote-floor";
 import type { Tables } from "@/types/yip/database";
+import { INK, SAFFRON, SERIF } from "@/app/yip/me/credential-ui";
 
 // ─── Types ──────────────────────────────────────────────────────
 
@@ -1916,8 +1917,9 @@ export function VoteManager({
       <>
         <Card>
           <CardHeader>
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em]" style={{ color: SAFFRON }}>LIVE CONTROL</p>
             <div className="flex items-center justify-between">
-              <CardTitle className="flex items-center gap-2 text-sm text-muted-foreground">
+              <CardTitle className="flex items-center gap-2 text-sm text-muted-foreground" style={{ ...SERIF, color: INK }}>
                 <Vote className="size-4" />
                 {voteSession.vote_type === "speaker_election"
                   ? "Speaker Election"
@@ -2444,7 +2446,8 @@ export function VoteManager({
     <>
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-sm text-muted-foreground">
+          <p className="text-[10px] font-bold uppercase tracking-[0.16em]" style={{ color: SAFFRON }}>LIVE CONTROL</p>
+          <CardTitle className="flex items-center gap-2 text-sm text-muted-foreground" style={{ ...SERIF, color: INK }}>
             <Vote className="size-4" />
             Digital Voting
           </CardTitle>

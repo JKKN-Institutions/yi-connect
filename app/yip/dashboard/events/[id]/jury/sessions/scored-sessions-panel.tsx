@@ -7,6 +7,7 @@ import {
   type ScoringToggleSession,
 } from "@/app/yip/actions/jury-sessions";
 import { Check, Loader2, Star, AlertTriangle } from "lucide-react";
+import { INK, SAFFRON, SERIF } from "@/app/yip/me/credential-ui";
 
 export function ScoredSessionsPanel({
   eventId,
@@ -46,9 +47,10 @@ export function ScoredSessionsPanel({
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-4">
+      <p className="text-[10px] font-bold uppercase tracking-[0.16em]" style={{ color: SAFFRON }}>SESSIONS</p>
       <div className="mb-1 flex items-center gap-2">
         <Star className="size-5 text-[#FF9933]" />
-        <h2 className="text-lg font-bold text-gray-900">Scored sessions</h2>
+        <h2 className="text-lg font-bold tracking-tight" style={{ ...SERIF, color: INK }}>Scored sessions</h2>
       </div>
       <p className="mb-3 text-sm text-gray-500">
         Choose which sessions are scored in this event. The standard scoring

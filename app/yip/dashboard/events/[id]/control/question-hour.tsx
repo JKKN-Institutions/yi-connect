@@ -29,6 +29,7 @@ import type {
   QuestionWithSubmitter,
 } from "@/app/yip/actions/questions";
 import { toast } from "sonner";
+import { INK, SAFFRON, SERIF } from "@/app/yip/me/credential-ui";
 
 function getMinistryLabel(key: string): string {
   const found = MINISTRIES.find((m) => m.key === key);
@@ -132,7 +133,10 @@ export function QuestionHourPanel({ eventId }: QuestionHourPanelProps) {
       {/* Header */}
       <div className="flex items-center gap-2">
         <MessageSquare className="size-5 text-cyan-600" />
-        <h3 className="text-lg font-bold text-gray-900">Question Hour</h3>
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-[0.16em]" style={{ color: SAFFRON }}>QUESTION HOUR</p>
+          <h3 className="text-lg font-bold" style={{ ...SERIF, color: INK }}>Question Hour</h3>
+        </div>
         <Badge variant="secondary" className="bg-cyan-100 text-cyan-700">
           {queuedQuestions.length} queued
         </Badge>

@@ -32,6 +32,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/yip/utils";
+import { INK, SAFFRON, SERIF } from "@/app/yip/me/credential-ui";
 
 interface Props {
   eventId: string;
@@ -95,7 +96,8 @@ export function ElectionResultsRollup({ eventId }: Props) {
   return (
     <Card className="border-l-4 border-l-[#138808]">
       <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2 text-sm text-muted-foreground">
+        <p className="text-[10px] font-bold uppercase tracking-[0.16em]" style={{ color: SAFFRON }}>RESULTS</p>
+        <CardTitle className="flex items-center gap-2 text-sm text-muted-foreground" style={{ ...SERIF, color: INK }}>
           <Trophy className="size-4 text-[#138808]" />
           Results so far
           <span className="ml-auto text-xs font-normal text-muted-foreground">

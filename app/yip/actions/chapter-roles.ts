@@ -17,10 +17,11 @@
 // to the target chapter (chair + national + regional all pass), which keeps a
 // single gate. Super-admins may also assign without an event.
 //
-// "Exactly one admin" (E7): assigning chapter_admin deactivates any other
-// active chapter_admin for that chapter first, and also points
-// yi.chapters.chair_email at the new admin so the email-fallback path converges
-// on the same person.
+// Multiple admins (decision 2026-06-29, supersedes the old "exactly one admin"
+// E7 rule): assigning chapter_admin no longer deactivates the chapter's other
+// admins — a chapter may have several full Chair-level admins. yi.chapters
+// .chair_email tracks the PRIMARY chair for the email-fallback path and is set
+// only when the chapter has none yet, so a co-admin never repoints it.
 //
 // Account provisioning: if the target email has no auth user yet, we create one
 // with a generated 12-char password returned ONCE for out-of-band sharing
@@ -199,23 +200,25 @@ export async function assignChapterRole(input: {
   const person = await ensurePerson(svc, email, fullName);
   if (!person.ok) return { ok: false, error: person.error };
 
-  // "Exactly one admin": when assigning chapter_admin, deactivate any other
-  // active chapter_admin for this chapter, then converge chair_email.
+  // Multiple chapter admins are allowed (decision 2026-06-29): a chapter may
+  // have several full Chair-level admins, so adding one no longer deactivates the
+  // others. yi.chapters.chair_email is the chapter's PRIMARY chair (used by the
+  // email-fallback auth path + comms) — set it only when the chapter has none
+  // yet, so adding a co-admin never steals it from the established chair.
   if (input.role === "chapter_admin") {
-    await svc
-      .schema("yi_directory")
-      .from("role_assignments")
-      .update({ is_active: false })
-      .eq("app", "yip")
-      .eq("role", "chapter_admin")
-      .eq("yi_chapter", auth.chapterName)
-      .neq("person_id", person.personId);
-
-    await svc
+    const { data: chap } = await svc
       .schema("yi")
       .from("chapters")
-      .update({ chair_email: email })
-      .eq("name", auth.chapterName);
+      .select("chair_email")
+      .eq("name", auth.chapterName)
+      .maybeSingle();
+    if (!chap?.chair_email || !chap.chair_email.trim()) {
+      await svc
+        .schema("yi")
+        .from("chapters")
+        .update({ chair_email: email })
+        .eq("name", auth.chapterName);
+    }
   }
 
   // Re-activate an existing matching assignment if present (idempotent), else insert.

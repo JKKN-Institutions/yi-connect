@@ -120,7 +120,12 @@ export function DashboardShell({
               {/* Logo mark removed 2026-06-16 — re-add later */}
               <Link href="/yip/dashboard" className="flex items-center gap-3">
                 <div className={cn(collapsed && "lg:hidden")}>
-                  <span className="block text-[13px] font-bold tracking-wide text-[#1a1a3e]">Young Indians</span>
+                  <span
+                    className="block text-[15px] font-bold tracking-wide text-[#1a1a3e]"
+                    style={{ fontFamily: "var(--font-heading), ui-serif, Georgia, serif" }}
+                  >
+                    Young Indians
+                  </span>
                   <span className="block text-[9px] font-semibold uppercase tracking-[0.25em] text-[#FF9933]">Parliament</span>
                 </div>
               </Link>

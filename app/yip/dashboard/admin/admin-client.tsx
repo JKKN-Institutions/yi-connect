@@ -11,6 +11,7 @@ import type { Season, SeasonPipelineData, SeasonEvent } from "@/app/yip/actions/
 import { Badge } from "@/components/yip/ui/badge";
 import { Button } from "@/components/yip/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/yip/ui/card";
+import { INK, SAFFRON, SERIF, inkA } from "@/app/yip/me/credential-ui";
 import {
   Table,
   TableBody,
@@ -310,8 +311,19 @@ export function AdminDashboardClient({ seasons }: { seasons: Season[] }) {
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Admin Dashboard</h1>
-          <p className="text-sm text-gray-500">
+          <p
+            className="text-[10px] font-bold uppercase tracking-[0.16em]"
+            style={{ color: SAFFRON }}
+          >
+            National Command
+          </p>
+          <h1
+            className="mt-0.5 text-2xl font-bold tracking-tight"
+            style={{ ...SERIF, color: INK }}
+          >
+            Admin Dashboard
+          </h1>
+          <p className="text-sm" style={{ color: inkA(0.5) }}>
             Manage the multi-level pipeline across seasons
           </p>
         </div>
@@ -367,7 +379,7 @@ export function AdminDashboardClient({ seasons }: { seasons: Season[] }) {
                 <p className="text-xs font-medium uppercase text-gray-500">
                   Chapter Events
                 </p>
-                <p className="mt-1 text-2xl font-bold text-gray-900">
+                <p className="mt-1 text-2xl font-bold" style={{ ...SERIF, color: INK }}>
                   {pipeline.stats.totalChapters}
                 </p>
               </CardContent>
@@ -377,7 +389,7 @@ export function AdminDashboardClient({ seasons }: { seasons: Season[] }) {
                 <p className="text-xs font-medium uppercase text-gray-500">
                   Regional Events
                 </p>
-                <p className="mt-1 text-2xl font-bold text-gray-900">
+                <p className="mt-1 text-2xl font-bold" style={{ ...SERIF, color: INK }}>
                   {pipeline.stats.totalRegionals}
                 </p>
               </CardContent>
@@ -387,7 +399,7 @@ export function AdminDashboardClient({ seasons }: { seasons: Season[] }) {
                 <p className="text-xs font-medium uppercase text-gray-500">
                   National Event
                 </p>
-                <p className="mt-1 text-2xl font-bold text-gray-900">
+                <p className="mt-1 text-2xl font-bold" style={{ ...SERIF, color: INK }}>
                   {pipeline.stats.totalNationals}
                 </p>
               </CardContent>
@@ -397,7 +409,7 @@ export function AdminDashboardClient({ seasons }: { seasons: Season[] }) {
                 <p className="text-xs font-medium uppercase text-gray-500">
                   Total Participants
                 </p>
-                <p className="mt-1 text-2xl font-bold text-gray-900">
+                <p className="mt-1 text-2xl font-bold" style={{ ...SERIF, color: INK }}>
                   {pipeline.stats.totalParticipants}
                 </p>
               </CardContent>
@@ -407,7 +419,7 @@ export function AdminDashboardClient({ seasons }: { seasons: Season[] }) {
                 <p className="text-xs font-medium uppercase text-gray-500">
                   Qualified for Next
                 </p>
-                <p className="mt-1 text-2xl font-bold text-[#138808]">
+                <p className="mt-1 text-2xl font-bold" style={{ ...SERIF, color: "#138808" }}>
                   {pipeline.stats.totalQualified}
                 </p>
               </CardContent>

@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { readSession } from "@/app/yi-future/actions/auth";
+import { getDelegateAnnouncementFeed } from "@/app/yi-future/actions/announcements";
 import { RoleHeader } from "@/components/yi-future/brand/RoleHeader";
 import { GuideLauncher } from "@/components/yi-future/guide";
 import { GUIDES } from "@/lib/yi-future/guide/content";

@@ -41,9 +41,28 @@ async function getChapters(): Promise<{ id: string; label: string }[]> {
   );
 }
 
+async function getZones(): Promise<{ id: string; label: string }[]> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const svc = (await createServiceClient()) as any;
+  const { data } = await svc
+    .schema("future")
+    .from("chapters")
+    .select("region")
+    .eq("is_active", true);
+  const regions = [
+    ...new Set(
+      ((data as { region: string | null }[]) ?? [])
+        .map((r) => r.region)
+        .filter((r): r is string => !!r)
+    ),
+  ].sort();
+  return regions.map((r) => ({ id: r, label: r }));
+}
+
 const AUDIENCE_LABEL: Record<string, string> = {
   everyone: "Everyone",
   chapter: "One chapter",
+  zone: "Zone",
 };
 
 function when(iso: string): string {

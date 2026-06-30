@@ -57,6 +57,7 @@ export function AnnouncementComposer({
   teams = [],
   delegates = [],
   chapters = [],
+  zones = [],
 }: Props) {
   const opts = AUDIENCE_OPTIONS[mode];
   const [audience, setAudience] = useState<AnnouncementAudience>(opts[0].value);

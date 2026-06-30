@@ -95,9 +95,12 @@ export default async function ExpertsPage() {
   }
   const unassignedEvents = events.filter((e) => !e.expert_id);
 
-  async function removeExpert(formData: FormData) {
+  async function removeExpert(
+    _prev: { ok: true; message?: string } | { ok: false; error: string } | null,
+    formData: FormData
+  ) {
     "use server";
-    await deleteExpert(String(formData.get("id") ?? ""));
+    return deleteExpert(String(formData.get("id") ?? ""));
   }
   async function regen(formData: FormData) {
     "use server";

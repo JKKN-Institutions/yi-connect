@@ -11,6 +11,10 @@ export const metadata = {
   title: "Announcements · Yi National · Yi Future 6.0",
 };
 
+// Live data via the service client (no cookies) — force dynamic so Next doesn't
+// try to statically prerender it (which runs the DB at build time and can time out).
+export const dynamic = "force-dynamic";
+
 const NAVY = "#1a1a3e";
 
 async function getActiveEdition(): Promise<{ id: string; name: string } | null> {

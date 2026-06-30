@@ -179,6 +179,31 @@ export function AnnouncementComposer({
         </div>
       )}
 
+      {mode === "national" && audience === "zone" && (
+        <div>
+          <label className={labelCls} style={{ color: `${NAVY}b3` }} htmlFor="zone">
+            Zone / region
+          </label>
+          <select
+            id="zone"
+            name="zone"
+            required
+            defaultValue=""
+            className={inputCls}
+            style={{ borderColor: `${NAVY}33`, color: NAVY }}
+          >
+            <option value="" disabled>
+              — choose a zone —
+            </option>
+            {zones.map((z) => (
+              <option key={z.id} value={z.id}>
+                {z.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
       {mode === "national" && audience === "chapter" && (
         <div>
           <label className={labelCls} style={{ color: `${NAVY}b3` }} htmlFor="chapter_id">

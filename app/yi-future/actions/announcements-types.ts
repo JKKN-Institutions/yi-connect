@@ -41,6 +41,7 @@ export type SentAnnouncement = {
   id: string;
   title: string;
   body: string;
+  url: string | null;
   audience: AnnouncementAudience;
   author_name: string | null;
   author_scope: AnnouncementAuthorScope;

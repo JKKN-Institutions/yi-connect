@@ -1,0 +1,106 @@
+{
+  "vertical": "varnam-vizha",
+  "spec": "docs/SPEC-VARNAM-VIZHA-FESTIVAL-PLATFORM.md",
+  "updated": "2026-06-22",
+  "features": [
+    {
+      "id": "VV-P0-1",
+      "name": "Festival edition data model",
+      "description": "New yi_connect.festival_editions table + events.festival_edition_id FK for evergreen multi-year grouping. No other new tables.",
+      "phase": "P0",
+      "status": "built",
+      "priority": "high",
+      "test_steps": [
+        "Apply migration 20260622000001 to a non-prod DB",
+        "Insert a 2026 edition row, link a test event via festival_edition_id",
+        "Confirm anon SELECT returns only status in (live, completed)"
+      ]
+    },
+    {
+      "id": "VV-P0-2",
+      "name": "Branded vertical shell",
+      "description": "app/varnam-vizha layout (bilingual Tamil+English fonts, festival colours), brand header/footer, landing page.",
+      "phase": "P0",
+      "status": "built",
+      "priority": "high",
+      "test_steps": [
+        "Visit /varnam-vizha → branded hero renders with Tamil wordmark",
+        "Header/footer show festival identity, not yi-connect default chrome"
+      ]
+    },
+    {
+      "id": "VV-P0-3",
+      "name": "Auth gate (app='varnam')",
+      "description": "lib/varnam/auth/access.ts over yi_directory.role_assignments; Forbidden403 explicit-deny; gated dashboard stub.",
+      "phase": "P0",
+      "status": "built",
+      "priority": "high",
+      "test_steps": [
+        "Visit /varnam-vizha/dashboard signed-out → Forbidden403 (no silent redirect)",
+        "With an app='varnam' role → dashboard stub renders with role + tier"
+      ]
+    },
+    {
+      "id": "VV-P1-1",
+      "name": "Public site (data-driven)",
+      "description": "Home, events list, public event page, schedule, sponsors wall — reading the current edition + its sub-events. Bilingual.",
+      "phase": "P1",
+      "status": "planned",
+      "priority": "high",
+      "test_steps": [
+        "Seeded 2026 edition + sample events render on /varnam-vizha/events",
+        "Public event page reuses /e/[slug] renderer",
+        "Native Tamil review of all visible copy before launch"
+      ]
+    },
+    {
+      "id": "VV-P2-1",
+      "name": "Registration & ticketing",
+      "description": "Reuse quick_rsvp token + event_custom_forms for per-event registration; confirmation/pass; member + guest paths. Payment-gateway-ready (no payment wired).",
+      "phase": "P2",
+      "status": "planned",
+      "priority": "high",
+      "test_steps": [
+        "Register on a test event end-to-end; row lands in event_rsvps",
+        "Custom form fields render + responses persist",
+        "Check-in toggles attendance"
+      ]
+    },
+    {
+      "id": "VV-P3-1",
+      "name": "Committee dashboard",
+      "description": "Events, registrations, team/roles, sponsor pipeline, budget/P&L over reused CRM + finance modules, festival-scoped.",
+      "phase": "P3",
+      "status": "planned",
+      "priority": "high",
+      "test_steps": [
+        "Each module visible to the right role; explicit 403 for others",
+        "Sponsor pipeline + budget rollup scoped to the edition"
+      ]
+    },
+    {
+      "id": "VV-P4-1",
+      "name": "Digital Playbook + history seed",
+      "description": "Seed 2021–2026 editions, event templates, contact directory, lessons from the Obsidian vault.",
+      "phase": "P4",
+      "status": "planned",
+      "priority": "medium",
+      "test_steps": [
+        "Past editions browsable; templates + contacts present",
+        "Reconcile public.events vs yi_connect.events historical Varnam rows"
+      ]
+    },
+    {
+      "id": "VV-P5-1",
+      "name": "Polish, bilingual pass & custom domain",
+      "description": "Gallery/media, full Tamil/English i18n with native review, custom domain via middleware host-rewrite, PWA manifest scoped to /varnam-vizha.",
+      "phase": "P5",
+      "status": "planned",
+      "priority": "medium",
+      "test_steps": [
+        "Custom domain serves /varnam-vizha (once domain name decided)",
+        "All Tamil copy native-reviewed; PWA installs scoped"
+      ]
+    }
+  ]
+}

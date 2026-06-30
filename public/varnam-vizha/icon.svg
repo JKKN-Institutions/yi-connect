@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="Varnam Vizha">
+  <defs>
+    <linearGradient id="vv" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#F4A300"/>
+      <stop offset="55%" stop-color="#D6336C"/>
+      <stop offset="100%" stop-color="#3B0A45"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#vv)"/>
+  <text x="256" y="256" fill="#FFFFFF" font-family="'Baloo Thambi 2','Mukta Malar',sans-serif" font-size="300" font-weight="800" text-anchor="middle" dominant-baseline="central">வ</text>
+</svg>

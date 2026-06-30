@@ -206,8 +206,13 @@ export default async function ProblemsPage({
                     <td className="px-4 py-2 text-navy/40 font-mono text-xs">
                       {i + 1}
                     </td>
-                    <td className="px-4 py-2 font-semibold text-navy">
-                      {row.title}
+                    <td className="px-4 py-2 font-semibold">
+                      <Link
+                        href={`/national/admin/problems/${row.problemId}/teams`}
+                        className="text-navy hover:text-yi-gold"
+                      >
+                        {row.title} →
+                      </Link>
                     </td>
                     <td className="px-4 py-2 text-navy/60 text-xs">
                       {row.trackName}

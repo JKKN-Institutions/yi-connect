@@ -444,6 +444,7 @@ export async function getDelegateAnnouncementFeed(): Promise<DelegateAnnouncemen
     chapter_id: string | null;
     team_id: string | null;
     delegate_id: string | null;
+    zone: string | null;
     created_at: string;
   };
 
@@ -452,6 +453,7 @@ export async function getDelegateAnnouncementFeed(): Promise<DelegateAnnouncemen
     if (r.audience === "chapter") return r.chapter_id === myChapterId;
     if (r.audience === "team") return !!r.team_id && myTeamIds.has(r.team_id);
     if (r.audience === "delegate") return r.delegate_id === session.id;
+    if (r.audience === "zone") return !!myRegion && r.zone === myRegion;
     return false;
   });
 

@@ -38,6 +38,7 @@ const STATION_LABEL: Record<string, string> = Object.fromEntries(
 const STATION_COLORS: Record<string, string> = {
   registration: "bg-cyan-500",
   help_desk: "bg-blue-500",
+  jury_support: "bg-teal-500",
   av_tech: "bg-violet-500",
   room_coordinator: "bg-indigo-500",
   hospitality: "bg-amber-500",
@@ -45,6 +46,7 @@ const STATION_COLORS: Record<string, string> = {
   photographer: "bg-pink-500",
   media: "bg-fuchsia-500",
   runner: "bg-emerald-500",
+  organiser_helper: "bg-lime-600",
   safety: "bg-red-500",
   floating: "bg-slate-400",
 };

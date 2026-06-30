@@ -6,6 +6,7 @@ import {
   getMyYuvaAssignment,
   type MyDesk,
 } from "@/app/yip/actions/volunteer-desk";
+import { StationTool } from "./station-tools";
 
 // Static responsibilities per desk (decision: static text, not per-row config).
 const RESPONSIBILITIES = [
@@ -28,13 +29,10 @@ export function DeskCard({ eventId }: { eventId: string }) {
   if (err) return <Banner>{err}</Banner>;
   if (!desk) return <Banner>Loading your desk…</Banner>;
 
+  // No party/committee desk → show this volunteer's STATION tool instead of a
+  // dead-end banner. The station tool itself handles a null/unassigned station.
   if (!desk.hasDesk) {
-    return (
-      <Banner tone="warn">
-        You haven&apos;t been assigned to a party or committee yet. Please see an
-        organiser to get your desk.
-      </Banner>
-    );
+    return <StationTool eventId={eventId} station={desk.station} />;
   }
 
   return (

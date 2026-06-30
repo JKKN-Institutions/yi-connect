@@ -304,15 +304,7 @@ export default async function ExpertsPage() {
                       Regen code
                     </button>
                   </form>
-                  <form action={removeExpert}>
-                    <input type="hidden" name="id" value={e.id} />
-                    <button
-                      type="submit"
-                      className="text-xs text-red-600/70 hover:text-red-600"
-                    >
-                      Delete
-                    </button>
-                  </form>
+                  <DeleteExpertButton id={e.id} action={removeExpert} />
                 </div>
               </div>
             );

@@ -38,8 +38,6 @@ import {
   UserRound,
   HeartHandshake,
   Flag,
-  ClipboardList,
-  Lock,
 } from "lucide-react";
 import { VoteClient } from "./vote/vote-client";
 import { GoIndependentButton } from "./go-independent-button";
@@ -254,11 +252,9 @@ export default async function ParticipantPage() {
   }
 
   // Committee topic + linked scheme (yip.topics catalog, same lookup as the bill
-  // page) so the dashboard can show "Committee N — topic" + the scheme, and the
-  // committee-report status to drive the Report card + bill lock.
+  // page) so the dashboard can show "Committee N — topic" + the scheme.
   let committeeTopic: string | null = null;
   let committeeScheme: string | null = null;
-  let reportSubmitted = false;
   if (participant.committee_name) {
     const { data: ct } = await supabase
       .from("topics")
@@ -269,14 +265,6 @@ export default async function ParticipantPage() {
       .maybeSingle();
     committeeTopic = ct?.description ?? null;
     committeeScheme = ct?.linked_scheme ?? null;
-
-    const { data: rep } = await supabase
-      .from("committee_reports")
-      .select("status")
-      .eq("event_id", event.id)
-      .eq("committee_name", participant.committee_name)
-      .maybeSingle();
-    reportSubmitted = rep?.status === "submitted";
   }
 
   // For non-committee members: fetch approved/presented bills for read-only view
@@ -849,35 +837,9 @@ export default async function ParticipantPage() {
       </SectionShell>
 
       {/* ─── BILL DRAFTING (committee members) ────────────── */}
-      {/* ─── COMMITTEE REPORT (the step before the bill) ──────── */}
-      {isCommitteeMember && (
-        <SectionShell accent={GOLD}>
-          <div className="px-5 py-4">
-            <SectionHeading
-              eyebrow="Committee"
-              title="Committee Report"
-              icon={ClipboardList}
-              accent={GOLD}
-              trailing={
-                <Link
-                  href="/yip/me/report"
-                  className="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors"
-                  style={{ background: `${GOLD}18`, color: GOLD }}
-                >
-                  {reportSubmitted ? "View" : "Write"}
-                  <ChevronRight className="size-4" />
-                </Link>
-              }
-            />
-            <p className="mt-1.5 text-xs" style={{ color: inkA(0.55) }}>
-              {reportSubmitted
-                ? "Submitted — your bill is unlocked"
-                : "Agree your findings + recommendations first"}
-            </p>
-          </div>
-        </SectionShell>
-      )}
-
+      {/* Committee Report card removed 2026-06-30 — per the YIP 2026 handbook the
+          committee's deliverable is the BILL, not a report. Committees draft
+          their bill directly; the report step no longer exists. */}
       {isCommitteeMember && (
         <SectionShell accent={GOLD}>
           <div className="px-5 py-4">
@@ -917,11 +879,6 @@ export default async function ParticipantPage() {
                   >
                     ({myBill.status ?? "drafting"})
                   </span>
-                </p>
-              ) : !reportSubmitted ? (
-                <p className="text-xs flex items-center gap-1" style={{ color: SAFFRON }}>
-                  <Lock className="size-3" />
-                  Locked until your report is submitted
                 </p>
               ) : (
                 <p className="text-xs" style={{ color: inkA(0.55) }}>
@@ -1060,7 +1017,7 @@ export default async function ParticipantPage() {
             }
           />
           <p className="mt-1.5 text-xs" style={{ color: inkA(0.55) }}>
-            Every round you've been part of — chapter to national
+            Every round you&apos;ve been part of — chapter to national
           </p>
         </div>
       </SectionShell>

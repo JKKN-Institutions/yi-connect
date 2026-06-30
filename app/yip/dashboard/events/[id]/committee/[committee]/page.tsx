@@ -1,7 +1,7 @@
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
 import { CommitteeClient } from "@/app/yip/me/committee/committee-client";
-import { AdminCommitteeReport } from "./admin-committee-report";
+// AdminCommitteeReport removed 2026-06-30 — committee report retired (handbook).
 
 // Organiser view of a committee's Room — the SAME surface participants use, but
 // driven by canManage (no participant session). The organiser can read + edit
@@ -22,7 +22,6 @@ export default async function OrganiserCommitteeRoomPage({
   const committeeName = decodeURIComponent(committee);
   return (
     <div className="mx-auto w-full max-w-lg px-4 py-5">
-      <AdminCommitteeReport eventId={id} committeeName={committeeName} />
       <CommitteeClient eventId={id} committeeName={committeeName} />
     </div>
   );

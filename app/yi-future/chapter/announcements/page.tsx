@@ -96,6 +96,14 @@ export default async function ChapterAnnouncementsPage() {
     await deleteAnnouncement(String(formData.get("id") ?? ""));
   }
 
+  async function editAction(
+    _prev: AnnouncementResult | null,
+    formData: FormData
+  ): Promise<AnnouncementResult | null> {
+    "use server";
+    return editChapterAnnouncement(String(formData.get("id") ?? ""), formData);
+  }
+
   return (
     <div className="space-y-8">
       <div>

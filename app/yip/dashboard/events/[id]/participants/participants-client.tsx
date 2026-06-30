@@ -12,6 +12,7 @@ import {
   updateParticipant,
 } from "@/app/yip/actions/participants";
 import { ROLE_LABELS, PARTY_COLORS } from "@/lib/yip/constants";
+import type { MinistryPortfolio } from "@/lib/yip/cabinet";
 import { CONSTITUENCIES } from "@/lib/yip/data/constituencies";
 import { Button } from "@/components/yip/ui/button";
 import { Input } from "@/components/yip/ui/input";
@@ -118,18 +119,9 @@ type EditFields = {
 // Parliament-role options for the edit dropdown (value → label from ROLE_LABELS).
 const ROLE_OPTIONS = Object.entries(ROLE_LABELS) as Array<[string, string]>;
 
-// Ministry options (mirrors the ministry_type enum). Only meaningful for the
-// cabinet_minister / shadow_minister roles.
-const MINISTRY_OPTIONS: Array<[string, string]> = [
-  ["home", "Home"],
-  ["finance", "Finance"],
-  ["education", "Education"],
-  ["health", "Health"],
-  ["women_child", "Women & Child"],
-  ["disaster_management", "Disaster Management"],
-  ["youth_sports", "Youth & Sports"],
-  ["it_digital", "IT & Digital"],
-];
+// Ministry options now come from the event's effective cabinet portfolios
+// (`ministries` prop) — a per-event custom cabinet (e.g. Tirupur runs 15), not
+// the static 8. Only meaningful for the cabinet_minister / shadow_minister roles.
 
 // Canonical Lok Sabha constituencies (543), grouped by state for the edit
 // picker. Picking a constituency auto-fills its state, so a chair can never
@@ -156,6 +148,7 @@ export function ParticipantsClient({
   canDelete = true,
   canManage = false,
   canEdit = false,
+  ministries,
 }: {
   eventId: string;
   participants: Participant[];
@@ -166,6 +159,8 @@ export function ParticipantsClient({
   canManage?: boolean;
   /** Chair/national/super-admin only — gates Add + Edit of participant fields. */
   canEdit?: boolean;
+  /** The event's effective cabinet portfolios for the Ministry dropdown. */
+  ministries: MinistryPortfolio[];
 }) {
   const router = useRouter();
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -1710,9 +1705,9 @@ export function ParticipantsClient({
                   className="mt-1 w-full rounded-md border border-gray-200 bg-white px-2.5 py-2 text-sm focus:border-[#1a1a3e]/40 focus:outline-none disabled:bg-gray-50 disabled:text-gray-400"
                 >
                   <option value="">— None —</option>
-                  {MINISTRY_OPTIONS.map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
+                  {ministries.map((m) => (
+                    <option key={m.key} value={m.key}>
+                      {m.label}
                     </option>
                   ))}
                 </select>

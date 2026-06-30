@@ -36,6 +36,24 @@ export function effectiveMinistries(
 }
 
 /**
+ * Resolve a ministry KEY to its display label using the event's effective
+ * portfolios first, then the static MINISTRIES default, then the raw key as a
+ * last resort. Pure / client-safe so every ministry-routing surface (the QH
+ * submit form + question list, the organiser control view, the Shadow desk and
+ * the Minister desk) shares ONE resolver — no per-file static label maps.
+ */
+export function ministryLabel(
+  key: string | null | undefined,
+  ministries: MinistryPortfolio[]
+): string {
+  if (!key) return "";
+  const inCabinet = ministries.find((m) => m.key === key);
+  if (inCabinet) return inCabinet.label;
+  const inDefault = MINISTRIES.find((m) => m.key === key);
+  return inDefault ? inDefault.label : key;
+}
+
+/**
  * Effective number of cabinet seats: an explicit count override wins, else the
  * number of effective portfolios.
  */

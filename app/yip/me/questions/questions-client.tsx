@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useTransition } from "react";
-import { MINISTRIES } from "@/lib/yip/constants";
+import { ministryLabel, type MinistryPortfolio } from "@/lib/yip/cabinet";
 import { submitQuestion, getMyQuestions } from "@/app/yip/actions/questions";
 import { Button } from "@/components/yip/ui/button";
 import { Textarea } from "@/components/yip/ui/textarea";
@@ -26,10 +26,9 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
-import type { Tables, Database } from "@/types/yip/database";
+import type { Tables } from "@/types/yip/database";
 
 type Question = Tables<{ schema: "yip" }, "questions">;
-type MinistryType = Database["public"]["Enums"]["ministry_type"];
 
 // ─── Session (server-provided) ──────────────────────────────────
 // The yip_session cookie is httpOnly, so it CANNOT be read from
@@ -89,21 +88,19 @@ const STATUS_ACCENT: Record<string, string> = {
   skipped: inkA(0.2),
 };
 
-function getMinistryLabel(key: string): string {
-  const found = MINISTRIES.find((m) => m.key === key);
-  return found ? found.label : key;
-}
-
 // ─── Page Component ─────────────────────────────────────────────
 
 export function QuestionsClient({
   initialSession,
+  ministries,
 }: {
   initialSession: ParticipantSession;
+  /** The event's effective cabinet portfolios (per-event override or default). */
+  ministries: MinistryPortfolio[];
 }) {
   const session: ParticipantSession | null = initialSession;
   const [questions, setQuestions] = useState<Question[]>([]);
-  const [ministry, setMinistry] = useState<MinistryType | "">("");
+  const [ministry, setMinistry] = useState<string>("");
   const [questionText, setQuestionText] = useState("");
   const [isPending, startTransition] = useTransition();
   const [loading, setLoading] = useState(true);
@@ -135,7 +132,7 @@ export function QuestionsClient({
       const result = await submitQuestion(
         session.eventId,
         session.id,
-        ministry as MinistryType,
+        ministry,
         questionText
       );
       if (result.success) {
@@ -219,11 +216,11 @@ export function QuestionsClient({
               <select
                 id="ministry"
                 value={ministry}
-                onChange={(e) => setMinistry(e.target.value as MinistryType)}
+                onChange={(e) => setMinistry(e.target.value)}
                 className="mt-1.5 flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 outline-none"
               >
                 <option value="">Select a ministry...</option>
-                {MINISTRIES.map((m) => (
+                {ministries.map((m) => (
                   <option key={m.key} value={m.key}>
                     {m.label}
                   </option>
@@ -324,7 +321,7 @@ export function QuestionsClient({
                       </p>
                       <p className="text-xs text-gray-400 mt-2">
                         Directed to: Minister of{" "}
-                        {getMinistryLabel(q.directed_to_ministry)}
+                        {ministryLabel(q.directed_to_ministry, ministries)}
                       </p>
                       {q.answer_summary && (
                         <div className="mt-2 rounded-md bg-emerald-50 p-2">

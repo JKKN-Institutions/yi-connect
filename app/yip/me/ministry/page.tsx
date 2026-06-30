@@ -4,6 +4,7 @@ import { getYipSession } from "@/lib/yip/auth/yip-session";
 import Link from "next/link";
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { getMinistryDesk } from "@/app/yip/actions/ministry";
+import { getCabinetConfig } from "@/app/yip/actions/cabinet";
 import { MinistryClient } from "./ministry-client";
 
 interface ParticipantSession {
@@ -64,7 +65,10 @@ export default async function MinistryPage() {
     );
   }
 
-  const result = await getMinistryDesk(session.eventId, participant.id);
+  const [result, { ministries }] = await Promise.all([
+    getMinistryDesk(session.eventId, participant.id),
+    getCabinetConfig(session.eventId),
+  ]);
 
   return (
     <MinistryClient
@@ -72,6 +76,7 @@ export default async function MinistryPage() {
       participantId={participant.id}
       initialDesk={result.success ? result.data : null}
       loadError={result.success ? null : result.error}
+      ministries={ministries}
     />
   );
 }

@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/yip/supabase/server";
 import { getEvent } from "@/app/yip/actions/events";
 import { getEventParticipants } from "@/app/yip/actions/participants";
+import { getCabinetConfig } from "@/app/yip/actions/cabinet";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { ParticipantsClient } from "./participants-client";
 import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
@@ -35,6 +36,11 @@ export default async function ParticipantsPage({
 
   const access = await getYipEventAccess(id);
 
+  // The event's effective cabinet portfolios — drive the Ministry dropdown in
+  // the participant editor (a minister can hold a per-event custom portfolio,
+  // not just the static 8).
+  const { ministries } = await getCabinetConfig(id);
+
   // The balancing field is collected only to spread parties + committees and is
   // NEVER shown in the platform — strip it from the client payload entirely (the
   // roster export reads it server-side; it is purged only when the event's PII is
@@ -49,6 +55,7 @@ export default async function ParticipantsPage({
       canDelete={access.canDelete}
       canManage={access.canManage}
       canEdit={access.canDelete}
+      ministries={ministries}
     />
   );
 }

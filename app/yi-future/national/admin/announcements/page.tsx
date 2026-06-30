@@ -2,10 +2,15 @@ import { createServiceClient } from "@/lib/yi-future/supabase/server";
 import {
   createNationalAnnouncement,
   deleteAnnouncement,
+  editNationalAnnouncement,
   listNationalAnnouncements,
 } from "@/app/yi-future/actions/announcements";
-import type { ComposerState } from "@/app/yi-future/actions/announcements-types";
+import type {
+  ComposerState,
+  AnnouncementResult,
+} from "@/app/yi-future/actions/announcements-types";
 import { AnnouncementComposer } from "@/components/yi-future/announcements/AnnouncementComposer";
+import { EditAnnouncement } from "@/components/yi-future/announcements/EditAnnouncement";
 
 export const metadata = {
   title: "Announcements · Yi National · Yi Future 6.0",

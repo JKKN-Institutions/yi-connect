@@ -416,7 +416,7 @@ export async function listChapterAnnouncements(
     .schema("future")
     .from("announcements")
     .select(
-      "id, title, body, audience, author_name, author_scope, chapter_id, team_id, delegate_id, zone, created_at"
+      "id, title, body, url, audience, author_name, author_scope, chapter_id, team_id, delegate_id, zone, created_at"
     )
     .eq("edition_id", editionId)
     .eq("chapter_id", chapterId)
@@ -433,7 +433,7 @@ export async function listNationalAnnouncements(
     .schema("future")
     .from("announcements")
     .select(
-      "id, title, body, audience, author_name, author_scope, chapter_id, team_id, delegate_id, zone, created_at"
+      "id, title, body, url, audience, author_name, author_scope, chapter_id, team_id, delegate_id, zone, created_at"
     )
     .eq("edition_id", editionId)
     .eq("author_scope", "national")

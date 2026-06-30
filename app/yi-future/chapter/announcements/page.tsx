@@ -4,10 +4,15 @@ import { getChapterContext } from "@/lib/yi-future/chapter-context";
 import {
   createChapterAnnouncement,
   deleteAnnouncement,
+  editChapterAnnouncement,
   listChapterAnnouncements,
 } from "@/app/yi-future/actions/announcements";
-import type { ComposerState } from "@/app/yi-future/actions/announcements-types";
+import type {
+  ComposerState,
+  AnnouncementResult,
+} from "@/app/yi-future/actions/announcements-types";
 import { AnnouncementComposer } from "@/components/yi-future/announcements/AnnouncementComposer";
+import { EditAnnouncement } from "@/components/yi-future/announcements/EditAnnouncement";
 
 const NAVY = "#1a1a3e";
 

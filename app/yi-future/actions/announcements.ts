@@ -327,6 +327,69 @@ export async function deleteAnnouncement(id: string): Promise<AnnouncementResult
   return { ok: true, message: "Deleted." };
 }
 
+// ─── EDIT (content only) ────────────────────────────────────────────
+// Edits the announcement TEXT (title / body / link) in place. Audience and
+// target are intentionally NOT editable — changing them would require
+// re-resolving recipients (and a sent push can't be unsent), so to change who
+// it reaches, delete and repost. Gated by the row's own scope, mirroring
+// deleteAnnouncement.
+async function editAnnouncementFields(
+  id: string,
+  formData: FormData,
+  expectedScope: "chapter" | "national"
+): Promise<AnnouncementResult> {
+  if (!id) return { ok: false, error: "Missing id." };
+  const title = String(formData.get("title") ?? "").trim();
+  const body = String(formData.get("body") ?? "").trim();
+  const url = String(formData.get("url") ?? "").trim() || null;
+  if (!title) return { ok: false, error: "Title is required." };
+  if (!body) return { ok: false, error: "Message is required." };
+
+  const svc = (await createServiceClient()) as LooseClient;
+  const { data: row } = await svc
+    .schema("future")
+    .from("announcements")
+    .select("author_scope, chapter_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (!row) return { ok: false, error: "Announcement not found." };
+  if (row.author_scope !== expectedScope) {
+    return { ok: false, error: "You can't edit this announcement." };
+  }
+
+  if (row.author_scope === "national") {
+    await requireFutureNationalAdmin();
+  } else {
+    await requireChapterAdmin(row.chapter_id ?? null);
+  }
+
+  const { error } = await svc
+    .schema("future")
+    .from("announcements")
+    .update({ title, body, url })
+    .eq("id", id);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/yi-future/chapter/announcements");
+  revalidatePath("/yi-future/national/admin/announcements");
+  revalidatePath("/yi-future/me/announcements");
+  return { ok: true, message: "Updated." };
+}
+
+export async function editChapterAnnouncement(
+  id: string,
+  formData: FormData
+): Promise<AnnouncementResult> {
+  return editAnnouncementFields(id, formData, "chapter");
+}
+
+export async function editNationalAnnouncement(
+  id: string,
+  formData: FormData
+): Promise<AnnouncementResult> {
+  return editAnnouncementFields(id, formData, "national");
+}
+
 // ─── ADMIN HISTORY ──────────────────────────────────────────────────
 async function withReadCounts(
   svc: LooseClient,

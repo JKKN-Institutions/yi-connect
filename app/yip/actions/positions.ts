@@ -465,10 +465,32 @@ export async function setCabinetPortfolio(input: {
   }
 
   const role = input.seat === "cabinet" ? "cabinet_minister" : "shadow_minister";
+
+  // Resolve the chosen ministry LABEL to its per-event cabinet KEY and store it
+  // in participants.ministry too. The Minister + Shadow desks (ministry.ts /
+  // shadow.ts) route Question-Hour questions by participants.ministry == the
+  // cabinet KEY a question is directed to — so without this, a portfolio-assigned
+  // minister would never see their questions. The label comes straight from the
+  // cabinet config (getCommitteeMinisters builds the rows from effectiveMinistries),
+  // so a match is expected; fall back to null defensively.
+  const { data: eventRow } = await supabase
+    .from("events")
+    .select("cabinet_ministries")
+    .eq("id", input.eventId)
+    .single();
+  const ministryKey =
+    effectiveMinistries(eventRow?.cabinet_ministries ?? null).find(
+      (m) => m.label.trim() === ministry
+    )?.key ?? null;
+
   const { error } = await (
     supabase.from("participants") as ReturnType<typeof supabase.from>
   )
-    .update({ parliament_role: role, cabinet_portfolio: ministry })
+    .update({
+      parliament_role: role,
+      cabinet_portfolio: ministry,
+      ministry: ministryKey,
+    })
     .eq("id", input.participantId);
   if (error) return { success: false, error: error.message };
 
@@ -492,7 +514,9 @@ export async function clearCabinetPortfolio(input: {
   const { error } = await (
     supabase.from("participants") as ReturnType<typeof supabase.from>
   )
-    .update({ parliament_role: "mp", cabinet_portfolio: null })
+    // Clear the routing key too, so the Minister/Shadow desks stop surfacing
+    // this (now-removed) minister's questions.
+    .update({ parliament_role: "mp", cabinet_portfolio: null, ministry: null })
     .eq("id", input.participantId)
     .eq("event_id", input.eventId);
   if (error) return { success: false, error: error.message };

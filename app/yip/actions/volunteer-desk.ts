@@ -7,6 +7,7 @@ import {
   deskScope,
   type DeskAssignment,
 } from "@/lib/yip/yuva-desk";
+import type { VolunteerStation } from "@/lib/yip/volunteers";
 import { revalidatePath } from "next/cache";
 
 /**
@@ -107,6 +108,10 @@ export type MyDesk = {
   parties: { id: string; name: string }[];
   committees: string[];
   hasDesk: boolean;
+  /** The volunteer's station (yip.volunteers.station) — drives the station tool
+   *  shown when there is no party/committee desk. The session carries no station,
+   *  so it's looked up here by the session's volunteer id. */
+  station: VolunteerStation | null;
 };
 
 export type DeskRosterMember = {
@@ -171,12 +176,20 @@ export async function getMyYuvaAssignment(
     parties = (pr ?? []).map((p) => ({ id: p.id, name: p.name }));
   }
 
+  // The volunteer's station (for the station tool shown when there is no desk).
+  const { data: vol } = await supabase
+    .from("volunteers")
+    .select("station")
+    .eq("id", session.volunteerId)
+    .maybeSingle();
+
   return {
     success: true,
     data: {
       parties,
       committees: committeeNames,
       hasDesk: partyIds.length > 0 || committeeNames.length > 0,
+      station: (vol?.station ?? null) as VolunteerStation | null,
     },
   };
 }

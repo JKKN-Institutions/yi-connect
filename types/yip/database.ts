@@ -242,6 +242,8 @@ export type Database = {
         | "runner"
         | "safety"
         | "floating"
+        | "jury_support"
+        | "organiser_helper"
       yi_role: "national" | "rm" | "chapter_em"
       yi_zone: "ER" | "WR" | "NR" | "NER" | "SRTN" | "SRTKKA"
     }
@@ -4238,6 +4240,8 @@ export const Constants = {
         "runner",
         "safety",
         "floating",
+        "jury_support",
+        "organiser_helper",
       ],
       yi_role: ["national", "rm", "chapter_em"],
       yi_zone: ["ER", "WR", "NR", "NER", "SRTN", "SRTKKA"],

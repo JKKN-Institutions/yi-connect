@@ -167,6 +167,7 @@ export default async function NationalAnnouncementsPage() {
                         style={{ background: "#F5A62314", color: "#9a6a00" }}
                       >
                         {AUDIENCE_LABEL[a.audience] ?? a.audience}
+                        {a.audience === "zone" && a.zone ? ` · ${a.zone}` : ""}
                       </span>
                       <span>{when(a.created_at)}</span>
                       <span>· {a.read_count} read</span>

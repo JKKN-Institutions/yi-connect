@@ -26,7 +26,6 @@ import {
   GitPullRequestArrow,
   Users,
   Loader2,
-  Lock,
   CheckCircle2,
   XCircle,
   Plus,
@@ -36,7 +35,6 @@ import {
   ThumbsDown,
   Clock,
   ArrowRight,
-  ClipboardList,
   Megaphone,
   X,
 } from "lucide-react";
@@ -509,45 +507,9 @@ function BillTab({
     });
   }
 
-  // Locked until the Committee Report is in. The template + documents stay
-  // available even while locked (as on the old bill page).
-  if (!room.reportSubmitted) {
-    return (
-      <div className="space-y-4">
-      <SectionShell accent={GOLD}>
-        <div className="py-6 px-5 text-center space-y-3">
-          <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-amber-100">
-            <Lock className="size-6 text-amber-500" />
-          </div>
-          <div>
-            <p className="font-semibold" style={{ ...SERIF, color: INK }}>
-              Submit your Committee Report first
-            </p>
-            <p className="text-sm mt-1" style={{ color: inkA(0.6) }}>
-              The bill is built from your report&apos;s findings. Once the report
-              is submitted, drafting unlocks here.
-            </p>
-          </div>
-          <Link href="/yip/me/report">
-            <Button style={{ backgroundColor: ORANGE }} className="text-white">
-              <ClipboardList className="size-4 mr-1.5" />
-              Go to Committee Report
-              <ArrowRight className="size-4 ml-1.5" />
-            </Button>
-          </Link>
-        </div>
-      </SectionShell>
-      <BillTemplateButton
-        committeeName={room.committeeName}
-        topic={room.topic}
-        scheme={room.scheme}
-      />
-      {participantId && (
-        <CommitteeDocumentsSection eventId={eventId} participantId={participantId} />
-      )}
-      </div>
-    );
-  }
+  // Committee Report step REMOVED 2026-06-30 — per the YIP 2026 handbook the
+  // committee's deliverable is the BILL, not a report. Drafting is always open;
+  // the old "submit your report first" gate no longer exists.
 
   const r = room.readiness;
   const readOnly = !canEdit;

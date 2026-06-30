@@ -34,7 +34,6 @@ import {
   requireVolunteerSession,
 } from "@/lib/yip/auth/yip-session";
 import { isCommitteeEligible } from "@/lib/yip/committee-assignment";
-import { isCommitteeReportSubmitted } from "@/app/yip/actions/committee-reports";
 import { normalizeProvisions, type Clause } from "@/lib/yip/bill-provisions";
 
 type ActionResult<T = null> =
@@ -315,25 +314,19 @@ async function loadBill(
   return (data as BillRow | null) ?? null;
 }
 
-/** Report gate: bill editing is open once the Committee Report is submitted OR
- *  the organiser flipped the per-event early-unlock toggle. */
+/** Report gate REMOVED (2026-06-30, handbook-aligned): the committee's
+ *  deliverable is the BILL, not a report (YIP 2026 Handbook p.19; "committee
+ *  reports" appear only as an optional Laying-of-Papers formality, p.23). Bill
+ *  drafting is therefore ALWAYS open — this function is retained (and always
+ *  returns true) so the ~6 call sites and the `reportSubmitted` plumbing keep
+ *  type-checking until the dead committee-report code is deleted in cleanup. */
 async function reportUnlocked(
-  sb: ServiceClient,
-  eventId: string,
-  committeeName: string,
-  isManager = false
+  _sb: ServiceClient,
+  _eventId: string,
+  _committeeName: string,
+  _isManager = false
 ): Promise<boolean> {
-  // Managers (organiser / chapter admin / assigned volunteer) bypass the report
-  // gate entirely — they can draft and submit the bill without waiting for a
-  // member to file the report (director decision 2026-06-28).
-  if (isManager) return true;
-  if (await isCommitteeReportSubmitted(eventId, committeeName)) return true;
-  const { data: ev } = await sb
-    .from("events")
-    .select("allow_bill_before_report")
-    .eq("id", eventId)
-    .maybeSingle();
-  return Boolean(ev?.allow_bill_before_report);
+  return true;
 }
 
 /** Parse a jsonb id array (string[] or stringified) into a clean string[]. */

@@ -55,6 +55,27 @@ export default async function ExpertHome() {
     }
   }
 
+  // Teams per chapter, so the expert can see who they'll work with.
+  const teamsByChapter = new Map<string, { name: string; count: number }[]>();
+  if (chapterIds.length > 0) {
+    const { data: teamRows } = await svc
+      .schema("future")
+      .from("teams")
+      .select("team_name, chapter_id, team_members(delegate_id)")
+      .in("chapter_id", chapterIds)
+      .eq("edition_id", session.edition_id)
+      .order("team_name", { ascending: true });
+    for (const t of (teamRows as {
+      team_name: string;
+      chapter_id: string;
+      team_members: { delegate_id: string }[] | null;
+    }[]) ?? []) {
+      const arr = teamsByChapter.get(t.chapter_id) ?? [];
+      arr.push({ name: t.team_name, count: t.team_members?.length ?? 0 });
+      teamsByChapter.set(t.chapter_id, arr);
+    }
+  }
+
   const now = Date.now();
   const upcoming = events.filter(
     (e) => e.scheduled_at && new Date(e.scheduled_at).getTime() >= now
@@ -123,6 +144,29 @@ export default async function ExpertHome() {
             </a>
           )}
         </div>
+        {(teamsByChapter.get(e.chapter_id)?.length ?? 0) > 0 && (
+          <div className="mt-3 border-t pt-3" style={{ borderColor: `${NAVY}0f` }}>
+            <div
+              className="mb-1.5 text-[10px] font-semibold uppercase tracking-widest"
+              style={{ color: `${NAVY}59` }}
+            >
+              Teams in this chapter ({teamsByChapter.get(e.chapter_id)!.length})
+            </div>
+            <ul className="space-y-0.5 text-sm" style={{ color: `${NAVY}cc` }}>
+              {teamsByChapter.get(e.chapter_id)!.map((t) => (
+                <li
+                  key={t.name}
+                  className="flex items-center justify-between"
+                >
+                  <span>{t.name}</span>
+                  <span style={{ color: `${NAVY}66` }}>
+                    {t.count} member{t.count === 1 ? "" : "s"}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
     );
   }

@@ -9,6 +9,7 @@ import {
   unassignExpertFromPhaseEvent,
 } from "@/app/yi-future/actions/experts";
 import { PHASE_EVENT_LABELS } from "@/lib/yi-future/constants";
+import { DeleteExpertButton } from "@/components/yi-future/experts/DeleteExpertButton";
 
 const NAVY = "#1a1a3e";
 const GOLD = "#F5A623";
@@ -94,9 +95,12 @@ export default async function ExpertsPage() {
   }
   const unassignedEvents = events.filter((e) => !e.expert_id);
 
-  async function removeExpert(formData: FormData) {
+  async function removeExpert(
+    _prev: { ok: true; message?: string } | { ok: false; error: string } | null,
+    formData: FormData
+  ) {
     "use server";
-    await deleteExpert(String(formData.get("id") ?? ""));
+    return deleteExpert(String(formData.get("id") ?? ""));
   }
   async function regen(formData: FormData) {
     "use server";
@@ -300,15 +304,7 @@ export default async function ExpertsPage() {
                       Regen code
                     </button>
                   </form>
-                  <form action={removeExpert}>
-                    <input type="hidden" name="id" value={e.id} />
-                    <button
-                      type="submit"
-                      className="text-xs text-red-600/70 hover:text-red-600"
-                    >
-                      Delete
-                    </button>
-                  </form>
+                  <DeleteExpertButton id={e.id} action={removeExpert} />
                 </div>
               </div>
             );

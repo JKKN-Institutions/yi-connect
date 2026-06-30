@@ -7,6 +7,23 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+
+  /* Yi-Future (Future 6.0) brand palette. Defined here so utility classes
+     text-navy / bg-ivory / text-yi-gold / text-yi-green / text-yi-saffron
+     actually compile — app/yi-future/globals.css declares them but is imported
+     nowhere, so before this every Yi-Future page rendered unbranded. Literal
+     hex (html2canvas-safe). Names are Yi-Future-specific and don't collide with
+     the Yi Connect / YIP token sets. */
+  --color-navy: #1a1a3e;
+  --color-navy-dark: #0f0f28;
+  --color-navy-light: #2d2d5c;
+  --color-yi-gold: #f5a623;
+  --color-yi-gold-light: #fcd89d;
+  --color-yi-saffron: #ff9933;
+  --color-yi-saffron-light: #ffe8d1;
+  --color-yi-green: #138808;
+  --color-ivory: #fefcf6;
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
   --color-sidebar-ring: var(--sidebar-ring);

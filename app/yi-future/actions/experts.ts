@@ -123,13 +123,23 @@ export async function deleteExpert(id: string): Promise<ActionResult> {
   await requireAuth();
   const svc = (await createServiceClient()) as LooseClient;
 
-  // Clear any phase-event assignments first (expert_id FK would otherwise
-  // dangle / block the delete).
-  await svc
+  // Experts are an edition-wide shared pool; a single chapter admin must not be
+  // able to silently rip an expert out of OTHER chapters' sessions. Refuse the
+  // delete while the expert is still assigned anywhere — surface a clear,
+  // actionable error instead of cascading.
+  const { count: assignedCount } = await svc
     .schema("future")
     .from("phase_events")
-    .update({ expert_id: null })
+    .select("id", { count: "exact", head: true })
     .eq("expert_id", id);
+  if ((assignedCount ?? 0) > 0) {
+    return {
+      ok: false,
+      error: `This expert is assigned to ${assignedCount} session${
+        assignedCount === 1 ? "" : "s"
+      }. Unassign them from those sessions first.`,
+    };
+  }
 
   const { error } = await svc
     .schema("future")

@@ -402,6 +402,18 @@ export async function getDelegateAnnouncementFeed(): Promise<DelegateAnnouncemen
     ((me.team_members ?? []) as { team_id: string }[]).map((t) => t.team_id)
   );
 
+  // The delegate's region (Yi zone) — for zone-targeted national announcements.
+  let myRegion: string | null = null;
+  if (myChapterId) {
+    const { data: ch } = await svc
+      .schema("future")
+      .from("chapters")
+      .select("region")
+      .eq("id", myChapterId)
+      .maybeSingle();
+    myRegion = (ch as { region: string | null } | null)?.region ?? null;
+  }
+
   // Candidates: this edition, and either edition-wide (chapter_id null) or my
   // chapter. Covers everyone / chapter / team / delegate (the latter three all
   // carry the author's chapter_id, which is mine when it concerns me).

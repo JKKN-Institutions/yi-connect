@@ -125,6 +125,7 @@ export default async function DelegateHome() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
         {[
           { label: "Announcements", href: "/yi-future/me/announcements" },
+          { label: "My problem", href: "/yi-future/me/problem" },
           { label: "Journey", href: "/yi-future/me/journey" },
           { label: "Submissions", href: "/yi-future/me/submissions" },
           { label: "Feedback", href: "/yi-future/me/feedback" },

@@ -11,6 +11,10 @@ export const metadata = {
   title: "Announcements · Yi National · Yi Future 6.0",
 };
 
+// Live data via the service client (no cookies) — force dynamic so Next doesn't
+// try to statically prerender it (which runs the DB at build time and can time out).
+export const dynamic = "force-dynamic";
+
 const NAVY = "#1a1a3e";
 
 async function getActiveEdition(): Promise<{ id: string; name: string } | null> {
@@ -41,9 +45,28 @@ async function getChapters(): Promise<{ id: string; label: string }[]> {
   );
 }
 
+async function getZones(): Promise<{ id: string; label: string }[]> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const svc = (await createServiceClient()) as any;
+  const { data } = await svc
+    .schema("future")
+    .from("chapters")
+    .select("region")
+    .eq("is_active", true);
+  const regions = [
+    ...new Set(
+      ((data as { region: string | null }[]) ?? [])
+        .map((r) => r.region)
+        .filter((r): r is string => !!r)
+    ),
+  ].sort();
+  return regions.map((r) => ({ id: r, label: r }));
+}
+
 const AUDIENCE_LABEL: Record<string, string> = {
   everyone: "Everyone",
   chapter: "One chapter",
+  zone: "Zone",
 };
 
 function when(iso: string): string {
@@ -68,8 +91,9 @@ export default async function NationalAnnouncementsPage() {
     );
   }
 
-  const [chapters, sent] = await Promise.all([
+  const [chapters, zones, sent] = await Promise.all([
     getChapters(),
+    getZones(),
     listNationalAnnouncements(edition.id),
   ]);
 
@@ -102,6 +126,7 @@ export default async function NationalAnnouncementsPage() {
         mode="national"
         action={postAction}
         chapters={chapters}
+        zones={zones}
       />
 
       <section className="space-y-3">
@@ -146,6 +171,7 @@ export default async function NationalAnnouncementsPage() {
                         style={{ background: "#F5A62314", color: "#9a6a00" }}
                       >
                         {AUDIENCE_LABEL[a.audience] ?? a.audience}
+                        {a.audience === "zone" && a.zone ? ` · ${a.zone}` : ""}
                       </span>
                       <span>{when(a.created_at)}</span>
                       <span>· {a.read_count} read</span>

@@ -18,6 +18,7 @@ type Props = {
   teams?: Option[];
   delegates?: Option[];
   chapters?: Option[];
+  zones?: Option[];
 };
 
 const AUDIENCE_OPTIONS: Record<
@@ -31,6 +32,7 @@ const AUDIENCE_OPTIONS: Record<
   ],
   national: [
     { value: "everyone", label: "Everyone", hint: "All delegates in this edition" },
+    { value: "zone", label: "One zone", hint: "All delegates in a Yi zone/region" },
     { value: "chapter", label: "One chapter", hint: "All delegates of a chapter" },
   ],
 };
@@ -55,6 +57,7 @@ export function AnnouncementComposer({
   teams = [],
   delegates = [],
   chapters = [],
+  zones = [],
 }: Props) {
   const opts = AUDIENCE_OPTIONS[mode];
   const [audience, setAudience] = useState<AnnouncementAudience>(opts[0].value);
@@ -170,6 +173,31 @@ export function AnnouncementComposer({
             {delegates.map((d) => (
               <option key={d.id} value={d.id}>
                 {d.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {mode === "national" && audience === "zone" && (
+        <div>
+          <label className={labelCls} style={{ color: `${NAVY}b3` }} htmlFor="zone">
+            Zone / region
+          </label>
+          <select
+            id="zone"
+            name="zone"
+            required
+            defaultValue=""
+            className={inputCls}
+            style={{ borderColor: `${NAVY}33`, color: NAVY }}
+          >
+            <option value="" disabled>
+              — choose a zone —
+            </option>
+            {zones.map((z) => (
+              <option key={z.id} value={z.id}>
+                {z.label}
               </option>
             ))}
           </select>

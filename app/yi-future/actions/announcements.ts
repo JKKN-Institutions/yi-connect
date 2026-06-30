@@ -73,6 +73,7 @@ async function resolveRecipientIds(
     chapter_id: string | null;
     team_id: string | null;
     delegate_id: string | null;
+    zone?: string | null;
   }
 ): Promise<string[]> {
   if (a.audience === "delegate") return a.delegate_id ? [a.delegate_id] : [];
@@ -85,6 +86,26 @@ async function resolveRecipientIds(
       .select("delegate_id")
       .eq("team_id", a.team_id);
     return ((data ?? []) as { delegate_id: string }[]).map((r) => r.delegate_id);
+  }
+
+  // 'zone' → active delegates in any chapter of that region (Yi zone).
+  if (a.audience === "zone") {
+    if (!a.zone) return [];
+    const { data: chRows } = await svc
+      .schema("future")
+      .from("chapters")
+      .select("id")
+      .eq("region", a.zone);
+    const chapterIds = ((chRows ?? []) as { id: string }[]).map((c) => c.id);
+    if (chapterIds.length === 0) return [];
+    const { data } = await svc
+      .schema("future")
+      .from("delegates")
+      .select("id")
+      .eq("edition_id", a.edition_id)
+      .eq("is_active", true)
+      .in("chapter_id", chapterIds);
+    return ((data ?? []) as { id: string }[]).map((r) => r.id);
   }
 
   // 'chapter' or 'everyone' → active delegates scoped by edition (+ chapter).
@@ -218,17 +239,21 @@ export async function createNationalAnnouncement(
   const body = String(formData.get("body") ?? "").trim();
   const url = String(formData.get("url") ?? "").trim() || null;
   const chapterId = String(formData.get("chapter_id") ?? "").trim() || null;
+  const zone = String(formData.get("zone") ?? "").trim() || null;
 
   if (!title) return { ok: false, error: "Title is required." };
   if (!body) return { ok: false, error: "Message is required." };
 
-  const allowed: AnnouncementAudience[] = ["everyone", "chapter"];
+  const allowed: AnnouncementAudience[] = ["everyone", "chapter", "zone"];
   if (!allowed.includes(audienceRaw as AnnouncementAudience)) {
     return { ok: false, error: "Pick who should receive this." };
   }
   const audience = audienceRaw as AnnouncementAudience;
   if (audience === "chapter" && !chapterId) {
     return { ok: false, error: "Select a chapter." };
+  }
+  if (audience === "zone" && !zone) {
+    return { ok: false, error: "Select a zone." };
   }
 
   const svc = (await createServiceClient()) as LooseClient;
@@ -242,6 +267,7 @@ export async function createNationalAnnouncement(
     chapter_id: audience === "chapter" ? chapterId : null,
     team_id: null,
     delegate_id: null,
+    zone: audience === "zone" ? zone : null,
     title,
     body,
     url,
@@ -327,7 +353,7 @@ export async function listChapterAnnouncements(
     .schema("future")
     .from("announcements")
     .select(
-      "id, title, body, audience, author_name, author_scope, chapter_id, team_id, delegate_id, created_at"
+      "id, title, body, audience, author_name, author_scope, chapter_id, team_id, delegate_id, zone, created_at"
     )
     .eq("edition_id", editionId)
     .eq("chapter_id", chapterId)
@@ -344,7 +370,7 @@ export async function listNationalAnnouncements(
     .schema("future")
     .from("announcements")
     .select(
-      "id, title, body, audience, author_name, author_scope, chapter_id, team_id, delegate_id, created_at"
+      "id, title, body, audience, author_name, author_scope, chapter_id, team_id, delegate_id, zone, created_at"
     )
     .eq("edition_id", editionId)
     .eq("author_scope", "national")
@@ -376,6 +402,18 @@ export async function getDelegateAnnouncementFeed(): Promise<DelegateAnnouncemen
     ((me.team_members ?? []) as { team_id: string }[]).map((t) => t.team_id)
   );
 
+  // The delegate's region (Yi zone) — for zone-targeted national announcements.
+  let myRegion: string | null = null;
+  if (myChapterId) {
+    const { data: ch } = await svc
+      .schema("future")
+      .from("chapters")
+      .select("region")
+      .eq("id", myChapterId)
+      .maybeSingle();
+    myRegion = (ch as { region: string | null } | null)?.region ?? null;
+  }
+
   // Candidates: this edition, and either edition-wide (chapter_id null) or my
   // chapter. Covers everyone / chapter / team / delegate (the latter three all
   // carry the author's chapter_id, which is mine when it concerns me).
@@ -383,7 +421,7 @@ export async function getDelegateAnnouncementFeed(): Promise<DelegateAnnouncemen
     .schema("future")
     .from("announcements")
     .select(
-      "id, title, body, url, author_name, author_scope, audience, chapter_id, team_id, delegate_id, created_at"
+      "id, title, body, url, author_name, author_scope, audience, chapter_id, team_id, delegate_id, zone, created_at"
     )
     .eq("edition_id", session.edition_id)
     .order("created_at", { ascending: false })
@@ -406,6 +444,7 @@ export async function getDelegateAnnouncementFeed(): Promise<DelegateAnnouncemen
     chapter_id: string | null;
     team_id: string | null;
     delegate_id: string | null;
+    zone: string | null;
     created_at: string;
   };
 
@@ -414,6 +453,7 @@ export async function getDelegateAnnouncementFeed(): Promise<DelegateAnnouncemen
     if (r.audience === "chapter") return r.chapter_id === myChapterId;
     if (r.audience === "team") return !!r.team_id && myTeamIds.has(r.team_id);
     if (r.audience === "delegate") return r.delegate_id === session.id;
+    if (r.audience === "zone") return !!myRegion && r.zone === myRegion;
     return false;
   });
 

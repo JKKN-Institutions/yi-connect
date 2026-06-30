@@ -36,6 +36,8 @@ const MERIT_ROLES: { key: string; label: string }[] = [
   { key: "cabinet_minister", label: "Cabinet Minister" },
   { key: "shadow_minister", label: "Shadow Cabinet Minister" },
   { key: "committee_chair", label: "Committee Chairperson" },
+  { key: "committee_drafter", label: "Committee Drafter" },
+  { key: "committee_presenter", label: "Committee Presenter" },
   { key: "nominated_speaker", label: "Nominated for Speaker" },
   { key: "mp", label: "No Position (MP)" },
 ];

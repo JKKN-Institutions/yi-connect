@@ -559,10 +559,31 @@ export async function updatePositionBonusConfig(
   }
 
   const supabase = await createServiceClient();
+  // MERGE over the existing config rather than REPLACE it. The three admin
+  // screens (scoring-config / scoring-framework / scoring-rules) each edit a
+  // DIFFERENT subset of role keys, and a full-replace upsert meant saving from
+  // one screen silently wiped every key the other screens own — e.g. the ex_*
+  // roles (absent from scoring-rules) and the committee_drafter /
+  // committee_presenter bill-role merit (only on scoring-framework). Read the
+  // current row, overlay only the keys this caller sent, and write the union, so
+  // a save never drops a key it didn't list.
+  const { data: existing } = await supabase
+    .from("position_bonus_config")
+    .select("bonuses")
+    .eq("id", true)
+    .maybeSingle();
+  const prior: Record<string, number> = {};
+  for (const [k, v] of Object.entries(
+    (existing?.bonuses ?? {}) as Record<string, unknown>
+  )) {
+    const n = Number(v);
+    if (Number.isFinite(n)) prior[k] = n;
+  }
+  const merged = { ...prior, ...clean };
   const { error } = await supabase.from("position_bonus_config").upsert(
     {
       id: true,
-      bonuses: clean as unknown as never,
+      bonuses: merged as unknown as never,
       updated_at: new Date().toISOString(),
     },
     { onConflict: "id" }

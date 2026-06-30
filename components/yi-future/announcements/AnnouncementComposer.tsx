@@ -18,6 +18,7 @@ type Props = {
   teams?: Option[];
   delegates?: Option[];
   chapters?: Option[];
+  zones?: Option[];
 };
 
 const AUDIENCE_OPTIONS: Record<

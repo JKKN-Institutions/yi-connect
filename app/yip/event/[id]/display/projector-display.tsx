@@ -81,6 +81,18 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
     event?.live_timer_running ?? false
   );
 
+  // A vote occupies the projector ONLY when it belongs to the CURRENT agenda
+  // item. A vote session has no terminal status (open/closed/revealed only), so
+  // the latest revealed vote stays "revealed" forever — without scoping to the
+  // live item it would keep the agenda title + timer hidden for the rest of the
+  // event (e.g. after revealing a party-leader vote and advancing to a timed
+  // session, the timer never appeared). Both the vote display and the
+  // agenda/timer block key off this single predicate so they stay complementary.
+  const voteForCurrentItem =
+    !!voteSession &&
+    voteSession.agenda_item_id === currentAgendaItem?.id &&
+    (isOpen || isClosed || isRevealed);
+
   // F5 — live banner (breaking-news strip)
   const liveBanner = useLiveBanner(
     eventId,
@@ -628,9 +640,7 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
             rest of the event — e.g. Day-1's Speaker Election still showing
             during Day-2 Question Hour. Scoping to the live item retires it the
             moment the moderator advances. */}
-        {voteSession &&
-          voteSession.agenda_item_id === currentAgendaItem?.id &&
-          (isOpen || isClosed || isRevealed) && (
+        {voteForCurrentItem && (
           <div className="w-full max-w-4xl space-y-8 text-center">
             {/* Voting Open */}
             {isOpen && (
@@ -938,8 +948,10 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
           </div>
         )}
 
-        {/* Current agenda item (only show when no active vote display) */}
-        {(!voteSession || (!isOpen && !isClosed && !isRevealed)) && currentAgendaItem ? (
+        {/* Current agenda item (only show when no vote occupies the CURRENT
+            item — a stale revealed vote from an earlier item must NOT hide the
+            agenda title + timer; that was the "timer not showing" bug). */}
+        {!voteForCurrentItem && currentAgendaItem ? (
           <div className="w-full max-w-4xl space-y-8 text-center">
             {/* Agenda item title */}
             <div>

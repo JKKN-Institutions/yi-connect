@@ -115,6 +115,14 @@ export default async function NationalAnnouncementsPage() {
     await deleteAnnouncement(String(formData.get("id") ?? ""));
   }
 
+  async function editAction(
+    _prev: AnnouncementResult | null,
+    formData: FormData
+  ): Promise<AnnouncementResult | null> {
+    "use server";
+    return editNationalAnnouncement(String(formData.get("id") ?? ""), formData);
+  }
+
   return (
     <div className="space-y-8">
       <div>

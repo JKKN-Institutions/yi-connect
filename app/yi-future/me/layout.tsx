@@ -21,9 +21,15 @@ export default async function DelegateLayout({
     redirect("/yi-future/join");
   }
 
+  const { unread } = await getDelegateAnnouncementFeed();
+
   return (
     <div className="min-h-screen bg-ivory flex flex-col">
-      <RoleHeader sessionName={session.name} roleLabel="Delegate" />
+      <RoleHeader
+        sessionName={session.name}
+        roleLabel="Delegate"
+        notif={{ href: "/yi-future/me/announcements", count: unread }}
+      />
       <main className="flex-1 max-w-3xl w-full mx-auto px-4 py-6">
         {children}
       </main>

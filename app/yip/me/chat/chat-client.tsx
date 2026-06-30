@@ -22,6 +22,8 @@ import {
   MessageActions,
   PinnedBanner,
   ChannelSearch,
+  MentionInput,
+  MessageBody,
 } from "@/components/yip/chat-message-extras";
 import {
   SectionShell,
@@ -42,8 +44,10 @@ import {
   toggleReaction,
   listPinnedMessages,
   searchMessages,
+  listChannelMembers,
   type ChatChannel,
   type ChatMessage,
+  type ChatMember,
   type ChatReplyPreview,
   type YuvaContact,
 } from "@/app/yip/actions/chat";
@@ -135,11 +139,19 @@ export function ChatClient({
             channelId: view.channel.id,
             body,
             replyToId: meta?.replyToId ?? null,
+            mentions: meta?.mentions ?? [],
           })
         }
         loadPinned={() =>
           listPinnedMessages({ channelId: view.channel.id, participantId })
         }
+        loadMembers={async () => {
+          const r = await listChannelMembers({
+            channelId: view.channel.id,
+            participantId,
+          });
+          return r.success ? r.data : [];
+        }}
         search={async (query) => {
           const r = await searchMessages({
             channelId: view.channel.id,
@@ -325,7 +337,11 @@ interface ThreadProps {
   >;
   send: (
     body: string,
-    meta?: { replyToId?: string | null; replyPreview?: ChatReplyPreview | null }
+    meta?: {
+      replyToId?: string | null;
+      replyPreview?: ChatReplyPreview | null;
+      mentions?: string[];
+    }
   ) => Promise<
     | { success: true; data: ChatMessage }
     | { success: false; error: string }
@@ -337,6 +353,8 @@ interface ThreadProps {
     | { success: true; data: ChatMessage[] }
     | { success: false; error: string }
   >;
+  /** Load mentionable members for the @-picker (channels only). */
+  loadMembers?: () => Promise<ChatMember[]>;
   /** Search messages in this channel (channels only). */
   search?: (query: string) => Promise<ChatMessage[]>;
   /** When set, the composer is replaced by this read-only note. */
@@ -357,6 +375,7 @@ function Thread({
   send,
   canReply,
   loadPinned,
+  loadMembers,
   search,
   readOnlyNote,
   onReport,
@@ -365,6 +384,8 @@ function Thread({
   const [reportedIds, setReportedIds] = useState<Set<string>>(new Set());
   const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
   const [pinned, setPinned] = useState<ChatMessage[]>([]);
+  const [members, setMembers] = useState<ChatMember[]>([]);
+  const [mentionIds, setMentionIds] = useState<string[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -375,6 +396,21 @@ function Thread({
     let active = true;
     loadPinned().then((r) => {
       if (active && r.success) setPinned(r.data);
+    });
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [threadId]);
+
+  useEffect(() => {
+    if (!loadMembers) {
+      setMembers([]);
+      return;
+    }
+    let active = true;
+    loadMembers().then((list) => {
+      if (active) setMembers(list);
     });
     return () => {
       active = false;
@@ -410,11 +446,18 @@ function Thread({
   function handleSend() {
     const body = draft.trim();
     if (!body || sending) return;
-    const meta = replyingTo
-      ? { replyToId: replyingTo.id, replyPreview: previewOf(replyingTo) }
-      : undefined;
+    const liveMentions = mentionIds.filter((id) => {
+      const first = members.find((mm) => mm.id === id)?.name.split(" ")[0];
+      return first ? body.includes(`@${first}`) : false;
+    });
+    const meta = {
+      replyToId: replyingTo?.id ?? null,
+      replyPreview: replyingTo ? previewOf(replyingTo) : null,
+      mentions: liveMentions,
+    };
     setDraft("");
     setReplyingTo(null);
+    setMentionIds([]);
     sendMessage(body, meta);
   }
 
@@ -520,7 +563,10 @@ function Thread({
                     />
                   )}
                   <span className="whitespace-pre-wrap break-words">
-                    {m.body}
+                    <MessageBody
+                      body={m.body}
+                      mentionsMe={!mine && m.mentions.includes(participantId)}
+                    />
                   </span>
                   {mine && (m.pending || m.failed) && (
                     <span
@@ -599,20 +645,35 @@ function Thread({
           </div>
         )}
         <div className="flex items-end gap-2">
-        <textarea
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              handleSend();
+        {canReply && members.length > 0 ? (
+          <MentionInput
+            value={draft}
+            onChange={setDraft}
+            members={members}
+            onAddMention={(id) =>
+              setMentionIds((prev) =>
+                prev.includes(id) ? prev : [...prev, id]
+              )
             }
-          }}
-          rows={1}
-          maxLength={2000}
-          placeholder="Type a message…"
-          className="max-h-32 flex-1 resize-none rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm focus:border-[#FF9933] focus:outline-none focus:ring-1 focus:ring-[#FF9933]"
-        />
+            onSubmit={handleSend}
+            placeholder="Type a message… (@ to mention)"
+          />
+        ) : (
+          <textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                handleSend();
+              }
+            }}
+            rows={1}
+            maxLength={2000}
+            placeholder="Type a message…"
+            className="max-h-32 flex-1 resize-none rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm focus:border-[#FF9933] focus:outline-none focus:ring-1 focus:ring-[#FF9933]"
+          />
+        )}
         <Button
           onClick={handleSend}
           disabled={sending || !draft.trim()}

@@ -11,16 +11,148 @@
  */
 
 import { useState } from "react";
-import { Reply, SmilePlus, X, Pin, Search, Loader2 } from "lucide-react";
+import { Reply, SmilePlus, X, Pin, Search, Loader2, AtSign } from "lucide-react";
 import { cn } from "@/lib/yip/utils";
 import { CHAT_REACTION_EMOJIS } from "@/lib/yip/chat-reactions";
 import type {
   ChatMessage,
+  ChatMember,
   ChatReactionSummary,
   ChatReplyPreview,
 } from "@/app/yip/actions/chat";
 
 type Tone = "light" | "accent";
+
+/** Render a message body with @mentions highlighted. */
+export function MessageBody({
+  body,
+  mentionsMe,
+}: {
+  body: string;
+  mentionsMe?: boolean;
+}) {
+  const parts = body.split(/(@[\p{L}][\p{L}\d._]*)/u);
+  return (
+    <>
+      {mentionsMe && (
+        <span className="mr-1 inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 align-middle text-[9px] font-semibold uppercase tracking-wide text-amber-700">
+          mentions you
+        </span>
+      )}
+      {parts.map((p, i) =>
+        /^@[\p{L}]/u.test(p) ? (
+          <span key={i} className="font-semibold text-blue-600">
+            {p}
+          </span>
+        ) : (
+          <span key={i}>{p}</span>
+        )
+      )}
+    </>
+  );
+}
+
+/**
+ * Textarea with an inline @-mention picker. Detects a trailing "@fragment",
+ * shows matching members, and on pick inserts "@FirstName " and records the id.
+ * Enter sends (onSubmit) unless the picker is open, where it picks the top match.
+ */
+export function MentionInput({
+  value,
+  onChange,
+  members,
+  onAddMention,
+  onSubmit,
+  placeholder,
+  disabled,
+  rows = 1,
+  className,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  members: ChatMember[];
+  onAddMention: (id: string) => void;
+  onSubmit: () => void;
+  placeholder?: string;
+  disabled?: boolean;
+  rows?: number;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [frag, setFrag] = useState("");
+
+  function handleChange(v: string) {
+    onChange(v);
+    const m = v.match(/@([\p{L}\d._]*)$/u);
+    if (m) {
+      setFrag(m[1].toLowerCase());
+      setOpen(true);
+    } else {
+      setOpen(false);
+    }
+  }
+
+  const filtered =
+    members.length > 0
+      ? members.filter((mm) => mm.name.toLowerCase().includes(frag)).slice(0, 6)
+      : [];
+
+  function pick(member: ChatMember) {
+    const replaced = value.replace(
+      /@([\p{L}\d._]*)$/u,
+      "@" + member.name.split(" ")[0] + " "
+    );
+    onChange(replaced);
+    onAddMention(member.id);
+    setOpen(false);
+  }
+
+  return (
+    <div className="relative flex-1">
+      {open && filtered.length > 0 && (
+        <div className="absolute bottom-full z-30 mb-1 max-h-48 w-full overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-lg">
+          {filtered.map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              onClick={() => pick(m)}
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-gray-50"
+            >
+              <AtSign className="size-3.5 text-gray-400" />
+              {m.name}
+            </button>
+          ))}
+        </div>
+      )}
+      <textarea
+        value={value}
+        rows={rows}
+        disabled={disabled}
+        onChange={(e) => handleChange(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") {
+            setOpen(false);
+            return;
+          }
+          if (e.key === "Enter" && !e.shiftKey) {
+            if (open && filtered.length > 0) {
+              e.preventDefault();
+              pick(filtered[0]);
+              return;
+            }
+            e.preventDefault();
+            onSubmit();
+          }
+        }}
+        placeholder={placeholder}
+        className={
+          className ??
+          "max-h-32 w-full resize-none rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm focus:border-[#FF9933] focus:outline-none focus:ring-1 focus:ring-[#FF9933]"
+        }
+      />
+    </div>
+  );
+}
 
 /** Banner shown at the top of a channel with the organiser's pinned message(s). */
 export function PinnedBanner({ pinned }: { pinned: ChatMessage[] }) {

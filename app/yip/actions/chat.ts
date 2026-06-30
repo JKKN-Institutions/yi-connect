@@ -36,6 +36,7 @@ import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { requireParticipantSession } from "@/lib/yip/auth/yip-session";
 import { CHAT_ENABLED } from "@/lib/yip/chat-config";
 import { isAllowedReaction } from "@/lib/yip/chat-reactions";
+import { sendYipPushToParticipants } from "@/lib/yip/push";
 
 type ActionResult<T = null> =
   | { success: true; data: T }
@@ -87,6 +88,14 @@ export interface ChatMessage {
   reactions: ChatReactionSummary[];
   /** Pin: set when an organiser has pinned this message to the channel. */
   pinnedAt: string | null;
+  /** Participant ids @-mentioned in this message (for highlight + push). */
+  mentions: string[];
+}
+
+/** A mentionable channel member (for the @-picker). */
+export interface ChatMember {
+  id: string;
+  name: string;
 }
 
 // ─── Untyped table access (chat_* not in generated DB types yet) ────
@@ -144,7 +153,7 @@ function toChannel(r: RawAny): ChatChannel {
 const CHANNEL_COLS =
   "id, event_id, kind, party_id, committee_name, name, frozen_at, created_at";
 const MSG_COLS =
-  "id, channel_id, sender_kind, sender_participant_id, sender_volunteer_id, body, dm_to_volunteer_id, deleted_at, created_at, reply_to_id, pinned_at";
+  "id, channel_id, sender_kind, sender_participant_id, sender_volunteer_id, body, dm_to_volunteer_id, deleted_at, created_at, reply_to_id, pinned_at, mentions";
 const MOD_MSG_COLS = `${MSG_COLS}, reported_at, reported_by_participant_id`;
 
 // ─── Internal helpers (NOT exported — a "use server" file may only export
@@ -275,6 +284,22 @@ async function loadNameMaps(
   return { pNames, vNames };
 }
 
+/** Tolerant jsonb → string[] for the mentions column (array, JSON string, or null). */
+function parseMentionIds(v: unknown): string[] {
+  if (Array.isArray(v)) return v.filter((x): x is string => typeof x === "string");
+  if (typeof v === "string" && v.trim()) {
+    try {
+      const j = JSON.parse(v);
+      return Array.isArray(j)
+        ? j.filter((x): x is string => typeof x === "string")
+        : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
 function toMessage(r: RawAny): ChatMessage {
   return {
     id: String(r.id),
@@ -292,6 +317,7 @@ function toMessage(r: RawAny): ChatMessage {
     replyPreview: null,
     reactions: [],
     pinnedAt: (r.pinned_at as string | null) ?? null,
+    mentions: parseMentionIds(r.mentions),
   };
 }
 
@@ -408,6 +434,41 @@ async function validateReplyAnchor(
     if (anchorThread !== threadKey) return null;
   }
   return replyToId;
+}
+
+/**
+ * Keep only @-mention ids that are genuine members of this channel (and not the
+ * sender). Reuses the channel-membership rule, so you can never mention someone
+ * who can't see the channel.
+ */
+async function validateMentions(
+  sb: ServiceClient,
+  mentions: string[] | undefined,
+  channel: ChatChannel,
+  senderId: string
+): Promise<string[]> {
+  const ids = Array.from(new Set((mentions ?? []).filter(Boolean))).filter(
+    (id) => id !== senderId
+  );
+  if (ids.length === 0) return [];
+  const { data } = (await table(sb, "participants")
+    .select("id, event_id, party_id, committee_name")
+    .in("id", ids)
+    .eq("event_id", channel.eventId)) as {
+    data: RawAny[] | null;
+    error: PgError | null;
+  };
+  const keep: string[] = [];
+  for (const r of data ?? []) {
+    const pr: ParticipantChatRow = {
+      id: String(r.id),
+      eventId: String(r.event_id),
+      partyId: (r.party_id as string | null) ?? null,
+      committeeName: (r.committee_name as string | null) ?? null,
+    };
+    if (channelVisibleToParticipant(channel, pr)) keep.push(pr.id);
+  }
+  return keep;
 }
 
 // ─── 1. List channels for an event ──────────────────────────────
@@ -631,6 +692,9 @@ export async function postChannelMessage(args: {
   // Optional WhatsApp-style reply anchor — must be a non-deleted message in the
   // SAME channel (validated below); ignored otherwise.
   replyToId?: string | null;
+  // Optional @-mention participant ids — kept only if they're members of this
+  // channel; each gets a push notification.
+  mentions?: string[];
 }): Promise<ActionResult<ChatMessage>> {
   if (!CHAT_ENABLED) return { success: false, error: DISABLED };
 
@@ -687,6 +751,15 @@ export async function postChannelMessage(args: {
     args.threadKey ?? null
   );
 
+  // @-mentions — keep only ids that are members of THIS channel (and not the
+  // sender themselves). Stored on the row + used to push.
+  const mentionIds = await validateMentions(
+    sb,
+    args.mentions,
+    channel,
+    args.participantId
+  );
+
   const { data, error } = (await table(sb, "chat_messages")
     .insert({
       event_id: eventId,
@@ -697,6 +770,7 @@ export async function postChannelMessage(args: {
       body,
       thread_key: args.threadKey ?? null,
       reply_to_id: replyToId,
+      mentions: mentionIds.length > 0 ? mentionIds : null,
     })
     .select(MSG_COLS)
     .single()) as { data: RawAny | null; error: PgError | null };
@@ -704,6 +778,23 @@ export async function postChannelMessage(args: {
   if (error || !data) {
     return { success: false, error: error?.message ?? "Failed to post." };
   }
+
+  // Best-effort push to the mentioned students (never blocks the send result).
+  if (mentionIds.length > 0) {
+    const senderName =
+      (await loadNameMaps(sb, [args.participantId], [])).pNames.get(
+        args.participantId
+      ) ?? "Someone";
+    void sendYipPushToParticipants(mentionIds, {
+      title: `${senderName} mentioned you`,
+      body:
+        `${channel.name}: ` +
+        (body.length > 120 ? `${body.slice(0, 120)}…` : body),
+      url: "/yip/me/chat",
+      tag: `mention-${args.channelId}`,
+    }).catch(() => {});
+  }
+
   const [enriched] = await enrichMessages(sb, [toMessage(data)], {
     kind: "student",
     id: args.participantId,
@@ -1960,4 +2051,64 @@ export async function searchMessages(args: {
   if (error) return { success: false, error: error.message };
   const enriched = await enrichMessages(sb, (data ?? []).map(toMessage), me);
   return { success: true, data: enriched };
+}
+
+/**
+ * Members of a channel — for the @-mention picker. Same membership gating as
+ * listMessages. Returns {id, name} sorted by name (excludes announcement
+ * channels, which students can't post in, and the caller themselves).
+ */
+export async function listChannelMembers(args: {
+  channelId: string;
+  participantId?: string;
+}): Promise<ActionResult<ChatMember[]>> {
+  if (!CHAT_ENABLED) return { success: false, error: DISABLED };
+  if (!args.channelId) return { success: false, error: "Missing channel." };
+
+  const sb = await createServiceClient();
+  const { data: chRow } = (await table(sb, "chat_channels")
+    .select(CHANNEL_COLS)
+    .eq("id", args.channelId)
+    .maybeSingle()) as { data: RawAny | null; error: PgError | null };
+  if (!chRow) return { success: false, error: "Channel not found." };
+  const channel = toChannel(chRow);
+
+  if (args.participantId) {
+    const auth = await requireParticipantSession(args.participantId, channel.eventId);
+    if (!auth.ok) return { success: false, error: auth.error };
+    const p = await loadParticipantChatRow(sb, args.participantId, channel.eventId);
+    if (!p || !channelVisibleToParticipant(channel, p)) {
+      return { success: false, error: "You don't have access to this channel." };
+    }
+  } else {
+    const access = await getYipEventAccess(channel.eventId);
+    if (!access.canManage) {
+      return { success: false, error: "Not authorized to read this channel." };
+    }
+  }
+
+  // Mentionable scope = the channel's membership. Announcement channels have no
+  // posting members worth mentioning.
+  if (channel.kind === "announcement") return { success: true, data: [] };
+
+  let mq = table(sb, "participants")
+    .select("id, full_name, party_id, committee_name")
+    .eq("event_id", channel.eventId);
+  if (channel.kind === "party" && channel.partyId) {
+    mq = mq.eq("party_id", channel.partyId);
+  } else if (channel.kind === "committee" && channel.committeeName) {
+    mq = mq.eq("committee_name", channel.committeeName);
+  } else {
+    return { success: true, data: [] };
+  }
+
+  const { data, error } = (await mq.order("full_name", { ascending: true })) as {
+    data: RawAny[] | null;
+    error: PgError | null;
+  };
+  if (error) return { success: false, error: error.message };
+  const members: ChatMember[] = (data ?? [])
+    .filter((r) => String(r.id) !== args.participantId)
+    .map((r) => ({ id: String(r.id), name: String(r.full_name) }));
+  return { success: true, data: members };
 }

@@ -9,6 +9,7 @@ import {
   unassignExpertFromPhaseEvent,
 } from "@/app/yi-future/actions/experts";
 import { PHASE_EVENT_LABELS } from "@/lib/yi-future/constants";
+import { DeleteExpertButton } from "@/components/yi-future/experts/DeleteExpertButton";
 
 const NAVY = "#1a1a3e";
 const GOLD = "#F5A623";

@@ -122,6 +122,7 @@ export default async function NationalAnnouncementsPage() {
         mode="national"
         action={postAction}
         chapters={chapters}
+        zones={zones}
       />
 
       <section className="space-y-3">

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
 import { getChapterContext } from "@/lib/yi-future/chapter-context";
@@ -180,13 +181,19 @@ export default async function ChapterProblemsPage() {
                     )}
                   </div>
 
-                  {count > 0 && (
-                    <div className="px-5 py-2 border-t border-navy/5 bg-navy/5">
-                      <div className="text-xs text-navy/50">
-                        {count} team{count !== 1 ? "s" : ""} working on this problem in your chapter
-                      </div>
-                    </div>
-                  )}
+                  <Link
+                    href={`/yi-future/chapter/problems/${p.id}`}
+                    className="flex items-center justify-between px-5 py-2.5 border-t border-navy/5 bg-navy/5 hover:bg-navy/10 transition-colors"
+                  >
+                    <span className="text-xs text-navy/60">
+                      {count > 0
+                        ? `${count} team${count !== 1 ? "s" : ""} in your chapter`
+                        : "No teams yet"}
+                    </span>
+                    <span className="text-xs font-semibold text-[#F5A623]">
+                      View teams &amp; delegates →
+                    </span>
+                  </Link>
                 </div>
               );
             })}

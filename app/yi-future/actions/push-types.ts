@@ -8,7 +8,8 @@ export type PushSubjectType =
   | "delegate"
   | "jury"
   | "mentor"
-  | "partner";
+  | "partner"
+  | "expert";
 
 export type SaveSubscriptionInput = {
   endpoint: string;

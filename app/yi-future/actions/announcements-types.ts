@@ -3,7 +3,12 @@
  * "use server" file so non-function exports are allowed.
  */
 
-export type AnnouncementAudience = "everyone" | "chapter" | "team" | "delegate";
+export type AnnouncementAudience =
+  | "everyone"
+  | "chapter"
+  | "team"
+  | "delegate"
+  | "zone";
 export type AnnouncementAuthorScope = "chapter" | "national";
 
 export type AnnouncementResult =

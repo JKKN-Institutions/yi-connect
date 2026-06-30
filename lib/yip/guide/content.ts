@@ -196,6 +196,7 @@ const organiser: PersonaGuide = {
         {
           action: "Run **Bill Presentation & Voting** — each committee presents and the house votes Aye/No.",
           detail: "The reveal shows BILL PASSED or BILL REJECTED.",
+          tip: "Committees draft their bill **directly** in their Committee Room (Bills → open a committee) — there is **no committee report** step. Open a room as organiser to help any committee that's stuck.",
           link: { label: "Open Bills", href: "/yip/dashboard/events/:eventId/bills" },
         },
         {
@@ -400,16 +401,26 @@ const student: PersonaGuide = {
     },
     {
       id: "draft-your-bill",
-      title: "Draft your committee bill",
+      title: "Your committee bill — draft, submit, present",
       steps: [
         {
-          action: "If you're on a bill committee, open the **Committee Room** to write, discuss and amend your committee's bill.",
-          detail: "Work it out together with your committee team.",
-          link: { label: "Open Committee Room", href: "/yip/me/bill" },
+          action: "**Draft** — open the **Committee Room** and use the **Bill** tab to write your bill: title, preamble, at least 2 objectives, and at least 3 provisions (the clauses).",
+          detail: "Your committee chair or lead drafter writes it; the whole committee sees it update live.",
+          link: { label: "Open Committee Room", href: "/yip/me/committee" },
         },
         {
-          action: "Have **one** committee member upload the final bill.",
-          tip: "Only the **first** person to submit locks the bill for the whole committee — agree who uploads, so you don't clash. Later, the whole house votes on it.",
+          action: "**Discuss** — talk each clause through in the **Discuss** tab and agree what it should say before you lock it in.",
+          detail: "This is where your committee debates and improves the bill together.",
+        },
+        {
+          action: "**Amend** — propose changes in the **Amend** tab; the committee votes each amendment up or down.",
+        },
+        {
+          action: "**Submit** — when the **Ready to submit?** checklist is all green (including a presenter chosen in the **Roles** tab), tap **Submit bill to the House**.",
+          tip: "Submitting **locks** the bill — no more edits, so make sure it's final. There is **no committee report** to file; the bill itself is your committee's work.",
+        },
+        {
+          action: "**Present & vote** — on Day 2 your **presenter** presents the bill to the House and everyone votes **Aye / Nay**. More Ayes than Nays and your bill **passes**.",
         },
       ],
     },

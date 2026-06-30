@@ -4,10 +4,15 @@ import { getChapterContext } from "@/lib/yi-future/chapter-context";
 import {
   createChapterAnnouncement,
   deleteAnnouncement,
+  editChapterAnnouncement,
   listChapterAnnouncements,
 } from "@/app/yi-future/actions/announcements";
-import type { ComposerState } from "@/app/yi-future/actions/announcements-types";
+import type {
+  ComposerState,
+  AnnouncementResult,
+} from "@/app/yi-future/actions/announcements-types";
 import { AnnouncementComposer } from "@/components/yi-future/announcements/AnnouncementComposer";
+import { EditAnnouncement } from "@/components/yi-future/announcements/EditAnnouncement";
 
 const NAVY = "#1a1a3e";
 
@@ -91,6 +96,14 @@ export default async function ChapterAnnouncementsPage() {
     await deleteAnnouncement(String(formData.get("id") ?? ""));
   }
 
+  async function editAction(
+    _prev: AnnouncementResult | null,
+    formData: FormData
+  ): Promise<AnnouncementResult | null> {
+    "use server";
+    return editChapterAnnouncement(String(formData.get("id") ?? ""), formData);
+  }
+
   return (
     <div className="space-y-8">
       <div>
@@ -157,6 +170,13 @@ export default async function ChapterAnnouncementsPage() {
                       <span>{timeAgo(a.created_at)}</span>
                       <span>· {a.read_count} read</span>
                     </div>
+                    <EditAnnouncement
+                      id={a.id}
+                      title={a.title}
+                      body={a.body}
+                      url={a.url ?? null}
+                      action={editAction}
+                    />
                   </div>
                   <form action={removeAnnouncement}>
                     <input type="hidden" name="id" value={a.id} />

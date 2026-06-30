@@ -2,10 +2,15 @@ import { createServiceClient } from "@/lib/yi-future/supabase/server";
 import {
   createNationalAnnouncement,
   deleteAnnouncement,
+  editNationalAnnouncement,
   listNationalAnnouncements,
 } from "@/app/yi-future/actions/announcements";
-import type { ComposerState } from "@/app/yi-future/actions/announcements-types";
+import type {
+  ComposerState,
+  AnnouncementResult,
+} from "@/app/yi-future/actions/announcements-types";
 import { AnnouncementComposer } from "@/components/yi-future/announcements/AnnouncementComposer";
+import { EditAnnouncement } from "@/components/yi-future/announcements/EditAnnouncement";
 
 export const metadata = {
   title: "Announcements · Yi National · Yi Future 6.0",
@@ -110,6 +115,14 @@ export default async function NationalAnnouncementsPage() {
     await deleteAnnouncement(String(formData.get("id") ?? ""));
   }
 
+  async function editAction(
+    _prev: AnnouncementResult | null,
+    formData: FormData
+  ): Promise<AnnouncementResult | null> {
+    "use server";
+    return editNationalAnnouncement(String(formData.get("id") ?? ""), formData);
+  }
+
   return (
     <div className="space-y-8">
       <div>
@@ -176,6 +189,13 @@ export default async function NationalAnnouncementsPage() {
                       <span>{when(a.created_at)}</span>
                       <span>· {a.read_count} read</span>
                     </div>
+                    <EditAnnouncement
+                      id={a.id}
+                      title={a.title}
+                      body={a.body}
+                      url={a.url ?? null}
+                      action={editAction}
+                    />
                   </div>
                   <form action={removeAnnouncement}>
                     <input type="hidden" name="id" value={a.id} />

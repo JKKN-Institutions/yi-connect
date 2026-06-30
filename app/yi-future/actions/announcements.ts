@@ -239,17 +239,21 @@ export async function createNationalAnnouncement(
   const body = String(formData.get("body") ?? "").trim();
   const url = String(formData.get("url") ?? "").trim() || null;
   const chapterId = String(formData.get("chapter_id") ?? "").trim() || null;
+  const zone = String(formData.get("zone") ?? "").trim() || null;
 
   if (!title) return { ok: false, error: "Title is required." };
   if (!body) return { ok: false, error: "Message is required." };
 
-  const allowed: AnnouncementAudience[] = ["everyone", "chapter"];
+  const allowed: AnnouncementAudience[] = ["everyone", "chapter", "zone"];
   if (!allowed.includes(audienceRaw as AnnouncementAudience)) {
     return { ok: false, error: "Pick who should receive this." };
   }
   const audience = audienceRaw as AnnouncementAudience;
   if (audience === "chapter" && !chapterId) {
     return { ok: false, error: "Select a chapter." };
+  }
+  if (audience === "zone" && !zone) {
+    return { ok: false, error: "Select a zone." };
   }
 
   const svc = (await createServiceClient()) as LooseClient;
@@ -263,6 +267,7 @@ export async function createNationalAnnouncement(
     chapter_id: audience === "chapter" ? chapterId : null,
     team_id: null,
     delegate_id: null,
+    zone: audience === "zone" ? zone : null,
     title,
     body,
     url,

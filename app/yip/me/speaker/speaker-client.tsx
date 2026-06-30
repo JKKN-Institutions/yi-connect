@@ -8,7 +8,9 @@ import {
   speakerOpenMotionVote,
   speakerRecordMotionVote,
   getNoConfidenceVoteState,
+  getSpeakerQuestions,
   type MotionVoteState,
+  type SpeakerQuestion,
 } from "@/app/yip/actions/speaker";
 import type { Motion } from "@/app/yip/actions/motions";
 import {
@@ -17,7 +19,7 @@ import {
   MOTION_STATUS_COLORS,
   type MotionStatus,
 } from "@/lib/yip/motions";
-import { Gavel, Vote, CheckCircle2, type LucideIcon } from "lucide-react";
+import { Gavel, Vote, CheckCircle2, ListOrdered, type LucideIcon } from "lucide-react";
 import {
   SectionShell,
   SectionHeading,
@@ -31,20 +33,36 @@ import {
 
 const TYPE_LABEL = new Map(MOTION_TYPES.map((t) => [t.code, t.label]));
 
+// Mirror of the Minister desk's ministry labels so the Speaker sees the same names.
+const MINISTRY_LABEL: Record<string, string> = {
+  home: "Home Affairs",
+  finance: "Finance",
+  education: "Education",
+  health: "Health",
+  women_child: "Women & Child Development",
+  disaster_management: "Disaster Management",
+  youth_sports: "Youth Affairs & Sports",
+  it_digital: "IT & Digital",
+};
+const ml = (k: string | null) => (k ? MINISTRY_LABEL[k] ?? k : "—");
+
 export function SpeakerClient({
   eventId,
   participantId,
   roleLabel,
   initialMotions,
+  initialQuestions,
   loadError,
 }: {
   eventId: string;
   participantId: string;
   roleLabel: string;
   initialMotions: Motion[];
+  initialQuestions: SpeakerQuestion[];
   loadError: string | null;
 }) {
   const [motions, setMotions] = useState<Motion[]>(initialMotions);
+  const [questions, setQuestions] = useState<SpeakerQuestion[]>(initialQuestions);
   const [error, setError] = useState<string | null>(loadError);
   const [busy, setBusy] = useState<string | null>(null);
   const [rejecting, setRejecting] = useState<Record<string, string>>({});
@@ -52,13 +70,15 @@ export function SpeakerClient({
   const [voteStates, setVoteStates] = useState<Record<string, MotionVoteState>>({});
 
   const refresh = useCallback(async () => {
-    const [m, v] = await Promise.all([
+    const [m, v, q] = await Promise.all([
       getSpeakerMotions(eventId, participantId),
       getNoConfidenceVoteState(eventId, participantId),
+      getSpeakerQuestions(eventId, participantId),
     ]);
     if (m.success) setMotions(m.data);
     else setError(m.error);
     if (v.success) setVoteStates(v.data);
+    if (q.success) setQuestions(q.data);
   }, [eventId, participantId]);
 
   async function run(id: string, fn: () => Promise<{ success: boolean; error?: string }>) {
@@ -118,6 +138,41 @@ export function SpeakerClient({
           {error}
         </div>
       )}
+
+      <Section title={`Question Hour (${questions.length})`} icon={ListOrdered} accent={GOLD}>
+        {questions.length === 0 && (
+          <Empty>
+            No approved questions yet. They appear here once the organiser approves them —
+            each shows the MP, their constituency &amp; number, and the ministry it&apos;s for.
+          </Empty>
+        )}
+        {questions.map((qn, i) => (
+          <SectionShell key={qn.id} accent={GOLD}>
+            <div className="space-y-1.5 px-5 py-3.5">
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-sm font-semibold" style={{ ...SERIF, color: INK }}>
+                  {i + 1}. {qn.mp_name}
+                </p>
+                <span
+                  className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                  style={{ background: `${GOLD}1a`, color: GOLD }}
+                >
+                  {ml(qn.directed_to_ministry)}
+                </span>
+              </div>
+              <p className="text-xs" style={{ color: inkA(0.55) }}>
+                {qn.constituency_name ?? "—"}
+                {qn.constituency_number != null
+                  ? ` · Constituency No. ${qn.constituency_number}`
+                  : ""}
+              </p>
+              <p className="text-sm leading-snug" style={{ color: inkA(0.82) }}>
+                {qn.question_text}
+              </p>
+            </div>
+          </SectionShell>
+        ))}
+      </Section>
 
       <Section title={`Awaiting your ruling (${pending.length})`} icon={Gavel} accent={SAFFRON}>
         {pending.length === 0 && <Empty>No motions waiting.</Empty>}

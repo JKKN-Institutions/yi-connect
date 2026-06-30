@@ -4,7 +4,7 @@ import { getYipSession } from "@/lib/yip/auth/yip-session";
 import Link from "next/link";
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { ROLE_LABELS } from "@/lib/yip/constants";
-import { getSpeakerMotions } from "@/app/yip/actions/speaker";
+import { getSpeakerMotions, getSpeakerQuestions } from "@/app/yip/actions/speaker";
 import { PRESIDING_ROLES } from "@/lib/yip/auth/leadership";
 import { SpeakerClient } from "./speaker-client";
 import { INK, GOLD, SERIF, inkA } from "../credential-ui";
@@ -79,12 +79,16 @@ export default async function SpeakerPage() {
   const result = await getSpeakerMotions(session.eventId, participant.id);
   const motions = result.success ? result.data : [];
 
+  const qResult = await getSpeakerQuestions(session.eventId, participant.id);
+  const questions = qResult.success ? qResult.data : [];
+
   return (
     <SpeakerClient
       eventId={session.eventId}
       participantId={participant.id}
       roleLabel={role ? ROLE_LABELS[role] ?? "Speaker" : "Speaker"}
       initialMotions={motions}
+      initialQuestions={questions}
       loadError={result.success ? null : result.error}
     />
   );

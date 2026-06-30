@@ -50,6 +50,76 @@ export async function getSpeakerMotions(
   return { success: true, data: (data ?? []) as unknown as Motion[] };
 }
 
+/** A single approved Question Hour question, shaped for the Speaker's read-only
+ *  List of Business. */
+export type SpeakerQuestion = {
+  id: string;
+  question_text: string;
+  directed_to_ministry: string | null;
+  mp_name: string;
+  constituency_name: string | null;
+  constituency_number: number | null;
+};
+
+/**
+ * Approved Question Hour questions for the presiding officer — a READ-ONLY List
+ * of Business so whoever plays Speaker can call questions in order. Each row
+ * carries the MP who tabled it, their constituency name + number, and the
+ * ministry it is directed to. Only `status='approved'` questions are returned
+ * (un-vetted / rejected ones never reach the Chair). Participant + role gated.
+ */
+export async function getSpeakerQuestions(
+  eventId: string,
+  participantId: string
+): Promise<ActionResult<SpeakerQuestion[]>> {
+  const gate = await requireLeadershipRole(participantId, eventId, PRESIDING_ROLES);
+  if (!gate.ok) return { success: false, error: gate.error };
+
+  const supabase = await createServiceClient();
+  const { data: qs, error } = await supabase
+    .from("questions")
+    .select("id, question_text, directed_to_ministry, submitted_by, created_at")
+    .eq("event_id", eventId)
+    .eq("status", "approved")
+    .order("directed_to_ministry", { ascending: true })
+    .order("created_at", { ascending: true });
+  if (error) return { success: false, error: error.message };
+
+  const ids = [
+    ...new Set((qs ?? []).map((q) => q.submitted_by).filter(Boolean) as string[]),
+  ];
+  const byId = new Map<
+    string,
+    { full_name: string; constituency_name: string | null; constituency_number: number | null }
+  >();
+  if (ids.length > 0) {
+    const { data: ps } = await supabase
+      .from("participants")
+      .select("id, full_name, constituency_name, constituency_number")
+      .in("id", ids);
+    for (const p of ps ?? []) {
+      byId.set(p.id, {
+        full_name: p.full_name,
+        constituency_name: p.constituency_name ?? null,
+        constituency_number: p.constituency_number ?? null,
+      });
+    }
+  }
+
+  const out: SpeakerQuestion[] = (qs ?? []).map((q) => {
+    const p = q.submitted_by ? byId.get(q.submitted_by) : undefined;
+    return {
+      id: q.id,
+      question_text: q.question_text,
+      directed_to_ministry: q.directed_to_ministry,
+      mp_name: p?.full_name ?? "—",
+      constituency_name: p?.constituency_name ?? null,
+      constituency_number: p?.constituency_number ?? null,
+    };
+  });
+  return { success: true, data: out };
+}
+
 type LoadedMotion =
   | {
       ok: true;

@@ -2656,7 +2656,7 @@ export type Database = {
           details: string | null
           directed_to_id: string | null
           directed_to_ministry:
-            | Database["public"]["Enums"]["ministry_type"]
+            | string
             | null
           event_id: string
           id: string
@@ -2688,7 +2688,7 @@ export type Database = {
           details?: string | null
           directed_to_id?: string | null
           directed_to_ministry?:
-            | Database["public"]["Enums"]["ministry_type"]
+            | string
             | null
           event_id: string
           id?: string
@@ -2722,7 +2722,7 @@ export type Database = {
           details?: string | null
           directed_to_id?: string | null
           directed_to_ministry?:
-            | Database["public"]["Enums"]["ministry_type"]
+            | string
             | null
           event_id?: string
           id?: string
@@ -2861,7 +2861,7 @@ export type Database = {
           home_state: string | null
           id: string
           is_mock: boolean
-          ministry: Database["public"]["Enums"]["ministry_type"] | null
+          ministry: string | null
           parent_phone: string | null
           parliament_role: Database["public"]["Enums"]["parliament_role"] | null
           party_id: string | null
@@ -2899,7 +2899,7 @@ export type Database = {
           home_state?: string | null
           id?: string
           is_mock?: boolean
-          ministry?: Database["public"]["Enums"]["ministry_type"] | null
+          ministry?: string | null
           parent_phone?: string | null
           parliament_role?:
             | Database["public"]["Enums"]["parliament_role"]
@@ -2939,7 +2939,7 @@ export type Database = {
           home_state?: string | null
           id?: string
           is_mock?: boolean
-          ministry?: Database["public"]["Enums"]["ministry_type"] | null
+          ministry?: string | null
           parent_phone?: string | null
           parliament_role?:
             | Database["public"]["Enums"]["parliament_role"]
@@ -3182,7 +3182,7 @@ export type Database = {
         Row: {
           answer_summary: string | null
           created_at: string | null
-          directed_to_ministry: Database["public"]["Enums"]["ministry_type"]
+          directed_to_ministry: string
           event_id: string
           filtered_by: string | null
           id: string
@@ -3197,7 +3197,7 @@ export type Database = {
         Insert: {
           answer_summary?: string | null
           created_at?: string | null
-          directed_to_ministry: Database["public"]["Enums"]["ministry_type"]
+          directed_to_ministry: string
           event_id: string
           filtered_by?: string | null
           id?: string
@@ -3212,7 +3212,7 @@ export type Database = {
         Update: {
           answer_summary?: string | null
           created_at?: string | null
-          directed_to_ministry?: Database["public"]["Enums"]["ministry_type"]
+          directed_to_ministry?: string
           event_id?: string
           filtered_by?: string | null
           id?: string

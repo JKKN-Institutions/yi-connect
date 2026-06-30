@@ -6,6 +6,7 @@ import {
   getMyMotions,
   getEventMotionCutoff,
 } from "@/app/yip/actions/motions";
+import { getCabinetConfig } from "@/app/yip/actions/cabinet";
 import { MotionClient } from "./motion-client";
 
 interface ParticipantSession {
@@ -56,6 +57,7 @@ export default async function MotionPage() {
 
   const myMotions = await getMyMotions(session.eventId, participant.id);
   const cutoffAt = await getEventMotionCutoff(session.eventId);
+  const { ministries } = await getCabinetConfig(session.eventId);
 
   return (
     <MotionClient
@@ -65,6 +67,7 @@ export default async function MotionPage() {
       partySide={participant.party_side}
       myMotions={myMotions}
       cutoffAt={cutoffAt}
+      ministries={ministries}
     />
   );
 }

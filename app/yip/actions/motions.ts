@@ -6,6 +6,7 @@ import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { requireParticipantSession } from "@/lib/yip/auth/yip-session";
 import { revalidatePath } from "next/cache";
 import { isHouseVoteMotionType } from "@/lib/yip/motions";
+import { effectiveMinistries } from "@/lib/yip/cabinet";
 import type { MotionType, MotionStatus } from "@/lib/yip/motions";
 
 type ActionResult<T = null> =
@@ -370,16 +371,10 @@ export async function raiseMotion(input: {
   motionType: MotionType;
   subject: string;
   details: string;
-  directedToMinistry:
-    | "home"
-    | "finance"
-    | "education"
-    | "health"
-    | "women_child"
-    | "disaster_management"
-    | "youth_sports"
-    | "it_digital"
-    | null;
+  // A per-event cabinet portfolio KEY (events.cabinet_ministries) or null.
+  // Free text now (directed_to_ministry is no longer the fixed enum) — validated
+  // against the event's effective ministries below when a motion needs one.
+  directedToMinistry: string | null;
 }): Promise<ActionResult<{ id: string }>> {
   // Participant self-service (a student raises a motion). Verify the session
   // owns participantId — NOT canManage (that's the organiser gate and would
@@ -417,10 +412,22 @@ export async function raiseMotion(input: {
 
   const { data: event } = await supabase
     .from("events")
-    .select("id")
+    .select("id, cabinet_ministries")
     .eq("id", input.eventId)
     .single();
   if (!event) return { success: false, error: "Event not found" };
+
+  // When a ministry is supplied it must be one of the event's effective cabinet
+  // portfolios (custom override or handbook default). directed_to_ministry is
+  // free text now, so this app gate is the only constraint. Fail closed.
+  if (input.directedToMinistry) {
+    const validKeys = new Set(
+      effectiveMinistries(event.cabinet_ministries).map((m) => m.key)
+    );
+    if (!validKeys.has(input.directedToMinistry)) {
+      return { success: false, error: "Please select a valid ministry for this event." };
+    }
+  }
 
   const { data, error } = await supabase
     .from("motions")

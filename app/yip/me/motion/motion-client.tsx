@@ -17,7 +17,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
-import { MINISTRIES } from "@/lib/yip/constants";
 import {
   MOTION_TYPES,
   MOTION_STATUS_LABELS,
@@ -27,9 +26,8 @@ import {
 } from "@/lib/yip/motions";
 import type { Motion } from "@/app/yip/actions/motions";
 import { raiseMotion } from "@/app/yip/actions/motions";
+import type { MinistryPortfolio } from "@/lib/yip/cabinet";
 import type { Database } from "@/types/yip/database";
-
-type MinistryType = Database["public"]["Enums"]["ministry_type"];
 
 interface MotionClientProps {
   eventId: string;
@@ -38,6 +36,8 @@ interface MotionClientProps {
   partySide: Database["public"]["Enums"]["party_side"] | null;
   myMotions: Motion[];
   cutoffAt: string | null;
+  /** The event's effective cabinet portfolios for the "Directed to" dropdown. */
+  ministries: MinistryPortfolio[];
 }
 
 function formatRelativeDeadline(iso: string): string {
@@ -58,12 +58,13 @@ export function MotionClient({
   participantId,
   myMotions,
   cutoffAt,
+  ministries,
 }: MotionClientProps) {
   const router = useRouter();
   const [motionType, setMotionType] = useState<MotionType | "">("");
   const [subject, setSubject] = useState("");
   const [details, setDetails] = useState("");
-  const [ministry, setMinistry] = useState<MinistryType | "">("");
+  const [ministry, setMinistry] = useState<string>("");
   const [isPending, startTransition] = useTransition();
 
   const meta = motionType ? motionMeta(motionType) : null;
@@ -98,7 +99,7 @@ export function MotionClient({
         motionType: motionType as MotionType,
         subject,
         details,
-        directedToMinistry: ministryRequired ? (ministry as MinistryType) : null,
+        directedToMinistry: ministryRequired ? ministry : null,
       });
       if (result.success) {
         toast.success("Motion raised. The Speaker will review it.");
@@ -289,13 +290,11 @@ export function MotionClient({
                 <select
                   id="ministry"
                   value={ministry}
-                  onChange={(e) =>
-                    setMinistry(e.target.value as MinistryType)
-                  }
+                  onChange={(e) => setMinistry(e.target.value)}
                   className="mt-1.5 flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 outline-none"
                 >
                   <option value="">Select a ministry...</option>
-                  {MINISTRIES.map((m) => (
+                  {ministries.map((m) => (
                     <option key={m.key} value={m.key}>
                       {m.label}
                     </option>

@@ -15,7 +15,9 @@ import {
   Landmark,
 } from "lucide-react";
 import { cn } from "@/lib/yip/utils";
-import { MINISTRIES, PARTY_COLORS } from "@/lib/yip/constants";
+import { PARTY_COLORS } from "@/lib/yip/constants";
+import { ministryLabel, type MinistryPortfolio } from "@/lib/yip/cabinet";
+import { getCabinetConfig } from "@/app/yip/actions/cabinet";
 import {
   advanceQuestion,
   markAnswered,
@@ -31,11 +33,6 @@ import type {
 import { toast } from "sonner";
 import { INK, SAFFRON, SERIF } from "@/app/yip/me/credential-ui";
 
-function getMinistryLabel(key: string): string {
-  const found = MINISTRIES.find((m) => m.key === key);
-  return found ? found.label : key;
-}
-
 interface QuestionHourPanelProps {
   eventId: string;
 }
@@ -50,19 +47,22 @@ export function QuestionHourPanel({ eventId }: QuestionHourPanelProps) {
   const [completedQuestions, setCompletedQuestions] = useState<
     QuestionWithSubmitter[]
   >([]);
+  const [ministries, setMinistries] = useState<MinistryPortfolio[]>([]);
   const [answerSummary, setAnswerSummary] = useState("");
   const [showCompleted, setShowCompleted] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const fetchAll = useCallback(async () => {
-    const [current, queued, completed] = await Promise.all([
+    const [current, queued, completed, cabinet] = await Promise.all([
       getCurrentQuestion(eventId),
       getQueuedQuestions(eventId),
       getCompletedQuestions(eventId),
+      getCabinetConfig(eventId),
     ]);
     setCurrentQuestion(current);
     setQueuedQuestions(queued);
     setCompletedQuestions(completed);
+    setMinistries(cabinet.ministries);
     setLoading(false);
   }, [eventId]);
 
@@ -161,7 +161,7 @@ export function QuestionHourPanel({ eventId }: QuestionHourPanelProps) {
                 >
                   <Landmark className="size-3 mr-1" />
                   Minister of{" "}
-                  {getMinistryLabel(currentQuestion.directed_to_ministry)}
+                  {ministryLabel(currentQuestion.directed_to_ministry, ministries)}
                 </Badge>
 
                 {/* Question text */}
@@ -373,7 +373,7 @@ export function QuestionHourPanel({ eventId }: QuestionHourPanelProps) {
                           {q.submitter?.full_name}
                         </p>
                         <p className="text-[10px] text-gray-400 mt-0.5">
-                          {getMinistryLabel(q.directed_to_ministry)}
+                          {ministryLabel(q.directed_to_ministry, ministries)}
                         </p>
                         <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">
                           {q.question_text}

@@ -3,6 +3,7 @@ import { getYipSession } from "@/lib/yip/auth/yip-session";
 import Link from "next/link";
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { getShadowDesk } from "@/app/yip/actions/shadow";
+import { getCabinetConfig } from "@/app/yip/actions/cabinet";
 import { ShadowClient } from "./shadow-client";
 
 export default async function ShadowPage() {
@@ -35,7 +36,10 @@ export default async function ShadowPage() {
     );
   }
 
-  const result = await getShadowDesk(session.eventId, participant.id);
+  const [result, { ministries }] = await Promise.all([
+    getShadowDesk(session.eventId, participant.id),
+    getCabinetConfig(session.eventId),
+  ]);
 
   return (
     <ShadowClient
@@ -43,6 +47,7 @@ export default async function ShadowPage() {
       participantId={participant.id}
       initialDesk={result.success ? result.data : null}
       loadError={result.success ? null : result.error}
+      ministries={ministries}
     />
   );
 }

@@ -4,10 +4,10 @@ import { createServiceClient } from "@/lib/yip/supabase/server";
 import { revalidatePath } from "next/cache";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { requireParticipantSession } from "@/lib/yip/auth/yip-session";
-import type { Tables, Database } from "@/types/yip/database";
+import { effectiveMinistries } from "@/lib/yip/cabinet";
+import type { Tables } from "@/types/yip/database";
 
 type Question = Tables<{ schema: "yip" }, "questions">;
-type MinistryType = Database["public"]["Enums"]["ministry_type"];
 
 type ActionResult<T = null> =
   | { success: true; data: T }
@@ -37,7 +37,7 @@ async function requireQuestionManage(
 export async function submitQuestion(
   eventId: string,
   participantId: string,
-  ministryKey: MinistryType,
+  ministryKey: string,
   questionText: string
 ): Promise<ActionResult<{ id: string }>> {
   // Participant self-service: verify the caller's session owns participantId.
@@ -54,11 +54,26 @@ export async function submitQuestion(
   // Enforce the submission window server-side: open_at <= now() <= close_at.
   // questions_open_at = earliest accepted (event-days only); questions_close_at
   // = handbook 4-day-prior cutoff. Either may be NULL (unbounded on that side).
+  // cabinet_ministries lets us validate the directed ministry KEY against the
+  // event's effective portfolios (directed_to_ministry is now free text, so the
+  // DB no longer constrains it — this app gate does).
   const { data: eventRow } = await supabase
     .from("events")
-    .select("questions_open_at, questions_close_at")
+    .select("questions_open_at, questions_close_at, cabinet_ministries")
     .eq("id", eventId)
     .single();
+
+  // The submitted ministry must be one of the event's effective cabinet
+  // portfolios (per-event override, else the handbook default). Fail closed.
+  const validKeys = new Set(
+    effectiveMinistries(eventRow?.cabinet_ministries).map((m) => m.key)
+  );
+  if (!ministryKey || !validKeys.has(ministryKey)) {
+    return {
+      success: false,
+      error: "Please select a valid ministry for this event.",
+    };
+  }
 
   if (eventRow?.questions_open_at) {
     const openAt = new Date(eventRow.questions_open_at);

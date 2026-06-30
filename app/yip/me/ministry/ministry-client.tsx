@@ -7,32 +7,27 @@ import {
   ministerRespondToMotion,
   type MinistryDesk,
 } from "@/app/yip/actions/ministry";
-
-const MINISTRY_LABEL: Record<string, string> = {
-  home: "Home Affairs",
-  finance: "Finance",
-  education: "Education",
-  health: "Health",
-  women_child: "Women & Child Development",
-  disaster_management: "Disaster Management",
-  youth_sports: "Youth Affairs & Sports",
-  it_digital: "IT & Digital",
-};
-const ml = (k: string | null) => (k ? MINISTRY_LABEL[k] ?? k : "—");
+import { ministryLabel, type MinistryPortfolio } from "@/lib/yip/cabinet";
 
 export function MinistryClient({
   eventId,
   participantId,
   initialDesk,
   loadError,
+  ministries,
 }: {
   eventId: string;
   participantId: string;
   initialDesk: MinistryDesk | null;
   loadError: string | null;
+  /** The event's effective cabinet portfolios — resolves the ministry label. */
+  ministries: MinistryPortfolio[];
 }) {
   const [desk, setDesk] = useState<MinistryDesk | null>(initialDesk);
   const [error, setError] = useState<string | null>(loadError);
+  // Resolve a ministry key to its label via the event's cabinet (custom or
+  // default), falling back to a dash when there is no ministry.
+  const ml = (k: string | null) => (k ? ministryLabel(k, ministries) : "—");
   const [busy, setBusy] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
 

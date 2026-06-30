@@ -208,6 +208,47 @@ export async function computeResults(
   const positionConfig = await getPositionBonusConfigAdmin();
   const positionBonuses = positionConfig.bonuses;
 
+  // 1c-bis. Committee bill-role merit (Director 2026-06-30). "Committee Drafter"
+  // and "Committee Presenter" are BILL roles — stored in yip.bills.drafters /
+  // .presenters as jsonb id-arrays (#705), NOT parliament roles — so their merit
+  // is earned by being named on ANY bill's role list ("every named" wins it).
+  // The jsonb columns aren't in the generated DB types, so read via an untyped
+  // accessor + parseIdList, mirroring app/yip/actions/committee-room.ts. The
+  // resulting per-participant bonus is folded into roleBonus below and capped
+  // with all other merit at the Leadership bucket's merit_max.
+  const parseIdList = (v: unknown): string[] => {
+    let arr: unknown = v;
+    if (typeof v === "string") {
+      try {
+        arr = JSON.parse(v);
+      } catch {
+        return [];
+      }
+    }
+    return Array.isArray(arr)
+      ? arr.filter((x): x is string => typeof x === "string" && x.length > 0)
+      : [];
+  };
+  const { data: billRoleRows } = (await (
+    supabase as unknown as {
+      from: (n: string) => {
+        select: (c: string) => {
+          eq: (k: string, v: string) => Promise<{ data: unknown[] | null }>;
+        };
+      };
+    }
+  )
+    .from("bills")
+    .select("drafters, presenters")
+    .eq("event_id", eventId)) as { data: unknown[] | null };
+  const drafterIds = new Set<string>();
+  const presenterIds = new Set<string>();
+  for (const row of billRoleRows ?? []) {
+    const r = row as { drafters?: unknown; presenters?: unknown };
+    for (const id of parseIdList(r.drafters)) drafterIds.add(id);
+    for (const id of parseIdList(r.presenters)) presenterIds.add(id);
+  }
+
   // 1d. Global scoring settings + per-session config — drive the aggregation
   // (all set by super-admin in the admin Scoring Rules / Session Scoring
   // screens; nothing hardcoded here).
@@ -505,10 +546,19 @@ export async function computeResults(
     // ScoringSettings type in scoring-settings.ts. Other events keep
     // average / weighted_average / best_n.
     const method = settings.aggregation_method as string;
+    // roleBonus = parliament-role merit + committee bill-role merit (drafter /
+    // presenter). All merit is later capped together at the Leadership bucket's
+    // merit_max (10), so a chair who is also a presenter banks min(10, 4+4)=8.
     const roleBonus =
-      (participant.parliament_role &&
+      ((participant.parliament_role &&
         positionBonuses[participant.parliament_role]) ||
-      0;
+        0) +
+      (drafterIds.has(participant.id)
+        ? positionBonuses["committee_drafter"] ?? 0
+        : 0) +
+      (presenterIds.has(participant.id)
+        ? positionBonuses["committee_presenter"] ?? 0
+        : 0);
 
     let baseScore = 0;
     let minSession = 0;

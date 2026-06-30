@@ -103,6 +103,8 @@ export const ROLE_LABELS: Record<string, string> = {
   coalition_leader: "Coalition Leader",
   bill_committee: "Bill Committee Member",
   committee_chair: "Committee Chairperson",
+  committee_drafter: "Committee Drafter",
+  committee_presenter: "Committee Presenter",
   mp: "Member of Parliament",
   independent_mp: "Independent MP",
   ex_prime_minister: "Ex-Prime Minister",
@@ -125,6 +127,8 @@ export const ROLE_COLORS: Record<string, string> = {
   coalition_leader: "bg-teal-600 text-white",
   bill_committee: "bg-purple-500 text-white",
   committee_chair: "bg-purple-700 text-white",
+  committee_drafter: "bg-purple-600 text-white",
+  committee_presenter: "bg-purple-400 text-white",
   mp: "bg-gray-500 text-white",
   independent_mp: "bg-emerald-600 text-white",
   // Ex- roles use a faded variant of their base color so they read as "former".

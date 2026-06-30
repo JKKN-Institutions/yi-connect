@@ -38,6 +38,18 @@ const FUTURE_NATIONAL_ROLES = new Set([
   "platform_super_admin",
 ]);
 
+// Chapter-level Yi Future roles in yi_directory. A holder of any of these for a
+// chapter is a chapter admin for that chapter — even if they were never synced
+// into future.chapter_core_team (the cache). yi_directory is the mother source.
+const FUTURE_CHAPTER_ROLES = new Set([
+  "chapter_chair",
+  "chapter_co_chair",
+  "chapter_event_lead",
+  "college_outreach_lead",
+  "mentorship_content_lead",
+  "ops_documentation_lead",
+]);
+
 /**
  * Resolve the current user's Yi Future access. Returns null if not logged in.
  * Never throws on "not an admin" — that's the caller's policy decision.

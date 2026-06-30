@@ -144,6 +144,29 @@ export default async function ExpertHome() {
             </a>
           )}
         </div>
+        {(teamsByChapter.get(e.chapter_id)?.length ?? 0) > 0 && (
+          <div className="mt-3 border-t pt-3" style={{ borderColor: `${NAVY}0f` }}>
+            <div
+              className="mb-1.5 text-[10px] font-semibold uppercase tracking-widest"
+              style={{ color: `${NAVY}59` }}
+            >
+              Teams in this chapter ({teamsByChapter.get(e.chapter_id)!.length})
+            </div>
+            <ul className="space-y-0.5 text-sm" style={{ color: `${NAVY}cc` }}>
+              {teamsByChapter.get(e.chapter_id)!.map((t) => (
+                <li
+                  key={t.name}
+                  className="flex items-center justify-between"
+                >
+                  <span>{t.name}</span>
+                  <span style={{ color: `${NAVY}66` }}>
+                    {t.count} member{t.count === 1 ? "" : "s"}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
     );
   }

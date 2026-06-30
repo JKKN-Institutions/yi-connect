@@ -170,6 +170,13 @@ export default async function ChapterAnnouncementsPage() {
                       <span>{timeAgo(a.created_at)}</span>
                       <span>· {a.read_count} read</span>
                     </div>
+                    <EditAnnouncement
+                      id={a.id}
+                      title={a.title}
+                      body={a.body}
+                      url={a.url ?? null}
+                      action={editAction}
+                    />
                   </div>
                   <form action={removeAnnouncement}>
                     <input type="hidden" name="id" value={a.id} />

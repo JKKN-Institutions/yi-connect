@@ -421,7 +421,7 @@ export async function getDelegateAnnouncementFeed(): Promise<DelegateAnnouncemen
     .schema("future")
     .from("announcements")
     .select(
-      "id, title, body, url, author_name, author_scope, audience, chapter_id, team_id, delegate_id, created_at"
+      "id, title, body, url, author_name, author_scope, audience, chapter_id, team_id, delegate_id, zone, created_at"
     )
     .eq("edition_id", session.edition_id)
     .order("created_at", { ascending: false })

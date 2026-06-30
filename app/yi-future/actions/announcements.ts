@@ -73,6 +73,7 @@ async function resolveRecipientIds(
     chapter_id: string | null;
     team_id: string | null;
     delegate_id: string | null;
+    zone?: string | null;
   }
 ): Promise<string[]> {
   if (a.audience === "delegate") return a.delegate_id ? [a.delegate_id] : [];
@@ -85,6 +86,26 @@ async function resolveRecipientIds(
       .select("delegate_id")
       .eq("team_id", a.team_id);
     return ((data ?? []) as { delegate_id: string }[]).map((r) => r.delegate_id);
+  }
+
+  // 'zone' → active delegates in any chapter of that region (Yi zone).
+  if (a.audience === "zone") {
+    if (!a.zone) return [];
+    const { data: chRows } = await svc
+      .schema("future")
+      .from("chapters")
+      .select("id")
+      .eq("region", a.zone);
+    const chapterIds = ((chRows ?? []) as { id: string }[]).map((c) => c.id);
+    if (chapterIds.length === 0) return [];
+    const { data } = await svc
+      .schema("future")
+      .from("delegates")
+      .select("id")
+      .eq("edition_id", a.edition_id)
+      .eq("is_active", true)
+      .in("chapter_id", chapterIds);
+    return ((data ?? []) as { id: string }[]).map((r) => r.id);
   }
 
   // 'chapter' or 'everyone' → active delegates scoped by edition (+ chapter).

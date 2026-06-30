@@ -32,6 +32,7 @@ const AUDIENCE_OPTIONS: Record<
   ],
   national: [
     { value: "everyone", label: "Everyone", hint: "All delegates in this edition" },
+    { value: "zone", label: "One zone", hint: "All delegates in a Yi zone/region" },
     { value: "chapter", label: "One chapter", hint: "All delegates of a chapter" },
   ],
 };

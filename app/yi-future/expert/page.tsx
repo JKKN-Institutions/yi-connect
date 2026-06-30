@@ -55,6 +55,27 @@ export default async function ExpertHome() {
     }
   }
 
+  // Teams per chapter, so the expert can see who they'll work with.
+  const teamsByChapter = new Map<string, { name: string; count: number }[]>();
+  if (chapterIds.length > 0) {
+    const { data: teamRows } = await svc
+      .schema("future")
+      .from("teams")
+      .select("team_name, chapter_id, team_members(delegate_id)")
+      .in("chapter_id", chapterIds)
+      .eq("edition_id", session.edition_id)
+      .order("team_name", { ascending: true });
+    for (const t of (teamRows as {
+      team_name: string;
+      chapter_id: string;
+      team_members: { delegate_id: string }[] | null;
+    }[]) ?? []) {
+      const arr = teamsByChapter.get(t.chapter_id) ?? [];
+      arr.push({ name: t.team_name, count: t.team_members?.length ?? 0 });
+      teamsByChapter.set(t.chapter_id, arr);
+    }
+  }
+
   const now = Date.now();
   const upcoming = events.filter(
     (e) => e.scheduled_at && new Date(e.scheduled_at).getTime() >= now

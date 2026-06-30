@@ -184,10 +184,13 @@ export async function getJurySupportData(
 
   // Per-session progress: distinct jurors who have entered ≥1 score for the
   // session's agenda item. One light read of (jury_assignment_id, agenda_item_id).
+  // Explicit high limit so the distinct count isn't silently truncated at the
+  // ~1000-row PostgREST default (the documented row-cap gotcha).
   const { data: scoreRows } = await gate.supabase
     .from("scores")
     .select("jury_assignment_id, agenda_item_id")
-    .eq("event_id", eventId);
+    .eq("event_id", eventId)
+    .limit(50000);
 
   const scoredBySession = new Map<string, Set<string>>();
   for (const r of scoreRows ?? []) {

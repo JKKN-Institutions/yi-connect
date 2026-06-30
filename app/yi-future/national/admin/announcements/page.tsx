@@ -87,8 +87,9 @@ export default async function NationalAnnouncementsPage() {
     );
   }
 
-  const [chapters, sent] = await Promise.all([
+  const [chapters, zones, sent] = await Promise.all([
     getChapters(),
+    getZones(),
     listNationalAnnouncements(edition.id),
   ]);
 

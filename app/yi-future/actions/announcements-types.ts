@@ -47,6 +47,7 @@ export type SentAnnouncement = {
   chapter_id: string | null;
   team_id: string | null;
   delegate_id: string | null;
+  zone: string | null;
   /** How many delegates have opened it (from announcement_reads). */
   read_count: number;
   created_at: string;

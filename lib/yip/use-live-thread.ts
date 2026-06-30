@@ -34,6 +34,7 @@ import type { ChatMessage, ChatReplyPreview } from "@/app/yip/actions/chat";
 export interface SendMeta {
   replyToId?: string | null;
   replyPreview?: ChatReplyPreview | null;
+  mentions?: string[];
 }
 
 type LoadResult =
@@ -218,6 +219,7 @@ export function useLiveThread({
         replyPreview: meta?.replyPreview ?? null,
         reactions: [],
         pinnedAt: null,
+        mentions: [],
         pending: true,
       };
       setPending((prev) => [...prev, optimistic]);

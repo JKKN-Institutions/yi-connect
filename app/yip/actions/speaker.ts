@@ -50,8 +50,9 @@ export async function getSpeakerMotions(
   return { success: true, data: (data ?? []) as unknown as Motion[] };
 }
 
-/** A single approved Question Hour question, shaped for the Speaker's read-only
- *  List of Business. */
+/** A single Question Hour question, shaped for the presiding officers' read-only
+ *  List of Business. Carries the moderation `status` and the tabling MP's bench
+ *  `side` so the Chair can see the full pipeline and the balance at a glance. */
 export type SpeakerQuestion = {
   id: string;
   question_text: string;
@@ -59,14 +60,22 @@ export type SpeakerQuestion = {
   mp_name: string;
   constituency_name: string | null;
   constituency_number: number | null;
+  /** questions.status — submitted | approved | rejected | asked | answered | skipped. */
+  status: string;
+  /** Bench of the MP who tabled it (from participants.party_side). */
+  side: "ruling" | "opposition" | null;
 };
 
 /**
- * Approved Question Hour questions for the presiding officer — a READ-ONLY List
- * of Business so whoever plays Speaker can call questions in order. Each row
- * carries the MP who tabled it, their constituency name + number, and the
- * ministry it is directed to. Only `status='approved'` questions are returned
- * (un-vetted / rejected ones never reach the Chair). Participant + role gated.
+ * Question Hour questions for the presiding officer — a READ-ONLY List of
+ * Business so whoever plays Speaker/Deputy can call questions in order. Each row
+ * carries the MP who tabled it, their constituency name + number, the ministry
+ * it is directed to, its moderation `status`, and the MP's bench `side`.
+ *
+ * ALL statuses are returned (not just approved) so the Chair can see whether the
+ * organiser has approved each question yet; the desk tags each one and the
+ * organiser stays the sole approver (this action never mutates). Participant +
+ * role gated.
  */
 export async function getSpeakerQuestions(
   eventId: string,
@@ -78,9 +87,8 @@ export async function getSpeakerQuestions(
   const supabase = await createServiceClient();
   const { data: qs, error } = await supabase
     .from("questions")
-    .select("id, question_text, directed_to_ministry, submitted_by, created_at")
+    .select("id, question_text, directed_to_ministry, submitted_by, created_at, status")
     .eq("event_id", eventId)
-    .eq("status", "approved")
     .order("directed_to_ministry", { ascending: true })
     .order("created_at", { ascending: true });
   if (error) return { success: false, error: error.message };
@@ -90,24 +98,34 @@ export async function getSpeakerQuestions(
   ];
   const byId = new Map<
     string,
-    { full_name: string; constituency_name: string | null; constituency_number: number | null }
+    {
+      full_name: string;
+      constituency_name: string | null;
+      constituency_number: number | null;
+      party_side: string | null;
+    }
   >();
   if (ids.length > 0) {
     const { data: ps } = await supabase
       .from("participants")
-      .select("id, full_name, constituency_name, constituency_number")
+      .select("id, full_name, constituency_name, constituency_number, party_side")
       .in("id", ids);
     for (const p of ps ?? []) {
       byId.set(p.id, {
         full_name: p.full_name,
         constituency_name: p.constituency_name ?? null,
         constituency_number: p.constituency_number ?? null,
+        party_side: p.party_side ?? null,
       });
     }
   }
 
   const out: SpeakerQuestion[] = (qs ?? []).map((q) => {
     const p = q.submitted_by ? byId.get(q.submitted_by) : undefined;
+    const side =
+      p?.party_side === "ruling" || p?.party_side === "opposition"
+        ? p.party_side
+        : null;
     return {
       id: q.id,
       question_text: q.question_text,
@@ -115,6 +133,8 @@ export async function getSpeakerQuestions(
       mp_name: p?.full_name ?? "—",
       constituency_name: p?.constituency_name ?? null,
       constituency_number: p?.constituency_number ?? null,
+      status: q.status ?? "submitted",
+      side,
     };
   });
   return { success: true, data: out };

@@ -30,6 +30,8 @@ import {
   X,
   Inbox,
   CalendarClock,
+  Download,
+  Printer,
 } from "lucide-react";
 import { cn } from "@/lib/yip/utils";
 import { MINISTRIES } from "@/lib/yip/constants";
@@ -63,6 +65,12 @@ function getMinistryLabel(key: string): string {
 function getBench(q: QuestionWithSubmitter): Bench | null {
   const side = q.submitter?.party_side;
   return side === "ruling" || side === "opposition" ? side : null;
+}
+
+/** Quote a value for a CSV cell (RFC-4180: wrap in quotes, double internal quotes). */
+function csvCell(v: string | number | null | undefined): string {
+  const s = v == null ? "" : String(v);
+  return `"${s.replace(/"/g, '""')}"`;
 }
 
 const STATUS_BADGES: Record<string, { label: string; className: string }> = {
@@ -351,8 +359,81 @@ export function QuestionsClient({
     },
   ];
 
+  // Export every REAL (non-mock) question as a CSV — MP, constituency, bench,
+  // ministry, the question text, its moderation status, type, and time. Excel-
+  // friendly (BOM + CRLF) so Tamil names in constituencies render correctly.
+  function exportCsv() {
+    const rows = questions.filter((q) => !q.is_mock);
+    if (rows.length === 0) {
+      toast.error("No questions to export yet");
+      return;
+    }
+    const header = [
+      "No.",
+      "MP",
+      "Constituency",
+      "Side",
+      "Ministry",
+      "Question",
+      "Status",
+      "Type",
+      "Submitted At",
+    ];
+    const lines = [header.map(csvCell).join(",")];
+    rows.forEach((q, i) => {
+      const bench = getBench(q);
+      lines.push(
+        [
+          csvCell(i + 1),
+          csvCell(q.submitter?.full_name ?? "—"),
+          csvCell(q.submitter?.constituency_name ?? ""),
+          csvCell(bench ? BENCH_BADGES[bench].label : "—"),
+          csvCell(getMinistryLabel(q.directed_to_ministry ?? "")),
+          csvCell(q.question_text),
+          csvCell(q.status ? STATUS_BADGES[q.status]?.label ?? q.status : ""),
+          csvCell(q.question_type ?? ""),
+          csvCell(q.created_at ? new Date(q.created_at).toLocaleString() : ""),
+        ].join(",")
+      );
+    });
+    // Lead with a UTF-8 BOM so Excel renders non-Latin (e.g. Tamil) names right.
+    const csv = "﻿" + lines.join("\r\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `question-hour-${eventId}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success(`Exported ${rows.length} question${rows.length === 1 ? "" : "s"}`);
+  }
+
   return (
     <div className="space-y-4">
+      {/* Export the tabled questions — CSV for records, printable order paper for the House. */}
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <Button size="sm" variant="outline" onClick={exportCsv}>
+          <Download className="mr-1.5 size-4" />
+          Export CSV
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() =>
+            window.open(
+              `/yip/dashboard/events/${eventId}/questions/order-paper`,
+              "_blank",
+              "noopener"
+            )
+          }
+        >
+          <Printer className="mr-1.5 size-4" />
+          Order paper (PDF)
+        </Button>
+      </div>
+
       {/* Question-submission OPEN time (event-days only). Pairs with the
           deadline below; submitQuestion enforces open_at <= now() <= close_at. */}
       <Card>

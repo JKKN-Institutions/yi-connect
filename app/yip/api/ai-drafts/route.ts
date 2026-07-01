@@ -31,6 +31,7 @@ import {
   getBillFeedbackWork,
   getParticipantStoryWork,
   getSessionFeedbackWork,
+  autoEnableScoringChapters,
   listAiEnabledEventIds,
 } from "@/lib/yip/ai/grounding";
 import type {
@@ -100,6 +101,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   // yet), so a freshly-scored session yields a growth note next cycle with no
   // manual button. Detection is best-effort and must never block draining.
   try {
+    // Auto-enable AI for any real chapter round that has started scoring,
+    // so every live + scoring chapter gets coaching with no manual toggle.
+    await autoEnableScoringChapters();
+
     const aiEventIds = await listAiEnabledEventIds();
 
     // Gather each event's detectable work (reads) in parallel. The AI-opted-in

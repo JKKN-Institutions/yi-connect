@@ -938,6 +938,69 @@ export async function getElectionResults(
   );
 }
 
+// ─── Vote check-in status (for a PROACTIVE helper) ──────────────────
+
+/**
+ * Whether the CURRENT participant may cast in a given vote session — computed so
+ * the ballot can show a PERSISTENT, proactive helper BEFORE the student taps,
+ * instead of only a fleeting toast after a dead tap (the "why isn't submit
+ * working?" complaint, Erode Day-2 2026-07-01). Mirrors castVote's gate exactly:
+ * an organiser override (config.override_checkin, #757) waives the day check-in;
+ * otherwise the voter must be checked in for the vote's agenda day. Returns the
+ * day so the client can name it ("Day 2"). Never a silent block (CLAUDE.md #27).
+ */
+export async function getVoteCheckInStatus(
+  sessionId: string,
+  participantId: string
+): Promise<
+  ActionResult<{ eligible: boolean; day: number | null; reason: string | null }>
+> {
+  const supabase = await createServiceClient();
+
+  const { data: session } = await supabase
+    .from("vote_sessions")
+    .select("config, agenda_item_id, event_id")
+    .eq("id", sessionId)
+    .single();
+  if (!session) return { success: false, error: "Vote session not found" };
+
+  // Only the owning participant may probe their own eligibility.
+  const sess = await requireParticipantSession(participantId, session.event_id);
+  if (!sess.ok) return { success: false, error: sess.error };
+
+  // Organiser override waives the check-in gate (mirrors castVote #757).
+  const overrideCheckin =
+    (session.config as { override_checkin?: boolean } | null | undefined)
+      ?.override_checkin === true;
+  if (overrideCheckin) {
+    return { success: true, data: { eligible: true, day: null, reason: null } };
+  }
+
+  // Resolve the vote's day for a specific "Day N" message.
+  let day: number | null = null;
+  if (session.agenda_item_id) {
+    const { data: item } = await supabase
+      .from("agenda")
+      .select("day")
+      .eq("id", session.agenda_item_id)
+      .maybeSingle();
+    day = item?.day ?? null;
+  }
+
+  const elig = await assertCheckedInForVote(
+    supabase,
+    participantId,
+    session.agenda_item_id
+  );
+  if (elig.ok) {
+    return { success: true, data: { eligible: true, day, reason: null } };
+  }
+  return {
+    success: true,
+    data: { eligible: false, day, reason: elig.error },
+  };
+}
+
 // ─── Cast Vote ──────────────────────────────────────────────────
 
 export async function castVote(

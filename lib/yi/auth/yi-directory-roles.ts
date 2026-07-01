@@ -16,6 +16,7 @@
  *
  * Created 2026-05-28 as part of YIP super-admin refactor (Phase 19 followup).
  */
+import { cache } from "react";
 import { createClient, createServiceClient } from "@/lib/yip/supabase/server";
 
 export type RoleAssignment = {
@@ -72,7 +73,13 @@ export function withinValidityWindow(
  *   - no matching yi_directory.people row for this auth user
  *   - the person is deactivated (is_active=false)
  */
-export async function getCurrentPersonRoles(): Promise<PersonRoles | null> {
+// Memoized per request with React cache(): auth gates across a single render or
+// request resolve the current person's roles many times (every getYipEventAccess,
+// every dashboard scope check), and each call otherwise re-runs auth.getUser plus
+// two yi_directory reads. cache() collapses them to one resolution per request.
+// Takes no arguments, so it memoizes to a single value — safe: the returned object
+// (including the assignments array) is read-only and never mutated by callers.
+export const getCurrentPersonRoles = cache(async (): Promise<PersonRoles | null> => {
   const supabase = await createClient();
   const {
     data: { user },
@@ -148,7 +155,7 @@ export async function getCurrentPersonRoles(): Promise<PersonRoles | null> {
     email: person.email,
     assignments,
   };
-}
+});
 
 /**
  * Convenience predicate — true if the current user has an active role

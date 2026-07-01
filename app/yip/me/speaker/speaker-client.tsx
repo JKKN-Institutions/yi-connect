@@ -46,6 +46,71 @@ const MINISTRY_LABEL: Record<string, string> = {
 };
 const ml = (k: string | null) => (k ? MINISTRY_LABEL[k] ?? k : "—");
 
+// Status chip for the Chair — shows whether the organiser has approved the
+// question yet ("Pending"), plus the downstream states once it is in play.
+const Q_STATUS: Record<string, { label: string; bg: string; fg: string }> = {
+  submitted: { label: "Pending", bg: "#f59e0b1f", fg: "#b45309" },
+  approved: { label: "Approved", bg: `${GREEN}14`, fg: GREEN },
+  asked: { label: "Asked", bg: "#2563eb14", fg: "#2563eb" },
+  answered: { label: "Answered", bg: "#05966914", fg: "#059669" },
+  skipped: { label: "Skipped", bg: inkA(0.06), fg: inkA(0.5) },
+  rejected: { label: "Rejected", bg: "#9A33241a", fg: "#9A3324" },
+};
+const SIDE_BADGE: Record<"ruling" | "opposition", { label: string; bg: string; fg: string }> = {
+  ruling: { label: "Ruling", bg: "#C2691A1a", fg: "#8a4a12" },
+  opposition: { label: "Opposition", bg: "#4f46e51a", fg: "#4338ca" },
+};
+
+/** One question row on the Chair's List of Business — MP, ministry, status +
+ *  bench tags, constituency, and the question text. Read-only. */
+function QuestionRow({ qn, n }: { qn: SpeakerQuestion; n: number | null }) {
+  const st = Q_STATUS[qn.status] ?? { label: qn.status, bg: inkA(0.06), fg: inkA(0.5) };
+  const sb = qn.side ? SIDE_BADGE[qn.side] : null;
+  return (
+    <SectionShell accent={GOLD}>
+      <div className="space-y-1.5 px-5 py-3.5">
+        <div className="flex items-start justify-between gap-2">
+          <p className="text-sm font-semibold" style={{ ...SERIF, color: INK }}>
+            {n != null ? `${n}. ` : ""}
+            {qn.mp_name}
+          </p>
+          <span
+            className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold"
+            style={{ background: `${GOLD}1a`, color: GOLD }}
+          >
+            {ml(qn.directed_to_ministry)}
+          </span>
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span
+            className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+            style={{ background: st.bg, color: st.fg }}
+          >
+            {st.label}
+          </span>
+          {sb && (
+            <span
+              className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+              style={{ background: sb.bg, color: sb.fg }}
+            >
+              {sb.label}
+            </span>
+          )}
+        </div>
+        <p className="text-xs" style={{ color: inkA(0.55) }}>
+          {qn.constituency_name ?? "—"}
+          {qn.constituency_number != null
+            ? ` · Constituency No. ${qn.constituency_number}`
+            : ""}
+        </p>
+        <p className="text-sm leading-snug" style={{ color: inkA(0.82) }}>
+          {qn.question_text}
+        </p>
+      </div>
+    </SectionShell>
+  );
+}
+
 export function SpeakerClient({
   eventId,
   participantId,
@@ -68,6 +133,10 @@ export function SpeakerClient({
   const [rejecting, setRejecting] = useState<Record<string, string>>({});
   // Live floor-vote state for No-Confidence motions, keyed by motionId.
   const [voteStates, setVoteStates] = useState<Record<string, MotionVoteState>>({});
+  // Question Hour view controls (Chair-side, read-only): filter by bench, and
+  // tuck rejected questions behind an expander so the live list stays clean.
+  const [sideFilter, setSideFilter] = useState<"all" | "ruling" | "opposition">("all");
+  const [showRejected, setShowRejected] = useState(false);
 
   const refresh = useCallback(async () => {
     const [m, v, q] = await Promise.all([
@@ -113,6 +182,13 @@ export function SpeakerClient({
     (m) => !["submitted", "discussing", "voting"].includes(m.status)
   );
 
+  // Question Hour, split for the Chair: filter by bench, keep rejected apart.
+  const qhVisible = questions.filter(
+    (q) => sideFilter === "all" || q.side === sideFilter
+  );
+  const qhInline = qhVisible.filter((q) => q.status !== "rejected");
+  const qhRejected = qhVisible.filter((q) => q.status === "rejected");
+
   return (
     <div className="mx-auto w-full max-w-md space-y-5 px-4 py-5 pb-24">
       <header>
@@ -140,38 +216,62 @@ export function SpeakerClient({
       )}
 
       <Section title={`Question Hour (${questions.length})`} icon={ListOrdered} accent={GOLD}>
-        {questions.length === 0 && (
+        {questions.length === 0 ? (
           <Empty>
-            No approved questions yet. They appear here once the organiser approves them —
-            each shows the MP, their constituency &amp; number, and the ministry it&apos;s for.
+            No questions tabled yet. As MPs submit them they appear here — each tagged
+            with its approval status (Pending until the organiser approves it) and the
+            bench that raised it.
           </Empty>
-        )}
-        {questions.map((qn, i) => (
-          <SectionShell key={qn.id} accent={GOLD}>
-            <div className="space-y-1.5 px-5 py-3.5">
-              <div className="flex items-start justify-between gap-2">
-                <p className="text-sm font-semibold" style={{ ...SERIF, color: INK }}>
-                  {i + 1}. {qn.mp_name}
-                </p>
-                <span
-                  className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold"
-                  style={{ background: `${GOLD}1a`, color: GOLD }}
-                >
-                  {ml(qn.directed_to_ministry)}
-                </span>
-              </div>
-              <p className="text-xs" style={{ color: inkA(0.55) }}>
-                {qn.constituency_name ?? "—"}
-                {qn.constituency_number != null
-                  ? ` · Constituency No. ${qn.constituency_number}`
-                  : ""}
-              </p>
-              <p className="text-sm leading-snug" style={{ color: inkA(0.82) }}>
-                {qn.question_text}
-              </p>
+        ) : (
+          <>
+            {/* Bench filter — All / Ruling / Opposition */}
+            <div className="flex gap-1.5">
+              {(["all", "ruling", "opposition"] as const).map((s) => {
+                const on = sideFilter === s;
+                return (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => setSideFilter(s)}
+                    className="rounded-full px-3 py-1 text-[11px] font-semibold transition-colors"
+                    style={
+                      on
+                        ? { background: INK, color: "#fff" }
+                        : { background: inkA(0.06), color: inkA(0.6) }
+                    }
+                  >
+                    {s === "all" ? "All" : s === "ruling" ? "Ruling" : "Opposition"}
+                  </button>
+                );
+              })}
             </div>
-          </SectionShell>
-        ))}
+
+            {qhVisible.length === 0 && (
+              <Empty>
+                No {sideFilter === "all" ? "" : `${sideFilter} `}questions to show.
+              </Empty>
+            )}
+
+            {qhInline.map((qn, i) => (
+              <QuestionRow key={qn.id} qn={qn} n={i + 1} />
+            ))}
+
+            {qhRejected.length > 0 && (
+              <div className="space-y-3">
+                <button
+                  type="button"
+                  onClick={() => setShowRejected((v) => !v)}
+                  className="text-xs font-semibold underline-offset-2 hover:underline"
+                  style={{ color: inkA(0.55) }}
+                >
+                  {showRejected ? "Hide" : "Show"} rejected ({qhRejected.length})
+                </button>
+                {showRejected &&
+                  qhRejected.map((qn) => <QuestionRow key={qn.id} qn={qn} n={null} />)}
+              </div>
+            )}
+          </>
+        )}
       </Section>
 
       <Section title={`Awaiting your ruling (${pending.length})`} icon={Gavel} accent={SAFFRON}>

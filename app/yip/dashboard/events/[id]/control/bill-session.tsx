@@ -20,6 +20,7 @@ import {
   CheckCircle2,
   XCircle,
   Users,
+  AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/yip/utils";
 import { PARTY_COLORS } from "@/lib/yip/constants";
@@ -29,7 +30,7 @@ import {
   setBillPresented,
   type BillWithMembers,
 } from "@/app/yip/actions/bills";
-import { openVote } from "@/app/yip/actions/voting";
+import { openVote, getDayCheckInSummary } from "@/app/yip/actions/voting";
 import { INK, SAFFRON, SERIF } from "@/app/yip/me/credential-ui";
 
 // ─── Types ──────────────────────────────────────────────────────
@@ -67,6 +68,13 @@ export function BillSession({ eventId, agendaItemId }: BillSessionProps) {
   // (avoids a stale closure).
   const [voteOverrideCheckin, setVoteOverrideCheckin] = useState(false);
   const voteOverrideRef = useRef(false);
+  // Check-in count for the current day, fetched when the bill-vote dialog opens
+  // so the organiser is warned BEFORE opening a vote nobody can cast in.
+  const [checkinSummary, setCheckinSummary] = useState<{
+    day: number | null;
+    checkedIn: number;
+    total: number;
+  } | null>(null);
 
   // Load bills
   useEffect(() => {
@@ -111,6 +119,12 @@ export function BillSession({ eventId, agendaItemId }: BillSessionProps) {
   function handleOpenBillVote(bill: BillWithMembers) {
     setVoteOverrideCheckin(false);
     voteOverrideRef.current = false;
+    // Fetch (fresh each open) how many are checked in for this day, so the
+    // dialog can warn if nobody can vote yet.
+    setCheckinSummary(null);
+    getDayCheckInSummary(eventId, agendaItemId).then((res) => {
+      if (res.success) setCheckinSummary(res.data);
+    });
     setConfirmDialog({
       open: true,
       title: "Open Bill Vote",
@@ -126,6 +140,13 @@ export function BillSession({ eventId, agendaItemId }: BillSessionProps) {
           );
           if (result.success) {
             toast.success("Bill voting is now open!");
+            const w = result.data.checkinWarning;
+            if (w) {
+              toast.warning(
+                `Nobody is checked in for Day ${w.day} yet — no one can vote. Check students in (Participants → “Check In All · Day ${w.day}”) or re-open with the not-checked-in override.`,
+                { duration: 12000 }
+              );
+            }
           } else {
             toast.error(result.error);
           }
@@ -197,6 +218,34 @@ export function BillSession({ eventId, agendaItemId }: BillSessionProps) {
               {confirmDialog.description}
             </DialogDescription>
           </DialogHeader>
+          {confirmDialog.showCheckinToggle &&
+            !voteOverrideCheckin &&
+            checkinSummary &&
+            (checkinSummary.day === 1 || checkinSummary.day === 2) &&
+            (checkinSummary.checkedIn === 0 ? (
+              <div
+                role="alert"
+                className="flex items-start gap-2.5 rounded-md border-2 border-amber-300 bg-amber-50 p-3 text-sm"
+              >
+                <AlertTriangle className="mt-0.5 size-5 shrink-0 text-amber-600" />
+                <div>
+                  <p className="font-semibold text-amber-800">
+                    Nobody is checked in for Day {checkinSummary.day} yet
+                  </p>
+                  <p className="mt-0.5 text-amber-700">
+                    If you open this vote now, students won&apos;t be able to
+                    cast. Check them in first (Participants → “Check In All · Day{" "}
+                    {checkinSummary.day}”), or turn on the override below to let
+                    not-checked-in students vote.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                {checkinSummary.checkedIn} of {checkinSummary.total} students
+                checked in for Day {checkinSummary.day}.
+              </p>
+            ))}
           {confirmDialog.showCheckinToggle && (
             <label className="flex items-start gap-2 rounded-md border p-3 text-sm">
               <input

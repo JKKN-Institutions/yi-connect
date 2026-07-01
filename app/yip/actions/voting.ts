@@ -321,6 +321,62 @@ async function resolveOutcome(
 
 // ─── Open Vote ──────────────────────────────────────────────────
 
+// ─── Check-in count (organiser open-time guard) ─────────────────────
+
+/**
+ * Count how many of an event's participants are checked in for a given day.
+ * `day` 1/2 → that in-person day's flag; anything else → the derived `checked_in`.
+ * Service-role; callers must gate on organiser access.
+ */
+async function countDayCheckin(
+  supabase: Awaited<ReturnType<typeof createServiceClient>>,
+  eventId: string,
+  day: number | null
+): Promise<{ checkedIn: number; total: number }> {
+  const { count: total } = await supabase
+    .from("participants")
+    .select("id", { count: "exact", head: true })
+    .eq("event_id", eventId);
+
+  let q = supabase
+    .from("participants")
+    .select("id", { count: "exact", head: true })
+    .eq("event_id", eventId);
+  q = day === 1 ? q.eq("checked_in_day1", true)
+    : day === 2 ? q.eq("checked_in_day2", true)
+    : q.eq("checked_in", true);
+  const { count: checkedIn } = await q;
+
+  return { checkedIn: checkedIn ?? 0, total: total ?? 0 };
+}
+
+/**
+ * How many students are checked in for the day an agenda item belongs to — so
+ * the control panel can warn the organiser BEFORE they open a day-gated vote
+ * that nobody can cast in (the other half of the Erode Day-2 silent-vote issue).
+ * Organiser-gated. day is null for pre-event (day 0) / undated items.
+ */
+export async function getDayCheckInSummary(
+  eventId: string,
+  agendaItemId: string
+): Promise<
+  ActionResult<{ day: number | null; checkedIn: number; total: number }>
+> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage)
+    return { success: false, error: "Not authorized to manage this event" };
+
+  const supabase = await createServiceClient();
+  const { data: item } = await supabase
+    .from("agenda")
+    .select("day")
+    .eq("id", agendaItemId)
+    .maybeSingle();
+  const day = item?.day ?? null;
+  const { checkedIn, total } = await countDayCheckin(supabase, eventId, day);
+  return { success: true, data: { day, checkedIn, total } };
+}
+
 export async function openVote(
   eventId: string,
   agendaItemId: string,
@@ -367,7 +423,15 @@ export async function openVote(
     // session config; honoured in castVote. Absent/false = normal check-in gate.
     override_checkin?: boolean;
   }
-): Promise<ActionResult<{ sessionId: string }>> {
+): Promise<
+  ActionResult<{
+    sessionId: string;
+    // Advisory only (never blocks the open): set when a day-1/2 vote is opened
+    // with NOBODY checked in for that day and no override — every cast would be
+    // blocked. Callers surface it so the organiser can check students in.
+    checkinWarning?: { day: number; checkedIn: number; total: number };
+  }>
+> {
   const access = await getYipEventAccess(eventId);
   if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
 
@@ -496,7 +560,34 @@ export async function openVote(
     return { success: false, error: error?.message ?? "Failed to open vote session" };
   }
 
-  return { success: true, data: { sessionId: data.id } };
+  // Advisory open-time guard: if this is a day-1/2 vote opened with nobody
+  // checked in for that day (and no override), tell the organiser — otherwise
+  // every cast is silently blocked (the Erode Day-2 failure, organiser side).
+  // Wrapped so it can NEVER turn a successful open into a failure (the vote row
+  // is already inserted above) — a warning is nice-to-have, not load-bearing.
+  let checkinWarning:
+    | { day: number; checkedIn: number; total: number }
+    | undefined;
+  try {
+    if (config?.override_checkin !== true) {
+      const { data: item } = await supabase
+        .from("agenda")
+        .select("day")
+        .eq("id", agendaItemId)
+        .maybeSingle();
+      const day = item?.day ?? null;
+      if (day === 1 || day === 2) {
+        const { checkedIn, total } = await countDayCheckin(supabase, eventId, day);
+        if (checkedIn === 0 && total > 0) {
+          checkinWarning = { day, checkedIn, total };
+        }
+      }
+    }
+  } catch {
+    // ignore — never block a successful open on the advisory count
+  }
+
+  return { success: true, data: { sessionId: data.id, checkinWarning } };
 }
 
 // ─── Close Vote ─────────────────────────────────────────────────

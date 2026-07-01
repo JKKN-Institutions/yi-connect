@@ -1715,6 +1715,86 @@ export type ScoringProgressData = {
   }>;
 };
 
+/**
+ * Lightweight "is the results snapshot current + complete" read for the results
+ * page's Show Results block. Deliberately does NOT reuse getScoringProgress
+ * (which builds a per-participant × per-session matrix and is exactly what times
+ * out on heavy events — the reason Show Results exists). Four cheap reads only:
+ *   participantCount — count of participants (drives empty-state wording:
+ *                      "no participants yet" vs "no scores yet").
+ *   totalJudges      — active jury_assignments for the event.
+ *   judgesScored     — DISTINCT juries with ≥1 SUBMITTED score.
+ *   scoresStale      — a submitted score landed AFTER the last compute (only
+ *                      meaningful once results exist).
+ * Gated on canViewScores, same as the results page. Returns null if denied.
+ */
+export async function getResultsFreshness(eventId: string): Promise<{
+  participantCount: number;
+  totalJudges: number;
+  judgesScored: number;
+  scoresStale: boolean;
+} | null> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canViewScores) return null;
+
+  const supabase = await createServiceClient();
+
+  const [
+    { count: participantCount },
+    { count: totalJudges },
+    { data: submitted },
+    { data: latestResult },
+  ] = await Promise.all([
+    supabase
+      .from("participants")
+      .select("id", { count: "exact", head: true })
+      .eq("event_id", eventId),
+    supabase
+      .from("jury_assignments")
+      .select("id", { count: "exact", head: true })
+      .eq("event_id", eventId)
+      .eq("is_active", true),
+    // Only the two columns we need; capped well above any real event so the read
+    // stays cheap (distinct-jury + max-time are folded in JS below).
+    supabase
+      .from("scores")
+      .select("jury_assignment_id, submitted_at")
+      .eq("event_id", eventId)
+      .eq("status", "submitted")
+      .limit(50000),
+    supabase
+      .from("results")
+      .select("computed_at")
+      .eq("event_id", eventId)
+      .order("computed_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+
+  const submittedRows = submitted ?? [];
+  const judgesScored = new Set(
+    submittedRows.map((s) => s.jury_assignment_id).filter(Boolean)
+  ).size;
+  const latestScoreAt = submittedRows.reduce<string | null>((max, s) => {
+    const t = s.submitted_at;
+    return t && (!max || t > max) ? t : max;
+  }, null);
+  const lastComputedAt = latestResult?.computed_at ?? null;
+
+  // Stale only when results EXIST and a submitted score is newer than the last
+  // compute. Before any compute there is nothing to be "stale" against — the
+  // empty state already prompts a first compute.
+  const scoresStale =
+    !!lastComputedAt && !!latestScoreAt && latestScoreAt > lastComputedAt;
+
+  return {
+    participantCount: participantCount ?? 0,
+    totalJudges: totalJudges ?? 0,
+    judgesScored,
+    scoresStale,
+  };
+}
+
 export async function getScoringProgress(
   eventId: string
 ): Promise<ScoringProgressData | null> {

@@ -5,6 +5,7 @@ import {
   getResults,
   getDay2CheckinWarning,
   getAwardCandidates,
+  getResultsFreshness,
 } from "@/app/yip/actions/results";
 import { getAwardOverrides } from "@/app/yip/actions/award-overrides";
 import { getPositionBonusConfigAdmin } from "@/app/yip/actions/positions";
@@ -51,6 +52,10 @@ export default async function ResultsPage({
   // (default = all). Locking qualifiers is a national-team (super-admin) action.
   const zoneAwardConfig = await getZoneAwardConfig(event.yi_zone_code ?? null);
   const canQualify = access.role === "super_admin";
+  // Light "is the snapshot current + complete" read for the Show Results block
+  // (judges-scored count + stale flag + participant count). Cheap counts only —
+  // deliberately NOT getScoringProgress (that times out on heavy events).
+  const freshness = await getResultsFreshness(id);
 
   return (
     <ResultsClient
@@ -66,6 +71,10 @@ export default async function ResultsPage({
       awardCandidates={awardCandidates}
       zoneAwardConfig={zoneAwardConfig}
       canQualify={canQualify}
+      participantCount={freshness?.participantCount ?? 0}
+      totalJudges={freshness?.totalJudges ?? 0}
+      judgesScored={freshness?.judgesScored ?? 0}
+      scoresStale={freshness?.scoresStale ?? false}
     />
   );
 }

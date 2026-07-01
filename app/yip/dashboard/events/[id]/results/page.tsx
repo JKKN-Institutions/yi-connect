@@ -59,6 +59,7 @@ export default async function ResultsPage({
       resultsPublishedAt={event.results_published_at}
       results={results}
       awardOverrides={awardOverrides}
+      canManage={access.canManage}
       canOverrideAwards={access.canDelete}
       positionBonuses={positionConfig.bonuses}
       day2CheckinWarning={day2Warning.shouldWarn}

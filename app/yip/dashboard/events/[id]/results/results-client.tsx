@@ -2,7 +2,11 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { publishResults, unpublishResults } from "@/app/yip/actions/results";
+import {
+  publishResults,
+  unpublishResults,
+  computeResults,
+} from "@/app/yip/actions/results";
 import type {
   ResultWithParticipant,
   AwardCandidateGroup,
@@ -50,8 +54,30 @@ import {
   TrendingUp,
   Pencil,
   X,
+  Calculator,
+  RefreshCw,
 } from "lucide-react";
 import { INK, SAFFRON, SERIF, SectionShell } from "@/app/yip/me/credential-ui";
+
+// Renders "Last computed: <local time>" (or "Not computed yet.") from the max
+// computed_at across the result rows. Hydration-safe: the first render outputs a
+// stable placeholder and the client effect swaps in the locale/timezone-formatted
+// string, avoiding an SSR (UTC) vs client (local) text mismatch.
+function LastComputed({ iso }: { iso: string | null }) {
+  const [label, setLabel] = useState<string>(iso ? "…" : "Not computed yet.");
+  useEffect(() => {
+    if (!iso) {
+      setLabel("Not computed yet.");
+      return;
+    }
+    const d = new Date(iso);
+    setLabel(
+      "Last computed: " +
+        d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
+    );
+  }, [iso]);
+  return <span suppressHydrationWarning>{label}</span>;
+}
 
 // ─── Award card styling ───────────────────────────────────────────
 // The engine decides which awards exist and emits their labels in
@@ -220,6 +246,7 @@ export function ResultsClient({
   resultsPublishedAt,
   results,
   awardOverrides = [],
+  canManage = false,
   canOverrideAwards = false,
   eventLevel = "chapter",
   initialQualifiedIds = [],
@@ -234,6 +261,9 @@ export function ResultsClient({
   resultsPublishedAt: string | null;
   results: ResultWithParticipant[];
   awardOverrides?: AwardOverride[];
+  // Whether the viewer may recompute + publish this event's results (organiser
+  // or above). Gates the "Show Results" recompute button.
+  canManage?: boolean;
   canOverrideAwards?: boolean;
   eventLevel?: string;
   initialQualifiedIds?: string[];
@@ -300,6 +330,7 @@ export function ResultsClient({
     router.refresh();
   }
   const [publishLoading, setPublishLoading] = useState(false);
+  const [computeLoading, setComputeLoading] = useState(false);
   const [message, setMessage] = useState<{
     type: "success" | "error";
     text: string;
@@ -329,6 +360,36 @@ export function ResultsClient({
   // Qualification (award-based) is handled by <QualificationPanel/> below, which
   // reuses the shared markQualified/unmarkQualified primitives. It calls back via
   // onQualifiedChange to keep qualifiedIds (the leaderboard badge) in sync.
+
+  // Latest recompute time = the max computed_at across the result rows
+  // (computeResults stamps every row it writes). ISO strings compare correctly.
+  const lastComputedAt = results.reduce<string | null>(
+    (max, r) =>
+      r.computed_at && (!max || r.computed_at > max) ? r.computed_at : max,
+    null
+  );
+
+  // "Show Results" — recompute this event's results from the LATEST submitted
+  // scores and refresh the snapshot. Reuses computeResults unchanged (admin-gated
+  // there too). Deliberately does NOT publish: revealing to participants stays a
+  // separate, explicit "Publish" click below.
+  async function handleShowResults() {
+    setComputeLoading(true);
+    setMessage(null);
+    const result = await computeResults(eventId);
+    if (result.success) {
+      setMessage({
+        type: "success",
+        text: `Results recomputed from the latest scoring for ${
+          result.data.computed
+        } participant${result.data.computed === 1 ? "" : "s"}.`,
+      });
+      router.refresh();
+    } else {
+      setMessage({ type: "error", text: result.error });
+    }
+    setComputeLoading(false);
+  }
 
   async function handlePublishToggle() {
     setPublishLoading(true);
@@ -420,18 +481,78 @@ export function ResultsClient({
     </div>
   ) : null;
 
+  // Shared message banner (success/error) — rendered in both the empty and the
+  // populated views so a recompute error is visible even before any results exist.
+  const messageBanner = message ? (
+    <div
+      className={`flex items-center gap-2 rounded-lg border px-4 py-3 text-sm ${
+        message.type === "success"
+          ? "border-green-200 bg-green-50 text-green-700"
+          : "border-red-200 bg-red-50 text-red-700"
+      }`}
+    >
+      {message.type === "success" ? (
+        <CheckCircle2 className="size-4 shrink-0" />
+      ) : (
+        <AlertCircle className="size-4 shrink-0" />
+      )}
+      {message.text}
+    </div>
+  ) : null;
+
+  // Admin-only "Show Results" recompute control. Recomputes from the latest
+  // submitted scores (computeResults, unchanged) so admins no longer need the
+  // scoring page (which times out on heavy events). Publishing to participants
+  // stays a separate, deliberate click.
+  const recomputeBlock = canManage ? (
+    <div className="flex flex-col gap-3 rounded-lg border border-[#1a1a3e]/15 bg-[#1a1a3e]/[0.03] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="min-w-0">
+        <div
+          className="flex items-center gap-2 text-sm font-semibold"
+          style={{ color: INK }}
+        >
+          <Calculator className="size-4" style={{ color: SAFFRON }} />
+          Recompute results
+        </div>
+        <p className="mt-0.5 text-xs text-gray-500">
+          Recomputes from the latest scoring — publish separately to reveal to
+          participants.
+        </p>
+        <p className="mt-0.5 text-xs text-gray-400 tabular-nums">
+          <LastComputed iso={lastComputedAt} />
+        </p>
+      </div>
+      <Button
+        size="sm"
+        onClick={handleShowResults}
+        disabled={computeLoading}
+        className="shrink-0 bg-[#1a1a3e] text-white hover:bg-[#2a2a5e]"
+      >
+        {computeLoading ? (
+          <Loader2 className="size-4 animate-spin" />
+        ) : (
+          <RefreshCw className="size-4" />
+        )}
+        Show Results
+      </Button>
+    </div>
+  ) : null;
+
   if (results.length === 0) {
     return (
       <div className="space-y-6">
         {day2Banner}
+        {messageBanner}
+        {recomputeBlock}
         <SectionShell accent={SAFFRON} className="flex flex-col items-center justify-center py-16 text-center">
           <Trophy className="mb-4 size-12 text-gray-300" />
           <h3 className="text-lg font-semibold text-gray-700">
             No Results Yet
           </h3>
           <p className="mt-1 max-w-sm text-sm text-gray-500">
-            Go to the Scoring tab and click &quot;Compute Results&quot; after
-            jury members have submitted their scores.
+            {canManage
+              ? "Click “Show Results” above to compute from the latest submitted scores."
+              : "Results appear here once an admin computes them from the submitted scores."}
           </p>
         </SectionShell>
       </div>
@@ -441,23 +562,12 @@ export function ResultsClient({
   return (
     <div className="space-y-6">
       {day2Banner}
-      {/* Message banner */}
-      {message && (
-        <div
-          className={`flex items-center gap-2 rounded-lg border px-4 py-3 text-sm ${
-            message.type === "success"
-              ? "border-green-200 bg-green-50 text-green-700"
-              : "border-red-200 bg-red-50 text-red-700"
-          }`}
-        >
-          {message.type === "success" ? (
-            <CheckCircle2 className="size-4 shrink-0" />
-          ) : (
-            <AlertCircle className="size-4 shrink-0" />
-          )}
-          {message.text}
-        </div>
-      )}
+      {/* Message banner (shared with the empty state) */}
+      {messageBanner}
+
+      {/* Admin-only recompute control — sits above Publish; the two are
+          deliberately separate (recompute ≠ reveal to participants). */}
+      {recomputeBlock}
 
       {/* Publish status banner */}
       <div

@@ -4,13 +4,9 @@ import { getEvent } from "@/app/yip/actions/events";
 import { getQuestions } from "@/app/yip/actions/questions";
 import type { QuestionWithSubmitter } from "@/app/yip/actions/questions";
 import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
-import { MINISTRIES } from "@/lib/yip/constants";
+import { ministryLabel as resolveMinistryLabel } from "@/lib/yip/cabinet";
+import { getCabinetConfig } from "@/app/yip/actions/cabinet";
 import { PrintButton } from "./print-button";
-
-function ministryLabel(key: string | null): string {
-  if (!key) return "Unassigned";
-  return MINISTRIES.find((m) => m.key === key)?.label ?? key;
-}
 
 /**
  * Printable "List of Business" for Question Hour — the approved questions in
@@ -38,6 +34,13 @@ export default async function OrderPaperPage({
       <Forbidden403 reason="You don't have access to this event's questions. The event may have been deleted, or your role may not include this event's chapter or region." />
     );
   }
+
+  // Resolve ministry KEYs against the event's effective cabinet portfolios
+  // (per-event custom ministries), falling back to "Unassigned" for a null
+  // ministry and to the raw key for any unknown key.
+  const { ministries } = await getCabinetConfig(id);
+  const ministryLabel = (key: string | null): string =>
+    key ? resolveMinistryLabel(key, ministries) : "Unassigned";
 
   const all = await getQuestions(id);
   const approved = all

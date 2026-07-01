@@ -5,6 +5,7 @@ import Link from "next/link";
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { ROLE_LABELS } from "@/lib/yip/constants";
 import { getSpeakerMotions, getSpeakerQuestions } from "@/app/yip/actions/speaker";
+import { getCabinetConfig } from "@/app/yip/actions/cabinet";
 import { PRESIDING_ROLES } from "@/lib/yip/auth/leadership";
 import { SpeakerClient } from "./speaker-client";
 import { INK, GOLD, SERIF, inkA } from "../credential-ui";
@@ -82,6 +83,10 @@ export default async function SpeakerPage() {
   const qResult = await getSpeakerQuestions(session.eventId, participant.id);
   const questions = qResult.success ? qResult.data : [];
 
+  // The event's effective cabinet portfolios (per-event custom ministries)
+  // resolve each question's ministry KEY to its label on the Chair's list.
+  const { ministries } = await getCabinetConfig(session.eventId);
+
   return (
     <SpeakerClient
       eventId={session.eventId}
@@ -89,6 +94,7 @@ export default async function SpeakerPage() {
       roleLabel={role ? ROLE_LABELS[role] ?? "Speaker" : "Speaker"}
       initialMotions={motions}
       initialQuestions={questions}
+      ministries={ministries}
       loadError={result.success ? null : result.error}
     />
   );

@@ -34,7 +34,7 @@ import {
   Printer,
 } from "lucide-react";
 import { cn } from "@/lib/yip/utils";
-import { MINISTRIES } from "@/lib/yip/constants";
+import { ministryLabel, type MinistryPortfolio } from "@/lib/yip/cabinet";
 import {
   approveQuestion,
   rejectQuestion,
@@ -55,11 +55,6 @@ type FilterTab = "all" | "submitted" | "approved" | "starred" | "rejected";
 
 type Bench = "ruling" | "opposition";
 type BenchFilter = "all" | Bench;
-
-function getMinistryLabel(key: string): string {
-  const found = MINISTRIES.find((m) => m.key === key);
-  return found ? found.label : key;
-}
 
 /** Which bench the question came from (null = unknown/no submitter). */
 function getBench(q: QuestionWithSubmitter): Bench | null {
@@ -104,6 +99,8 @@ interface QuestionsClientProps {
   initialOpenAt: string | null;
   /** events.questions_close_at — student submissions close at this time. */
   initialCloseAt: string | null;
+  /** The event's effective cabinet portfolios — resolves ministry KEYs to labels. */
+  ministries: MinistryPortfolio[];
 }
 
 /** ISO (UTC) → value for <input type="datetime-local"> in the viewer's zone. */
@@ -120,6 +117,7 @@ export function QuestionsClient({
   initialQuestions,
   initialOpenAt,
   initialCloseAt,
+  ministries,
 }: QuestionsClientProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -388,7 +386,7 @@ export function QuestionsClient({
           csvCell(q.submitter?.full_name ?? "—"),
           csvCell(q.submitter?.constituency_name ?? ""),
           csvCell(bench ? BENCH_BADGES[bench].label : "—"),
-          csvCell(getMinistryLabel(q.directed_to_ministry ?? "")),
+          csvCell(ministryLabel(q.directed_to_ministry, ministries)),
           csvCell(q.question_text),
           csvCell(q.status ? STATUS_BADGES[q.status]?.label ?? q.status : ""),
           csvCell(q.question_type ?? ""),
@@ -728,7 +726,7 @@ export function QuestionsClient({
                       {/* Ministry */}
                       <TableCell>
                         <span className="inline-flex items-center rounded-md bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600">
-                          {getMinistryLabel(q.directed_to_ministry)}
+                          {ministryLabel(q.directed_to_ministry, ministries)}
                         </span>
                       </TableCell>
 
@@ -860,6 +858,7 @@ export function QuestionsClient({
         question={
           viewing ? questions.find((x) => x.id === viewing.id) ?? viewing : null
         }
+        ministries={ministries}
         onClose={() => setViewing(null)}
         onApprove={(id) => {
           handleApprove(id);
@@ -877,12 +876,14 @@ export function QuestionsClient({
 
 function QuestionDetailDialog({
   question,
+  ministries,
   onClose,
   onApprove,
   onReject,
   isPending,
 }: {
   question: QuestionWithSubmitter | null;
+  ministries: MinistryPortfolio[];
   onClose: () => void;
   onApprove: (id: string) => void;
   onReject: (id: string) => void;
@@ -946,7 +947,7 @@ function QuestionDetailDialog({
                 <span className="text-gray-400 text-xs block">
                   Directed to ministry
                 </span>
-                <span>{getMinistryLabel(q.directed_to_ministry)}</span>
+                <span>{ministryLabel(q.directed_to_ministry, ministries)}</span>
               </div>
               {q.submitter?.school_name && (
                 <div className="col-span-2">

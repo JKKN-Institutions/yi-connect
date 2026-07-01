@@ -20,6 +20,7 @@ import {
   type MotionStatus,
 } from "@/lib/yip/motions";
 import { Gavel, Vote, CheckCircle2, ListOrdered, type LucideIcon } from "lucide-react";
+import { ministryLabel, type MinistryPortfolio } from "@/lib/yip/cabinet";
 import {
   SectionShell,
   SectionHeading,
@@ -32,19 +33,6 @@ import {
 } from "../credential-ui";
 
 const TYPE_LABEL = new Map(MOTION_TYPES.map((t) => [t.code, t.label]));
-
-// Mirror of the Minister desk's ministry labels so the Speaker sees the same names.
-const MINISTRY_LABEL: Record<string, string> = {
-  home: "Home Affairs",
-  finance: "Finance",
-  education: "Education",
-  health: "Health",
-  women_child: "Women & Child Development",
-  disaster_management: "Disaster Management",
-  youth_sports: "Youth Affairs & Sports",
-  it_digital: "IT & Digital",
-};
-const ml = (k: string | null) => (k ? MINISTRY_LABEL[k] ?? k : "—");
 
 // Status chip for the Chair — shows whether the organiser has approved the
 // question yet ("Pending"), plus the downstream states once it is in play.
@@ -63,9 +51,20 @@ const SIDE_BADGE: Record<"ruling" | "opposition", { label: string; bg: string; f
 
 /** One question row on the Chair's List of Business — MP, ministry, status +
  *  bench tags, constituency, and the question text. Read-only. */
-function QuestionRow({ qn, n }: { qn: SpeakerQuestion; n: number | null }) {
+function QuestionRow({
+  qn,
+  n,
+  ministries,
+}: {
+  qn: SpeakerQuestion;
+  n: number | null;
+  ministries: MinistryPortfolio[];
+}) {
   const st = Q_STATUS[qn.status] ?? { label: qn.status, bg: inkA(0.06), fg: inkA(0.5) };
   const sb = qn.side ? SIDE_BADGE[qn.side] : null;
+  const ministry = qn.directed_to_ministry
+    ? ministryLabel(qn.directed_to_ministry, ministries)
+    : "—";
   return (
     <SectionShell accent={GOLD}>
       <div className="space-y-1.5 px-5 py-3.5">
@@ -78,7 +77,7 @@ function QuestionRow({ qn, n }: { qn: SpeakerQuestion; n: number | null }) {
             className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold"
             style={{ background: `${GOLD}1a`, color: GOLD }}
           >
-            {ml(qn.directed_to_ministry)}
+            {ministry}
           </span>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
@@ -117,6 +116,7 @@ export function SpeakerClient({
   roleLabel,
   initialMotions,
   initialQuestions,
+  ministries,
   loadError,
 }: {
   eventId: string;
@@ -124,6 +124,7 @@ export function SpeakerClient({
   roleLabel: string;
   initialMotions: Motion[];
   initialQuestions: SpeakerQuestion[];
+  ministries: MinistryPortfolio[];
   loadError: string | null;
 }) {
   const [motions, setMotions] = useState<Motion[]>(initialMotions);
@@ -253,7 +254,7 @@ export function SpeakerClient({
             )}
 
             {qhInline.map((qn, i) => (
-              <QuestionRow key={qn.id} qn={qn} n={i + 1} />
+              <QuestionRow key={qn.id} qn={qn} n={i + 1} ministries={ministries} />
             ))}
 
             {qhRejected.length > 0 && (
@@ -267,7 +268,9 @@ export function SpeakerClient({
                   {showRejected ? "Hide" : "Show"} rejected ({qhRejected.length})
                 </button>
                 {showRejected &&
-                  qhRejected.map((qn) => <QuestionRow key={qn.id} qn={qn} n={null} />)}
+                  qhRejected.map((qn) => (
+                    <QuestionRow key={qn.id} qn={qn} n={null} ministries={ministries} />
+                  ))}
               </div>
             )}
           </>

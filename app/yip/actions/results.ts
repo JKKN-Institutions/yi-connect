@@ -1724,43 +1724,53 @@ export async function getScoringProgress(
 
   const supabase = await createServiceClient();
 
-  const { data: event } = await supabase
-    .from("events")
-    .select("id, scores_locked, results_published_at")
-    .eq("id", eventId)
-    .single();
+  // These five reads are independent, so fetch them concurrently. On a heavy
+  // event (e.g. Erode: 173 participants) they were ~5 serial Supabase
+  // round-trips and the dominant cost of this page's server render, pushing it
+  // past the serverless timeout on a cold start. Same queries, same results —
+  // just no longer awaited one-by-one. The agenda lookup below still runs after,
+  // since it needs the draft ids from `draftScores`.
+  const [
+    { data: event },
+    { data: participants },
+    { data: juries },
+    { data: scores },
+    // Drafts: saved but NOT yet submitted. Surfaced per-juror — WITH the
+    // participant + session + saved total — so an organiser can find exactly
+    // where each stuck draft is and submit it on the juror's behalf. Drafts
+    // never enter any total until they're promoted to 'submitted'.
+    { data: draftScores },
+  ] = await Promise.all([
+    supabase
+      .from("events")
+      .select("id, scores_locked, results_published_at")
+      .eq("id", eventId)
+      .single(),
+    supabase
+      .from("participants")
+      .select("id, full_name, parliament_role, party_side, party_number, constituency_number, constituency_name, committee_number, committee_name")
+      .eq("event_id", eventId)
+      .not("parliament_role", "is", null)
+      .order("full_name"),
+    supabase
+      .from("jury_assignments")
+      .select("id, jury_name")
+      .eq("event_id", eventId)
+      .eq("is_active", true)
+      .order("created_at"),
+    supabase
+      .from("scores")
+      .select("id, participant_id, jury_assignment_id, agenda_item_id, total_score, status, submitted_at, updated_at")
+      .eq("event_id", eventId)
+      .eq("status", "submitted"),
+    supabase
+      .from("scores")
+      .select("id, participant_id, jury_assignment_id, agenda_item_id, total_score, updated_at")
+      .eq("event_id", eventId)
+      .eq("status", "draft"),
+  ]);
 
   if (!event) return null;
-
-  const { data: participants } = await supabase
-    .from("participants")
-    .select("id, full_name, parliament_role, party_side, party_number, constituency_number, constituency_name, committee_number, committee_name")
-    .eq("event_id", eventId)
-    .not("parliament_role", "is", null)
-    .order("full_name");
-
-  const { data: juries } = await supabase
-    .from("jury_assignments")
-    .select("id, jury_name")
-    .eq("event_id", eventId)
-    .eq("is_active", true)
-    .order("created_at");
-
-  const { data: scores } = await supabase
-    .from("scores")
-    .select("id, participant_id, jury_assignment_id, agenda_item_id, total_score, status, submitted_at, updated_at")
-    .eq("event_id", eventId)
-    .eq("status", "submitted");
-
-  // Drafts: saved but NOT yet submitted. Surfaced per-juror — WITH the
-  // participant + session + saved total — so an organiser can find exactly
-  // where each stuck draft is and submit it on the juror's behalf. Drafts never
-  // enter any total until they're promoted to 'submitted'.
-  const { data: draftScores } = await supabase
-    .from("scores")
-    .select("id, participant_id, jury_assignment_id, agenda_item_id, total_score, updated_at")
-    .eq("event_id", eventId)
-    .eq("status", "draft");
 
   const participantList = participants ?? [];
   const juryList = juries ?? [];

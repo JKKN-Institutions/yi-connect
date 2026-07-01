@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cache } from "react";
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { getCurrentPersonRoles } from "@/lib/yi/auth/yi-directory-roles";
 
@@ -102,7 +103,15 @@ const norm = (s: string | null | undefined) => (s ?? "").trim().toLowerCase();
  * Always returns an object — callers check the boolean they need and, on
  * failure, render Forbidden403 (view) or return a structured error (actions).
  */
-export async function getYipEventAccess(eventId: string): Promise<YipEventAccess> {
+// Memoized per request with React cache(): the scoring render path resolves
+// access twice for the same event (the page gate + getScoringProgress), and
+// each call otherwise re-runs getCurrentPersonRoles (auth.getUser + two directory
+// reads) plus the event/chapter lookups. cache() collapses same-eventId calls
+// within one request to a single resolution. Safe to memoize: the returned
+// object is read-only booleans/strings, never mutated by callers.
+export const getYipEventAccess = cache(async (
+  eventId: string
+): Promise<YipEventAccess> => {
   const roles = await getCurrentPersonRoles();
   if (!roles) return { ...DENY, reason: "unauthenticated" };
 
@@ -228,7 +237,7 @@ export async function getYipEventAccess(eventId: string): Promise<YipEventAccess
   }
 
   return DENY;
-}
+});
 
 /**
  * National-rollup pages (zones overview, schools directory, topics) show

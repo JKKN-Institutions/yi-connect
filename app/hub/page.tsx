@@ -391,6 +391,35 @@ function HubLogin({ error }: { error?: string }) {
 
           <OAuthButtons />
 
+          {/* Event attendees — students & jury who only hold an access code (no
+              email/password login) jump straight to the YIP code entry, which
+              self-routes participant → /yip/me and jury → /yip/jury. Prominent
+              on event day so code-only users can self-serve. */}
+          <Link
+            href="/yip/join"
+            className="group mt-6 flex items-center justify-between gap-3 rounded-xl border border-[#000066]/15 bg-white px-4 py-3 shadow-sm transition-all hover:border-[#000066]/40 hover:shadow-md"
+          >
+            <span className="flex items-center gap-2.5">
+              <span aria-hidden className="text-lg">
+                ⚖️
+              </span>
+              <span className="text-left">
+                <span className="block text-sm font-semibold text-[#000066]">
+                  Have a Yi Parliament event code?
+                </span>
+                <span className="block text-xs text-slate-500">
+                  Students &amp; jury — enter your access code
+                </span>
+              </span>
+            </span>
+            <span
+              aria-hidden
+              className="shrink-0 text-[#000066] transition-transform group-hover:translate-x-0.5"
+            >
+              →
+            </span>
+          </Link>
+
           {/* partner logos — shown here only when the brand panel is hidden */}
           <PartnerLogos className="mt-8 justify-center lg:hidden" />
 

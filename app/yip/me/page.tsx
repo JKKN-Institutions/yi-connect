@@ -59,6 +59,7 @@ import {
 import { YourDayInTheHouseCard } from "./your-day-card";
 import { YourGrowthCard } from "./your-growth-card";
 import { SectionShell, SectionHeading, INK, SAFFRON, GREEN, GOLD, SERIF, inkA } from "./credential-ui";
+import { CommitteeBillsList, type DashboardCommitteeBill } from "./committee-bills-list";
 
 // ─── Session parsing ─────────────────────────────────────────────
 
@@ -268,27 +269,61 @@ export default async function ParticipantPage() {
     committeeScheme = ct?.linked_scheme ?? null;
   }
 
-  // For non-committee members: fetch approved/presented bills for read-only view
-  let approvedBills: Array<{
-    id: string;
-    title: string;
-    party_side: string | null;
-    committee_name: string | null;
-    objective: string | null;
-    provisions: string[] | null;
-    status: string | null;
-  }> = [];
+  // Committee bills visible to EVERY MP (read-only). Once the organiser approves
+  // a committee's bill (status approved / presented / passed) the full bill text
+  // appears here for all MPs — drafts and rejected bills stay hidden. Committee
+  // members see this list in addition to their own Committee Room card above.
+  let committeeBills: DashboardCommitteeBill[] = [];
 
-  if (!isCommitteeMember) {
+  // Does this event use bills at all (any status)? Drives the empty state:
+  // "bills exist but none approved yet" → show a note; "no bills concept" → hide
+  // the whole card.
+  const { count: totalBillCount } = await supabase
+    .from("bills")
+    .select("id", { count: "exact", head: true })
+    .eq("event_id", event.id);
+  const eventHasBills = (totalBillCount ?? 0) > 0;
+
+  {
+    // The 9-section bill columns (preamble/definitions/objectives/…) exist in
+    // the DB but aren't in the generated types yet, so a typed select errors —
+    // cast the raw rows (same pattern as the report's committees-bills getter).
+    type BillRowRaw = {
+      id: string;
+      committee_name: string | null;
+      title: string | null;
+      status: string | null;
+      preamble: string | null;
+      definitions: string | null;
+      objectives: unknown;
+      provisions: unknown;
+      implementation: string | null;
+      funding_budget: string | null;
+      expected_impact: string | null;
+      conclusion: string | null;
+    };
     const { data: billsData } = await supabase
       .from("bills")
-      .select("id, title, party_side, committee_name, objective, provisions, status")
+      .select(
+        "id, committee_name, title, status, preamble, definitions, objectives, provisions, implementation, funding_budget, expected_impact, conclusion"
+      )
       .eq("event_id", event.id)
-      .in("status", ["approved", "presented", "passed", "rejected"]);
+      .in("status", ["approved", "presented", "passed"])
+      .order("committee_name", { ascending: true });
 
-    approvedBills = (billsData ?? []).map((b) => ({
-      ...b,
+    committeeBills = ((billsData ?? []) as unknown as BillRowRaw[]).map((b) => ({
+      id: b.id,
+      committeeName: b.committee_name,
+      title: b.title,
+      status: b.status,
+      preamble: b.preamble,
+      definitions: b.definitions,
+      objectives: clauseTexts(b.objectives),
       provisions: clauseTexts(b.provisions),
+      implementation: b.implementation,
+      fundingBudget: b.funding_budget,
+      expectedImpact: b.expected_impact,
+      conclusion: b.conclusion,
     }));
   }
 
@@ -894,78 +929,31 @@ export default async function ParticipantPage() {
         </SectionShell>
       )}
 
-      {/* ─── BILLS (read-only for non-committee members) ──────── */}
-      {!isCommitteeMember && approvedBills.length > 0 && (
+      {/* ─── COMMITTEE BILLS (read-only, visible to EVERY MP) ─────
+          Full bill text per committee, collapsed by default (tap to expand).
+          Only organiser-approved bills (approved/presented/passed) appear;
+          drafts and rejected bills are hidden. Shows for every MP; committee
+          members also keep their own Committee Room card above. When the event
+          has bills but none are approved yet, a short note stands in; when the
+          event has no bills at all, the card is not rendered. */}
+      {eventHasBills && (
         <SectionShell accent={SAFFRON}>
           <div className="px-5 py-4">
-            <SectionHeading eyebrow="Legislation" title="Bills" icon={FileText} accent={SAFFRON} />
-            <div className="mt-3.5 space-y-2.5">
-              {approvedBills.map((bill) => (
-                <div
-                  key={bill.id}
-                  className="rounded-xl p-3"
-                  style={{
-                    background:
-                      bill.party_side === "ruling"
-                        ? `${GREEN}0d`
-                        : bill.party_side === "opposition"
-                          ? "#9A332412"
-                          : `${SAFFRON}0d`,
-                    border: `1px solid ${
-                      bill.party_side === "ruling"
-                        ? `${GREEN}30`
-                        : bill.party_side === "opposition"
-                          ? "#9A332430"
-                          : `${SAFFRON}30`
-                    }`,
-                  }}
-                >
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <span
-                      className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold text-white"
-                      style={{
-                        background:
-                          bill.party_side === "ruling"
-                            ? GREEN
-                            : bill.party_side === "opposition"
-                              ? "#9A3324"
-                              : SAFFRON,
-                      }}
-                    >
-                      {bill.committee_name ??
-                        (bill.party_side === "ruling"
-                          ? "Ruling"
-                          : bill.party_side === "opposition"
-                            ? "Opposition"
-                            : "Committee Bill")}
-                    </span>
-                    {bill.status && (
-                      <span
-                        className="font-mono text-[10px] tracking-wide"
-                        style={{
-                          color:
-                            bill.status === "passed"
-                              ? GREEN
-                              : bill.status === "rejected"
-                                ? "#9A3324"
-                                : inkA(0.45),
-                        }}
-                      >
-                        {bill.status}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-sm font-semibold" style={{ color: INK }}>
-                    {bill.title}
-                  </p>
-                  {bill.objective && (
-                    <p className="text-xs mt-1" style={{ color: inkA(0.65) }}>
-                      {bill.objective}
-                    </p>
-                  )}
-                </div>
-              ))}
-            </div>
+            <SectionHeading
+              eyebrow="Legislation"
+              title="Committee Bills"
+              icon={FileText}
+              accent={SAFFRON}
+            />
+            {committeeBills.length > 0 ? (
+              <div className="mt-3.5">
+                <CommitteeBillsList bills={committeeBills} />
+              </div>
+            ) : (
+              <p className="mt-2 text-xs" style={{ color: inkA(0.55) }}>
+                Committee bills will appear here once the organiser approves them.
+              </p>
+            )}
           </div>
         </SectionShell>
       )}

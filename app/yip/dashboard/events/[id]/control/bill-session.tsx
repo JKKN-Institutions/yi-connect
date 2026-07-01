@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useTransition } from "react";
+import { useState, useEffect, useTransition, useRef } from "react";
 import { clauseTexts } from "@/lib/yip/bill-provisions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/yip/ui/card";
 import { Button } from "@/components/yip/ui/button";
@@ -59,7 +59,14 @@ export function BillSession({ eventId, agendaItemId }: BillSessionProps) {
     title: string;
     description: string;
     action: () => void;
+    showCheckinToggle?: boolean;
   }>({ open: false, title: "", description: "", action: () => {} });
+  // Bill-vote check-in override (live-event escape hatch): when ON, students not
+  // yet checked in for today may still vote. Default OFF (fail-closed). Mirrored
+  // into a ref so the dialog's already-created action reads the latest value
+  // (avoids a stale closure).
+  const [voteOverrideCheckin, setVoteOverrideCheckin] = useState(false);
+  const voteOverrideRef = useRef(false);
 
   // Load bills
   useEffect(() => {
@@ -73,13 +80,18 @@ export function BillSession({ eventId, agendaItemId }: BillSessionProps) {
   }
 
   function handlePresentBill(bill: BillWithMembers) {
+    // A bill that isn't approved/submitted (i.e. still drafting, or rejected) is
+    // force-presented so the organiser can put it to a vote anyway (override).
+    const isForce = !(bill.status === "approved" || bill.status === "submitted");
     setConfirmDialog({
       open: true,
       title: `Present ${bill.committee_name ?? (bill.party_side === "ruling" ? "Ruling" : bill.party_side === "opposition" ? "Opposition" : "Committee")} Bill`,
-      description: `Mark "${bill.title}" as presented? This will show the bill on the projector display.`,
+      description: isForce
+        ? `"${bill.title}" isn't finalised (status: ${bill.status ?? "drafting"}). Present it and put it to a vote anyway?`
+        : `Mark "${bill.title}" as presented? This will show the bill on the projector display.`,
       action: () => {
         startTransition(async () => {
-          const result = await setBillPresented(bill.id);
+          const result = await setBillPresented(bill.id, isForce);
           if (result.success) {
             toast.success("Bill marked as presented");
             setBills((prev) =>
@@ -97,17 +109,20 @@ export function BillSession({ eventId, agendaItemId }: BillSessionProps) {
   }
 
   function handleOpenBillVote(bill: BillWithMembers) {
+    setVoteOverrideCheckin(false);
+    voteOverrideRef.current = false;
     setConfirmDialog({
       open: true,
       title: "Open Bill Vote",
       description: `Open voting on "${bill.title}"? Participants will vote Aye, Nay, or Abstain.`,
+      showCheckinToggle: true,
       action: () => {
         startTransition(async () => {
           const result = await openVote(
             eventId,
             agendaItemId,
             "bill_vote",
-            { billId: bill.id }
+            { billId: bill.id, override_checkin: voteOverrideRef.current }
           );
           if (result.success) {
             toast.success("Bill voting is now open!");
@@ -130,12 +145,12 @@ export function BillSession({ eventId, agendaItemId }: BillSessionProps) {
     );
   }
 
-  // One card per drafting committee's bill. Benchless events (the default) have
-  // no ruling/opposition split, so bills are identified by committee_name and
-  // carry no party_side — keying off party_side here dropped every committee
-  // bill and dead-ended the Bill Presentation session. Legacy benched events
-  // still surface their side tint. Drafting bills aren't ready to present.
-  const presentableBills = bills.filter((b) => b.status !== "drafting");
+  // One card per committee's bill. Benchless events (the default) have no
+  // ruling/opposition split, so bills are identified by committee_name and carry
+  // no party_side — keying off party_side dropped every committee bill and
+  // dead-ended the session. We now show ALL bills (incl. drafts): the organiser
+  // can force-present a draft to put it to a vote (live-event override).
+  const presentableBills = bills;
 
   return (
     <>
@@ -150,7 +165,7 @@ export function BillSession({ eventId, agendaItemId }: BillSessionProps) {
         <CardContent className="space-y-4">
           {presentableBills.length === 0 ? (
             <p className="text-center py-4 text-sm text-muted-foreground">
-              No bills available. Bills must be submitted and approved first.
+              No bills yet for this event.
             </p>
           ) : (
             <div className="space-y-4">
@@ -182,6 +197,28 @@ export function BillSession({ eventId, agendaItemId }: BillSessionProps) {
               {confirmDialog.description}
             </DialogDescription>
           </DialogHeader>
+          {confirmDialog.showCheckinToggle && (
+            <label className="flex items-start gap-2 rounded-md border p-3 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={voteOverrideCheckin}
+                onChange={(e) => {
+                  setVoteOverrideCheckin(e.target.checked);
+                  voteOverrideRef.current = e.target.checked;
+                }}
+              />
+              <span>
+                <span className="font-medium">
+                  Allow students not checked in for today to vote
+                </span>
+                <span className="block text-xs text-muted-foreground">
+                  Turn on if you haven&apos;t run today&apos;s check-in (e.g. a
+                  Day-2 bill vote). Off = only checked-in students can vote.
+                </span>
+              </span>
+            </label>
+          )}
           <DialogFooter>
             <Button
               variant="outline"

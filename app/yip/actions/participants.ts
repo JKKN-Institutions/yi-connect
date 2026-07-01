@@ -8,6 +8,10 @@ import { requireParticipantSession } from "@/lib/yip/auth/yip-session";
 import { COMMITTEES } from "@/lib/yip/constants";
 import { getCommitteeNumbering } from "@/lib/yip/committee-number";
 import {
+  isGoIndependentClosed,
+  BILL_DRAFTING_SESSION_KEY,
+} from "@/lib/yip/go-independent";
+import {
   CONSTITUENCIES,
   PROMINENT_CONSTITUENCIES,
 } from "@/lib/yip/data/constituencies";
@@ -1377,6 +1381,33 @@ export async function goIndependent(
       success: false,
       error:
         "You hold a parliamentary role, so you can't switch yourself to Independent. Please ask an organiser.",
+    };
+  }
+
+  // Window guard (Director, 2026-07-01): the switch closes once the Committee
+  // (Bill Drafting) session has ended — from bill presentation/voting onward
+  // party membership is fixed. Same rule the student page uses to hide the
+  // button; enforced here so it can't be bypassed.
+  const { data: ev } = await supabase
+    .from("events")
+    .select("status")
+    .eq("id", eventId)
+    .single();
+  const { data: draftRows } = await supabase
+    .from("agenda")
+    .select("status")
+    .eq("event_id", eventId)
+    .eq("session_key", BILL_DRAFTING_SESSION_KEY);
+  if (
+    isGoIndependentClosed(
+      ev?.status,
+      (draftRows ?? []).map((r) => r.status as string | null)
+    )
+  ) {
+    return {
+      success: false,
+      error:
+        "Switching to Independent has closed — the Committee (Bill Drafting) session is over. Please ask an organiser if you need a change.",
     };
   }
 

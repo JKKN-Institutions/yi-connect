@@ -723,6 +723,59 @@ export async function getSessionFeedbackWork(
   return work;
 }
 
+/**
+ * SELF-RUNNING DETECTOR for participant_story ("Your Day in the House"). For an
+ * ai_enabled event, find every participant that does NOT yet have a
+ * participant_story ai_draft row, and return the participant ids that need a
+ * card generated. Mirrors getSessionFeedbackWork / getBillFeedbackWork so the
+ * out-of-band endpoint can auto-enqueue BOTH card types — no manual "Prepare
+ * Day-2 cards" button required. Reads yip.participants + yip.ai_drafts only; the
+ * participant_story grounding is score-free by construction (see HARD RULE
+ * above), so this never touches yip.scores / yip.results.
+ *
+ * Returns [] for events that are not ai_enabled (the endpoint also gates).
+ */
+export async function getParticipantStoryWork(
+  eventId: string
+): Promise<{ participantId: string }[]> {
+  const svc = await createServiceClient();
+  const loose = svc as unknown as LooseSvc;
+
+  // ai_enabled gate (loose — column not in generated types).
+  const { data: ev } = await loose
+    .from("events")
+    .select("id, ai_enabled")
+    .eq("id", eventId)
+    .maybeSingle();
+  if (!ev || !ev.ai_enabled) return [];
+
+  // All participants for this event.
+  const { data: parts } = await loose
+    .from("participants")
+    .select("id")
+    .eq("event_id", eventId);
+  const participants = ((parts as Array<{ id: string }>) ?? []).filter(
+    (p) => !!p.id
+  );
+  if (participants.length === 0) return [];
+
+  // Existing participant_story drafts (any status) — never re-enqueue.
+  const { data: existing } = await loose
+    .from("ai_drafts")
+    .select("subject_id")
+    .eq("event_id", eventId)
+    .eq("kind", "participant_story");
+  const have = new Set(
+    ((existing as Array<{ subject_id: string | null }>) ?? [])
+      .map((r) => r.subject_id)
+      .filter((x): x is string => !!x)
+  );
+
+  return participants
+    .filter((p) => !have.has(p.id))
+    .map((p) => ({ participantId: p.id }));
+}
+
 // ─── Bill feedback (team-level note on a BILL's craft) ──────────────────────
 
 /**

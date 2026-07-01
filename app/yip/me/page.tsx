@@ -1,6 +1,10 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { clauseTexts } from "@/lib/yip/bill-provisions";
+import {
+  isGoIndependentClosed,
+  BILL_DRAFTING_SESSION_KEY,
+} from "@/lib/yip/go-independent";
 import { getYipSession } from "@/lib/yip/auth/yip-session";
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import {
@@ -316,6 +320,20 @@ export default async function ParticipantPage() {
 
   const role = participant.parliament_role;
   const side = participant.party_side as "ruling" | "opposition" | null;
+
+  // "Go Independent" window: a plain MP may leave their party only until the
+  // Committee (Bill Drafting) session ends. Same rule the server action enforces
+  // (lib/yip/go-independent). Fetch the drafting session's status and close the
+  // button once it's over (or by day 2).
+  const { data: draftRows } = await supabase
+    .from("agenda")
+    .select("status")
+    .eq("event_id", event.id)
+    .eq("session_key", BILL_DRAFTING_SESSION_KEY);
+  const goIndependentClosed = isGoIndependentClosed(
+    event.status,
+    (draftRows ?? []).map((r) => r.status as string | null)
+  );
   // Party identity must show even when there is no bench. Benchless allocation
   // (the current default) leaves party_side null — Ruling/Opposition is decided
   // live on event day — so party display can NOT key off `side`, or every party
@@ -690,14 +708,25 @@ export default async function ParticipantPage() {
 
           {/* Self-service "go Independent" — only a plain MP may leave their
               party themselves; role-holders must ask an organiser. Kept outside
-              the collapse so it's always reachable. */}
-          {role === "mp" && (
+              the collapse so it's always reachable. Closes once Committee (Bill
+              Drafting) is over (goIndependentClosed). */}
+          {role === "mp" && !goIndependentClosed && (
             <div className="px-5 pb-4">
               <div className="pt-3" style={{ borderTop: `1px solid ${inkA(0.08)}` }}>
                 <GoIndependentButton
                   participantId={participant.id}
                   eventId={participant.event_id}
                 />
+              </div>
+            </div>
+          )}
+          {role === "mp" && goIndependentClosed && (
+            <div className="px-5 pb-4">
+              <div className="pt-3" style={{ borderTop: `1px solid ${inkA(0.08)}` }}>
+                <p className="text-xs" style={{ color: inkA(0.4) }}>
+                  Switching to Independent has closed for this event (Committee
+                  Bill Drafting is over).
+                </p>
               </div>
             </div>
           )}

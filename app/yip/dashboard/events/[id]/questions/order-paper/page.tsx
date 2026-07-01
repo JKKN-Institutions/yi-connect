@@ -65,8 +65,23 @@ export default async function OrderPaperPage({
   }
 
   return (
-    <div className="mx-auto max-w-3xl bg-white px-8 py-8 text-[#1a1a3e] print:px-0 print:py-0">
-      <style>{`@media print { .no-print { display: none !important; } @page { margin: 18mm; } }`}</style>
+    <div
+      id="yip-order-paper"
+      className="mx-auto max-w-3xl bg-white px-8 py-8 text-[#1a1a3e] print:px-0 print:py-0"
+    >
+      {/* Print isolation (mirrors the report's report-print.css): hide the whole
+          app shell — dashboard nav, event sidebar, header — and print ONLY this
+          order paper, pinned top-left. Without this the sidebar bleeds into the
+          saved PDF. */}
+      <style>{`@media print {
+        @page { margin: 18mm; }
+        html, body { background: #ffffff !important; }
+        body * { visibility: hidden; }
+        #yip-order-paper, #yip-order-paper * { visibility: visible; }
+        #yip-order-paper { position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 0; }
+        .no-print { display: none !important; }
+        * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+      }`}</style>
 
       <div className="mb-6 flex items-start justify-between gap-4">
         <div>

@@ -242,6 +242,16 @@ export async function adminCreateBill(
     problemStatement?: string;
     provisions?: string[];
     approved?: boolean;
+    /**
+     * Admin-only "extra bill": add an ADDITIONAL bill for a committee that
+     * already has one, for putting multiple bills to a floor vote. To stay safe
+     * on the live 1:1 committee↔bill model (a DB unique constraint + ~10
+     * single-row committee lookups incl. the student "My Bill" card), an extra
+     * bill is stored with committee_name = NULL (so it never collides with the
+     * constraint or the student's own bill) and the committee is embedded in the
+     * title instead. It is fully presentable/votable (present + vote go by id).
+     */
+    extra?: boolean;
   }
 ): Promise<ActionResult<{ billId: string }>> {
   const access = await getYipEventAccess(eventId);
@@ -252,7 +262,7 @@ export async function adminCreateBill(
     };
   }
 
-  const title = data.title?.trim();
+  let title = data.title?.trim();
   const committeeName = data.committeeName?.trim();
   if (!title) return { success: false, error: "Bill title is required." };
   if (!committeeName)
@@ -260,18 +270,28 @@ export async function adminCreateBill(
 
   const supabase = await createServiceClient();
 
-  // One bill per committee per event (matches the drafting flow's assumption).
-  const { data: existing } = await supabase
-    .from("bills")
-    .select("id")
-    .eq("event_id", eventId)
-    .eq("committee_name" as never, committeeName as never)
-    .maybeSingle();
-  if (existing) {
-    return {
-      success: false,
-      error: `A bill already exists for ${committeeName}. Delete it first to re-add.`,
-    };
+  // Normal add is strictly one bill per committee (matches the drafting flow +
+  // DB constraint). An admin "extra" bill intentionally skips this and is stored
+  // committee-unlinked (committee_name NULL) so it can't collide.
+  if (!data.extra) {
+    const { data: existing } = await supabase
+      .from("bills")
+      .select("id")
+      .eq("event_id", eventId)
+      .eq("committee_name" as never, committeeName as never)
+      .maybeSingle();
+    if (existing) {
+      return {
+        success: false,
+        error: `A bill already exists for ${committeeName}. Add it as an extra bill, or delete the existing one first.`,
+      };
+    }
+  } else {
+    // Keep the committee visible on the (committee-unlinked) extra bill by
+    // embedding it in the title, unless the admin already did.
+    if (!title.toLowerCase().startsWith(committeeName.toLowerCase())) {
+      title = `${committeeName} — ${title}`;
+    }
   }
 
   // Store the new stable {id,text}[] clause shape (matches the Committee Room).
@@ -284,7 +304,9 @@ export async function adminCreateBill(
     .from("bills")
     .insert({
       event_id: eventId,
-      committee_name: committeeName,
+      // Extra bills are committee-unlinked (NULL) to dodge the unique constraint
+      // and never shadow the committee's real (student-drafted) bill.
+      committee_name: data.extra ? null : committeeName,
       title,
       objective: data.objective?.trim() || null,
       problem_statement: data.problemStatement?.trim() || null,

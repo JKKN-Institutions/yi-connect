@@ -129,6 +129,7 @@ export function BillsClient({
     objective: "",
     provisions: "",
     approved: true,
+    extra: false,
   });
 
   async function handleAddBill() {
@@ -152,10 +153,15 @@ export function BillsClient({
             .filter(Boolean)
         : undefined,
       approved: form.approved,
+      extra: form.extra,
     });
     setAdding(false);
     if (result.success) {
-      toast.success("Bill added — it's now available in the Bill Presentation session.");
+      toast.success(
+        form.extra
+          ? "Extra bill added — available in the Bill Presentation session."
+          : "Bill added — it's now available in the Bill Presentation session."
+      );
       setAddOpen(false);
       setForm({
         committeeName: "",
@@ -163,6 +169,7 @@ export function BillsClient({
         objective: "",
         provisions: "",
         approved: true,
+        extra: false,
       });
       router.refresh();
     } else {
@@ -421,6 +428,24 @@ export function BillsClient({
                   setForm((f) => ({ ...f, provisions: e.target.value }))
                 }
                 placeholder={"Provision 1\nProvision 2\nProvision 3"}
+              />
+            </div>
+            <div className="flex items-center justify-between rounded-md border px-3 py-2">
+              <div className="pr-3">
+                <p className="text-sm font-medium text-gray-900">
+                  Extra bill for this committee
+                </p>
+                <p className="text-xs text-gray-500">
+                  On: add an additional bill for a committee that already has one
+                  (multiple bills on the floor). The committee is shown in the
+                  title. Off: one bill per committee.
+                </p>
+              </div>
+              <Switch
+                checked={form.extra}
+                onCheckedChange={(v) =>
+                  setForm((f) => ({ ...f, extra: v }))
+                }
               />
             </div>
             <div className="flex items-center justify-between rounded-md border px-3 py-2">

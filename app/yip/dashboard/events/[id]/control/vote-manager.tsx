@@ -82,6 +82,21 @@ import {
 import type { Tables } from "@/types/yip/database";
 import { INK, SAFFRON, SERIF } from "@/app/yip/me/credential-ui";
 
+// ─── Helpers ────────────────────────────────────────────────────
+
+// After opening a vote, warn the organiser if nobody is checked in for that
+// day (openVote returns checkinWarning) — otherwise every cast is silently
+// blocked (the Erode Day-2 issue, organiser side). Advisory; the vote is open.
+function warnIfNoCheckin(result: Awaited<ReturnType<typeof openVote>>) {
+  if (!result.success) return;
+  const w = result.data.checkinWarning;
+  if (!w) return;
+  toast.warning(
+    `Nobody is checked in for Day ${w.day} yet — no one can vote. Check students in (Participants → “Check In All · Day ${w.day}”) or re-open with the not-checked-in override.`,
+    { duration: 12000 }
+  );
+}
+
 // ─── Types ──────────────────────────────────────────────────────
 
 type AgendaItem = Tables<{ schema: "yip" }, "agenda">;
@@ -507,6 +522,7 @@ export function VoteManager({
       );
       if (result.success) {
         toast.success("Speaker election is now open!");
+        warnIfNoCheckin(result);
         setSpeakerDialog({
           open: false,
           groups: [],
@@ -565,6 +581,7 @@ export function VoteManager({
       );
       if (result.success) {
         toast.success(`${party.name} leader election is now open!`);
+        warnIfNoCheckin(result);
         setLeaderDialog({
           open: false,
           party: null,
@@ -658,6 +675,7 @@ export function VoteManager({
       });
       if (result.success) {
         toast.success(`${label} election is now open!`);
+        warnIfNoCheckin(result);
         setLeadershipDialog({
           open: false,
           voteType: null,
@@ -733,6 +751,7 @@ export function VoteManager({
         const title =
           voteType === "cabinet_minister" ? "Cabinet" : "Shadow Cabinet";
         toast.success(`${party.name} ${title} election is now open!`);
+        warnIfNoCheckin(result);
         setMinisterDialog({
           open: false,
           voteType: null,

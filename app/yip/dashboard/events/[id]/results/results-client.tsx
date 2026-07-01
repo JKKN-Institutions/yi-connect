@@ -56,6 +56,7 @@ import {
   X,
   Calculator,
   RefreshCw,
+  Info,
 } from "lucide-react";
 import { INK, SAFFRON, SERIF, SectionShell } from "@/app/yip/me/credential-ui";
 
@@ -332,7 +333,9 @@ export function ResultsClient({
   const [publishLoading, setPublishLoading] = useState(false);
   const [computeLoading, setComputeLoading] = useState(false);
   const [message, setMessage] = useState<{
-    type: "success" | "error";
+    // "info" = a benign, non-error outcome (e.g. nothing to compute yet) —
+    // rendered neutral/amber so it neither alarms (red) nor falsely celebrates (green).
+    type: "success" | "error" | "info";
     text: string;
   } | null>(null);
 
@@ -378,15 +381,30 @@ export function ResultsClient({
     setMessage(null);
     const result = await computeResults(eventId);
     if (result.success) {
-      setMessage({
-        type: "success",
-        text: `Results recomputed from the latest scoring for ${
-          result.data.computed
-        } participant${result.data.computed === 1 ? "" : "s"}.`,
-      });
+      const n = result.data.computed;
+      setMessage(
+        n === 0
+          ? {
+              // Benign empty case — the compute ran fine, there just aren't any
+              // scores yet. Keep it friendly, not an error.
+              type: "info",
+              text: "No scores entered yet — there's nothing to compute. Once judges submit scores, click Show Results again.",
+            }
+          : {
+              type: "success",
+              text: `Results recomputed from the latest scoring for ${n} participant${
+                n === 1 ? "" : "s"
+              }.`,
+            }
+      );
       router.refresh();
     } else {
-      setMessage({ type: "error", text: result.error });
+      // computeResults can time out on heavy events; give a clear, retryable message
+      // rather than surfacing a raw server error string.
+      setMessage({
+        type: "error",
+        text: "Compute took too long or didn't finish — please click Show Results to try again.",
+      });
     }
     setComputeLoading(false);
   }
@@ -488,11 +506,15 @@ export function ResultsClient({
       className={`flex items-center gap-2 rounded-lg border px-4 py-3 text-sm ${
         message.type === "success"
           ? "border-green-200 bg-green-50 text-green-700"
-          : "border-red-200 bg-red-50 text-red-700"
+          : message.type === "info"
+            ? "border-amber-200 bg-amber-50 text-amber-700"
+            : "border-red-200 bg-red-50 text-red-700"
       }`}
     >
       {message.type === "success" ? (
         <CheckCircle2 className="size-4 shrink-0" />
+      ) : message.type === "info" ? (
+        <Info className="size-4 shrink-0" />
       ) : (
         <AlertCircle className="size-4 shrink-0" />
       )}

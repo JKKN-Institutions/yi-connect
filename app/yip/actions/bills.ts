@@ -398,7 +398,11 @@ export async function rejectBill(
 // ─── Set Bill as Presented ─────────────────────────────────────
 
 export async function setBillPresented(
-  billId: string
+  billId: string,
+  // Organiser override: when true, present a bill in ANY status (incl. a still
+  // "drafting" or "rejected" bill) so it can be put to a floor vote. Absent/false
+  // keeps the normal gate (only approved/submitted bills may be presented).
+  force = false
 ): Promise<ActionResult> {
   const supabase = await createServiceClient();
 
@@ -417,14 +421,15 @@ export async function setBillPresented(
     return { success: false, error: "Not authorized to manage this event" };
   }
 
-  const { error } = await supabase
+  let update = supabase
     .from("bills")
     .update({
       status: "presented",
       updated_at: new Date().toISOString(),
     })
-    .eq("id", billId)
-    .in("status", ["approved", "submitted"]);
+    .eq("id", billId);
+  if (!force) update = update.in("status", ["approved", "submitted"]);
+  const { error } = await update;
 
   if (error) return { success: false, error: error.message };
   return { success: true, data: null };

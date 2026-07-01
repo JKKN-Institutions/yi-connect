@@ -362,6 +362,10 @@ export async function openVote(
       | "shadow_minister";
     // Deputy runoffs only: how many deputy seats are still open (1 or 2).
     openDeputySeats?: number;
+    // Organiser override (live-event escape hatch): when true, students who are
+    // NOT checked in for this vote's day may still cast. Persisted in the
+    // session config; honoured in castVote. Absent/false = normal check-in gate.
+    override_checkin?: boolean;
   }
 ): Promise<ActionResult<{ sessionId: string }>> {
   const access = await getYipEventAccess(eventId);
@@ -965,13 +969,20 @@ export async function castVote(
     };
   }
 
-  // Only students checked in for this vote's day may cast (interview 2026-06-14).
-  const elig = await assertCheckedInForVote(
-    supabase,
-    participantId,
-    session.agenda_item_id
-  );
-  if (!elig.ok) return { success: false, error: elig.error };
+  // Only students checked in for this vote's day may cast (interview 2026-06-14),
+  // UNLESS the organiser opened this vote with override_checkin (live-event escape
+  // hatch — e.g. a Day-2 bill vote run before Day-2 check-in). Flag absent => gate ON.
+  const overrideCheckin =
+    (session.config as { override_checkin?: boolean } | null | undefined)
+      ?.override_checkin === true;
+  if (!overrideCheckin) {
+    const elig = await assertCheckedInForVote(
+      supabase,
+      participantId,
+      session.agenda_item_id
+    );
+    if (!elig.ok) return { success: false, error: elig.error };
+  }
 
   // Reject junk / non-candidate values before they pollute the tally.
   const valid = validateVoteValue(session, voteValue);

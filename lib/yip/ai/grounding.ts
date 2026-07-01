@@ -643,6 +643,58 @@ export async function listAiEnabledEventIds(): Promise<string[]> {
 }
 
 /**
+ * Auto-enable AI coaching for any REAL chapter round that has started scoring
+ * (i.e. gone live). Excludes mock/demo/deleted events, and only flips events
+ * that are currently ai_enabled=false, so it is idempotent. Returns the ids
+ * newly enabled. Best-effort — the drain endpoint calls this each run so that
+ * every chapter which goes live and scores gets coaching with NO manual toggle.
+ */
+export async function autoEnableScoringChapters(): Promise<string[]> {
+  const svc = await createServiceClient();
+  const loose = svc as unknown as LooseSvc;
+
+  // Real chapter rounds not yet enabled.
+  const { data: evs } = await loose
+    .from("events")
+    .select("id, name, is_mock, ai_enabled")
+    .eq("level", "chapter");
+  const candidates = (
+    (evs as Array<{
+      id: string;
+      name: string | null;
+      is_mock: boolean | null;
+      ai_enabled: boolean | null;
+    }> | null) ?? []
+  ).filter(
+    (e) =>
+      e.id &&
+      !e.ai_enabled &&
+      !e.is_mock &&
+      !/mock|demo|delete/i.test(e.name ?? "")
+  );
+  if (candidates.length === 0) return [];
+
+  // Which have at least one real (non-mock) submitted score = live.
+  const candidateIds = candidates.map((e) => e.id);
+  const { data: scored } = await loose
+    .from("scores")
+    .select("event_id")
+    .in("event_id", candidateIds)
+    .eq("status", "submitted")
+    .or("is_mock.is.null,is_mock.eq.false");
+  const scoredIds = new Set(
+    ((scored as Array<{ event_id: string | null }> | null) ?? [])
+      .map((r) => r.event_id)
+      .filter((x): x is string => !!x)
+  );
+  const toEnable = candidateIds.filter((id) => scoredIds.has(id));
+  if (toEnable.length === 0) return [];
+
+  await loose.from("events").update({ ai_enabled: true }).in("id", toEnable);
+  return toEnable;
+}
+
+/**
  * SELF-RUNNING DETECTOR. For an ai_enabled event, find every (participant,
  * scored session) that HAS submitted scores but does NOT yet have a
  * session_feedback ai_draft row, and return the (participantId, agendaItemId)

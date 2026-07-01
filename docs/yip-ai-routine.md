@@ -2,7 +2,7 @@
 
 > **What this is.** The Yi Connect production app **never calls an LLM.** All YIP AI
 > text — the participant "Your Day in the House" card, the per-session **"Your Growth"**
-> coaching notes, and the chair's report narrative — is written by an **external, hourly
+> coaching notes, and the chair's report narrative — is written by an **external, every-3-hours
 > [claude.ai](https://claude.ai) routine** that polls a bearer-protected endpoint, generates
 > drafts off-platform, and posts them back. The app only **enqueues requests**, **detects
 > newly-scored sessions**, **reads finished drafts**, and **exposes the endpoint**.
@@ -59,7 +59,7 @@ coaching note per (participant, session). See §1's `session_feedback` block for
 > allow-listed app domain (see §2).
 
 ````text
-You are the YIP AI drafting routine for Yi Connect. You run once an hour. You write three
+You are the YIP AI drafting routine for Yi Connect. You run every 3 hours. You write three
 kinds of short, factual, encouraging text for a youth-parliament event platform. You NEVER
 invent facts. You ONLY narrate the facts handed to you in the grounding payload.
 
@@ -73,7 +73,7 @@ invent facts. You ONLY narrate the facts handed to you in the grounding payload.
    The response is JSON:
      { "count": <n>, "requests": [ { "id", "eventId", "kind", "subjectId", "agendaItemId", "status", "grounding" }, ... ] }
 
-   If count is 0 → stop, nothing to do this hour.
+   If count is 0 → stop, nothing to do this cycle.
    If the response is 401 → the secret is wrong or not set in Vercel. Stop and report it; do
    not retry blindly.
 
@@ -356,15 +356,15 @@ constraint-following is what keeps a stray growth note from ever hinting at a ra
 minutes off the hour so it doesn't pile onto the top-of-hour fleet). The routine self-terminates
 each run after draining the pending queue.
 
-> **Why hourly is enough for the growth loop.** The app auto-detects newly-scored sessions on
+> **Why every 3 hours is enough for the growth loop.** The app auto-detects newly-scored sessions on
 > every GET and pre-inserts a `requested` growth-note row for each (participant, session) that
-> has scores but no note yet. So within an hour of a session being scored, the routine writes
+> has scores but no note yet. So within a few hours of a session being scored, the routine writes
 > the note and it appears on the participant's "Your Growth" card before their next session.
 > A chair "refresh now" button is optional sugar — the loop runs on its own.
 
 > **Why not a Vercel cron?** Generation runs in the external claude.ai routine, not as a
 > Vercel function — the app has no LLM key on purpose. So there is **no** entry for this in
-> `vercel.json`; the hourly trigger lives in the routine. (Vercel cron stays reserved for
+> `vercel.json`; the every-3-hours trigger lives in the routine. (Vercel cron stays reserved for
 > the email-drain jobs that already exist.)
 
 ---
@@ -494,7 +494,7 @@ Content-Type: application/json
   reviewer can see exactly which session + which strength/focus pattern the note was grounded
   on.
 - Responses: `200 { success: true, id, status }`; `400` malformed body; `404` row no longer
-  pending (skip); `500` write failure (retry next hour).
+  pending (skip); `500` write failure (retry next cycle).
 
 ---
 

@@ -9,6 +9,7 @@ import { getRegionalAdminZones } from "@/lib/yi/auth/yi-directory-roles";
 import { revalidatePath } from "next/cache";
 import { attachCentralTopicsToEvent } from "./admin-topics";
 import { getComplianceScore } from "./branding";
+import { writeEventAiEnabled } from "@/lib/yip/ai/drafts";
 import type { Database } from "@/types/yip/database";
 
 // ─── Types ─────────────────────────────────────────────────────────
@@ -448,6 +449,15 @@ export async function createEvent(
       success: false,
       error: eventError?.message ?? "Failed to create event",
     };
+  }
+
+  // Real chapter rounds default AI coaching ON so participants get their
+  // "Your Day in the House" / "Your Growth" cards without an extra step.
+  // events.ai_enabled lags the generated types, so it is written through the
+  // loose writer (same mechanism setEventAiEnabled uses) rather than the strict
+  // typed insert above. Best-effort: a failure here must not fail event creation.
+  if (data.level === "chapter") {
+    await writeEventAiEnabled(event.id, true);
   }
 
   // Auto-generate agenda items. Source of truth is the central

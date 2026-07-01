@@ -15,6 +15,7 @@ import { EventDangerZone } from "@/components/yip/event-danger-zone";
 import { Switch } from "@/components/yip/ui/switch";
 import { setAllowBulkFloorVotes } from "@/app/yip/actions/vote-floor";
 import { setBillEarlyUnlock } from "@/app/yip/actions/bills";
+import { setEventAiEnabled } from "@/app/yip/actions/ai-drafts";
 import { INK, SAFFRON, SERIF, inkA, SectionShell } from "@/app/yip/me/credential-ui";
 
 const LEVEL_OPTIONS = [
@@ -73,6 +74,12 @@ export default function EditEventPage() {
   const [billEarlyUnlock, setBillEarlyUnlockState] = useState(false);
   const [billEarlyUnlockBusy, setBillEarlyUnlockBusy] = useState(false);
 
+  // Per-event AI coaching: when on, every participant gets their
+  // "Your Day in the House" and "Your Growth" cards, generated from their
+  // scoring. Writes immediately via setEventAiEnabled.
+  const [aiEnabled, setAiEnabledState] = useState(false);
+  const [aiEnabledBusy, setAiEnabledBusy] = useState(false);
+
   const [form, setForm] = useState<EditFormData>({
     name: "",
     level: "chapter",
@@ -127,6 +134,9 @@ export default function EditEventPage() {
           (event as { allow_bill_before_report?: boolean | null })
             .allow_bill_before_report
         )
+      );
+      setAiEnabledState(
+        Boolean((event as { ai_enabled?: boolean | null }).ai_enabled)
       );
       setLoading(false);
     }
@@ -261,6 +271,20 @@ export default function EditEventPage() {
         ? "Bill drafting unlocked early (before the Committee Report)"
         : "Bill drafting re-locked to the Committee Report"
     );
+  }
+
+  // Flip the per-event AI coaching setting. Event-scoped (canManage); saves on
+  // toggle, independent of the Save button.
+  async function handleToggleAi(next: boolean) {
+    setAiEnabledBusy(true);
+    const res = await setEventAiEnabled(eventId, next);
+    setAiEnabledBusy(false);
+    if (!res.success) {
+      toast.error(res.error);
+      return;
+    }
+    setAiEnabledState(next);
+    toast.success(next ? "AI coaching enabled" : "AI coaching disabled");
   }
 
   if (loading) {
@@ -493,6 +517,34 @@ export default function EditEventPage() {
               checked={billEarlyUnlock}
               onCheckedChange={handleToggleBillEarlyUnlock}
               disabled={billEarlyUnlockBusy}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* AI Coaching — per-event participant AI cards. Saves immediately;
+          independent of the Save button below. */}
+      <Card>
+        <CardHeader>
+          <CardTitle>AI Coaching</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-start justify-between gap-4">
+            <div className="space-y-1">
+              <Label htmlFor="ai_enabled" className="cursor-pointer">
+                Enable participant AI coaching
+              </Label>
+              <p className="text-xs text-gray-500">
+                Turning this on gives every participant their &ldquo;Your Day in
+                the House&rdquo; and &ldquo;Your Growth&rdquo; cards, generated
+                from their scoring. Off by default. Saved immediately.
+              </p>
+            </div>
+            <Switch
+              id="ai_enabled"
+              checked={aiEnabled}
+              onCheckedChange={handleToggleAi}
+              disabled={aiEnabledBusy}
             />
           </div>
         </CardContent>

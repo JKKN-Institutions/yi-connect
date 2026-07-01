@@ -29,6 +29,7 @@ import {
   buildRoundNarrativeGrounding,
   buildSessionFeedbackGrounding,
   getBillFeedbackWork,
+  getParticipantStoryWork,
   getSessionFeedbackWork,
   listAiEnabledEventIds,
 } from "@/lib/yip/ai/grounding";
@@ -104,11 +105,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     // Gather each event's detectable work (reads) in parallel. The AI-opted-in
     // set is intentionally small, so a modest pool is plenty.
     const perEvent = await mapPool(aiEventIds, 4, async (eventId) => {
-      const [work, billWork] = await Promise.all([
+      const [work, billWork, storyWork] = await Promise.all([
         getSessionFeedbackWork(eventId),
         getBillFeedbackWork(eventId),
+        getParticipantStoryWork(eventId),
       ]);
-      return { eventId, work, billWork };
+      return { eventId, work, billWork, storyWork };
     });
 
     // Flatten to enqueue tasks. Every task targets a DISTINCT
@@ -116,7 +118,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     // row per (participant, session) and getBillFeedbackWork one per bill — so
     // running them concurrently can't race the read-then-write in enqueueAiDraft.
     const enqueueTasks: Array<() => Promise<unknown>> = [];
-    for (const { eventId, work, billWork } of perEvent) {
+    for (const { eventId, work, billWork, storyWork } of perEvent) {
       for (const w of work) {
         enqueueTasks.push(() =>
           enqueueAiDraft({
@@ -133,6 +135,15 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
             eventId,
             kind: "bill_feedback",
             subjectId: b.billId,
+          })
+        );
+      }
+      for (const s of storyWork) {
+        enqueueTasks.push(() =>
+          enqueueAiDraft({
+            eventId,
+            kind: "participant_story",
+            subjectId: s.participantId,
           })
         );
       }

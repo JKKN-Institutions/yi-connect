@@ -31,6 +31,7 @@ import {
   getMyVoteScope,
   getSpeakerCandidates,
   getVoteCandidates,
+  getVoteCheckInStatus,
   hasParticipantVoted,
   type VoteCandidate,
 } from "@/app/yip/actions/voting";
@@ -67,6 +68,17 @@ export function VoteClient({
   const [billTitle, setBillTitle] = useState<string | null>(null);
   const [billObjective, setBillObjective] = useState<string | null>(null);
   const [motionSubject, setMotionSubject] = useState<string | null>(null);
+  // Proactive check-in status for THIS vote's day — lets the ballot warn the
+  // student BEFORE they tap (a not-checked-in cast is rejected server-side, and
+  // a fleeting toast on a busy phone reads as "the button is broken").
+  const [checkIn, setCheckIn] = useState<{
+    eligible: boolean;
+    day: number | null;
+    reason: string | null;
+  } | null>(null);
+  // Last cast rejection, kept ON SCREEN (not just a toast that vanishes) so the
+  // reason a vote didn't go through stays visible until the student re-picks.
+  const [castError, setCastError] = useState<string | null>(null);
 
   const eventId = session?.eventId ?? "";
 
@@ -97,6 +109,9 @@ export function VoteClient({
     // New session (e.g. a runoff) — a pick made in the previous round must not
     // carry over (validateVoteValue would reject it with a confusing toast).
     setSelectedValue(null);
+    // A new session invalidates any prior warning/error banner.
+    setCastError(null);
+    setCheckIn(null);
 
     async function loadData() {
       if (!voteSession || !session) return;
@@ -172,6 +187,11 @@ export function VoteClient({
       // of the runoff they are entitled to vote in.
       const votedRes = await hasParticipantVoted(voteSession.id, session.id);
       setHasVoted(votedRes.success && votedRes.data.hasVoted);
+
+      // Proactive check-in eligibility for this vote's day, so the ballot can
+      // warn BEFORE a dead tap. Mirrors castVote's gate (override waives it).
+      const ciRes = await getVoteCheckInStatus(voteSession.id, session.id);
+      if (ciRes.success) setCheckIn(ciRes.data);
       } catch {
         // Offline / network error while loading the ballot — leave candidates
         // empty rather than hanging on a spinner forever. The offline banner +
@@ -185,14 +205,28 @@ export function VoteClient({
   }, [voteSession?.id, session?.id]);
 
   function handleCastVote() {
-    if (!voteSession || !session || !selectedValue) return;
+    if (!voteSession || !session) return;
+
+    setCastError(null);
+
+    // Never fail silently when nothing is picked — say so instead of just
+    // sitting there (the button is also disabled, but if it's ever reached,
+    // the student still gets a clear reason).
+    if (!selectedValue) {
+      const msg = "Please choose an option above first, then tap Cast Vote.";
+      setCastError(msg);
+      toast.error(msg);
+      return;
+    }
 
     // Voting needs a live connection (open-session check + immutable, atomic
     // anti-double-vote happen server-side). Offline, the cast would fail
     // silently — surface it clearly instead. The global offline banner already
     // signals the state; this prevents a confusing dead tap.
     if (typeof navigator !== "undefined" && !navigator.onLine) {
-      toast.error("You're offline — reconnect to the internet to vote.");
+      const msg = "You're offline — reconnect to the internet to vote.";
+      setCastError(msg);
+      toast.error(msg);
       return;
     }
 
@@ -213,9 +247,10 @@ export function VoteClient({
             await new Promise((r) => setTimeout(r, backoffMs[attempt]));
             continue;
           }
-          toast.error(
-            "Couldn't reach the server. Check your connection and try again — or ask a volunteer to record your vote at the desk."
-          );
+          const msg =
+            "Couldn't reach the server. Check your connection and try again — or ask a volunteer to record your vote at the desk.";
+          setCastError(msg);
+          toast.error(msg);
           return;
         }
       }
@@ -229,12 +264,24 @@ export function VoteClient({
           setHasVoted(true);
           toast.info("You have already voted in this session");
         } else if (result.data.status === "closed") {
-          toast.error("Voting has been closed");
+          const msg = "Voting has been closed";
+          setCastError(msg);
+          toast.error(msg);
         }
       } else {
+        // Keep the reason ON SCREEN — a busy-hall toast is easily missed, and
+        // "why didn't my vote submit?" was the exact Erode Day-2 complaint.
+        setCastError(result.error);
         toast.error(result.error);
       }
     });
+  }
+
+  // Picking (or changing) an option clears a stale rejection banner so the
+  // student isn't left staring at last attempt's error after re-choosing.
+  function choose(value: string) {
+    setSelectedValue(value);
+    setCastError(null);
   }
 
   // ─── No session ───────────────────────────────────────────────
@@ -391,6 +438,55 @@ export function VoteClient({
     );
   }
 
+  // ─── Shared "why can't I vote?" helper (rendered above every Cast button) ──
+  // One persistent, proactive note so a blocked cast is NEVER silent. Priority:
+  //  1. Not checked in for this vote's day  → amber, tells them to see an
+  //     organiser (the exact Erode Day-2 failure). Shown before they even tap.
+  //  2. A rejected cast reason              → red, kept on screen (not a
+  //     vanishing toast) until they re-pick.
+  //  3. Nothing selected yet                → muted hint (the button is also
+  //     disabled, so this explains the disabled state).
+  const dayLabel =
+    checkIn?.day === 1
+      ? "Day 1"
+      : checkIn?.day === 2
+        ? "Day 2"
+        : "today's session";
+  const notCheckedIn = !!checkIn && !checkIn.eligible;
+  const castGuardNote = notCheckedIn ? (
+    <div
+      role="alert"
+      className="rounded-xl border-2 border-amber-300 bg-amber-50 px-4 py-3"
+    >
+      <div className="flex items-start gap-2.5">
+        <AlertTriangle className="mt-0.5 size-5 shrink-0 text-amber-600" />
+        <div className="text-sm">
+          <p className="font-bold text-amber-800">
+            You&apos;re not checked in for {dayLabel}
+          </p>
+          <p className="mt-0.5 text-amber-700">
+            Your vote won&apos;t go through yet. Please see an organiser to check
+            you in for {dayLabel} — then come back here and tap Cast Vote.
+          </p>
+        </div>
+      </div>
+    </div>
+  ) : castError ? (
+    <div
+      role="alert"
+      className="rounded-xl border-2 border-red-300 bg-red-50 px-4 py-3"
+    >
+      <div className="flex items-start gap-2.5">
+        <AlertTriangle className="mt-0.5 size-5 shrink-0 text-red-600" />
+        <p className="text-sm font-medium text-red-700">{castError}</p>
+      </div>
+    </div>
+  ) : !selectedValue ? (
+    <p className="text-center text-xs" style={{ color: inkA(0.5) }}>
+      Tap an option above, then press Cast Vote.
+    </p>
+  ) : null;
+
   // ─── Candidate ballot (Speaker + Party-Leader + bench seats) ──────
   // All render an identical candidate grid; vote_value is the candidate id.
   // The bench seats (PM / Deputy PM / Leader of Opposition) store their nominees
@@ -513,7 +609,7 @@ export function VoteClient({
             return (
               <button
                 key={candidate.id}
-                onClick={() => setSelectedValue(candidate.id)}
+                onClick={() => choose(candidate.id)}
                 className={cn(
                   "w-full rounded-xl border-2 p-4 text-left transition-all",
                   isSelected
@@ -572,6 +668,8 @@ export function VoteClient({
         </div>
 
         {/* Cast Vote Button */}
+        {castGuardNote}
+
         <Button
           onClick={handleCastVote}
           disabled={isPending || !selectedValue}
@@ -657,7 +755,7 @@ export function VoteClient({
 
         <div className="space-y-3">
           <button
-            onClick={() => setSelectedValue("aye")}
+            onClick={() => choose("aye")}
             className={cn(
               "w-full rounded-xl border-2 p-5 text-center transition-all",
               selectedValue === "aye"
@@ -672,7 +770,7 @@ export function VoteClient({
           </button>
 
           <button
-            onClick={() => setSelectedValue("nay")}
+            onClick={() => choose("nay")}
             className={cn(
               "w-full rounded-xl border-2 p-5 text-center transition-all",
               selectedValue === "nay"
@@ -687,7 +785,7 @@ export function VoteClient({
           </button>
 
           <button
-            onClick={() => setSelectedValue("abstain")}
+            onClick={() => choose("abstain")}
             className={cn(
               "w-full rounded-xl border-2 p-5 text-center transition-all",
               selectedValue === "abstain"
@@ -699,6 +797,8 @@ export function VoteClient({
             <p className="text-sm text-gray-400 mt-1">Neither for nor against</p>
           </button>
         </div>
+
+        {castGuardNote}
 
         <Button
           onClick={handleCastVote}
@@ -771,7 +871,7 @@ export function VoteClient({
         {/* Vote Buttons */}
         <div className="space-y-3">
           <button
-            onClick={() => setSelectedValue("aye")}
+            onClick={() => choose("aye")}
             className={cn(
               "w-full rounded-xl border-2 p-5 text-center transition-all",
               selectedValue === "aye"
@@ -784,7 +884,7 @@ export function VoteClient({
           </button>
 
           <button
-            onClick={() => setSelectedValue("nay")}
+            onClick={() => choose("nay")}
             className={cn(
               "w-full rounded-xl border-2 p-5 text-center transition-all",
               selectedValue === "nay"
@@ -797,7 +897,7 @@ export function VoteClient({
           </button>
 
           <button
-            onClick={() => setSelectedValue("abstain")}
+            onClick={() => choose("abstain")}
             className={cn(
               "w-full rounded-xl border-2 p-5 text-center transition-all",
               selectedValue === "abstain"
@@ -811,6 +911,8 @@ export function VoteClient({
         </div>
 
         {/* Cast Vote Button */}
+        {castGuardNote}
+
         <Button
           onClick={handleCastVote}
           disabled={isPending || !selectedValue}

@@ -256,6 +256,10 @@ export function ResultsClient({
   awardCandidates = [],
   zoneAwardConfig = {},
   canQualify = false,
+  participantCount = 0,
+  totalJudges = 0,
+  judgesScored = 0,
+  scoresStale = false,
 }: {
   eventId: string;
   eventName: string;
@@ -281,6 +285,13 @@ export function ResultsClient({
   // Top-5 contender shortlist per award (pre-cap), with the actual winner(s)
   // flagged (post-cap). Empty until results are computed.
   awardCandidates?: AwardCandidateGroup[];
+  // Results-freshness signals for the Show Results block (see getResultsFreshness):
+  // total participants (empty-state wording), judges submitted / total, and
+  // whether a submitted score landed after the last compute (stale snapshot).
+  participantCount?: number;
+  totalJudges?: number;
+  judgesScored?: number;
+  scoresStale?: boolean;
 }) {
   const router = useRouter();
 
@@ -385,10 +396,14 @@ export function ResultsClient({
       setMessage(
         n === 0
           ? {
-              // Benign empty case — the compute ran fine, there just aren't any
-              // scores yet. Keep it friendly, not an error.
+              // Benign empty case — the compute ran fine, there's just nothing to
+              // rank. Say WHICH kind of empty it is: an event with no participants
+              // at all vs one where participants exist but no scores are in yet.
               type: "info",
-              text: "No scores entered yet — there's nothing to compute. Once judges submit scores, click Show Results again.",
+              text:
+                participantCount === 0
+                  ? "No participants have been added to this event yet."
+                  : "Participants are added, but no scores have been entered yet — nothing to compute. Once judges submit scores, click Show Results again.",
             }
           : {
               type: "success",
@@ -543,6 +558,21 @@ export function ResultsClient({
         <p className="mt-0.5 text-xs text-gray-400 tabular-nums">
           <LastComputed iso={lastComputedAt} />
         </p>
+        {totalJudges > 0 && (
+          <p className="mt-0.5 text-xs text-gray-500">
+            {judgesScored} of {totalJudges} judges have submitted scores
+            {judgesScored < totalJudges
+              ? " so far — results are provisional."
+              : "."}
+          </p>
+        )}
+        {scoresStale && (
+          <p className="mt-1 flex items-center gap-1 text-xs font-medium text-amber-700">
+            <Info className="size-3.5 shrink-0" />
+            Scores have changed since you last computed — click Show Results to
+            refresh.
+          </p>
+        )}
       </div>
       <Button
         size="sm"
@@ -573,7 +603,9 @@ export function ResultsClient({
           </h3>
           <p className="mt-1 max-w-sm text-sm text-gray-500">
             {canManage
-              ? "Click “Show Results” above to compute from the latest submitted scores."
+              ? participantCount === 0
+                ? "No participants have been added to this event yet."
+                : "Click “Show Results” above to compute from the latest submitted scores."
               : "Results appear here once an admin computes them from the submitted scores."}
           </p>
         </SectionShell>

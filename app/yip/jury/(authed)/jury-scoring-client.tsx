@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { createClient } from "@/lib/yip/supabase/client";
 import { ScoreForm } from "@/components/yip/scoring/score-form";
 import {
@@ -8,10 +8,14 @@ import {
   getRubricForRole,
   getScoreForParticipant,
   getScoreOccurrences,
+  getScoresForJury,
   getSessionScoringParams,
   getScoreableParticipants,
   submitScore,
   type CurrentSpeakerInfo,
+  type ScoreWithParticipant,
+  type ScoringRubricData,
+  type SessionScoringParams,
 } from "@/app/yip/actions/scoring";
 import {
   getJuryScreenBootstrap,
@@ -123,6 +127,25 @@ interface Props {
   initialEventLocked?: boolean;
 }
 
+// Jury lookup by participant number / constituency name (Mizoram req). Shared
+// by the full picker AND the quick-jump bar (Piece 2) so both match
+// identically — the quick-jump bar reuses this rather than inventing a
+// second matcher.
+function filterParticipantsBySearch(
+  list: Participant[],
+  query: string
+): Participant[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return list;
+  return list.filter(
+    (p) =>
+      juryLabel(p.constituency_number, p.id).toLowerCase().includes(q) ||
+      (p.constituency_number != null &&
+        String(p.constituency_number).includes(q)) ||
+      (p.constituency_name?.toLowerCase().includes(q) ?? false)
+  );
+}
+
 // ─── Component ────────────────────────────────────────────────────
 
 export function JuryScoringClient({
@@ -213,6 +236,42 @@ function JuryScoringClientInner({
   // Jury lookup by participant number / constituency / name (Mizoram req)
   const [pickerSearch, setPickerSearch] = useState("");
 
+  // ─── Rapid scoring (#776+): instant participant switching ────────
+  // The rubric is per-ROLE and a session's scoring parameters are per-SESSION
+  // — neither depends on which participant is active, so both are cached
+  // after first sight instead of re-fetched on every switch. Existing scores
+  // + turn occurrences both come from the `scores` table and are covered by
+  // ONE bulk pull (getScoresForJury) instead of two per-switch reads.
+  // FRESHNESS TRADEOFF (accepted): the bulk map refreshes on mount, on
+  // session change, after every submit, and when the tab regains focus —
+  // never per-switch in the background (a juror scores from one device; the
+  // existing offline mode already accepts the same staleness). Refs (not
+  // state) because mutating them must never itself trigger a form remount —
+  // only scoreKey does that, exactly as before.
+  const rubricByRoleRef = useRef<Map<string, ScoringRubricData>>(new Map());
+  const sessionParamsCacheRef = useRef<
+    Map<string, SessionScoringParams | null>
+  >(new Map());
+  const scoresByKeyRef = useRef<Map<string, ScoreWithParticipant[]>>(
+    new Map()
+  );
+  const scoresMapLoadedRef = useRef(false);
+  // Sequence guard (adversarial review fix): loadScoresMap is fired
+  // concurrently from mount/session-change/submit/visibilitychange, so
+  // whichever call RESOLVES last would otherwise win even if it started
+  // first. Also bumped by patchScoreIntoMap so an in-flight pull that
+  // started BEFORE a submit can never land afterwards and clobber the
+  // submit's synchronous patch with pre-submit data.
+  const loadSeqRef = useRef(0);
+  // Bumped whenever scoresByKeyRef is rebuilt — mutating a ref doesn't
+  // re-render; this forces one so the quick-jump status dots and the
+  // Unfinished strip (which read the ref directly) reflect the refresh.
+  const [scoresMapVersion, setScoresMapVersion] = useState(0);
+
+  // Quick-jump bar (Piece 2) + Unfinished strip (Piece 3) state.
+  const [quickJump, setQuickJump] = useState("");
+  const [showAllUnfinished, setShowAllUnfinished] = useState(false);
+
   // Special Remarks (Phase 18 / F4) — flag checkboxes + delta config
   const [flagDeltas, setFlagDeltas] = useState<FlagDeltas | null>(null);
   const [flags, setFlags] = useState<FlagsState>(EMPTY_FLAGS);
@@ -224,15 +283,25 @@ function JuryScoringClientInner({
   // key on the real participant.
   const activeParticipantRaw =
     manualParticipant ?? currentSpeaker?.participant ?? null;
-  const activeParticipant = activeParticipantRaw
-    ? {
-        ...activeParticipantRaw,
-        full_name: juryLabel(
-          activeParticipantRaw.constituency_number,
-          activeParticipantRaw.id
-        ),
-      }
-    : null;
+  // Memoized (adversarial review fix): manualParticipant/currentSpeaker are
+  // state, so activeParticipantRaw is reference-stable across renders that
+  // don't change them. Without this useMemo, activeParticipant was rebuilt as
+  // a FRESH object literal on every unrelated render (e.g. typing in the
+  // quick-jump input), and since it sits in the flags effect's dependency
+  // array, that churned the effect (and its setFlags call) on every keystroke.
+  const activeParticipant = useMemo(
+    () =>
+      activeParticipantRaw
+        ? {
+            ...activeParticipantRaw,
+            full_name: juryLabel(
+              activeParticipantRaw.constituency_number,
+              activeParticipantRaw.id
+            ),
+          }
+        : null,
+    [activeParticipantRaw]
+  );
 
   // ─── Fetch speaker data ─────────────────────────────────────────
 
@@ -337,6 +406,204 @@ function JuryScoringClientInner({
     [juryAssignmentId, eventId, selectedSessionId]
   );
 
+  // Bulk-refresh THIS juror's own scores (rows include participant_id +
+  // agenda_item_id + occurrence + criteria_scores + total_score + comments +
+  // status + the flag_* columns — everything the per-switch reads below
+  // need). Grouped by `${participantId}|${agendaItemId}`; each bucket keeps
+  // the server's own updated_at-desc order, so bucket[0] is always the same
+  // row getScoreForParticipant(..., agendaItemId) would resolve to (it runs
+  // the identical `.order("updated_at", {ascending:false}).limit(1)`).
+  const loadScoresMap = useCallback(async () => {
+    // Sequence guard: claim this call's slot BEFORE the await. If anything
+    // bumps loadSeqRef.current while this fetch is in flight (a newer
+    // loadScoresMap call, OR a submit's synchronous patchScoreIntoMap), this
+    // result is stale and must not overwrite what's already there.
+    const seq = ++loadSeqRef.current;
+    try {
+      const rows = await getScoresForJury(juryAssignmentId, eventId);
+      if (seq !== loadSeqRef.current) return;
+      const map = new Map<string, ScoreWithParticipant[]>();
+      for (const row of rows) {
+        const key = `${row.participant_id}|${row.agenda_item_id ?? "null"}`;
+        const bucket = map.get(key);
+        if (bucket) bucket.push(row);
+        else map.set(key, [row]);
+      }
+      scoresByKeyRef.current = map;
+      scoresMapLoadedRef.current = true;
+      setScoresMapVersion((v) => v + 1);
+    } catch {
+      // Offline/error — leave whatever we had. Every per-switch read below
+      // falls back to the untouched server path whenever the map isn't
+      // loaded or a key is missing, so this failure is silent by design.
+    }
+  }, [juryAssignmentId, eventId]);
+
+  // Fix (adversarial review): synchronously patch the bulk map with the
+  // juror's own just-written score — called from handleSubmit on BOTH the
+  // success path AND a network failure (submitScore throws when offline).
+  // Without this, a switch-away-then-back before the next loadScoresMap pull
+  // lands would serve the PRE-submit bucket: merely stale online, but a real
+  // regression offline — a stale NON-NULL existingScore SUPPRESSES
+  // ScoreForm's localStorage-buffer fallback (getInitialScores prefers
+  // existingScore.criteria_scores over the buffer), so the display would
+  // silently revert to the pre-edit score even though the buffer (and the
+  // eventual background sync) hold the juror's real edit.
+  const patchScoreIntoMap = useCallback(
+    (input: {
+      participant: Participant;
+      agendaItemId: string;
+      criteriaScores: Record<string, number>;
+      totalScore: number;
+      comments: string;
+      status: "draft" | "submitted";
+      flags: FlagsState;
+      isNewTurn: boolean;
+      // The server-assigned id when known (the success path always has one).
+      // Omitted on the offline/catch path — falls back to the row being
+      // edited's existing id, or a synthetic key-only id for a brand-new row
+      // (replaced by the next real loadScoresMap pull).
+      savedId?: string;
+    }) => {
+      if (!rubric) return; // handleSubmit already guards this; defensive only.
+      const key = `${input.participant.id}|${input.agendaItemId}`;
+      const existingRows = scoresByKeyRef.current.get(key) ?? [];
+
+      // Mirrors submitScore's own occurrence rule exactly: a new turn gets
+      // max(existing)+1 (server-assigned); the normal edit path always
+      // targets occurrence 1 — handleSubmit never passes `occurrence`, so
+      // submitScore defaults `input.occurrence ?? 1`.
+      const occurrence = input.isNewTurn
+        ? existingRows.reduce((m, r) => Math.max(m, r.occurrence), 0) + 1
+        : 1;
+      const editingRow = input.isNewTurn
+        ? undefined
+        : existingRows.find((r) => r.occurrence === 1);
+      const rowId = input.savedId ?? editingRow?.id ?? `local-${Date.now()}`;
+
+      const patchedRow: ScoreWithParticipant = {
+        id: rowId,
+        jury_assignment_id: juryAssignmentId,
+        participant_id: input.participant.id,
+        event_id: eventId,
+        rubric_id: rubric.id,
+        agenda_item_id: input.agendaItemId,
+        occurrence,
+        criteria_scores: input.criteriaScores,
+        total_score: input.totalScore,
+        comments: input.comments || null,
+        status: input.status,
+        is_mock: false,
+        position_bonus: 0,
+        submitted_at:
+          input.status === "submitted" ? new Date().toISOString() : null,
+        created_at: editingRow?.created_at ?? new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        flag_no_confidence_brought: input.flags.no_confidence_brought,
+        flag_walkout: input.flags.walkout,
+        flag_ruckus: input.flags.ruckus,
+        flag_suspension: input.flags.suspension,
+        participant: {
+          id: input.participant.id,
+          full_name: input.participant.full_name,
+          parliament_role: input.participant.parliament_role,
+          party_side: input.participant.party_side,
+          party_number: input.participant.party_number ?? null,
+          constituency_name: input.participant.constituency_name ?? null,
+          constituency_number: input.participant.constituency_number ?? null,
+          serial_no: input.participant.serial_no ?? null,
+        },
+        rubric: null,
+      };
+
+      // bucket[0] must stay the most-recently-updated row — the invariant
+      // every reader (existingScore, flags, status dots, Unfinished) relies
+      // on. The row we just wrote/attempted IS that row (newest updated_at).
+      scoresByKeyRef.current.set(key, [
+        patchedRow,
+        ...existingRows.filter((r) => r.occurrence !== occurrence),
+      ]);
+      // Invalidate any in-flight loadScoresMap pull that started BEFORE this
+      // submit — it would otherwise resolve afterwards and overwrite this
+      // patch with pre-submit data (the fetch-vs-local-patch race).
+      loadSeqRef.current++;
+      setScoresMapVersion((v) => v + 1);
+    },
+    [rubric, juryAssignmentId, eventId]
+  );
+
+  // Cache-only path: returns true (and has already updated every piece of
+  // state loadRubricAndScore would) when the role rubric, this session's
+  // params, AND the bulk score map are all warm. Returns false the moment ANY
+  // of the three is cold so the caller falls back to the untouched,
+  // battle-tested loadRubricAndScore server path — this must never regress a
+  // live event.
+  const loadParticipantScoreFast = useCallback(
+    (participant: Participant): boolean => {
+      if (!selectedSessionId) return false;
+      const role = participant.parliament_role ?? "mp";
+      const cachedRubric = rubricByRoleRef.current.get(role);
+      if (!cachedRubric) return false;
+      if (!sessionParamsCacheRef.current.has(selectedSessionId)) return false;
+      if (!scoresMapLoadedRef.current) return false;
+
+      const sessionParams =
+        sessionParamsCacheRef.current.get(selectedSessionId) ?? null;
+      // Mirrors loadRubricAndScore's success branch exactly (same precedence:
+      // session params override the role-rubric fallback).
+      setRubric({
+        id: cachedRubric.id,
+        criteria: (sessionParams?.criteria ??
+          cachedRubric.criteria) as unknown as Criterion[],
+        total_max: sessionParams?.total_max ?? cachedRubric.total_max,
+      });
+      setSessionLocksOnSubmit(sessionParams?.lock_on_submit === true);
+
+      const rows =
+        scoresByKeyRef.current.get(
+          `${participant.id}|${selectedSessionId}`
+        ) ?? [];
+      const latest = rows[0] ?? null;
+      setExistingScore(
+        latest
+          ? {
+              id: latest.id,
+              criteria_scores:
+                latest.criteria_scores as unknown as Record<string, number>,
+              total_score: latest.total_score,
+              comments: latest.comments,
+              status: latest.status,
+            }
+          : null
+      );
+      setAddingTurn(false);
+      setOccurrences(
+        [...rows]
+          .sort((a, b) => a.occurrence - b.occurrence)
+          .map((r) => ({
+            id: r.id,
+            occurrence: r.occurrence,
+            total_score: r.total_score,
+            status: r.status,
+          }))
+      );
+      setScoreKey((k) => k + 1);
+      return true;
+    },
+    [selectedSessionId]
+  );
+
+  // Every call site below switches through THIS wrapper. It tries the
+  // instant cache-only path first; on a cold cache it degrades to the exact
+  // original server round-trips, unchanged.
+  const loadParticipantScore = useCallback(
+    async (participant: Participant) => {
+      if (loadParticipantScoreFast(participant)) return;
+      await loadRubricAndScore(participant);
+    },
+    [loadParticipantScoreFast, loadRubricAndScore]
+  );
+
   const loadCurrentSpeaker = useCallback(async () => {
     try {
       const result = await getCurrentSpeaker(eventId);
@@ -344,7 +611,7 @@ function JuryScoringClientInner({
         setCurrentSpeaker(result.data);
         // If no manual override, load rubric for current speaker
         if (!manualParticipant && result.data?.participant) {
-          await loadRubricAndScore(result.data.participant);
+          await loadParticipantScore(result.data.participant);
         } else if (!manualParticipant && !result.data) {
           setRubric(null);
           setExistingScore(null);
@@ -357,7 +624,7 @@ function JuryScoringClientInner({
       setCurrentSpeaker(null);
     }
     setLoading(false);
-  }, [eventId, manualParticipant, loadRubricAndScore]);
+  }, [eventId, manualParticipant, loadParticipantScore]);
 
   // ─── Load initial data — ONE bootstrap round-trip (BUG-392) ──────
   //
@@ -378,6 +645,18 @@ function JuryScoringClientInner({
       setSelectableSessionIds(b.selectableSessionIds);
       setAllowEarlierSessions(b.allowEarlierSessions);
       currentAgendaItemRef.current = b.currentAgendaItemId;
+
+      // Rapid scoring: the bootstrap already fetches every role rubric +
+      // every assigned session's parameters in one round-trip — seed the
+      // in-memory caches from it for free (zero extra network cost) so
+      // future participant switches skip getRubricForRole /
+      // getSessionScoringParams entirely.
+      for (const [role, r] of Object.entries(b.rubricsByRole)) {
+        rubricByRoleRef.current.set(role, r);
+      }
+      for (const [sid, p] of Object.entries(b.sessionParams)) {
+        sessionParamsCacheRef.current.set(sid, p);
+      }
 
       // Default the juror's session to the live current session (organiser-
       // driven, BUG-393). Keep an existing pick only if it's still selectable.
@@ -445,11 +724,16 @@ function JuryScoringClientInner({
         if (!cancelled) setLoading(false);
       }
     })();
+    // Rapid scoring: pull this juror's own scores once, in parallel — never
+    // gates the loading spinner. Cold on the very first render (before this
+    // resolves), every per-switch read above degrades to the original server
+    // path until it lands.
+    void loadScoresMap();
     return () => {
       cancelled = true;
     };
-    // applyBootstrap is stable via useCallback over (eventId, juryAssignmentId).
-  }, [juryAssignmentId, eventId, applyBootstrap]);
+    // applyBootstrap/loadScoresMap are stable via useCallback over (eventId, juryAssignmentId).
+  }, [juryAssignmentId, eventId, applyBootstrap, loadScoresMap]);
 
   // ─── Realtime auto-switch (BUG-393) ─────────────────────────────
   // When the organiser advances the house, re-derive the live state in one
@@ -486,6 +770,15 @@ function JuryScoringClientInner({
       setShowAllSessions(false);
     }
     currentAgendaItemRef.current = b.currentAgendaItemId;
+    // Rapid scoring: this call already re-fetches rubricsByRole/sessionParams
+    // live — keep the caches in lockstep (e.g. an organiser toggling
+    // lock_on_submit mid-event) at zero extra network cost.
+    for (const [role, r] of Object.entries(b.rubricsByRole)) {
+      rubricByRoleRef.current.set(role, r);
+    }
+    for (const [sid, p] of Object.entries(b.sessionParams)) {
+      sessionParamsCacheRef.current.set(sid, p);
+    }
     patchOfflineCache(eventId, juryAssignmentId, {
       sessions: b.sessions,
       roster: b.roster,
@@ -511,8 +804,12 @@ function JuryScoringClientInner({
   // transition from the bootstrap), reload the active participant's score for
   // that session so the form reflects the right existing values + rubric.
   useEffect(() => {
+    // Rapid scoring freshness trigger: re-pull this juror's own scores
+    // whenever the session they're scoring changes (background — never
+    // blocks the UI, and runs even with no active participant yet).
+    void loadScoresMap();
     if (!activeParticipant || !selectedSessionId) return;
-    void loadRubricAndScore(activeParticipant);
+    void loadParticipantScore(activeParticipant);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedSessionId]);
 
@@ -523,6 +820,40 @@ function JuryScoringClientInner({
   useEffect(() => {
     if (!activeParticipant) {
       setFlags(EMPTY_FLAGS);
+      return;
+    }
+    // Rapid scoring fast path: once the bulk score map is loaded, derive
+    // flags synchronously from it instead of re-fetching — this is the SAME
+    // row getScoreForParticipant(juryAssignmentId, participantId, eventId,
+    // selectedSessionId) resolves to (see loadScoresMap's grouping above), so
+    // this never changes what the juror sees, only how fast it appears.
+    if (selectedSessionId && scoresMapLoadedRef.current) {
+      const rows =
+        scoresByKeyRef.current.get(
+          `${activeParticipant.id}|${selectedSessionId}`
+        ) ?? [];
+      const latest = rows[0] ?? null;
+      const next: FlagsState = latest
+        ? {
+            no_confidence_brought: Boolean(latest.flag_no_confidence_brought),
+            walkout: Boolean(latest.flag_walkout),
+            ruckus: Boolean(latest.flag_ruckus),
+            suspension: Boolean(latest.flag_suspension),
+          }
+        : EMPTY_FLAGS;
+      // Bail-out functional update (adversarial review fix): activeParticipant
+      // is now memoized, but this effect still re-runs on every
+      // scoresMapVersion bump — return the SAME `prev` reference when nothing
+      // actually changed so React can skip the re-render entirely instead of
+      // committing an identical-content-but-new-object state update.
+      setFlags((prev) =>
+        prev.no_confidence_brought === next.no_confidence_brought &&
+        prev.walkout === next.walkout &&
+        prev.ruckus === next.ruckus &&
+        prev.suspension === next.suspension
+          ? prev
+          : next
+      );
       return;
     }
     let cancelled = false;
@@ -561,7 +892,16 @@ function JuryScoringClientInner({
     return () => {
       cancelled = true;
     };
-  }, [activeParticipant, juryAssignmentId, eventId, selectedSessionId]);
+    // scoresMapVersion: re-run once the bulk map lands so a switch that fired
+    // during the still-cold window above converges onto the cache-derived
+    // value (identical data — this only affects which branch computed it).
+  }, [
+    activeParticipant,
+    juryAssignmentId,
+    eventId,
+    selectedSessionId,
+    scoresMapVersion,
+  ]);
 
   // ─── Realtime: watch events table for current_agenda_item_id ────
   // Latest-callback refs so the (stable, [eventId]-keyed) channel always
@@ -626,6 +966,20 @@ function JuryScoringClientInner({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId]);
 
+  // Rapid scoring freshness trigger: refresh this juror's own scores when the
+  // tab/app regains focus (e.g. a phone screen waking back up).
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        void loadScoresMap();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [loadScoresMap]);
+
   // ─── Load all participants for manual picker ────────────────────
 
   const loadAllParticipants = async () => {
@@ -652,8 +1006,11 @@ function JuryScoringClientInner({
     setManualParticipant(p);
     setShowPicker(false);
     setPickerSearch(""); // clear search after picking a participant
+    // Rapid scoring: loadParticipantScore resolves synchronously (no spinner
+    // flash) whenever the caches are warm — setLoading(true) below is a no-op
+    // in that common case since setLoading(false) follows on the same tick.
     setLoading(true);
-    await loadRubricAndScore(p);
+    await loadParticipantScore(p);
     setLoading(false);
   };
 
@@ -661,7 +1018,7 @@ function JuryScoringClientInner({
     setManualParticipant(null);
     if (currentSpeaker?.participant) {
       setLoading(true);
-      loadRubricAndScore(currentSpeaker.participant).then(() =>
+      loadParticipantScore(currentSpeaker.participant).then(() =>
         setLoading(false)
       );
     } else {
@@ -699,23 +1056,60 @@ function JuryScoringClientInner({
       };
     }
 
-    const result = await submitScore({
-      juryAssignmentId,
-      participantId: activeParticipant.id,
-      eventId,
-      rubricId: rubric.id,
-      agendaItemId: selectedSessionId,
-      criteriaScores: data.criteriaScores,
-      totalScore: data.totalScore,
-      comments: data.comments,
-      status: data.status,
-      flags,
-      // #4: when capturing an extra turn, the server assigns the next occurrence
-      // and inserts a fresh row instead of overwriting turn 1.
-      newTurn: addingTurn,
-    });
+    let result: Awaited<ReturnType<typeof submitScore>>;
+    try {
+      result = await submitScore({
+        juryAssignmentId,
+        participantId: activeParticipant.id,
+        eventId,
+        rubricId: rubric.id,
+        agendaItemId: selectedSessionId,
+        criteriaScores: data.criteriaScores,
+        totalScore: data.totalScore,
+        comments: data.comments,
+        status: data.status,
+        flags,
+        // #4: when capturing an extra turn, the server assigns the next occurrence
+        // and inserts a fresh row instead of overwriting turn 1.
+        newTurn: addingTurn,
+      });
+    } catch (err) {
+      // Network failure (offline) — submitScore never reached the server.
+      // Patch the bulk map with the juror's INTENDED write (the same values
+      // ScoreForm's own catch below buffers to localStorage) so a switch-
+      // away-then-back before connectivity returns shows this edit, not a
+      // stale pre-submit score (see patchScoreIntoMap's comment above).
+      patchScoreIntoMap({
+        participant: activeParticipant,
+        agendaItemId: selectedSessionId,
+        criteriaScores: data.criteriaScores,
+        totalScore: data.totalScore,
+        comments: data.comments,
+        status: data.status,
+        flags,
+        isNewTurn: addingTurn,
+      });
+      // Rethrow — ScoreForm's own catch (buffer write + "no internet"
+      // message) must run exactly as before; this handler never swallows it.
+      throw err;
+    }
 
     if (result.success) {
+      // Patch the bulk map synchronously with what we just wrote — closes the
+      // window where a switch-away-then-back before loadScoresMap's
+      // background pull (below) lands would still serve the pre-submit row.
+      patchScoreIntoMap({
+        participant: activeParticipant,
+        agendaItemId: selectedSessionId,
+        criteriaScores: data.criteriaScores,
+        totalScore: data.totalScore,
+        comments: data.comments,
+        status: data.status,
+        flags,
+        isNewTurn: addingTurn,
+        savedId: result.data.id,
+      });
+
       // Refresh the existing score after saving — best-effort; if the network
       // dropped between the save and this read, the save still stands.
       try {
@@ -756,6 +1150,11 @@ function JuryScoringClientInner({
           // ignore — strip refresh only
         }
       }
+
+      // Rapid scoring freshness trigger: re-pull the bulk scores map in the
+      // background so the quick-jump status dots + Unfinished strip reflect
+      // this submit immediately, and future participant switches see it too.
+      void loadScoresMap();
     }
 
     return result.success
@@ -773,7 +1172,7 @@ function JuryScoringClientInner({
 
   const cancelAnotherTurn = () => {
     setAddingTurn(false);
-    if (activeParticipant) void loadRubricAndScore(activeParticipant);
+    if (activeParticipant) void loadParticipantScore(activeParticipant);
   };
 
   // ─── Render ─────────────────────────────────────────────────────
@@ -809,6 +1208,47 @@ function JuryScoringClientInner({
     );
   }
 
+  // ─── Quick-jump bar (Piece 2) + Unfinished strip (Piece 3) ───────
+  // Both are derived straight from the Piece 1 caches on every render; a
+  // re-render is forced whenever scoresMapVersion (state) bumps, since
+  // mutating scoresByKeyRef alone would not otherwise trigger one.
+  const getStatusDot = (
+    participantId: string
+  ): "unscored" | "draft" | "submitted" => {
+    if (!selectedSessionId) return "unscored";
+    const rows = scoresByKeyRef.current.get(
+      `${participantId}|${selectedSessionId}`
+    );
+    const latest = rows?.[0];
+    if (!latest) return "unscored";
+    return latest.status === "draft" ? "draft" : "submitted";
+  };
+
+  const quickJumpMatches = quickJump.trim()
+    ? filterParticipantsBySearch(allParticipants, quickJump)
+    : [];
+
+  // Unfinished (Piece 3): this juror's DRAFT rows for the selected session,
+  // read straight off the bulk map (each bucket's [0] is the latest row).
+  const unfinishedRows: ScoreWithParticipant[] = [];
+  if (selectedSessionId) {
+    for (const rows of scoresByKeyRef.current.values()) {
+      const latest = rows[0];
+      if (
+        latest &&
+        latest.status === "draft" &&
+        latest.agenda_item_id === selectedSessionId
+      ) {
+        unfinishedRows.push(latest);
+      }
+    }
+  }
+  const UNFINISHED_VISIBLE_CAP = 8;
+  const unfinishedVisible = showAllUnfinished
+    ? unfinishedRows
+    : unfinishedRows.slice(0, UNFINISHED_VISIBLE_CAP);
+  const unfinishedHiddenCount = unfinishedRows.length - unfinishedVisible.length;
+
   return (
     <div className="space-y-4">
       {eventLocked && (
@@ -828,6 +1268,137 @@ function JuryScoringClientInner({
         </div>
       )}
 
+      {/* Quick-jump bar (Piece 2) — replaces the open-search-close picker
+          loop for rapid-fire moments (a 15-second intervention shouldn't cost
+          3-4 server round trips + a picker open/close cycle). Sticky so it
+          stays reachable while the rubric form scrolls under it; only shown
+          once a session is selected (matching + status dots need one). */}
+      {selectedSessionId && (
+        <div
+          className="sticky top-0 z-20 mx-4 mt-4 rounded-xl border-2 border-gray-200 bg-white/95 px-3 py-2.5 backdrop-blur"
+          style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}
+        >
+          <label
+            htmlFor="quick-jump-input"
+            className="block text-[11px] font-bold uppercase tracking-wide"
+            style={{ color: inkA(0.5) }}
+          >
+            Jump to participant #
+          </label>
+          <input
+            id="quick-jump-input"
+            type="text"
+            inputMode="numeric"
+            autoComplete="off"
+            value={quickJump}
+            onChange={(e) => setQuickJump(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && quickJumpMatches.length === 1) {
+                void selectManualParticipant(quickJumpMatches[0]);
+                setQuickJump("");
+              }
+            }}
+            placeholder="e.g. 42"
+            aria-label="Jump to participant by number"
+            className="mt-1 w-full rounded-lg border-2 border-gray-200 px-3 py-2 text-base font-semibold text-gray-900 focus:border-blue-400 focus:outline-none"
+            style={{ minHeight: "44px" }}
+          />
+
+          {quickJump.trim() && (
+            <div
+              className="mt-2 flex gap-2 overflow-x-auto pb-1"
+              role="list"
+              aria-label="Matching participants"
+            >
+              {quickJumpMatches.length === 0 ? (
+                <p className="py-2 text-xs" style={{ color: inkA(0.45) }}>
+                  No participant matches &ldquo;{quickJump}&rdquo;.
+                </p>
+              ) : (
+                quickJumpMatches.map((p) => {
+                  const dot = getStatusDot(p.id);
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      role="listitem"
+                      onClick={() => {
+                        void selectManualParticipant(p);
+                        setQuickJump("");
+                      }}
+                      className="flex shrink-0 touch-manipulation items-center gap-1.5 rounded-full border-2 border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-800 hover:bg-gray-50 active:bg-gray-100"
+                      style={{ minHeight: "40px" }}
+                    >
+                      <span
+                        className="size-2 shrink-0 rounded-full"
+                        aria-hidden="true"
+                        style={{
+                          background:
+                            dot === "submitted"
+                              ? "#138808"
+                              : dot === "draft"
+                                ? GOLD
+                                : "#d1d5db",
+                        }}
+                      />
+                      {juryLabel(p.constituency_number, p.id)}
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          )}
+
+          {/* Unfinished strip (Piece 3) — a lull-time worklist so 15-second
+              partial scores get finished. Draft rows for THIS session only. */}
+          {unfinishedRows.length > 0 && (
+            <div className="mt-2.5 border-t border-gray-100 pt-2">
+              <p
+                className="text-[11px] font-bold"
+                style={{ color: inkA(0.5) }}
+              >
+                Unfinished ({unfinishedRows.length}):
+              </p>
+              <div className="mt-1 flex flex-wrap gap-2">
+                {unfinishedVisible.map((row) => (
+                  <button
+                    key={row.id}
+                    type="button"
+                    onClick={() => void selectManualParticipant(row.participant)}
+                    className="flex shrink-0 touch-manipulation items-center gap-1.5 rounded-full border-2 px-3 py-2 text-xs font-semibold hover:bg-amber-100 active:bg-amber-200"
+                    style={{
+                      minHeight: "40px",
+                      borderColor: `${GOLD}66`,
+                      background: `${GOLD}14`,
+                      color: "#7a5c1e",
+                    }}
+                  >
+                    <span
+                      className="size-2 shrink-0 rounded-full"
+                      aria-hidden="true"
+                      style={{ background: GOLD }}
+                    />
+                    {juryLabel(
+                      row.participant.constituency_number,
+                      row.participant.id
+                    )}
+                  </button>
+                ))}
+                {unfinishedHiddenCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllUnfinished(true)}
+                    className="shrink-0 touch-manipulation rounded-full border-2 border-gray-200 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50"
+                    style={{ minHeight: "40px" }}
+                  >
+                    +{unfinishedHiddenCount} more
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Session selector — organiser-driven (BUG-393). The juror scores the
           CURRENT session by default; the only manual choice is "catch up" on
@@ -1195,18 +1766,9 @@ function JuryScoringClientInner({
         </button>
 
         {showPicker && allParticipants.length > 0 && (() => {
-          const q = pickerSearch.trim().toLowerCase();
-          const list = q
-            ? allParticipants.filter(
-                (p) =>
-                  juryLabel(p.constituency_number, p.id)
-                    .toLowerCase()
-                    .includes(q) ||
-                  (p.constituency_number != null &&
-                    String(p.constituency_number).includes(q)) ||
-                  (p.constituency_name?.toLowerCase().includes(q) ?? false)
-              )
-            : allParticipants;
+          // Shared with the quick-jump bar's live filter (Piece 2) —
+          // filterParticipantsBySearch, defined at module scope above.
+          const list = filterParticipantsBySearch(allParticipants, pickerSearch);
           return (
             <div className="mt-2 rounded-xl border border-gray-200 bg-white shadow-md overflow-hidden">
               <div className="border-b border-gray-100 p-2">

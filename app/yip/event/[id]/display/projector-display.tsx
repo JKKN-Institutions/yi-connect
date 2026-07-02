@@ -9,6 +9,7 @@ import { computeMultiSeatOutcome } from "@/lib/yip/election-outcome";
 import { useRealtimeEvent } from "@/lib/yip/hooks/use-realtime-event";
 import { useVoteSession } from "@/lib/yip/hooks/use-vote-session";
 import { useTimer } from "@/lib/yip/hooks/use-timer";
+import { armTimerSound } from "@/lib/yip/timer-sound";
 import { useLiveBanner } from "@/lib/yip/hooks/use-live-banner";
 import { createClient } from "@/lib/yip/supabase/client";
 
@@ -159,6 +160,7 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
       if (!Ctor) return;
       audioCtxRef.current = audioCtxRef.current ?? new Ctor();
       void audioCtxRef.current.resume();
+      armTimerSound(); // the same tap also unlocks the session-timer cues
       setSoundArmed(true);
     } catch {
       /* ignore — celebration stays silent */
@@ -595,14 +597,15 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
         }
       `}</style>
 
-      {/* One-time tap to enable celebration sound (browser autoplay rule) */}
+      {/* One-time tap to enable sound — timer cues + winner celebration
+          (browser autoplay rule requires a gesture on this screen). */}
       {!soundArmed && (
         <button
           type="button"
           onClick={armSound}
           className="fixed bottom-4 right-4 z-[60] rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm font-medium text-white/80 backdrop-blur transition-colors hover:bg-white/20"
         >
-          &#128266; Tap once to enable celebration sound
+          &#128266; Tap once to enable sound
         </button>
       )}
 

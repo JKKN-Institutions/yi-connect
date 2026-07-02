@@ -93,10 +93,16 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
   // event (e.g. after revealing a party-leader vote and advancing to a timed
   // session, the timer never appeared). Both the vote display and the
   // agenda/timer block key off this single predicate so they stay complementary.
+  //
+  // A REVEALED vote additionally needs at least one ballot: the results block
+  // only renders when tallies exist, so a zero-vote reveal (open→close→reveal
+  // with nobody voting — Erode 2026, 23:21) would otherwise claim the screen
+  // and draw NOTHING, blanking the projector. With no tallies to show, fall
+  // through to the session/bill view instead.
   const voteForCurrentItem =
     !!voteSession &&
     voteSession.agenda_item_id === currentAgendaItem?.id &&
-    (isOpen || isClosed || isRevealed);
+    (isOpen || isClosed || (isRevealed && tallies.length > 0));
 
   // F5 — live banner (breaking-news strip)
   const liveBanner = useLiveBanner(

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { createClient } from "@/lib/yip/supabase/client";
 import { ScoreForm } from "@/components/yip/scoring/score-form";
 import {
@@ -256,6 +256,13 @@ function JuryScoringClientInner({
     new Map()
   );
   const scoresMapLoadedRef = useRef(false);
+  // Sequence guard (adversarial review fix): loadScoresMap is fired
+  // concurrently from mount/session-change/submit/visibilitychange, so
+  // whichever call RESOLVES last would otherwise win even if it started
+  // first. Also bumped by patchScoreIntoMap so an in-flight pull that
+  // started BEFORE a submit can never land afterwards and clobber the
+  // submit's synchronous patch with pre-submit data.
+  const loadSeqRef = useRef(0);
   // Bumped whenever scoresByKeyRef is rebuilt — mutating a ref doesn't
   // re-render; this forces one so the quick-jump status dots and the
   // Unfinished strip (which read the ref directly) reflect the refresh.
@@ -276,15 +283,25 @@ function JuryScoringClientInner({
   // key on the real participant.
   const activeParticipantRaw =
     manualParticipant ?? currentSpeaker?.participant ?? null;
-  const activeParticipant = activeParticipantRaw
-    ? {
-        ...activeParticipantRaw,
-        full_name: juryLabel(
-          activeParticipantRaw.constituency_number,
-          activeParticipantRaw.id
-        ),
-      }
-    : null;
+  // Memoized (adversarial review fix): manualParticipant/currentSpeaker are
+  // state, so activeParticipantRaw is reference-stable across renders that
+  // don't change them. Without this useMemo, activeParticipant was rebuilt as
+  // a FRESH object literal on every unrelated render (e.g. typing in the
+  // quick-jump input), and since it sits in the flags effect's dependency
+  // array, that churned the effect (and its setFlags call) on every keystroke.
+  const activeParticipant = useMemo(
+    () =>
+      activeParticipantRaw
+        ? {
+            ...activeParticipantRaw,
+            full_name: juryLabel(
+              activeParticipantRaw.constituency_number,
+              activeParticipantRaw.id
+            ),
+          }
+        : null,
+    [activeParticipantRaw]
+  );
 
   // ─── Fetch speaker data ─────────────────────────────────────────
 
@@ -397,8 +414,14 @@ function JuryScoringClientInner({
   // row getScoreForParticipant(..., agendaItemId) would resolve to (it runs
   // the identical `.order("updated_at", {ascending:false}).limit(1)`).
   const loadScoresMap = useCallback(async () => {
+    // Sequence guard: claim this call's slot BEFORE the await. If anything
+    // bumps loadSeqRef.current while this fetch is in flight (a newer
+    // loadScoresMap call, OR a submit's synchronous patchScoreIntoMap), this
+    // result is stale and must not overwrite what's already there.
+    const seq = ++loadSeqRef.current;
     try {
       const rows = await getScoresForJury(juryAssignmentId, eventId);
+      if (seq !== loadSeqRef.current) return;
       const map = new Map<string, ScoreWithParticipant[]>();
       for (const row of rows) {
         const key = `${row.participant_id}|${row.agenda_item_id ?? "null"}`;
@@ -415,6 +438,99 @@ function JuryScoringClientInner({
       // loaded or a key is missing, so this failure is silent by design.
     }
   }, [juryAssignmentId, eventId]);
+
+  // Fix (adversarial review): synchronously patch the bulk map with the
+  // juror's own just-written score — called from handleSubmit on BOTH the
+  // success path AND a network failure (submitScore throws when offline).
+  // Without this, a switch-away-then-back before the next loadScoresMap pull
+  // lands would serve the PRE-submit bucket: merely stale online, but a real
+  // regression offline — a stale NON-NULL existingScore SUPPRESSES
+  // ScoreForm's localStorage-buffer fallback (getInitialScores prefers
+  // existingScore.criteria_scores over the buffer), so the display would
+  // silently revert to the pre-edit score even though the buffer (and the
+  // eventual background sync) hold the juror's real edit.
+  const patchScoreIntoMap = useCallback(
+    (input: {
+      participant: Participant;
+      agendaItemId: string;
+      criteriaScores: Record<string, number>;
+      totalScore: number;
+      comments: string;
+      status: "draft" | "submitted";
+      flags: FlagsState;
+      isNewTurn: boolean;
+      // The server-assigned id when known (the success path always has one).
+      // Omitted on the offline/catch path — falls back to the row being
+      // edited's existing id, or a synthetic key-only id for a brand-new row
+      // (replaced by the next real loadScoresMap pull).
+      savedId?: string;
+    }) => {
+      if (!rubric) return; // handleSubmit already guards this; defensive only.
+      const key = `${input.participant.id}|${input.agendaItemId}`;
+      const existingRows = scoresByKeyRef.current.get(key) ?? [];
+
+      // Mirrors submitScore's own occurrence rule exactly: a new turn gets
+      // max(existing)+1 (server-assigned); the normal edit path always
+      // targets occurrence 1 — handleSubmit never passes `occurrence`, so
+      // submitScore defaults `input.occurrence ?? 1`.
+      const occurrence = input.isNewTurn
+        ? existingRows.reduce((m, r) => Math.max(m, r.occurrence), 0) + 1
+        : 1;
+      const editingRow = input.isNewTurn
+        ? undefined
+        : existingRows.find((r) => r.occurrence === 1);
+      const rowId = input.savedId ?? editingRow?.id ?? `local-${Date.now()}`;
+
+      const patchedRow: ScoreWithParticipant = {
+        id: rowId,
+        jury_assignment_id: juryAssignmentId,
+        participant_id: input.participant.id,
+        event_id: eventId,
+        rubric_id: rubric.id,
+        agenda_item_id: input.agendaItemId,
+        occurrence,
+        criteria_scores: input.criteriaScores,
+        total_score: input.totalScore,
+        comments: input.comments || null,
+        status: input.status,
+        is_mock: false,
+        position_bonus: 0,
+        submitted_at:
+          input.status === "submitted" ? new Date().toISOString() : null,
+        created_at: editingRow?.created_at ?? new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        flag_no_confidence_brought: input.flags.no_confidence_brought,
+        flag_walkout: input.flags.walkout,
+        flag_ruckus: input.flags.ruckus,
+        flag_suspension: input.flags.suspension,
+        participant: {
+          id: input.participant.id,
+          full_name: input.participant.full_name,
+          parliament_role: input.participant.parliament_role,
+          party_side: input.participant.party_side,
+          party_number: input.participant.party_number ?? null,
+          constituency_name: input.participant.constituency_name ?? null,
+          constituency_number: input.participant.constituency_number ?? null,
+          serial_no: input.participant.serial_no ?? null,
+        },
+        rubric: null,
+      };
+
+      // bucket[0] must stay the most-recently-updated row — the invariant
+      // every reader (existingScore, flags, status dots, Unfinished) relies
+      // on. The row we just wrote/attempted IS that row (newest updated_at).
+      scoresByKeyRef.current.set(key, [
+        patchedRow,
+        ...existingRows.filter((r) => r.occurrence !== occurrence),
+      ]);
+      // Invalidate any in-flight loadScoresMap pull that started BEFORE this
+      // submit — it would otherwise resolve afterwards and overwrite this
+      // patch with pre-submit data (the fetch-vs-local-patch race).
+      loadSeqRef.current++;
+      setScoresMapVersion((v) => v + 1);
+    },
+    [rubric, juryAssignmentId, eventId]
+  );
 
   // Cache-only path: returns true (and has already updated every piece of
   // state loadRubricAndScore would) when the role rubric, this session's
@@ -717,17 +833,26 @@ function JuryScoringClientInner({
           `${activeParticipant.id}|${selectedSessionId}`
         ) ?? [];
       const latest = rows[0] ?? null;
-      setFlags(
-        latest
-          ? {
-              no_confidence_brought: Boolean(
-                latest.flag_no_confidence_brought
-              ),
-              walkout: Boolean(latest.flag_walkout),
-              ruckus: Boolean(latest.flag_ruckus),
-              suspension: Boolean(latest.flag_suspension),
-            }
-          : EMPTY_FLAGS
+      const next: FlagsState = latest
+        ? {
+            no_confidence_brought: Boolean(latest.flag_no_confidence_brought),
+            walkout: Boolean(latest.flag_walkout),
+            ruckus: Boolean(latest.flag_ruckus),
+            suspension: Boolean(latest.flag_suspension),
+          }
+        : EMPTY_FLAGS;
+      // Bail-out functional update (adversarial review fix): activeParticipant
+      // is now memoized, but this effect still re-runs on every
+      // scoresMapVersion bump — return the SAME `prev` reference when nothing
+      // actually changed so React can skip the re-render entirely instead of
+      // committing an identical-content-but-new-object state update.
+      setFlags((prev) =>
+        prev.no_confidence_brought === next.no_confidence_brought &&
+        prev.walkout === next.walkout &&
+        prev.ruckus === next.ruckus &&
+        prev.suspension === next.suspension
+          ? prev
+          : next
       );
       return;
     }
@@ -931,23 +1056,60 @@ function JuryScoringClientInner({
       };
     }
 
-    const result = await submitScore({
-      juryAssignmentId,
-      participantId: activeParticipant.id,
-      eventId,
-      rubricId: rubric.id,
-      agendaItemId: selectedSessionId,
-      criteriaScores: data.criteriaScores,
-      totalScore: data.totalScore,
-      comments: data.comments,
-      status: data.status,
-      flags,
-      // #4: when capturing an extra turn, the server assigns the next occurrence
-      // and inserts a fresh row instead of overwriting turn 1.
-      newTurn: addingTurn,
-    });
+    let result: Awaited<ReturnType<typeof submitScore>>;
+    try {
+      result = await submitScore({
+        juryAssignmentId,
+        participantId: activeParticipant.id,
+        eventId,
+        rubricId: rubric.id,
+        agendaItemId: selectedSessionId,
+        criteriaScores: data.criteriaScores,
+        totalScore: data.totalScore,
+        comments: data.comments,
+        status: data.status,
+        flags,
+        // #4: when capturing an extra turn, the server assigns the next occurrence
+        // and inserts a fresh row instead of overwriting turn 1.
+        newTurn: addingTurn,
+      });
+    } catch (err) {
+      // Network failure (offline) — submitScore never reached the server.
+      // Patch the bulk map with the juror's INTENDED write (the same values
+      // ScoreForm's own catch below buffers to localStorage) so a switch-
+      // away-then-back before connectivity returns shows this edit, not a
+      // stale pre-submit score (see patchScoreIntoMap's comment above).
+      patchScoreIntoMap({
+        participant: activeParticipant,
+        agendaItemId: selectedSessionId,
+        criteriaScores: data.criteriaScores,
+        totalScore: data.totalScore,
+        comments: data.comments,
+        status: data.status,
+        flags,
+        isNewTurn: addingTurn,
+      });
+      // Rethrow — ScoreForm's own catch (buffer write + "no internet"
+      // message) must run exactly as before; this handler never swallows it.
+      throw err;
+    }
 
     if (result.success) {
+      // Patch the bulk map synchronously with what we just wrote — closes the
+      // window where a switch-away-then-back before loadScoresMap's
+      // background pull (below) lands would still serve the pre-submit row.
+      patchScoreIntoMap({
+        participant: activeParticipant,
+        agendaItemId: selectedSessionId,
+        criteriaScores: data.criteriaScores,
+        totalScore: data.totalScore,
+        comments: data.comments,
+        status: data.status,
+        flags,
+        isNewTurn: addingTurn,
+        savedId: result.data.id,
+      });
+
       // Refresh the existing score after saving — best-effort; if the network
       // dropped between the save and this read, the save still stands.
       try {

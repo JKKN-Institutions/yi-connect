@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   updateScoreAsOrganizer,
+  deleteScoreAsOrganizer,
   type ParticipantScoringDetail,
   type ParticipantScoreRow,
 } from "@/app/yip/actions/scoring-detail";
@@ -24,6 +25,7 @@ import {
   Save,
   X,
   Loader2,
+  Trash2,
 } from "lucide-react";
 import { INK, SAFFRON, SERIF } from "@/app/yip/me/credential-ui";
 
@@ -212,6 +214,23 @@ export function ParticipantDetailClient({
   const [editComments, setEditComments] = useState("");
   const [saving, setSaving] = useState(false);
   const [editErr, setEditErr] = useState<string | null>(null);
+  // Admin delete of a DRAFT score: deleteId is the row awaiting inline confirm.
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteErr, setDeleteErr] = useState<string | null>(null);
+
+  async function handleDelete(scoreId: string) {
+    setDeleteBusy(true);
+    setDeleteErr(null);
+    const res = await deleteScoreAsOrganizer(eventId, scoreId);
+    setDeleteBusy(false);
+    if (!res.success) {
+      setDeleteErr(res.error);
+      return;
+    }
+    setDeleteId(null);
+    router.refresh();
+  }
 
   function startEdit(s: ParticipantScoreRow) {
     setEditErr(null);
@@ -452,18 +471,75 @@ export function ParticipantDetailClient({
                               <span className="font-mono text-sm font-bold text-gray-900">
                                 {s.total_score}
                               </span>
-                              {canEdit && editingId !== s.id && (
-                                <button
-                                  type="button"
-                                  onClick={() => startEdit(s)}
-                                  className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
-                                  title="Correct this score (chair only — audited)"
-                                >
-                                  <Pencil className="size-3.5" />
-                                </button>
+                              {canEdit &&
+                                editingId !== s.id &&
+                                deleteId !== s.id && (
+                                  <button
+                                    type="button"
+                                    onClick={() => startEdit(s)}
+                                    className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                                    title="Correct this score (chair only — audited)"
+                                  >
+                                    <Pencil className="size-3.5" />
+                                  </button>
+                                )}
+                              {/* Admin-only: delete a DRAFT score (doesn't count).
+                                  Submitted/locked scores have no delete — they
+                                  count in results. */}
+                              {canEdit &&
+                                s.status === "draft" &&
+                                editingId !== s.id &&
+                                deleteId !== s.id && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setDeleteId(s.id);
+                                      setDeleteErr(null);
+                                    }}
+                                    className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600"
+                                    title="Delete this draft score (admin only)"
+                                  >
+                                    <Trash2 className="size-3.5" />
+                                  </button>
+                                )}
+                              {deleteId === s.id && (
+                                <span className="inline-flex items-center gap-1.5">
+                                  <span className="text-[11px] text-gray-600">
+                                    Delete draft?
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setDeleteId(null);
+                                      setDeleteErr(null);
+                                    }}
+                                    disabled={deleteBusy}
+                                    className="rounded border border-gray-300 px-2 py-0.5 text-[11px] font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-50"
+                                  >
+                                    Cancel
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDelete(s.id)}
+                                    disabled={deleteBusy}
+                                    className="inline-flex items-center gap-1 rounded bg-red-600 px-2 py-0.5 text-[11px] font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                                  >
+                                    {deleteBusy ? (
+                                      <Loader2 className="size-3 animate-spin" />
+                                    ) : (
+                                      <Trash2 className="size-3" />
+                                    )}
+                                    Delete
+                                  </button>
+                                </span>
                               )}
                             </div>
                           </div>
+                          {deleteId === s.id && deleteErr && (
+                            <p className="mt-1 text-xs text-red-600">
+                              {deleteErr}
+                            </p>
+                          )}
 
                           {editingId === s.id ? (
                             <div className="mt-2 space-y-2 rounded-md border border-blue-200 bg-blue-50/50 p-2.5">

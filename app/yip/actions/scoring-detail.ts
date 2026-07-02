@@ -347,3 +347,53 @@ export async function updateScoreAsOrganizer(
 
   return { success: true, total };
 }
+
+// Admin-only delete of a DRAFT score. Gated to canManage (event chair /
+// organiser / super-admin) — jurors never reach the detail page. Restricted to
+// status='draft' on purpose: a draft never counts toward results, so deleting it
+// is safe cleanup (e.g. removing an abandoned/partial sheet). Submitted or locked
+// scores CANNOT be deleted here — they count in standings, so silently removing
+// one would corrupt results; convert such a score to draft first if it must go.
+export async function deleteScoreAsOrganizer(
+  eventId: string,
+  scoreId: string
+): Promise<{ success: true } | { success: false; error: string }> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Only the event chair can delete scores." };
+  }
+
+  const supabase = await createServiceClient();
+
+  const { data: existing } = await supabase
+    .from("scores")
+    .select("id, status")
+    .eq("id", scoreId)
+    .eq("event_id", eventId)
+    .maybeSingle();
+  if (!existing) {
+    return { success: false, error: "Score not found for this event." };
+  }
+  if (existing.status !== "draft") {
+    return {
+      success: false,
+      error:
+        "Only draft scores can be deleted. This score is " +
+        (existing.status ?? "unknown") +
+        " — convert it to a draft first if it must be removed.",
+    };
+  }
+
+  // Clear any audit rows for this draft first so the delete can't be blocked by
+  // an FK (drafts never counted, so their audit trail isn't load-bearing).
+  await supabase.from("score_audit").delete().eq("score_id", scoreId);
+
+  const { error } = await supabase
+    .from("scores")
+    .delete()
+    .eq("id", scoreId)
+    .eq("event_id", eventId);
+  if (error) return { success: false, error: error.message };
+
+  return { success: true };
+}

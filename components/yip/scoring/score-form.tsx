@@ -7,6 +7,11 @@ import { ROLE_LABELS, ROLE_COLORS, PARTY_COLORS } from "@/lib/yip/constants";
 import { saveToBuffer, getFromBuffer, removeFromBuffer } from "@/lib/yip/score-buffer";
 import { Save, Send, Loader2, CheckCircle2, MessageSquare } from "lucide-react";
 
+// Compact/Detailed view preference — a pure render-layer toggle (no scoring
+// semantics involved). Persisted per-device so a juror's choice sticks across
+// participants within an event.
+const COMPACT_STORAGE_KEY = "yip-scoreform-compact";
+
 // ─── Types ────────────────────────────────────────────────────────
 
 interface Criterion {
@@ -148,6 +153,35 @@ export function ScoreForm({
   // True once the juror has touched the form (score/comment edit). Gates the
   // autosave buffer so merely VIEWING a participant never creates an entry.
   const dirtyRef = useRef(false);
+
+  // Compact/Detailed view — pure UI state, no bearing on scores/buffer/submit.
+  // Starts `true` (compact) so server + first client render always match (no
+  // window/localStorage access here — that would cause a hydration mismatch).
+  // A post-mount effect below refines this from the juror's saved preference,
+  // falling back to "compact on small screens" when nothing is saved yet.
+  const [compactMode, setCompactMode] = useState(true);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const stored = window.localStorage.getItem(COMPACT_STORAGE_KEY);
+      if (stored === "true" || stored === "false") {
+        setCompactMode(stored === "true");
+        return;
+      }
+    } catch {
+      // localStorage unavailable (private browsing, etc.) — keep the default.
+    }
+    setCompactMode(window.innerWidth < 640);
+  }, []);
+
+  const updateCompactMode = useCallback((next: boolean) => {
+    setCompactMode(next);
+    try {
+      window.localStorage.setItem(COMPACT_STORAGE_KEY, String(next));
+    } catch {
+      // Storage write failed — the toggle still works for this session.
+    }
+  }, []);
 
   // Why: only sum keys that belong to the active rubric — defends totals from any leaked
   // foreign keys (legacy dotted sub-criteria) that might have slipped past sanitization.
@@ -402,6 +436,93 @@ export function ScoreForm({
     );
   };
 
+  // Compact skin for the SAME criterion: one dense row (label + value badge +
+  // the identical quick-tap buttons), no description, no slider. Calls the
+  // exact same handleScoreChange(criterion.key, ...) as renderCriterion above
+  // — same state, same keys, just a denser layout. Whatever shape the caller
+  // handed this component (session-parameter leaf criteria, or role-rubric
+  // parents that carry an ignored `sub_criteria` field — see renderCriterion,
+  // which never reads it either) renders one row per array element here too,
+  // so compact mode never invents new sub-criteria handling.
+  const renderCriterionCompact = (criterion: Criterion) => {
+    const value = scores[criterion.key] ?? 0;
+
+    return (
+      <div
+        key={criterion.key}
+        className="rounded-lg border border-gray-200 bg-white px-3 py-2"
+      >
+        <div className="flex items-center justify-between gap-2">
+          <span
+            className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-900"
+            title={criterion.label}
+          >
+            {criterion.label}
+          </span>
+          <span className="shrink-0 text-sm font-bold text-gray-900 tabular-nums">
+            {value}
+            <span className="text-xs font-normal text-gray-400">
+              /{criterion.max_score}
+            </span>
+          </span>
+        </div>
+
+        {/* Quick-tap score buttons — identical control to renderCriterion,
+            just slightly narrower; height stays a full 36px touch target. */}
+        <div className="flex gap-1 mt-1.5 flex-wrap">
+          {Array.from(
+            { length: Math.min(criterion.max_score + 1, 11) },
+            (_, i) => {
+              // Show evenly distributed buttons if max > 10
+              if (criterion.max_score > 10) {
+                const step = criterion.max_score / 10;
+                const val = Math.round(i * step);
+                return (
+                  <button
+                    key={val}
+                    type="button"
+                    disabled={isLocked}
+                    onClick={() => handleScoreChange(criterion.key, val)}
+                    aria-label={`Score ${val} for ${criterion.label}`}
+                    className={`min-w-[32px] h-9 rounded-md text-xs font-medium transition-all
+                      ${
+                        value === val
+                          ? "bg-blue-600 text-white shadow-sm"
+                          : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                      }
+                      disabled:opacity-50 disabled:cursor-not-allowed
+                    `}
+                  >
+                    {val}
+                  </button>
+                );
+              }
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  disabled={isLocked}
+                  onClick={() => handleScoreChange(criterion.key, i)}
+                  aria-label={`Score ${i} for ${criterion.label}`}
+                  className={`min-w-[32px] h-9 rounded-md text-xs font-medium transition-all
+                    ${
+                      value === i
+                        ? "bg-blue-600 text-white shadow-sm"
+                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                    }
+                    disabled:opacity-50 disabled:cursor-not-allowed
+                  `}
+                >
+                  {i}
+                </button>
+              );
+            }
+          )}
+        </div>
+      </div>
+    );
+  };
+
   const roleLabel = participant.parliament_role
     ? ROLE_LABELS[participant.parliament_role] ?? participant.parliament_role
     : "Participant";
@@ -451,12 +572,45 @@ export function ScoreForm({
         </span>
       </div>
 
+      {/* Compact/Detailed toggle — render-layer only; same scores, same keys,
+          same buffer/autosave underneath either mode. */}
+      <div className="flex items-center justify-end gap-2">
+        <span className="text-xs font-medium text-gray-500">View</span>
+        <div
+          role="group"
+          aria-label="Scoring view mode"
+          className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-0.5"
+        >
+          <button
+            type="button"
+            aria-pressed={compactMode}
+            onClick={() => updateCompactMode(true)}
+            className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-all ${
+              compactMode ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"
+            }`}
+          >
+            Compact
+          </button>
+          <button
+            type="button"
+            aria-pressed={!compactMode}
+            onClick={() => updateCompactMode(false)}
+            className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-all ${
+              !compactMode ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"
+            }`}
+          >
+            Detailed
+          </button>
+        </div>
+      </div>
+
       {/* Criteria Sliders — grouped: evaluation params first, then (only when
           present) a clearly labeled Participation subsection. The total/maxTotal
           math above sums ALL criteria regardless of group, so the running total
           and submit payload are unchanged. When no criterion carries a `kind`
           (role-rubric fallback), everything is treated as evaluation and renders
-          as a single ungrouped list exactly as before. */}
+          as a single ungrouped list exactly as before. Compact mode reuses the
+          identical grouping/filtering — only the per-row renderer changes. */}
       {(() => {
         const participationCriteria = criteria.filter(
           (c) => c.kind === "participation"
@@ -464,13 +618,13 @@ export function ScoreForm({
         const evaluationCriteria = criteria.filter(
           (c) => c.kind !== "participation"
         );
+        const renderRow = compactMode ? renderCriterionCompact : renderCriterion;
+        const groupClass = compactMode ? "space-y-2" : "space-y-5 landscape-2col";
 
         return (
           <>
-            <div className="space-y-5 landscape-2col">
-              {evaluationCriteria.map((criterion) =>
-                renderCriterion(criterion)
-              )}
+            <div className={groupClass}>
+              {evaluationCriteria.map((criterion) => renderRow(criterion))}
             </div>
 
             {participationCriteria.length > 0 && (
@@ -481,10 +635,8 @@ export function ScoreForm({
                   </span>
                   <span className="h-px flex-1 bg-indigo-200" />
                 </div>
-                <div className="space-y-5 landscape-2col">
-                  {participationCriteria.map((criterion) =>
-                    renderCriterion(criterion)
-                  )}
+                <div className={groupClass}>
+                  {participationCriteria.map((criterion) => renderRow(criterion))}
                 </div>
               </div>
             )}

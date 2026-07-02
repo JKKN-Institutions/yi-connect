@@ -123,6 +123,18 @@ export function ScoreForm({
   }, [criteria, existingScore, juryAssignmentId, participant.id, agendaItemId, sanitizeScores]);
 
   const [scores, setScores] = useState<Record<string, number>>(getInitialScores);
+  // Which criteria the juror has deliberately set this session. A criterion
+  // counts as "scored" once they interact with it (tapping 0 counts), OR it
+  // loaded with a real (>0) value from a saved score/draft. Submit stays blocked
+  // until EVERY criterion is scored: a fresh sheet starts all-zero and untouched,
+  // so an accidental early Submit can no longer record the un-scored criteria as
+  // 0 (which silently counted against the participant in results).
+  const [touched, setTouched] = useState<Set<string>>(() => {
+    const init = getInitialScores();
+    return new Set(
+      criteria.filter((c) => (init[c.key] ?? 0) > 0).map((c) => c.key)
+    );
+  });
   const [comments, setComments] = useState(
     existingScore?.comments ??
       getFromBuffer(juryAssignmentId, participant.id, agendaItemId)?.comments ??
@@ -144,6 +156,12 @@ export function ScoreForm({
   );
   const totalScore = criteria.reduce((sum, c) => sum + (scores[c.key] ?? 0), 0);
   const maxTotal = criteria.reduce((sum, c) => sum + c.max_score, 0);
+  // Submit is blocked until every criterion has been deliberately scored (tapping
+  // 0 counts). Prevents the accidental early-Submit that recorded unscored
+  // criteria as 0. Save Draft is unaffected — drafts may be partial.
+  const scoredCount = criteria.filter((c) => touched.has(c.key)).length;
+  const allScored = scoredCount === criteria.length;
+  const unscoredCount = criteria.length - scoredCount;
   const isSubmitted = existingScore?.status === "submitted";
   // lock_on_submit sessions freeze on submit: a submitted score is read-only,
   // reusing every isLocked code path below (disabled inputs, hidden submit
@@ -219,6 +237,12 @@ export function ScoreForm({
     if (!criterion) return;
     const clamped = Math.max(0, Math.min(value, criterion.max_score));
     dirtyRef.current = true;
+    setTouched((prev) => {
+      if (prev.has(key)) return prev;
+      const next = new Set(prev);
+      next.add(key);
+      return next;
+    });
     setScores((prev) => ({ ...prev, [key]: clamped }));
     setError(null);
   };
@@ -516,34 +540,46 @@ export function ScoreForm({
 
       {/* Action Buttons — always visible in landscape via sticky bottom */}
       {!isLocked && (
-        <div className="flex gap-3 pb-4 landscape-compact">
-          <Button
-            type="button"
-            variant="outline"
-            className="flex-1 h-14 text-base"
-            disabled={saving || submitting}
-            onClick={() => handleAction("draft")}
-          >
-            {saving ? (
-              <Loader2 className="size-5 animate-spin mr-2" />
-            ) : (
-              <Save className="size-5 mr-2" />
-            )}
-            Save Draft
-          </Button>
-          <Button
-            type="button"
-            className="flex-1 h-14 text-base bg-blue-600 hover:bg-blue-700"
-            disabled={saving || submitting}
-            onClick={() => handleAction("submitted")}
-          >
-            {submitting ? (
-              <Loader2 className="size-5 animate-spin mr-2" />
-            ) : (
-              <Send className="size-5 mr-2" />
-            )}
-            Submit
-          </Button>
+        <div className="space-y-2 pb-4 landscape-compact">
+          {/* Blocked-submit notice: every criterion must be scored before Submit
+              (tapping 0 counts). Save Draft stays available for partial sheets. */}
+          {!allScored && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
+              Score all {criteria.length} criteria to submit — {unscoredCount}{" "}
+              still {unscoredCount === 1 ? "needs" : "need"} a score. Tap{" "}
+              <span className="font-semibold">0</span> if a criterion earns
+              nothing.
+            </div>
+          )}
+          <div className="flex gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              className="flex-1 h-14 text-base"
+              disabled={saving || submitting}
+              onClick={() => handleAction("draft")}
+            >
+              {saving ? (
+                <Loader2 className="size-5 animate-spin mr-2" />
+              ) : (
+                <Save className="size-5 mr-2" />
+              )}
+              Save Draft
+            </Button>
+            <Button
+              type="button"
+              className="flex-1 h-14 text-base bg-blue-600 hover:bg-blue-700"
+              disabled={saving || submitting || !allScored}
+              onClick={() => handleAction("submitted")}
+            >
+              {submitting ? (
+                <Loader2 className="size-5 animate-spin mr-2" />
+              ) : (
+                <Send className="size-5 mr-2" />
+              )}
+              Submit
+            </Button>
+          </div>
         </div>
       )}
     </div>

@@ -1304,6 +1304,50 @@ function JuryScoringClientInner({
             style={{ minHeight: "44px" }}
           />
 
+          {/* On-screen digit pad — avoids summoning the OS keyboard for
+              rapid-fire numeric jumps during live debate (#780). Appends
+              straight into the SAME quickJump state; no focus() calls. */}
+          <div
+            className="mt-2 flex gap-1"
+            role="group"
+            aria-label="Digit pad for participant number"
+          >
+            {["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"].map((d) => (
+              <button
+                key={d}
+                type="button"
+                onClick={() => setQuickJump((q) => q + d)}
+                className="flex-1 rounded-md border-2 text-sm font-bold active:scale-95"
+                style={{
+                  minHeight: "40px",
+                  borderColor: `${GOLD}66`,
+                  color: INK,
+                  background: `${GOLD}14`,
+                }}
+              >
+                {d}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => setQuickJump((q) => q.slice(0, -1))}
+              aria-label="Backspace"
+              className="flex-1 rounded-md border-2 border-gray-200 text-sm font-bold text-gray-700 active:scale-95"
+              style={{ minHeight: "40px" }}
+            >
+              ⌫
+            </button>
+            <button
+              type="button"
+              onClick={() => setQuickJump("")}
+              aria-label="Clear"
+              className="flex-1 rounded-md border-2 border-gray-200 text-sm font-bold text-gray-700 active:scale-95"
+              style={{ minHeight: "40px" }}
+            >
+              ×
+            </button>
+          </div>
+
           {quickJump.trim() && (
             <div
               className="mt-2 flex gap-2 overflow-x-auto pb-1"

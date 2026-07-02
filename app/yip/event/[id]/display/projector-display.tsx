@@ -12,6 +12,10 @@ import { useTimer } from "@/lib/yip/hooks/use-timer";
 import { armTimerSound } from "@/lib/yip/timer-sound";
 import { useLiveBanner } from "@/lib/yip/hooks/use-live-banner";
 import { createClient } from "@/lib/yip/supabase/client";
+import {
+  ProjectorMomentScene,
+  useProjectedMoment,
+} from "./projector-moment-scene";
 
 interface SpeakerInfo {
   full_name: string;
@@ -100,6 +104,11 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
     (event?.live_banner_active ?? false) === true,
     event?.live_banner_text ?? null
   );
+
+  // AI Moment — director-curated scene (yip.projector_moments). A live vote
+  // for the CURRENT item always outranks it; otherwise it replaces the agenda
+  // default until the director clears it from the control panel.
+  const projectedMoment = useProjectedMoment(eventId);
 
   // ─── Auto-update: keep the long-open projector on the latest deploy ───
   // The projector is a kiosk that stays open for hours, so on its own it would
@@ -951,10 +960,15 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
           </div>
         )}
 
+        {/* AI Moment scene — a live vote for the current item outranks it. */}
+        {!voteForCurrentItem && projectedMoment && (
+          <ProjectorMomentScene moment={projectedMoment} />
+        )}
+
         {/* Current agenda item (only show when no vote occupies the CURRENT
             item — a stale revealed vote from an earlier item must NOT hide the
             agenda title + timer; that was the "timer not showing" bug). */}
-        {!voteForCurrentItem && currentAgendaItem ? (
+        {!voteForCurrentItem && !projectedMoment && currentAgendaItem ? (
           <div className="w-full max-w-4xl space-y-8 text-center">
             {/* Agenda item title */}
             <div>
@@ -1254,8 +1268,9 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
             )}
           </div>
         ) : (
-          /* No active item and no active vote — show event info */
-          !voteSession || (!isOpen && !isClosed && !isRevealed) ? (
+          /* No active item and no active vote — show event info (unless an
+             AI Moment scene is on screen above) */
+          !projectedMoment && (!voteSession || (!isOpen && !isClosed && !isRevealed)) ? (
             <div className="text-center">
               <h2 className="text-4xl font-bold text-gray-500 lg:text-5xl">
                 {isLive

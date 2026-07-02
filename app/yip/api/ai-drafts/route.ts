@@ -34,11 +34,19 @@ import {
   autoEnableScoringChapters,
   listAiEnabledEventIds,
 } from "@/lib/yip/ai/grounding";
-import type {
-  AiDraftStatus,
-  AiGrounding,
-  AiSourceRef,
-  PendingAiRequest,
+import {
+  buildProjectorBillSummaryGrounding,
+  buildProjectorFramingGrounding,
+  buildProjectorHouseMindGrounding,
+  buildProjectorQhThemesGrounding,
+  buildProjectorQuotesGrounding,
+} from "@/lib/yip/ai/projector-grounding";
+import {
+  isProjectorAiKind,
+  type AiDraftStatus,
+  type AiGrounding,
+  type AiSourceRef,
+  type PendingAiRequest,
 } from "@/lib/yip/ai/types";
 
 // This route does live DB reads/writes — never cache it.
@@ -195,6 +203,25 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           row.event_id,
           row.subject_id
         );
+      } else if (row.kind === "projector_quotes") {
+        // SELECTION-ONLY: the routine curates question ids from this pool and
+        // echoes them via sourceRefs; the server later copies verbatim text.
+        grounding = await buildProjectorQuotesGrounding(row.event_id);
+      } else if (row.kind === "projector_bill_summary" && row.subject_id) {
+        grounding = await buildProjectorBillSummaryGrounding(
+          row.event_id,
+          row.subject_id
+        );
+      } else if (row.kind === "projector_house_mind") {
+        grounding = await buildProjectorHouseMindGrounding(row.event_id);
+      } else if (row.kind === "projector_framing" && row.subject_id) {
+        // subject_id = agenda.id for framing (generic uuid subject).
+        grounding = await buildProjectorFramingGrounding(
+          row.event_id,
+          row.subject_id
+        );
+      } else if (row.kind === "projector_qh_themes") {
+        grounding = await buildProjectorQhThemesGrounding(row.event_id);
       }
       // ministry_verdict and any unknown kind → grounding stays null (skipped).
     } catch {
@@ -263,11 +290,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  // The chair narrative is the ONLY review-gated kind. participant_story and
-  // session_feedback both auto-show ('ready') — they are dispute-proof / number-
-  // free by construction and gated on events.ai_enabled at the card.
+  // Review-gated kinds: the chair narrative AND every projector kind (the
+  // venue screen shows nothing without the director's Project tap on the
+  // control panel). participant_story and session_feedback auto-show ('ready')
+  // — dispute-proof / number-free by construction and gated on
+  // events.ai_enabled at the card.
   const targetStatus: AiDraftStatus =
-    row.kind === "round_narrative" ? "pending_review" : "ready";
+    row.kind === "round_narrative" || isProjectorAiKind(row.kind)
+      ? "pending_review"
+      : "ready";
 
   const sourceRefs: AiSourceRef[] = Array.isArray(b.sourceRefs)
     ? (b.sourceRefs as AiSourceRef[])

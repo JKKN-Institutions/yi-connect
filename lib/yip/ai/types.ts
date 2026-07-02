@@ -14,7 +14,33 @@ export type AiDraftKind =
   | "round_narrative" // subject_id = null; agenda_item_id NULL — event-level chair report narrative
   | "session_feedback" // subject_id = participants.id; agenda_item_id = agenda.id — per-session growth note, NO numbers
   | "bill_feedback" // subject_id = bills.id; agenda_item_id NULL — team-level note on a BILL's craft, NO scores/people
-  | "ministry_verdict"; // future
+  | "ministry_verdict" // future
+  // ── Projector moments (director-triggered, ALWAYS pending_review) ──
+  | "projector_quotes" // subject_id = null — SELECTION-ONLY: routine picks question ids; server copies verbatim text
+  | "projector_bill_summary" // subject_id = bills.id — 3-bullet big-screen distillation of ONE bill
+  | "projector_house_mind" // subject_id = null — the 3 themes the whole House kept returning to
+  | "projector_framing" // subject_id = agenda.id — 2-line big-screen intro for one agenda item
+  | "projector_qh_themes"; // subject_id = null — "the House is asking about…" Question-Hour synthesis
+
+/**
+ * The projector-moment kinds. Every one is DIRECTOR-TRIGGERED from the control
+ * panel (never auto-queued), lands as pending_review (never auto-shows), and
+ * reaches the big screen only after the director's explicit "Project" tap
+ * copies it into yip.projector_moments.
+ */
+export const PROJECTOR_AI_KINDS = [
+  "projector_quotes",
+  "projector_bill_summary",
+  "projector_house_mind",
+  "projector_framing",
+  "projector_qh_themes",
+] as const;
+
+export type ProjectorAiKind = (typeof PROJECTOR_AI_KINDS)[number];
+
+export function isProjectorAiKind(kind: string): kind is ProjectorAiKind {
+  return (PROJECTOR_AI_KINDS as readonly string[]).includes(kind);
+}
 
 /**
  * Lifecycle:
@@ -271,11 +297,148 @@ export type BillFeedbackGrounding = {
   sourceRefs: AiSourceRef[];
 };
 
+// ─── Projector-moment groundings (director-triggered, review-gated) ─────────
+//
+// Same content-safety doctrine as everything above: NO scores, NO ranks. These
+// payloads carry the House's OWN words (questions, bill fields, agenda facts)
+// so the routine synthesizes/curates rather than invents. Every projector kind
+// lands as pending_review — the director reads the exact output on the control
+// panel and taps "Project" before anything reaches the venue screen.
+
+/**
+ * Grounding for kind='projector_quotes' — "Voices of the House".
+ *
+ * SELECTION-ONLY CONTRACT: the routine must NOT write display prose. It reads
+ * the House's own submitted questions and returns, via sourceRefs, the ids of
+ * the most striking 4–8 (type:"question"). At Project time the SERVER copies
+ * the verbatim question text + asker from the DB — quotes are verbatim BY
+ * CONSTRUCTION, immune to rewording. draft_text carries only a short internal
+ * framing line for the director's review card.
+ *
+ * Note: includes 'submitted' (not yet organiser-approved) questions and
+ * excludes only 'rejected' — the director's Project-tap review is the vet.
+ */
+export type ProjectorQuotesGrounding = {
+  kind: "projector_quotes";
+  event: { id: string; name: string; chapterName: string | null };
+  /** The House's own words. Curate from THESE ONLY; echo chosen ids. */
+  questions: {
+    id: string;
+    text: string;
+    ministryLabel: string | null;
+    /** 'submitted' | 'approved' | 'answered' — never 'rejected'. */
+    status: string;
+  }[];
+  sourceRefs: AiSourceRef[];
+};
+
+/**
+ * Grounding for kind='projector_bill_summary' — one bill distilled for the big
+ * screen: exactly 3 short bullets + a one-line essence, from the bill's OWN
+ * fields (same content-safe shape as bill_feedback; no drafting people).
+ */
+export type ProjectorBillSummaryGrounding = {
+  kind: "projector_bill_summary";
+  bill: {
+    id: string;
+    title: string | null;
+    committeeName: string | null;
+    partySide: string | null;
+    problemStatement: string | null;
+    objective: string | null;
+    provisions: unknown;
+    expectedImpact: string | null;
+    implementation: string | null;
+  };
+  ministry: { topic: string | null; scheme: string | null } | null;
+  event: { id: string; name: string; chapterName: string | null };
+  sourceRefs: AiSourceRef[];
+};
+
+/**
+ * Grounding for kind='projector_house_mind' — the 3 concerns this House kept
+ * returning to, synthesized from its own questions + bills. No names, no
+ * counts, no digits in the output.
+ */
+export type ProjectorHouseMindGrounding = {
+  kind: "projector_house_mind";
+  event: { id: string; name: string; chapterName: string | null };
+  questions: { text: string; ministryLabel: string | null }[];
+  bills: { title: string | null; problemStatement: string | null }[];
+  nationalTopics: { title: string; scheme: string | null }[];
+  sourceRefs: AiSourceRef[];
+};
+
+/** Grounding for kind='projector_framing' — a 2-line intro for ONE agenda item. */
+export type ProjectorFramingGrounding = {
+  kind: "projector_framing";
+  agendaItem: {
+    id: string;
+    title: string;
+    agendaType: string | null;
+    day: number | null;
+  };
+  nationalTopics: { title: string; scheme: string | null }[];
+  event: { id: string; name: string; chapterName: string | null };
+  sourceRefs: AiSourceRef[];
+};
+
+/**
+ * Grounding for kind='projector_qh_themes' — "the House is asking about…":
+ * a 3-line synthesis of Question Hour so far, grouped by ministry. No names,
+ * no counts, no digits in the output.
+ */
+export type ProjectorQhThemesGrounding = {
+  kind: "projector_qh_themes";
+  event: { id: string; name: string; chapterName: string | null };
+  byMinistry: { ministryLabel: string; questions: string[] }[];
+  sourceRefs: AiSourceRef[];
+};
+
+/**
+ * The payload the projector kiosk renders (yip.projector_moments.payload).
+ * Built SERVER-SIDE at Project time — for quotes the text is copied verbatim
+ * from yip.questions by the server, never taken from model output.
+ */
+export type ProjectorMomentPayload = {
+  title: string;
+  subtitle?: string | null;
+  /** Text scenes: one entry per display line/bullet/theme. */
+  lines?: string[] | null;
+  /** Quote scene: verbatim House voices (server-copied). */
+  quotes?:
+    | {
+        text: string;
+        name: string;
+        constituency: string | null;
+        ministry: string | null;
+      }[]
+    | null;
+};
+
+/** A yip.projector_moments row (hand-typed; table not in generated types). */
+export type ProjectorMomentRow = {
+  id: string;
+  event_id: string;
+  kind: ProjectorAiKind;
+  payload: ProjectorMomentPayload;
+  status: "projected" | "retired";
+  source_draft_id: string | null;
+  is_mock: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
 export type AiGrounding =
   | ParticipantStoryGrounding
   | RoundNarrativeGrounding
   | SessionFeedbackGrounding
-  | BillFeedbackGrounding;
+  | BillFeedbackGrounding
+  | ProjectorQuotesGrounding
+  | ProjectorBillSummaryGrounding
+  | ProjectorHouseMindGrounding
+  | ProjectorFramingGrounding
+  | ProjectorQhThemesGrounding;
 
 /** A pending request handed to the routine: the row + its grounding payload. */
 export type PendingAiRequest = {

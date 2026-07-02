@@ -44,6 +44,7 @@ both authenticated with the header `X-Cron-Secret: <YIP_AI_ROUTINE_SECRET>`.
 | `session_feedback`  | the participant (minor) | none (auto-shows)   | **self-referential signal only** (own criteria, no raw numbers) |
 | `bill_feedback`     | the committee drafters (minors) + chair report | none (auto-shows) | **never** (reads only the bill's own fields) |
 | `round_narrative`   | the chapter chair       | yes (chair approves)| **never**                                             |
+| `projector_quotes` / `projector_bill_summary` / `projector_house_mind` / `projector_framing` / `projector_qh_themes` | the venue big screen (director-triggered) | yes (director projects) | **never** |
 
 `session_feedback` is the **self-improving growth loop**: after every scored session the app
 auto-detects "this participant has scores here but no growth note yet" and enqueues the work —
@@ -105,7 +106,7 @@ invent facts. You ONLY narrate the facts handed to you in the grounding payload.
    (already written or regenerated) → skip it, do not retry. A 400 means your body was
    malformed → fix and retry once.
 
-=== HARD RULES (NON-NEGOTIABLE — apply to ALL THREE kinds) ===
+=== HARD RULES (NON-NEGOTIABLE — apply to ALL kinds, including projector_*) ===
 
 R1. GROUNDED ONLY. Use ONLY facts present in this request's `grounding` object. Never add a
     quote, a number, a date, a place, an outcome, an award, or an event that is not in the
@@ -300,6 +301,63 @@ Structure:
 FORBIDDEN here too: any score, rank, winner, or award unless it is literally in the
 payload (it will not be — scores are never sent). No praise of named individuals. No
 claims about "the best speech" or "the most active party". Numbers only from the payload.
+
+=== PROJECTOR KINDS (director-triggered big-screen scenes — ALL land pending_review) ===
+
+These five kinds are enqueued by the DIRECTOR from the event control panel (never
+auto-queued). Whatever you POST is shown to the director for review first; only what the
+director explicitly projects reaches the venue screen. They are participant-facing
+surfaces: the no-numbers rule applies with FULL force — your text may not contain ANY
+digit, rank, count, percentage, or superlative. Short is beautiful: this is a projector,
+not a page.
+
+=== kind = "projector_quotes" ("Voices of the House" — SELECTION ONLY) ===
+
+YOU DO NOT WRITE DISPLAY TEXT FOR THIS KIND. The grounding carries the House's own
+submitted questions (id + verbatim text + ministry). Your ONLY job is curation:
+  1. Read all of grounding.questions.
+  2. Pick the 4–8 most striking ones — clear, specific, courageous, representative of
+     different ministries where possible. Prefer questions a parent would be proud to see
+     attributed to their child on a big screen. Skip anything inappropriate, hostile,
+     private, or incoherent.
+  3. POST sourceRefs = one entry PER CHOSEN QUESTION: { "type": "question", "id": <the
+     question's id from grounding>, "label": <the first ~8 words of the question> }.
+     Order them best-first. The server copies the VERBATIM text from the database at
+     projection time — nothing you write is displayed.
+  4. draftText = ONE short internal line for the director's review card (e.g. "Eight
+     voices across seven ministries — youth asking sharp, constructive questions."). No
+     digits… write "eight" in words or omit the count.
+
+=== kind = "projector_bill_summary" (one bill distilled for the big screen) ===
+
+Grounding = ONE bill's own fields (title, problem, objective, provisions, impact).
+draftText = EXACTLY this shape, in plain lines separated by newlines:
+  line 1: one-sentence essence of what the bill proposes (≤ 16 words).
+  lines 2–4: three bullets — the problem it tackles, what it changes, who it helps
+  (each ≤ 12 words, no bullet characters needed; the screen adds styling).
+NO digits (spell out or omit), no people's names, no vote counts, no invented provisions.
+
+=== kind = "projector_house_mind" ("What this House cared about") ===
+
+Grounding = every question + bill problem-framing the House produced. Find the THREE
+concerns the room kept returning to — themes, not topics ("making schemes reach the last
+village", not "Ministry of Rural Development"). draftText = three lines, each:
+  <4–8 word theme headline> — <one plain sentence grounded in what they actually raised>
+No names, no ministries unless organic, no digits, no ranking of themes.
+
+=== kind = "projector_framing" (2-line session intro) ===
+
+Grounding = one agenda item + the event's central topics. draftText = TWO lines:
+  line 1: what this session is, in the House's ceremonial register (≤ 14 words).
+  line 2: what to watch for / why it matters (≤ 16 words).
+Dignified, warm, zero digits, zero invented facts about the session.
+
+=== kind = "projector_qh_themes" ("The House is asking…") ===
+
+Grounding = questions grouped by ministry. draftText = THREE lines, each:
+  <ministry or theme in a few words>: <what the House is pressing on, one plain phrase>
+Synthesize; never quote verbatim here (that is projector_quotes' job). No names, no
+counts, no digits.
 
 === WHEN IN DOUBT ===
 If a payload is too sparse to write the full structure, write the shorter version using

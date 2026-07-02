@@ -275,6 +275,8 @@ function JuryScoringClientInner({
   // Special Remarks (Phase 18 / F4) — flag checkboxes + delta config
   const [flagDeltas, setFlagDeltas] = useState<FlagDeltas | null>(null);
   const [flags, setFlags] = useState<FlagsState>(EMPTY_FLAGS);
+  // Collapsed-by-default accordion for the Special Remarks block (layout only).
+  const [remarksOpen, setRemarksOpen] = useState(false);
 
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
@@ -1626,66 +1628,98 @@ function JuryScoringClientInner({
           is loaded. Deltas come from yip.scoring_flags_config and are
           applied at result-computation time, not added to the live total. */}
       {activeParticipant && rubric && (
-        <div className="mx-4 rounded-xl border-2 border-amber-200 bg-amber-50/60 px-4 py-3">
-          <div
-            className="flex items-center gap-2 text-sm font-semibold text-amber-900"
-            style={{ ...SERIF }}
+        <div className="mx-4 rounded-xl border-2 border-amber-200 bg-amber-50/60">
+          <button
+            type="button"
+            onClick={() => setRemarksOpen((prev) => !prev)}
+            aria-expanded={remarksOpen}
+            className="flex w-full items-center justify-between gap-2 px-4 py-2.5 touch-manipulation"
+            style={{ minHeight: "44px" }}
           >
-            <AlertTriangle className="size-4 shrink-0" />
-            <span>Special Remarks</span>
-          </div>
-          <p className="text-xs text-amber-800/80 mt-0.5">
-            Tick only if observed. Applied at results time.
-          </p>
-          <div className="mt-3 grid grid-cols-1 gap-2">
-            {FLAG_ORDER.map((k) => {
-              const delta = flagDeltas?.[k];
-              const checked = flags[k];
-              return (
-                <label
-                  key={k}
-                  className={`flex items-center justify-between gap-3 rounded-lg border bg-white px-3 py-2 touch-manipulation cursor-pointer transition-colors
-                    ${
-                      checked
-                        ? "border-amber-400 ring-1 ring-amber-300"
-                        : "border-gray-200 hover:bg-gray-50"
-                    }
-                    ${eventLocked ? "opacity-60 cursor-not-allowed" : ""}
-                  `}
-                  style={{ minHeight: "48px" }}
-                >
-                  <span className="flex items-center gap-3">
-                    <input
-                      type="checkbox"
-                      className="size-5 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
-                      checked={checked}
-                      disabled={eventLocked}
-                      onChange={(e) =>
-                        setFlags((prev) => ({
-                          ...prev,
-                          [k]: e.target.checked,
-                        }))
-                      }
-                    />
-                    <span className="text-sm font-medium text-gray-900">
+            <span
+              className="flex items-center gap-2 text-sm font-semibold text-amber-900 shrink-0"
+              style={{ ...SERIF }}
+            >
+              <AlertTriangle className="size-4 shrink-0" />
+              <span>Special Remarks</span>
+            </span>
+            <span className="flex items-center gap-1.5 flex-wrap justify-end min-w-0">
+              {!remarksOpen &&
+                FLAG_ORDER.filter((k) => flags[k]).map((k) => {
+                  const delta = flagDeltas?.[k];
+                  return (
+                    <span
+                      key={k}
+                      className="inline-flex items-center whitespace-nowrap rounded-full bg-amber-200 px-2 py-0.5 text-[11px] font-bold text-amber-900"
+                    >
                       {FLAG_LABELS[k]}
+                      {delta !== undefined ? ` ${formatDelta(delta)}` : ""}
                     </span>
-                  </span>
-                  <span
-                    className={`text-sm font-bold tabular-nums ${
-                      delta === undefined
-                        ? "text-gray-400"
-                        : delta >= 0
-                          ? "text-emerald-700"
-                          : "text-rose-700"
-                    }`}
-                  >
-                    {delta === undefined ? "…" : formatDelta(delta)}
-                  </span>
-                </label>
-              );
-            })}
-          </div>
+                  );
+                })}
+              {remarksOpen ? (
+                <ChevronUp className="size-5 text-amber-700 shrink-0" />
+              ) : (
+                <ChevronDown className="size-5 text-amber-700 shrink-0" />
+              )}
+            </span>
+          </button>
+          {remarksOpen && (
+            <div className="px-4 pb-3">
+              <p className="text-xs text-amber-800/80 mt-0.5">
+                Tick only if observed. Applied at results time.
+              </p>
+              <div className="mt-3 grid grid-cols-1 gap-2">
+                {FLAG_ORDER.map((k) => {
+                  const delta = flagDeltas?.[k];
+                  const checked = flags[k];
+                  return (
+                    <label
+                      key={k}
+                      className={`flex items-center justify-between gap-3 rounded-lg border bg-white px-3 py-2 touch-manipulation cursor-pointer transition-colors
+                        ${
+                          checked
+                            ? "border-amber-400 ring-1 ring-amber-300"
+                            : "border-gray-200 hover:bg-gray-50"
+                        }
+                        ${eventLocked ? "opacity-60 cursor-not-allowed" : ""}
+                      `}
+                      style={{ minHeight: "48px" }}
+                    >
+                      <span className="flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          className="size-5 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                          checked={checked}
+                          disabled={eventLocked}
+                          onChange={(e) =>
+                            setFlags((prev) => ({
+                              ...prev,
+                              [k]: e.target.checked,
+                            }))
+                          }
+                        />
+                        <span className="text-sm font-medium text-gray-900">
+                          {FLAG_LABELS[k]}
+                        </span>
+                      </span>
+                      <span
+                        className={`text-sm font-bold tabular-nums ${
+                          delta === undefined
+                            ? "text-gray-400"
+                            : delta >= 0
+                              ? "text-emerald-700"
+                              : "text-rose-700"
+                        }`}
+                      >
+                        {delta === undefined ? "…" : formatDelta(delta)}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
 

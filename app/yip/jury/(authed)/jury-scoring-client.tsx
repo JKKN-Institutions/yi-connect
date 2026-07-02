@@ -941,16 +941,21 @@ function JuryScoringClientInner({
       .on(
         "postgres_changes",
         {
-          event: "UPDATE",
+          // "*" not "UPDATE": the Now Speaking console (#782) INSERTs a fresh
+          // row the FIRST time a participant speaks — an UPDATE-only
+          // subscription never fires for it (planned queues only ever UPDATE
+          // pre-seeded rows, which is why UPDATE-only worked before #782).
+          event: "*",
           schema: "yip",
           table: "agenda_speakers",
         },
         (payload) => {
-          // A speaker status changed -- reload if relevant
-          if (
-            payload.new &&
-            (payload.new as Record<string, unknown>).status === "speaking"
-          ) {
+          // Reload on any live-relevant change: a row entering 'speaking'
+          // (speaker set) or leaving it via completed/skipped (speaker done /
+          // house moved on). Ignore 'pending' — that's just queue seeding.
+          const status = (payload.new as Record<string, unknown> | null)
+            ?.status;
+          if (status && status !== "pending") {
             void loadCurrentSpeakerRef.current();
           }
         }

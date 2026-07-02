@@ -27,6 +27,7 @@ import {
   type ElectionOutcome,
 } from "@/lib/yip/election-outcome";
 import type { Tables, Json } from "@/types/yip/database";
+import { revalidatePath } from "next/cache";
 import type { RollupEntry, RollupOption } from "@/lib/yip/election-rollup";
 
 type VoteSession = Tables<{ schema: "yip" }, "vote_sessions">;
@@ -454,6 +455,28 @@ export async function openVote(
     return { success: false, error: "Scores are locked — unlock scores before opening a vote." };
   }
 
+  // A Bill Vote only makes sense inside the "Bill Presentation & Voting"
+  // session: the projector's bill card and the jury's bill-session scoring
+  // both key off the LIVE agenda item being agenda_type='bill_presentation'.
+  // Opening a bill vote against any other item produces a silent split — the
+  // vote tally shows on screen but the bill and jury stay dark (the Erode
+  // 2026 incident). Refuse it here so the invariant can't be bypassed via the
+  // API; the organiser must make the Bill Presentation session live first.
+  if (voteType === "bill_vote") {
+    const { data: voteItem } = await supabase
+      .from("agenda")
+      .select("agenda_type")
+      .eq("id", agendaItemId)
+      .maybeSingle();
+    if (!voteItem || voteItem.agenda_type !== "bill_presentation") {
+      return {
+        success: false,
+        error:
+          "Bill voting must run inside the “Bill Presentation & Voting” session. Make that session live first, then open the vote.",
+      };
+    }
+  }
+
   // Fail CLOSED: a party/bench election MUST carry its scope key, else the cast
   // and tally guards (which are conditioned on it) would fail open — anyone
   // could vote and every ballot would count for a seat that belongs to one
@@ -588,6 +611,35 @@ export async function openVote(
   }
 
   return { success: true, data: { sessionId: data.id, checkinWarning } };
+}
+
+// ─── Clear Result (dismiss a revealed vote from the projector) ────
+// A revealed vote stays pinned to the projector — and hides the bill/session
+// view — until it leaves the display set (the projector + getActiveVoteSession
+// only show open/closed/revealed). 'archived' is a terminal, non-displayed
+// status: clearing archives every REVEALED session for the event so the big
+// screen falls back to the live session (the Erode 2026 sticky-results gap).
+// Open/closed (mid-vote) sessions are left untouched. Stored standings live on
+// the bill / participant rows, so this only changes what the screen shows.
+export async function clearVoteResults(
+  eventId: string
+): Promise<ActionResult<{ cleared: number }>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage)
+    return { success: false, error: "Not authorized to manage this event" };
+
+  const supabase = await createServiceClient();
+  const { data, error } = await supabase
+    .from("vote_sessions")
+    .update({ status: "archived" })
+    .eq("event_id", eventId)
+    .eq("status", "revealed")
+    .select("id");
+
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/yip/dashboard/events/${eventId}/control`);
+  return { success: true, data: { cleared: data?.length ?? 0 } };
 }
 
 // ─── Close Vote ─────────────────────────────────────────────────

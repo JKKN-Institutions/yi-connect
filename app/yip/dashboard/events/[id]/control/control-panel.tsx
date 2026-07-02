@@ -344,6 +344,46 @@ export function ControlPanel({
   // Status transition logic
   const isLive = eventStatus === "day1_live" || eventStatus === "day2_live";
 
+  // ── "Make the Bill session live" nudge ───────────────────────────
+  // The projector's bill card and the jury's bill-session scoring only show a
+  // bill while the LIVE agenda item is the Bill Presentation & Voting session.
+  // If the house has reached the bill slot but the organiser is parked on a
+  // different item (or the session was accidentally marked completed — clicking
+  // a completed row does nothing), voting + jury silently stay dark. Surface a
+  // one-tap fix instead of leaving them to improvise an on-the-spot item that
+  // can't render as a bill session (the Erode 2026 incident).
+  const billSession = dayItems.find(
+    (i) => i.agenda_type === "bill_presentation"
+  );
+  const currentIdxInDay = dayItems.findIndex((i) => i.id === currentItemId);
+  const billIdxInDay = billSession
+    ? dayItems.findIndex((i) => i.id === billSession.id)
+    : -1;
+  const currentIsBillSession =
+    billIdxInDay >= 0 && currentIdxInDay === billIdxInDay;
+  // Only nudge once we've actually reached the bill slot (or the session was
+  // already started/completed) — never during the morning sessions.
+  const reachedBillSlot =
+    currentIdxInDay >= 0 && billIdxInDay >= 0 && currentIdxInDay >= billIdxInDay;
+  const billAlreadyTouched =
+    !!billSession && billSession.status !== "upcoming";
+  // An on-the-spot (temporary) item live during a chapter round is the exact
+  // detour organisers reach for when they can't get onto the bill session — and
+  // the screen/jury can't render a bill on it. Always nudge in that case.
+  const currentIsTemporary = currentAgendaItem?.agenda_type === "temporary";
+  const billIsCompleted =
+    billSession?.status === "completed" || billSession?.status === "skipped";
+  // Re-activating a completed session rewinds the live screen → chair/national
+  // only (mirrors the sidebar re-open gate). Forward activation → any organiser.
+  const canMakeBillLive = billIsCompleted
+    ? canControlAgendaBackward
+    : canManageAgenda;
+  const showBillSessionNudge =
+    isLive &&
+    !!billSession &&
+    !currentIsBillSession &&
+    (reachedBillSlot || billAlreadyTouched || currentIsTemporary);
+
   function getNextTransition(): {
     label: string;
     status: string;
@@ -513,6 +553,30 @@ export function ControlPanel({
       open: true,
       title: "Jump to Item",
       description: `Jump to "${title}"? The current item will be marked as completed.`,
+      action: () => {
+        startTransition(async () => {
+          const result = await startAgendaItem(eventId, itemId);
+          if (result.success) {
+            toast.success(`Now on: ${title}`);
+          } else {
+            toast.error(result.error);
+          }
+          setConfirmDialog((prev) => ({ ...prev, open: false }));
+        });
+      },
+    });
+  }
+
+  // One-tap "Make the Bill Presentation & Voting session live" from the nudge.
+  // startAgendaItem sets the target in_progress and repoints the event, so it
+  // reactivates a session even when it was accidentally marked completed (the
+  // case the sidebar row-click can't handle). Confirm first — it marks the
+  // current item completed and rewinds the live screen to the bill session.
+  function handleMakeBillSessionLive(itemId: string, title: string) {
+    setConfirmDialog({
+      open: true,
+      title: "Make Bill Presentation & Voting live",
+      description: `Make "${title}" the live session so the big screen and jury show the bill? The current item will be marked completed. Any scores already entered are kept.`,
       action: () => {
         startTransition(async () => {
           const result = await startAgendaItem(eventId, itemId);
@@ -1208,6 +1272,42 @@ export function ControlPanel({
               )}
             </CardContent>
           </Card>
+
+          {/* Bill session not live — one-tap fix (Erode 2026 guard) */}
+          {showBillSessionNudge && billSession && (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 p-3">
+              <div className="flex items-start gap-3">
+                <span className="mt-0.5 text-lg leading-none" aria-hidden>
+                  🗳️
+                </span>
+                <div className="min-w-0 flex-1 text-sm">
+                  <p className="font-semibold text-amber-900">
+                    “Bill Presentation &amp; Voting” isn’t the live session.
+                  </p>
+                  <p className="mt-0.5 text-amber-800">
+                    The big screen and the jury only show a bill while this
+                    session is live. Opening a bill vote on any other item won’t
+                    display it.
+                    {billIsCompleted && !canMakeBillLive
+                      ? " Ask the chapter chair to re-open it."
+                      : ""}
+                  </p>
+                </div>
+                {canMakeBillLive && (
+                  <Button
+                    size="sm"
+                    disabled={isPending}
+                    onClick={() =>
+                      handleMakeBillSessionLive(billSession.id, billSession.title)
+                    }
+                    className="shrink-0 bg-amber-600 text-white hover:bg-amber-700"
+                  >
+                    Make it live
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Timer */}
           <Card>

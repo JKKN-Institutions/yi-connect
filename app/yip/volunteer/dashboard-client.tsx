@@ -5,13 +5,15 @@ import { KioskClient } from "./kiosk-client";
 import { DeskCard } from "./desk-client";
 import { NowCard } from "./now-client";
 import { DeskRoster } from "./roster-client";
+import { NowSpeakingConsole } from "./now-speaking-client";
 
-type Tab = "desk" | "now" | "roster" | "vote";
+type Tab = "desk" | "now" | "speak" | "roster" | "vote";
 const SAFFRON = "#FF9933";
 
 const TABS: [Tab, string][] = [
   ["desk", "Desk"],
   ["now", "Now"],
+  ["speak", "Speaker"],
   ["roster", "Students"],
   ["vote", "Vote"],
 ];
@@ -29,6 +31,7 @@ export function VolunteerDashboard({
     <div className="space-y-4">
       {tab === "desk" && <DeskCard eventId={eventId} />}
       {tab === "now" && <NowCard eventId={eventId} />}
+      {tab === "speak" && <NowSpeakingConsole eventId={eventId} />}
       {tab === "roster" && <DeskRoster eventId={eventId} />}
       {tab === "vote" && (
         <KioskClient eventId={eventId} volunteerName={volunteerName} />

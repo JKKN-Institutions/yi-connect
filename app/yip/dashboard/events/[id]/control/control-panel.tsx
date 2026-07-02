@@ -41,6 +41,7 @@ import {
 import { Switch } from "@/components/yip/ui/switch";
 import { Textarea } from "@/components/yip/ui/textarea";
 import { MissionControl } from "./mission-control";
+import { AiMomentsCard } from "./ai-moments-card";
 import { cn } from "@/lib/yip/utils";
 import { ROLE_LABELS, ROLE_COLORS, PARTY_COLORS } from "@/lib/yip/constants";
 import { useRealtimeEvent } from "@/lib/yip/hooks/use-realtime-event";
@@ -1980,6 +1981,9 @@ export function ControlPanel({
         initialActive={(event.live_banner_active ?? false) === true}
         initialText={event.live_banner_text ?? null}
       />
+
+      {/* === AI Moments: director-curated AI scenes for the projector === */}
+      <AiMomentsCard eventId={eventId} />
     </div>
   );
 }

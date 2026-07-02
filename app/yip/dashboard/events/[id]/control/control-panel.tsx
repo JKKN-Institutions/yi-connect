@@ -36,6 +36,7 @@ import {
   Lock,
   Megaphone,
   Pencil,
+  Plus,
 } from "lucide-react";
 import { Switch } from "@/components/yip/ui/switch";
 import { Textarea } from "@/components/yip/ui/textarea";
@@ -44,7 +45,7 @@ import { cn } from "@/lib/yip/utils";
 import { ROLE_LABELS, ROLE_COLORS, PARTY_COLORS } from "@/lib/yip/constants";
 import { useRealtimeEvent } from "@/lib/yip/hooks/use-realtime-event";
 import { useTimer } from "@/lib/yip/hooks/use-timer";
-import { advanceAgenda, goToPreviousAgendaItem, reopenAgendaItem, reopenLastCompletedSession, resetAgenda, startAgendaItem, skipAgendaItem, updateEventStatus, updateAgendaItemDuration, updateAgendaItemSubTimers, setChapterControlFilter, type ControlAgendaFilter } from "@/app/yip/actions/agenda";
+import { advanceAgenda, goToPreviousAgendaItem, reopenAgendaItem, reopenLastCompletedSession, resetAgenda, startAgendaItem, skipAgendaItem, updateEventStatus, updateAgendaItemDuration, updateAgendaItemSubTimers, setChapterControlFilter, createTemporaryAgendaItem, type ControlAgendaFilter } from "@/app/yip/actions/agenda";
 import { setJuryAllowEarlierSessions } from "@/app/yip/actions/jury";
 import {
   getSubTimers,
@@ -156,6 +157,10 @@ export function ControlPanel({
   const [controlFilter, setControlFilter] =
     useState<ControlAgendaFilter>(initialControlFilter);
   const [timerDuration, setTimerDuration] = useState(90);
+  // On-the-spot (temporary) agenda item dialog.
+  const [spotOpen, setSpotOpen] = useState(false);
+  const [spotName, setSpotName] = useState("");
+  const [spotMinutes, setSpotMinutes] = useState("5");
   const [speakers, setSpeakers] = useState<SpeakerWithParticipant[]>(initialSpeakers);
   // 0 = Pre-event (day-0 prep items), 1 = Day 1, 2 = Day 2. We never auto-open
   // Pre-event — it's an opt-in tab the moderator taps; the day always defaults
@@ -229,6 +234,9 @@ export function ControlPanel({
   // (minutes → seconds). The organiser can still override the value before
   // starting. Re-seeds whenever the current item — or its duration — changes.
   const currentItemForSeed = currentAgendaItem;
+  // Is the live item an on-the-spot (temporary) one, and if so which planned
+  // item did it interrupt (for the one-tap "return to where you were")?
+  const spotMeta = readSpotConfig(currentAgendaItem?.config);
   useEffect(() => {
     const mins = currentItemForSeed?.duration_minutes;
     if (mins && mins > 0) {
@@ -574,6 +582,60 @@ export function ControlPanel({
     });
   }
 
+  // ─── On-the-spot (temporary) agenda item ───────────────────────
+  // Read the is_temporary / return_to markers off a current item's config
+  // (jsonb → unknown; guard the shape before reading keys).
+  function readSpotConfig(config: unknown): {
+    isTemporary: boolean;
+    returnTo: string | null;
+  } {
+    if (config && typeof config === "object" && !Array.isArray(config)) {
+      const c = config as Record<string, unknown>;
+      return {
+        isTemporary: c.is_temporary === true,
+        returnTo: typeof c.return_to === "string" ? c.return_to : null,
+      };
+    }
+    return { isTemporary: false, returnTo: null };
+  }
+
+  function handleAddSpotItem() {
+    const name = spotName.trim();
+    const minutes = parseInt(spotMinutes, 10);
+    if (!name) {
+      toast.error("Give the item a name.");
+      return;
+    }
+    if (!Number.isFinite(minutes) || minutes < 1 || minutes > 600) {
+      toast.error("Enter a length between 1 and 600 minutes.");
+      return;
+    }
+    startTransition(async () => {
+      const res = await createTemporaryAgendaItem(eventId, name, minutes);
+      if (res.success) {
+        toast.success(`On-the-spot item started: ${name} (${minutes} min)`);
+        setSpotOpen(false);
+        setSpotName("");
+        setSpotMinutes("5");
+        router.refresh();
+      } else {
+        toast.error(res.error);
+      }
+    });
+  }
+
+  function handleReturnToPlanned(returnToId: string) {
+    startTransition(async () => {
+      const res = await startAgendaItem(eventId, returnToId);
+      if (res.success) {
+        toast.success("Returned to the planned agenda.");
+        router.refresh();
+      } else {
+        toast.error(res.error);
+      }
+    });
+  }
+
   function handleStartTimer() {
     startTransition(async () => {
       const result = await startTimer(eventId, timerDuration);
@@ -905,19 +967,93 @@ export function ControlPanel({
         <div className="space-y-4">
           {/* Current Agenda Item */}
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
               <CardTitle className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Clock className="size-4" />
                 Current Agenda Item
               </CardTitle>
+              {canManageAgenda && (
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={isPending}
+                    onClick={() => setSpotOpen(true)}
+                  >
+                    <Plus className="size-4" />
+                    On-the-spot item
+                  </Button>
+                  <Dialog open={spotOpen} onOpenChange={setSpotOpen}>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Add an on-the-spot item</DialogTitle>
+                      <DialogDescription>
+                        Give it a name and a length. It becomes the live item now
+                        and shows on the projector with a countdown — your planned
+                        agenda is untouched, and you can jump back to it anytime.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-3">
+                      <div className="space-y-1.5">
+                        <label htmlFor="spot-name" className="text-sm font-medium">
+                          Name
+                        </label>
+                        <Input
+                          id="spot-name"
+                          value={spotName}
+                          onChange={(e) => setSpotName(e.target.value)}
+                          placeholder="e.g. Tea Break, Special Address"
+                          maxLength={120}
+                          autoFocus
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label htmlFor="spot-minutes" className="text-sm font-medium">
+                          Length (minutes)
+                        </label>
+                        <Input
+                          id="spot-minutes"
+                          type="number"
+                          min={1}
+                          max={600}
+                          value={spotMinutes}
+                          onChange={(e) => setSpotMinutes(e.target.value)}
+                          className="w-28"
+                        />
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button
+                        variant="outline"
+                        onClick={() => setSpotOpen(false)}
+                        disabled={isPending}
+                      >
+                        Cancel
+                      </Button>
+                      <Button onClick={handleAddSpotItem} disabled={isPending}>
+                        <Play className="size-4" />
+                        Add &amp; start
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                  </Dialog>
+                </>
+              )}
             </CardHeader>
             <CardContent>
               {currentAgendaItem ? (
                 <div className="space-y-4">
                   <div className="flex items-start justify-between gap-3">
-                    <h2 className="text-2xl font-bold text-gray-900">
-                      {currentAgendaItem.title}
-                    </h2>
+                    <div className="min-w-0">
+                      <h2 className="text-2xl font-bold text-gray-900">
+                        {currentAgendaItem.title}
+                      </h2>
+                      {spotMeta.isTemporary && (
+                        <Badge variant="secondary" className="mt-1">
+                          On-the-spot item
+                        </Badge>
+                      )}
+                    </div>
                     <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
                       {/* Backward controls — cautious secondary actions vs the
                           primary Next. Previous = any organiser; Reset = chair /
@@ -974,6 +1110,18 @@ export function ControlPanel({
                         </span>
                       )}
                     </p>
+                  )}
+                  {spotMeta.isTemporary && spotMeta.returnTo && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={isPending}
+                      onClick={() => handleReturnToPlanned(spotMeta.returnTo!)}
+                      className="border-[#1a1a3e]/30"
+                    >
+                      <Undo2 className="size-4" />
+                      Return to the planned agenda
+                    </Button>
                   )}
                 </div>
               ) : hasCompleted ? (

@@ -1155,6 +1155,107 @@ export async function addAgendaItem(
 }
 
 /**
+ * Create an ON-THE-SPOT (temporary) agenda item mid-session: a named item with
+ * an optional timer that becomes the live current item RIGHT NOW, without
+ * disturbing the planned agenda. Unlike startAgendaItem, it does NOT mark the
+ * interrupted planned item completed — it stashes that item's id in
+ * config.return_to so the Control panel can offer a one-tap "go back to where
+ * you were" (director decision 2026-07-02). Marked config.is_temporary so it
+ * reads as temporary everywhere. When minutes > 0 the SHARED live timer is
+ * (re)started — labelled with the name — so the projector + participant screens
+ * show its countdown exactly like any other agenda item. canManage-gated.
+ */
+export async function createTemporaryAgendaItem(
+  eventId: string,
+  title: string,
+  durationMinutes?: number
+): Promise<ActionResult<{ id: string }>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage)
+    return { success: false, error: "Not authorized to manage this event" };
+
+  const name = title?.trim();
+  if (!name) return { success: false, error: "Give the on-the-spot item a name." };
+  if (name.length > 120)
+    return { success: false, error: "Name must be 120 characters or fewer." };
+
+  // Optional timer length in minutes. 0 / undefined = create the item with no
+  // timer (the operator can start one from the timer box afterwards).
+  const minutes = durationMinutes === undefined ? 0 : Math.round(durationMinutes);
+  if (!Number.isFinite(minutes) || minutes < 0 || minutes > 600)
+    return { success: false, error: "Minutes must be between 0 and 600." };
+
+  const supabase = await createServiceClient();
+
+  // Current event → active day + the item we're interrupting (to return to).
+  const { data: event } = await supabase
+    .from("events")
+    .select("id, status, current_agenda_item_id")
+    .eq("id", eventId)
+    .single();
+  if (!event) return { success: false, error: "Event not found" };
+
+  const day = event.status === "day2_live" ? 2 : 1;
+  const returnTo = event.current_agenda_item_id ?? null;
+
+  // Append after the day's max sequence (unique (event,day,sequence) index).
+  const { data: maxRow } = await supabase
+    .from("agenda")
+    .select("sequence_order")
+    .eq("event_id", eventId)
+    .eq("day", day)
+    .order("sequence_order", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const nextSeq = (maxRow?.sequence_order ?? 0) + 1;
+
+  const config: Record<string, unknown> = { is_temporary: true };
+  if (returnTo) config.return_to = returnTo;
+
+  const { data: inserted, error: insErr } = await supabase
+    .from("agenda")
+    .insert({
+      event_id: eventId,
+      day,
+      sequence_order: nextSeq,
+      title: name,
+      duration_minutes: minutes > 0 ? minutes : null,
+      agenda_type: "temporary",
+      mode: modeForAgendaType("temporary"),
+      status: "in_progress",
+      actual_start: new Date().toISOString(),
+      is_scoreable: false,
+      config: config as Json,
+    } as never)
+    .select("id")
+    .single();
+  if (insErr || !inserted)
+    return { success: false, error: insErr?.message ?? "Failed to add item." };
+
+  // Make it the live item WITHOUT completing the interrupted planned item, and
+  // (re)start the shared timer so every screen shows the countdown. Both writes
+  // land in ONE events update so the realtime broadcast is a single change.
+  const eventUpdate: Record<string, unknown> = {
+    current_agenda_item_id: inserted.id,
+  };
+  if (minutes > 0) {
+    eventUpdate.live_timer_end = new Date(
+      Date.now() + minutes * 60 * 1000
+    ).toISOString();
+    eventUpdate.live_timer_running = true;
+    eventUpdate.live_timer_label = name;
+  }
+  const { error: evErr } = await supabase
+    .from("events")
+    .update(eventUpdate)
+    .eq("id", eventId);
+  if (evErr) return { success: false, error: evErr.message };
+
+  revalidatePath(`/yip/dashboard/events/${eventId}/control`);
+  return { success: true, data: { id: inserted.id } };
+}
+
+/**
  * Delete an agenda item. Chair / national only. Blocked when the item is live
  * or has dependent data (scores, a vote session, jury session assignments) —
  * the caller should exclude it from the run instead.

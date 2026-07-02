@@ -18,6 +18,7 @@ import {
   CheckCircle2,
   XCircle,
   Eye,
+  EyeOff,
   StopCircle,
   Users,
   BarChart3,
@@ -49,6 +50,7 @@ import {
   openVote,
   closeVote,
   revealResults,
+  clearVoteResults,
   openRunoff,
   getSpeakerCandidates,
   getVoteCandidates,
@@ -826,6 +828,31 @@ export function VoteManager({
       action: () => {
         setStartingNew(true);
         setConfirmDialog((prev) => ({ ...prev, open: false }));
+      },
+    });
+  }
+
+  // Take a revealed result off the big screen so the projector returns to the
+  // live session/bill view. A revealed vote stays pinned to the projector until
+  // it's archived — without this the bill-presentation content can never show
+  // under a finished result (the Erode 2026 sticky-results gap). Standings stay
+  // fully on record; this only changes what the screen displays.
+  function handleClearResult() {
+    setConfirmDialog({
+      open: true,
+      title: "Clear result & show the session",
+      description:
+        "Take this result off the big screen and return to the live session view? The result stays fully on record — this only changes what the projector shows.",
+      action: () => {
+        startTransition(async () => {
+          const result = await clearVoteResults(eventId);
+          if (result.success) {
+            toast.success("Result cleared — the projector now shows the session.");
+          } else {
+            toast.error(result.error);
+          }
+          setConfirmDialog((prev) => ({ ...prev, open: false }));
+        });
       },
     });
   }
@@ -2385,6 +2412,21 @@ export function VoteManager({
                     Start new vote
                   </Button>
                 )}
+              {/* Take the finished result off the projector and return to the
+                  live session/bill view. Shown for every revealed vote type —
+                  a lingering result of any kind hides the session screen. */}
+              {isRevealed && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={isPending}
+                  onClick={handleClearResult}
+                  className="flex-1 border-amber-300 text-amber-700 hover:bg-amber-50 hover:text-amber-800"
+                >
+                  <EyeOff className="size-3.5 mr-1" />
+                  Clear result &amp; show session
+                </Button>
+              )}
             </div>
 
             {/* Floor capture — manual roll-call entry, only while open */}

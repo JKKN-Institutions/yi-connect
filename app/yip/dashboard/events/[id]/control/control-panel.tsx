@@ -37,6 +37,7 @@ import {
   Megaphone,
   Pencil,
   Plus,
+  Trash2,
 } from "lucide-react";
 import { Switch } from "@/components/yip/ui/switch";
 import { Textarea } from "@/components/yip/ui/textarea";
@@ -47,7 +48,7 @@ import { ROLE_LABELS, ROLE_COLORS, PARTY_COLORS } from "@/lib/yip/constants";
 import { useRealtimeEvent } from "@/lib/yip/hooks/use-realtime-event";
 import { useTimer } from "@/lib/yip/hooks/use-timer";
 import { armTimerSound } from "@/lib/yip/timer-sound";
-import { advanceAgenda, goToPreviousAgendaItem, reopenAgendaItem, reopenLastCompletedSession, resetAgenda, startAgendaItem, skipAgendaItem, updateEventStatus, updateAgendaItemDuration, updateAgendaItemSubTimers, setChapterControlFilter, createTemporaryAgendaItem, type ControlAgendaFilter } from "@/app/yip/actions/agenda";
+import { advanceAgenda, goToPreviousAgendaItem, reopenAgendaItem, reopenLastCompletedSession, resetAgenda, startAgendaItem, skipAgendaItem, updateEventStatus, updateAgendaItemDuration, updateAgendaItemSubTimers, setChapterControlFilter, createTemporaryAgendaItem, deleteAgendaItem, type ControlAgendaFilter } from "@/app/yip/actions/agenda";
 import { setJuryAllowEarlierSessions } from "@/app/yip/actions/jury";
 import {
   getSubTimers,
@@ -181,6 +182,8 @@ export function ControlPanel({
     action: () => void;
     /** Optional override for the confirm button label (default "Confirm"). */
     confirmLabel?: string;
+    /** Optional override for the cancel button label (default "Cancel"). */
+    cancelLabel?: string;
     /** Render the confirm button in destructive (red) style. */
     destructive?: boolean;
   }>({ open: false, title: "", description: "", action: () => {} });
@@ -548,6 +551,33 @@ export function ControlPanel({
           const result = await reopenAgendaItem(eventId, itemId);
           if (result.success) {
             toast.success(`Re-opened: ${title}`);
+            router.refresh();
+          } else {
+            toast.error(result.error);
+          }
+          setConfirmDialog((prev) => ({ ...prev, open: false }));
+        });
+      },
+    });
+  }
+
+  // Chair / national only (canControlAgendaBackward — same tier deleteAgendaItem
+  // gates on). Cleanup affordance for TEMPORARY (on-the-spot) rows only — never
+  // offered for the live item, and the server refuses it too if scores/votes/
+  // jury assignments got attached in the meantime.
+  function handleRemoveTempItem(itemId: string, title: string) {
+    setConfirmDialog({
+      open: true,
+      title: "Remove this on-the-spot item?",
+      description: `The temporary agenda row "${title}" will be permanently removed from the agenda. This can't be undone.`,
+      confirmLabel: "Remove",
+      cancelLabel: "Keep",
+      destructive: true,
+      action: () => {
+        startTransition(async () => {
+          const result = await deleteAgendaItem(eventId, itemId);
+          if (result.success) {
+            toast.success("On-the-spot item removed");
             router.refresh();
           } else {
             toast.error(result.error);
@@ -1719,6 +1749,7 @@ export function ControlPanel({
                   const statusInfo =
                     AGENDA_STATUS_ICON[status] ?? AGENDA_STATUS_ICON.upcoming;
                   const isCurrent = item.id === currentItemId;
+                  const isTemp = readSpotConfig(item.config).isTemporary;
 
                   const canJump =
                     isLive &&
@@ -1827,6 +1858,20 @@ export function ControlPanel({
                               title="Re-open this completed session"
                             >
                               <RotateCcw className="size-3" />
+                            </button>
+                          )}
+                          {isTemp && !isCurrent && canControlAgendaBackward && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleRemoveTempItem(item.id, item.title)
+                              }
+                              disabled={isPending}
+                              className="mt-0.5 shrink-0 rounded p-1 text-red-500 hover:bg-red-100 hover:text-red-700"
+                              aria-label={`Remove on-the-spot item ${item.title}`}
+                              title="Remove this on-the-spot item"
+                            >
+                              <Trash2 className="size-3" />
                             </button>
                           )}
                           <button
@@ -1975,7 +2020,7 @@ export function ControlPanel({
                 setConfirmDialog((prev) => ({ ...prev, open: false }))
               }
             >
-              Cancel
+              {confirmDialog.cancelLabel ?? "Cancel"}
             </Button>
             <Button
               variant={confirmDialog.destructive ? "destructive" : "default"}

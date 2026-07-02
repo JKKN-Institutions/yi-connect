@@ -45,6 +45,7 @@ import { cn } from "@/lib/yip/utils";
 import { ROLE_LABELS, ROLE_COLORS, PARTY_COLORS } from "@/lib/yip/constants";
 import { useRealtimeEvent } from "@/lib/yip/hooks/use-realtime-event";
 import { useTimer } from "@/lib/yip/hooks/use-timer";
+import { armTimerSound } from "@/lib/yip/timer-sound";
 import { advanceAgenda, goToPreviousAgendaItem, reopenAgendaItem, reopenLastCompletedSession, resetAgenda, startAgendaItem, skipAgendaItem, updateEventStatus, updateAgendaItemDuration, updateAgendaItemSubTimers, setChapterControlFilter, createTemporaryAgendaItem, type ControlAgendaFilter } from "@/app/yip/actions/agenda";
 import { setJuryAllowEarlierSessions } from "@/app/yip/actions/jury";
 import {
@@ -157,6 +158,8 @@ export function ControlPanel({
   const [controlFilter, setControlFilter] =
     useState<ControlAgendaFilter>(initialControlFilter);
   const [timerDuration, setTimerDuration] = useState(90);
+  // Timer sound is unlocked per-screen by a one-time tap (browser autoplay rule).
+  const [soundArmed, setSoundArmed] = useState(false);
   // On-the-spot (temporary) agenda item dialog.
   const [spotOpen, setSpotOpen] = useState(false);
   const [spotName, setSpotName] = useState("");
@@ -1252,6 +1255,18 @@ export function ControlPanel({
                       Reset
                     </Button>
                   </div>
+                  {!soundArmed && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        armTimerSound();
+                        setSoundArmed(true);
+                      }}
+                      className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                    >
+                      🔊 Tap once to enable timer sound
+                    </button>
+                  )}
                 </div>
               </div>
 

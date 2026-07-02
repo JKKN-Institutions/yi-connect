@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { playWarningBeep, playTimesUpChime } from "@/lib/yip/timer-sound";
 
 interface TimerResult {
   /** Total seconds remaining (0 if expired) */
@@ -15,38 +16,6 @@ interface TimerResult {
   isExpired: boolean;
   /** True when timer is actively counting down */
   isActive: boolean;
-}
-
-/**
- * Play a short beep tone using the Web Audio API.
- * 880 Hz, sine wave, 0.3 second duration.
- */
-function playExpireBeep() {
-  try {
-    const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
-    const oscillator = ctx.createOscillator();
-    const gain = ctx.createGain();
-
-    oscillator.type = "sine";
-    oscillator.frequency.setValueAtTime(880, ctx.currentTime);
-
-    gain.gain.setValueAtTime(0.5, ctx.currentTime);
-    // Fade out near the end to avoid click
-    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.28);
-
-    oscillator.connect(gain);
-    gain.connect(ctx.destination);
-
-    oscillator.start(ctx.currentTime);
-    oscillator.stop(ctx.currentTime + 0.3);
-
-    // Clean up the AudioContext after the tone finishes
-    oscillator.onended = () => {
-      ctx.close();
-    };
-  } catch {
-    // Web Audio API not available — silently skip
-  }
 }
 
 /**
@@ -71,8 +40,11 @@ export function useTimer(
 
   const [remaining, setRemaining] = useState<number>(computeRemaining);
 
-  // Track the previous expired state so the beep only fires on the transition
+  // Fire each cue exactly once per transition: a heads-up beep when crossing
+  // into the final 10s, and the time's-up chime on active→expired. warnedRef
+  // re-arms whenever remaining climbs back above 10s (a fresh / reset timer).
   const wasExpiredRef = useRef(false);
+  const warnedRef = useRef(false);
 
   useEffect(() => {
     // Immediately compute on prop change
@@ -97,13 +69,22 @@ export function useTimer(
   const isExpired = Boolean(timerEnd) && isRunning && remaining <= 0;
   const isActive = Boolean(timerEnd) && isRunning && remaining > 0;
 
-  // Play beep exactly once when timer transitions from active to expired
+  // Sound cues. These only actually play on a screen that armed sound with a
+  // tap (see lib/yip/timer-sound.ts); everywhere else they are silent no-ops.
+  //  • warning beep once when remaining first drops to ≤10s
+  //  • time's-up chime once on the active→expired transition
   useEffect(() => {
+    if (isActive && remaining <= 10 && !warnedRef.current) {
+      playWarningBeep();
+      warnedRef.current = true;
+    }
+    if (remaining > 10) warnedRef.current = false; // re-arm for a fresh/reset timer
+
     if (isExpired && !wasExpiredRef.current) {
-      playExpireBeep();
+      playTimesUpChime();
     }
     wasExpiredRef.current = isExpired;
-  }, [isExpired]);
+  }, [remaining, isActive, isExpired]);
 
   return {
     seconds: remaining,

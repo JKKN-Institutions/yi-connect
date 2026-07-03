@@ -1,11 +1,10 @@
 "use server";
 
 import { createServiceClient } from "@/lib/yip/supabase/server";
-import { requireVolunteerSession } from "@/lib/yip/auth/yip-session";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { getScoreableSessions } from "@/app/yip/actions/jury-sessions";
 import { revalidatePath } from "next/cache";
-import type { VolunteerStation } from "@/lib/yip/volunteers";
+import { requireVolunteerStation } from "@/lib/yip/auth/volunteer-station";
 
 /**
  * Per-STATION volunteer tools ("Tool B").
@@ -27,43 +26,9 @@ type ActionResult<T> =
 
 type ServiceClient = Awaited<ReturnType<typeof createServiceClient>>;
 
-// ── Fail-closed per-station gate ──────────────────────────────────
-type StationAuthOk = {
-  ok: true;
-  volunteerId: string;
-  name: string;
-  station: VolunteerStation;
-  supabase: ServiceClient;
-};
-type StationAuthErr = { ok: false; error: string };
-
-async function requireVolunteerStation(
-  eventId: string,
-  allowed: VolunteerStation[]
-): Promise<StationAuthOk | StationAuthErr> {
-  const session = await requireVolunteerSession(eventId);
-  if (!session.ok) return { ok: false, error: session.error };
-  const supabase = await createServiceClient();
-
-  const { data: vol } = await supabase
-    .from("volunteers")
-    .select("station")
-    .eq("id", session.volunteerId)
-    .maybeSingle();
-
-  const station = (vol?.station ?? null) as VolunteerStation | null;
-  // Fail closed: no station, or a station this tool doesn't serve, is denied.
-  if (!station || !allowed.includes(station)) {
-    return { ok: false, error: "This tool isn't available for your station." };
-  }
-  return {
-    ok: true,
-    volunteerId: session.volunteerId,
-    name: session.name,
-    station,
-    supabase,
-  };
-}
+// The fail-closed per-station gate (requireVolunteerStation) now lives in
+// lib/yip/auth/volunteer-station.ts so the "Now Speaking" console can reuse the
+// exact same helper. Imported above.
 
 // ── (a) Registration desk: check in ANY student (whole event) ─────
 export type RegRosterMember = {

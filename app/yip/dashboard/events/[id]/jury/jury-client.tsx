@@ -222,7 +222,7 @@ export function JuryClient({
                   setJuryEmail(e.target.value);
                   setError("");
                 }}
-                placeholder="rajesh@example.com — enables /yip/jury/login"
+                placeholder="rajesh@example.com (optional, for records)"
                 onKeyDown={(e) => {
                   if (e.key === "Enter") handleAddJury();
                 }}

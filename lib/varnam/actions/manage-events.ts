@@ -69,8 +69,10 @@ function parseEventFields(
   }
   const startsAt = toIstTimestamp(startsAtLocal);
 
+  // end_date is NOT NULL in yi_connect.events — when the organiser leaves the
+  // end time blank, default to 2 hours after the start.
   const endsAtLocal = String(formData.get("ends_at") ?? "").trim();
-  let endsAt: string | null = null;
+  let endsAt: string;
   if (endsAtLocal) {
     if (!DT_LOCAL_RE.test(endsAtLocal)) {
       return { ok: false, message: "The end date & time isn't valid." };
@@ -79,6 +81,10 @@ function parseEventFields(
     if (Date.parse(endsAt) <= Date.parse(startsAt)) {
       return { ok: false, message: "The end time must be after the start time." };
     }
+  } else {
+    endsAt = new Date(
+      Date.parse(startsAt) + 2 * 60 * 60 * 1000
+    ).toISOString();
   }
 
   const description = String(formData.get("description") ?? "").trim() || null;

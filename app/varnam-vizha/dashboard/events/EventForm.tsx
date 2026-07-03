@@ -130,7 +130,10 @@ export function EventForm({
           </div>
           <div>
             <label htmlFor="ends_at" className={labelCls}>
-              Ends <span className="text-[#2B0A33]/40">(optional)</span>
+              Ends{" "}
+              <span className="text-[#2B0A33]/40">
+                (blank = 2 hours after start)
+              </span>
             </label>
             <input
               id="ends_at"

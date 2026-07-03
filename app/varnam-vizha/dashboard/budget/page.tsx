@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
 import { getVarnamAccess } from "@/lib/varnam/auth/access";
 import { Forbidden403 } from "@/app/varnam-vizha/_components/Forbidden403";
-import { getBudgetDetail } from "@/lib/varnam/data/dashboard-detail";
+import { getBudgetBoard } from "@/lib/varnam/data/manage-boards-data";
+import { CreateBudgetCard } from "./_components/CreateBudgetCard";
+import { AddAllocationPanel } from "./_components/AddAllocationPanel";
+import { AllocationsTable } from "./_components/AllocationsTable";
 
 export const metadata: Metadata = { title: "Budget" };
 
@@ -38,7 +41,7 @@ export default async function BudgetPage() {
   const access = await getVarnamAccess();
   if (!access.canView) return <Forbidden403 reason={access.reason} />;
 
-  const budget = await getBudgetDetail();
+  const budget = await getBudgetBoard();
   const remaining = budget ? budget.total - budget.spent : 0;
 
   return (
@@ -53,11 +56,15 @@ export default async function BudgetPage() {
       </div>
 
       {!budget ? (
-        <section className="rounded-2xl border border-[#3B0A45]/10 bg-white p-6 shadow-sm">
-          <p className="text-sm text-[#2B0A33]/50">
-            No budget has been set for this edition yet.
-          </p>
-        </section>
+        access.canManage ? (
+          <CreateBudgetCard />
+        ) : (
+          <section className="rounded-2xl border border-[#3B0A45]/10 bg-white p-6 shadow-sm">
+            <p className="text-sm text-[#2B0A33]/50">
+              No budget has been set for this edition yet.
+            </p>
+          </section>
+        )
       ) : (
         <>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -75,80 +82,21 @@ export default async function BudgetPage() {
             />
           </div>
 
+          {access.canManage ? (
+            <AddAllocationPanel
+              budgetId={budget.id}
+              unallocated={budget.total - budget.allocated}
+            />
+          ) : null}
+
           <section className="mt-6 overflow-hidden rounded-2xl border border-[#3B0A45]/10 bg-white shadow-sm">
             <h2 className="px-6 pb-2 pt-5 font-[family-name:var(--font-vv-display)] text-lg font-bold text-[#3B0A45]">
               Allocations by vertical
             </h2>
-            {budget.allocations.length === 0 ? (
-              <p className="px-6 pb-6 text-sm text-[#2B0A33]/50">
-                No allocations have been set yet.
-              </p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead>
-                    <tr className="border-b border-[#3B0A45]/10 text-xs uppercase tracking-wide text-[#2B0A33]/50">
-                      <th className="px-6 py-3 font-semibold">Vertical</th>
-                      <th className="px-4 py-3 text-right font-semibold">
-                        Allocated
-                      </th>
-                      <th className="px-4 py-3 text-right font-semibold">
-                        Spent
-                      </th>
-                      <th className="px-4 py-3 text-right font-semibold">
-                        Remaining
-                      </th>
-                      <th className="px-6 py-3 text-right font-semibold">
-                        % spent
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {budget.allocations.map((a) => {
-                      const pct =
-                        a.allocated > 0
-                          ? Math.min(
-                              100,
-                              Math.round((a.spent / a.allocated) * 100)
-                            )
-                          : 0;
-                      return (
-                        <tr
-                          key={a.vertical}
-                          className="border-b border-[#3B0A45]/6 last:border-0 hover:bg-[#FFF9F0]"
-                        >
-                          <td className="px-6 py-3 font-medium text-[#2B0A33]">
-                            {a.vertical}
-                          </td>
-                          <td className="whitespace-nowrap px-4 py-3 text-right text-[#2B0A33]/70">
-                            {inr(a.allocated)}
-                          </td>
-                          <td className="whitespace-nowrap px-4 py-3 text-right text-[#2B0A33]/70">
-                            {inr(a.spent)}
-                          </td>
-                          <td className="whitespace-nowrap px-4 py-3 text-right font-medium text-[#0a8485]">
-                            {inr(a.remaining)}
-                          </td>
-                          <td className="px-6 py-3">
-                            <div className="flex items-center justify-end gap-2">
-                              <div className="h-2 w-24 overflow-hidden rounded-full bg-[#3B0A45]/8">
-                                <div
-                                  className="h-full rounded-full bg-gradient-to-r from-[#F4A300] to-[#D6336C]"
-                                  style={{ width: `${pct}%` }}
-                                />
-                              </div>
-                              <span className="w-9 text-right text-xs font-semibold text-[#2B0A33]/60">
-                                {pct}%
-                              </span>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
+            <AllocationsTable
+              allocations={budget.allocations}
+              canManage={access.canManage}
+            />
           </section>
         </>
       )}

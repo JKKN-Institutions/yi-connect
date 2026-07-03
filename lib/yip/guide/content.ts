@@ -626,7 +626,7 @@ const jury: PersonaGuide = {
     "You watch and score each participant out of /100 on your own phone — the screen follows the house for you.",
   pdfPath: "/yip/guides/jury.pdf",
   journey: [
-    "Sign in with email",
+    "Sign in with your code",
     "Learn the rubric",
     "Score each speaker",
     "Check your history",
@@ -634,12 +634,12 @@ const jury: PersonaGuide = {
   sections: [
     {
       id: "sign-in",
-      title: "Signing in with email",
+      title: "Signing in with your code",
       steps: [
         {
-          action: "Go to **Jury Sign-in** and sign in with the **email the organisers registered for you**.",
+          action: "Go to **Sign-in** and enter the **access code the organisers gave you**.",
           detail: "You score on **your own phone** — never an organiser's login.",
-          link: { label: "Go to Jury Sign-in", href: "/yip/jury/login" },
+          link: { label: "Go to Sign-in", href: "/yip/join" },
         },
         {
           action: "Land on the scoring screen and you're ready.",

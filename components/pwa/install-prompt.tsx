@@ -8,6 +8,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react'
+import { usePathname } from 'next/navigation'
 import { X, Download, Share, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -24,6 +25,7 @@ interface BeforeInstallPromptEvent extends Event {
 }
 
 export function InstallPrompt() {
+  const pathname = usePathname()
   const [deferredPrompt, setDeferredPrompt] =
     useState<BeforeInstallPromptEvent | null>(null)
   const [isInstalled, setIsInstalled] = useState(false)
@@ -96,6 +98,11 @@ export function InstallPrompt() {
     setIsDismissed(true)
     sessionStorage.setItem('pwa-install-dismissed', 'true')
   }, [])
+
+  // Varnam Vizha has its own scoped PWA manifest — suppress the shared prompt there
+  if (pathname?.startsWith('/varnam-vizha')) {
+    return null
+  }
 
   // Don't show if already installed, in standalone mode, or dismissed
   if (isStandalone || isInstalled || isDismissed) {

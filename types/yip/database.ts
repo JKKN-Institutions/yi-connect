@@ -237,6 +237,7 @@ export type Database = {
         | "room_coordinator"
         | "hospitality"
         | "stage_manager"
+        | "speaker_desk"
         | "photographer"
         | "media"
         | "runner"
@@ -4235,6 +4236,7 @@ export const Constants = {
         "room_coordinator",
         "hospitality",
         "stage_manager",
+        "speaker_desk",
         "photographer",
         "media",
         "runner",

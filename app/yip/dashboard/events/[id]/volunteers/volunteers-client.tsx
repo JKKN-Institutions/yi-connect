@@ -43,6 +43,7 @@ const STATION_COLORS: Record<string, string> = {
   room_coordinator: "bg-indigo-500",
   hospitality: "bg-amber-500",
   stage_manager: "bg-rose-500",
+  speaker_desk: "bg-orange-500",
   photographer: "bg-pink-500",
   media: "bg-fuchsia-500",
   runner: "bg-emerald-500",

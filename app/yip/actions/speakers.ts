@@ -2,7 +2,7 @@
 
 import { createClient, createServiceClient } from "@/lib/yip/supabase/server";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
-import { requireVolunteerSession } from "@/lib/yip/auth/yip-session";
+import { requireVolunteerStation } from "@/lib/yip/auth/volunteer-station";
 import {
   getScoreableParticipants,
   type ScoreableParticipant,
@@ -300,15 +300,14 @@ export async function generateSpeakerQueue(
 // change (jury-scoring-client.tsx) — so writing this table IS the broadcast;
 // no jury-side code is touched.
 //
-// AUTH — these are gated by requireVolunteerSession(eventId) (the SAME helper
-// the event-wide volunteer actions in volunteer-desk.ts use), NOT by
-// getYipEventAccess(canManage). Rationale: the console is the interactive twin
-// of the existing event-wide "Now" tab (getVolunteerAgendaNow), surfaced to
-// every volunteer on the kiosk dashboard. There is no station enum for
-// "Speaker's aide / floor marshal", and per-station scoping (requireVolunteer
-// Station) is for tools bound to a physical desk (registration, help desk).
-// Least-privilege still holds at the EVENT boundary: the signed session's
-// eventId must match, and every path fails CLOSED with { success:false }.
+// AUTH — these are gated by requireVolunteerStation(eventId, ["speaker_desk"])
+// (lib/yip/auth/volunteer-station.ts), NOT by getYipEventAccess(canManage) and
+// NOT by the event-wide requireVolunteerSession. Flipping the live speaker yanks
+// EVERY jury screen, so it is an explicitly ASSIGNED role: only the volunteer an
+// organiser has placed on the "Now Speaking (Speaker's aide)" station
+// (speaker_desk) can drive it. The gate fails CLOSED — a null/unknown station,
+// or any other station, is DENIED with a plain-words { success:false } that tells
+// the volunteer to ask the organiser for the station on the Volunteers page.
 //
 // NEVER-TWO-'SPEAKING' — getCurrentSpeaker() reads the sole 'speaking' row with
 // .single(); two such rows would error and jurors would lose the banner. Every
@@ -317,6 +316,10 @@ export async function generateSpeakerQueue(
 // .sql: UNIQUE (agenda_item_id) WHERE status='speaking') makes a second
 // 'speaking' row physically impossible. Concurrent taps that collide surface as
 // 23505 and are retried (complete-again → set-again) so the LAST tap wins.
+
+// Plain-words denial shown to a volunteer who isn't on the speaker_desk station.
+const SPEAKER_DESK_DENIED =
+  "This tool is for the assigned Now Speaking volunteer. Ask the organiser to assign you the 'Now Speaking' station on the Volunteers page.";
 
 export type NowSpeakingData = {
   /** true only when the event is live AND a current agenda item is set. */
@@ -334,9 +337,13 @@ export type NowSpeakingData = {
 export async function getNowSpeakingData(
   eventId: string
 ): Promise<ActionResult<NowSpeakingData>> {
-  const session = await requireVolunteerSession(eventId);
-  if (!session.ok) return { success: false, error: session.error };
-  const supabase = await createServiceClient();
+  const gate = await requireVolunteerStation(
+    eventId,
+    ["speaker_desk"],
+    SPEAKER_DESK_DENIED
+  );
+  if (!gate.ok) return { success: false, error: gate.error };
+  const supabase = gate.supabase;
 
   const { data: event } = await supabase
     .from("events")
@@ -423,9 +430,13 @@ export async function setLiveSpeaker(
   eventId: string,
   participantId: string
 ): Promise<ActionResult<{ currentParticipantId: string }>> {
-  const session = await requireVolunteerSession(eventId);
-  if (!session.ok) return { success: false, error: session.error };
-  const supabase = await createServiceClient();
+  const gate = await requireVolunteerStation(
+    eventId,
+    ["speaker_desk"],
+    SPEAKER_DESK_DENIED
+  );
+  if (!gate.ok) return { success: false, error: gate.error };
+  const supabase = gate.supabase;
 
   // Resolve the live agenda item — fail closed if the event isn't live or has
   // no current item (the console is inactive in that state).
@@ -543,9 +554,13 @@ export async function setLiveSpeaker(
  * current 'speaking' row(s) so the jury banner goes quiet until the next tap.
  */
 export async function clearLiveSpeaker(eventId: string): Promise<ActionResult> {
-  const session = await requireVolunteerSession(eventId);
-  if (!session.ok) return { success: false, error: session.error };
-  const supabase = await createServiceClient();
+  const gate = await requireVolunteerStation(
+    eventId,
+    ["speaker_desk"],
+    SPEAKER_DESK_DENIED
+  );
+  if (!gate.ok) return { success: false, error: gate.error };
+  const supabase = gate.supabase;
 
   const { data: event } = await supabase
     .from("events")

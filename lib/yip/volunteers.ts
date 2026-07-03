@@ -8,6 +8,7 @@ export type VolunteerStation =
   | "room_coordinator"
   | "hospitality"
   | "stage_manager"
+  | "speaker_desk"
   | "photographer"
   | "media"
   | "runner"
@@ -24,6 +25,7 @@ export const VOLUNTEER_STATIONS: { code: VolunteerStation; label: string }[] = [
   { code: "room_coordinator", label: "Room Coordinator" },
   { code: "hospitality", label: "Hospitality" },
   { code: "stage_manager", label: "Stage Manager" },
+  { code: "speaker_desk", label: "Now Speaking (Speaker's aide)" },
   { code: "photographer", label: "Photographer" },
   { code: "media", label: "Media / Social" },
   { code: "runner", label: "Runner" },

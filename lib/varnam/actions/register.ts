@@ -8,6 +8,7 @@
  */
 import { createAdminSupabaseClient } from "@/lib/supabase/server";
 import { computeRegistrationMode } from "@/lib/varnam/data/editions";
+import { parseFormFields } from "@/lib/varnam/forms/types";
 
 export type RegisterState = { ok: boolean; message: string };
 
@@ -36,7 +37,7 @@ export async function registerForEvent(
     .schema("yi_connect")
     .from("events")
     .select(
-      "id, festival_edition_id, status, start_date, max_capacity, waitlist_enabled, custom_fields"
+      "id, festival_edition_id, status, start_date, max_capacity, waitlist_enabled, custom_fields, registration_form_fields"
     )
     .eq("id", eventId)
     .maybeSingle();
@@ -47,6 +48,7 @@ export async function registerForEvent(
     max_capacity?: number | null;
     waitlist_enabled?: boolean | null;
     custom_fields?: Record<string, unknown> | null;
+    registration_form_fields?: unknown;
   } | null;
   if (!event || !event.festival_edition_id) {
     return { ok: false, message: "This event isn't open for registration yet." };
@@ -91,6 +93,35 @@ export async function registerForEvent(
   if (mode === "full")
     return { ok: false, message: "Sorry — this event is full." };
 
+  // Organiser-designed extra questions: validate against the form definition
+  // fetched server-side above (never trust the client's rendered fields).
+  const formFields = parseFormFields(event.registration_form_fields);
+  const responses: Record<string, { label: string; value: string | boolean }> =
+    {};
+  for (const field of formFields) {
+    const raw = formData.get(`cf_${field.id}`);
+    if (field.type === "checkbox") {
+      responses[field.id] = { label: field.label, value: raw !== null };
+      continue;
+    }
+    const value =
+      typeof raw === "string" ? raw.trim().slice(0, 500) : "";
+    if (field.required && !value) {
+      return { ok: false, message: `Please fill in "${field.label}".` };
+    }
+    if (
+      field.type === "select" &&
+      value &&
+      !(field.options ?? []).includes(value)
+    ) {
+      return {
+        ok: false,
+        message: `Please choose a valid option for "${field.label}".`,
+      };
+    }
+    responses[field.id] = { label: field.label, value };
+  }
+
   const status = mode === "waitlist" ? "waitlist" : "confirmed";
   const { error } = await sb
     .schema("yi_connect")
@@ -101,6 +132,9 @@ export async function registerForEvent(
       email,
       phone: phone || null,
       status,
+      ...(formFields.length > 0
+        ? { custom_field_responses: responses }
+        : {}),
     });
   if (error) {
     return { ok: false, message: "Couldn't register right now — please try again." };

@@ -271,6 +271,10 @@ function JuryScoringClientInner({
   // Quick-jump bar (Piece 2) + Unfinished strip (Piece 3) state.
   const [quickJump, setQuickJump] = useState("");
   const [showAllUnfinished, setShowAllUnfinished] = useState(false);
+  // The on-screen digit pad is collapsed by default so the scoring form sits
+  // near the top (jurors were scrolling past it for every participant). Opening
+  // it once keeps it open for the rest of the session (manual catch-up mode).
+  const [keypadOpen, setKeypadOpen] = useState(false);
 
   // Special Remarks (Phase 18 / F4) — flag checkboxes + delta config
   const [flagDeltas, setFlagDeltas] = useState<FlagDeltas | null>(null);
@@ -1285,13 +1289,30 @@ function JuryScoringClientInner({
           className="sticky top-0 z-20 mx-4 mt-4 rounded-xl border-2 border-gray-200 bg-white/95 px-3 py-2.5 backdrop-blur"
           style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}
         >
-          <label
-            htmlFor="quick-jump-input"
-            className="block text-[11px] font-bold uppercase tracking-wide"
-            style={{ color: inkA(0.5) }}
-          >
-            Jump to participant #
-          </label>
+          <div className="flex items-center justify-between">
+            <label
+              htmlFor="quick-jump-input"
+              className="block text-[11px] font-bold uppercase tracking-wide"
+              style={{ color: inkA(0.5) }}
+            >
+              Jump to participant #
+            </label>
+            <button
+              type="button"
+              onClick={() => setKeypadOpen((o) => !o)}
+              aria-expanded={keypadOpen}
+              aria-controls="quick-jump-keypad"
+              className="flex items-center gap-1 text-[11px] font-semibold text-gray-500 active:opacity-70 touch-manipulation"
+              style={{ minHeight: "32px" }}
+            >
+              Keypad
+              {keypadOpen ? (
+                <ChevronUp className="size-3.5" />
+              ) : (
+                <ChevronDown className="size-3.5" />
+              )}
+            </button>
+          </div>
           <input
             id="quick-jump-input"
             type="text"
@@ -1313,8 +1334,12 @@ function JuryScoringClientInner({
 
           {/* On-screen digit pad — avoids summoning the OS keyboard for
               rapid-fire numeric jumps during live debate (#780). Appends
-              straight into the SAME quickJump state; no focus() calls. */}
+              straight into the SAME quickJump state; no focus() calls.
+              Collapsed by default (layout) — the text field above still works
+              for typing a number; open the keypad for tap-only entry. */}
+          {keypadOpen && (
           <div
+            id="quick-jump-keypad"
             className="mt-2 flex gap-1"
             role="group"
             aria-label="Digit pad for participant number"
@@ -1354,6 +1379,7 @@ function JuryScoringClientInner({
               ×
             </button>
           </div>
+          )}
 
           {quickJump.trim() && (
             <div
@@ -1450,131 +1476,6 @@ function JuryScoringClientInner({
           )}
         </div>
       )}
-
-      {/* Session selector — organiser-driven (BUG-393). The juror scores the
-          CURRENT session by default; the only manual choice is "catch up" on
-          the immediately-previous session. Older sessions are locked. When no
-          live agenda position is known (offline / event not started) every
-          assigned session is selectable as a fallback. */}
-      {(() => {
-        // Restricted set: the {current, immediately-previous} ids from the
-        // bootstrap, mapped back to full session rows (ordered). Falls back to
-        // all assigned sessions when the live position is unknown.
-        const restricted =
-          selectableSessionIds.length > 0
-            ? assignedSessions.filter((s) =>
-                selectableSessionIds.includes(s.id)
-              )
-            : assignedSessions;
-        // BUG-393 follow-up: "Score an earlier session" reveals every assigned
-        // session. Default stays restricted (current + catch-up only).
-        const selectable = showAllSessions ? assignedSessions : restricted;
-        const lockedCount = assignedSessions.length - restricted.length;
-        if (selectable.length === 0) return null;
-        return (
-          <div className="mx-4 mt-4">
-            <label
-              htmlFor="session-select"
-              className="block text-xs font-semibold text-gray-600 mb-1"
-            >
-              Scoring session
-            </label>
-            <select
-              id="session-select"
-              value={selectedSessionId ?? ""}
-              onChange={(e) => setSelectedSessionId(e.target.value || null)}
-              className="w-full rounded-lg border-2 border-gray-200 bg-white px-3 py-3 text-sm font-medium text-gray-900 focus:border-blue-500 focus:outline-none"
-              style={{ minHeight: "48px" }}
-            >
-              {selectable.map((s) => {
-                const suffix =
-                  s.id === currentSessionId
-                    ? " (current)"
-                    : restricted.some((r) => r.id === s.id)
-                      ? " (catch-up)"
-                      : " (earlier)";
-                return (
-                  <option key={s.id} value={s.id}>
-                    Day {s.day} · {s.title}
-                    {suffix}
-                  </option>
-                );
-              })}
-            </select>
-            {lockedCount > 0 &&
-              allowEarlierSessions &&
-              (showAllSessions ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    showAllSessionsRef.current = false;
-                    setShowAllSessions(false);
-                    // Snap back to a currently-selectable session so the picker
-                    // never shows a blank value.
-                    if (!restricted.some((r) => r.id === selectedSessionId)) {
-                      setSelectedSessionId(
-                        currentSessionId ?? restricted[0]?.id ?? null
-                      );
-                    }
-                  }}
-                  className="mt-1.5 text-xs font-medium text-gray-500 underline hover:text-gray-700"
-                >
-                  Back to current session
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => {
-                    showAllSessionsRef.current = true;
-                    setShowAllSessions(true);
-                  }}
-                  className="mt-1.5 text-xs font-medium text-blue-600 underline hover:text-blue-700"
-                >
-                  Score an earlier session
-                </button>
-              ))}
-          </div>
-        );
-      })()}
-
-      {/* Session context blurb (BUG-395) — what this session is about, so the
-          juror knows what they're scoring. Sourced from the agenda row. */}
-      {(() => {
-        const active = assignedSessions.find(
-          (s) => s.id === selectedSessionId
-        );
-        if (!active) return null;
-        return (
-          <div className="mx-4 mt-3">
-            <SectionShell accent={SAFFRON}>
-              <div className="px-4 py-3">
-                <SectionHeading
-                  eyebrow="This session"
-                  title={active.title}
-                  icon={Info}
-                  accent={SAFFRON}
-                />
-                {active.description ? (
-                  <p
-                    className="mt-2 text-xs leading-relaxed"
-                    style={{ color: inkA(0.6) }}
-                  >
-                    {active.description}
-                  </p>
-                ) : (
-                  <p
-                    className="mt-2 text-xs italic"
-                    style={{ color: inkA(0.45) }}
-                  >
-                    Day {active.day} session — score each participant on the
-                    criteria below.
-                  </p>
-                )}
-              </div>
-            </SectionShell>
-          </div>
-        );
-      })()}
 
       {/* Current agenda context */}
       {currentSpeaker && !manualParticipant && (
@@ -1821,6 +1722,131 @@ function JuryScoringClientInner({
           </p>
         </div>
       )}
+
+      {/* Session selector — organiser-driven (BUG-393). The juror scores the
+          CURRENT session by default; the only manual choice is "catch up" on
+          the immediately-previous session. Older sessions are locked. When no
+          live agenda position is known (offline / event not started) every
+          assigned session is selectable as a fallback. */}
+      {(() => {
+        // Restricted set: the {current, immediately-previous} ids from the
+        // bootstrap, mapped back to full session rows (ordered). Falls back to
+        // all assigned sessions when the live position is unknown.
+        const restricted =
+          selectableSessionIds.length > 0
+            ? assignedSessions.filter((s) =>
+                selectableSessionIds.includes(s.id)
+              )
+            : assignedSessions;
+        // BUG-393 follow-up: "Score an earlier session" reveals every assigned
+        // session. Default stays restricted (current + catch-up only).
+        const selectable = showAllSessions ? assignedSessions : restricted;
+        const lockedCount = assignedSessions.length - restricted.length;
+        if (selectable.length === 0) return null;
+        return (
+          <div className="mx-4 mt-4">
+            <label
+              htmlFor="session-select"
+              className="block text-xs font-semibold text-gray-600 mb-1"
+            >
+              Scoring session
+            </label>
+            <select
+              id="session-select"
+              value={selectedSessionId ?? ""}
+              onChange={(e) => setSelectedSessionId(e.target.value || null)}
+              className="w-full rounded-lg border-2 border-gray-200 bg-white px-3 py-3 text-sm font-medium text-gray-900 focus:border-blue-500 focus:outline-none"
+              style={{ minHeight: "48px" }}
+            >
+              {selectable.map((s) => {
+                const suffix =
+                  s.id === currentSessionId
+                    ? " (current)"
+                    : restricted.some((r) => r.id === s.id)
+                      ? " (catch-up)"
+                      : " (earlier)";
+                return (
+                  <option key={s.id} value={s.id}>
+                    Day {s.day} · {s.title}
+                    {suffix}
+                  </option>
+                );
+              })}
+            </select>
+            {lockedCount > 0 &&
+              allowEarlierSessions &&
+              (showAllSessions ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    showAllSessionsRef.current = false;
+                    setShowAllSessions(false);
+                    // Snap back to a currently-selectable session so the picker
+                    // never shows a blank value.
+                    if (!restricted.some((r) => r.id === selectedSessionId)) {
+                      setSelectedSessionId(
+                        currentSessionId ?? restricted[0]?.id ?? null
+                      );
+                    }
+                  }}
+                  className="mt-1.5 text-xs font-medium text-gray-500 underline hover:text-gray-700"
+                >
+                  Back to current session
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    showAllSessionsRef.current = true;
+                    setShowAllSessions(true);
+                  }}
+                  className="mt-1.5 text-xs font-medium text-blue-600 underline hover:text-blue-700"
+                >
+                  Score an earlier session
+                </button>
+              ))}
+          </div>
+        );
+      })()}
+
+      {/* Session context blurb (BUG-395) — what this session is about, so the
+          juror knows what they're scoring. Sourced from the agenda row. */}
+      {(() => {
+        const active = assignedSessions.find(
+          (s) => s.id === selectedSessionId
+        );
+        if (!active) return null;
+        return (
+          <div className="mx-4 mt-3">
+            <SectionShell accent={SAFFRON}>
+              <div className="px-4 py-3">
+                <SectionHeading
+                  eyebrow="This session"
+                  title={active.title}
+                  icon={Info}
+                  accent={SAFFRON}
+                />
+                {active.description ? (
+                  <p
+                    className="mt-2 text-xs leading-relaxed"
+                    style={{ color: inkA(0.6) }}
+                  >
+                    {active.description}
+                  </p>
+                ) : (
+                  <p
+                    className="mt-2 text-xs italic"
+                    style={{ color: inkA(0.45) }}
+                  >
+                    Day {active.day} session — score each participant on the
+                    criteria below.
+                  </p>
+                )}
+              </div>
+            </SectionShell>
+          </div>
+        );
+      })()}
 
       {/* Manual participant picker toggle */}
       <div className="border-t border-gray-200 pt-4 px-4 pb-4">

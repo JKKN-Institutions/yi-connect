@@ -29,6 +29,11 @@ type DelegateRow = {
   registered_at: string | null;
 };
 
+type TeamRow = {
+  id: string;
+  chapter_id: string;
+};
+
 type EditionRow = {
   id: string;
   name: string;
@@ -92,6 +97,27 @@ async function getDelegates(editionId: string): Promise<DelegateRow[]> {
   return all;
 }
 
+async function getTeams(editionId: string): Promise<TeamRow[]> {
+  const svc = await createServiceClient();
+  // Mirror the paginated fetch used for delegates so this query can never be
+  // silently truncated by the PostgREST ~1000-row response cap either.
+  const PAGE = 1000;
+  const all: TeamRow[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await svc
+      .schema("future")
+      .from("teams")
+      .select("id, chapter_id")
+      .eq("edition_id", editionId)
+      .order("id", { ascending: true })
+      .range(from, from + PAGE - 1);
+    if (error || !data || data.length === 0) break;
+    all.push(...(data as unknown as TeamRow[]));
+    if (data.length < PAGE) break;
+  }
+  return all;
+}
+
 function timeAgo(iso: string | null): string {
   if (!iso) return "never";
   const ms = Date.now() - new Date(iso).getTime();
@@ -124,9 +150,11 @@ export default async function NationalDashboard({
 }) {
   const { sort } = await searchParams;
   const sortHigh = sort === "high";
+  const sortTeams = sort === "teams";
   const edition = await getActiveEdition();
   const chapters = await getAllChapters();
   const delegates = edition ? await getDelegates(edition.id) : [];
+  const teams = edition ? await getTeams(edition.id) : [];
 
   const countsByChapter = new Map<string, number>();
   const lastRegByChapter = new Map<string, string>();
@@ -139,6 +167,14 @@ export default async function NationalDashboard({
     if (d.registered_at && (!cur || d.registered_at > cur)) {
       lastRegByChapter.set(d.chapter_id, d.registered_at);
     }
+  }
+
+  const teamCountsByChapter = new Map<string, number>();
+  for (const t of teams) {
+    teamCountsByChapter.set(
+      t.chapter_id,
+      (teamCountsByChapter.get(t.chapter_id) ?? 0) + 1
+    );
   }
 
   const regionStats = REGIONS.map((r) => {
@@ -162,10 +198,15 @@ export default async function NationalDashboard({
   const rows = chapters.map((c) => ({
     ...c,
     count: countsByChapter.get(c.id) ?? 0,
+    teamCount: teamCountsByChapter.get(c.id) ?? 0,
     lastReg: lastRegByChapter.get(c.id) ?? null,
   }));
   rows.sort((a, b) => {
-    if (a.count !== b.count) {
+    if (sortTeams) {
+      if (a.teamCount !== b.teamCount) {
+        return b.teamCount - a.teamCount;
+      }
+    } else if (a.count !== b.count) {
       return sortHigh ? b.count - a.count : a.count - b.count;
     }
     return a.name.localeCompare(b.name);
@@ -260,13 +301,18 @@ export default async function NationalDashboard({
         <div className="flex items-end justify-between mb-3 gap-4 flex-wrap">
           <div className="flex items-center gap-3 flex-wrap">
             <h3 className="text-xs font-semibold uppercase tracking-widest text-navy/50">
-              All chapters · sorted by {sortHigh ? "highest" : "lowest"} first
+              All chapters · sorted by{" "}
+              {sortTeams
+                ? "highest teams"
+                : sortHigh
+                ? "highest delegates"
+                : "lowest first"}
             </h3>
             <div className="flex items-center gap-1 text-[11px] font-semibold">
               <Link
                 href="/yi-future/national/admin"
                 className={`px-2 py-0.5 rounded ${
-                  !sortHigh
+                  !sortHigh && !sortTeams
                     ? "bg-navy text-ivory"
                     : "text-navy/60 hover:bg-navy/5 border border-navy/15"
                 }`}
@@ -281,7 +327,17 @@ export default async function NationalDashboard({
                     : "text-navy/60 hover:bg-navy/5 border border-navy/15"
                 }`}
               >
-                Highest first
+                Highest: Delegates
+              </Link>
+              <Link
+                href="/yi-future/national/admin?sort=teams"
+                className={`px-2 py-0.5 rounded ${
+                  sortTeams
+                    ? "bg-navy text-ivory"
+                    : "text-navy/60 hover:bg-navy/5 border border-navy/15"
+                }`}
+              >
+                Highest: Teams
               </Link>
             </div>
           </div>
@@ -298,6 +354,7 @@ export default async function NationalDashboard({
                 <th className="text-left px-3 py-2 font-semibold">Chapter</th>
                 <th className="text-left px-3 py-2 font-semibold">Region</th>
                 <th className="text-right px-3 py-2 font-semibold">Delegates</th>
+                <th className="text-right px-3 py-2 font-semibold">Teams</th>
                 <th className="text-left px-3 py-2 font-semibold">Last reg.</th>
                 <th className="text-left px-3 py-2 font-semibold">Chair</th>
                 <th className="text-right px-3 py-2 font-semibold">Push</th>
@@ -350,9 +407,12 @@ export default async function NationalDashboard({
                       </span>
                     </td>
                     <td
-                      className={`px-3 py-2.5 text-right font-bold ${tone}`}
+                      className={`px-3 py-2.5 text-right font-bold tabular-nums ${tone}`}
                     >
                       {r.count}
+                    </td>
+                    <td className="px-3 py-2.5 text-right font-bold tabular-nums text-navy">
+                      {r.teamCount}
                     </td>
                     <td className="px-3 py-2.5 text-xs text-navy/60">
                       {timeAgo(r.lastReg)}

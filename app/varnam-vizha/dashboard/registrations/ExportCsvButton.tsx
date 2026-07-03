@@ -7,6 +7,8 @@ export type CsvRow = {
   email: string | null;
   phone: string | null;
   eventTitle: string;
+  status: string | null;
+  checked_in_at: string | null;
   created_at: string | null;
 };
 
@@ -16,11 +18,24 @@ function csvCell(value: string): string {
 }
 
 function buildCsv(rows: CsvRow[]): string {
-  const header = ["Name", "Email", "Phone", "Event", "Registered"];
+  const header = [
+    "Name",
+    "Email",
+    "Phone",
+    "Event",
+    "Status",
+    "Checked in",
+    "Registered",
+  ];
   const lines = [header.map(csvCell).join(",")];
   for (const r of rows) {
     const registered = r.created_at
       ? new Date(r.created_at).toLocaleString("en-IN", {
+          timeZone: "Asia/Kolkata",
+        })
+      : "";
+    const checkedIn = r.checked_in_at
+      ? new Date(r.checked_in_at).toLocaleString("en-IN", {
           timeZone: "Asia/Kolkata",
         })
       : "";
@@ -30,6 +45,8 @@ function buildCsv(rows: CsvRow[]): string {
         r.email ?? "",
         r.phone ?? "",
         r.eventTitle ?? "",
+        r.status ?? "",
+        checkedIn,
         registered,
       ]
         .map((c) => csvCell(String(c)))

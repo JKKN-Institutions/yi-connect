@@ -37,8 +37,13 @@ function categoryChip(cat: string | null): string {
 function EventCard({ e }: { e: FestivalEvent }) {
   const day = fmtDay(e.start_date);
   const href = e.public_slug ? `/varnam-vizha/events/${e.public_slug}` : undefined;
+  const cancelled = e.status === "cancelled";
   const body = (
-    <article className="group flex h-full gap-4 rounded-2xl border border-[#3B0A45]/10 bg-white p-5 shadow-sm transition hover:border-[#D6336C]/40 hover:shadow-md">
+    <article
+      className={`group flex h-full gap-4 rounded-2xl border border-[#3B0A45]/10 bg-white p-5 shadow-sm transition hover:border-[#D6336C]/40 hover:shadow-md${
+        cancelled ? " opacity-60" : ""
+      }`}
+    >
       <div className="flex h-16 w-16 shrink-0 flex-col items-center justify-center rounded-xl bg-gradient-to-br from-[#F4A300] to-[#D6336C] text-white">
         <span className="font-[family-name:var(--font-vv-display)] text-2xl font-bold leading-none">
           {day.d}
@@ -59,6 +64,11 @@ function EventCard({ e }: { e: FestivalEvent }) {
           {e.is_featured && (
             <span className="rounded-full bg-[#F4A300]/15 px-2 py-0.5 text-[11px] font-semibold text-[#a06a00]">
               ★ Featured
+            </span>
+          )}
+          {cancelled && (
+            <span className="rounded-full bg-[#3B0A45]/10 px-2 py-0.5 text-[11px] font-semibold text-[#3B0A45]/70">
+              Cancelled
             </span>
           )}
         </div>

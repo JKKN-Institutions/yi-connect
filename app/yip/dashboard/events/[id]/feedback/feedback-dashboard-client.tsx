@@ -288,7 +288,7 @@ export function FeedbackDashboardClient({
                 <TableHead className="text-center w-[60px]">Overall</TableHead>
                 <TableHead className="text-center w-[50px]">NPS</TableHead>
                 <TableHead>Biggest takeaway</TableHead>
-                <TableHead>What didn&apos;t work</TableHead>
+                <TableHead>What to improve</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -350,7 +350,11 @@ export function FeedbackDashboardClient({
                   </TableCell>
                   <TableCell className="max-w-xs">
                     <p className="text-xs text-gray-700 line-clamp-2">
-                      {r.what_didnt_work ?? (
+                      {/* Only the ORGANIZER form collects what_didnt_work; the
+                          participant form's improvement text lands in
+                          `suggestions`. Coalesce so participant rows aren't a
+                          permanently blank column (Erode 2026). */}
+                      {r.what_didnt_work?.trim() || r.suggestions?.trim() || (
                         <span className="text-gray-300">—</span>
                       )}
                     </p>

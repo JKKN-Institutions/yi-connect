@@ -346,8 +346,9 @@ export default async function JuryPage({
           </div>
           <p className="mt-3 text-xs text-navy/50">
             Teams are assigned to their track jury automatically based on the
-            problem statement they picked. Toggle tracks on each jury card
-            below — team assignments sync on their own.
+            problem statement they picked. Adding a jury to a track syncs their
+            teams on its own; removing a jury from a track keeps already-synced
+            teams until you clean them up under Manual overrides.
           </p>
         </div>
       )}

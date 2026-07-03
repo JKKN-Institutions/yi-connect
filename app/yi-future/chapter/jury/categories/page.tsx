@@ -94,10 +94,6 @@ export default async function JuryCategoriesPage() {
   const summaries = await getTrackSummaries(ctx.editionId, ctx.chapterId);
   const totalJury = summaries.reduce((s, t) => s + t.juryCount, 0);
   const totalTeams = summaries.reduce((s, t) => s + t.teamCount, 0);
-  const totalAssignments = summaries.reduce(
-    (s, t) => s + t.assignmentCount,
-    0
-  );
 
   const canAutoAssign = totalJury > 0 && totalTeams > 0;
 

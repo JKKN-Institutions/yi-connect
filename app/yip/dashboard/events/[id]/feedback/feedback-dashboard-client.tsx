@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import Link from "next/link";
 import { Card, CardContent } from "@/components/yip/ui/card";
 import { Button } from "@/components/yip/ui/button";
 import { Badge } from "@/components/yip/ui/badge";
@@ -22,6 +23,7 @@ import {
   ThumbsUp,
   Inbox,
   Copy,
+  FileText,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -113,6 +115,15 @@ export function FeedbackDashboardClient({
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {/* Committee-ready analysis: scorecard, themes, voices, recommendations.
+              Plain styled Link — the yip Button has no asChild/Slot support. */}
+          <Link
+            href={`/yip/dashboard/events/${eventId}/feedback/report`}
+            className="inline-flex h-8 items-center rounded-md border border-[#1a1a3e]/20 bg-white px-3 text-xs font-medium text-[#1a1a3e] shadow-sm transition-colors hover:bg-gray-50"
+          >
+            <FileText className="size-3.5 mr-1.5" />
+            Open report
+          </Link>
           <Button
             variant="outline"
             size="sm"

@@ -25,7 +25,9 @@ async function getTrackSummaries(
 ): Promise<TrackSummary[]> {
   const svc = await createServiceClient();
 
-  // Fetch tracks, jury with track_id, and teams with problem_statement -> track
+  // Fetch tracks, multi-track jury memberships, and teams with
+  // problem_statement -> track. jury_track_assignments is not in generated
+  // types yet, hence the cast (established codebase pattern).
   const [{ data: tracks }, { data: juryRows }, { data: teamRows }] =
     await Promise.all([
       svc
@@ -34,13 +36,12 @@ async function getTrackSummaries(
         .select("id, name, slug, icon, color_hex")
         .eq("edition_id", editionId)
         .order("display_order", { ascending: true }),
-      svc
+      (svc as any)
         .schema("future")
-        .from("jury_assignments")
-        .select("id, track_id")
-        .eq("edition_id", editionId)
-        .eq("is_active", true)
-        .not("track_id", "is", null),
+        .from("jury_track_assignments")
+        .select("jury_id, track_id, jury_assignments!inner(edition_id, is_active)")
+        .eq("jury_assignments.edition_id", editionId)
+        .eq("jury_assignments.is_active", true),
       svc
         .schema("future")
         .from("teams")
@@ -52,7 +53,7 @@ async function getTrackSummaries(
 
   const trackList = (tracks as unknown as Track[]) ?? [];
   const juryList =
-    (juryRows as unknown as { id: string; track_id: string }[]) ?? [];
+    (juryRows as unknown as { jury_id: string; track_id: string }[]) ?? [];
 
   type TeamRow = {
     id: string;
@@ -60,7 +61,7 @@ async function getTrackSummaries(
   };
   const teamList = (teamRows as unknown as TeamRow[]) ?? [];
 
-  // Count jury per track
+  // Count jury per track (one row per jury·track — PK guarantees distinct)
   const juryPerTrack = new Map<string, number>();
   for (const j of juryList) {
     juryPerTrack.set(j.track_id, (juryPerTrack.get(j.track_id) ?? 0) + 1);
@@ -113,7 +114,7 @@ export default async function JuryCategoriesPage() {
             Jury Categories by Track
           </h2>
           <p className="mt-1 text-sm text-navy/60">
-            {totalJury} jury assigned to tracks · {totalTeams} teams with
+            {totalJury} jury seats across tracks · {totalTeams} teams with
             problem statements
           </p>
         </div>
@@ -205,7 +206,8 @@ export default async function JuryCategoriesPage() {
         </p>
         <ol className="list-decimal list-inside space-y-1">
           <li>
-            Assign each jury member to a track (category) on the jury page.
+            Add each jury member to one or more track juries (max 10 per
+            track) on the jury page.
           </li>
           <li>
             Teams are mapped to tracks through their chosen problem statement.

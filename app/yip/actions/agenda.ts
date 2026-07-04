@@ -4,6 +4,7 @@ import { createServiceClient } from "@/lib/yip/supabase/server";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { revalidatePath } from "next/cache";
 import { modeForAgendaType } from "@/lib/yip/constants";
+import { expireActiveSpeakingRequests } from "@/lib/yip/speaking-floor-expiry";
 import type { Json } from "@/types/yip/database";
 import {
   type SubTimer,
@@ -110,6 +111,9 @@ export async function advanceAgenda(
       .update({ current_agenda_item_id: null })
       .eq("id", eventId);
   }
+
+  // New session → fresh Speaking Floor (clear any pending raise-to-speak hands).
+  await expireActiveSpeakingRequests(supabase, eventId);
 
   revalidatePath(`/yip/dashboard/events/${eventId}/control`);
   return { success: true, data: { nextItemId: nextItem?.id ?? null } };
@@ -421,6 +425,8 @@ export async function startAgendaItem(
 
   if (!event) return { success: false, error: "Event not found" };
 
+  const itemChanged = event.current_agenda_item_id !== agendaItemId;
+
   // If there's a current item, mark it completed first
   if (event.current_agenda_item_id && event.current_agenda_item_id !== agendaItemId) {
     await supabase
@@ -446,6 +452,12 @@ export async function startAgendaItem(
     .from("events")
     .update({ current_agenda_item_id: agendaItemId })
     .eq("id", eventId);
+
+  // Jumping to a DIFFERENT session resets the Speaking Floor; re-affirming the
+  // same live item must not clear a floor that legitimately belongs to it.
+  if (itemChanged) {
+    await expireActiveSpeakingRequests(supabase, eventId);
+  }
 
   revalidatePath(`/yip/dashboard/events/${eventId}/control`);
   return { success: true, data: null };
@@ -1250,6 +1262,9 @@ export async function createTemporaryAgendaItem(
     .update(eventUpdate)
     .eq("id", eventId);
   if (evErr) return { success: false, error: evErr.message };
+
+  // On-the-spot item is a new live context → fresh Speaking Floor.
+  await expireActiveSpeakingRequests(supabase, eventId);
 
   revalidatePath(`/yip/dashboard/events/${eventId}/control`);
   return { success: true, data: { id: inserted.id } };

@@ -16,6 +16,7 @@ import {
   ProjectorMomentScene,
   useProjectedMoment,
 } from "./projector-moment-scene";
+import { ProjectorFairnessMeter } from "./fairness-meter";
 
 interface SpeakerInfo {
   full_name: string;
@@ -1294,6 +1295,13 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
           ) : null
         )}
       </main>
+
+      {/* Speaking Floor fairness meter — public aggregate corner overlay.
+          Self-hides off-session, before the floor is used, and during AI Moments. */}
+      <ProjectorFairnessMeter
+        eventId={eventId}
+        visible={isLive && !projectedMoment}
+      />
 
       {/* Footer tricolor bar */}
       <div className="flex h-2 w-full">

@@ -191,6 +191,14 @@ export default async function YiFiAdminPage() {
                 icon="📋"
               />
             )}
+            {permissions.includes("community") && (
+              <ActionCard
+                title="YIBE Corner"
+                desc="Moderate the peer challenge board, review flags, and seed starter challenges from the census"
+                href="/yifi/admin/community"
+                icon="💬"
+              />
+            )}
           </div>
         </section>
 

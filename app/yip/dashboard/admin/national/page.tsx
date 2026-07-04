@@ -2,6 +2,7 @@ import { requireSuperAdmin } from "@/lib/yip/auth/require-super-admin";
 import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
 import { Globe2 } from "lucide-react";
 import { ParticipationPanel } from "./_panels/ParticipationPanel";
+import { NationalFootprintPanel } from "./_panels/NationalFootprintPanel";
 import { CoveragePanel } from "./_panels/CoveragePanel";
 import { VerdictByMinistryPanel } from "./_panels/VerdictByMinistryPanel";
 import { BillPipelinePanel } from "./_panels/BillPipelinePanel";
@@ -69,6 +70,12 @@ export default async function NationalIntelligencePage() {
       {/* Participation spans full width — the top-of-board national reach headline. */}
       <div className="mb-6">
         <ParticipationPanel />
+      </div>
+
+      {/* National footprint — which real Indian constituencies were represented,
+          by state & region. Full width: the geographic reach story. */}
+      <div className="mb-6">
+        <NationalFootprintPanel />
       </div>
 
       {/* Core corpus panels. Each is self-contained and copies the CoveragePanel

@@ -98,6 +98,22 @@ const COL_ALIASES: Record<
   committee_name: ["committee_name"],
 };
 
+// Serial-number column aliases (S.No / Serial / Sl.No / Sr.No). Used ONLY as a
+// fallback SOURCE for the constituency number: when a roster carries a serial
+// column but NO constituency-number column, the serial becomes the constituency
+// number (1-based) instead of the DB trigger's default 101+. If a real
+// constituency-number column is present, the serial is ignored entirely.
+// (Director rule, 2026-07-04 — Hyderabad's "S.No" roster.)
+const SERIAL_ALIASES = [
+  "s no",
+  "sno",
+  "serial",
+  "serial no",
+  "serial number",
+  "sl no",
+  "sr no",
+];
+
 // Normalize a header or alias for matching: lowercase, then collapse every run
 // of non-alphanumerics (spaces, underscores, dots, hyphens) to a single space.
 // So "Constituency No.", "constituency_number", "CONSTITUENCY  NO" all compare
@@ -152,7 +168,8 @@ function resolveStateRouting(presentKeys: string[]): "home_state" | "constituenc
 function normalizeXlsxRow(
   rawRow: Record<string, unknown>,
   rowNumber: number,
-  bareStateRoutes: "home_state" | "constituency_state"
+  bareStateRoutes: "home_state" | "constituency_state",
+  useSerialAsConstituency: boolean
 ): ParsedRow {
   // Build a normalized-key version for easy lookup (punctuation-insensitive).
   const lc: Record<string, unknown> = {};
@@ -233,6 +250,18 @@ function normalizeXlsxRow(
   if (constituencyNumberRaw !== undefined && constituencyNumberRaw !== "") {
     const n = Number(constituencyNumberRaw);
     if (!isNaN(n)) constituency_number = n;
+  }
+  // Fallback: no constituency-number column but a serial column present → the
+  // serial IS the constituency number (1-based). Only when the file has no
+  // constituency-number column at all (decided file-wide by the caller), so a
+  // blank cell in a real constituency-number column still falls to the 101+
+  // trigger rather than borrowing the serial.
+  if (constituency_number === undefined && useSerialAsConstituency) {
+    const serialRaw = pick(SERIAL_ALIASES);
+    if (serialRaw !== undefined && serialRaw !== "") {
+      const n = Number(serialRaw);
+      if (!isNaN(n)) constituency_number = n;
+    }
   }
 
   // A numeric "Committee" value is the committee NUMBER; a text value is a
@@ -396,6 +425,16 @@ export function CsvImport({
             return;
           }
           const bareStateRoutes = resolveStateRouting(keys);
+          // Director rule (2026-07-04): a roster with a serial column (S.No) but
+          // NO constituency-number column uses the serial AS the constituency
+          // number (1-based); otherwise the DB trigger stamps the default 101+.
+          const hasConstNumCol = COL_ALIASES.constituency_number.some((a) =>
+            keys.includes(normHeader(a))
+          );
+          const hasSerialCol = SERIAL_ALIASES.some((a) =>
+            keys.includes(normHeader(a))
+          );
+          const useSerialAsConst = !hasConstNumCol && hasSerialCol;
 
           // Skip entirely-blank rows
           const rows: ParsedRow[] = [];
@@ -405,7 +444,9 @@ export function CsvImport({
               (v) => v === "" || v === null || v === undefined
             );
             if (allEmpty) continue;
-            rows.push(normalizeXlsxRow(raw, i + 2, bareStateRoutes)); // +2 because row 1 = header
+            rows.push(
+              normalizeXlsxRow(raw, i + 2, bareStateRoutes, useSerialAsConst)
+            ); // +2 because row 1 = header
           }
 
           if (rows.length === 0) {
@@ -458,6 +499,10 @@ export function CsvImport({
           const constNumIdx = findColIdx(headers, COL_ALIASES.constituency_number);
           const committeeNumIdx = findColIdx(headers, COL_ALIASES.committee_number);
           const committeeNameIdx = findColIdx(headers, COL_ALIASES.committee_name);
+          // Director rule (2026-07-04): serial column but no constituency-number
+          // column → serial becomes the constituency number (1-based).
+          const serialIdx = findColIdx(headers, SERIAL_ALIASES);
+          const useSerialAsConst = constNumIdx === -1 && serialIdx >= 0;
 
           if (nameIdx === -1) {
             setParseError('CSV must have a "name" column.');
@@ -516,6 +561,13 @@ export function CsvImport({
             let constituency_number: number | undefined;
             if (constNumIdx >= 0) {
               const raw = cols[constNumIdx]?.trim();
+              if (raw) {
+                const n = Number(raw);
+                if (!isNaN(n)) constituency_number = n;
+              }
+            }
+            if (constituency_number === undefined && useSerialAsConst) {
+              const raw = cols[serialIdx]?.trim();
               if (raw) {
                 const n = Number(raw);
                 if (!isNaN(n)) constituency_number = n;
@@ -749,7 +801,8 @@ export function CsvImport({
                     (r) =>
                       r.party_letter ||
                       r.constituency_name ||
-                      r.committee_number !== undefined
+                      r.committee_number !== undefined ||
+                      r.constituency_number !== undefined
                   );
                   return (
                     <div className="max-h-60 overflow-auto rounded-lg border">
@@ -761,6 +814,7 @@ export function CsvImport({
                             {showAllocCols && (
                               <>
                                 <TableHead>Party</TableHead>
+                                <TableHead>No.</TableHead>
                                 <TableHead>Constituency</TableHead>
                                 <TableHead>Committee</TableHead>
                               </>
@@ -786,6 +840,9 @@ export function CsvImport({
                                 <>
                                   <TableCell className="text-xs">
                                     {row.party_letter || "--"}
+                                  </TableCell>
+                                  <TableCell className="text-xs tabular-nums">
+                                    {row.constituency_number ?? "--"}
                                   </TableCell>
                                   <TableCell className="text-xs">
                                     {row.constituency_name

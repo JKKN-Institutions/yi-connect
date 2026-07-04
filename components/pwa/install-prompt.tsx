@@ -8,6 +8,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react'
+import { usePathname } from 'next/navigation'
 import { X, Download, Share, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -31,6 +32,15 @@ export function InstallPrompt() {
   const [isStandalone, setIsStandalone] = useState(false)
   const [isDismissed, setIsDismissed] = useState(false)
   const [showIOSInstructions, setShowIOSInstructions] = useState(false)
+
+  // Presentation / public read-only surfaces where a bottom-corner install nag
+  // just covers content: the big-screen projector (…/display) and the no-login
+  // shared feedback report (/yip/r/…). Those screens are watched by a room or
+  // read by a committee, not a phone user deciding to install the app.
+  const pathname = usePathname()
+  const suppressedRoute =
+    !!pathname &&
+    (pathname.endsWith('/display') || pathname.startsWith('/yip/r/'))
 
   useEffect(() => {
     // Check if already dismissed in this session
@@ -97,8 +107,9 @@ export function InstallPrompt() {
     sessionStorage.setItem('pwa-install-dismissed', 'true')
   }, [])
 
-  // Don't show if already installed, in standalone mode, or dismissed
-  if (isStandalone || isInstalled || isDismissed) {
+  // Don't show if already installed, in standalone mode, dismissed, or on a
+  // presentation/public read-only surface (projector, shared report).
+  if (isStandalone || isInstalled || isDismissed || suppressedRoute) {
     return null
   }
 

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
 import { getChapterContext } from "@/lib/yi-future/chapter-context";
+import { TrackIcon } from "@/components/yi-future/TrackIcon";
 import { autoAssignJuryToTeams } from "@/app/yi-future/actions/jury";
 
 type Track = {
@@ -141,7 +142,7 @@ export default async function JuryCategoriesPage() {
             className="bg-white border border-navy/10 rounded-lg p-5"
           >
             <div className="flex items-center gap-2 mb-3">
-              {track.icon && <span className="text-lg">{track.icon}</span>}
+              <TrackIcon icon={track.icon} name={track.name} size={22} className="shrink-0" />
               <h3 className="text-lg font-bold text-navy">{track.name}</h3>
             </div>
 

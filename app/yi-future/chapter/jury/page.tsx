@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
 import { getChapterContext } from "@/lib/yi-future/chapter-context";
+import { TrackIcon } from "@/components/yi-future/TrackIcon";
 import {
   deleteJury,
   regenerateJuryCode,
@@ -325,7 +326,7 @@ export default async function JuryPage({
                   className="border border-navy/10 rounded-md p-3"
                 >
                   <div className="flex items-center gap-1.5 text-sm font-semibold text-navy">
-                    {t.icon && <span>{t.icon}</span>}
+                    <TrackIcon icon={t.icon} name={t.name} size={18} className="shrink-0" />
                     <span className="truncate">{t.name}</span>
                   </div>
                   <div className="mt-1 text-xs text-navy/60">
@@ -430,7 +431,12 @@ export default async function JuryPage({
                                   : "px-2 py-1 text-xs font-semibold rounded-full border border-navy/20 text-navy/60 hover:border-navy/50"
                             }
                           >
-                            {t.icon ? `${t.icon} ` : ""}
+                            <TrackIcon
+                              icon={t.icon}
+                              name={t.name}
+                              size={12}
+                              className="inline-block align-[-2px] mr-1"
+                            />
                             {t.name} · {members}/{JURY_TRACK_CAP}
                           </button>
                         </form>

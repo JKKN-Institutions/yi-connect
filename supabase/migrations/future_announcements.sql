@@ -59,3 +59,8 @@ create table if not exists future.announcement_reads (
 
 alter table future.announcements      enable row level security;
 alter table future.announcement_reads enable row level security;
+
+-- Table-level grants (same Management-API gotcha as jury_track_assignments:
+-- no default service_role grants on API-created tables). Applied to prod 2026-07-04.
+grant select, insert, update, delete on future.announcements to service_role;
+grant select, insert, update, delete on future.announcement_reads to service_role;

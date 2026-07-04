@@ -431,7 +431,12 @@ export default async function JuryPage({
                                   : "px-2 py-1 text-xs font-semibold rounded-full border border-navy/20 text-navy/60 hover:border-navy/50"
                             }
                           >
-                            {t.icon ? `${t.icon} ` : ""}
+                            <TrackIcon
+                              icon={t.icon}
+                              name={t.name}
+                              size={12}
+                              className="inline-block align-[-2px] mr-1"
+                            />
                             {t.name} · {members}/{JURY_TRACK_CAP}
                           </button>
                         </form>

@@ -66,6 +66,7 @@ import { QuestionHourPanel } from "./question-hour";
 import { GovernmentFormationPanel } from "./government-formation";
 import { VoteManager } from "./vote-manager";
 import { BillSession } from "./bill-session";
+import { SpeakingFloorPanel } from "./speaking-floor-panel";
 import { ElectionResultsRollup } from "./election-results-rollup";
 import type { Tables } from "@/types/yip/database";
 import { toast } from "sonner";
@@ -1532,6 +1533,13 @@ export function ControlPanel({
                 )}
             </CardContent>
           </Card>
+
+          {/* Speaking Floor — live raise-to-speak queue + fairness meter.
+              Available for any live session (debates, zero hour, open floor);
+              self-hides its buttons for view-only organisers. */}
+          {currentAgendaItem && isLive && (
+            <SpeakingFloorPanel eventId={eventId} canManage={canManageAgenda} />
+          )}
 
           {/* Question Hour Panel (replaces speaker queue for question_hour agenda type) */}
           {currentAgendaItem?.agenda_type === "question_hour" && (

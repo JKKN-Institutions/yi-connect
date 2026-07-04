@@ -834,6 +834,61 @@ export type Database = {
   }
   yip: {
     Tables: {
+      speaking_requests: {
+        Row: {
+          agenda_item_id: string | null
+          called_at: string | null
+          event_id: string
+          id: string
+          participant_id: string
+          requested_at: string
+          resolved_at: string | null
+          status: string
+        }
+        Insert: {
+          agenda_item_id?: string | null
+          called_at?: string | null
+          event_id: string
+          id?: string
+          participant_id: string
+          requested_at?: string
+          resolved_at?: string | null
+          status?: string
+        }
+        Update: {
+          agenda_item_id?: string | null
+          called_at?: string | null
+          event_id?: string
+          id?: string
+          participant_id?: string
+          requested_at?: string
+          resolved_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "speaking_requests_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "speaking_requests_agenda_item_id_fkey"
+            columns: ["agenda_item_id"]
+            isOneToOne: false
+            referencedRelation: "agenda"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "speaking_requests_participant_id_fkey"
+            columns: ["participant_id"]
+            isOneToOne: false
+            referencedRelation: "participants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chapter_privacy: {
         Row: {
           privacy_default: boolean
@@ -2136,6 +2191,7 @@ export type Database = {
           allow_bill_before_report: boolean
           results_published_at: string | null
           scores_locked: boolean | null
+          speaking_placard_enabled: boolean
           jury_allow_earlier_sessions: boolean
           social_links: string[]
           social_reach_count: number | null
@@ -2188,6 +2244,7 @@ export type Database = {
           allow_bill_before_report?: boolean
           results_published_at?: string | null
           scores_locked?: boolean | null
+          speaking_placard_enabled?: boolean
           jury_allow_earlier_sessions?: boolean
           social_links?: string[]
           social_reach_count?: number | null
@@ -2240,6 +2297,7 @@ export type Database = {
           allow_bill_before_report?: boolean
           results_published_at?: string | null
           scores_locked?: boolean | null
+          speaking_placard_enabled?: boolean
           jury_allow_earlier_sessions?: boolean
           social_links?: string[]
           social_reach_count?: number | null

@@ -326,7 +326,7 @@ export default async function JuryPage({
                   className="border border-navy/10 rounded-md p-3"
                 >
                   <div className="flex items-center gap-1.5 text-sm font-semibold text-navy">
-                    {t.icon && <span>{t.icon}</span>}
+                    <TrackIcon icon={t.icon} name={t.name} size={18} className="shrink-0" />
                     <span className="truncate">{t.name}</span>
                   </div>
                   <div className="mt-1 text-xs text-navy/60">

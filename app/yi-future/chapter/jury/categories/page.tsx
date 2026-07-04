@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
 import { getChapterContext } from "@/lib/yi-future/chapter-context";
+import { TrackIcon } from "@/components/yi-future/TrackIcon";
 import { autoAssignJuryToTeams } from "@/app/yi-future/actions/jury";
 
 type Track = {

@@ -271,10 +271,6 @@ function JuryScoringClientInner({
   // Quick-jump bar (Piece 2) + Unfinished strip (Piece 3) state.
   const [quickJump, setQuickJump] = useState("");
   const [showAllUnfinished, setShowAllUnfinished] = useState(false);
-  // The on-screen digit pad is collapsed by default so the scoring form sits
-  // near the top (jurors were scrolling past it for every participant). Opening
-  // it once keeps it open for the rest of the session (manual catch-up mode).
-  const [keypadOpen, setKeypadOpen] = useState(false);
 
   // Special Remarks (Phase 18 / F4) — flag checkboxes + delta config
   const [flagDeltas, setFlagDeltas] = useState<FlagDeltas | null>(null);
@@ -1166,6 +1162,15 @@ function JuryScoringClientInner({
       // background so the quick-jump status dots + Unfinished strip reflect
       // this submit immediately, and future participant switches see it too.
       void loadScoresMap();
+
+      // Interview 2026-07-04: after a FINAL submit, stop following any manual
+      // catch-up pick and return to the live speaker (activeParticipant then
+      // falls back to currentSpeaker, or the "Waiting for next speaker" state
+      // when nobody is on the floor). A DRAFT save leaves the juror in place so
+      // they can keep editing.
+      if (data.status === "submitted") {
+        setManualParticipant(null);
+      }
     }
 
     return result.success
@@ -1261,7 +1266,7 @@ function JuryScoringClientInner({
   const unfinishedHiddenCount = unfinishedRows.length - unfinishedVisible.length;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 pb-56">
       {eventLocked && (
         <div
           role="alert"
@@ -1279,201 +1284,40 @@ function JuryScoringClientInner({
         </div>
       )}
 
-      {/* Quick-jump bar (Piece 2) — replaces the open-search-close picker
-          loop for rapid-fire moments (a 15-second intervention shouldn't cost
-          3-4 server round trips + a picker open/close cycle). Sticky so it
-          stays reachable while the rubric form scrolls under it; only shown
-          once a session is selected (matching + status dots need one). */}
-      {selectedSessionId && (
-        <div
-          className="sticky top-0 z-20 mx-4 mt-4 rounded-xl border-2 border-gray-200 bg-white/95 px-3 py-2.5 backdrop-blur"
-          style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}
-        >
-          <div className="flex items-center justify-between">
-            <label
-              htmlFor="quick-jump-input"
-              className="block text-[11px] font-bold uppercase tracking-wide"
-              style={{ color: inkA(0.5) }}
-            >
-              Jump to participant #
-            </label>
-            <button
-              type="button"
-              onClick={() => setKeypadOpen((o) => !o)}
-              aria-expanded={keypadOpen}
-              aria-controls="quick-jump-keypad"
-              className="flex items-center gap-1 text-[11px] font-semibold text-gray-500 active:opacity-70 touch-manipulation"
-              style={{ minHeight: "32px" }}
-            >
-              Keypad
-              {keypadOpen ? (
-                <ChevronUp className="size-3.5" />
-              ) : (
-                <ChevronDown className="size-3.5" />
-              )}
-            </button>
+      {/* Score form -- show when we have an active participant + rubric */}
+      {activeParticipant && rubric ? (
+        <ScoreForm
+          key={`${activeParticipant.id}-${scoreKey}`}
+          participant={activeParticipant}
+          criteria={rubric.criteria}
+          rubricId={rubric.id}
+          eventId={eventId}
+          agendaItemId={selectedSessionId}
+          juryAssignmentId={juryAssignmentId}
+          existingScore={existingScore}
+          lockAfterSubmit={sessionLocksOnSubmit}
+          flags={flags}
+          onSubmit={handleSubmit}
+        />
+      ) : (
+        /* Waiting state -- no current speaker */
+        <div className="flex flex-col items-center justify-center py-16 text-center px-4 landscape-compact">
+          <div className="size-20 rounded-full bg-[#FF9933]/10 flex items-center justify-center mb-4 landscape-hide">
+            <Mic className="size-10 text-[#FF9933]" />
           </div>
-          <input
-            id="quick-jump-input"
-            type="text"
-            inputMode="numeric"
-            autoComplete="off"
-            value={quickJump}
-            onChange={(e) => setQuickJump(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && quickJumpMatches.length === 1) {
-                void selectManualParticipant(quickJumpMatches[0]);
-                setQuickJump("");
-              }
-            }}
-            placeholder="e.g. 42"
-            aria-label="Jump to participant by number"
-            className="mt-1 w-full rounded-lg border-2 border-gray-200 px-3 py-2 text-base font-semibold text-gray-900 focus:border-blue-400 focus:outline-none"
-            style={{ minHeight: "44px" }}
-          />
-
-          {/* On-screen digit pad — avoids summoning the OS keyboard for
-              rapid-fire numeric jumps during live debate (#780). Appends
-              straight into the SAME quickJump state; no focus() calls.
-              Collapsed by default (layout) — the text field above still works
-              for typing a number; open the keypad for tap-only entry. */}
-          {keypadOpen && (
-          <div
-            id="quick-jump-keypad"
-            className="mt-2 flex gap-1"
-            role="group"
-            aria-label="Digit pad for participant number"
+          <h2
+            className="text-xl font-bold"
+            style={{ ...SERIF, color: INK }}
           >
-            {["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"].map((d) => (
-              <button
-                key={d}
-                type="button"
-                onClick={() => setQuickJump((q) => q + d)}
-                className="flex-1 rounded-md border-2 text-sm font-bold active:scale-95"
-                style={{
-                  minHeight: "40px",
-                  borderColor: `${GOLD}66`,
-                  color: INK,
-                  background: `${GOLD}14`,
-                }}
-              >
-                {d}
-              </button>
-            ))}
-            <button
-              type="button"
-              onClick={() => setQuickJump((q) => q.slice(0, -1))}
-              aria-label="Backspace"
-              className="flex-1 rounded-md border-2 border-gray-200 text-sm font-bold text-gray-700 active:scale-95"
-              style={{ minHeight: "40px" }}
-            >
-              ⌫
-            </button>
-            <button
-              type="button"
-              onClick={() => setQuickJump("")}
-              aria-label="Clear"
-              className="flex-1 rounded-md border-2 border-gray-200 text-sm font-bold text-gray-700 active:scale-95"
-              style={{ minHeight: "40px" }}
-            >
-              ×
-            </button>
-          </div>
-          )}
-
-          {quickJump.trim() && (
-            <div
-              className="mt-2 flex gap-2 overflow-x-auto pb-1"
-              role="list"
-              aria-label="Matching participants"
-            >
-              {quickJumpMatches.length === 0 ? (
-                <p className="py-2 text-xs" style={{ color: inkA(0.45) }}>
-                  No participant matches &ldquo;{quickJump}&rdquo;.
-                </p>
-              ) : (
-                quickJumpMatches.map((p) => {
-                  const dot = getStatusDot(p.id);
-                  return (
-                    <button
-                      key={p.id}
-                      type="button"
-                      role="listitem"
-                      onClick={() => {
-                        void selectManualParticipant(p);
-                        setQuickJump("");
-                      }}
-                      className="flex shrink-0 touch-manipulation items-center gap-1.5 rounded-full border-2 border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-800 hover:bg-gray-50 active:bg-gray-100"
-                      style={{ minHeight: "40px" }}
-                    >
-                      <span
-                        className="size-2 shrink-0 rounded-full"
-                        aria-hidden="true"
-                        style={{
-                          background:
-                            dot === "submitted"
-                              ? "#138808"
-                              : dot === "draft"
-                                ? GOLD
-                                : "#d1d5db",
-                        }}
-                      />
-                      {juryLabel(p.constituency_number, p.id)}
-                    </button>
-                  );
-                })
-              )}
-            </div>
-          )}
-
-          {/* Unfinished strip (Piece 3) — a lull-time worklist so 15-second
-              partial scores get finished. Draft rows for THIS session only. */}
-          {unfinishedRows.length > 0 && (
-            <div className="mt-2.5 border-t border-gray-100 pt-2">
-              <p
-                className="text-[11px] font-bold"
-                style={{ color: inkA(0.5) }}
-              >
-                Unfinished ({unfinishedRows.length}):
-              </p>
-              <div className="mt-1 flex flex-wrap gap-2">
-                {unfinishedVisible.map((row) => (
-                  <button
-                    key={row.id}
-                    type="button"
-                    onClick={() => void selectManualParticipant(row.participant)}
-                    className="flex shrink-0 touch-manipulation items-center gap-1.5 rounded-full border-2 px-3 py-2 text-xs font-semibold hover:bg-amber-100 active:bg-amber-200"
-                    style={{
-                      minHeight: "40px",
-                      borderColor: `${GOLD}66`,
-                      background: `${GOLD}14`,
-                      color: "#7a5c1e",
-                    }}
-                  >
-                    <span
-                      className="size-2 shrink-0 rounded-full"
-                      aria-hidden="true"
-                      style={{ background: GOLD }}
-                    />
-                    {juryLabel(
-                      row.participant.constituency_number,
-                      row.participant.id
-                    )}
-                  </button>
-                ))}
-                {unfinishedHiddenCount > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setShowAllUnfinished(true)}
-                    className="shrink-0 touch-manipulation rounded-full border-2 border-gray-200 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50"
-                    style={{ minHeight: "40px" }}
-                  >
-                    +{unfinishedHiddenCount} more
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
+            Waiting for next speaker...
+          </h2>
+          <p
+            className="text-sm mt-2 max-w-xs landscape-hide"
+            style={{ color: inkA(0.55) }}
+          >
+            The score form will appear automatically when the moderator starts
+            the next speaker.
+          </p>
         </div>
       )}
 
@@ -1524,6 +1368,131 @@ function JuryScoringClientInner({
           </SectionShell>
         </div>
       )}
+
+      {/* Session selector — organiser-driven (BUG-393). The juror scores the
+          CURRENT session by default; the only manual choice is "catch up" on
+          the immediately-previous session. Older sessions are locked. When no
+          live agenda position is known (offline / event not started) every
+          assigned session is selectable as a fallback. */}
+      {(() => {
+        // Restricted set: the {current, immediately-previous} ids from the
+        // bootstrap, mapped back to full session rows (ordered). Falls back to
+        // all assigned sessions when the live position is unknown.
+        const restricted =
+          selectableSessionIds.length > 0
+            ? assignedSessions.filter((s) =>
+                selectableSessionIds.includes(s.id)
+              )
+            : assignedSessions;
+        // BUG-393 follow-up: "Score an earlier session" reveals every assigned
+        // session. Default stays restricted (current + catch-up only).
+        const selectable = showAllSessions ? assignedSessions : restricted;
+        const lockedCount = assignedSessions.length - restricted.length;
+        if (selectable.length === 0) return null;
+        return (
+          <div className="mx-4 mt-4">
+            <label
+              htmlFor="session-select"
+              className="block text-xs font-semibold text-gray-600 mb-1"
+            >
+              Scoring session
+            </label>
+            <select
+              id="session-select"
+              value={selectedSessionId ?? ""}
+              onChange={(e) => setSelectedSessionId(e.target.value || null)}
+              className="w-full rounded-lg border-2 border-gray-200 bg-white px-3 py-3 text-sm font-medium text-gray-900 focus:border-blue-500 focus:outline-none"
+              style={{ minHeight: "48px" }}
+            >
+              {selectable.map((s) => {
+                const suffix =
+                  s.id === currentSessionId
+                    ? " (current)"
+                    : restricted.some((r) => r.id === s.id)
+                      ? " (catch-up)"
+                      : " (earlier)";
+                return (
+                  <option key={s.id} value={s.id}>
+                    Day {s.day} · {s.title}
+                    {suffix}
+                  </option>
+                );
+              })}
+            </select>
+            {lockedCount > 0 &&
+              allowEarlierSessions &&
+              (showAllSessions ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    showAllSessionsRef.current = false;
+                    setShowAllSessions(false);
+                    // Snap back to a currently-selectable session so the picker
+                    // never shows a blank value.
+                    if (!restricted.some((r) => r.id === selectedSessionId)) {
+                      setSelectedSessionId(
+                        currentSessionId ?? restricted[0]?.id ?? null
+                      );
+                    }
+                  }}
+                  className="mt-1.5 text-xs font-medium text-gray-500 underline hover:text-gray-700"
+                >
+                  Back to current session
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    showAllSessionsRef.current = true;
+                    setShowAllSessions(true);
+                  }}
+                  className="mt-1.5 text-xs font-medium text-blue-600 underline hover:text-blue-700"
+                >
+                  Score an earlier session
+                </button>
+              ))}
+          </div>
+        );
+      })()}
+
+      {/* Session context blurb (BUG-395) — what this session is about, so the
+          juror knows what they're scoring. Sourced from the agenda row. */}
+      {(() => {
+        const active = assignedSessions.find(
+          (s) => s.id === selectedSessionId
+        );
+        if (!active) return null;
+        return (
+          <div className="mx-4 mt-3">
+            <SectionShell accent={SAFFRON}>
+              <div className="px-4 py-3">
+                <SectionHeading
+                  eyebrow="This session"
+                  title={active.title}
+                  icon={Info}
+                  accent={SAFFRON}
+                />
+                {active.description ? (
+                  <p
+                    className="mt-2 text-xs leading-relaxed"
+                    style={{ color: inkA(0.6) }}
+                  >
+                    {active.description}
+                  </p>
+                ) : (
+                  <p
+                    className="mt-2 text-xs italic"
+                    style={{ color: inkA(0.45) }}
+                  >
+                    Day {active.day} session — score each participant on the
+                    criteria below.
+                  </p>
+                )}
+              </div>
+            </SectionShell>
+          </div>
+        );
+      })()}
 
       {/* Special Remarks (Phase 18 / F4) — visible whenever a participant
           is loaded. Deltas come from yip.scoring_flags_config and are
@@ -1686,168 +1655,6 @@ function JuryScoringClientInner({
           </SectionShell>
         )}
 
-      {/* Score form -- show when we have an active participant + rubric */}
-      {activeParticipant && rubric ? (
-        <ScoreForm
-          key={`${activeParticipant.id}-${scoreKey}`}
-          participant={activeParticipant}
-          criteria={rubric.criteria}
-          rubricId={rubric.id}
-          eventId={eventId}
-          agendaItemId={selectedSessionId}
-          juryAssignmentId={juryAssignmentId}
-          existingScore={existingScore}
-          lockAfterSubmit={sessionLocksOnSubmit}
-          flags={flags}
-          onSubmit={handleSubmit}
-        />
-      ) : (
-        /* Waiting state -- no current speaker */
-        <div className="flex flex-col items-center justify-center py-16 text-center px-4 landscape-compact">
-          <div className="size-20 rounded-full bg-[#FF9933]/10 flex items-center justify-center mb-4 landscape-hide">
-            <Mic className="size-10 text-[#FF9933]" />
-          </div>
-          <h2
-            className="text-xl font-bold"
-            style={{ ...SERIF, color: INK }}
-          >
-            Waiting for next speaker...
-          </h2>
-          <p
-            className="text-sm mt-2 max-w-xs landscape-hide"
-            style={{ color: inkA(0.55) }}
-          >
-            The score form will appear automatically when the moderator starts
-            the next speaker.
-          </p>
-        </div>
-      )}
-
-      {/* Session selector — organiser-driven (BUG-393). The juror scores the
-          CURRENT session by default; the only manual choice is "catch up" on
-          the immediately-previous session. Older sessions are locked. When no
-          live agenda position is known (offline / event not started) every
-          assigned session is selectable as a fallback. */}
-      {(() => {
-        // Restricted set: the {current, immediately-previous} ids from the
-        // bootstrap, mapped back to full session rows (ordered). Falls back to
-        // all assigned sessions when the live position is unknown.
-        const restricted =
-          selectableSessionIds.length > 0
-            ? assignedSessions.filter((s) =>
-                selectableSessionIds.includes(s.id)
-              )
-            : assignedSessions;
-        // BUG-393 follow-up: "Score an earlier session" reveals every assigned
-        // session. Default stays restricted (current + catch-up only).
-        const selectable = showAllSessions ? assignedSessions : restricted;
-        const lockedCount = assignedSessions.length - restricted.length;
-        if (selectable.length === 0) return null;
-        return (
-          <div className="mx-4 mt-4">
-            <label
-              htmlFor="session-select"
-              className="block text-xs font-semibold text-gray-600 mb-1"
-            >
-              Scoring session
-            </label>
-            <select
-              id="session-select"
-              value={selectedSessionId ?? ""}
-              onChange={(e) => setSelectedSessionId(e.target.value || null)}
-              className="w-full rounded-lg border-2 border-gray-200 bg-white px-3 py-3 text-sm font-medium text-gray-900 focus:border-blue-500 focus:outline-none"
-              style={{ minHeight: "48px" }}
-            >
-              {selectable.map((s) => {
-                const suffix =
-                  s.id === currentSessionId
-                    ? " (current)"
-                    : restricted.some((r) => r.id === s.id)
-                      ? " (catch-up)"
-                      : " (earlier)";
-                return (
-                  <option key={s.id} value={s.id}>
-                    Day {s.day} · {s.title}
-                    {suffix}
-                  </option>
-                );
-              })}
-            </select>
-            {lockedCount > 0 &&
-              allowEarlierSessions &&
-              (showAllSessions ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    showAllSessionsRef.current = false;
-                    setShowAllSessions(false);
-                    // Snap back to a currently-selectable session so the picker
-                    // never shows a blank value.
-                    if (!restricted.some((r) => r.id === selectedSessionId)) {
-                      setSelectedSessionId(
-                        currentSessionId ?? restricted[0]?.id ?? null
-                      );
-                    }
-                  }}
-                  className="mt-1.5 text-xs font-medium text-gray-500 underline hover:text-gray-700"
-                >
-                  Back to current session
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => {
-                    showAllSessionsRef.current = true;
-                    setShowAllSessions(true);
-                  }}
-                  className="mt-1.5 text-xs font-medium text-blue-600 underline hover:text-blue-700"
-                >
-                  Score an earlier session
-                </button>
-              ))}
-          </div>
-        );
-      })()}
-
-      {/* Session context blurb (BUG-395) — what this session is about, so the
-          juror knows what they're scoring. Sourced from the agenda row. */}
-      {(() => {
-        const active = assignedSessions.find(
-          (s) => s.id === selectedSessionId
-        );
-        if (!active) return null;
-        return (
-          <div className="mx-4 mt-3">
-            <SectionShell accent={SAFFRON}>
-              <div className="px-4 py-3">
-                <SectionHeading
-                  eyebrow="This session"
-                  title={active.title}
-                  icon={Info}
-                  accent={SAFFRON}
-                />
-                {active.description ? (
-                  <p
-                    className="mt-2 text-xs leading-relaxed"
-                    style={{ color: inkA(0.6) }}
-                  >
-                    {active.description}
-                  </p>
-                ) : (
-                  <p
-                    className="mt-2 text-xs italic"
-                    style={{ color: inkA(0.45) }}
-                  >
-                    Day {active.day} session — score each participant on the
-                    criteria below.
-                  </p>
-                )}
-              </div>
-            </SectionShell>
-          </div>
-        );
-      })()}
-
       {/* Manual participant picker toggle */}
       <div className="border-t border-gray-200 pt-4 px-4 pb-4">
         <button
@@ -1969,6 +1776,182 @@ function JuryScoringClientInner({
           );
         })()}
       </div>
+      {/* Quick-jump bar (Piece 2) — pinned to the BOTTOM of the screen so the
+          score form fills the top and the juror can jump to the next
+          participant without scrolling up (interview 2026-07-04). Sticky-bottom
+          keeps it reachable while the rubric form scrolls above it; only shown
+          once a session is selected (matching + status dots need one). */}
+      {selectedSessionId && (
+        <div
+          className="fixed inset-x-0 bottom-0 z-30 mx-auto mb-3 max-w-md rounded-xl border-2 border-gray-200 bg-white/95 px-3 py-2.5 backdrop-blur"
+          style={{ boxShadow: "0 -2px 10px rgba(0,0,0,0.07)", width: "calc(100% - 2rem)" }}
+        >
+          <label
+            htmlFor="quick-jump-input"
+            className="block text-[11px] font-bold uppercase tracking-wide"
+            style={{ color: inkA(0.5) }}
+          >
+            Jump to participant #
+          </label>
+          <input
+            id="quick-jump-input"
+            type="text"
+            inputMode="numeric"
+            autoComplete="off"
+            value={quickJump}
+            onChange={(e) => setQuickJump(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && quickJumpMatches.length === 1) {
+                void selectManualParticipant(quickJumpMatches[0]);
+                setQuickJump("");
+              }
+            }}
+            placeholder="e.g. 42"
+            aria-label="Jump to participant by number"
+            className="mt-1 w-full rounded-lg border-2 border-gray-200 px-3 py-2 text-base font-semibold text-gray-900 focus:border-blue-400 focus:outline-none"
+            style={{ minHeight: "44px" }}
+          />
+
+          {/* On-screen digit pad — avoids summoning the OS keyboard for
+              rapid-fire numeric jumps during live debate (#780). Appends
+              straight into the SAME quickJump state; no focus() calls. */}
+          <div
+            className="mt-2 flex gap-1"
+            role="group"
+            aria-label="Digit pad for participant number"
+          >
+            {["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"].map((d) => (
+              <button
+                key={d}
+                type="button"
+                onClick={() => setQuickJump((q) => q + d)}
+                className="flex-1 rounded-md border-2 text-sm font-bold active:scale-95"
+                style={{
+                  minHeight: "40px",
+                  borderColor: `${GOLD}66`,
+                  color: INK,
+                  background: `${GOLD}14`,
+                }}
+              >
+                {d}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => setQuickJump((q) => q.slice(0, -1))}
+              aria-label="Backspace"
+              className="flex-1 rounded-md border-2 border-gray-200 text-sm font-bold text-gray-700 active:scale-95"
+              style={{ minHeight: "40px" }}
+            >
+              ⌫
+            </button>
+            <button
+              type="button"
+              onClick={() => setQuickJump("")}
+              aria-label="Clear"
+              className="flex-1 rounded-md border-2 border-gray-200 text-sm font-bold text-gray-700 active:scale-95"
+              style={{ minHeight: "40px" }}
+            >
+              ×
+            </button>
+          </div>
+
+          {quickJump.trim() && (
+            <div
+              className="mt-2 flex gap-2 overflow-x-auto pb-1"
+              role="list"
+              aria-label="Matching participants"
+            >
+              {quickJumpMatches.length === 0 ? (
+                <p className="py-2 text-xs" style={{ color: inkA(0.45) }}>
+                  No participant matches &ldquo;{quickJump}&rdquo;.
+                </p>
+              ) : (
+                quickJumpMatches.map((p) => {
+                  const dot = getStatusDot(p.id);
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      role="listitem"
+                      onClick={() => {
+                        void selectManualParticipant(p);
+                        setQuickJump("");
+                      }}
+                      className="flex shrink-0 touch-manipulation items-center gap-1.5 rounded-full border-2 border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-800 hover:bg-gray-50 active:bg-gray-100"
+                      style={{ minHeight: "40px" }}
+                    >
+                      <span
+                        className="size-2 shrink-0 rounded-full"
+                        aria-hidden="true"
+                        style={{
+                          background:
+                            dot === "submitted"
+                              ? "#138808"
+                              : dot === "draft"
+                                ? GOLD
+                                : "#d1d5db",
+                        }}
+                      />
+                      {juryLabel(p.constituency_number, p.id)}
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          )}
+
+          {/* Unfinished strip (Piece 3) — a lull-time worklist so 15-second
+              partial scores get finished. Draft rows for THIS session only. */}
+          {unfinishedRows.length > 0 && (
+            <div className="mt-2.5 border-t border-gray-100 pt-2">
+              <p
+                className="text-[11px] font-bold"
+                style={{ color: inkA(0.5) }}
+              >
+                Unfinished ({unfinishedRows.length}):
+              </p>
+              <div className="mt-1 flex flex-wrap gap-2">
+                {unfinishedVisible.map((row) => (
+                  <button
+                    key={row.id}
+                    type="button"
+                    onClick={() => void selectManualParticipant(row.participant)}
+                    className="flex shrink-0 touch-manipulation items-center gap-1.5 rounded-full border-2 px-3 py-2 text-xs font-semibold hover:bg-amber-100 active:bg-amber-200"
+                    style={{
+                      minHeight: "40px",
+                      borderColor: `${GOLD}66`,
+                      background: `${GOLD}14`,
+                      color: "#7a5c1e",
+                    }}
+                  >
+                    <span
+                      className="size-2 shrink-0 rounded-full"
+                      aria-hidden="true"
+                      style={{ background: GOLD }}
+                    />
+                    {juryLabel(
+                      row.participant.constituency_number,
+                      row.participant.id
+                    )}
+                  </button>
+                ))}
+                {unfinishedHiddenCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllUnfinished(true)}
+                    className="shrink-0 touch-manipulation rounded-full border-2 border-gray-200 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50"
+                    style={{ minHeight: "40px" }}
+                  >
+                    +{unfinishedHiddenCount} more
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
     </div>
   );
 }

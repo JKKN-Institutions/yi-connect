@@ -87,7 +87,12 @@ export default function JoinPage() {
                     placeholder="ABC123"
                     value={code}
                     onChange={(e) => {
-                      setCode(e.target.value.toUpperCase());
+                      // Codes are A-Z0-9 only — drop spaces/punctuation so a
+                      // pasted "ABC 123" can't eat the 10-char limit or fail
+                      // the lookup (BUG-429).
+                      setCode(
+                        e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "")
+                      );
                       setError(null);
                     }}
                     maxLength={10}

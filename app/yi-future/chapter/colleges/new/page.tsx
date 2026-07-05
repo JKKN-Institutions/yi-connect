@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getChapterContext } from "@/lib/yi-future/chapter-context";
 import { createCollege } from "@/app/yi-future/actions/colleges";
 import { FormLayout, Field, SubmitRow } from "@/components/yi-future/admin/FormLayout";
+import { ActionResultForm } from "@/components/yi-future/admin/ActionResultForm";
 
 export default async function NewCollegePage() {
   const ctx = await getChapterContext();
@@ -9,7 +10,7 @@ export default async function NewCollegePage() {
 
   async function action(formData: FormData) {
     "use server";
-    await createCollege(ctx!.chapterId, formData);
+    return await createCollege(ctx!.chapterId, formData);
   }
 
   return (
@@ -18,7 +19,7 @@ export default async function NewCollegePage() {
       subtitle={`For ${ctx.chapterName}`}
       backHref="/yi-future/chapter/colleges"
     >
-      <form action={action} className="space-y-5">
+      <ActionResultForm action={action} className="space-y-5">
         <Field
           label="College name"
           name="name"
@@ -61,7 +62,7 @@ export default async function NewCollegePage() {
         </label>
 
         <SubmitRow submitLabel="Add college" cancelHref="/yi-future/chapter/colleges" />
-      </form>
+      </ActionResultForm>
     </FormLayout>
   );
 }

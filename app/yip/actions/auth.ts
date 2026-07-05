@@ -45,7 +45,10 @@ type ValidationResult =
 export async function validateAccessCode(
   code: string
 ): Promise<ValidationResult> {
-  const trimmed = code.trim().toUpperCase();
+  // BUG-429: codes typed/pasted with spaces (leading, trailing, or in the
+  // middle) failed the exact-match lookup. All live codes are strictly A-Z0-9,
+  // so strip everything else before matching.
+  const trimmed = code.toUpperCase().replace(/[^A-Z0-9]/g, "");
 
   if (!trimmed || trimmed.length < 3 || trimmed.length > 10) {
     return { type: "error", message: "Please enter a valid access code" };

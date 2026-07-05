@@ -84,6 +84,11 @@ export async function updateCollege(
       primary_contact_email,
       primary_contact_phone,
       is_yuva,
+      // BUG-402: the pending tab's "Edit & approve" routes here, but this
+      // update never flipped is_approved — the college stayed Pending after
+      // Save. An admin edit always vouches for the row, so saving approves
+      // (no-op for already-approved colleges).
+      is_approved: true,
     })
     .eq("id", id);
   if (error) return { ok: false, error: error.message };

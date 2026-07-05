@@ -104,7 +104,12 @@ export function WhatsAppSendButton({
         const whatsappStatus = await getWhatsAppStatus();
         if (!whatsappStatus.isReady) {
           setStatus('error');
-          setError('WhatsApp is not connected. Please connect in Settings → WhatsApp first.');
+          // BUG-448: the old copy pointed Yi-Future chapter admins at a menu
+          // their app doesn't have. Name both real connect surfaces and make
+          // clear it's a platform-level link, not a per-user setting.
+          setError(
+            'WhatsApp is not connected yet. A platform admin must link the shared WhatsApp account first — Yi Connect: Settings → WhatsApp, or Yi-Future: National Admin → Connect WhatsApp.'
+          );
           onError?.('WhatsApp not connected');
           return;
         }

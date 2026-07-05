@@ -3,6 +3,7 @@ import { createServiceClient } from "@/lib/yi-future/supabase/server";
 import { getChapterContext } from "@/lib/yi-future/chapter-context";
 import { updateCollege } from "@/app/yi-future/actions/colleges";
 import { FormLayout, Field, SubmitRow } from "@/components/yi-future/admin/FormLayout";
+import { ActionResultForm } from "@/components/yi-future/admin/ActionResultForm";
 
 type College = {
   id: string;
@@ -49,7 +50,7 @@ export default async function EditCollegePage({
 
   async function action(formData: FormData) {
     "use server";
-    await updateCollege(id, formData);
+    return await updateCollege(id, formData);
   }
 
   return (
@@ -57,7 +58,7 @@ export default async function EditCollegePage({
       title={`Edit — ${college.name}`}
       backHref="/yi-future/chapter/colleges"
     >
-      <form action={action} className="space-y-5">
+      <ActionResultForm action={action} className="space-y-5">
         <Field
           label="College name"
           name="name"
@@ -115,7 +116,7 @@ export default async function EditCollegePage({
         </label>
 
         <SubmitRow submitLabel="Save changes" cancelHref="/yi-future/chapter/colleges" />
-      </form>
+      </ActionResultForm>
     </FormLayout>
   );
 }

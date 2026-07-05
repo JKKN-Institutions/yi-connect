@@ -14,6 +14,7 @@ import { inviteMember, removeMember } from "@/app/yi-future/actions/members";
 import { TEAM_SIZE_MAX } from "@/lib/yi-future/constants";
 import { TrackIcon, trackIconText } from "@/components/yi-future/TrackIcon";
 import { unfreezeTeam } from "@/app/yi-future/actions/team-invites";
+import { ActionResultForm } from "@/components/yi-future/admin/ActionResultForm";
 
 type TeamDetail = {
   id: string;
@@ -147,7 +148,9 @@ export default async function TeamDetailPage({
   async function inviteMemberAction(formData: FormData) {
     "use server";
     const did = String(formData.get("delegate_id") ?? "");
-    await inviteMember(team!.id, did);
+    // BUG-466: the result was discarded, so "team is locked" (and every other
+    // refusal) looked like a silent page refresh. Return it for display.
+    return await inviteMember(team!.id, did);
   }
 
   async function removeMemberAction(formData: FormData) {
@@ -326,7 +329,10 @@ export default async function TeamDetailPage({
         )}
 
         {team.team_members.length < TEAM_SIZE_MAX && (
-          <form action={inviteMemberAction} className="flex gap-2 pt-3 border-t border-navy/10">
+          <ActionResultForm
+            action={inviteMemberAction}
+            className="flex flex-wrap gap-2 pt-3 border-t border-navy/10"
+          >
             <select
               name="delegate_id"
               required
@@ -353,7 +359,7 @@ export default async function TeamDetailPage({
             >
               Invite
             </button>
-          </form>
+          </ActionResultForm>
         )}
       </section>
 

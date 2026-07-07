@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
 import { getChapterContext } from "@/lib/yi-future/chapter-context";
-import { updateChapter } from "@/app/yi-future/actions/chapters";
+import { updateOwnChapterProfile } from "@/app/yi-future/actions/chapters";
+import { ActionResultForm } from "@/components/yi-future/admin/ActionResultForm";
 import {
   addCoreTeamMember,
   removeCoreTeamMember,
@@ -122,43 +123,10 @@ export default async function ChapterSetupPage() {
 
   async function saveChapter(formData: FormData) {
     "use server";
-    await updateChapter(ctx!.chapterId, formData);
-
-    // Save programme duration (only if not locked & a valid value)
-    const raw = String(formData.get("programme_duration_days") ?? "").trim();
-    const parsed = raw === "30" ? 30 : raw === "60" ? 60 : raw === "90" ? 90 : null;
-    if (parsed !== null) {
-      const svc = await createServiceClient();
-      // Re-check lock at write time to avoid race with phase-event creation.
-      const { count } = await svc
-        .schema("future")
-        .from("phase_events")
-        .select("id", { count: "exact", head: true })
-        .eq("chapter_id", ctx!.chapterId)
-        .eq("edition_id", ctx!.editionId);
-      if ((count ?? 0) === 0) {
-        await svc
-          .schema("yi")
-          .from("chapters")
-          .update({ programme_duration_days: parsed } as never)
-          .eq("id", ctx!.chapterId);
-      }
-    }
-
-    // Save finale dates
-    const finaleStart = String(formData.get("finale_start_date") ?? "").trim() || null;
-    const finaleEnd = String(formData.get("finale_end_date") ?? "").trim() || null;
-    {
-      const svc = await createServiceClient();
-      await svc
-        .schema("yi")
-        .from("chapters")
-        .update({
-          finale_start_date: finaleStart,
-          finale_end_date: finaleEnd,
-        } as never)
-        .eq("id", ctx!.chapterId);
-    }
+    // Profile + programme duration + finale dates saved in one chapter-scoped
+    // action. (The old national-gated updateChapter 403'd every chapter admin
+    // and skipped the duration/finale writes entirely.)
+    return await updateOwnChapterProfile(formData);
   }
 
   async function addMember(formData: FormData) {
@@ -196,7 +164,7 @@ export default async function ChapterSetupPage() {
       {/* ─── Profile form ───────────────────────────────────────── */}
       <section className="bg-white border border-navy/10 rounded-lg p-6">
         <h3 className="text-lg font-bold text-navy mb-5">Chapter profile</h3>
-        <form action={saveChapter} className="space-y-4">
+        <ActionResultForm action={saveChapter} className="space-y-4">
           <div>
             <label className="block text-xs font-semibold uppercase tracking-widest text-navy/70 mb-1.5">
               Name
@@ -335,7 +303,7 @@ export default async function ChapterSetupPage() {
               Save profile
             </button>
           </div>
-        </form>
+        </ActionResultForm>
       </section>
 
       {/* ─── Core team ──────────────────────────────────────────── */}

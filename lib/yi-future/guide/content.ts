@@ -579,7 +579,7 @@ export const GUIDES: GuideBook = {
           "steps": [
             {
               "action": "Go to **My team** and scroll to **Problem statement**.",
-              "detail": "All four tracks are shown (Accessibility, Climate Action, Health, Road Safety) with three problems in each. Read the titles and descriptions carefully.",
+              "detail": "All four tracks are shown (Accessibility, Climate Change, Health, Road Safety) with three problems in each. Read the titles and descriptions carefully.",
               "link": {
                 "label": "Team page",
                 "href": "/yi-future/me/team"
@@ -999,7 +999,7 @@ export const GUIDES: GuideBook = {
       "persona": "partner",
       "title": "Partner Recruiting Guide",
       "tagline": "Review finalist resumes and run interviews to recruit Young Indians delegates.",
-      "whyItMatters": "Yi Future attracts top college innovators across Accessibility, Climate Action, Health, and Road Safety. As a partner, you get direct access to this talent pool and can make early hiring decisions on candidates at their strongest—after three months of intensive problem-solving in a national program.",
+      "whyItMatters": "Yi Future attracts top college innovators across Accessibility, Climate Change, Health, and Road Safety. As a partner, you get direct access to this talent pool and can make early hiring decisions on candidates at their strongest—after three months of intensive problem-solving in a national program.",
       "startHere": {
         "label": "Go to Partner Home",
         "href": "/yi-future/partner"
@@ -1130,7 +1130,7 @@ export const GUIDES: GuideBook = {
     },
     {
       "term": "Track",
-      "def": "A thematic area: Accessibility, Climate Action, Health, or Road Safety. Each edition has four tracks. Delegates pick one and work on a problem within it."
+      "def": "A thematic area: Accessibility, Climate Change, Health, or Road Safety. Each edition has four tracks. Delegates pick one and work on a problem within it."
     },
     {
       "term": "Problem Statement",

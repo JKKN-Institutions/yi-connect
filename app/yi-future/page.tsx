@@ -83,7 +83,7 @@ export default async function YiFuturePage() {
           </div>
 
           <div className="mt-8 grid grid-cols-4 gap-3 max-w-sm mx-auto">
-            {["Climate Action", "Healthcare", "Smart Cities", "Rural Dev"].map(
+            {["Climate Change", "Healthcare", "Smart Cities", "Rural Dev"].map(
               (track) => (
                 <div
                   key={track}

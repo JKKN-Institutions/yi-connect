@@ -63,6 +63,8 @@ const SCOPES = [
   "partners",
   "evaluations",
   "chair_credentials_template",
+  "chapter_progress",
+  "problem_matrix",
 ] as const;
 type Scope = (typeof SCOPES)[number];
 
@@ -190,6 +192,8 @@ export async function GET(
     "partners", // corporate partners incl. access codes
     "evaluations", // cross-chapter evaluation dump
     "chair_credentials_template", // template for seeding chair credentials
+    "chapter_progress", // all-chapter delegate funnel counts
+    "problem_matrix", // all-chapter × problem-statement team counts
   ]);
 
   // Scopes a chapter admin may export, constrained to their own chapter.
@@ -1203,6 +1207,207 @@ export async function GET(
     return csvResponse(
       `evaluations-${todayStamp()}.csv`,
       toCSV(mapped, columns)
+    );
+  }
+
+  // ────────────────────────────────────────────────────────────────────
+  // chapter_progress — one row per chapter: delegate funnel counts
+  // (registered → on a team → team has captain → team picked a problem)
+  // ────────────────────────────────────────────────────────────────────
+  if (scope === "chapter_progress") {
+    const edition = await resolveEdition(svc, editionSlug);
+    if (!edition) return jsonError(404, "No edition found");
+
+    let cq = svc
+      .schema("yi")
+      .from("chapters")
+      .select("id, name, region")
+      .order("name", { ascending: true });
+    if (regionFilter) cq = cq.eq("region", regionFilter);
+    const { data: chapterRows } = await cq;
+    const chapters =
+      (chapterRows as { id: string; name: string; region: string | null }[] | null) ?? [];
+
+    // National row sets exceed the ~1000-row PostgREST cap — page through.
+    const delegates = await fetchAllRows<{ id: string; chapter_id: string }>(
+      (from, to) =>
+        svc
+          .schema("future")
+          .from("delegates")
+          .select("id, chapter_id")
+          .eq("edition_id", edition.id)
+          .order("id", { ascending: true })
+          .range(from, to)
+    );
+    const teams = await fetchAllRows<{
+      id: string;
+      chapter_id: string;
+      captain_id: string | null;
+      problem_statement_id: string | null;
+    }>((from, to) =>
+      svc
+        .schema("future")
+        .from("teams")
+        .select("id, chapter_id, captain_id, problem_statement_id")
+        .eq("edition_id", edition.id)
+        .order("id", { ascending: true })
+        .range(from, to)
+    );
+    const members = await fetchAllRows<{ delegate_id: string; team_id: string }>(
+      (from, to) =>
+        svc
+          .schema("future")
+          .from("team_members")
+          .select("delegate_id, team_id")
+          .order("delegate_id", { ascending: true })
+          .range(from, to)
+    );
+
+    const delegateChapter = new Map(delegates.map((d) => [d.id, d.chapter_id]));
+    const teamById = new Map(teams.map((t) => [t.id, t]));
+
+    type Stat = {
+      total: number;
+      inTeam: number;
+      withCaptain: number;
+      withProblem: number;
+    };
+    const stats = new Map<string, Stat>();
+    const stat = (chapterId: string): Stat => {
+      let s = stats.get(chapterId);
+      if (!s) {
+        s = { total: 0, inTeam: 0, withCaptain: 0, withProblem: 0 };
+        stats.set(chapterId, s);
+      }
+      return s;
+    };
+
+    for (const d of delegates) stat(d.chapter_id).total += 1;
+    for (const m of members) {
+      const chapterId = delegateChapter.get(m.delegate_id);
+      const team = teamById.get(m.team_id);
+      // Skip members whose delegate/team is outside this edition.
+      if (!chapterId || !team) continue;
+      const s = stat(chapterId);
+      s.inTeam += 1;
+      if (team.captain_id) s.withCaptain += 1;
+      if (team.problem_statement_id) s.withProblem += 1;
+    }
+
+    const rows = chapters.map((c) => {
+      const s = stats.get(c.id) ?? {
+        total: 0,
+        inTeam: 0,
+        withCaptain: 0,
+        withProblem: 0,
+      };
+      return {
+        chapter: c.name,
+        region: c.region ?? "",
+        total_delegates: String(s.total),
+        delegates_in_team: String(s.inTeam),
+        delegates_without_team: String(s.total - s.inTeam),
+        delegates_with_captain: String(s.withCaptain),
+        delegates_with_problem: String(s.withProblem),
+      };
+    });
+
+    const columns = [
+      { key: "chapter", label: "Chapter" },
+      { key: "region", label: "Region" },
+      { key: "total_delegates", label: "Total Delegates" },
+      { key: "delegates_in_team", label: "Delegates In A Team" },
+      { key: "delegates_without_team", label: "Delegates Without Team" },
+      { key: "delegates_with_captain", label: "Delegates In A Team With Captain" },
+      { key: "delegates_with_problem", label: "Delegates In A Team With Problem Picked" },
+    ];
+
+    return csvResponse(
+      `chapter-progress-${todayStamp()}.csv`,
+      toCSV(rows, columns)
+    );
+  }
+
+  // ────────────────────────────────────────────────────────────────────
+  // problem_matrix — one row per chapter, one column per problem statement
+  // (P1..Pn in track order), cell = number of teams that picked it.
+  // ────────────────────────────────────────────────────────────────────
+  if (scope === "problem_matrix") {
+    const edition = await resolveEdition(svc, editionSlug);
+    if (!edition) return jsonError(404, "No edition found");
+
+    const { data: problemRows } = await svc
+      .schema("future")
+      .from("problem_statements")
+      .select("id, title, display_order, tracks!inner(edition_id, display_order)")
+      .eq("tracks.edition_id", edition.id)
+      .eq("is_active", true);
+    const problems = (
+      (problemRows as unknown as {
+        id: string;
+        title: string;
+        display_order: number | null;
+        tracks: { display_order: number | null } | null;
+      }[]) ?? []
+    ).sort(
+      (a, b) =>
+        (a.tracks?.display_order ?? 0) - (b.tracks?.display_order ?? 0) ||
+        (a.display_order ?? 0) - (b.display_order ?? 0)
+    );
+
+    let cq = svc
+      .schema("yi")
+      .from("chapters")
+      .select("id, name, region")
+      .order("name", { ascending: true });
+    if (regionFilter) cq = cq.eq("region", regionFilter);
+    const { data: chapterRows } = await cq;
+    const chapters =
+      (chapterRows as { id: string; name: string; region: string | null }[] | null) ?? [];
+
+    const teams = await fetchAllRows<{
+      chapter_id: string;
+      problem_statement_id: string | null;
+    }>((from, to) =>
+      svc
+        .schema("future")
+        .from("teams")
+        .select("id, chapter_id, problem_statement_id")
+        .eq("edition_id", edition.id)
+        .order("id", { ascending: true })
+        .range(from, to)
+    );
+
+    const counts = new Map<string, number>();
+    for (const t of teams) {
+      if (!t.problem_statement_id) continue;
+      const key = `${t.chapter_id}|${t.problem_statement_id}`;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+
+    const rows = chapters.map((c) => {
+      const row: Record<string, string> = {
+        chapter: c.name,
+        region: c.region ?? "",
+      };
+      problems.forEach((p, i) => {
+        row[`p${i + 1}`] = String(counts.get(`${c.id}|${p.id}`) ?? 0);
+      });
+      return row;
+    });
+
+    const columns = [
+      { key: "chapter", label: "Chapter" },
+      { key: "region", label: "Region" },
+      ...problems.map((p, i) => ({
+        key: `p${i + 1}`,
+        label: `P${i + 1}: ${p.title}`,
+      })),
+    ];
+
+    return csvResponse(
+      `problem-matrix-${todayStamp()}.csv`,
+      toCSV(rows, columns)
     );
   }
 

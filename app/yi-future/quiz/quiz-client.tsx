@@ -45,7 +45,7 @@ export function QuizClient({ tracks }: { tracks: TrackMini[] }) {
             </h1>
             <p className="mt-3 text-base text-navy/60 max-w-md mx-auto">
               Answer 3 quick questions and we&apos;ll match you to the Future 6.0
-              track that fits your interests — Climate Action, Healthcare, Smart
+              track that fits your interests — Climate Change, Healthcare, Smart
               Cities, or Rural Development.
             </p>
             <button

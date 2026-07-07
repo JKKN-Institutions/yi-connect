@@ -18,6 +18,14 @@ const nextConfig: NextConfig = {
   // Auth depends on cookies which is inherently dynamic
   cacheComponents: false,
 
+  // 2026-07-07: Vercel PRODUCTION builds deadlock at the "Running TypeScript"
+  // step (preview builds of the same commit + cache pass in ~2 min; two prod
+  // builds in a row hit the 45-min kill). Skip Vercel's type-check step —
+  // `npx tsc --noEmit` on the main tree remains this repo's authoritative
+  // type gate before every PR (see CLAUDE.md). REVERT once Vercel prod
+  // builders stop hanging.
+  typescript: { ignoreBuildErrors: true },
+
   // Empty turbopack config to silence the warning about webpack config
   // Serwist uses webpack, but we need this for Next.js 16 compatibility
   turbopack: {},

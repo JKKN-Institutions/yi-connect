@@ -627,10 +627,10 @@ export async function electPartyLeader(
 ): Promise<ActionResult> {
   const supabase = await createServiceClient();
 
-  // Resolve event to authorize before mutating.
+  // Resolve event + current leader to authorize and to demote cleanly on a swap.
   const { data: party } = await supabase
     .from("parties")
-    .select("event_id")
+    .select("event_id, party_leader_id")
     .eq("id", partyId)
     .single();
   if (!party) return { success: false, error: "Party not found" };
@@ -638,6 +638,26 @@ export async function electPartyLeader(
   const access = await getYipEventAccess(party.event_id);
   if (!access.canManage) {
     return { success: false, error: "Not authorized to manage this event" };
+  }
+
+  const previousLeaderId = party.party_leader_id as string | null;
+  // Re-selecting the same person is a no-op — nothing to change or demote.
+  if (previousLeaderId === participantId) {
+    return { success: true, data: null };
+  }
+
+  // The parties-table write below is keyed only on party id, so validate that
+  // the new leader actually belongs to THIS event before mutating — otherwise a
+  // foreign participant id would set party_leader_id while the event-scoped role
+  // write matches nothing, leaving the two fields divergent.
+  const { data: member } = await supabase
+    .from("participants")
+    .select("id")
+    .eq("id", participantId)
+    .eq("event_id", party.event_id)
+    .maybeSingle();
+  if (!member) {
+    return { success: false, error: "That participant isn't in this event" };
   }
 
   // Set leader on party
@@ -652,13 +672,27 @@ export async function electPartyLeader(
     return { success: false, error: error?.message ?? "Failed" };
   }
 
-  // Mark the participant's role as party_leader (scope to the gated event so
-  // a participant from another event can't be mutated via a foreign id).
+  // Promote the new leader (scope to the gated event so a participant from
+  // another event can't be mutated via a foreign id).
   await supabase
     .from("participants")
     .update({ parliament_role: "party_leader" })
     .eq("id", participantId)
     .eq("event_id", updated.event_id);
+
+  // Demote the OUTGOING leader back to a plain MP. party_leader carries a
+  // position bonus (6 pts in the live config) auto-awarded per role at results
+  // time — leaving the old leader flagged party_leader would double-award that
+  // role across two people. Guarded to only reset a row still flagged
+  // party_leader, so a former leader meanwhile given another role isn't clobbered.
+  if (previousLeaderId) {
+    await supabase
+      .from("participants")
+      .update({ parliament_role: "mp" })
+      .eq("id", previousLeaderId)
+      .eq("event_id", updated.event_id)
+      .eq("parliament_role", "party_leader");
+  }
 
   revalidatePath(`/yip/dashboard/events/${updated.event_id}/parties`);
   revalidatePath(`/yip/dashboard/events/${updated.event_id}/participants`);

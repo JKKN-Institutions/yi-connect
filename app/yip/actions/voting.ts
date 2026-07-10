@@ -843,10 +843,40 @@ export async function revealResults(
   if (session.vote_type === "party_leader" && outcome.partyLeaderId) {
     const cfg = (session.config ?? {}) as { partyId?: string };
     if (cfg.partyId) {
+      // Read the outgoing leader before overwriting so we can demote them.
+      const { data: partyRow } = await supabase
+        .from("parties")
+        .select("party_leader_id")
+        .eq("id", cfg.partyId)
+        .single();
+      const previousLeaderId = partyRow?.party_leader_id as string | null;
+
       await supabase
         .from("parties")
         .update({ party_leader_id: outcome.partyLeaderId })
         .eq("id", cfg.partyId);
+
+      // Seat the winner in the party_leader ROLE — the leadership position
+      // bonus is awarded per role (results.ts reads parliament_role, not
+      // party_leader_id), so without this an ELECTED party leader earns 0
+      // position points. Mirrors the Speaker / PM / LoP outcomes above and the
+      // manual electPartyLeader path.
+      await supabase
+        .from("participants")
+        .update({ parliament_role: "party_leader" })
+        .eq("id", outcome.partyLeaderId)
+        .eq("event_id", session.event_id);
+
+      // Demote the outgoing leader back to a plain MP so the role (and its
+      // points) isn't duplicated. Guarded to a row still flagged party_leader.
+      if (previousLeaderId && previousLeaderId !== outcome.partyLeaderId) {
+        await supabase
+          .from("participants")
+          .update({ parliament_role: "mp" })
+          .eq("id", previousLeaderId)
+          .eq("event_id", session.event_id)
+          .eq("parliament_role", "party_leader");
+      }
     }
   }
 

@@ -925,6 +925,37 @@ export async function revealResults(
       .in("id", outcome.winnerIds);
   }
 
+  // Keep parties.party_leader_id consistent with parliament_role: if a sitting
+  // party leader was just elected to a bench seat (PM / Speaker / minister, …),
+  // their role is no longer party_leader — so clear the now-stale "leader" label
+  // on any party they were leading. Cheap reconciliation over this event's
+  // parties; a party_leader election itself leaves the winner flagged
+  // party_leader, so it is never wrongly cleared.
+  {
+    const { data: leaderParties } = await supabase
+      .from("parties")
+      .select("id, party_leader_id")
+      .eq("event_id", session.event_id)
+      .not("party_leader_id", "is", null);
+    if (leaderParties && leaderParties.length > 0) {
+      const leaderIds = leaderParties.map((p) => p.party_leader_id as string);
+      const { data: stillLeaders } = await supabase
+        .from("participants")
+        .select("id")
+        .in("id", leaderIds)
+        .eq("parliament_role", "party_leader");
+      const stillSet = new Set((stillLeaders ?? []).map((p) => p.id));
+      for (const lp of leaderParties) {
+        if (!stillSet.has(lp.party_leader_id as string)) {
+          await supabase
+            .from("parties")
+            .update({ party_leader_id: null })
+            .eq("id", lp.id);
+        }
+      }
+    }
+  }
+
   const results: VoteResults = {
     session: { ...session, status: "revealed" },
     tallies,

@@ -58,6 +58,29 @@ const EMPTY_FORM: FormState = {
   manifesto: ["", "", "", ""],
 };
 
+// Members who already hold a points-bearing senior post are hidden from the
+// leader picker — making them party leader would silently overwrite that post
+// (and strip its points). Plain MPs / unassigned members stay eligible.
+const SENIOR_ROLES = new Set<string>([
+  "speaker",
+  "nominated_speaker",
+  "deputy_speaker",
+  "prime_minister",
+  "deputy_prime_minister",
+  "leader_of_opposition",
+  "cabinet_minister",
+  "shadow_minister",
+  "coalition_leader",
+  "committee_chair",
+  "committee_drafter",
+  "committee_presenter",
+  "ex_prime_minister",
+  "ex_deputy_prime_minister",
+  "ex_speaker",
+  "ex_deputy_speaker",
+  "ex_leader_of_opposition",
+]);
+
 export function PartiesClient({
   eventId,
   eventName,
@@ -743,7 +766,11 @@ export function PartiesClient({
                             {leader ? "Change leader…" : "Elect leader…"}
                           </option>
                           {members
-                            .filter((m) => m.id !== p.party_leader_id)
+                            .filter(
+                              (m) =>
+                                m.id !== p.party_leader_id &&
+                                !SENIOR_ROLES.has(m.parliament_role ?? "")
+                            )
                             .map((m) => (
                               <option key={m.id} value={m.id}>
                                 {m.full_name}

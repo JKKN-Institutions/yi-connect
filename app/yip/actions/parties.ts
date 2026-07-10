@@ -696,5 +696,54 @@ export async function electPartyLeader(
 
   revalidatePath(`/yip/dashboard/events/${updated.event_id}/parties`);
   revalidatePath(`/yip/dashboard/events/${updated.event_id}/participants`);
+  revalidatePath(`/yip/dashboard/events/${updated.event_id}/positions`);
+  return { success: true, data: null };
+}
+
+/**
+ * Remove a party's leader entirely: clears the party's party_leader_id and
+ * demotes the sitting leader back to a plain MP (so they stop carrying the
+ * party_leader position bonus). Guarded to a row still flagged party_leader.
+ * canManage-gated. Used by the Positions-tab party-leaders card (and reusable
+ * anywhere an admin needs to vacate the seat).
+ */
+export async function clearPartyLeader(partyId: string): Promise<ActionResult> {
+  const supabase = await createServiceClient();
+
+  const { data: party } = await supabase
+    .from("parties")
+    .select("event_id, party_leader_id")
+    .eq("id", partyId)
+    .single();
+  if (!party) return { success: false, error: "Party not found" };
+
+  const access = await getYipEventAccess(party.event_id);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
+
+  const leaderId = party.party_leader_id as string | null;
+  if (!leaderId) return { success: true, data: null }; // already vacant
+
+  // Compare-and-swap: only clear the link if it STILL points to the leader we
+  // read. If a concurrent electPartyLeader seated a new leader in between, this
+  // no-ops (0 rows) instead of wiping the new leader's link — preventing a
+  // stale remove from stranding a live party_leader (who would then double-count).
+  await supabase
+    .from("parties")
+    .update({ party_leader_id: null })
+    .eq("id", partyId)
+    .eq("party_leader_id", leaderId);
+
+  await supabase
+    .from("participants")
+    .update({ parliament_role: "mp" })
+    .eq("id", leaderId)
+    .eq("event_id", party.event_id)
+    .eq("parliament_role", "party_leader");
+
+  revalidatePath(`/yip/dashboard/events/${party.event_id}/parties`);
+  revalidatePath(`/yip/dashboard/events/${party.event_id}/participants`);
+  revalidatePath(`/yip/dashboard/events/${party.event_id}/positions`);
   return { success: true, data: null };
 }

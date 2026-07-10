@@ -3,11 +3,13 @@ import { createClient } from "@/lib/yip/supabase/server";
 import { getEvent } from "@/app/yip/actions/events";
 import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
 import { PositionsAssignmentCard } from "@/components/yip/positions-assignment-card";
+import { PartyLeadersCard } from "@/components/yip/party-leaders-card";
 import { CommitteeChairsCard } from "@/components/yip/committee-chairs-card";
 import { CommitteeMinistersCard } from "@/components/yip/committee-ministers-card";
 import {
   getParticipantsByRole,
   getAllEventParticipants,
+  getPartyLeaders,
   getCommitteeChairs,
   getCommitteeMinisters,
 } from "@/app/yip/actions/positions";
@@ -38,13 +40,19 @@ export default async function PositionsPage({
 
   // Position-bonus assignment data. Moved off the Control panel onto its own tab
   // so role assignment has room to breathe and is reachable at any event status.
-  const [positionGroups, allParticipants, committeeChairs, committeeMinisters] =
-    await Promise.all([
-      getParticipantsByRole(id),
-      getAllEventParticipants(id),
-      getCommitteeChairs(id),
-      getCommitteeMinisters(id),
-    ]);
+  const [
+    positionGroups,
+    allParticipants,
+    partyLeaders,
+    committeeChairs,
+    committeeMinisters,
+  ] = await Promise.all([
+    getParticipantsByRole(id),
+    getAllEventParticipants(id),
+    getPartyLeaders(id),
+    getCommitteeChairs(id),
+    getCommitteeMinisters(id),
+  ]);
 
   return (
     <div className="space-y-4">
@@ -52,6 +60,7 @@ export default async function PositionsPage({
         groups={positionGroups}
         allParticipants={allParticipants}
       />
+      <PartyLeadersCard data={partyLeaders} />
       <CommitteeMinistersCard data={committeeMinisters} eventId={id} />
       <CommitteeChairsCard data={committeeChairs} />
     </div>

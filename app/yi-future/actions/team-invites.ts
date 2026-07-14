@@ -590,3 +590,314 @@ export async function setLeader(
   revalidatePath("/yi-future/me/team");
   return { ok: true, message: "Leader updated." };
 }
+
+// ─── RENAME TEAM (captain self-service) ─────────────────────────────
+// BUG-452/458/459: the delegate "My team" page called the admin-gated
+// updateTeamName, bouncing every captain to /yi-future/forbidden.
+export async function renameTeamAsCaptain(
+  teamId: string,
+  newName: string
+): Promise<ActionResult> {
+  const session = await readSession();
+  if (!session || session.type !== "delegate") {
+    return { ok: false, error: "Sign in as a delegate first." };
+  }
+
+  const name = newName.trim();
+  if (!name) return { ok: false, error: "Team name is required." };
+  if (name.length > 80) {
+    return { ok: false, error: "Team name must be under 80 characters." };
+  }
+
+  const team = await loadTeam(teamId);
+  if (!team) return { ok: false, error: "Team not found." };
+  if (!team.captain_id || team.captain_id !== session.id) {
+    return { ok: false, error: "Only the team captain can rename the team." };
+  }
+  if (team.is_frozen) {
+    return {
+      ok: false,
+      error:
+        "Your team is submitted and locked — ask your chapter admin to unlock it before renaming.",
+    };
+  }
+
+  const svc = await createServiceClient();
+  const { data: clash } = await svc
+    .schema("future")
+    .from("teams")
+    .select("id")
+    .eq("edition_id", team.edition_id)
+    .eq("team_name", name)
+    .neq("id", teamId)
+    .maybeSingle();
+  if (clash) {
+    return { ok: false, error: "Another team already has that name." };
+  }
+
+  const { error } = await svc
+    .schema("future")
+    .from("teams")
+    .update({ team_name: name, updated_at: new Date().toISOString() } as never)
+    .eq("id", teamId);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/yi-future/me");
+  revalidatePath("/yi-future/me/team");
+  revalidatePath(`/yi-future/chapter/teams/${teamId}`);
+  return { ok: true, message: "Team name updated." };
+}
+
+// ─── LEAVE MY TEAM (member self-service) ────────────────────────────
+// BUG-454/467/443: membership could only be ended by an admin. A member can
+// now leave their own (unlocked) team. Captains can't leave — they delete the
+// team (if it was a mistake) or ask the chapter admin to transfer captaincy.
+export async function leaveMyTeam(): Promise<ActionResult> {
+  const session = await readSession();
+  if (!session || session.type !== "delegate") {
+    return { ok: false, error: "Sign in as a delegate first." };
+  }
+
+  const svc = await createServiceClient();
+  const { data: membership } = await svc
+    .schema("future")
+    .from("team_members")
+    .select("team_id")
+    .eq("delegate_id", session.id)
+    .maybeSingle();
+  if (!membership) return { ok: false, error: "You're not on a team." };
+  const teamId = (membership as { team_id: string }).team_id;
+
+  const team = await loadTeam(teamId);
+  if (!team) return { ok: false, error: "Team not found." };
+  if (team.is_frozen) {
+    return {
+      ok: false,
+      error:
+        "Your team is submitted and locked — ask your chapter admin to unlock it before leaving.",
+    };
+  }
+  if (team.captain_id === session.id) {
+    return {
+      ok: false,
+      error:
+        "You're the team captain. Delete the team if you created it by mistake, or ask your chapter admin to transfer captaincy first.",
+    };
+  }
+
+  const { error } = await svc
+    .schema("future")
+    .from("team_members")
+    .delete()
+    .eq("team_id", teamId)
+    .eq("delegate_id", session.id);
+  if (error) return { ok: false, error: error.message };
+
+  // If the leaver was the designated leader, hand leadership back to the captain.
+  if (team.leader_delegate_id === session.id) {
+    await svc
+      .schema("future")
+      .from("teams")
+      .update({
+        leader_delegate_id: team.captain_id,
+        updated_at: new Date().toISOString(),
+      } as never)
+      .eq("id", teamId);
+  }
+
+  revalidatePath("/yi-future/me");
+  revalidatePath("/yi-future/me/team");
+  revalidatePath("/yi-future/me/team/directory");
+  revalidatePath("/yi-future/me/team/invites");
+  return { ok: true, message: "You left the team." };
+}
+
+// ─── DELETE TEAM (captain self-service) ─────────────────────────────
+// BUG-403/414/420/468: mis-created teams could only be removed by an admin.
+// The captain can delete their own team ONLY while it is unlocked and has no
+// evaluations, submissions, advancements, or awards — evaluations/submissions
+// CASCADE on team delete, so this guard is what protects scored work.
+export async function deleteMyTeamAsCaptain(
+  teamId: string
+): Promise<ActionResult> {
+  const session = await readSession();
+  if (!session || session.type !== "delegate") {
+    return { ok: false, error: "Sign in as a delegate first." };
+  }
+
+  const team = await loadTeam(teamId);
+  if (!team) return { ok: false, error: "Team not found." };
+  if (!team.captain_id || team.captain_id !== session.id) {
+    return { ok: false, error: "Only the team captain can delete the team." };
+  }
+  if (team.is_frozen) {
+    return {
+      ok: false,
+      error:
+        "Your team is submitted and locked — ask your chapter admin if it really needs to be deleted.",
+    };
+  }
+
+  const svc = await createServiceClient();
+  const guards: [table: string, label: string][] = [
+    ["evaluations", "jury evaluations"],
+    ["mentor_evaluations", "mentor evaluations"],
+    ["submissions", "submissions"],
+    ["advancements", "round advancements"],
+    ["awards", "awards"],
+  ];
+  for (const [table, label] of guards) {
+    const { count } = await (svc as AnyClient)
+      .schema("future")
+      .from(table)
+      .select("*", { count: "exact", head: true })
+      .eq("team_id", teamId);
+    if ((count ?? 0) > 0) {
+      return {
+        ok: false,
+        error: `This team already has ${label} — it can't be deleted. Contact your chapter admin.`,
+      };
+    }
+  }
+
+  const { error } = await svc
+    .schema("future")
+    .from("teams")
+    .delete()
+    .eq("id", teamId);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/yi-future/me");
+  revalidatePath("/yi-future/me/team");
+  revalidatePath("/yi-future/me/team/directory");
+  revalidatePath("/yi-future/me/team/invites");
+  revalidatePath("/yi-future/chapter/teams");
+  return { ok: true, message: "Team deleted." };
+}
+
+// ─── REMOVE MEMBER (captain self-service) ───────────────────────────
+// BUG-432/444: only admins could remove a member. The captain can now remove
+// a (non-self) member from their own unlocked team; the removed delegate can
+// be re-invited later or join another team.
+export async function removeMemberAsCaptain(
+  teamId: string,
+  delegateId: string
+): Promise<ActionResult> {
+  const session = await readSession();
+  if (!session || session.type !== "delegate") {
+    return { ok: false, error: "Sign in as a delegate first." };
+  }
+
+  const team = await loadTeam(teamId);
+  if (!team) return { ok: false, error: "Team not found." };
+  if (!team.captain_id || team.captain_id !== session.id) {
+    return { ok: false, error: "Only the team captain can remove members." };
+  }
+  if (team.is_frozen) {
+    return {
+      ok: false,
+      error:
+        "Your team is submitted and locked — ask your chapter admin to unlock it before changing members.",
+    };
+  }
+  if (delegateId === session.id) {
+    return {
+      ok: false,
+      error:
+        "You can't remove yourself — delete the team if it was a mistake.",
+    };
+  }
+
+  const svc = await createServiceClient();
+  const { data: member } = await svc
+    .schema("future")
+    .from("team_members")
+    .select("delegate_id")
+    .eq("team_id", teamId)
+    .eq("delegate_id", delegateId)
+    .maybeSingle();
+  if (!member) {
+    return { ok: false, error: "That delegate is not on this team." };
+  }
+
+  const { error } = await svc
+    .schema("future")
+    .from("team_members")
+    .delete()
+    .eq("team_id", teamId)
+    .eq("delegate_id", delegateId);
+  if (error) return { ok: false, error: error.message };
+
+  // If the removed member was the designated leader, hand it back to the captain.
+  if (team.leader_delegate_id === delegateId) {
+    await svc
+      .schema("future")
+      .from("teams")
+      .update({
+        leader_delegate_id: team.captain_id,
+        updated_at: new Date().toISOString(),
+      } as never)
+      .eq("id", teamId);
+  }
+
+  revalidatePath("/yi-future/me/team");
+  revalidatePath("/yi-future/me/team/directory");
+  revalidatePath(`/yi-future/chapter/teams/${teamId}`);
+  return { ok: true, message: "Member removed." };
+}
+
+// ─── CANCEL PENDING INVITE (team-member self-service) ───────────────
+// BUG-444: an invite sent to the wrong person could not be withdrawn. Any
+// current member of the team (same policy as sendInvite) can cancel a
+// still-pending invite; the invitee simply stops seeing it.
+export async function cancelTeamInvite(
+  inviteId: string
+): Promise<ActionResult> {
+  const session = await readSession();
+  if (!session || session.type !== "delegate") {
+    return { ok: false, error: "Sign in as a delegate first." };
+  }
+
+  const svc = await createServiceClient();
+  const { data: inviteRaw } = await svc
+    .schema("future")
+    .from("team_invitations" as AnyClient)
+    .select("id, team_id, status")
+    .eq("id", inviteId)
+    .maybeSingle();
+  const invite = inviteRaw as {
+    id: string;
+    team_id: string;
+    status: string;
+  } | null;
+  if (!invite) return { ok: false, error: "Invite not found." };
+
+  const { data: callerMember } = await svc
+    .schema("future")
+    .from("team_members")
+    .select("delegate_id")
+    .eq("team_id", invite.team_id)
+    .eq("delegate_id", session.id)
+    .maybeSingle();
+  if (!callerMember) {
+    return { ok: false, error: "Only team members can cancel this invite." };
+  }
+  if (invite.status !== "pending") {
+    return { ok: false, error: "That invite is no longer pending." };
+  }
+
+  const { error } = await svc
+    .schema("future")
+    .from("team_invitations" as AnyClient)
+    .update({
+      status: "expired",
+      responded_at: new Date().toISOString(),
+    } as never)
+    .eq("id", inviteId);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/yi-future/me/team");
+  revalidatePath("/yi-future/me/team/directory");
+  revalidatePath("/yi-future/me/team/invites");
+  return { ok: true, message: "Invite cancelled." };
+}

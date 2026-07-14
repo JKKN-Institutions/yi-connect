@@ -111,7 +111,33 @@ const KEY_ROLES: { role: ParliamentRole; label: string }[] = [
   { role: "speaker", label: "Speaker" },
   { role: "deputy_speaker", label: "Deputy Speaker" },
   { role: "leader_of_opposition", label: "Leader of Opposition" },
+  // coalition_leader is a plain event-wide leadership role (no per-party link),
+  // so it assigns cleanly through setParliamentRole like the others above.
+  { role: "coalition_leader", label: "Coalition Leader" },
 ];
+
+// Members already holding a points-bearing senior post are not offered as a
+// party-leader candidate on the Positions tab (making them party leader would
+// overwrite that post and strip its points). Mirrors the Parties-tab picker.
+const SENIOR_POSITION_ROLES = new Set<string>([
+  "speaker",
+  "nominated_speaker",
+  "deputy_speaker",
+  "prime_minister",
+  "deputy_prime_minister",
+  "leader_of_opposition",
+  "cabinet_minister",
+  "shadow_minister",
+  "coalition_leader",
+  "committee_chair",
+  "committee_drafter",
+  "committee_presenter",
+  "ex_prime_minister",
+  "ex_deputy_prime_minister",
+  "ex_speaker",
+  "ex_deputy_speaker",
+  "ex_leader_of_opposition",
+]);
 
 // ─── Actions ───────────────────────────────────────────────────────
 
@@ -203,6 +229,108 @@ export async function getParticipantsByRole(
         party_side: p.party_side,
       })),
   }));
+}
+
+// ─── Party leaders (Positions tab, per-party) ────────────────────────
+// party_leader is PARTY-scoped (one per party) and carries a second field —
+// parties.party_leader_id — so it can't ride the flat KEY_ROLES card. Like
+// committee_chair it gets a per-party card, and its writes route through
+// electPartyLeader / clearPartyLeader (parties.ts) which keep party_leader_id
+// and parliament_role in sync + demote the outgoing leader.
+
+export type PartyLeaderMember = {
+  id: string;
+  full_name: string;
+  party_side: string | null;
+  constituency_number: number | null;
+  constituency_name: string | null;
+};
+
+export type PartyLeaderRow = {
+  partyId: string;
+  partyName: string;
+  partyNumber: number;
+  side: string | null;
+  leader: PartyLeaderMember | null;
+  // Party members eligible to be made leader: excludes anyone already holding a
+  // points-bearing senior post (and the current leader is handled in the UI).
+  eligibleMembers: PartyLeaderMember[];
+};
+
+export type PartyLeadersData = { bonus: number; parties: PartyLeaderRow[] };
+
+/**
+ * Per-party leaders for the Positions tab. Reads the party's party_leader_id as
+ * the source of truth for who leads it (kept in sync with parliament_role by
+ * electPartyLeader / clearPartyLeader and the reveal reconciliation).
+ */
+export async function getPartyLeaders(
+  eventId: string
+): Promise<PartyLeadersData> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canView) return { bonus: 0, parties: [] };
+
+  const supabase = await createServiceClient();
+  const [{ bonuses }, partiesRes, participantsRes] = await Promise.all([
+    getPositionBonusConfigAdmin(),
+    supabase
+      .from("parties")
+      .select("id, name, party_number, side, party_leader_id")
+      .eq("event_id", eventId)
+      .order("party_number", { ascending: true }),
+    supabase
+      .from("participants")
+      .select(
+        "id, full_name, party_side, parliament_role, party_id, constituency_number, constituency_name"
+      )
+      .eq("event_id", eventId)
+      .order("constituency_number", { nullsFirst: false })
+      .order("full_name"),
+  ]);
+
+  const bonus = bonuses["party_leader"] ?? 0;
+  const parts = participantsRes.data ?? [];
+  const byId = new Map(parts.map((p) => [p.id, p]));
+  const byParty = new Map<string, typeof parts>();
+  for (const p of parts) {
+    if (!p.party_id) continue;
+    const list = byParty.get(p.party_id);
+    if (list) list.push(p);
+    else byParty.set(p.party_id, [p]);
+  }
+
+  const toMember = (p: (typeof parts)[number]): PartyLeaderMember => ({
+    id: p.id,
+    full_name: p.full_name,
+    party_side: p.party_side,
+    constituency_number: p.constituency_number,
+    constituency_name: p.constituency_name,
+  });
+
+  const parties: PartyLeaderRow[] = (partiesRes.data ?? []).map((party) => {
+    const members = byParty.get(party.id) ?? [];
+    const leaderP = party.party_leader_id
+      ? byId.get(party.party_leader_id)
+      : null;
+    // Only surface a leader whose role is ACTUALLY party_leader. If
+    // party_leader_id still points to someone who has since moved to a senior
+    // post (PM / minister / …), the party-leader seat is effectively vacant —
+    // show it as assignable rather than mislabel a PM as "Party Leader (+6)".
+    const activeLeader =
+      leaderP && leaderP.parliament_role === "party_leader" ? leaderP : null;
+    return {
+      partyId: party.id,
+      partyName: party.name,
+      partyNumber: party.party_number,
+      side: party.side,
+      leader: activeLeader ? toMember(activeLeader) : null,
+      eligibleMembers: members
+        .filter((m) => !SENIOR_POSITION_ROLES.has(m.parliament_role ?? ""))
+        .map(toMember),
+    };
+  });
+
+  return { bonus, parties };
 }
 
 /**

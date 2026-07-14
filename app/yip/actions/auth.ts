@@ -45,7 +45,10 @@ type ValidationResult =
 export async function validateAccessCode(
   code: string
 ): Promise<ValidationResult> {
-  const trimmed = code.trim().toUpperCase();
+  // BUG-429: codes typed/pasted with spaces (leading, trailing, or in the
+  // middle) failed the exact-match lookup. All live codes are strictly A-Z0-9,
+  // so strip everything else before matching.
+  const trimmed = code.toUpperCase().replace(/[^A-Z0-9]/g, "");
 
   if (!trimmed || trimmed.length < 3 || trimmed.length > 10) {
     return { type: "error", message: "Please enter a valid access code" };
@@ -156,98 +159,6 @@ export async function validateAccessCode(
 //   Pros: zero-friction for legit jurors, no password/OTP UI surface, no
 //   open auth hole. Cons: organizer must enter emails in advance (they
 //   already do — they print badges with access codes today).
-
-type JuryLoginResult =
-  | {
-      type: "ok";
-      jury: { id: string; jury_name: string };
-      eventId: string;
-    }
-  | { type: "error"; message: string };
-
-export async function juryLoginByEmail(
-  email: string,
-  eventId: string
-): Promise<JuryLoginResult> {
-  const normalisedEmail = email.trim().toLowerCase();
-  const trimmedEventId = eventId.trim();
-
-  if (!normalisedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalisedEmail)) {
-    return { type: "error", message: "Please enter a valid email address" };
-  }
-
-  if (!trimmedEventId) {
-    return { type: "error", message: "Please select an event" };
-  }
-
-  const supabase = await createServiceClient();
-
-  const { data: jury, error } = await supabase
-    .from("jury_assignments")
-    .select("id, jury_name, event_id, is_active")
-    .eq("email", normalisedEmail)
-    .eq("event_id", trimmedEventId)
-    .maybeSingle();
-
-  if (error || !jury) {
-    return {
-      type: "error",
-      message:
-        "Not authorized for this event. Please contact the event organizer.",
-    };
-  }
-
-  if (jury.is_active === false) {
-    return {
-      type: "error",
-      message: "Your jury access has been deactivated. Contact the organizer.",
-    };
-  }
-
-  // Set the SAME session cookie shape as access-code login so /yip/jury/*
-  // is agnostic to login method.
-  await mintYipSession({
-    type: "jury",
-    id: jury.id,
-    name: jury.jury_name,
-    eventId: jury.event_id,
-  });
-
-  await logAuditAction({
-    action_type: "login",
-    target_table: "auth",
-    target_id: jury.id,
-    target_event_id: jury.event_id,
-    performed_by: { email: normalisedEmail },
-    metadata: { method: "jury-email", jury_name: jury.jury_name },
-  });
-
-  return {
-    type: "ok",
-    jury: { id: jury.id, jury_name: jury.jury_name },
-    eventId: jury.event_id,
-  };
-}
-
-// Public list of events for the jury login dropdown.
-// Returns only minimal display info (no payment/admin fields).
-export async function listJuryLoginEvents(): Promise<
-  Array<{
-    id: string;
-    name: string;
-    chapter_name: string | null;
-    level: string;
-    day1_date: string;
-  }>
-> {
-  const supabase = await createServiceClient();
-  const { data } = await supabase
-    .from("events")
-    .select("id, name, chapter_name, level, day1_date")
-    .order("day1_date", { ascending: false });
-
-  return data ?? [];
-}
 
 // ─── Organizer Auth (Supabase Auth) ─────────────────────────────────
 

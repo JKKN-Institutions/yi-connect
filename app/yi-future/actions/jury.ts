@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { createClient, createServiceClient } from "@/lib/yi-future/supabase/server";
+import { createServiceClient } from "@/lib/yi-future/supabase/server";
 import { generateAccessCode } from "@/lib/yi-future/access-code";
 import type { Database } from "@/types/yi-future/database";
 import type { ActionResult } from "./editions";
@@ -205,27 +205,106 @@ export async function unassignJuryFromTeam(
   return { ok: true, message: "Unassigned." };
 }
 
-// ─── UPDATE JURY TRACK (category) ──────────────────────────────────
-export async function updateJuryTrack(
+// ─── TRACK JURY MEMBERSHIP (multi-track, capped panels) ────────────
+// A jury member may sit on MULTIPLE track juries. Each track jury holds
+// up to JURY_TRACK_CAP active members (per edition). Membership lives in
+// future.jury_track_assignments (the legacy jury_assignments.track_id
+// column is no longer written).
+const JURY_TRACK_CAP = 10;
+
+export async function assignJuryToTrack(
   juryId: string,
-  trackId: string | null
+  trackId: string
 ): Promise<ActionResult> {
   await requireAuth();
+  if (!juryId || !trackId) {
+    return { ok: false, error: "Missing jury or track." };
+  }
   const svc = await createServiceClient();
-  const { error } = await svc
+
+  // Resolve this jury's edition — fail closed if the jury doesn't exist.
+  const { data: juryRow } = await svc
     .schema("future")
     .from("jury_assignments")
-    .update({ track_id: trackId || null })
-    .eq("id", juryId);
+    .select("id, edition_id")
+    .eq("id", juryId)
+    .maybeSingle();
+  if (!juryRow) return { ok: false, error: "Jury member not found." };
+  const editionId = (juryRow as unknown as { edition_id: string }).edition_id;
+
+  // Current ACTIVE panel for this track within the same edition.
+  // jury_track_assignments is not in generated types yet → cast (established pattern).
+  const { data: panelRows, error: panelErr } = await (svc as any)
+    .schema("future")
+    .from("jury_track_assignments")
+    .select("jury_id, jury_assignments!inner(edition_id, is_active)")
+    .eq("track_id", trackId)
+    .eq("jury_assignments.edition_id", editionId)
+    .eq("jury_assignments.is_active", true);
+  if (panelErr) return { ok: false, error: panelErr.message };
+
+  const memberIds = new Set(
+    (((panelRows ?? []) as { jury_id: string }[])).map((r) => r.jury_id)
+  );
+  if (memberIds.has(juryId)) {
+    return { ok: true, message: "Already on this track jury." };
+  }
+  if (memberIds.size >= JURY_TRACK_CAP) {
+    const { data: track } = await svc
+      .schema("future")
+      .from("tracks")
+      .select("name")
+      .eq("id", trackId)
+      .maybeSingle();
+    const trackName = (track as unknown as { name: string } | null)?.name;
+    return {
+      ok: false,
+      error: `${
+        trackName ? `The ${trackName} track jury` : "This track jury"
+      } already has ${JURY_TRACK_CAP} members. Remove someone first.`,
+    };
+  }
+
+  const { error } = await (svc as any)
+    .schema("future")
+    .from("jury_track_assignments")
+    .upsert(
+      { jury_id: juryId, track_id: trackId },
+      { onConflict: "jury_id,track_id" }
+    );
   if (error) return { ok: false, error: error.message };
+
   revalidatePath("/yi-future/chapter/jury");
   revalidatePath("/yi-future/chapter/jury/categories");
-  return { ok: true, message: "Track updated." };
+  return { ok: true, message: "Added to track jury." };
+}
+
+export async function unassignJuryFromTrack(
+  juryId: string,
+  trackId: string
+): Promise<ActionResult> {
+  await requireAuth();
+  if (!juryId || !trackId) {
+    return { ok: false, error: "Missing jury or track." };
+  }
+  const svc = await createServiceClient();
+  const { error } = await (svc as any)
+    .schema("future")
+    .from("jury_track_assignments")
+    .delete()
+    .eq("jury_id", juryId)
+    .eq("track_id", trackId);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/yi-future/chapter/jury");
+  revalidatePath("/yi-future/chapter/jury/categories");
+  return { ok: true, message: "Removed from track jury." };
 }
 
 // ─── AUTO-ASSIGN JURY TO TEAMS BY TRACK ────────────────────────────
-// For each track: every jury assigned to that track gets assigned to
-// every team whose problem_statement belongs to that track.
+// For each track: every jury member on that track jury gets assigned to
+// every team whose problem_statement belongs to that track. Tracks are
+// derived from future.jury_track_assignments (multi-track model).
 export async function autoAssignJuryToTeams(
   chapterId: string,
   editionId: string
@@ -233,18 +312,19 @@ export async function autoAssignJuryToTeams(
   await requireAuth();
   const svc = await createServiceClient();
 
-  // 1. Fetch all jury with a track_id set
-  const { data: juryRows } = await svc
+  // 1. Fetch all (jury, track) memberships for active jury of this edition
+  const { data: jtaRows, error: jtaErr } = await (svc as any)
     .schema("future")
-    .from("jury_assignments")
-    .select("id, track_id")
-    .eq("edition_id", editionId)
-    .eq("is_active", true)
-    .not("track_id", "is", null);
+    .from("jury_track_assignments")
+    .select("jury_id, track_id, jury_assignments!inner(edition_id, is_active)")
+    .eq("jury_assignments.edition_id", editionId)
+    .eq("jury_assignments.is_active", true);
+  if (jtaErr) return { ok: false, error: jtaErr.message };
 
-  const juryList = (juryRows as unknown as { id: string; track_id: string }[]) ?? [];
+  const juryList =
+    ((jtaRows ?? []) as { jury_id: string; track_id: string }[]);
   if (juryList.length === 0)
-    return { ok: false, error: "No jury members have a track assigned." };
+    return { ok: false, error: "No jury members are assigned to a track jury yet." };
 
   // 2. Fetch teams with their problem_statement → track mapping
   const { data: teamRows } = await svc
@@ -268,7 +348,7 @@ export async function autoAssignJuryToTeams(
   const juryByTrack = new Map<string, string[]>();
   for (const j of juryList) {
     const arr = juryByTrack.get(j.track_id) ?? [];
-    arr.push(j.id);
+    if (!arr.includes(j.jury_id)) arr.push(j.jury_id);
     juryByTrack.set(j.track_id, arr);
   }
 

@@ -10,7 +10,13 @@ import {
   createTeamAsDelegate,
   sendInvite,
 } from "@/app/yi-future/actions/team-invites";
-import { updateTeamName } from "@/app/yi-future/actions/teams";
+import {
+  RenameTeamForm,
+  LeaveTeamButton,
+  DeleteTeamButton,
+  RemoveMemberButton,
+  CancelInviteButton,
+} from "@/components/yi-future/TeamSelfService";
 import { TEAM_SIZE_MIN, TEAM_SIZE_MAX } from "@/lib/yi-future/constants";
 import { isInviteExpired } from "@/lib/yi-future/invite-expiry";
 import { TrackIcon, trackIconText } from "@/components/yi-future/TrackIcon";
@@ -87,7 +93,7 @@ async function getMyTeam(delegateId: string): Promise<TeamView | null> {
 type AvailableDelegate = {
   id: string;
   full_name: string;
-  hasPendingInvite: boolean;
+  pendingInviteId: string | null;
 };
 
 async function getAvailableDelegates(
@@ -117,15 +123,21 @@ async function getAvailableDelegates(
   const { data: pending } = await (svc as any)
     .schema("future")
     .from("team_invitations")
-    .select("invited_delegate_id, created_at")
+    .select("id, invited_delegate_id, created_at")
     .eq("team_id", teamId)
     .eq("status", "pending");
   // Only still-valid pending invites count as "invite sent" — an expired one
   // can be re-sent, so the delegate appears invitable again.
-  const pendingIds = new Set(
-    ((pending ?? []) as { invited_delegate_id: string; created_at: string }[])
+  const pendingByDelegate = new Map(
+    (
+      (pending ?? []) as {
+        id: string;
+        invited_delegate_id: string;
+        created_at: string;
+      }[]
+    )
       .filter((r) => !isInviteExpired(r.created_at))
-      .map((r) => r.invited_delegate_id)
+      .map((r) => [r.invited_delegate_id, r.id] as const)
   );
 
   return delegates
@@ -133,7 +145,7 @@ async function getAvailableDelegates(
     .map((d) => ({
       id: d.id,
       full_name: d.full_name,
-      hasPendingInvite: pendingIds.has(d.id),
+      pendingInviteId: pendingByDelegate.get(d.id) ?? null,
     }));
 }
 
@@ -268,11 +280,6 @@ export default async function MyTeamPage() {
     await sendInvite({ teamId: team!.id, toDelegateId });
   }
 
-  async function renameAction(formData: FormData) {
-    "use server";
-    await updateTeamName(team!.id, team!.edition_id, formData);
-  }
-
   async function pickProblemAction(formData: FormData) {
     "use server";
     const pid = String(formData.get("problem_id") ?? "");
@@ -345,20 +352,14 @@ export default async function MyTeamPage() {
       {isCaptain && (
         <section className="bg-white border border-navy/10 rounded-lg p-5">
           <h3 className="text-sm font-bold text-navy mb-3">Team name</h3>
-          <form action={renameAction} className="flex gap-2">
-            <input
-              name="team_name"
-              required
-              defaultValue={team.team_name}
-              className="flex-1 px-3 py-2 border border-navy/20 rounded-md text-sm"
-            />
-            <SubmitButton
-              pendingText="Saving..."
-              className="px-4 py-2 rounded-md bg-navy text-ivory text-sm font-semibold hover:bg-navy-dark"
-            >
-              Save
-            </SubmitButton>
-          </form>
+          {isFrozen ? (
+            <p className="text-xs text-navy/50 italic">
+              Team is submitted — the name is locked. Ask your chapter admin if
+              it must change.
+            </p>
+          ) : (
+            <RenameTeamForm teamId={team.id} defaultName={team.team_name} />
+          )}
         </section>
       )}
 
@@ -401,6 +402,13 @@ export default async function MyTeamPage() {
                       LEADER
                     </span>
                   )}
+                {isCaptain && !isFrozen && m.delegate_id !== session.id && (
+                  <RemoveMemberButton
+                    teamId={team.id}
+                    delegateId={m.delegate_id}
+                    memberName={m.delegates.full_name}
+                  />
+                )}
               </div>
             </li>
           ))}
@@ -425,9 +433,12 @@ export default async function MyTeamPage() {
                 <span className="font-semibold text-navy text-sm">
                   {d.full_name}
                 </span>
-                {d.hasPendingInvite ? (
-                  <span className="text-[10px] font-semibold text-yi-gold uppercase tracking-wider">
-                    Invite sent
+                {d.pendingInviteId ? (
+                  <span className="flex items-center gap-2">
+                    <span className="text-[10px] font-semibold text-yi-gold uppercase tracking-wider">
+                      Invite sent
+                    </span>
+                    <CancelInviteButton inviteId={d.pendingInviteId} />
                   </span>
                 ) : (
                   <form action={inviteAction}>
@@ -681,6 +692,49 @@ export default async function MyTeamPage() {
                   </div>
                 )}
               </details>
+            </>
+          )}
+        </section>
+      )}
+
+      {/* Leave team (non-captain members) */}
+      {!isCaptain && (
+        <section className="bg-white border border-navy/10 rounded-lg p-5">
+          <h3 className="text-sm font-bold text-navy mb-1">Leave team</h3>
+          {isFrozen ? (
+            <p className="text-xs text-navy/50 italic">
+              Team is submitted and locked — ask your chapter admin to unlock
+              it if you need to leave.
+            </p>
+          ) : (
+            <>
+              <p className="text-xs text-navy/60 mb-3">
+                Joined by mistake or want to switch teams? You can leave while
+                the team is not yet submitted.
+              </p>
+              <LeaveTeamButton />
+            </>
+          )}
+        </section>
+      )}
+
+      {/* Delete team (captain) */}
+      {isCaptain && (
+        <section className="bg-white border border-red-200 rounded-lg p-5">
+          <h3 className="text-sm font-bold text-red-600 mb-1">Delete team</h3>
+          {isFrozen ? (
+            <p className="text-xs text-navy/50 italic">
+              Team is submitted and locked — ask your chapter admin if it
+              really needs to be deleted.
+            </p>
+          ) : (
+            <>
+              <p className="text-xs text-navy/60 mb-3">
+                Created this team by mistake? Deleting it frees you and all
+                members to join or create other teams. Teams that already have
+                evaluations or submissions can&apos;t be deleted.
+              </p>
+              <DeleteTeamButton teamId={team.id} teamName={team.team_name} />
             </>
           )}
         </section>

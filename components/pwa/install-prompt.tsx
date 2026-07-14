@@ -25,7 +25,6 @@ interface BeforeInstallPromptEvent extends Event {
 }
 
 export function InstallPrompt() {
-  const pathname = usePathname()
   const [deferredPrompt, setDeferredPrompt] =
     useState<BeforeInstallPromptEvent | null>(null)
   const [isInstalled, setIsInstalled] = useState(false)
@@ -33,6 +32,19 @@ export function InstallPrompt() {
   const [isStandalone, setIsStandalone] = useState(false)
   const [isDismissed, setIsDismissed] = useState(false)
   const [showIOSInstructions, setShowIOSInstructions] = useState(false)
+
+  // Presentation / public read-only surfaces where a bottom-corner install nag
+  // just covers content: the big-screen projector (…/display) and the no-login
+  // shared feedback report (/yip/r/…). Those screens are watched by a room or
+  // read by a committee, not a phone user deciding to install the app.
+  // Varnam Vizha (/varnam-vizha/…) has its own scoped PWA manifest, so the
+  // shared Yi Connect prompt is suppressed there too.
+  const pathname = usePathname()
+  const suppressedRoute =
+    !!pathname &&
+    (pathname.endsWith('/display') ||
+      pathname.startsWith('/yip/r/') ||
+      pathname.startsWith('/varnam-vizha'))
 
   useEffect(() => {
     // Check if already dismissed in this session
@@ -99,13 +111,9 @@ export function InstallPrompt() {
     sessionStorage.setItem('pwa-install-dismissed', 'true')
   }, [])
 
-  // Varnam Vizha has its own scoped PWA manifest — suppress the shared prompt there
-  if (pathname?.startsWith('/varnam-vizha')) {
-    return null
-  }
-
-  // Don't show if already installed, in standalone mode, or dismissed
-  if (isStandalone || isInstalled || isDismissed) {
+  // Don't show if already installed, in standalone mode, dismissed, or on a
+  // presentation/public read-only surface (projector, shared report).
+  if (isStandalone || isInstalled || isDismissed || suppressedRoute) {
     return null
   }
 

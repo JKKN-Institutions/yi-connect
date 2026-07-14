@@ -46,6 +46,7 @@ import {
 import { VoteClient } from "./vote/vote-client";
 import { GoIndependentButton } from "./go-independent-button";
 import { LiveNowCard } from "./live-now-card";
+import { SpeakCard } from "./speak-card";
 import { HeroCredential } from "./hero-credential";
 import { AnnouncementStrip } from "./announcement-strip";
 import { PushToggle } from "@/components/yip/push-toggle";
@@ -532,6 +533,12 @@ export default async function ParticipantPage() {
 
       {/* ─── LIVE NOW (realtime agenda + timer) ────────────────────── */}
       <LiveNowCard eventId={event.id} />
+
+      {/* ─── SPEAKING FLOOR (raise-to-speak — realtime, self-hides) ────
+          Optional phone placard, OFF by default (Erode disliked phone overuse);
+          the Chair's fairness board + projector meter work phone-free regardless.
+          Only renders when a chapter turns it on for this event. */}
+      {event.speaking_placard_enabled && <SpeakCard eventId={event.id} />}
 
       {/* ─── VOTE NOW (live ballot, inline — no navigation to /me/vote) ─ */}
       <VoteClient initialSession={session} embedded />

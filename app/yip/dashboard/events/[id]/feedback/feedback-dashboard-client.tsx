@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import Link from "next/link";
 import { Card, CardContent } from "@/components/yip/ui/card";
 import { Button } from "@/components/yip/ui/button";
 import { Badge } from "@/components/yip/ui/badge";
@@ -22,6 +23,7 @@ import {
   ThumbsUp,
   Inbox,
   Copy,
+  FileText,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -113,6 +115,15 @@ export function FeedbackDashboardClient({
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {/* Committee-ready analysis: scorecard, themes, voices, recommendations.
+              Plain styled Link — the yip Button has no asChild/Slot support. */}
+          <Link
+            href={`/yip/dashboard/events/${eventId}/feedback/report`}
+            className="inline-flex h-8 items-center rounded-md border border-[#1a1a3e]/20 bg-white px-3 text-xs font-medium text-[#1a1a3e] shadow-sm transition-colors hover:bg-gray-50"
+          >
+            <FileText className="size-3.5 mr-1.5" />
+            Open report
+          </Link>
           <Button
             variant="outline"
             size="sm"
@@ -288,7 +299,7 @@ export function FeedbackDashboardClient({
                 <TableHead className="text-center w-[60px]">Overall</TableHead>
                 <TableHead className="text-center w-[50px]">NPS</TableHead>
                 <TableHead>Biggest takeaway</TableHead>
-                <TableHead>What didn&apos;t work</TableHead>
+                <TableHead>What to improve</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -350,7 +361,11 @@ export function FeedbackDashboardClient({
                   </TableCell>
                   <TableCell className="max-w-xs">
                     <p className="text-xs text-gray-700 line-clamp-2">
-                      {r.what_didnt_work ?? (
+                      {/* Only the ORGANIZER form collects what_didnt_work; the
+                          participant form's improvement text lands in
+                          `suggestions`. Coalesce so participant rows aren't a
+                          permanently blank column (Erode 2026). */}
+                      {r.what_didnt_work?.trim() || r.suggestions?.trim() || (
                         <span className="text-gray-300">—</span>
                       )}
                     </p>

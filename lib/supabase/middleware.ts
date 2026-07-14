@@ -201,6 +201,7 @@ function handleYipAuth(
     '/yip/event',
     '/yip/test-login',
     '/yip/jury/login',
+    '/yip/r', // public feedback-report share links (token-gated, no login)
   ]
   // Exact match for the landing page.
   if (pathname === '/yip' || pathname === '/yip/') {

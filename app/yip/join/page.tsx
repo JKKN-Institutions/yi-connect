@@ -87,7 +87,12 @@ export default function JoinPage() {
                     placeholder="ABC123"
                     value={code}
                     onChange={(e) => {
-                      setCode(e.target.value.toUpperCase());
+                      // Codes are A-Z0-9 only — drop spaces/punctuation so a
+                      // pasted "ABC 123" can't eat the 10-char limit or fail
+                      // the lookup (BUG-429).
+                      setCode(
+                        e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "")
+                      );
                       setError(null);
                     }}
                     maxLength={10}
@@ -144,13 +149,7 @@ export default function JoinPage() {
           </div>
 
           <p className="mt-8 text-center text-sm text-[#1a1a3e]/35">
-            Jury member?{" "}
-            <Link
-              href="/yip/jury/login"
-              className="font-medium text-[#FF9933] hover:underline"
-            >
-              Sign in with email
-            </Link>
+            Jury member? Enter the access code the organisers gave you above.
           </p>
           <p className="mt-2 text-center text-sm text-[#1a1a3e]/35">
             Organizing an event?{" "}

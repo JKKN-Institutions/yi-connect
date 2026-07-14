@@ -843,10 +843,40 @@ export async function revealResults(
   if (session.vote_type === "party_leader" && outcome.partyLeaderId) {
     const cfg = (session.config ?? {}) as { partyId?: string };
     if (cfg.partyId) {
+      // Read the outgoing leader before overwriting so we can demote them.
+      const { data: partyRow } = await supabase
+        .from("parties")
+        .select("party_leader_id")
+        .eq("id", cfg.partyId)
+        .single();
+      const previousLeaderId = partyRow?.party_leader_id as string | null;
+
       await supabase
         .from("parties")
         .update({ party_leader_id: outcome.partyLeaderId })
         .eq("id", cfg.partyId);
+
+      // Seat the winner in the party_leader ROLE — the leadership position
+      // bonus is awarded per role (results.ts reads parliament_role, not
+      // party_leader_id), so without this an ELECTED party leader earns 0
+      // position points. Mirrors the Speaker / PM / LoP outcomes above and the
+      // manual electPartyLeader path.
+      await supabase
+        .from("participants")
+        .update({ parliament_role: "party_leader" })
+        .eq("id", outcome.partyLeaderId)
+        .eq("event_id", session.event_id);
+
+      // Demote the outgoing leader back to a plain MP so the role (and its
+      // points) isn't duplicated. Guarded to a row still flagged party_leader.
+      if (previousLeaderId && previousLeaderId !== outcome.partyLeaderId) {
+        await supabase
+          .from("participants")
+          .update({ parliament_role: "mp" })
+          .eq("id", previousLeaderId)
+          .eq("event_id", session.event_id)
+          .eq("parliament_role", "party_leader");
+      }
     }
   }
 
@@ -893,6 +923,37 @@ export async function revealResults(
       .from("participants")
       .update({ parliament_role: session.vote_type })
       .in("id", outcome.winnerIds);
+  }
+
+  // Keep parties.party_leader_id consistent with parliament_role: if a sitting
+  // party leader was just elected to a bench seat (PM / Speaker / minister, …),
+  // their role is no longer party_leader — so clear the now-stale "leader" label
+  // on any party they were leading. Cheap reconciliation over this event's
+  // parties; a party_leader election itself leaves the winner flagged
+  // party_leader, so it is never wrongly cleared.
+  {
+    const { data: leaderParties } = await supabase
+      .from("parties")
+      .select("id, party_leader_id")
+      .eq("event_id", session.event_id)
+      .not("party_leader_id", "is", null);
+    if (leaderParties && leaderParties.length > 0) {
+      const leaderIds = leaderParties.map((p) => p.party_leader_id as string);
+      const { data: stillLeaders } = await supabase
+        .from("participants")
+        .select("id")
+        .in("id", leaderIds)
+        .eq("parliament_role", "party_leader");
+      const stillSet = new Set((stillLeaders ?? []).map((p) => p.id));
+      for (const lp of leaderParties) {
+        if (!stillSet.has(lp.party_leader_id as string)) {
+          await supabase
+            .from("parties")
+            .update({ party_leader_id: null })
+            .eq("id", lp.id);
+        }
+      }
+    }
   }
 
   const results: VoteResults = {

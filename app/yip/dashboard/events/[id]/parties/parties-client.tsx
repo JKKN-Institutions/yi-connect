@@ -58,6 +58,29 @@ const EMPTY_FORM: FormState = {
   manifesto: ["", "", "", ""],
 };
 
+// Members who already hold a points-bearing senior post are hidden from the
+// leader picker — making them party leader would silently overwrite that post
+// (and strip its points). Plain MPs / unassigned members stay eligible.
+const SENIOR_ROLES = new Set<string>([
+  "speaker",
+  "nominated_speaker",
+  "deputy_speaker",
+  "prime_minister",
+  "deputy_prime_minister",
+  "leader_of_opposition",
+  "cabinet_minister",
+  "shadow_minister",
+  "coalition_leader",
+  "committee_chair",
+  "committee_drafter",
+  "committee_presenter",
+  "ex_prime_minister",
+  "ex_deputy_prime_minister",
+  "ex_speaker",
+  "ex_deputy_speaker",
+  "ex_leader_of_opposition",
+]);
+
 export function PartiesClient({
   eventId,
   eventName,
@@ -88,6 +111,8 @@ export function PartiesClient({
   const [flash, setFlash] = useState<string | null>(null);
   const [assignOpen, setAssignOpen] = useState<string | null>(null);
   const [picked, setPicked] = useState<Set<string>>(new Set());
+  // Party id whose already-assigned leader is being changed (reveals the picker).
+  const [changing, setChanging] = useState<string | null>(null);
   const [setupCount, setSetupCount] = useState(5);
   const [uploadingSymbol, setUploadingSymbol] = useState(false);
 
@@ -298,6 +323,7 @@ export function PartiesClient({
   }
 
   function handleElectLeader(partyId: string, participantId: string) {
+    const hadLeader = !!parties.find((p) => p.id === partyId)?.party_leader_id;
     startTransition(async () => {
       const res = await electPartyLeader(partyId, participantId);
       if (!res.success) {
@@ -309,7 +335,8 @@ export function PartiesClient({
           p.id === partyId ? { ...p, party_leader_id: participantId } : p
         )
       );
-      setFlash("Party Leader elected");
+      setChanging(null);
+      setFlash(hadLeader ? "Party Leader changed" : "Party Leader elected");
       setTimeout(() => setFlash(null), 2500);
     });
   }
@@ -728,19 +755,46 @@ export function PartiesClient({
                       <Button size="sm" variant="outline" onClick={() => openAssign(p.id)}>
                         Assign
                       </Button>
-                      {members.length > 0 && !leader && (
+                      {members.length > 0 && (!leader || changing === p.id) && (
                         <select
                           onChange={(e) => e.target.value && handleElectLeader(p.id, e.target.value)}
                           defaultValue=""
-                          className="text-xs border rounded px-2 py-1"
+                          disabled={pending}
+                          className="text-xs border rounded px-2 py-1 disabled:opacity-50"
                         >
-                          <option value="">Elect leader…</option>
-                          {members.map((m) => (
-                            <option key={m.id} value={m.id}>
-                              {m.full_name}
-                            </option>
-                          ))}
+                          <option value="">
+                            {leader ? "Change leader…" : "Elect leader…"}
+                          </option>
+                          {members
+                            .filter(
+                              (m) =>
+                                m.id !== p.party_leader_id &&
+                                !SENIOR_ROLES.has(m.parliament_role ?? "")
+                            )
+                            .map((m) => (
+                              <option key={m.id} value={m.id}>
+                                {m.full_name}
+                              </option>
+                            ))}
                         </select>
+                      )}
+                      {leader && changing !== p.id && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setChanging(p.id)}
+                        >
+                          Change
+                        </Button>
+                      )}
+                      {changing === p.id && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setChanging(null)}
+                        >
+                          Cancel
+                        </Button>
                       )}
                     </div>
                   </div>

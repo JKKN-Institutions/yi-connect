@@ -45,6 +45,20 @@ const SCOPES: ScopeDef[] = [
     regional: true,
   },
   {
+    scope: "chapter_progress",
+    title: "Chapter Progress",
+    description:
+      "One row per chapter: total delegates, in a team, without a team, in a team with captain, in a team with problem picked.",
+    regional: true,
+  },
+  {
+    scope: "problem_matrix",
+    title: "Problem Statement Matrix",
+    description:
+      "One row per chapter, one column per problem statement (P1–P12 in track order) — cell = teams that picked it.",
+    regional: true,
+  },
+  {
     scope: "colleges",
     title: "Colleges",
     description:
@@ -126,6 +140,20 @@ async function countScope(
 ): Promise<number> {
   const svc = await createServiceClient();
   const { editionId, chapterIds } = ctx;
+
+  // chapter_progress / problem_matrix — one row per chapter
+  if (scope === "chapter_progress" || scope === "problem_matrix") {
+    let q = svc
+      .schema("yi")
+      .from("chapters")
+      .select("id", { count: "exact", head: true });
+    if (chapterIds) {
+      if (chapterIds.length === 0) return 0;
+      q = q.in("id", chapterIds);
+    }
+    const { count } = await q;
+    return count ?? 0;
+  }
 
   // chapters
   if (scope === "chapters") {

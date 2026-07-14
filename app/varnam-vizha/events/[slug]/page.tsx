@@ -38,7 +38,7 @@ export default async function VarnamEventDetail({ params }: Params) {
   const { slug } = await params;
   const found = await getEventBySlug(slug);
   if (!found) notFound();
-  const { event, edition, registration } = found;
+  const { event, edition, registration, registrationFormFields } = found;
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-12">
@@ -138,6 +138,7 @@ export default async function VarnamEventDetail({ params }: Params) {
             eventId={event.id}
             mode={registration.mode}
             spotsLeft={registration.spotsLeft}
+            fields={registrationFormFields}
           />
         )}
       </div>

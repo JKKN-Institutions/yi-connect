@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import { getVarnamAccess } from "@/lib/varnam/auth/access";
 import { Forbidden403 } from "@/app/varnam-vizha/_components/Forbidden403";
-import { getSponsorsDetail } from "@/lib/varnam/data/dashboard-detail";
+import { getSponsorsBoard } from "@/lib/varnam/data/manage-boards-data";
+import { AddSponsorPanel } from "./_components/AddSponsorPanel";
+import { SponsorsTable } from "./_components/SponsorsTable";
 
 export const metadata: Metadata = { title: "Sponsors" };
 
@@ -16,7 +18,7 @@ export default async function SponsorsPage() {
   const access = await getVarnamAccess();
   if (!access.canView) return <Forbidden403 reason={access.reason} />;
 
-  const sponsors = await getSponsorsDetail();
+  const sponsors = await getSponsorsBoard();
   const committedTotal = sponsors.reduce((s, x) => s + x.committed, 0);
 
   return (
@@ -41,70 +43,10 @@ export default async function SponsorsPage() {
         ) : null}
       </div>
 
+      {access.canManage ? <AddSponsorPanel /> : null}
+
       <section className="overflow-hidden rounded-2xl border border-[#3B0A45]/10 bg-white shadow-sm">
-        {sponsors.length === 0 ? (
-          <p className="p-6 text-sm text-[#2B0A33]/50">
-            No active sponsors yet.
-          </p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="border-b border-[#3B0A45]/10 text-xs uppercase tracking-wide text-[#2B0A33]/50">
-                  <th className="px-4 py-3 font-semibold">Sponsor</th>
-                  <th className="px-4 py-3 font-semibold">Industry</th>
-                  <th className="px-4 py-3 font-semibold">Status</th>
-                  <th className="px-4 py-3 font-semibold">Priority</th>
-                  <th className="px-4 py-3 text-right font-semibold">
-                    This year
-                  </th>
-                  <th className="px-4 py-3 text-right font-semibold">
-                    Committed
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {sponsors.map((s, i) => (
-                  <tr
-                    key={`${s.name}-${i}`}
-                    className="border-b border-[#3B0A45]/6 last:border-0 hover:bg-[#FFF9F0]"
-                  >
-                    <td className="px-4 py-3 font-medium text-[#2B0A33]">
-                      {s.name}
-                    </td>
-                    <td className="px-4 py-3 text-[#2B0A33]/70">
-                      {s.industry ?? (
-                        <span className="text-[#2B0A33]/35">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="inline-flex rounded-full bg-[#3B0A45]/8 px-2.5 py-0.5 text-[11px] font-medium capitalize text-[#3B0A45]/70">
-                        {s.status ?? "prospect"}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      {s.priority ? (
-                        <span className="inline-flex rounded-full bg-[#F4A300]/15 px-2.5 py-0.5 text-[11px] font-medium capitalize text-[#a06b00]">
-                          {s.priority}
-                        </span>
-                      ) : (
-                        <span className="text-[#2B0A33]/35">—</span>
-                      )}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-right text-[#2B0A33]/70">
-                      {s.currentYearAmount
-                        ? inr(s.currentYearAmount)
-                        : "—"}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-right font-semibold text-[#0a8485]">
-                      {s.committed ? inr(s.committed) : "—"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <SponsorsTable sponsors={sponsors} canManage={access.canManage} />
       </section>
     </div>
   );

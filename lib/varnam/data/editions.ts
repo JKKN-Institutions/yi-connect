@@ -5,6 +5,10 @@
  * so this is safe for the public site (least privilege).
  */
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import {
+  parseFormFields,
+  type VarnamFormField,
+} from "@/lib/varnam/forms/types";
 
 export const FESTIVAL_KEY = "varnam-vizha";
 
@@ -137,6 +141,8 @@ export async function getEventBySlug(slug: string): Promise<{
   event: FestivalEvent;
   edition: Edition | null;
   registration: RegistrationState;
+  /** Organiser-designed extra sign-up questions (defensively parsed). */
+  registrationFormFields: VarnamFormField[];
 } | null> {
   const sb = await createServerSupabaseClient();
   const { data: eventRaw } = await sb
@@ -144,7 +150,7 @@ export async function getEventBySlug(slug: string): Promise<{
     .from("events")
     .select(
       EVENT_COLS +
-        ",festival_edition_id,max_capacity,waitlist_enabled,custom_fields"
+        ",festival_edition_id,max_capacity,waitlist_enabled,custom_fields,registration_form_fields"
     )
     .eq("public_slug", slug)
     .maybeSingle();
@@ -154,6 +160,7 @@ export async function getEventBySlug(slug: string): Promise<{
     max_capacity?: number | null;
     waitlist_enabled?: boolean | null;
     custom_fields?: Record<string, unknown> | null;
+    registration_form_fields?: unknown;
   };
 
   let edition: Edition | null = null;
@@ -191,5 +198,10 @@ export async function getEventBySlug(slug: string): Promise<{
       ? Math.max(0, event.max_capacity - confirmedCount)
       : null;
 
-  return { event, edition, registration: { mode, ticketUrl, spotsLeft } };
+  return {
+    event,
+    edition,
+    registration: { mode, ticketUrl, spotsLeft },
+    registrationFormFields: parseFormFields(event.registration_form_fields),
+  };
 }

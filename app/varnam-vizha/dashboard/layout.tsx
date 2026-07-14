@@ -14,6 +14,7 @@ const TABS = [
   { href: "/varnam-vizha/dashboard/registrations", label: "Registrations" },
   { href: "/varnam-vizha/dashboard/sponsors", label: "Sponsors" },
   { href: "/varnam-vizha/dashboard/budget", label: "Budget" },
+  { href: "/varnam-vizha/dashboard/team", label: "Team" },
   { href: "/varnam-vizha/playbook", label: "Playbook" },
 ];
 

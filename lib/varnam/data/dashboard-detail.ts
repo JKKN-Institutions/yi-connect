@@ -91,10 +91,13 @@ export async function getEventsManagement(): Promise<EventRow[]> {
 
 // ── Registrations ──────────────────────────────────────────────────────────
 export type RegistrationRow = {
+  id: string;
   name: string;
   email: string | null;
   phone: string | null;
   eventTitle: string;
+  status: string | null;
+  checked_in_at: string | null;
   created_at: string | null;
 };
 
@@ -117,21 +120,27 @@ export async function getAllRegistrations(): Promise<RegistrationRow[]> {
   const { data: regsRaw } = await sb
     .schema("yi_connect")
     .from("guest_rsvps")
-    .select("full_name, email, phone, event_id, created_at")
+    .select("id, full_name, email, phone, event_id, status, checked_in_at, created_at")
     .in("event_id", eventIds)
     .order("created_at", { ascending: false });
 
   return ((regsRaw ?? []) as {
+    id: string;
     full_name: string;
     email: string | null;
     phone: string | null;
     event_id: string;
+    status: string | null;
+    checked_in_at: string | null;
     created_at: string | null;
   }[]).map((r) => ({
+    id: r.id,
     name: r.full_name,
     email: r.email,
     phone: r.phone,
     eventTitle: titleById.get(r.event_id) ?? "Event",
+    status: r.status,
+    checked_in_at: r.checked_in_at,
     created_at: r.created_at,
   }));
 }

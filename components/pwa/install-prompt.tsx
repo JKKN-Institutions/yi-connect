@@ -37,10 +37,14 @@ export function InstallPrompt() {
   // just covers content: the big-screen projector (…/display) and the no-login
   // shared feedback report (/yip/r/…). Those screens are watched by a room or
   // read by a committee, not a phone user deciding to install the app.
+  // Varnam Vizha (/varnam-vizha/…) has its own scoped PWA manifest, so the
+  // shared Yi Connect prompt is suppressed there too.
   const pathname = usePathname()
   const suppressedRoute =
     !!pathname &&
-    (pathname.endsWith('/display') || pathname.startsWith('/yip/r/'))
+    (pathname.endsWith('/display') ||
+      pathname.startsWith('/yip/r/') ||
+      pathname.startsWith('/varnam-vizha'))
 
   useEffect(() => {
     // Check if already dismissed in this session

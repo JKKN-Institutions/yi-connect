@@ -1,24 +1,128 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { CheckCircle2 } from "lucide-react";
 import { registerForEvent, type RegisterState } from "@/lib/varnam/actions/register";
+import type { VarnamFormField } from "@/lib/varnam/forms/types";
 
 const INITIAL: RegisterState = { ok: false, message: "" };
 
 const inputCls =
   "w-full rounded-lg border border-[#3B0A45]/15 bg-white px-3 py-2.5 text-sm text-[#2B0A33] outline-none transition focus:border-[#D6336C] focus:ring-2 focus:ring-[#D6336C]/20";
 
+/**
+ * Organiser-designed extra question. `required` here is UX only — the register
+ * server action re-fetches the form definition and is the real gate.
+ *
+ * Controlled: React 19 resets uncontrolled form fields after a server action,
+ * which would wipe the visitor's answers whenever validation fails. Values
+ * live in the parent's state so a failed submit keeps everything typed.
+ */
+function CustomField({
+  field,
+  value,
+  onChange,
+}: {
+  field: VarnamFormField;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const name = `cf_${field.id}`;
+
+  if (field.type === "checkbox") {
+    return (
+      <label className="flex items-start gap-2.5 text-sm text-[#2B0A33]">
+        <input
+          type="checkbox"
+          name={name}
+          required={field.required}
+          checked={value === "on"}
+          onChange={(e) => onChange(e.target.checked ? "on" : "")}
+          className="mt-0.5 size-4 shrink-0 accent-[#D6336C]"
+        />
+        <span>
+          {field.label}
+          {field.required && <span className="text-[#D6336C]"> *</span>}
+        </span>
+      </label>
+    );
+  }
+
+  const control =
+    field.type === "textarea" ? (
+      <textarea
+        id={name}
+        name={name}
+        rows={3}
+        placeholder={field.placeholder}
+        required={field.required}
+        maxLength={500}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={inputCls}
+      />
+    ) : field.type === "select" ? (
+      <select
+        id={name}
+        name={name}
+        required={field.required}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={inputCls}
+      >
+        <option value="">{field.placeholder || "Select an option"}</option>
+        {(field.options ?? []).map((o) => (
+          <option key={o} value={o}>
+            {o}
+          </option>
+        ))}
+      </select>
+    ) : (
+      <input
+        id={name}
+        name={name}
+        type={field.type === "phone" ? "tel" : "text"}
+        placeholder={field.placeholder}
+        required={field.required}
+        maxLength={500}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={inputCls}
+      />
+    );
+
+  return (
+    <div>
+      <label
+        htmlFor={name}
+        className="mb-1 block text-xs font-medium text-[#2B0A33]/70"
+      >
+        {field.label}
+        {field.required && <span className="text-[#D6336C]"> *</span>}
+      </label>
+      {control}
+    </div>
+  );
+}
+
 export function RegisterForm({
   eventId,
   mode = "open",
   spotsLeft,
+  fields,
 }: {
   eventId: string;
   mode?: "open" | "waitlist";
   spotsLeft?: number | null;
+  fields?: VarnamFormField[];
 }) {
   const [state, action, pending] = useActionState(registerForEvent, INITIAL);
+  // Controlled values so a failed submit (validation error) never wipes what
+  // the visitor typed — React 19 auto-resets uncontrolled fields after a
+  // server action round-trip.
+  const [vals, setVals] = useState<Record<string, string>>({});
+  const set = (k: string) => (v: string) =>
+    setVals((p) => ({ ...p, [k]: v }));
 
   if (state.ok) {
     return (
@@ -48,9 +152,38 @@ export function RegisterForm({
             : "Free registration — no account needed."}
       </p>
       <div className="space-y-3">
-        <input name="full_name" placeholder="Your name" required className={inputCls} />
-        <input name="email" type="email" placeholder="Email address" required className={inputCls} />
-        <input name="phone" placeholder="Phone (optional)" className={inputCls} />
+        <input
+          name="full_name"
+          placeholder="Your name"
+          required
+          value={vals.full_name ?? ""}
+          onChange={(e) => set("full_name")(e.target.value)}
+          className={inputCls}
+        />
+        <input
+          name="email"
+          type="email"
+          placeholder="Email address"
+          required
+          value={vals.email ?? ""}
+          onChange={(e) => set("email")(e.target.value)}
+          className={inputCls}
+        />
+        <input
+          name="phone"
+          placeholder="Phone (optional)"
+          value={vals.phone ?? ""}
+          onChange={(e) => set("phone")(e.target.value)}
+          className={inputCls}
+        />
+        {fields?.map((f) => (
+          <CustomField
+            key={f.id}
+            field={f}
+            value={vals[`cf_${f.id}`] ?? ""}
+            onChange={set(`cf_${f.id}`)}
+          />
+        ))}
       </div>
       {state.message && !state.ok && (
         <p className="mt-3 text-sm font-medium text-[#D6336C]">{state.message}</p>

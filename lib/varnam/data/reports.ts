@@ -165,12 +165,19 @@ export async function getEditionFinance(): Promise<EditionFinance> {
   const receivedTotal = deals.reduce((s, d) => s + d.received, 0);
 
   const spent = budget?.spent ?? 0;
+  // Received is normally a subset of committed (a deal's paid-in portion), so
+  // adding both would double-count. Net = the larger of the two per deal −
+  // spend: "money secured minus money out".
+  const securedTotal = deals.reduce(
+    (s, d) => s + Math.max(d.committed, d.received),
+    0
+  );
   return {
     edition,
     budget,
     allocations,
     sponsorship: { committedTotal, receivedTotal, deals },
-    netPosition: committedTotal + receivedTotal - spent,
+    netPosition: securedTotal - spent,
     ticketNote: EMPTY_FINANCE.ticketNote,
   };
 }

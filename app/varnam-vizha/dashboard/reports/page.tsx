@@ -102,17 +102,17 @@ export default async function ReportsPage() {
         />
         <MoneyCard
           icon={<HandCoins className="size-5" />}
-          label="Sponsorship committed + received"
+          label="Sponsorship committed"
           value={
             finance.sponsorship.deals.length > 0
-              ? `${formatINR(finance.sponsorship.committedTotal)} + ${formatINR(finance.sponsorship.receivedTotal)}`
+              ? formatINR(finance.sponsorship.committedTotal)
               : "—"
           }
           sub={
             finance.sponsorship.deals.length > 0
-              ? `${finance.sponsorship.deals.length} deal${
-                  finance.sponsorship.deals.length === 1 ? "" : "s"
-                } this fiscal year (committed + received in hand)`
+              ? `${formatINR(finance.sponsorship.receivedTotal)} received in hand · ${
+                  finance.sponsorship.deals.length
+                } deal${finance.sponsorship.deals.length === 1 ? "" : "s"} this fiscal year`
               : "No sponsorship deals recorded yet — add them in Sponsors."
           }
         />

@@ -34,6 +34,30 @@ async function getTeams(
   return (data as unknown as Team[]) ?? [];
 }
 
+// teamId -> mentor names for this chapter (field request 2026-07-17:
+// admins need to see which teams still have no mentor assigned).
+async function getMentorsByTeam(
+  chapterId: string
+): Promise<Map<string, string[]>> {
+  const svc = await createServiceClient();
+  const { data } = await svc
+    .schema("future")
+    .from("mentor_team_assignments" as never)
+    .select("team_id, mentors!inner(full_name, chapter_id)")
+    .eq("mentors.chapter_id", chapterId);
+  const map = new Map<string, string[]>();
+  for (const r of ((data as unknown as {
+    team_id: string;
+    mentors: { full_name: string } | null;
+  }[]) ?? [])) {
+    if (!r.mentors?.full_name) continue;
+    const list = map.get(r.team_id) ?? [];
+    list.push(r.mentors.full_name);
+    map.set(r.team_id, list);
+  }
+  return map;
+}
+
 export default async function TeamsPage({
   searchParams,
 }: {
@@ -45,6 +69,10 @@ export default async function TeamsPage({
   const trackFilter = sp.track?.trim() || "all";
 
   const allTeams = await getTeams(ctx.chapterId, ctx.editionId);
+  const mentorsByTeam = await getMentorsByTeam(ctx.chapterId);
+  const withMentor = allTeams.filter(
+    (t) => (mentorsByTeam.get(t.id) ?? []).length > 0
+  ).length;
   const teams =
     trackFilter === "all"
       ? allTeams
@@ -86,7 +114,9 @@ export default async function TeamsPage({
         <div>
           <h2 className="text-2xl font-bold text-navy">Teams</h2>
           <p className="mt-1 text-sm text-navy/60">
-            {teams.length} total · {readyCount} ready to submit
+            {teams.length} total · {readyCount} ready to submit ·{" "}
+            {withMentor} with mentor · {allTeams.length - withMentor} awaiting
+            mentor
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -195,6 +225,18 @@ export default async function TeamsPage({
                     <span className="text-navy/80 truncate">
                       {t.problem_statements?.title ?? (
                         <span className="text-red-600/70">not picked</span>
+                      )}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-semibold uppercase tracking-widest text-navy/40 w-16">
+                      Mentor
+                    </span>
+                    <span className="text-navy/80 truncate">
+                      {(mentorsByTeam.get(t.id) ?? []).length > 0 ? (
+                        mentorsByTeam.get(t.id)!.join(", ")
+                      ) : (
+                        <span className="text-red-600/70">not assigned</span>
                       )}
                     </span>
                   </div>

@@ -68,14 +68,23 @@ async function regenCode(formData: FormData) {
 export default async function DelegatesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; msg?: string }>;
+  searchParams: Promise<{ error?: string; msg?: string; team?: string }>;
 }) {
   const ctx = await getChapterContext();
   if (!ctx) redirect("/yi-future/chapter");
 
   const sp = await searchParams;
-  const delegates = await getDelegates(ctx.chapterId, ctx.editionId);
-  const onTeam = delegates.filter((d) => d.team_members.length > 0).length;
+  const allDelegates = await getDelegates(ctx.chapterId, ctx.editionId);
+  const onTeam = allDelegates.filter((d) => d.team_members.length > 0).length;
+  // Field request 2026-07-17: quick teamed / unteamed views.
+  const teamFilter =
+    sp.team === "teamed" || sp.team === "none" ? sp.team : "all";
+  const delegates =
+    teamFilter === "teamed"
+      ? allDelegates.filter((d) => d.team_members.length > 0)
+      : teamFilter === "none"
+        ? allDelegates.filter((d) => d.team_members.length === 0)
+        : allDelegates;
 
   return (
     <div className="space-y-6">
@@ -93,7 +102,8 @@ export default async function DelegatesPage({
         <div>
           <h2 className="text-2xl font-bold text-navy">Delegates</h2>
           <p className="mt-1 text-sm text-navy/60">
-            {delegates.length} registered · {onTeam} on teams
+            {allDelegates.length} registered · {onTeam} on teams ·{" "}
+            {allDelegates.length - onTeam} without a team
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -110,6 +120,36 @@ export default async function DelegatesPage({
             + Register delegate
           </Link>
         </div>
+      </div>
+
+      {/* Teamed / unteamed filter chips */}
+      <div className="flex flex-wrap gap-2">
+        {(
+          [
+            { key: "all", label: `All (${allDelegates.length})` },
+            { key: "teamed", label: `In a team (${onTeam})` },
+            {
+              key: "none",
+              label: `No team (${allDelegates.length - onTeam})`,
+            },
+          ] as const
+        ).map((chip) => (
+          <Link
+            key={chip.key}
+            href={
+              chip.key === "all"
+                ? "/yi-future/chapter/delegates"
+                : `/yi-future/chapter/delegates?team=${chip.key}`
+            }
+            className={`min-h-[36px] inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold border-2 transition-all ${
+              teamFilter === chip.key
+                ? "border-navy bg-navy text-ivory"
+                : "border-navy/15 bg-white text-navy/70 hover:border-navy/40"
+            }`}
+          >
+            {chip.label}
+          </Link>
+        ))}
       </div>
 
       <div className="bg-white border border-navy/10 rounded-lg overflow-hidden">

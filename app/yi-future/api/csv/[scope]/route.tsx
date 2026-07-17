@@ -123,6 +123,34 @@ async function chapterIdsForRegion(
 }
 
 /**
+ * Map of teamId -> mentor full names, scoped to a chapter or an edition via
+ * the mentors table (mentor_team_assignments itself has no scope columns).
+ */
+async function mentorNamesByTeam(
+  svc: Awaited<ReturnType<typeof createServiceClient>>,
+  filter: { chapterId?: string; editionId?: string }
+): Promise<Map<string, string[]>> {
+  let q = svc
+    .schema("future")
+    .from("mentor_team_assignments" as never)
+    .select("team_id, mentors!inner(full_name, chapter_id, edition_id)");
+  if (filter.chapterId) q = q.eq("mentors.chapter_id", filter.chapterId);
+  if (filter.editionId) q = q.eq("mentors.edition_id", filter.editionId);
+  const { data } = await q;
+  const map = new Map<string, string[]>();
+  for (const r of ((data as unknown as {
+    team_id: string;
+    mentors: { full_name: string } | null;
+  }[]) ?? [])) {
+    if (!r.mentors?.full_name) continue;
+    const list = map.get(r.team_id) ?? [];
+    list.push(r.mentors.full_name);
+    map.set(r.team_id, list);
+  }
+  return map;
+}
+
+/**
  * Build a map of chapterId -> {name, region} for display joining.
  */
 async function chapterDisplayMap(
@@ -288,33 +316,49 @@ export async function GET(
         registered_at: string | null;
         profile_completion_pct: number | null;
         points: number | null;
+        team_members: {
+          role_in_team: string | null;
+          teams: {
+            team_name: string;
+            problem_statements: { title: string } | null;
+          } | null;
+        }[];
       };
 
       const { data } = await svc
         .schema("future")
         .from("delegates")
         .select(
-          "id, full_name, email, phone, course, year_of_study, home_state, access_code, registered_at, profile_completion_pct, points"
+          "id, full_name, email, phone, course, year_of_study, home_state, access_code, registered_at, profile_completion_pct, points, team_members(role_in_team, teams(team_name, problem_statements(title)))"
         )
         .eq("chapter_id", legacyChapterId)
         .order("full_name", { ascending: true });
 
-      const rows = ((data as unknown as Row[]) ?? []).map((d) => ({
-        id: d.id,
-        full_name: d.full_name,
-        email: d.email ?? "",
-        phone: d.phone ?? "",
-        college: d.course ?? "",
-        year_of_study: d.year_of_study != null ? String(d.year_of_study) : "",
-        home_state: d.home_state ?? "",
-        access_code: d.access_code,
-        registered_at: d.registered_at ?? "",
-        profile_completion_pct:
-          d.profile_completion_pct != null
-            ? String(d.profile_completion_pct)
-            : "",
-        points: d.points != null ? String(d.points) : "0",
-      }));
+      const rows = ((data as unknown as Row[]) ?? []).map((d) => {
+        const tm = d.team_members?.[0];
+        return {
+          id: d.id,
+          full_name: d.full_name,
+          email: d.email ?? "",
+          phone: d.phone ?? "",
+          college: d.course ?? "",
+          year_of_study: d.year_of_study != null ? String(d.year_of_study) : "",
+          home_state: d.home_state ?? "",
+          access_code: d.access_code,
+          // Field request 2026-07-17: teamed/unteamed + team + problem,
+          // delegate-wise, straight from this CSV.
+          has_team: tm ? "yes" : "no",
+          team_name: tm?.teams?.team_name ?? "",
+          role_in_team: tm?.role_in_team ?? "",
+          problem_title: tm?.teams?.problem_statements?.title ?? "",
+          registered_at: d.registered_at ?? "",
+          profile_completion_pct:
+            d.profile_completion_pct != null
+              ? String(d.profile_completion_pct)
+              : "",
+          points: d.points != null ? String(d.points) : "0",
+        };
+      });
 
       const columns = [
         { key: "id", label: "ID" },
@@ -325,6 +369,10 @@ export async function GET(
         { key: "year_of_study", label: "Year of Study" },
         { key: "home_state", label: "Home State" },
         { key: "access_code", label: "Access Code" },
+        { key: "has_team", label: "Has Team" },
+        { key: "team_name", label: "Team" },
+        { key: "role_in_team", label: "Team Role" },
+        { key: "problem_title", label: "Problem Statement" },
         { key: "registered_at", label: "Registered At" },
         { key: "profile_completion_pct", label: "Profile %" },
         { key: "points", label: "Points" },
@@ -354,6 +402,13 @@ export async function GET(
       registered_at: string | null;
       chapter_id: string;
       colleges: { name: string; city: string | null } | null;
+      team_members: {
+        role_in_team: string | null;
+        teams: {
+          team_name: string;
+          problem_statements: { title: string } | null;
+        } | null;
+      }[];
     };
 
     let regionChapterIds: string[] | null = null;
@@ -375,7 +430,7 @@ export async function GET(
         .schema("future")
         .from("delegates")
         .select(
-          "id, full_name, email, phone, whatsapp, gender, age, course, year_of_study, home_state, registered_at, chapter_id, colleges(name, city)"
+          "id, full_name, email, phone, whatsapp, gender, age, course, year_of_study, home_state, registered_at, chapter_id, colleges(name, city), team_members(role_in_team, teams(team_name, problem_statements(title)))"
         )
         .eq("edition_id", edition.id);
       if (chapterFilter) q = q.eq("chapter_id", chapterFilter);
@@ -392,6 +447,7 @@ export async function GET(
 
     const rows = data.map((d) => {
       const ch = chMap.get(d.chapter_id);
+      const tm = d.team_members?.[0];
       return {
         id: d.id,
         full_name: d.full_name,
@@ -407,6 +463,10 @@ export async function GET(
         college_city: d.colleges?.city ?? "",
         chapter_name: ch?.name ?? "",
         region: ch?.region ?? "",
+        has_team: tm ? "yes" : "no",
+        team_name: tm?.teams?.team_name ?? "",
+        role_in_team: tm?.role_in_team ?? "",
+        problem_title: tm?.teams?.problem_statements?.title ?? "",
         registered_at: d.registered_at ?? "",
       };
     });
@@ -426,6 +486,10 @@ export async function GET(
       { key: "college_city", label: "College City" },
       { key: "chapter_name", label: "Chapter" },
       { key: "region", label: "Region" },
+      { key: "has_team", label: "Has Team" },
+      { key: "team_name", label: "Team" },
+      { key: "role_in_team", label: "Team Role" },
+      { key: "problem_title", label: "Problem Statement" },
       { key: "registered_at", label: "Registered At" },
     ];
 
@@ -450,7 +514,10 @@ export async function GET(
         leader: { full_name: string } | null;
         captain: { full_name: string } | null;
         problem_statements: { title: string } | null;
-        team_members: { delegate_id: string }[];
+        team_members: {
+          delegate_id: string;
+          delegates: { full_name: string } | null;
+        }[];
       };
 
       const { data } = await svc
@@ -461,10 +528,17 @@ export async function GET(
           // `teams_leader_delegate_id_fkey` (column is leader_delegate_id),
           // not `teams_leader_id_fkey`. Using the wrong constraint name
           // makes PostgREST drop the leader column silently.
-          "id, team_name, is_frozen, frozen_at, status, leader:delegates!teams_leader_delegate_id_fkey(full_name), captain:delegates!teams_captain_id_fkey(full_name), problem_statements(title), team_members(delegate_id)"
+          "id, team_name, is_frozen, frozen_at, status, leader:delegates!teams_leader_delegate_id_fkey(full_name), captain:delegates!teams_captain_id_fkey(full_name), problem_statements(title), team_members(delegate_id, delegates(full_name))"
         )
         .eq("chapter_id", legacyChapterId)
         .order("team_name", { ascending: true });
+
+      // Mentor names per team (chapter-scoped). Yi Puducherry field request
+      // 2026-07-17: admins need member NAMES and mentor status in this CSV,
+      // not just a member count.
+      const mentorsByTeam = await mentorNamesByTeam(svc, {
+        chapterId: legacyChapterId,
+      });
 
       const rows = ((data as unknown as Row[]) ?? []).map((t) => ({
         id: t.id,
@@ -476,6 +550,12 @@ export async function GET(
         frozen_at: t.frozen_at ?? "",
         status: t.status ?? "",
         member_count: String(t.team_members.length),
+        member_names: t.team_members
+          .map((m) => m.delegates?.full_name ?? "")
+          .filter(Boolean)
+          .join("; "),
+        mentor_names: (mentorsByTeam.get(t.id) ?? []).join("; "),
+        mentor_assigned: (mentorsByTeam.get(t.id) ?? []).length > 0 ? "yes" : "no",
       }));
 
       const columns = [
@@ -488,6 +568,9 @@ export async function GET(
         { key: "frozen_at", label: "Frozen At" },
         { key: "status", label: "Status" },
         { key: "member_count", label: "Members" },
+        { key: "member_names", label: "Member Names" },
+        { key: "mentor_names", label: "Mentor(s)" },
+        { key: "mentor_assigned", label: "Mentor Assigned" },
       ];
 
       return csvResponse(
@@ -513,14 +596,17 @@ export async function GET(
             tracks: { name: string } | null;
           }
         | null;
-      team_members: { delegate_id: string }[];
+      team_members: {
+        delegate_id: string;
+        delegates: { full_name: string } | null;
+      }[];
     };
 
     let q = svc
       .schema("future")
       .from("teams")
       .select(
-        "id, team_name, status, created_at, chapter_id, captain:delegates!teams_captain_id_fkey(full_name), problem_statements(title, tracks(name)), team_members(delegate_id)"
+        "id, team_name, status, created_at, chapter_id, captain:delegates!teams_captain_id_fkey(full_name), problem_statements(title, tracks(name)), team_members(delegate_id, delegates(full_name))"
       )
       .eq("edition_id", edition.id)
       .order("team_name", { ascending: true });
@@ -539,6 +625,9 @@ export async function GET(
 
     const { data } = await q;
     const chMap = await chapterDisplayMap(svc);
+    const mentorsByTeam = await mentorNamesByTeam(svc, {
+      editionId: edition.id,
+    });
 
     const rows = ((data as unknown as Row[]) ?? []).map((t) => {
       const ch = chMap.get(t.chapter_id);
@@ -552,6 +641,12 @@ export async function GET(
         status: t.status ?? "",
         captain_name: t.captain?.full_name ?? "",
         member_count: String(t.team_members?.length ?? 0),
+        member_names: (t.team_members ?? [])
+          .map((m) => m.delegates?.full_name ?? "")
+          .filter(Boolean)
+          .join("; "),
+        mentor_names: (mentorsByTeam.get(t.id) ?? []).join("; "),
+        mentor_assigned: (mentorsByTeam.get(t.id) ?? []).length > 0 ? "yes" : "no",
         created_at: t.created_at ?? "",
       };
     });
@@ -566,6 +661,9 @@ export async function GET(
       { key: "status", label: "Status" },
       { key: "captain_name", label: "Captain" },
       { key: "member_count", label: "Members" },
+      { key: "member_names", label: "Member Names" },
+      { key: "mentor_names", label: "Mentor(s)" },
+      { key: "mentor_assigned", label: "Mentor Assigned" },
       { key: "created_at", label: "Created At" },
     ];
 

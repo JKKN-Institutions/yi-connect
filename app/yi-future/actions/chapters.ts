@@ -82,13 +82,15 @@ export async function updateOwnChapterProfile(
     return { ok: false, error: "Sign in as a chapter admin first." };
   }
 
-  const name = String(formData.get("name") ?? "").trim();
+  // Chapter NAME and REGION are national identity — deliberately NOT
+  // accepted from this form. 2026-07-17 incident: a chapter chair typed a
+  // student's name ("Shantanu Marathe") into the Name field and a state into
+  // Region, renaming the Nagpur chapter on every national leaderboard.
+  // Renames stay with the national team via updateChapter above.
   const city = String(formData.get("city") ?? "").trim();
   const state = String(formData.get("state") ?? "").trim() || null;
-  const region = String(formData.get("region") ?? "").trim() || null;
   const logo_url = String(formData.get("logo_url") ?? "").trim() || null;
 
-  if (!name) return { ok: false, error: "Name is required." };
   if (!city) return { ok: false, error: "City is required." };
 
   const finale_start_date =
@@ -107,10 +109,8 @@ export async function updateOwnChapterProfile(
     .schema("yi")
     .from("chapters")
     .update({
-      name,
       city,
       state,
-      region,
       logo_url,
       finale_start_date,
       finale_end_date,

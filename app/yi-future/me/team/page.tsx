@@ -17,6 +17,7 @@ import {
   RemoveMemberButton,
   CancelInviteButton,
 } from "@/components/yi-future/TeamSelfService";
+import { RequestUnlockForm } from "@/components/yi-future/RequestUnlockForm";
 import { TEAM_SIZE_MIN, TEAM_SIZE_MAX } from "@/lib/yi-future/constants";
 import { isInviteExpired } from "@/lib/yi-future/invite-expiry";
 import { TrackIcon, trackIconText } from "@/components/yi-future/TrackIcon";
@@ -267,6 +268,21 @@ export default async function MyTeamPage() {
   const isFrozen = team.is_frozen === true;
   const canInvite = !isFrozen && team.team_members.length < TEAM_SIZE_MAX;
 
+  // Open unlock request (BUG-494) — shown to the captain while it waits.
+  let openUnlockRequest: { created_at: string } | null = null;
+  if (isFrozen) {
+    const svc = await createServiceClient();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: req } = await (svc as any)
+      .schema("future")
+      .from("team_unlock_requests")
+      .select("created_at")
+      .eq("team_id", team.id)
+      .eq("status", "open")
+      .maybeSingle();
+    openUnlockRequest = (req as { created_at: string } | null) ?? null;
+  }
+
   const availableDelegates = canInvite
     ? await getAvailableDelegates(team.chapter_id, team.edition_id, team.id, session.id)
     : [];
@@ -347,6 +363,39 @@ export default async function MyTeamPage() {
           </Link>
         </div>
       </div>
+
+      {/* Request unlock (captain of a frozen team — BUG-494) */}
+      {isFrozen && isCaptain && (
+        <section className="bg-[#F5A623]/10 border-2 border-[#F5A623]/40 rounded-lg p-5">
+          <h3 className="text-sm font-bold text-navy mb-1">
+            Need to change something?
+          </h3>
+          {openUnlockRequest ? (
+            <p className="text-sm text-navy/70">
+              <span className="font-semibold text-yi-green">
+                Unlock request sent
+              </span>{" "}
+              on{" "}
+              {new Date(openUnlockRequest.created_at).toLocaleDateString(
+                undefined,
+                { day: "numeric", month: "short" }
+              )}
+              . Your chapter admin will see it on their Teams page — once they
+              unlock the team you can edit members, invites and the problem
+              statement again.
+            </p>
+          ) : (
+            <>
+              <p className="text-xs text-navy/60 mb-3">
+                Your team is submitted and locked. Ask your chapter admin to
+                unlock it — they&apos;ll see your request right on their Teams
+                page.
+              </p>
+              <RequestUnlockForm teamId={team.id} />
+            </>
+          )}
+        </section>
+      )}
 
       {/* Team name (captain only) */}
       {isCaptain && (
@@ -460,6 +509,23 @@ export default async function MyTeamPage() {
       {canInvite && availableDelegates.length === 0 && !isFrozen && (
         <section className="bg-navy/5 border border-navy/10 rounded-lg p-4 text-center text-xs text-navy/50">
           No other delegates available to invite in your chapter yet.
+        </section>
+      )}
+
+      {/* Explicit reasons when inviting is off (BUG-475): a vanished section
+          reads as "there is no option to send team invite". */}
+      {isFrozen && (
+        <section className="bg-navy/5 border border-navy/10 rounded-lg p-4 text-center text-xs text-navy/50">
+          Invites are locked — the team is submitted.
+          {isCaptain
+            ? " Use “Request unlock” above if you need to add members."
+            : " Ask your captain or chapter admin if members must change."}
+        </section>
+      )}
+      {!isFrozen && team.team_members.length >= TEAM_SIZE_MAX && (
+        <section className="bg-navy/5 border border-navy/10 rounded-lg p-4 text-center text-xs text-navy/50">
+          Your team is at the maximum of {TEAM_SIZE_MAX} members — no more
+          invites can be sent.
         </section>
       )}
 

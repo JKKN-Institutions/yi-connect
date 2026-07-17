@@ -3,8 +3,10 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import { createClient, createServiceClient } from "@/lib/yi-future/supabase/server";
 import { SESSION_COOKIE_NAME } from "@/lib/yi-future/constants";
+import { sendEmail } from "@/lib/yi-future/email";
 import {
   sendBrandedPasswordReset,
   appBaseUrl,
@@ -192,6 +194,75 @@ export async function validateAccessCode(
     ok: false,
     error: "That code was not recognized. Check the letters and try again.",
   };
+}
+
+// ─── EMAIL ME MY CODE (delegate lost access code — BUG-477) ─────────
+// Unauthenticated by nature, so it must never reveal whether an email is
+// registered: the response is ALWAYS the same neutral message, and all real
+// work (lookup, rate limit, send) runs in after() so response timing does not
+// diverge between hit and miss. Rate limit: max 3 code emails per address per
+// hour, enforced server-side by counting future.notification_log rows.
+export async function requestAccessCodeEmail(
+  emailRaw: string
+): Promise<{ ok: true; message: string }> {
+  const NEUTRAL =
+    "If that email is registered, we've sent the access code to it.";
+  const email = emailRaw?.trim().toLowerCase() ?? "";
+
+  // Shape check only — reveals nothing about registration.
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    after(async () => {
+      try {
+        const svc = await createServiceClient();
+
+        // Server-side rate limit: 3 sends / address / hour.
+        const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+        const { count } = await svc
+          .schema("future")
+          .from("notification_log" as never)
+          .select("id", { count: "exact", head: true })
+          .eq("recipient_email", email)
+          .eq("recipient_subject_type", "access_code_recovery")
+          .gte("created_at", oneHourAgo);
+        if ((count ?? 0) >= 3) return;
+
+        const { data: delegate } = (await svc
+          .schema("future")
+          .from("delegates")
+          .select("id, full_name, access_code")
+          .eq("email", email)
+          .eq("is_active", true)
+          .order("registered_at", { ascending: false })
+          .limit(1)
+          .maybeSingle()) as unknown as {
+          data: { id: string; full_name: string | null; access_code: string | null } | null;
+        };
+        if (!delegate?.access_code) return;
+
+        await sendEmail({
+          to: email,
+          triggerType: "custom",
+          recipientSubjectType: "access_code_recovery",
+          recipientSubjectId: delegate.id,
+          subject: "Your Future 6.0 access code",
+          body: `Hi ${delegate.full_name ?? "there"},
+
+Your Future 6.0 access code is: **${delegate.access_code}**
+
+Sign in any time at ${appBaseUrl()}/yi-future/access
+
+If you didn't request this email, you can safely ignore it.`,
+        });
+      } catch (e) {
+        console.warn(
+          "[access-code-email] failed:",
+          e instanceof Error ? e.message : String(e)
+        );
+      }
+    });
+  }
+
+  return { ok: true, message: NEUTRAL };
 }
 
 // ─── LOGIN DELEGATE BY EMAIL (for Google OAuth / email-password) ────

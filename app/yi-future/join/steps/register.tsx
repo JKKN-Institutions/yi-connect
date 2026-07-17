@@ -291,10 +291,17 @@ export function RegisterStep({
     if (!result.ok) {
       setError(result.banner);
       setFieldErrors(result.fields);
+      if (typeof window !== "undefined") {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
       return;
     }
     startTransition(async () => {
-      const res = await registerDelegate({
+      // A thrown server action (flaky network, mid-deploy version skew) must
+      // never end as a silent no-op — BUG-501-class reports.
+      let res: Awaited<ReturnType<typeof registerDelegate>>;
+      try {
+        res = await registerDelegate({
         full_name: form.full_name.trim(),
         email: form.email.trim(),
         mobile: form.mobile,
@@ -315,7 +322,16 @@ export function RegisterStep({
         declaration_accepted: form.declaration_accepted,
         password: form.password,
         preferred_track_slug: preferredTrack || undefined,
-      });
+        });
+      } catch {
+        setError(
+          "Couldn't reach the server — check your internet connection and try again. Your answers are saved on this device."
+        );
+        if (typeof window !== "undefined") {
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }
+        return;
+      }
       if (res.ok) {
         try {
           localStorage.removeItem(STORAGE_KEY);
@@ -327,6 +343,11 @@ export function RegisterStep({
         else window.location.href = res.redirect;
       } else {
         setError(res.error);
+        // The banner renders at the top of the card — on a phone the user is
+        // scrolled to the Submit button, so bring the error into view.
+        if (typeof window !== "undefined") {
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }
       }
     });
   }

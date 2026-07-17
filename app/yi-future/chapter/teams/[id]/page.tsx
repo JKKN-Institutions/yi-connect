@@ -113,6 +113,22 @@ export default async function TeamDetailPage({
     getChapterProblems(team.edition_id),
   ]);
 
+  // Open unlock request from the captain (BUG-494) — shown inside the
+  // frozen banner; unfreezing auto-resolves it.
+  let unlockRequest: { reason: string; created_at: string } | null = null;
+  if (team.is_frozen) {
+    const svc = await createServiceClient();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: req } = await (svc as any)
+      .schema("future")
+      .from("team_unlock_requests")
+      .select("reason, created_at")
+      .eq("team_id", team.id)
+      .eq("status", "open")
+      .maybeSingle();
+    unlockRequest = (req as { reason: string; created_at: string } | null) ?? null;
+  }
+
   // Group the 12 problems by track so the picker reads track-by-track.
   const problemsByTrack = problems.reduce<
     { trackId: string; trackName: string; trackIcon: string | null; items: Problem[] }[]
@@ -233,6 +249,20 @@ export default async function TeamDetailPage({
             <span className="font-semibold text-navy">Team is frozen.</span>{" "}
             Members cannot change their roster or problem statement until you
             unfreeze it.
+            {unlockRequest && (
+              <div className="mt-1.5 p-2 rounded bg-[#F5A623]/15 border border-[#F5A623]/40 text-navy">
+                🔓 <span className="font-semibold">Captain requested an unlock</span>{" "}
+                <span className="text-xs text-navy/50">
+                  (
+                  {new Date(unlockRequest.created_at).toLocaleDateString(
+                    undefined,
+                    { day: "numeric", month: "short" }
+                  )}
+                  )
+                </span>
+                : “{unlockRequest.reason}” — unfreezing clears the request.
+              </div>
+            )}
           </div>
           <form action={unfreezeTeamAction}>
             <button

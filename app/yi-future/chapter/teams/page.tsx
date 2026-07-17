@@ -34,6 +34,32 @@ async function getTeams(
   return (data as unknown as Team[]) ?? [];
 }
 
+// Open unlock requests from frozen-team captains (BUG-494) — surfaced as an
+// in-app banner so the admin sees them without any email.
+type UnlockRequest = {
+  team_id: string;
+  reason: string;
+  created_at: string;
+  teams: { team_name: string } | null;
+};
+
+async function getOpenUnlockRequests(
+  chapterId: string,
+  editionId: string
+): Promise<UnlockRequest[]> {
+  const svc = await createServiceClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data } = await (svc as any)
+    .schema("future")
+    .from("team_unlock_requests")
+    .select("team_id, reason, created_at, teams!inner(team_name, chapter_id, edition_id)")
+    .eq("status", "open")
+    .eq("teams.chapter_id", chapterId)
+    .eq("teams.edition_id", editionId)
+    .order("created_at", { ascending: true });
+  return (data as unknown as UnlockRequest[]) ?? [];
+}
+
 // teamId -> mentor names for this chapter (field request 2026-07-17:
 // admins need to see which teams still have no mentor assigned).
 async function getMentorsByTeam(
@@ -70,6 +96,7 @@ export default async function TeamsPage({
 
   const allTeams = await getTeams(ctx.chapterId, ctx.editionId);
   const mentorsByTeam = await getMentorsByTeam(ctx.chapterId);
+  const unlockRequests = await getOpenUnlockRequests(ctx.chapterId, ctx.editionId);
   const withMentor = allTeams.filter(
     (t) => (mentorsByTeam.get(t.id) ?? []).length > 0
   ).length;
@@ -134,6 +161,41 @@ export default async function TeamsPage({
           </Link>
         </div>
       </div>
+
+      {/* Unlock requests from frozen-team captains (BUG-494) */}
+      {unlockRequests.length > 0 && (
+        <div className="bg-[#F5A623]/10 border-2 border-[#F5A623]/40 rounded-lg p-4">
+          <p className="text-sm font-bold text-navy mb-2">
+            🔓 {unlockRequests.length} team
+            {unlockRequests.length !== 1 ? "s" : ""} requested an unlock
+          </p>
+          <ul className="space-y-1.5">
+            {unlockRequests.map((r) => (
+              <li key={r.team_id} className="text-sm text-navy/80">
+                <Link
+                  href={`/yi-future/chapter/teams/${r.team_id}`}
+                  className="font-semibold text-navy hover:text-yi-gold underline"
+                >
+                  {r.teams?.team_name ?? "Team"}
+                </Link>{" "}
+                — “{r.reason}”{" "}
+                <span className="text-xs text-navy/40">
+                  (
+                  {new Date(r.created_at).toLocaleDateString(undefined, {
+                    day: "numeric",
+                    month: "short",
+                  })}
+                  )
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-xs text-navy/50">
+            Open the team and press “Unfreeze team” to approve — the request
+            clears automatically.
+          </p>
+        </div>
+      )}
 
       {/* Track filter chips (Future 6.0: every chapter runs all 4 tracks) */}
       <div className="flex flex-wrap gap-2">

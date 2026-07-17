@@ -10,6 +10,7 @@ import {
   loginDelegateByEmail,
   loginDelegateById,
   listDelegatesForChapter,
+  requestAccessCodeEmail,
 } from "@/app/yi-future/actions/auth";
 
 type Tab = "code" | "google" | "email";
@@ -66,13 +67,16 @@ export default function AccessCodePage() {
           </div>
 
           {tab === "code" && (
-            <CodeEntryStep
-              onBack={() => router.push("/yi-future/join")}
-              onSuccess={(redirect) => {
-                router.push(redirect);
-                router.refresh();
-              }}
-            />
+            <>
+              <CodeEntryStep
+                onBack={() => router.push("/yi-future/join")}
+                onSuccess={(redirect) => {
+                  router.push(redirect);
+                  router.refresh();
+                }}
+              />
+              <LostCodeHelp />
+            </>
           )}
 
           {tab === "google" && <GoogleLoginTab />}
@@ -98,6 +102,85 @@ export default function AccessCodePage() {
         </div>
       </footer>
     </main>
+  );
+}
+
+// ─── Lost Code Help (BUG-477) ──────────────────────────────────────
+// Emails the delegate their access code. The confirmation is deliberately
+// neutral — it never says whether the address is registered.
+function LostCodeHelp() {
+  const [open, setOpen] = useState(false);
+  const [email, setEmail] = useState("");
+  const [message, setMessage] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  if (!open) {
+    return (
+      <div className="mt-2 text-center">
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="text-xs text-navy/50 hover:text-navy underline"
+        >
+          Lost your code? Email me my code
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-4 p-4 rounded-lg bg-navy/5 border border-navy/10">
+      <p className="text-sm font-semibold text-navy mb-2">
+        Email me my code
+      </p>
+      {message ? (
+        <div className="space-y-2">
+          <p className="text-sm text-yi-green font-semibold">{message}</p>
+          <p className="text-xs text-navy/50">
+            No email after 5 minutes? Check your spam folder, or ask your
+            chapter admin — they can look up your code.
+          </p>
+        </div>
+      ) : (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            startTransition(async () => {
+              try {
+                const res = await requestAccessCodeEmail(email);
+                setMessage(res.message);
+              } catch {
+                setMessage(
+                  "If that email is registered, we've sent the access code to it."
+                );
+              }
+            });
+          }}
+          className="space-y-2"
+        >
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="The email you registered with"
+            required
+            autoComplete="email"
+            className="w-full px-3 py-2.5 border border-navy/20 rounded-md text-sm bg-white focus:border-[#F5A623] focus:outline-none"
+          />
+          <button
+            type="submit"
+            disabled={!email || pending}
+            className="w-full py-2.5 rounded-md bg-navy text-ivory text-sm font-semibold hover:bg-navy-dark disabled:opacity-40"
+          >
+            {pending ? "Sending…" : "Send my code"}
+          </button>
+          <p className="text-[11px] text-navy/40">
+            We&apos;ll email the code to your registered address. No email after
+            5 minutes? Check spam or ask your chapter admin.
+          </p>
+        </form>
+      )}
+    </div>
   );
 }
 

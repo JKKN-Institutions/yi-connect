@@ -169,12 +169,18 @@ export default async function ChapterSetupPage() {
             <label className="block text-xs font-semibold uppercase tracking-widest text-navy/70 mb-1.5">
               Name
             </label>
+            {/* Chapter name is national identity — read-only here (2026-07-17:
+                a chair accidentally renamed the Nagpur chapter to a student's
+                name via this field). */}
             <input
-              name="name"
-              defaultValue={chapter?.name ?? ""}
-              required
-              className="w-full px-3 py-2 border border-navy/20 rounded-md text-sm"
+              value={chapter?.name ?? ""}
+              readOnly
+              className="w-full px-3 py-2 border border-navy/20 rounded-md text-sm bg-navy/5 text-navy/60 cursor-not-allowed"
             />
+            <p className="text-xs text-navy/50 mt-1">
+              Managed by the Yi Future national team — contact them to change
+              the chapter name.
+            </p>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -205,10 +211,13 @@ export default async function ChapterSetupPage() {
                 Region
               </label>
               <input
-                name="region"
-                defaultValue={chapter?.region ?? ""}
-                className="w-full px-3 py-2 border border-navy/20 rounded-md text-sm"
+                value={chapter?.region ?? ""}
+                readOnly
+                className="w-full px-3 py-2 border border-navy/20 rounded-md text-sm bg-navy/5 text-navy/60 cursor-not-allowed"
               />
+              <p className="text-xs text-navy/50 mt-1">
+                Set by the national team.
+              </p>
             </div>
             <div>
               <label className="block text-xs font-semibold uppercase tracking-widest text-navy/70 mb-1.5">

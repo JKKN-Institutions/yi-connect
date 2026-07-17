@@ -446,11 +446,80 @@ export async function unfreezeTeam(teamId: string): Promise<ActionResult> {
     .eq("id", teamId);
   if (error) return { ok: false, error: error.message };
 
+  // Auto-resolve any open unlock request — unfreezing IS the resolution.
+  await svc
+    .schema("future")
+    .from("team_unlock_requests" as AnyClient)
+    .update({ status: "resolved", resolved_at: nowIso } as never)
+    .eq("team_id", teamId)
+    .eq("status", "open");
+
   revalidatePath(`/yi-future/chapter/teams/${teamId}`);
+  revalidatePath("/yi-future/chapter/teams");
   revalidatePath("/yi-future/me/team");
   revalidatePath("/yi-future/me/team/directory");
   revalidatePath("/yi-future/me/team/invites");
   return { ok: true, message: "Team unfrozen." };
+}
+
+// ─── REQUEST UNLOCK (captain self-service, BUG-494) ─────────────────
+// A frozen team's captain can file ONE open unlock request (short reason
+// required). Chapter admins see it as an in-app banner on their Teams pages;
+// unfreezing the team auto-resolves it. Deliberately NO email — in-app only.
+export async function requestTeamUnlock(
+  teamId: string,
+  reason: string
+): Promise<ActionResult> {
+  const session = await readSession();
+  if (!session || session.type !== "delegate") {
+    return { ok: false, error: "Sign in as a delegate first." };
+  }
+
+  const cleanReason = reason.trim();
+  if (!cleanReason) {
+    return { ok: false, error: "Please say briefly why the team needs to be unlocked." };
+  }
+  if (cleanReason.length > 300) {
+    return { ok: false, error: "Keep the reason under 300 characters." };
+  }
+
+  const team = await loadTeam(teamId);
+  if (!team) return { ok: false, error: "Team not found." };
+  if (!team.captain_id || team.captain_id !== session.id) {
+    return { ok: false, error: "Only the team captain can request an unlock." };
+  }
+  if (!team.is_frozen) {
+    return { ok: false, error: "Your team isn't locked — no unlock needed." };
+  }
+
+  const svc = await createServiceClient();
+  const { error } = await svc
+    .schema("future")
+    .from("team_unlock_requests" as AnyClient)
+    .insert({
+      team_id: teamId,
+      requested_by: session.id,
+      reason: cleanReason,
+      status: "open",
+    } as never);
+  if (error) {
+    // 23505 = the partial unique index: one open request per team.
+    if ((error as { code?: string }).code === "23505") {
+      return {
+        ok: false,
+        error: "An unlock request for this team is already waiting for your chapter admin.",
+      };
+    }
+    return { ok: false, error: error.message };
+  }
+
+  revalidatePath("/yi-future/me/team");
+  revalidatePath("/yi-future/chapter/teams");
+  revalidatePath(`/yi-future/chapter/teams/${teamId}`);
+  return {
+    ok: true,
+    message: "Unlock request sent — your chapter admin will see it on their Teams page.",
+  };
 }
 
 // ─── PICK PROBLEM STATEMENT (delegate auth — any team member) ───────

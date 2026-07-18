@@ -5,6 +5,7 @@ import { createServiceClient } from "@/lib/yifi/supabase/server";
 import { CensusPrompt } from "./census-prompt";
 import { RoutingCard } from "./routing-card";
 import { VowSection } from "./vow-section";
+import { PaymentBanner } from "./payment-banner";
 import { GUIDES } from "@/lib/yifi/guide/content";
 import { logGuideEvent } from "@/lib/yifi/guide/actions";
 import { OnboardingLauncher } from "@/app/yifi/_components/OnboardingLauncher";
@@ -110,6 +111,7 @@ export default async function MyYiFiPage() {
       </header>
 
       <div className="max-w-2xl mx-auto px-4 py-6 space-y-8">
+        <PaymentBanner status={registrant.payment_status} />
         <ModuleWelcome
           moduleKey="participant-home"
           lane="participant"

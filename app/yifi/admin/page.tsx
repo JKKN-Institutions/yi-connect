@@ -183,10 +183,18 @@ export default async function YiFiAdminPage() {
                 external
               />
             )}
+            {permissions.includes("sessions") && (
+              <ActionCard
+                title="Sessions & Transcripts"
+                desc="Enter stage sessions and paste transcripts — the raw material the dossier engine filters per attendee"
+                href="/yifi/admin/sessions"
+                icon="🎙️"
+              />
+            )}
             {permissions.includes("dossiers") && (
               <ActionCard
                 title="Dossier Pipeline"
-                desc="Monitor personalised dossier generation and delivery status"
+                desc="Generate personalised dossiers, then deliver to each attendee on WhatsApp"
                 href="/yifi/admin/dossiers"
                 icon="📋"
               />

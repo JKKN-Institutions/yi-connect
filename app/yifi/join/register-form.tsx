@@ -2,129 +2,166 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { registerSelf, prefillByEmail } from "@/app/yifi/actions/register";
+import {
+  resolveMember,
+  registerMember,
+  type ResolvedMember,
+  type Fee,
+} from "@/app/yifi/actions/register";
 
 const INPUT =
   "w-full px-3 py-2.5 bg-white/10 border border-white/20 rounded-lg text-white text-sm placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-[#FD7215] focus:border-transparent";
-const SELECT =
-  "w-full px-3 py-2.5 bg-[#0a0a4a] border border-white/20 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#FD7215] focus:border-transparent";
 const LABEL = "text-white/60 text-xs uppercase tracking-wide mb-1.5 block";
 
-const MEMBER_CATEGORIES = [
-  { value: "ec", label: "EC — Enablers of Change" },
-  { value: "gc", label: "GC" },
-  { value: "nmt", label: "NMT" },
-  { value: "general", label: "General / Guest" },
-];
+// Stage machine for the member-gated register door:
+//   lookup     — enter email/phone, resolve against the Yi member directory
+//   rejected   — not a Yi member (explicit screen, never a silent redirect)
+//   pay         — resolved: show name + fee + payment instructions, enter a reference
+//   done        — registered, payment pending verification, show access code
+type Stage =
+  | { kind: "lookup" }
+  | { kind: "rejected"; email: string }
+  | { kind: "pay"; member: ResolvedMember; editionId: string; fee: Fee }
+  | { kind: "done"; code: string };
 
-const TEAM_SIZES = ["Just me", "2–10", "11–50", "51–200", "200+"];
-
-const SEEKING_OPTIONS = [
-  { value: "co-founder", label: "Find a co-founder / partner" },
-  { value: "investor", label: "Raise capital / find investors" },
-  { value: "scale", label: "Scale / grow my business" },
-  { value: "customers", label: "Find customers / distribution" },
-  { value: "mentorship", label: "Get mentorship" },
-  { value: "talent", label: "Hire / find talent" },
-  { value: "suppliers", label: "Find suppliers / vendors" },
-  { value: "learn", label: "Learn & explore" },
-];
-
-type SuccessState = { kind: "registered"; code: string } | { kind: "already" };
+function formatAmount(amount: number | null, currency: string | null): string {
+  if (amount == null) return "the registration fee";
+  const cur = (currency || "INR").toUpperCase();
+  const symbol = cur === "INR" ? "₹" : cur === "USD" ? "$" : `${cur} `;
+  const n = Number(amount);
+  const pretty = Number.isInteger(n) ? n.toLocaleString("en-IN") : n.toString();
+  return `${symbol}${pretty}`;
+}
 
 export function RegisterForm({ onUseCode }: { onUseCode?: () => void }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState("");
-  const [isCouple, setIsCouple] = useState(false);
+  const [stage, setStage] = useState<Stage>({ kind: "lookup" });
 
-  // Controlled so directory pre-fill can populate them on email blur.
-  const [fullName, setFullName] = useState("");
-  const [phone, setPhone] = useState("");
+  // lookup inputs
   const [email, setEmail] = useState("");
-  const [prefilled, setPrefilled] = useState(false);
+  const [phone, setPhone] = useState("");
 
-  const [success, setSuccess] = useState<SuccessState | null>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
 
-  // On the success swap, bring the (short) success card into view and announce it —
-  // otherwise on this long form the all-important access code can render above the fold.
+  // On stage swaps that show a short card, bring it into view + announce it.
   useEffect(() => {
-    if (success) {
+    if (stage.kind === "done" || stage.kind === "rejected" || stage.kind === "pay") {
       window.scrollTo({ top: 0, behavior: "smooth" });
       headingRef.current?.focus();
     }
-  }, [success]);
+  }, [stage]);
 
-  // Prefill runs OUTSIDE the submit transition so a slow directory lookup never
-  // disables the submit button, and only fills fields the user has left blank.
-  async function handleEmailBlur() {
-    const value = email.trim();
-    if (!value.includes("@")) return;
-    const match = await prefillByEmail(value);
-    if (match?.full_name) {
-      setFullName((prev) => (prev ? prev : match.full_name));
-      setPrefilled(true);
-    }
-  }
-
-  function handleSubmit(formData: FormData) {
+  function handleLookup(e: React.FormEvent) {
+    e.preventDefault();
     setError("");
     startTransition(async () => {
-      const result = await registerSelf(formData);
+      const result = await resolveMember(email, phone);
       if (!result.ok) {
         setError(result.error);
         return;
       }
-      if (result.status === "already_registered") {
-        setSuccess({ kind: "already" });
+      if (!result.found) {
+        setStage({ kind: "rejected", email: email.trim() });
         return;
       }
-      setSuccess({ kind: "registered", code: result.accessCode });
+      setStage({
+        kind: "pay",
+        member: result.member,
+        editionId: result.editionId,
+        fee: result.fee,
+      });
     });
   }
 
-  if (success?.kind === "already") {
+  function handlePay(formData: FormData) {
+    setError("");
+    startTransition(async () => {
+      const result = await registerMember(formData);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      setStage({ kind: "done", code: result.accessCode });
+    });
+  }
+
+  // ── REJECTED: not in the Yi member directory ──────────────────────────────
+  if (stage.kind === "rejected") {
     return (
       <div className="bg-white/5 border border-white/10 rounded-xl p-6 text-center">
-        <div className="text-4xl mb-3">👋</div>
-        <h2 ref={headingRef} tabIndex={-1} className="text-xl font-bold text-white mb-1 outline-none">
-          You&apos;re already registered
+        <div className="text-4xl mb-3">🙏</div>
+        <h2
+          ref={headingRef}
+          tabIndex={-1}
+          className="text-xl font-bold text-white mb-2 outline-none"
+        >
+          We couldn&apos;t find you in the Yi member directory
         </h2>
-        <p className="text-white/50 text-sm mb-5">
-          This email already has a YiFi registration. Use the access code from your registration
-          confirmation to log in.
+        <p className="text-white/60 text-sm mb-5">
+          YiFi is for Yi members. We looked up{" "}
+          {stage.email ? (
+            <span className="text-white font-medium">{stage.email}</span>
+          ) : (
+            "your details"
+          )}{" "}
+          and didn&apos;t find a matching member. Please ask your chapter to add you to
+          the Yi member directory, then try again.
         </p>
         <button
-          onClick={() => onUseCode?.()}
+          onClick={() => {
+            setError("");
+            setStage({ kind: "lookup" });
+          }}
           className="w-full py-3 bg-[#FD7215] text-white font-semibold rounded-lg hover:bg-[#e5660f] transition-colors"
         >
-          I have a code →
+          ← Try a different email or phone
         </button>
         <p className="text-white/40 text-xs mt-4">
-          Can&apos;t find your code? Contact your chapter&apos;s YiFi organiser to have it resent.
+          Already registered? Use the{" "}
+          <button
+            type="button"
+            onClick={() => onUseCode?.()}
+            className="text-[#FD7215] underline hover:no-underline"
+          >
+            access-code
+          </button>{" "}
+          door instead.
         </p>
       </div>
     );
   }
 
-  if (success?.kind === "registered") {
+  // ── DONE: registered, payment pending verification ────────────────────────
+  if (stage.kind === "done") {
     return (
       <div className="bg-white/5 border border-white/10 rounded-xl p-6 text-center">
         <div className="text-4xl mb-3">🎉</div>
-        <h2 ref={headingRef} tabIndex={-1} className="text-xl font-bold text-white mb-1 outline-none">
-          You&apos;re in.
+        <h2
+          ref={headingRef}
+          tabIndex={-1}
+          className="text-xl font-bold text-white mb-1 outline-none"
+        >
+          You&apos;re registered!
         </h2>
-        <p className="text-white/50 text-sm mb-5">
-          Welcome to YiFi 2026 — Built for Generations.
+        <p className="text-white/60 text-sm mb-4">
+          Welcome to YiFi 2026. Your payment is{" "}
+          <span className="text-amber-300 font-medium">pending verification</span> by
+          the organisers — you have full access in the meantime.
         </p>
 
         <div className="bg-[#FD7215]/10 border border-[#FD7215]/40 rounded-lg py-4 mb-2">
-          <p className="text-white/50 text-[11px] uppercase tracking-wider mb-1">Your access code</p>
-          <p className="text-3xl font-mono font-bold tracking-widest text-[#FD7215]">{success.code}</p>
+          <p className="text-white/50 text-[11px] uppercase tracking-wider mb-1">
+            Your access code
+          </p>
+          <p className="text-3xl font-mono font-bold tracking-widest text-[#FD7215]">
+            {stage.code}
+          </p>
         </div>
         <p className="text-white/40 text-xs mb-6">
-          Save this code — it&apos;s how you log back in to your routing card and dossier.
+          Save this code — it&apos;s how you log back in to your routing card and
+          dossier.
         </p>
 
         <button
@@ -137,6 +174,133 @@ export function RegisterForm({ onUseCode }: { onUseCode?: () => void }) {
     );
   }
 
+  // ── PAY: resolved member, show fee + payment instructions, enter reference ─
+  if (stage.kind === "pay") {
+    const { member, editionId, fee } = stage;
+    const amountLabel = formatAmount(fee.amount, fee.currency);
+
+    return (
+      <div>
+        <div className="text-center mb-6">
+          <h1
+            ref={headingRef}
+            tabIndex={-1}
+            className="text-2xl font-bold text-white mb-1 outline-none"
+          >
+            Confirm &amp; <span className="text-[#FD7215]">Pay</span>
+          </h1>
+          <p className="text-white/50 text-sm">
+            One more step — pay your fee, then enter your reference.
+          </p>
+        </div>
+
+        {/* Resolved member identity */}
+        <div className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-xl p-4 mb-5">
+          {member.photo_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={member.photo_url}
+              alt=""
+              className="w-12 h-12 rounded-full object-cover border border-white/20"
+            />
+          ) : (
+            <div className="w-12 h-12 rounded-full bg-[#FD7215]/20 border border-[#FD7215]/40 flex items-center justify-center text-[#FD7215] font-bold text-lg">
+              {member.full_name?.[0]?.toUpperCase() ?? "Y"}
+            </div>
+          )}
+          <div className="min-w-0">
+            <p className="text-white font-semibold truncate">{member.full_name}</p>
+            <p className="text-[#229434] text-xs">✓ Verified Yi member</p>
+          </div>
+        </div>
+
+        {/* Fee + payment instructions */}
+        <div className="bg-[#FD7215]/10 border border-[#FD7215]/40 rounded-xl p-4 mb-5">
+          <div className="flex items-baseline justify-between mb-2">
+            <span className="text-white/60 text-xs uppercase tracking-wide">
+              Amount due
+            </span>
+            {fee.tier && (
+              <span className="text-[#229434] text-[11px] font-medium uppercase tracking-wide">
+                {fee.tier === "early_bird" ? "Early bird" : fee.tier}
+              </span>
+            )}
+          </div>
+          <p className="text-3xl font-bold text-[#FD7215] mb-3">{amountLabel}</p>
+          {fee.payment_instructions ? (
+            <div className="border-t border-white/10 pt-3">
+              <p className="text-white/60 text-xs uppercase tracking-wide mb-1.5">
+                How to pay
+              </p>
+              <p className="text-white/80 text-sm whitespace-pre-wrap break-words">
+                {fee.payment_instructions}
+              </p>
+            </div>
+          ) : (
+            <p className="text-white/50 text-xs border-t border-white/10 pt-3">
+              Your chapter organiser will share payment details. Pay via UPI / bank
+              transfer, then enter the reference below.
+            </p>
+          )}
+        </div>
+
+        <p className="text-white/50 text-xs mb-4">
+          Pay <span className="text-white font-medium">{amountLabel}</span> via UPI /
+          bank transfer, then enter your payment reference below. An organiser verifies
+          it later — you get access immediately.
+        </p>
+
+        <form action={handlePay} className="space-y-4">
+          <input type="hidden" name="edition_id" value={editionId} />
+          <input type="hidden" name="person_id" value={member.person_id} />
+          <input type="hidden" name="full_name" value={member.full_name ?? ""} />
+          <input type="hidden" name="email" value={member.email ?? ""} />
+          <input type="hidden" name="phone" value={member.phone ?? ""} />
+          <input
+            type="hidden"
+            name="amount_due"
+            value={fee.amount != null ? String(fee.amount) : ""}
+          />
+
+          <div>
+            <label className={LABEL}>Payment reference (UPI / transaction id) *</label>
+            <input
+              name="payment_reference"
+              required
+              placeholder="e.g. UPI ref 4032… or bank UTR"
+              className={INPUT}
+              autoFocus
+            />
+            <p className="text-white/30 text-[11px] mt-1.5">
+              The UPI reference number or bank transaction id from your payment.
+            </p>
+          </div>
+
+          {error && <p className="text-red-400 text-sm text-center">{error}</p>}
+
+          <button
+            type="submit"
+            disabled={isPending}
+            className="w-full py-3 bg-[#FD7215] text-white font-semibold rounded-lg hover:bg-[#e5660f] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isPending ? "Submitting…" : "Submit & Get My Access Code"}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setError("");
+              setStage({ kind: "lookup" });
+            }}
+            className="w-full text-white/40 text-xs hover:text-white/70 transition-colors"
+          >
+            ← That&apos;s not me
+          </button>
+        </form>
+      </div>
+    );
+  }
+
+  // ── LOOKUP: resolve against the Yi member directory ───────────────────────
   return (
     <div>
       <div className="text-center mb-6">
@@ -144,189 +308,49 @@ export function RegisterForm({ onUseCode }: { onUseCode?: () => void }) {
           Register for <span className="text-[#FD7215]">YiFi 2026</span>
         </h1>
         <p className="text-white/50 text-sm">
-          This is your census too — it powers your personalised matches and dossier.
+          YiFi is for Yi members. Enter your email (or phone) and we&apos;ll find you in
+          the Yi member directory.
         </p>
       </div>
 
-      <form action={handleSubmit} className="space-y-5">
-        {/* Identity */}
-        <div className="space-y-3">
-          <div>
-            <label className={LABEL}>
-              Email{" "}
-              {prefilled && <span className="text-[#229434] normal-case">· found your Yi profile</span>}
-            </label>
-            <input
-              name="email"
-              type="email"
-              inputMode="email"
-              autoComplete="email"
-              placeholder="you@email.com (helps us pre-fill your name)"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              onBlur={handleEmailBlur}
-              className={INPUT}
-            />
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className={LABEL}>Full name *</label>
-              <input
-                name="full_name"
-                required
-                placeholder="Your name"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                className={INPUT}
-              />
-            </div>
-            <div>
-              <label className={LABEL}>Phone (WhatsApp) *</label>
-              <input
-                name="phone"
-                required
-                inputMode="tel"
-                autoComplete="tel"
-                placeholder="10-digit mobile"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                className={INPUT}
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className={LABEL}>Member category *</label>
-              <select name="member_category" required defaultValue="" className={SELECT}>
-                <option value="" disabled>Select…</option>
-                {MEMBER_CATEGORIES.map((c) => (
-                  <option key={c.value} value={c.value}>{c.label}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className={LABEL}>Yi chapter</label>
-              <input name="chapter_name" placeholder="e.g. Yi Erode" className={INPUT} />
-            </div>
-          </div>
+      <form onSubmit={handleLookup} className="space-y-4">
+        <div>
+          <label className={LABEL}>Email</label>
+          <input
+            name="email"
+            type="email"
+            inputMode="email"
+            autoComplete="email"
+            placeholder="you@email.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className={INPUT}
+          />
         </div>
-
-        {/* Business / routing core */}
-        <div className="border-t border-white/10 pt-4 space-y-3">
-          <p className="text-white/70 text-sm font-medium">About your business</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className={LABEL}>Sector / industry *</label>
-              <input name="sector" required placeholder="e.g. Manufacturing, SaaS" className={INPUT} />
-            </div>
-            <div>
-              <label className={LABEL}>Organisation</label>
-              <input name="organisation" placeholder="Company name" className={INPUT} />
-            </div>
-            <div>
-              <label className={LABEL}>Your role</label>
-              <input name="designation" placeholder="e.g. Founder, MD" className={INPUT} />
-            </div>
-            <div>
-              <label className={LABEL}>City</label>
-              <input name="city" placeholder="City" className={INPUT} />
-            </div>
-            <div>
-              <label className={LABEL}>Total team size</label>
-              <select name="total_team_size" defaultValue="" className={SELECT}>
-                <option value="">Select…</option>
-                {TEAM_SIZES.map((t) => (
-                  <option key={t} value={t}>{t}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-        </div>
-
-        {/* Challenges — the match input */}
-        <div className="border-t border-white/10 pt-4">
-          <label className={LABEL}>Your top 3 business challenges right now</label>
-          <p className="text-white/40 text-xs mb-2">This is what we match you on. Be specific.</p>
-          <div className="space-y-2">
-            {[0, 1, 2].map((i) => (
-              <input
-                key={i}
-                name={`challenge${i + 1}`}
-                required={i === 0}
-                placeholder={`Challenge ${i + 1}${i === 0 ? " (required)" : " (optional)"}`}
-                className={INPUT}
-              />
-            ))}
-          </div>
-        </div>
-
-        {/* What you're seeking — intent */}
-        <div className="border-t border-white/10 pt-4">
-          <label className={LABEL}>What are you hoping to get from YiFi?</label>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {SEEKING_OPTIONS.map((o) => (
-              <label
-                key={o.value}
-                className="flex items-center gap-2 px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white/80 text-sm cursor-pointer hover:bg-white/10 transition-colors has-[:checked]:border-[#FD7215]/50 has-[:checked]:bg-[#FD7215]/10"
-              >
-                <input type="checkbox" name="seeking" value={o.value} className="accent-[#FD7215]" />
-                {o.label}
-              </label>
-            ))}
-          </div>
-        </div>
-
-        {/* What you can offer */}
-        <div className="border-t border-white/10 pt-4">
-          <label className={LABEL}>What can you offer other founders? (optional)</label>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <input name="offer_capital" placeholder="Capital range (e.g. ₹5L–50L)" className={INPUT} />
-            <input name="offer_hours" placeholder="Hours/month you can mentor" className={INPUT} />
-            <input name="offer_distribution" placeholder="Distribution reach" className={INPUT} />
-            <input name="offer_customers" placeholder="Customer access / intro" className={INPUT} />
-          </div>
-        </div>
-
-        {/* Couple */}
-        <div className="border-t border-white/10 pt-4">
-          <label className="flex items-center gap-2 text-white/80 text-sm cursor-pointer">
-            <input
-              type="checkbox"
-              name="is_couple"
-              checked={isCouple}
-              onChange={(e) => setIsCouple(e.target.checked)}
-              className="accent-[#FD7215] w-4 h-4"
-            />
-            Registering as a couple (both attending together)
-          </label>
-          {isCouple && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
-              <div className="sm:col-span-2">
-                <label className={LABEL}>Partner&apos;s name *</label>
-                <input name="partner_name" required={isCouple} placeholder="Partner's full name" className={INPUT} />
-              </div>
-              <input name="partner_phone" inputMode="tel" placeholder="Partner's phone (optional)" className={INPUT} />
-              <input name="partner_email" type="email" placeholder="Partner's email (optional)" className={INPUT} />
-            </div>
-          )}
-          {isCouple && (
-            <p className="text-white/40 text-xs mt-2">
-              Your partner gets their own access code and confirms their own census when they log in.
-            </p>
-          )}
+        <div>
+          <label className={LABEL}>Phone (if email isn&apos;t on file)</label>
+          <input
+            name="phone"
+            inputMode="tel"
+            autoComplete="tel"
+            placeholder="10-digit mobile"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            className={INPUT}
+          />
         </div>
 
         {error && <p className="text-red-400 text-sm text-center">{error}</p>}
 
         <button
           type="submit"
-          disabled={isPending}
+          disabled={isPending || (!email.trim() && !phone.trim())}
           className="w-full py-3 bg-[#FD7215] text-white font-semibold rounded-lg hover:bg-[#e5660f] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {isPending ? "Registering…" : "Complete Registration"}
+          {isPending ? "Looking you up…" : "Continue"}
         </button>
         <p className="text-white/30 text-[11px] text-center">
-          Your data stays inside Yi — never sold, never shared with sponsors.
+          Not a Yi member yet? Ask your chapter to add you to the directory first.
         </p>
       </form>
     </div>

@@ -182,6 +182,26 @@ export default async function MyYiFiPage() {
           )}
         </section>
 
+        <section>
+          <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+            <span className="text-[#FD7215]">💬</span> YIBE Corner
+          </h2>
+          <div className="space-y-3">
+            <Link
+              href="/yifi/community"
+              className="block bg-white/5 border border-white/10 rounded-xl p-6 hover:border-[#FD7215]/40 transition-colors"
+            >
+              <p className="text-white font-medium mb-1">Post a challenge, share a best practice, help a peer</p>
+              <p className="text-white/50 text-sm">
+                The member board — ask the room your toughest business question, or answer someone else&apos;s.
+              </p>
+            </Link>
+            <Link href="/yifi/me/community" className="inline-block text-[#FD7215] text-sm hover:underline">
+              Your starter challenges &amp; notifications →
+            </Link>
+          </div>
+        </section>
+
         <section className="border-t border-white/10 pt-8">
           <div className="bg-gradient-to-r from-[#000066] to-[#000044] border border-white/10 rounded-xl p-6 text-center">
             <p className="text-white/70 text-sm mb-2">

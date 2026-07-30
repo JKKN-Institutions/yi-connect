@@ -26,6 +26,12 @@ async function getActiveChapters(): Promise<ChapterRow[]> {
   return (data as unknown as ChapterRow[]) ?? [];
 }
 
+// The chapter list now depends on the live registration window (a national
+// admin can close/reopen chapters at any moment), so this page must render
+// per request. As a static prerender it served a build-time snapshot — CFT
+// 2026-07-30 found the closed state never reaching students.
+export const dynamic = "force-dynamic";
+
 export default async function JoinPage() {
   const allChapters = await getActiveChapters();
 

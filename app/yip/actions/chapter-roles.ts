@@ -157,6 +157,16 @@ async function ensurePerson(
     });
     if (!createRes.ok) {
       const txt = await createRes.text();
+      // Supabase's admin email lookup is unreliable (it paginates rather than
+      // filtering), so we can reach here when an auth account already exists
+      // for this email but isn't linked to a directory profile. Give an
+      // actionable message instead of a raw HTTP error.
+      if (createRes.status === 422 || /already.*registered|email_exists/i.test(txt)) {
+        return {
+          ok: false,
+          error: `An account already exists for ${email} but isn't linked to a directory profile. Ask a super-admin to link (or reset) it.`,
+        };
+      }
       return {
         ok: false,
         error: `Failed to create login for ${email} (HTTP ${createRes.status}): ${txt.slice(0, 160)}`,

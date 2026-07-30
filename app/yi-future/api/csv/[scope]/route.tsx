@@ -65,6 +65,7 @@ const SCOPES = [
   "chair_credentials_template",
   "chapter_progress",
   "problem_matrix",
+  "waitlist",
 ] as const;
 type Scope = (typeof SCOPES)[number];
 
@@ -222,6 +223,7 @@ export async function GET(
     "chair_credentials_template", // template for seeding chair credentials
     "chapter_progress", // all-chapter delegate funnel counts
     "problem_matrix", // all-chapter × problem-statement team counts
+    "waitlist", // emails of students who arrived after registrations closed
   ]);
 
   // Scopes a chapter admin may export, constrained to their own chapter.
@@ -855,6 +857,37 @@ export async function GET(
     return csvResponse(
       `editions-${todayStamp()}.csv`,
       toCSV(rows, columns)
+    );
+  }
+
+  // ────────────────────────────────────────────────────────────────────
+  // waitlist — emails left on /join while registrations were closed
+  // ────────────────────────────────────────────────────────────────────
+  if (scope === "waitlist") {
+    const edition = await resolveEdition(svc, editionSlug);
+    if (!edition) return jsonError(404, "No edition found");
+
+    type Row = { email: string; created_at: string };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data } = await (svc as any)
+      .schema("future")
+      .from("registration_waitlist")
+      .select("email, created_at")
+      .eq("edition_id", edition.id)
+      .order("created_at", { ascending: true });
+
+    const rows = ((data as Row[] | null) ?? []).map((r) => ({
+      email: r.email,
+      signed_up_at: r.created_at,
+    }));
+
+    return csvResponse(
+      `registration-waitlist-${todayStamp()}.csv`,
+      toCSV(rows, [
+        { key: "email", label: "Email" },
+        { key: "signed_up_at", label: "Added At" },
+      ])
     );
   }
 

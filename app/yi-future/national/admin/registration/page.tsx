@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
 import { isCurrentUserPlatformAdmin } from "@/app/yi-future/actions/national-admins";
 import { saveRegistrationWindow } from "@/app/yi-future/actions/registration-window";
@@ -26,18 +27,29 @@ async function getData() {
 
   const window = ed ? await getRegistrationWindow(ed.id) : null;
 
+  // Waitlist: emails left by late students while registrations were closed.
+  let waitlistCount = 0;
+  if (ed) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { count } = await (svc as any)
+      .schema("future")
+      .from("registration_waitlist")
+      .select("id", { count: "exact", head: true })
+      .eq("edition_id", ed.id);
+    waitlistCount = count ?? 0;
+  }
+
   return {
     edition: ed,
     chapters: ((chapters as ChapterRow[] | null) ?? []),
     window,
+    waitlistCount,
   };
 }
 
 export default async function RegistrationWindowPage() {
-  const [{ edition, chapters, window }, { isPlatform }] = await Promise.all([
-    getData(),
-    isCurrentUserPlatformAdmin(),
-  ]);
+  const [{ edition, chapters, window, waitlistCount }, { isPlatform }] =
+    await Promise.all([getData(), isCurrentUserPlatformAdmin()]);
 
   if (!edition || !window) {
     return (
@@ -82,6 +94,24 @@ export default async function RegistrationWindowPage() {
       {!isPlatform && (
         <div className="rounded-md border border-navy/15 bg-navy/5 px-4 py-3 text-xs text-navy/70">
           View only — only Platform admins can change the registration window.
+        </div>
+      )}
+
+      {waitlistCount > 0 && (
+        <div className="bg-white border border-navy/10 rounded-lg p-4 flex items-center justify-between gap-4">
+          <div className="text-sm text-navy/80">
+            <span className="font-bold text-navy">{waitlistCount}</span> late
+            student{waitlistCount === 1 ? "" : "s"} left an email while
+            registrations were closed.
+          </div>
+          {isPlatform && (
+            <Link
+              href="/api/csv/waitlist"
+              className="text-xs font-semibold text-navy hover:text-yi-gold border border-navy/20 rounded px-3 py-1.5 inline-flex items-center gap-1.5 whitespace-nowrap"
+            >
+              <span>↓</span> CSV
+            </Link>
+          )}
         </div>
       )}
 

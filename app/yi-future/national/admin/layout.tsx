@@ -16,6 +16,7 @@ const NAV: NavItem[] = [
   { label: "Chapter Assignments", href: "/yi-future/national/admin/chapter-assignments" },
   { label: "Rubrics", href: "/yi-future/national/admin/rubrics" },
   { label: "Chapters", href: "/yi-future/national/admin/chapters" },
+  { label: "Registration", href: "/yi-future/national/admin/registration" },
   { label: "Chairs", href: "/yi-future/national/admin/chairs" },
   { label: "Teams", href: "/yi-future/national/admin/teams" },
   { label: "Delegates", href: "/yi-future/national/admin/delegates" },

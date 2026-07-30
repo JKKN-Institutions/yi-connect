@@ -51,6 +51,7 @@ export function TeamClient({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [newPassword, setNewPassword] = useState<{ email: string; password: string } | null>(null);
+  const [existingLoginNote, setExistingLoginNote] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
   function refresh(next: ChapterRoleRow[]) {
@@ -60,6 +61,7 @@ export function TeamClient({
   function handleAdd() {
     setError(null);
     setNewPassword(null);
+    setExistingLoginNote(null);
     if (!fullName.trim() || !email.trim()) {
       setError("Enter both a name and an email.");
       return;
@@ -84,6 +86,10 @@ export function TeamClient({
       ]);
       if (res.password) {
         setNewPassword({ email: res.email, password: res.password });
+      } else if (res.existingLogin) {
+        // They already have a Yi login — no new password to show. Say so, so
+        // it doesn't look like the "create login" step silently failed.
+        setExistingLoginNote(res.email);
       }
       setFullName("");
       setEmail("");
@@ -228,6 +234,22 @@ export function TeamClient({
                 {copied ? "Copied" : "Copy"}
               </Button>
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Added, but they already have a Yi login (no new password to show) */}
+      {existingLoginNote && (
+        <Card className="border-[#1a1a3e]/15 bg-[#1a1a3e]/[0.03]">
+          <CardContent className="space-y-1 pt-4">
+            <div className="flex items-center gap-2 text-sm font-medium text-[#1a1a3e]">
+              <CheckCircle2 className="size-4" /> {existingLoginNote} added to the team
+            </div>
+            <p className="text-xs text-[#1a1a3e]/60">
+              This person already has a Yi login, so no new password is needed —
+              they sign in with their existing Yi email &amp; password. If they
+              have forgotten it, a super-admin can reset it for them.
+            </p>
           </CardContent>
         </Card>
       )}

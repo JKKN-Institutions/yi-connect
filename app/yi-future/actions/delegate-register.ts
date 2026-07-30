@@ -3,6 +3,10 @@
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
 import { generateAccessCode } from "@/lib/yi-future/access-code";
 import { notifyRegistrationConfirmed } from "@/lib/yi-future/email-triggers";
+import {
+  getRegistrationWindow,
+  isChapterOpenForRegistration,
+} from "@/lib/yi-future/registration-window";
 
 // ─── TYPES ──────────────────────────────────────────────────────────
 
@@ -317,6 +321,17 @@ export async function registerDelegate(
     .maybeSingle();
   if (!chapter || (chapter as { is_active: boolean }).is_active === false) {
     return { ok: false, error: "Pick a valid Yi chapter from the list." };
+  }
+
+  // Registration window: server-side enforcement so a stale form (saved
+  // draft, old tab) can't register into a chapter that has since closed.
+  const regWindow = await getRegistrationWindow(editionId);
+  if (!isChapterOpenForRegistration(regWindow, input.chapter_id)) {
+    return {
+      ok: false,
+      error:
+        "Registrations for this chapter have closed. Contact your chapter team if you think this is a mistake.",
+    };
   }
 
   const college_id = await findOrCreatePendingCollege(

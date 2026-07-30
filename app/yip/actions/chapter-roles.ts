@@ -36,7 +36,16 @@ import { requireSuperAdmin } from "@/lib/yip/auth/require-super-admin";
 export type ChapterRoleKind = "chapter_admin" | "chapter_organizer";
 
 export type AssignResult =
-  | { ok: true; email: string; password?: string; created: boolean; role: ChapterRoleKind }
+  | {
+      ok: true;
+      email: string;
+      password?: string;
+      created: boolean;
+      role: ChapterRoleKind;
+      // True when the person already had a Yi login (they sign in with it — no
+      // new password is generated). Lets the UI explain why no password shows.
+      existingLogin?: boolean;
+    }
   | { ok: false; error: string };
 
 export type ChapterRoleRow = {
@@ -96,28 +105,32 @@ async function authorizeAssigner(
   return { ok: true, chapterName: event.chapter_name, zone: event.yi_zone_code };
 }
 
-/** Find-or-create a yi_directory.people row for an email; ensure an auth user. */
+/**
+ * Find-or-create a yi_directory.people row for an email AND guarantee it has an
+ * auth login.
+ *
+ * Returns `password` ONLY when a NEW login was just created (reveal it once).
+ * Returns `existingLogin: true` when the person already had a Yi login — they
+ * sign in with that; we never reset a shared login here.
+ *
+ * Fixes the 2026-05-30 Team-tab gap: a person already in the shared directory
+ * but with NO login (user_id null) used to be added with no login ever created
+ * and no password shown, so they could never sign in.
+ */
 async function ensurePerson(
   svc: Svc,
   email: string,
   fullName: string
 ): Promise<
-  | { ok: true; personId: string; created: boolean; password?: string }
+  | {
+      ok: true;
+      personId: string;
+      created: boolean;
+      password?: string;
+      existingLogin?: boolean;
+    }
   | { ok: false; error: string }
 > {
-  // 1. Existing person by email?
-  const { data: existing } = await svc
-    .schema("yi_directory")
-    .from("people")
-    .select("id, user_id")
-    .ilike("email", email)
-    .maybeSingle();
-
-  if (existing) {
-    return { ok: true, personId: existing.id, created: false };
-  }
-
-  // 2. Existing auth user by email? (person row may be missing even if auth exists)
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
   const headers = {
@@ -126,23 +139,11 @@ async function ensurePerson(
     "Content-Type": "application/json",
   };
 
-  let authUserId: string | null = null;
-  let password: string | undefined;
-  let created = false;
-
-  const lookup = await fetch(
-    `${url}/auth/v1/admin/users?email=${encodeURIComponent(email)}`,
-    { headers, cache: "no-store" }
-  );
-  if (lookup.ok) {
-    const body = (await lookup.json()) as { users?: Array<{ id: string; email?: string }> };
-    const match = (body.users ?? []).find((u) => norm(u.email ?? "") === norm(email));
-    if (match) authUserId = match.id;
-  }
-
-  // 3. Create the auth user if none exists.
-  if (!authUserId) {
-    password = generatePassword();
+  // Create a brand-new auth login with a generated one-time password.
+  async function createAuthLogin(): Promise<
+    { ok: true; userId: string; password: string } | { ok: false; error: string }
+  > {
+    const password = generatePassword();
     const createRes = await fetch(`${url}/auth/v1/admin/users`, {
       method: "POST",
       headers,
@@ -161,22 +162,97 @@ async function ensurePerson(
         error: `Failed to create login for ${email} (HTTP ${createRes.status}): ${txt.slice(0, 160)}`,
       };
     }
-    authUserId = ((await createRes.json()) as { id: string }).id;
+    const userId = ((await createRes.json()) as { id: string }).id;
+    return { ok: true, userId, password };
+  }
+
+  // Look up an existing auth user by email (person row may be missing even
+  // when the auth login already exists).
+  async function lookupAuthUser(): Promise<string | null> {
+    const lookup = await fetch(
+      `${url}/auth/v1/admin/users?email=${encodeURIComponent(email)}`,
+      { headers, cache: "no-store" }
+    );
+    if (!lookup.ok) return null;
+    const body = (await lookup.json()) as {
+      users?: Array<{ id: string; email?: string }>;
+    };
+    const match = (body.users ?? []).find((u) => norm(u.email ?? "") === norm(email));
+    return match?.id ?? null;
+  }
+
+  // 1. Existing person by email?
+  const { data: existing } = await svc
+    .schema("yi_directory")
+    .from("people")
+    .select("id, user_id")
+    .ilike("email", email)
+    .maybeSingle();
+
+  if (existing) {
+    // Already linked to a login → they sign in with it. No new password.
+    if (existing.user_id) {
+      return { ok: true, personId: existing.id, created: false, existingLogin: true };
+    }
+    // Person exists but has NO login (the gap). Reuse an auth user if one
+    // already exists for this email, else create one; then link it.
+    const authUserId = await lookupAuthUser();
+    if (authUserId) {
+      await svc
+        .schema("yi_directory")
+        .from("people")
+        .update({ user_id: authUserId })
+        .eq("id", existing.id);
+      return { ok: true, personId: existing.id, created: false, existingLogin: true };
+    }
+    const login = await createAuthLogin();
+    if (!login.ok) return login;
+    const { error: linkErr } = await svc
+      .schema("yi_directory")
+      .from("people")
+      .update({ user_id: login.userId })
+      .eq("id", existing.id);
+    if (linkErr) {
+      return { ok: false, error: `Created login but failed to link it: ${linkErr.message}` };
+    }
+    return {
+      ok: true,
+      personId: existing.id,
+      created: true,
+      password: login.password,
+    };
+  }
+
+  // 2. No person row. Reuse an existing auth user for this email if present,
+  //    otherwise create a fresh login.
+  const existingAuthId = await lookupAuthUser();
+  let userId: string;
+  let password: string | undefined;
+  let created = false;
+  let existingLogin = false;
+  if (existingAuthId) {
+    userId = existingAuthId;
+    existingLogin = true;
+  } else {
+    const login = await createAuthLogin();
+    if (!login.ok) return login;
+    userId = login.userId;
+    password = login.password;
     created = true;
   }
 
-  // 4. Insert the people row linked to the auth user.
+  // 3. Insert the people row linked to the auth user.
   const { data: person, error: pErr } = await svc
     .schema("yi_directory")
     .from("people")
-    .insert({ user_id: authUserId, email, full_name: fullName, is_active: true })
+    .insert({ user_id: userId, email, full_name: fullName, is_active: true })
     .select("id")
     .single();
 
   if (pErr || !person) {
     return { ok: false, error: `Failed to create directory person: ${pErr?.message ?? "unknown"}` };
   }
-  return { ok: true, personId: person.id, created, password };
+  return { ok: true, personId: person.id, created, password, existingLogin };
 }
 
 // ─── Assign an organiser or admin to a chapter ───────────────────────
@@ -255,7 +331,14 @@ export async function assignChapterRole(input: {
   }
 
   revalidatePath(`/yip/dashboard/events/${input.eventId}/team`);
-  return { ok: true, email, password: person.password, created: person.created, role: input.role };
+  return {
+    ok: true,
+    email,
+    password: person.password,
+    created: person.created,
+    role: input.role,
+    existingLogin: person.existingLogin,
+  };
 }
 
 // ─── List chapter roles for an event ─────────────────────────────────
@@ -361,5 +444,12 @@ export async function assignChapterRoleAsSuperAdmin(input: {
     });
   if (insErr) return { ok: false, error: `Failed to assign role: ${insErr.message}` };
 
-  return { ok: true, email, password: person.password, created: person.created, role: input.role };
+  return {
+    ok: true,
+    email,
+    password: person.password,
+    created: person.created,
+    role: input.role,
+    existingLogin: person.existingLogin,
+  };
 }

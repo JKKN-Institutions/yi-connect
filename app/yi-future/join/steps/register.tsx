@@ -130,12 +130,22 @@ export function RegisterStep({
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw) as Partial<FormState>;
+        // A saved draft can name a chapter that has since closed for
+        // registration (it is no longer in `chapters`). Drop it so the
+        // student is asked to re-pick on Section 1 instead of filling all
+        // four sections and being refused by the server at submit.
+        if (
+          parsed.chapter_id &&
+          !chapters.some((c) => c.id === parsed.chapter_id)
+        ) {
+          parsed.chapter_id = "";
+        }
         setForm((prev) => ({ ...prev, ...parsed }));
       }
     } catch {
       /* ignore */
     }
-  }, []);
+  }, [chapters]);
 
   useEffect(() => {
     if (!hydrated.current) return;

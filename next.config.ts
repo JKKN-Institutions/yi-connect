@@ -140,6 +140,14 @@ const nextConfig: NextConfig = {
   // /api/verticals, /api/expand-url, /api/bug-reporter, /api/activity-templates).
   async rewrites() {
     return [
+      // YIP Erode Regional Round — static hotel-accommodation page. Serves the
+      // self-contained HTML in public/ at a clean, .html-free URL. Public (no
+      // login: middleware handleYipAuth gates only /yip/dashboard|jury|me), and
+      // noindex'd in the file's <head> so it stays link-only. (2026-07-31)
+      {
+        source: '/yip/erode/hotels',
+        destination: '/yip/erode/hotels.html',
+      },
       {
         source: '/api/cron/:path*',
         destination: '/yi-future/api/cron/:path*',

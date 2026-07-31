@@ -8,10 +8,19 @@ import { getChapterControlFilter } from "@/app/yip/actions/agenda";
 
 export default async function ControlPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<{ day?: string }>;
 }) {
   const { id } = await params;
+  // Deep-link support: Mission Control's pre-event readiness items link to
+  // ?day=0 so the panel opens on the "Pre-Event (Online)" tab. Without this
+  // the panel always opens on Day 1 and the Speaker election (a day-0 item)
+  // looks unreachable. Anything other than 0/1/2 is ignored.
+  const dayParam = (await searchParams)?.day;
+  const initialDay =
+    dayParam === "0" ? 0 : dayParam === "1" ? 1 : dayParam === "2" ? 2 : undefined;
   const supabase = await createClient();
   const {
     data: { user },
@@ -97,6 +106,7 @@ export default async function ControlPage({
         canControlAgendaBackward={canControlAgendaBackward}
         canManageAgenda={canManageAgenda}
         initialControlFilter={controlAgendaFilter}
+        initialDay={initialDay}
         stats={{
           totalParticipants: participantRes.count ?? 0,
           checkedIn: checkedInRes.count ?? 0,

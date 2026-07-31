@@ -6,6 +6,7 @@ import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { Badge } from "@/components/yip/ui/badge";
 import { Input } from "@/components/yip/ui/input";
 import { YI_ZONES } from "@/lib/yip/hierarchy";
+import { isPreEventLive, PRE_EVENT_STATUS_LABEL } from "@/lib/yip/constants";
 import { CalendarDays, Users, MapPin, Search, X } from "lucide-react";
 
 export type EventCard = {
@@ -23,10 +24,13 @@ export type EventCard = {
   created_at: string | null;
   updated_at: string | null;
   participantCount: number;
+  /** `day` of the event's current agenda item — 0 means a pre-event session is
+   *  live, which badges as "Pre-Event". Null when nothing is running. */
+  liveItemDay?: number | null;
 };
 
 // ── Badge + date helpers (moved from page.tsx so the grid renders client-side) ──
-function statusBadge(status: string) {
+function statusBadge(status: string, liveItemDay?: number | null) {
   const map: Record<string, { label: string; className: string }> = {
     draft: { label: "Draft", className: "bg-[#1a1a3e]/5 text-[#1a1a3e]/60 border border-[#1a1a3e]/10" },
     registration_open: { label: "Registration Open", className: "bg-[#FF9933]/8 text-[#FF9933] border border-[#FF9933]/15" },
@@ -37,7 +41,11 @@ function statusBadge(status: string) {
     completed: { label: "Completed", className: "bg-[#1a1a3e]/5 text-[#1a1a3e] border border-[#1a1a3e]/10" },
     results_published: { label: "Results Published", className: "bg-[#FF9933]/8 text-[#FF9933] border border-[#FF9933]/15" },
   };
-  return map[status] ?? { label: status, className: "bg-[#1a1a3e]/5 text-[#1a1a3e]/60 border border-[#1a1a3e]/10" };
+  const base = map[status] ?? { label: status, className: "bg-[#1a1a3e]/5 text-[#1a1a3e]/60 border border-[#1a1a3e]/10" };
+  // Display only: a live day-0 item means pre-event, not Day 1.
+  return isPreEventLive(status, liveItemDay)
+    ? { ...base, label: PRE_EVENT_STATUS_LABEL }
+    : base;
 }
 
 function levelBadge(level: string) {
@@ -62,7 +70,7 @@ const SORTS = [
 ] as const;
 
 function EventCardView({ event }: { event: EventCard }) {
-  const status = statusBadge(event.status);
+  const status = statusBadge(event.status, event.liveItemDay);
   const level = levelBadge(event.level);
   const count = event.participantCount;
   return (

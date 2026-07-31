@@ -335,3 +335,32 @@ export const HANDBOOK_AWARDS = [
   { key: "best_constituency_rep", label: "Best Constituency Representative", source: "constituency_mp_top" },
 ] as const;
 export type HandbookAwardKey = (typeof HANDBOOK_AWARDS)[number]["key"];
+
+// ─── Pre-event status label ──────────────────────────────────────────────
+// Starting ANY non-day-2 agenda item flips the event to "day1_live"
+// (agenda.ts: `status: item.day === 2 ? "day2_live" : "day1_live"`), including
+// the day-0 pre-event items — Speaker election, party-leader selection and the
+// like. So an event running pre-event activity truthfully reports day1_live and
+// the badge reads "Day 1 Live", which is wrong and confused a chapter chair.
+//
+// This is a DISPLAY-ONLY override: the stored status is untouched, so every
+// existing `status === "day1_live"` gate (projector, student pages, voting,
+// timers — 58 sites) keeps behaving exactly as before. Three separate badge
+// maps render event status, so the rule lives here rather than being copied
+// into each and drifting apart.
+export const PRE_EVENT_STATUS_LABEL = "Pre-Event";
+
+/**
+ * True when the event is live but the item actually running is a day-0
+ * (pre-event) item. `liveItemDay` is the `day` of the event's
+ * current_agenda_item; null/undefined when nothing is live.
+ */
+export function isPreEventLive(
+  status: string | null | undefined,
+  liveItemDay: number | null | undefined
+): boolean {
+  if (liveItemDay !== 0) return false;
+  // Gate on the live statuses: a stale current_agenda_item_id pointing at a
+  // day-0 row on a completed event must not relabel it "Pre-Event".
+  return status === "day1_live" || status === "day2_live";
+}

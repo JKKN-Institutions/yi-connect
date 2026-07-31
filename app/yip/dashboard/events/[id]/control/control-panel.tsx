@@ -178,24 +178,37 @@ export function ControlPanel({
   // 0 = Pre-event (day-0 prep items), 1 = Day 1, 2 = Day 2. We never auto-open
   // Pre-event — it's an opt-in tab the moderator taps; the day always defaults
   // to the live day.
+  // A ?day= deep link is only usable if that tab actually exists. ?day=0 on an
+  // event with no day-0 items is ignored: that tab is not rendered, so
+  // honouring it would strand the moderator on an empty list with no way back.
+  const usableDeepLinkDay =
+    initialDay !== undefined &&
+    (initialDay !== 0 || initialAgendaItems.some((i) => i.day === 0))
+      ? initialDay
+      : undefined;
+
   const [activeDay, setActiveDay] = useState<0 | 1 | 2>(() => {
     // An explicit ?day= wins — that is a deliberate deep link (Mission
-    // Control's pre-event readiness items point at ?day=0). Ignore ?day=0 on
-    // an event with no day-0 items: that tab is not rendered, so honouring it
-    // would strand the moderator on an empty list with no way back.
-    if (initialDay !== undefined) {
-      if (initialDay !== 0 || initialAgendaItems.some((i) => i.day === 0)) {
-        return initialDay;
-      }
-    }
+    // Control's pre-event readiness items point at ?day=0).
+    if (usableDeepLinkDay !== undefined) return usableDeepLinkDay;
     if (initialEvent.status === "day2_live") return 2;
     if (initialEvent.status === "day1_complete") return 2;
     return 1;
   });
+
+  // Mission Control's readiness checklist is rendered ON this page, so its
+  // "Fix this →" links are SAME-ROUTE navigations. React keeps this component
+  // mounted across those, which means the useState initialiser above never
+  // re-runs and the tab would not move. Sync on the prop instead.
+  // Deliberately keyed on the param only: a moderator who then taps a tab by
+  // hand keeps their choice, because this does not re-fire until ?day= changes.
+  useEffect(() => {
+    if (usableDeepLinkDay !== undefined) setActiveDay(usableDeepLinkDay);
+  }, [usableDeepLinkDay]);
   // The auto-switch effect below also fires on mount, which would immediately
   // snap a ?day= deep link back to the live day on a live event. Honour the
   // deep link once, then let auto-switch resume for real status changes.
-  const deepLinkHonoured = useRef(initialDay !== undefined);
+  const deepLinkHonoured = useRef(usableDeepLinkDay !== undefined);
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean;
     title: string;

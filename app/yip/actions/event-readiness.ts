@@ -265,7 +265,7 @@ export async function getEventReadiness(
           label: "Speaker elected",
           ok: speakers > 0,
           detail: speakers > 0 ? "Speaker seated" : "no Speaker yet",
-          href: `${base}/control`,
+          href: `${base}/control?day=0`,
         },
         {
           key: "party_leaders",
@@ -275,7 +275,7 @@ export async function getEventReadiness(
             parties === 0
               ? "create parties first"
               : `${leaders} of ${parties} parties have a leader`,
-          href: `${base}/control`,
+          href: `${base}/control?day=0`,
         },
         {
           key: "no_open_votes",
@@ -285,7 +285,7 @@ export async function getEventReadiness(
             openVoteCount === 0
               ? "no open votes"
               : `${openVoteCount} vote(s) still open — close & reveal them`,
-          href: `${base}/control`,
+          href: `${base}/control?day=0`,
         },
       ],
     },

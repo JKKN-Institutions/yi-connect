@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useEffect, useCallback } from "react";
+import { useState, useTransition, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/yip/ui/card";
 import { Button } from "@/components/yip/ui/button";
@@ -118,6 +118,12 @@ interface ControlPanelProps {
   canManageAgenda: boolean;
   /** Per-chapter Control-panel agenda filter ("full" vs "scored_voted_only"). */
   initialControlFilter: ControlAgendaFilter;
+  /**
+   * Day tab to open on, from the `?day=` query param. Lets Mission Control
+   * deep-link straight to "Pre-Event (Online)" (`?day=0`), which is otherwise
+   * unreachable except by tapping the tab. Undefined = fall back to the live day.
+   */
+  initialDay?: 0 | 1 | 2;
   stats: {
     totalParticipants: number;
     checkedIn: number;
@@ -154,6 +160,7 @@ export function ControlPanel({
   canControlAgendaBackward,
   canManageAgenda,
   initialControlFilter,
+  initialDay,
   stats,
 }: ControlPanelProps) {
   const router = useRouter();
@@ -172,10 +179,23 @@ export function ControlPanel({
   // Pre-event — it's an opt-in tab the moderator taps; the day always defaults
   // to the live day.
   const [activeDay, setActiveDay] = useState<0 | 1 | 2>(() => {
+    // An explicit ?day= wins — that is a deliberate deep link (Mission
+    // Control's pre-event readiness items point at ?day=0). Ignore ?day=0 on
+    // an event with no day-0 items: that tab is not rendered, so honouring it
+    // would strand the moderator on an empty list with no way back.
+    if (initialDay !== undefined) {
+      if (initialDay !== 0 || initialAgendaItems.some((i) => i.day === 0)) {
+        return initialDay;
+      }
+    }
     if (initialEvent.status === "day2_live") return 2;
     if (initialEvent.status === "day1_complete") return 2;
     return 1;
   });
+  // The auto-switch effect below also fires on mount, which would immediately
+  // snap a ?day= deep link back to the live day on a live event. Honour the
+  // deep link once, then let auto-switch resume for real status changes.
+  const deepLinkHonoured = useRef(initialDay !== undefined);
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean;
     title: string;
@@ -234,6 +254,11 @@ export function ControlPanel({
 
   // Auto-switch day tab when event status changes
   useEffect(() => {
+    // Skip the mount run when the moderator deep-linked to a specific day.
+    if (deepLinkHonoured.current) {
+      deepLinkHonoured.current = false;
+      return;
+    }
     if (event?.status === "day2_live") setActiveDay(2);
     if (event?.status === "day1_live") setActiveDay(1);
   }, [event?.status]);

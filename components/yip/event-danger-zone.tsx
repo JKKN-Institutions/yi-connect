@@ -54,8 +54,15 @@ export function EventDangerZone({
     setResetting(false);
     if (res.success) {
       const s = res.data.summary;
+      // Only the delete counters are "records removed" — the reset counters
+      // (students cleared, agenda rows reset, event status reset) are updates.
+      const notRemoved = new Set([
+        "participants_cleared",
+        "agenda_reset",
+        "event_status_reset",
+      ]);
       const removed = Object.entries(s)
-        .filter(([k]) => k !== "participants_cleared")
+        .filter(([k]) => !notRemoved.has(k))
         .reduce((sum, [, n]) => sum + (Number(n) || 0), 0);
       toast.success(
         `Practice data cleared — ${removed} record${removed === 1 ? "" : "s"} removed, ${
@@ -82,7 +89,9 @@ export function EventDangerZone({
               Rehearsed on this event? This permanently deletes all votes, jury
               scores, bills, questions, motions, check-ins and computed results,
               and clears every party / constituency / committee / role
-              assignment — so you can start the real day clean.{" "}
+              assignment — so you can start the real day clean. The event goes
+              back to <span className="font-medium text-gray-800">Draft</span>,
+              ready for you to press Start Day 1 again.{" "}
               <span className="font-medium text-gray-800">
                 Your imported students and the agenda are kept.
               </span>
@@ -127,6 +136,10 @@ export function EventDangerZone({
               <li>all submitted bills, questions &amp; motions</li>
               <li>everyone&apos;s check-in status</li>
               <li>every party, constituency, committee &amp; role assignment</li>
+              <li>
+                the day&apos;s progress — the agenda rewinds to the start and
+                the event goes back to <span className="font-medium">Draft</span>
+              </li>
             </ul>
             <p className="text-gray-600">
               Kept: the{" "}

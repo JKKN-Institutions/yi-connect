@@ -44,7 +44,7 @@ import { Textarea } from "@/components/yip/ui/textarea";
 import { MissionControl } from "./mission-control";
 import { AiMomentsCard } from "./ai-moments-card";
 import { cn } from "@/lib/yip/utils";
-import { ROLE_LABELS, ROLE_COLORS, PARTY_COLORS } from "@/lib/yip/constants";
+import { ROLE_LABELS, ROLE_COLORS, PARTY_COLORS, isPreEventLive, PRE_EVENT_STATUS_LABEL } from "@/lib/yip/constants";
 import { useRealtimeEvent } from "@/lib/yip/hooks/use-realtime-event";
 import { useTimer } from "@/lib/yip/hooks/use-timer";
 import { armTimerSound } from "@/lib/yip/timer-sound";
@@ -1017,10 +1017,15 @@ export function ControlPanel({
 
   // ─── Render ───────────────────────────────────────────────────
 
-  const statusInfo = STATUS_MAP[eventStatus] ?? {
+  const baseStatusInfo = STATUS_MAP[eventStatus] ?? {
     label: eventStatus,
     className: "bg-gray-100 text-gray-700",
   };
+  // Display-only: while a day-0 item is the live one, say "Pre-Event" rather
+  // than "Day 1 Live". Keeps the same styling — it is still a live state.
+  const statusInfo = isPreEventLive(eventStatus, currentAgendaItem?.day)
+    ? { ...baseStatusInfo, label: PRE_EVENT_STATUS_LABEL }
+    : baseStatusInfo;
 
   return (
     <div className="space-y-4">

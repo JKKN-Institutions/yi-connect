@@ -78,6 +78,26 @@ export default async function DashboardPage() {
     );
   }
 
+  // Day of each live event's current agenda item, so a card running a day-0
+  // (pre-event) session badges "Pre-Event" instead of "Day 1 Live". One extra
+  // lookup for the handful of events that are actually live. Display only.
+  const liveItemDays: Record<string, number | null> = {};
+  const liveItemIds = (events ?? [])
+    .map((e) => e.current_agenda_item_id)
+    .filter((v): v is string => Boolean(v));
+  if (liveItemIds.length > 0) {
+    const { data: liveItems } = await supabase
+      .from("agenda")
+      .select("id, day")
+      .in("id", liveItemIds);
+    const dayById = new Map((liveItems ?? []).map((r) => [r.id, r.day]));
+    for (const e of events ?? []) {
+      liveItemDays[e.id] = e.current_agenda_item_id
+        ? (dayById.get(e.current_agenda_item_id) ?? null)
+        : null;
+    }
+  }
+
   // Shape the role-scoped list for the client grid (search / filter / sort live
   // there). The server query above stays the authorization boundary.
   const eventsForClient: EventCard[] = (events ?? []).map((e) => ({
@@ -95,6 +115,7 @@ export default async function DashboardPage() {
     created_at: e.created_at,
     updated_at: e.updated_at,
     participantCount: participantCounts[e.id] || 0,
+    liveItemDay: liveItemDays[e.id] ?? null,
   }));
 
   const hasEvents = events && events.length > 0;

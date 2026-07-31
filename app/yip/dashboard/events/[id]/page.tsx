@@ -2,6 +2,8 @@ import Link from "next/link";
 import { getEvent } from "@/app/yip/actions/events";
 import { getChiefGuests } from "@/app/yip/actions/reporting-extras";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
+import { createClient } from "@/lib/yip/supabase/server";
+import { isPreEventLive, PRE_EVENT_STATUS_LABEL } from "@/lib/yip/constants";
 import { EventReportingCard } from "./event-reporting-card";
 import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
 import { Badge } from "@/components/yip/ui/badge";
@@ -87,7 +89,24 @@ export default async function EventOverviewPage({
     );
   }
 
-  const status = statusBadge(event.status);
+  // Day of the item running right now, so a live day-0 (pre-event) session is
+  // badged "Pre-Event" instead of "Day 1 Live". Display only — see
+  // isPreEventLive in lib/yip/constants.
+  let liveItemDay: number | null = null;
+  if (event.current_agenda_item_id) {
+    const supabase = await createClient();
+    const { data: liveItem } = await supabase
+      .from("agenda")
+      .select("day")
+      .eq("id", event.current_agenda_item_id)
+      .maybeSingle();
+    liveItemDay = liveItem?.day ?? null;
+  }
+
+  const baseStatus = statusBadge(event.status);
+  const status = isPreEventLive(event.status, liveItemDay)
+    ? { ...baseStatus, label: PRE_EVENT_STATUS_LABEL }
+    : baseStatus;
   const access = await getYipEventAccess(id);
   const chiefGuests = await getChiefGuests(id);
 

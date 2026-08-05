@@ -7,6 +7,7 @@ import { CoveragePanel } from "./_panels/CoveragePanel";
 import { VerdictByMinistryPanel } from "./_panels/VerdictByMinistryPanel";
 import { BillPipelinePanel } from "./_panels/BillPipelinePanel";
 import { PositioningPanel } from "./_panels/PositioningPanel";
+import { AttendanceExportPanel } from "./_panels/AttendanceExportPanel";
 
 // ═══════════════════════════════════════════════════════════════════════
 // YIP NATIONAL INTELLIGENCE dashboard.
@@ -76,6 +77,13 @@ export default async function NationalIntelligencePage() {
           by state & region. Full width: the geographic reach story. */}
       <div className="mb-6">
         <NationalFootprintPanel />
+      </div>
+
+      {/* The take-away file. Sits with the reach panels because it is the same
+          question ("who turned up, across the country") in downloadable form —
+          those panels count it, this exports it. */}
+      <div className="mb-6">
+        <AttendanceExportPanel />
       </div>
 
       {/* Core corpus panels. Each is self-contained and copies the CoveragePanel

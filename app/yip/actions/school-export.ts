@@ -2,6 +2,11 @@
 
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { createServiceClient } from "@/lib/yip/supabase/server";
+import {
+  checkInLabel,
+  csvCell,
+  formatCheckInTime,
+} from "@/lib/yip/attendance-csv";
 
 type ActionResult<T = null> =
   | { success: true; data: T }
@@ -14,14 +19,11 @@ export interface AllocationRosterExport {
   count: number;
 }
 
-function csvCell(v: unknown): string {
-  const s = v == null ? "" : String(v);
-  return `"${s.replace(/"/g, '""')}"`;
-}
 
 /**
- * Download the current allocation roster as a CSV — name + party (letter) +
- * constituency (no. + name + state) + committee (no.) + access code.
+ * Download the current allocation roster as a CSV — name + school + party
+ * (letter) + constituency (no. + name + state) + committee (no.) + access code
+ * + Day 1 / Day 2 check-in (Yes/No + IST timestamp).
  *
  * Re-runnable any number of times so an organiser can re-download after adding
  * late registrants and re-running allocation. Non-destructive: it only reads the
@@ -60,7 +62,7 @@ export async function exportAllocationRoster(
   const { data: rows, error: rowsErr } = await service
     .from("participants")
     .select(
-      "full_name, party_number, constituency_number, constituency_name, constituency_state, committee_number, access_code"
+      "full_name, school_name, party_number, constituency_number, constituency_name, constituency_state, committee_number, access_code, checked_in_day1, checked_in_day1_at, checked_in_day2, checked_in_day2_at"
     )
     .eq("event_id", eventId)
     .order("party_number", { ascending: true, nullsFirst: false })
@@ -70,12 +72,17 @@ export async function exportAllocationRoster(
 
   const list = (rows ?? []) as Array<{
     full_name: string | null;
+    school_name: string | null;
     party_number: number | null;
     constituency_number: number | null;
     constituency_name: string | null;
     constituency_state: string | null;
     committee_number: number | null;
     access_code: string | null;
+    checked_in_day1: boolean | null;
+    checked_in_day1_at: string | null;
+    checked_in_day2: boolean | null;
+    checked_in_day2_at: string | null;
   }>;
 
   if (list.length === 0) {
@@ -90,14 +97,25 @@ export async function exportAllocationRoster(
   // its number (1..N) — the short identifiers students use, and the format the
   // allocated-roster upload reads back. Access Code IS included so the organiser
   // can hand each student their login alongside their allocation (canManage-gated).
+  //
+  // School + the four check-in columns were added 2026-08-05 so a chapter can
+  // pull its own attendance sheet from the same file (national reporting needs
+  // "who actually turned up", not just who was allocated). Safe to append: the
+  // roster importer (components/yip/csv-import.tsx) matches columns by name
+  // alias and ignores any it doesn't recognise, so this file still re-uploads.
   const headers = [
     "Name",
+    "School",
     "Party",
     "Constituency No.",
     "Constituency",
     "Constituency State",
     "Committee No.",
     "Access Code",
+    "Day 1 Check-In",
+    "Day 1 Check-In Time",
+    "Day 2 Check-In",
+    "Day 2 Check-In Time",
   ];
   const body = list.map((r) => {
     // Bare party letter: strip the "Party " prefix so the default "Party A".."Party G"
@@ -109,12 +127,17 @@ export async function exportAllocationRoster(
     const partyLabel = partyName.replace(/^Party\s+/i, "");
     return [
       r.full_name ?? "",
+      r.school_name ?? "",
       partyLabel,
       r.constituency_number ?? "",
       r.constituency_name ?? "",
       r.constituency_state ?? "",
       r.committee_number ?? "",
       r.access_code ?? "",
+      checkInLabel(r.checked_in_day1),
+      formatCheckInTime(r.checked_in_day1_at),
+      checkInLabel(r.checked_in_day2),
+      formatCheckInTime(r.checked_in_day2_at),
     ]
       .map(csvCell)
       .join(",");

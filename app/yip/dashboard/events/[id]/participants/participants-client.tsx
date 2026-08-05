@@ -808,9 +808,9 @@ export function ParticipantsClient({
 
           <CsvImport eventId={eventId} onImported={() => router.refresh()} />
 
-          {/* Download the current allocation roster (organiser+). Re-runnable
-              any time — re-download after adding late registrants and re-running
-              allocation. */}
+          {/* Download the current allocation roster + Day 1/Day 2 check-in
+              (organiser+). Re-runnable any time — re-download after adding late
+              registrants, re-running allocation, or as check-ins come in. */}
           {canManage && initialParticipants.length > 0 && (
             <Button
               variant="outline"
@@ -823,7 +823,7 @@ export function ParticipantsClient({
               ) : (
                 <Download className="size-4" />
               )}
-              Download Auto-Allocated List
+              Download List &amp; Attendance
             </Button>
           )}
 

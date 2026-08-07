@@ -7,6 +7,7 @@ import {
   getRegistrationWindow,
   isChapterOpenForRegistration,
 } from "@/lib/yi-future/registration-window";
+import { checkRegistrationAbuse } from "@/lib/yi-future/registration-guard";
 
 // ─── TYPES ──────────────────────────────────────────────────────────
 
@@ -37,6 +38,9 @@ export type RegisterDelegateInput = {
   password: string;
   // Quiz pre-select (optional — set when user took quiz before registering)
   preferred_track_slug?: string;
+  /** Cloudflare Turnstile token from the public form. Optional and
+   *  back-compatible: only enforced once TURNSTILE_SECRET_KEY is set. */
+  turnstile_token?: string | null;
 };
 
 export type RegisterDelegateResult =
@@ -262,6 +266,20 @@ export async function registerDelegate(
   }
   const editionId = (editionRow as { id: string }).id;
 
+  // Abuse guard — per-IP cap, platform-wide burst breaker, and (once keys are
+  // set) a Turnstile bot challenge. Placed immediately after the edition lookup
+  // so a blocked request does almost no database work, and crucially BEFORE
+  // findOrCreatePendingCollege: the 2026-08-07 script created one junk college
+  // per registration, so rejecting late would still have polluted the table.
+  const guard = await checkRegistrationAbuse(
+    svc,
+    editionId,
+    input.turnstile_token ?? null
+  );
+  if (!guard.ok) {
+    return { ok: false, error: guard.error };
+  }
+
   // Strict email-unique guard
   const { data: dupEmail } = await svc
     .schema("future")
@@ -364,6 +382,7 @@ export async function registerDelegate(
       access_code,
       is_active: true,
       registered_at: nowIso,
+      registration_ip: guard.ip,
       interest_internships: input.interest_internships,
       interest_jobs: input.interest_jobs,
       interest_workshops: input.interest_workshops,

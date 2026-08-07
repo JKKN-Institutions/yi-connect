@@ -9,6 +9,10 @@ import {
   type CollegeSuggestion,
   type PreviousProfile,
 } from "@/app/yi-future/actions/delegate-register";
+// Shared Cloudflare Turnstile widget (first used by Yi Youth Academy). Renders
+// nothing until NEXT_PUBLIC_TURNSTILE_SITE_KEY is set, so the form is unchanged
+// for students until the challenge is deliberately switched on.
+import { YuvaTurnstile } from "@/components/yuva/turnstile";
 
 type ChapterMini = {
   id: string;
@@ -94,6 +98,9 @@ export function RegisterStep({
   const hydrated = useRef(false);
   const [returningProfile, setReturningProfile] = useState<PreviousProfile | null>(null);
   const [lookupDone, setLookupDone] = useState(false);
+  // Turnstile response token. Stays "" while the widget is disabled (no site
+  // key), and the server only enforces it when its own secret is configured.
+  const [turnstileToken, setTurnstileToken] = useState("");
   const lookupRef = useRef(false);
 
   const preferredTrack = useMemo(() => {
@@ -332,6 +339,7 @@ export function RegisterStep({
         declaration_accepted: form.declaration_accepted,
         password: form.password,
         preferred_track_slug: preferredTrack || undefined,
+        turnstile_token: turnstileToken || null,
         });
       } catch {
         setError(
@@ -422,6 +430,12 @@ export function RegisterStep({
         )}
         {section === 3 && <Section3 form={form} update={update} />}
         {section === 4 && <Section4 form={form} update={update} />}
+
+        {section === 4 && (
+          <div className="mt-5">
+            <YuvaTurnstile onToken={setTurnstileToken} />
+          </div>
+        )}
 
         <div className="mt-6 flex items-center justify-between">
           {section > 1 ? (
